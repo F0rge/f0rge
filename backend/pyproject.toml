@@ -1,0 +1,13 @@
+[project]
+name = "health-tracker-backend"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi[standard]",
+    "sqlalchemy>=2.0",
+    "pydantic-settings>=2.0",
+    "bcrypt>=4.0",
+    "pillow>=10.0",
+    "python-multipart>=0.0.9",
+]
