@@ -1,0 +1,18 @@
+name: Deploy to Coolify
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Deploy backend
+        run: |
+          curl -s -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            "http://localhost:8000/api/v1/deploy?uuid=mk404cskowkgcow48g8s8okw"
+      - name: Deploy frontend
+        run: |
+          curl -s -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            "http://localhost:8000/api/v1/deploy?uuid=o0kw8wwscooc00o4gkcosocs"
