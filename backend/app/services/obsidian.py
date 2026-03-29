@@ -103,11 +103,19 @@ def write_daily_file(
     entry: Entry,
     photos: Optional[Sequence[Photo]] = None,
 ) -> None:
+    if not settings.vault_path:
+        return
+
     if photos is None:
         photos = []
 
     logs_dir = os.path.join(settings.vault_path, "02-Symptoms", "Logs")
-    os.makedirs(logs_dir, exist_ok=True)
+    try:
+        os.makedirs(logs_dir, exist_ok=True)
+    except OSError:
+        import logging
+        logging.getLogger(__name__).warning("Vault path not writable: %s", logs_dir)
+        return
 
     content = _render_markdown(entry, photos)
     target_path = os.path.join(logs_dir, f"{entry.date.isoformat()}.md")
@@ -124,6 +132,9 @@ def write_daily_file(
 
 
 def delete_daily_file(date_str: str) -> None:
+    if not settings.vault_path:
+        return
+
     logs_dir = os.path.join(settings.vault_path, "02-Symptoms", "Logs")
     target_path = os.path.join(logs_dir, f"{date_str}.md")
     if os.path.exists(target_path):

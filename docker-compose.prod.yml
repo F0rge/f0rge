@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: health-tracker-backend
+    ports:
+      - "8004:8000"
+    environment:
+      - PIN_HASH=${PIN_HASH}
+      - VAULT_PATH=
+      - DATABASE_URL=sqlite:///data/health.db
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - CORS_ORIGINS=["https://health.leo-figueiredo.com","http://localhost:3004"]
+      - PHOTO_DIR=/app/photos
+    volumes:
+      - health-data:/app/data
+      - health-photos:/app/photos
+    restart: unless-stopped
+    networks:
+      - health-tracker-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        API_URL: http://backend:8000
+    container_name: health-tracker-frontend
+    ports:
+      - "3004:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - health-tracker-network
+
+volumes:
+  health-data:
+  health-photos:
+
+networks:
+  health-tracker-network:
+    driver: bridge
