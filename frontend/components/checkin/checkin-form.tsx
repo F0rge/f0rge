@@ -2,13 +2,21 @@
 
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import { ScaleInput } from './scale-input'
 import { BinaryInput } from './binary-input'
 import { NotesInput } from './notes-input'
 import { PhotoCapture } from './photo-capture'
-import { useCreateEntry, useUpdateEntry, useUploadPhoto } from '@/lib/api/hooks'
+import { useCreateEntry, useUpdateEntry, useUploadPhoto, useDeletePhoto, useEntry } from '@/lib/api/hooks'
 import type { Entry, EntryCreate } from '@/lib/api/types'
+
+const DIET_OPTIONS = [
+  { id: 'normal', label: 'Normal' },
+  { id: 'high-histamine', label: 'High-histamine' },
+  { id: 'high-fodmap', label: 'High-FODMAP' },
+  { id: 'gluten', label: 'Gluten' },
+  { id: 'not-sure', label: 'Not sure' },
+]
 
 interface CheckinFormProps {
   date: string
@@ -20,10 +28,13 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const createEntry = useCreateEntry()
   const updateEntry = useUpdateEntry()
   const uploadPhoto = useUploadPhoto()
+  const deletePhoto = useDeletePhoto()
+  const { refetch: refetchEntry } = useEntry(date)
 
   const [overall, setOverall] = useState(2)
   const [bloating, setBloating] = useState(0)
   const [stoolNormal, setStoolNormal] = useState(true)
+  const [stoolType, setStoolType] = useState<string>('')
   const [jointPain, setJointPain] = useState(0)
   const [neuro, setNeuro] = useState(0)
   const [sleepQuality, setSleepQuality] = useState(2)
@@ -34,6 +45,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const [notes, setNotes] = useState('')
   const [photos, setPhotos] = useState<File[]>([])
   const [labels, setLabels] = useState<string[]>([])
+  const [existingPhotos, setExistingPhotos] = useState<Entry['photos']>([])
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -41,6 +53,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       setOverall(existingEntry.overall)
       setBloating(existingEntry.bloating)
       setStoolNormal(existingEntry.stool_normal)
+      setStoolType(existingEntry.stool_type || '')
       setJointPain(existingEntry.joint_pain)
       setNeuro(existingEntry.neuro)
       setSleepQuality(existingEntry.sleep_quality)
@@ -49,8 +62,43 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       setSupplements(existingEntry.supplements)
       setSick(existingEntry.sick)
       setNotes(existingEntry.notes || '')
+      setExistingPhotos(existingEntry.photos || [])
     }
   }, [existingEntry])
+
+  // Reset stool type when switching back to normal
+  useEffect(() => {
+    if (stoolNormal) setStoolType('')
+  }, [stoolNormal])
+
+  const handleDietToggle = (id: string) => {
+    const current = dietRisk ? dietRisk.split(',').filter(Boolean) : []
+
+    if (id === 'normal') {
+      setDietRisk('normal')
+      return
+    }
+
+    // Remove 'normal' when selecting a risk
+    const withoutNormal = current.filter((d) => d !== 'normal')
+
+    if (withoutNormal.includes(id)) {
+      const updated = withoutNormal.filter((d) => d !== id)
+      setDietRisk(updated.length === 0 ? 'normal' : updated.join(','))
+    } else {
+      setDietRisk([...withoutNormal, id].join(','))
+    }
+  }
+
+  const handleDeleteExistingPhoto = async (photoId: number) => {
+    try {
+      await deletePhoto.mutateAsync(photoId)
+      setExistingPhotos((prev) => prev.filter((p) => p.id !== photoId))
+      toast.success('Photo deleted')
+    } catch {
+      toast.error('Failed to delete photo')
+    }
+  }
 
   const handleSubmit = async () => {
     setSubmitting(true)
@@ -60,6 +108,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         overall,
         bloating,
         stool_normal: stoolNormal,
+        stool_type: stoolNormal ? undefined : stoolType || undefined,
         joint_pain: jointPain,
         neuro,
         sleep_quality: sleepQuality,
@@ -88,6 +137,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       toast.success(existingEntry ? 'Entry updated' : 'Entry saved')
       setPhotos([])
       setLabels([])
+      refetchEntry()
       onSuccess?.()
     } catch {
       toast.error('Failed to save entry')
@@ -121,13 +171,26 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         ]}
       />
 
-      <BinaryInput
-        label="Stool"
-        value={stoolNormal}
-        onChange={setStoolNormal}
-        trueLabel="Normal"
-        falseLabel="Abnormal"
-      />
+      <div className="space-y-3">
+        <BinaryInput
+          label="Stool"
+          value={stoolNormal}
+          onChange={setStoolNormal}
+          trueLabel="Normal"
+          falseLabel="Abnormal"
+        />
+        {!stoolNormal && (
+          <ScaleInput
+            label="Type"
+            value={stoolType}
+            onChange={(v) => setStoolType(v as string)}
+            options={[
+              { value: 'soft', label: 'Soft / Loose' },
+              { value: 'constipated', label: 'Constipated' },
+            ]}
+          />
+        )}
+      </div>
 
       <ScaleInput
         label="Joint pain / crepitus"
@@ -174,19 +237,29 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         ]}
       />
 
-      <ScaleInput
-        label="Diet risk"
-        value={dietRisk}
-        onChange={(v) => setDietRisk(v as string)}
-        options={[
-          { value: 'normal', label: 'Normal' },
-          { value: 'high-histamine', label: 'High-histamine' },
-          { value: 'high-fodmap', label: 'High-FODMAP' },
-          { value: 'gluten', label: 'Gluten' },
-          { value: 'both', label: 'Hist + FOD' },
-          { value: 'not-sure', label: 'Not sure' },
-        ]}
-      />
+      {/* Diet risk - multi-select */}
+      <div className="space-y-3">
+        <label className="text-sm font-semibold">Diet risk</label>
+        <div className="grid grid-cols-3 gap-2">
+          {DIET_OPTIONS.map((opt) => {
+            const selected = dietRisk.split(',').includes(opt.id)
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => handleDietToggle(opt.id)}
+                className={`min-h-[48px] rounded-xl border px-2 py-2.5 text-sm font-medium transition-all ${
+                  selected
+                    ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                    : 'border-border bg-background text-muted-foreground'
+                }`}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -254,6 +327,36 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       />
 
       <NotesInput value={notes} onChange={setNotes} />
+
+      {/* Existing photos with delete */}
+      {existingPhotos.length > 0 && (
+        <div className="space-y-3">
+          <label className="text-sm font-semibold">Uploaded photos</label>
+          <div className="grid grid-cols-2 gap-3">
+            {existingPhotos.map((photo) => (
+              <div key={photo.id} className="relative rounded-xl border border-border overflow-hidden">
+                <img
+                  src={`/api/v1/photos/${photo.id}/file`}
+                  alt={photo.label || 'Photo'}
+                  className="aspect-square w-full object-cover"
+                />
+                {photo.label && (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                    {photo.label}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleDeleteExistingPhoto(photo.id)}
+                  className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <PhotoCapture
         photos={photos}

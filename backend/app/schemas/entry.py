@@ -13,6 +13,7 @@ class EntryCreate(BaseModel):
     overall: int
     bloating: int
     stool_normal: bool
+    stool_type: Optional[str] = None
     joint_pain: int
     neuro: int
     sleep_quality: int
@@ -27,6 +28,7 @@ class EntryUpdate(BaseModel):
     overall: Optional[int] = None
     bloating: Optional[int] = None
     stool_normal: Optional[bool] = None
+    stool_type: Optional[str] = None
     joint_pain: Optional[int] = None
     neuro: Optional[int] = None
     sleep_quality: Optional[int] = None
@@ -43,6 +45,7 @@ class EntryResponse(BaseModel):
     overall: int
     bloating: int
     stool_normal: bool
+    stool_type: Optional[str] = None
     joint_pain: int
     neuro: int
     sleep_quality: int

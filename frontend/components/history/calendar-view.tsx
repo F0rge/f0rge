@@ -19,8 +19,8 @@ function getFirstDayOfWeek(year: number, month: number): number {
 }
 
 function getOverallColor(overall: number): string {
-  if (overall >= 4) return 'bg-green-500'
-  if (overall === 3) return 'bg-amber-500'
+  if (overall === 3) return 'bg-green-500'
+  if (overall === 2) return 'bg-amber-500'
   return 'bg-red-500'
 }
 

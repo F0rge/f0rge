@@ -16,6 +16,7 @@ class Entry(Base):
     overall: Mapped[int] = mapped_column(Integer, nullable=False)
     bloating: Mapped[int] = mapped_column(Integer, nullable=False)
     stool_normal: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    stool_type: Mapped[str | None] = mapped_column(String, nullable=True)
     joint_pain: Mapped[int] = mapped_column(Integer, nullable=False)
     neuro: Mapped[int] = mapped_column(Integer, nullable=False)
     sleep_quality: Mapped[int] = mapped_column(Integer, nullable=False)

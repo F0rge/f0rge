@@ -12,6 +12,7 @@ export interface Entry {
   overall: number // 1-3 (Very Poor, Standard, Very Good)
   bloating: number // 0-3
   stool_normal: boolean
+  stool_type: string | null
   joint_pain: number // 0-3
   neuro: number // -1, 0, 1
   sleep_quality: number // 1-3
@@ -30,6 +31,7 @@ export interface EntryCreate {
   overall: number
   bloating: number
   stool_normal: boolean
+  stool_type?: string
   joint_pain: number
   neuro: number
   sleep_quality: number

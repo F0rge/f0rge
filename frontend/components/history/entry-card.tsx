@@ -10,17 +10,15 @@ interface EntryCardProps {
 function getOverallLabel(overall: number): string {
   switch (overall) {
     case 1: return 'Very Poor'
-    case 2: return 'Poor'
-    case 3: return 'Standard'
-    case 4: return 'Good'
-    case 5: return 'Very Good'
+    case 2: return 'Standard'
+    case 3: return 'Very Good'
     default: return 'Unknown'
   }
 }
 
 function getOverallBadgeClass(overall: number): string {
-  if (overall >= 4) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-  if (overall === 3) return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+  if (overall === 3) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+  if (overall === 2) return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
   return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
 }
 
