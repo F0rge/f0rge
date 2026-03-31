@@ -97,7 +97,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   }
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-7 pb-8">
       <ScaleInput
         label="How was your day?"
         value={overall}
@@ -188,9 +188,27 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         ]}
       />
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Supplements taken</label>
-        <div className="grid grid-cols-2 gap-2">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-semibold">Supplements taken</label>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setSupplements('nac,fish_oil,magnesium,beef_organs,allicin,oregano,vitamin_d_k2,dao,creatine')}
+              className="text-xs text-muted-foreground underline"
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setSupplements('')}
+              className="text-xs text-muted-foreground underline"
+            >
+              None
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
           {[
             { id: 'nac', label: 'NAC' },
             { id: 'fish_oil', label: 'Fish Oil' },
@@ -198,8 +216,8 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
             { id: 'beef_organs', label: 'Beef Organs' },
             { id: 'allicin', label: 'Allicin' },
             { id: 'oregano', label: 'Oregano Oil' },
-            { id: 'vitamin_d_k2', label: 'Vitamin D+K2' },
-            { id: 'dao', label: 'DAO Enzyme' },
+            { id: 'vitamin_d_k2', label: 'D3 + K2' },
+            { id: 'dao', label: 'DAO' },
             { id: 'creatine', label: 'Creatine' },
           ].map((supp) => {
             const taken = supplements.split(',').includes(supp.id)
@@ -214,9 +232,9 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
                     : [...current, supp.id]
                   setSupplements(updated.join(','))
                 }}
-                className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                className={`min-h-[48px] rounded-xl border px-2 py-2.5 text-sm font-medium transition-all ${
                   taken
-                    ? 'border-primary bg-primary text-primary-foreground'
+                    ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                     : 'border-border bg-background text-muted-foreground'
                 }`}
               >
@@ -225,13 +243,6 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
             )
           })}
         </div>
-        <button
-          type="button"
-          onClick={() => setSupplements('nac,fish_oil,magnesium,beef_organs,allicin,oregano,vitamin_d_k2,dao,creatine')}
-          className="text-xs text-muted-foreground underline"
-        >
-          Select all
-        </button>
       </div>
 
       <BinaryInput
@@ -255,7 +266,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         type="button"
         onClick={handleSubmit}
         disabled={submitting}
-        className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+        className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50 shadow-sm"
       >
         {submitting ? (
           <>

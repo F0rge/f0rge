@@ -14,13 +14,19 @@ interface ScaleInputProps {
 }
 
 export function ScaleInput({ label, options, value, onChange, description }: ScaleInputProps) {
+  // Use grid for 5+ options to prevent cramming
+  const useGrid = options.length >= 5
+  const containerClass = useGrid
+    ? 'grid grid-cols-3 gap-2'
+    : 'flex gap-2'
+
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium leading-none">{label}</label>
+    <div className="space-y-3">
+      <label className="text-sm font-semibold leading-none">{label}</label>
       {description && (
         <p className="text-xs text-muted-foreground">{description}</p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className={containerClass}>
         {options.map((option) => {
           const isActive = value === option.value
           return (
@@ -28,9 +34,11 @@ export function ScaleInput({ label, options, value, onChange, description }: Sca
               key={String(option.value)}
               type="button"
               onClick={() => onChange(option.value)}
-              className={`min-h-[44px] min-w-[44px] flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              className={`min-h-[48px] rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
+                useGrid ? '' : 'flex-1'
+              } ${
                 isActive
-                  ? 'border-primary bg-primary text-primary-foreground'
+                  ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                   : 'border-border bg-background text-foreground hover:bg-muted'
               }`}
             >

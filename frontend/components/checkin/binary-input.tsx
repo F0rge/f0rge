@@ -10,15 +10,15 @@ interface BinaryInputProps {
 
 export function BinaryInput({ label, value, onChange, trueLabel, falseLabel }: BinaryInputProps) {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium leading-none">{label}</label>
+    <div className="space-y-3">
+      <label className="text-sm font-semibold leading-none">{label}</label>
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => onChange(true)}
-          className={`min-h-[44px] flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+          className={`min-h-[48px] flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
             value
-              ? 'border-primary bg-primary text-primary-foreground'
+              ? 'border-primary bg-primary text-primary-foreground shadow-sm'
               : 'border-border bg-background text-foreground hover:bg-muted'
           }`}
         >
@@ -27,9 +27,9 @@ export function BinaryInput({ label, value, onChange, trueLabel, falseLabel }: B
         <button
           type="button"
           onClick={() => onChange(false)}
-          className={`min-h-[44px] flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+          className={`min-h-[48px] flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
             !value
-              ? 'border-primary bg-primary text-primary-foreground'
+              ? 'border-primary bg-primary text-primary-foreground shadow-sm'
               : 'border-border bg-background text-foreground hover:bg-muted'
           }`}
         >
