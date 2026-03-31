@@ -183,7 +183,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
           { value: 'high-histamine', label: 'High-histamine' },
           { value: 'high-fodmap', label: 'High-FODMAP' },
           { value: 'gluten', label: 'Gluten' },
-          { value: 'both', label: 'Both' },
+          { value: 'both', label: 'Hist + FOD' },
           { value: 'not-sure', label: 'Not sure' },
         ]}
       />
