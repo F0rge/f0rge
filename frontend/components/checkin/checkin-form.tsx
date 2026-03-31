@@ -7,7 +7,9 @@ import { ScaleInput } from './scale-input'
 import { BinaryInput } from './binary-input'
 import { NotesInput } from './notes-input'
 import { PhotoCapture } from './photo-capture'
-import { useCreateEntry, useUpdateEntry, useUploadPhoto, useDeletePhoto, useEntry } from '@/lib/api/hooks'
+import { useQueryClient } from '@tanstack/react-query'
+import { useCreateEntry, useUpdateEntry, useUploadPhoto, useDeletePhoto } from '@/lib/api/hooks'
+import { apiDelete } from '@/lib/api/client'
 import type { Entry, EntryCreate } from '@/lib/api/types'
 
 const DIET_OPTIONS = [
@@ -28,8 +30,8 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const createEntry = useCreateEntry()
   const updateEntry = useUpdateEntry()
   const uploadPhoto = useUploadPhoto()
-  const deletePhoto = useDeletePhoto()
-  const { refetch: refetchEntry } = useEntry(date)
+  const deletePhotoMutation = useDeletePhoto()
+  const queryClient = useQueryClient()
 
   const [overall, setOverall] = useState(2)
   const [bloating, setBloating] = useState(0)
@@ -92,8 +94,9 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
 
   const handleDeleteExistingPhoto = async (photoId: number) => {
     try {
-      await deletePhoto.mutateAsync(photoId)
+      await deletePhotoMutation.mutateAsync(photoId)
       setExistingPhotos((prev) => prev.filter((p) => p.id !== photoId))
+      queryClient.invalidateQueries({ queryKey: ['entry', date] })
       toast.success('Photo deleted')
     } catch {
       toast.error('Failed to delete photo')
@@ -137,7 +140,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       toast.success(existingEntry ? 'Entry updated' : 'Entry saved')
       setPhotos([])
       setLabels([])
-      refetchEntry()
+      queryClient.invalidateQueries({ queryKey: ['entry', date] })
       onSuccess?.()
     } catch {
       toast.error('Failed to save entry')
