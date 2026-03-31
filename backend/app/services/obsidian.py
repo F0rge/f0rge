@@ -12,10 +12,20 @@ from app.models.photo import Photo
 
 OVERALL_LABELS = {
     1: "Very Poor",
-    2: "Poor",
-    3: "Standard",
-    4: "Good",
-    5: "Very Good",
+    2: "Standard",
+    3: "Very Good",
+}
+
+SUPPLEMENT_LABELS = {
+    "nac": "NAC",
+    "fish_oil": "Fish Oil",
+    "magnesium": "Magnesium",
+    "beef_organs": "Beef Organs",
+    "allicin": "Allicin",
+    "oregano": "Oregano Oil",
+    "vitamin_d_k2": "Vitamin D+K2",
+    "dao": "DAO Enzyme",
+    "creatine": "Creatine",
 }
 
 BLOATING_LABELS = {0: "None", 1: "Mild", 2: "Moderate", 3: "Severe"}
@@ -27,6 +37,14 @@ NEURO_LABELS = {-1: "Worse than usual", 0: "Baseline", 1: "Better than usual"}
 SLEEP_LABELS = {1: "Poor", 2: "OK", 3: "Good"}
 
 STRESS_LABELS = {1: "Low", 2: "Medium", 3: "High"}
+
+
+def _format_supplements(supplements_str: str) -> str:
+    if not supplements_str:
+        return "None"
+    taken = [s.strip() for s in supplements_str.split(",") if s.strip()]
+    labels = [SUPPLEMENT_LABELS.get(s, s) for s in taken]
+    return ", ".join(labels) if labels else "None"
 
 
 def _render_markdown(entry: Entry, photos: Sequence[Photo]) -> str:
@@ -61,7 +79,7 @@ def _render_markdown(entry: Entry, photos: Sequence[Photo]) -> str:
         "",
         "| Category | Value |",
         "|----------|-------|",
-        f"| Overall day | {OVERALL_LABELS.get(entry.overall, str(entry.overall))} ({entry.overall}/5) |",
+        f"| Overall day | {OVERALL_LABELS.get(entry.overall, str(entry.overall))} ({entry.overall}/3) |",
         f"| Bloating | {BLOATING_LABELS.get(entry.bloating, str(entry.bloating))} |",
         f"| Stool | {'Normal' if entry.stool_normal else 'Abnormal'} |",
         f"| Joint pain | {JOINT_PAIN_LABELS.get(entry.joint_pain, str(entry.joint_pain))} |",
@@ -69,7 +87,7 @@ def _render_markdown(entry: Entry, photos: Sequence[Photo]) -> str:
         f"| Sleep quality | {SLEEP_LABELS.get(entry.sleep_quality, str(entry.sleep_quality))} |",
         f"| Stress | {STRESS_LABELS.get(entry.stress, str(entry.stress))} |",
         f"| Diet risk | {entry.diet_risk} |",
-        f"| Supplements | {entry.supplements} |",
+        f"| Supplements | {_format_supplements(entry.supplements)} |",
         f"| Sick | {sick_str} |",
         "",
         "## Notes",

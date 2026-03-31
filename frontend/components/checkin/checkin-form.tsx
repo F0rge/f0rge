@@ -21,7 +21,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const updateEntry = useUpdateEntry()
   const uploadPhoto = useUploadPhoto()
 
-  const [overall, setOverall] = useState(3)
+  const [overall, setOverall] = useState(2)
   const [bloating, setBloating] = useState(0)
   const [stoolNormal, setStoolNormal] = useState(true)
   const [jointPain, setJointPain] = useState(0)
@@ -29,7 +29,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const [sleepQuality, setSleepQuality] = useState(2)
   const [stress, setStress] = useState(1)
   const [dietRisk, setDietRisk] = useState<string>('normal')
-  const [supplements, setSupplements] = useState<string>('yes')
+  const [supplements, setSupplements] = useState<string>('nac,fish_oil,magnesium,beef_organs,allicin,oregano,vitamin_d_k2,dao,creatine')
   const [sick, setSick] = useState(false)
   const [notes, setNotes] = useState('')
   const [photos, setPhotos] = useState<File[]>([])
@@ -104,10 +104,8 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         onChange={(v) => setOverall(v as number)}
         options={[
           { value: 1, label: 'Very Poor' },
-          { value: 2, label: 'Poor' },
-          { value: 3, label: 'Standard' },
-          { value: 4, label: 'Good' },
-          { value: 5, label: 'Very Good' },
+          { value: 2, label: 'Standard' },
+          { value: 3, label: 'Very Good' },
         ]}
       />
 
@@ -184,20 +182,57 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
           { value: 'normal', label: 'Normal' },
           { value: 'high-histamine', label: 'High-histamine' },
           { value: 'high-fodmap', label: 'High-FODMAP' },
+          { value: 'gluten', label: 'Gluten' },
           { value: 'both', label: 'Both' },
+          { value: 'not-sure', label: 'Not sure' },
         ]}
       />
 
-      <ScaleInput
-        label="Supplements taken"
-        value={supplements}
-        onChange={(v) => setSupplements(v as string)}
-        options={[
-          { value: 'yes', label: 'Yes' },
-          { value: 'partial', label: 'Partial' },
-          { value: 'no', label: 'No' },
-        ]}
-      />
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Supplements taken</label>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { id: 'nac', label: 'NAC' },
+            { id: 'fish_oil', label: 'Fish Oil' },
+            { id: 'magnesium', label: 'Magnesium' },
+            { id: 'beef_organs', label: 'Beef Organs' },
+            { id: 'allicin', label: 'Allicin' },
+            { id: 'oregano', label: 'Oregano Oil' },
+            { id: 'vitamin_d_k2', label: 'Vitamin D+K2' },
+            { id: 'dao', label: 'DAO Enzyme' },
+            { id: 'creatine', label: 'Creatine' },
+          ].map((supp) => {
+            const taken = supplements.split(',').includes(supp.id)
+            return (
+              <button
+                key={supp.id}
+                type="button"
+                onClick={() => {
+                  const current = supplements ? supplements.split(',').filter(Boolean) : []
+                  const updated = taken
+                    ? current.filter((s) => s !== supp.id)
+                    : [...current, supp.id]
+                  setSupplements(updated.join(','))
+                }}
+                className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  taken
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-background text-muted-foreground'
+                }`}
+              >
+                {supp.label}
+              </button>
+            )
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => setSupplements('nac,fish_oil,magnesium,beef_organs,allicin,oregano,vitamin_d_k2,dao,creatine')}
+          className="text-xs text-muted-foreground underline"
+        >
+          Select all
+        </button>
+      </div>
 
       <BinaryInput
         label="Sick / cold?"
