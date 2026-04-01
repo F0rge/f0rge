@@ -111,6 +111,36 @@ class HealthTrackerSync:
         except SystemExit:
             return None
 
+    def get_weather(self, date: str) -> Optional[dict]:
+        try:
+            result = self._request_safe(f"/weather/{date}")
+            return result
+        except Exception:
+            return None
+
+    def get_health_metrics(self, date: str) -> Optional[dict]:
+        try:
+            result = self._request_safe(f"/health-metrics/{date}")
+            return result
+        except Exception:
+            return None
+
+    def _request_safe(self, path: str) -> Optional[dict]:
+        """Like _request but returns None on 404 instead of exiting."""
+        url = f"{API_BASE}{path}"
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "HealthTrackerSync/1.0",
+        }
+        if self.session_cookie:
+            headers["Cookie"] = self.session_cookie
+        req = Request(url, headers=headers, method="GET")
+        try:
+            resp = urlopen(req)
+            return json.loads(resp.read().decode())
+        except URLError:
+            return None
+
     def format_supplements(self, supplements_str: str) -> str:
         if not supplements_str:
             return "None"
@@ -118,7 +148,7 @@ class HealthTrackerSync:
         labels = [SUPPLEMENT_LABELS.get(s, s) for s in taken]
         return ", ".join(labels) if labels else "None"
 
-    def render_markdown(self, entry: dict) -> str:
+    def render_markdown(self, entry: dict, weather: Optional[dict] = None, health: Optional[dict] = None) -> str:
         date_str = entry["date"]
         stool_str = "true" if entry["stool_normal"] else "false"
         sick_str = "true" if entry["sick"] else "false"
@@ -178,6 +208,52 @@ class HealthTrackerSync:
                     lines.append(f"*{photo['label']}*")
                 lines.append("")
 
+        if health:
+            lines.append("## Apple Watch Data")
+            lines.append("")
+            lines.append("| Metric | Value |")
+            lines.append("|--------|-------|")
+            if health.get("hrv_mean") is not None:
+                lines.append(f"| HRV | {health['hrv_mean']} ms (std {health.get('hrv_std', 'N/A')}) |")
+            if health.get("resting_hr") is not None:
+                lines.append(f"| Resting HR | {health['resting_hr']} bpm |")
+            if health.get("sleep_hours") is not None:
+                lines.append(f"| Sleep | {health['sleep_hours']} hours |")
+            if health.get("sleep_deep_min") is not None:
+                lines.append(f"| Deep sleep | {health['sleep_deep_min']} min ({health.get('sleep_deep_pct', 'N/A')}%) |")
+            if health.get("sleep_rem_min") is not None:
+                lines.append(f"| REM sleep | {health['sleep_rem_min']} min ({health.get('sleep_rem_pct', 'N/A')}%) |")
+            if health.get("sleep_core_min") is not None:
+                lines.append(f"| Core sleep | {health['sleep_core_min']} min |")
+            if health.get("sleep_awake_min") is not None:
+                lines.append(f"| Awake in bed | {health['sleep_awake_min']} min |")
+            if health.get("sleep_efficiency") is not None:
+                lines.append(f"| Sleep efficiency | {health['sleep_efficiency']}% |")
+            if health.get("sleep_start"):
+                lines.append(f"| Bedtime | {health['sleep_start']} |")
+            if health.get("sleep_end"):
+                lines.append(f"| Wake time | {health['sleep_end']} |")
+            if health.get("steps") is not None:
+                lines.append(f"| Steps | {health['steps']} |")
+            if health.get("spo2") is not None:
+                lines.append(f"| SpO2 | {health['spo2']}% |")
+            if health.get("active_minutes") is not None:
+                lines.append(f"| Active energy | {health['active_minutes']} kcal |")
+            lines.append("")
+
+        if weather:
+            lines.append("## Weather (Luxembourg)")
+            lines.append("")
+            lines.append("| Metric | Value |")
+            lines.append("|--------|-------|")
+            lines.append(f"| Temperature | {weather.get('temp_min', 'N/A')} - {weather.get('temp_max', 'N/A')} C (mean {weather.get('temp_mean', 'N/A')}) |")
+            lines.append(f"| Pressure | {weather.get('pressure_mean', 'N/A')} hPa |")
+            if weather.get("pressure_delta_24h") is not None:
+                lines.append(f"| Pressure delta (24h) | {weather['pressure_delta_24h']} hPa |")
+            lines.append(f"| Humidity | {weather.get('humidity_mean', 'N/A')}% |")
+            lines.append(f"| Readings | {weather.get('reading_count', 0)} |")
+            lines.append("")
+
         lines.append("---")
         lines.append("")
         lines.append("[[02-Symptoms/Symptoms-Master]] | [[CURRENT-HYPOTHESIS]]")
@@ -193,8 +269,12 @@ class HealthTrackerSync:
         md_path = self.logs_dir / f"{date_str}.md"
         photos = entry.get("photos", [])
 
+        # Fetch enrichment data
+        weather = self.get_weather(date_str)
+        health = self.get_health_metrics(date_str)
+
         # Render markdown
-        content = self.render_markdown(entry)
+        content = self.render_markdown(entry, weather=weather, health=health)
 
         # Check if file needs updating
         if md_path.exists():
