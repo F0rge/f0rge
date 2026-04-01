@@ -72,45 +72,64 @@ def parse_health_auto_export(
                     continue
                 date_key = parsed_date.isoformat()
 
-                # Extract total sleep duration (try multiple formats)
+                # Extract total sleep duration in hours
                 hours = sample.get("qty")
                 if hours is None:
                     total_sleep = sample.get("totalSleep")
                     if total_sleep is not None:
-                        hours = float(total_sleep) / 60.0
+                        ts = float(total_sleep)
+                        # If totalSleep > 24, it's in minutes; otherwise hours
+                        hours = ts / 60.0 if ts > 24 else ts
                     elif sample.get("asleep") is not None:
-                        hours = float(sample["asleep"]) / 60.0
+                        a = float(sample["asleep"])
+                        hours = a / 60.0 if a > 24 else a
                     elif sample.get("duration") is not None:
                         hours = float(sample["duration"]) / 3600.0
                 if hours is not None:
                     sleep_durations[date_key].append(float(hours))
 
-                # Extract stage durations in minutes
-                deep = sample.get("deep")
-                rem = sample.get("rem")
-                core = sample.get("core")
-                awake = sample.get("awake")
+                # Extract stage durations — detect if hours or minutes
+                # Health Auto Export sends stages in hours (e.g. deep=0.58)
+                # when totalSleep is also in hours, or in minutes (e.g. deep=52)
+                # when totalSleep is in minutes. Detect by checking if sum < 24.
+                deep_raw = sample.get("deep")
+                rem_raw = sample.get("rem")
+                core_raw = sample.get("core")
+                awake_raw = sample.get("awake")
 
-                if deep is not None:
-                    sleep_deep_mins[date_key].append(float(deep))
-                if rem is not None:
-                    sleep_rem_mins[date_key].append(float(rem))
-                if core is not None:
-                    sleep_core_mins[date_key].append(float(core))
-                if awake is not None:
-                    sleep_awake_mins[date_key].append(float(awake))
+                stage_vals = [float(v) for v in [deep_raw, rem_raw, core_raw] if v is not None]
+                stage_sum = sum(stage_vals)
 
-                # Compute percentages from stage minutes
-                total_stage = float(deep or 0) + float(rem or 0) + float(core or 0)
+                # If stage values sum to < 24, they're in hours — convert to minutes
+                in_hours = stage_sum > 0 and stage_sum < 24
+
+                def to_min(val: float) -> float:
+                    return val * 60.0 if in_hours else val
+
+                if deep_raw is not None:
+                    sleep_deep_mins[date_key].append(to_min(float(deep_raw)))
+                if rem_raw is not None:
+                    sleep_rem_mins[date_key].append(to_min(float(rem_raw)))
+                if core_raw is not None:
+                    sleep_core_mins[date_key].append(to_min(float(core_raw)))
+                if awake_raw is not None:
+                    sleep_awake_mins[date_key].append(to_min(float(awake_raw)))
+
+                # Compute percentages (unit-agnostic since we use ratios)
+                total_stage = sum(float(v) for v in [deep_raw, rem_raw, core_raw] if v is not None)
                 if total_stage > 0:
-                    sleep_deep_pcts[date_key].append(float(deep or 0) / total_stage * 100)
-                    sleep_rem_pcts[date_key].append(float(rem or 0) / total_stage * 100)
+                    sleep_deep_pcts[date_key].append(float(deep_raw or 0) / total_stage * 100)
+                    sleep_rem_pcts[date_key].append(float(rem_raw or 0) / total_stage * 100)
 
                 # Sleep efficiency
                 in_bed = sample.get("inBed") or sample.get("inBedDuration")
                 asleep_total = sample.get("totalSleep") or sample.get("asleep")
                 if in_bed and asleep_total and float(in_bed) > 0:
-                    sleep_efficiency_vals[date_key].append(float(asleep_total) / float(in_bed) * 100)
+                    ib = float(in_bed)
+                    at = float(asleep_total)
+                    # Both should be in the same unit; efficiency is just ratio
+                    if ib > 0:
+                        sleep_efficiency_vals[date_key].append(at / ib * 100)
 
                 # Bed/wake times (keep the latest sleep session per date)
                 sleep_start_str = sample.get("sleepStart") or sample.get("startDate")
@@ -151,7 +170,7 @@ def parse_health_auto_export(
                 spo2_values[date_key].append(qty)
             elif name == "active_energy_burned":
                 active_energy_values[date_key].append(qty)
-            elif name == "wrist_temperature":
+            elif name in ("wrist_temperature", "apple_sleeping_wrist_temperature"):
                 wrist_temp_values[date_key].append(qty)
 
     # Collect all dates
