@@ -45,6 +45,13 @@ def parse_health_auto_export(
     wrist_temp_values: dict[str, list[float]] = defaultdict(list)
     sleep_deep_pcts: dict[str, list[float]] = defaultdict(list)
     sleep_rem_pcts: dict[str, list[float]] = defaultdict(list)
+    sleep_deep_mins: dict[str, list[float]] = defaultdict(list)
+    sleep_rem_mins: dict[str, list[float]] = defaultdict(list)
+    sleep_core_mins: dict[str, list[float]] = defaultdict(list)
+    sleep_awake_mins: dict[str, list[float]] = defaultdict(list)
+    sleep_efficiency_vals: dict[str, list[float]] = defaultdict(list)
+    sleep_starts: dict[str, str] = {}
+    sleep_ends: dict[str, str] = {}
 
     # Log all metric names for debugging
     metric_names = [m.get("name", "") for m in metrics_list]
@@ -65,33 +72,53 @@ def parse_health_auto_export(
                     continue
                 date_key = parsed_date.isoformat()
 
-                # Try various sleep duration formats
+                # Extract total sleep duration (try multiple formats)
                 hours = sample.get("qty")
                 if hours is None:
-                    # Health Auto Export v2 format: duration fields in minutes or hours
                     total_sleep = sample.get("totalSleep")
                     if total_sleep is not None:
-                        hours = float(total_sleep) / 60.0  # minutes to hours
+                        hours = float(total_sleep) / 60.0
                     elif sample.get("asleep") is not None:
                         hours = float(sample["asleep"]) / 60.0
                     elif sample.get("duration") is not None:
-                        hours = float(sample["duration"]) / 3600.0  # seconds to hours
+                        hours = float(sample["duration"]) / 3600.0
                 if hours is not None:
                     sleep_durations[date_key].append(float(hours))
 
-                # Extract deep and REM percentages
+                # Extract stage durations in minutes
                 deep = sample.get("deep")
                 rem = sample.get("rem")
                 core = sample.get("core")
-                if deep is not None and (deep or core or rem):
-                    total = (float(deep or 0) + float(rem or 0) + float(core or 0))
-                    if total > 0:
-                        if date_key not in sleep_deep_pcts:
-                            sleep_deep_pcts[date_key] = []
-                        if date_key not in sleep_rem_pcts:
-                            sleep_rem_pcts[date_key] = []
-                        sleep_deep_pcts[date_key].append(float(deep or 0) / total * 100)
-                        sleep_rem_pcts[date_key].append(float(rem or 0) / total * 100)
+                awake = sample.get("awake")
+
+                if deep is not None:
+                    sleep_deep_mins[date_key].append(float(deep))
+                if rem is not None:
+                    sleep_rem_mins[date_key].append(float(rem))
+                if core is not None:
+                    sleep_core_mins[date_key].append(float(core))
+                if awake is not None:
+                    sleep_awake_mins[date_key].append(float(awake))
+
+                # Compute percentages from stage minutes
+                total_stage = float(deep or 0) + float(rem or 0) + float(core or 0)
+                if total_stage > 0:
+                    sleep_deep_pcts[date_key].append(float(deep or 0) / total_stage * 100)
+                    sleep_rem_pcts[date_key].append(float(rem or 0) / total_stage * 100)
+
+                # Sleep efficiency
+                in_bed = sample.get("inBed") or sample.get("inBedDuration")
+                asleep_total = sample.get("totalSleep") or sample.get("asleep")
+                if in_bed and asleep_total and float(in_bed) > 0:
+                    sleep_efficiency_vals[date_key].append(float(asleep_total) / float(in_bed) * 100)
+
+                # Bed/wake times (keep the latest sleep session per date)
+                sleep_start_str = sample.get("sleepStart") or sample.get("startDate")
+                sleep_end_str = sample.get("sleepEnd") or sample.get("endDate")
+                if sleep_start_str:
+                    sleep_starts[date_key] = str(sleep_start_str)
+                if sleep_end_str:
+                    sleep_ends[date_key] = str(sleep_end_str)
             continue
 
         for sample in samples:
@@ -139,8 +166,15 @@ def parse_health_auto_export(
         wrist_temp_values,
         sleep_deep_pcts,
         sleep_rem_pcts,
+        sleep_deep_mins,
+        sleep_rem_mins,
+        sleep_core_mins,
+        sleep_awake_mins,
+        sleep_efficiency_vals,
     ):
         all_dates.update(d.keys())
+    all_dates.update(sleep_starts.keys())
+    all_dates.update(sleep_ends.keys())
 
     result: dict[str, HealthMetricCreate] = {}
 
@@ -189,14 +223,29 @@ def parse_health_auto_export(
         if sleep_rem_pcts[date_key]:
             sleep_rem_pct = round(statistics.mean(sleep_rem_pcts[date_key]), 1)
 
+        sleep_deep_min = round(sum(sleep_deep_mins[date_key]), 1) if sleep_deep_mins[date_key] else None
+        sleep_rem_min = round(sum(sleep_rem_mins[date_key]), 1) if sleep_rem_mins[date_key] else None
+        sleep_core_min = round(sum(sleep_core_mins[date_key]), 1) if sleep_core_mins[date_key] else None
+        sleep_awake_min = round(sum(sleep_awake_mins[date_key]), 1) if sleep_awake_mins[date_key] else None
+        sleep_efficiency = round(statistics.mean(sleep_efficiency_vals[date_key]), 1) if sleep_efficiency_vals[date_key] else None
+        sleep_start = sleep_starts.get(date_key)
+        sleep_end = sleep_ends.get(date_key)
+
         result[date_key] = HealthMetricCreate(
             date=parsed,
             hrv_mean=hrv_mean,
             hrv_std=hrv_std,
             resting_hr=resting_hr,
             sleep_hours=sleep_hours,
+            sleep_deep_min=sleep_deep_min,
+            sleep_rem_min=sleep_rem_min,
+            sleep_core_min=sleep_core_min,
+            sleep_awake_min=sleep_awake_min,
             sleep_deep_pct=sleep_deep_pct,
             sleep_rem_pct=sleep_rem_pct,
+            sleep_efficiency=sleep_efficiency,
+            sleep_start=sleep_start,
+            sleep_end=sleep_end,
             steps=steps,
             spo2=spo2,
             active_minutes=active_minutes,

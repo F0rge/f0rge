@@ -25,10 +25,23 @@ def _run_migrations() -> None:
         return
     try:
         conn = sqlite3.connect(db_path)
+        # Entries table migrations
         existing = {row[1] for row in conn.execute("PRAGMA table_info(entries)").fetchall()}
         if "stool_type" not in existing:
             conn.execute("ALTER TABLE entries ADD COLUMN stool_type VARCHAR")
-            conn.commit()
+
+        # Health metrics table migrations
+        try:
+            hm_cols = {row[1] for row in conn.execute("PRAGMA table_info(health_metrics)").fetchall()}
+            for col in ["sleep_deep_min", "sleep_rem_min", "sleep_core_min", "sleep_awake_min",
+                        "sleep_efficiency", "sleep_start", "sleep_end"]:
+                if col not in hm_cols:
+                    col_type = "VARCHAR" if col.startswith("sleep_s") or col.startswith("sleep_e") else "FLOAT"
+                    conn.execute(f"ALTER TABLE health_metrics ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass  # Table may not exist yet
+
+        conn.commit()
         conn.close()
     except Exception:
         pass  # Table may not exist yet, create_all will handle it
