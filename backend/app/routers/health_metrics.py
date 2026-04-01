@@ -53,6 +53,18 @@ def import_health_data(
     db: Session = Depends(get_db),
     _auth: bool = Depends(get_health_import_auth),
 ):
+    import json as _json
+    import logging
+    _logger = logging.getLogger("health_import_debug")
+
+    # Log raw metric names and first sample of each for debugging
+    for m in body.get("data", {}).get("metrics", []):
+        name = m.get("name", "")
+        samples = m.get("data", [])
+        if "sleep" in name.lower() and samples:
+            _logger.warning("RAW SLEEP METRIC: name=%s, sample_count=%d, first_sample=%s",
+                          name, len(samples), _json.dumps(samples[0], default=str)[:500])
+
     parsed = parse_health_auto_export(body)
     upserted = 0
 
