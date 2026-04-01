@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, Loader2 } from 'lucide-react'
+import { CalendarDays, Loader2, Settings } from 'lucide-react'
 import { CheckinForm } from '@/components/checkin/checkin-form'
 import { useEntry } from '@/lib/api/hooks'
 
@@ -31,13 +31,21 @@ export default function CheckinPage() {
           <h1 className="text-xl font-semibold tracking-tight">Check-in</h1>
           <p className="text-sm text-muted-foreground">{formatDisplayDate(today)}</p>
         </div>
-        <Link
-          href="/history"
-          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <CalendarDays className="size-4" />
-          History
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/settings"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Settings className="size-4" />
+          </Link>
+          <Link
+            href="/history"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <CalendarDays className="size-4" />
+            History
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (

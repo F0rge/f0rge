@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -8,7 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import auth, entries, photos
+from app.routers import auth, enriched, entries, health_metrics, photos, weather
+from app.services.weather import weather_background_loop
+
+_weather_task = None
 
 
 def _run_migrations() -> None:
@@ -32,9 +36,14 @@ def _run_migrations() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    global _weather_task
     Base.metadata.create_all(bind=engine)
     _run_migrations()
+    if settings.weather_fetch_enabled and settings.openweathermap_api_key:
+        _weather_task = asyncio.create_task(weather_background_loop())
     yield
+    if _weather_task:
+        _weather_task.cancel()
 
 
 app = FastAPI(title="Health Tracker", lifespan=lifespan)
@@ -50,6 +59,9 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(entries.router)
 app.include_router(photos.router)
+app.include_router(weather.router)
+app.include_router(health_metrics.router)
+app.include_router(enriched.router)
 
 
 @app.get("/api/v1/health")

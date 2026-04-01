@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     secret_key: str = "change-me"
     cors_origins: list[str] = ["http://localhost:3000"]
     photo_dir: str = "photos"
+    openweathermap_api_key: str = ""
+    openweathermap_city: str = "Luxembourg"
+    weather_fetch_enabled: bool = True
+    health_import_token: str = ""
 
     model_config = {"env_file": ".env"}
 
