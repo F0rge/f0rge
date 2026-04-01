@@ -43,13 +43,62 @@ def parse_health_auto_export(
     spo2_values: dict[str, list[float]] = defaultdict(list)
     active_energy_values: dict[str, list[float]] = defaultdict(list)
     wrist_temp_values: dict[str, list[float]] = defaultdict(list)
+    sleep_deep_pcts: dict[str, list[float]] = defaultdict(list)
+    sleep_rem_pcts: dict[str, list[float]] = defaultdict(list)
+
+    # Log all metric names for debugging
+    metric_names = [m.get("name", "") for m in metrics_list]
+    logger.info("Health Auto Export metrics received: %s", metric_names)
 
     for metric in metrics_list:
         name = metric.get("name", "").lower().replace(" ", "_")
         samples = metric.get("data", [])
 
+        # Handle sleep analysis separately (different structure)
+        if "sleep" in name.lower():
+            logger.info("Sleep metric '%s' with %d samples, first sample keys: %s",
+                       name, len(samples), list(samples[0].keys()) if samples else [])
+            for sample in samples:
+                date_str = sample.get("date", sample.get("sleepStart", sample.get("startDate", "")))
+                parsed_date = _parse_date(str(date_str))
+                if parsed_date is None:
+                    continue
+                date_key = parsed_date.isoformat()
+
+                # Try various sleep duration formats
+                hours = sample.get("qty")
+                if hours is None:
+                    # Health Auto Export v2 format: duration fields in minutes or hours
+                    total_sleep = sample.get("totalSleep")
+                    if total_sleep is not None:
+                        hours = float(total_sleep) / 60.0  # minutes to hours
+                    elif sample.get("asleep") is not None:
+                        hours = float(sample["asleep"]) / 60.0
+                    elif sample.get("duration") is not None:
+                        hours = float(sample["duration"]) / 3600.0  # seconds to hours
+                if hours is not None:
+                    sleep_durations[date_key].append(float(hours))
+
+                # Extract deep and REM percentages
+                deep = sample.get("deep")
+                rem = sample.get("rem")
+                core = sample.get("core")
+                if deep is not None and (deep or core or rem):
+                    total = (float(deep or 0) + float(rem or 0) + float(core or 0))
+                    if total > 0:
+                        if date_key not in sleep_deep_pcts:
+                            sleep_deep_pcts[date_key] = []
+                        if date_key not in sleep_rem_pcts:
+                            sleep_rem_pcts[date_key] = []
+                        sleep_deep_pcts[date_key].append(float(deep or 0) / total * 100)
+                        sleep_rem_pcts[date_key].append(float(rem or 0) / total * 100)
+            continue
+
         for sample in samples:
             qty = sample.get("qty")
+            if qty is None:
+                # Try alternate value fields
+                qty = sample.get("Avg") or sample.get("value")
             if qty is None:
                 continue
             try:
@@ -71,7 +120,7 @@ def parse_health_auto_export(
                 sleep_durations[date_key].append(qty)
             elif name == "step_count":
                 step_values[date_key].append(qty)
-            elif name in ("blood_oxygen", "oxygen_saturation"):
+            elif name in ("blood_oxygen", "oxygen_saturation", "blood_oxygen_saturation", "spo2"):
                 spo2_values[date_key].append(qty)
             elif name == "active_energy_burned":
                 active_energy_values[date_key].append(qty)
@@ -88,6 +137,8 @@ def parse_health_auto_export(
         spo2_values,
         active_energy_values,
         wrist_temp_values,
+        sleep_deep_pcts,
+        sleep_rem_pcts,
     ):
         all_dates.update(d.keys())
 
@@ -130,12 +181,22 @@ def parse_health_auto_export(
                 statistics.mean(wrist_temp_values[date_key]), 2
             )
 
+        sleep_deep_pct = None
+        if sleep_deep_pcts[date_key]:
+            sleep_deep_pct = round(statistics.mean(sleep_deep_pcts[date_key]), 1)
+
+        sleep_rem_pct = None
+        if sleep_rem_pcts[date_key]:
+            sleep_rem_pct = round(statistics.mean(sleep_rem_pcts[date_key]), 1)
+
         result[date_key] = HealthMetricCreate(
             date=parsed,
             hrv_mean=hrv_mean,
             hrv_std=hrv_std,
             resting_hr=resting_hr,
             sleep_hours=sleep_hours,
+            sleep_deep_pct=sleep_deep_pct,
+            sleep_rem_pct=sleep_rem_pct,
             steps=steps,
             spo2=spo2,
             active_minutes=active_minutes,
