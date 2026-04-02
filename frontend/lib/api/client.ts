@@ -10,6 +10,14 @@ class ApiError extends Error {
 }
 
 async function handleResponse(res: Response) {
+  if (res.status === 401) {
+    // Session expired — redirect to login with return URL
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      const returnTo = encodeURIComponent(window.location.pathname)
+      window.location.href = `/login?redirect=${returnTo}`
+    }
+    throw new ApiError('Session expired', 401)
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => 'Unknown error')
     throw new ApiError(text, res.status)
