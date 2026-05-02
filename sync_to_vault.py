@@ -24,7 +24,7 @@ API_BASE = os.getenv("HEALTH_TRACKER_API", "https://health.leo-figueiredo.com/ap
 VAULT_PATH = os.getenv(
     "VAULT_PATH",
     os.path.expanduser(
-        "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Health-Research"
+        "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Brain"
     ),
 )
 PIN = os.getenv("HEALTH_TRACKER_PIN", "1234")
@@ -51,7 +51,7 @@ SUPPLEMENT_LABELS = {
 class HealthTrackerSync:
     def __init__(self):
         self.session_cookie = None
-        self.logs_dir = Path(VAULT_PATH) / "02-Symptoms" / "Logs"
+        self.logs_dir = Path(VAULT_PATH) / "Daily" / "Health-Logs"
         self.attachments_dir = Path(VAULT_PATH) / "attachments"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         self.attachments_dir.mkdir(parents=True, exist_ok=True)
@@ -256,7 +256,10 @@ class HealthTrackerSync:
 
         lines.append("---")
         lines.append("")
-        lines.append("[[02-Symptoms/Symptoms-Master]] | [[CURRENT-HYPOTHESIS]]")
+        lines.append(
+            "[[Projects/Health-Diagnostic/Symptoms-Master]] | "
+            "[[Projects/Health-Diagnostic/CURRENT-HYPOTHESIS]]"
+        )
         lines.append("")
         lines.append("---")
         lines.append("*Logged via health-tracker*")

@@ -5,10 +5,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     pin_hash: str = ""
-    vault_path: str = (
-        "/Users/leo/Library/Mobile Documents"
-        "/iCloud~md~obsidian/Documents/Health-Research"
-    )
+    vault_path: str = "/vault"
     database_url: str = "sqlite:///data/health.db"
     secret_key: str = "change-me"
     cors_origins: list[str] = ["http://localhost:3000"]

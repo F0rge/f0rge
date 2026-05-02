@@ -22,8 +22,9 @@ cd frontend && npm run dev   # Frontend only
 - Frontend: http://localhost:3000
 - SQLite DB: backend/data/health.db
 - Photo storage: backend/photos/
-- Obsidian vault: /Users/leo/Library/Mobile Documents/iCloud~md~obsidian/Documents/Health-Research/
-- Vault daily files: {vault}/02-Symptoms/Logs/YYYY-MM-DD.md
+- Obsidian vault (Mac): /Users/leo/Library/Mobile Documents/iCloud~md~obsidian/Documents/Brain/
+- Obsidian vault (container): /vault (bind mount of /mnt/nvme/home/leo/vaults/brain on Pi)
+- Vault daily files: {vault}/Daily/Health-Logs/YYYY-MM-DD.md
 - Vault photo attachments: {vault}/attachments/
 
 ## Conventions

@@ -38,11 +38,12 @@ def save_photo(file_bytes: bytes, filename: str, vault_path: str) -> None:
     with open(local_path, "wb") as f:
         f.write(file_bytes)
 
-    # Copy to vault attachments
-    attachments_dir = os.path.join(vault_path, "attachments")
-    os.makedirs(attachments_dir, exist_ok=True)
-    vault_path_file = os.path.join(attachments_dir, filename)
-    shutil.copy2(local_path, vault_path_file)
+    # Copy to vault attachments (skip if vault disabled)
+    if vault_path:
+        attachments_dir = os.path.join(vault_path, "attachments")
+        os.makedirs(attachments_dir, exist_ok=True)
+        vault_path_file = os.path.join(attachments_dir, filename)
+        shutil.copy2(local_path, vault_path_file)
 
 
 def delete_photo(filename: str, vault_path: str) -> None:
@@ -51,7 +52,8 @@ def delete_photo(filename: str, vault_path: str) -> None:
     if os.path.exists(local_path):
         os.unlink(local_path)
 
-    # Remove from vault attachments
-    vault_file = os.path.join(vault_path, "attachments", filename)
-    if os.path.exists(vault_file):
-        os.unlink(vault_file)
+    # Remove from vault attachments (skip if vault disabled)
+    if vault_path:
+        vault_file = os.path.join(vault_path, "attachments", filename)
+        if os.path.exists(vault_file):
+            os.unlink(vault_file)
