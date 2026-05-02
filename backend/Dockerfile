@@ -1,5 +1,8 @@
 FROM python:3.10-slim
 
+# Match host user `leo` (uid 1000) so vault writes land owned correctly
+RUN groupadd --gid 1000 app && useradd --uid 1000 --gid 1000 --create-home app
+
 WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -9,7 +12,9 @@ RUN uv sync --frozen --no-dev
 
 COPY ./app ./app
 
-RUN mkdir -p /app/data /app/photos
+RUN mkdir -p /app/data /app/photos && chown -R app:app /app
+
+USER app
 
 EXPOSE 8000
 
