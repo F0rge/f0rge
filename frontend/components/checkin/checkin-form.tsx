@@ -5,12 +5,19 @@ import { toast } from 'sonner'
 import { Loader2, X } from 'lucide-react'
 import { ScaleInput } from './scale-input'
 import { BinaryInput } from './binary-input'
+import { BristolInput } from './bristol-input'
 import { NotesInput } from './notes-input'
 import { PhotoCapture } from './photo-capture'
+import { SupplementPicker } from './supplement-picker'
 import { useQueryClient } from '@tanstack/react-query'
-import { useCreateEntry, useUpdateEntry, useUploadPhoto, useDeletePhoto } from '@/lib/api/hooks'
-import { apiDelete } from '@/lib/api/client'
-import type { Entry, EntryCreate } from '@/lib/api/types'
+import {
+  useCreateEntry,
+  useUpdateEntry,
+  useUploadPhoto,
+  useDeletePhoto,
+  useSupplementCatalog,
+} from '@/lib/api/hooks'
+import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
 
 const DIET_OPTIONS = [
   { id: 'normal', label: 'Normal' },
@@ -32,46 +39,72 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const uploadPhoto = useUploadPhoto()
   const deletePhotoMutation = useDeletePhoto()
   const queryClient = useQueryClient()
+  const { data: catalog } = useSupplementCatalog(false)
+
+  const defaultSupplements = (catalog ?? [])
+    .filter((c) => !c.archived)
+    .map((c) => c.key)
+    .join(',')
 
   const [overall, setOverall] = useState(2)
   const [bloating, setBloating] = useState(0)
-  const [stoolNormal, setStoolNormal] = useState(true)
-  const [stoolType, setStoolType] = useState<string>('')
+  const [stoolStatus, setStoolStatus] = useState<StoolStatus>('normal')
+  const [bristolType, setBristolType] = useState<number | null>(null)
   const [jointPain, setJointPain] = useState(0)
   const [neuro, setNeuro] = useState(0)
   const [sleepQuality, setSleepQuality] = useState(2)
   const [stress, setStress] = useState(1)
   const [dietRisk, setDietRisk] = useState<string>('normal')
-  const [supplements, setSupplements] = useState<string>('nac,fish_oil,magnesium,beef_organs,allicin,oregano,vitamin_d_k2,dao,creatine')
+  const [supplements, setSupplements] = useState<string>('')
+  const [supplementsTouched, setSupplementsTouched] = useState(false)
   const [sick, setSick] = useState(false)
+  const [hotShower, setHotShower] = useState(false)
   const [notes, setNotes] = useState('')
   const [photos, setPhotos] = useState<File[]>([])
   const [labels, setLabels] = useState<string[]>([])
   const [existingPhotos, setExistingPhotos] = useState<Entry['photos']>([])
   const [submitting, setSubmitting] = useState(false)
 
+  // When creating a new entry, pre-fill supplements with the current active catalog.
+  useEffect(() => {
+    if (!existingEntry && !supplementsTouched && defaultSupplements) {
+      setSupplements(defaultSupplements)
+    }
+  }, [defaultSupplements, existingEntry, supplementsTouched])
+
   useEffect(() => {
     if (existingEntry) {
       setOverall(existingEntry.overall)
       setBloating(existingEntry.bloating)
-      setStoolNormal(existingEntry.stool_normal)
-      setStoolType(existingEntry.stool_type || '')
+      // Map v1 entries onto the v2 stool fields.
+      if (existingEntry.stool_status) {
+        setStoolStatus(existingEntry.stool_status)
+      } else if (existingEntry.stool_normal === false) {
+        setStoolStatus('abnormal')
+      } else if (existingEntry.stool_normal === true) {
+        setStoolStatus('normal')
+      } else {
+        setStoolStatus('normal')
+      }
+      setBristolType(existingEntry.bristol_type ?? null)
       setJointPain(existingEntry.joint_pain)
       setNeuro(existingEntry.neuro)
       setSleepQuality(existingEntry.sleep_quality)
       setStress(existingEntry.stress)
       setDietRisk(existingEntry.diet_risk)
       setSupplements(existingEntry.supplements)
+      setSupplementsTouched(true)
       setSick(existingEntry.sick)
+      setHotShower(existingEntry.hot_shower ?? false)
       setNotes(existingEntry.notes || '')
       setExistingPhotos(existingEntry.photos || [])
     }
   }, [existingEntry])
 
-  // Reset stool type when switching back to normal
+  // Clear Bristol when leaving abnormal state.
   useEffect(() => {
-    if (stoolNormal) setStoolType('')
-  }, [stoolNormal])
+    if (stoolStatus !== 'abnormal') setBristolType(null)
+  }, [stoolStatus])
 
   const handleDietToggle = (id: string) => {
     const current = dietRisk ? dietRisk.split(',').filter(Boolean) : []
@@ -81,7 +114,6 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       return
     }
 
-    // Remove 'normal' when selecting a risk
     const withoutNormal = current.filter((d) => d !== 'normal')
 
     if (withoutNormal.includes(id)) {
@@ -104,14 +136,23 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   }
 
   const handleSubmit = async () => {
+    if (stoolStatus === 'abnormal' && bristolType === null) {
+      toast.error('Pick a Bristol type, or switch stool back to Normal / None')
+      return
+    }
     setSubmitting(true)
     try {
       const data: EntryCreate = {
         date,
+        schema_version: 2,
+        entry_time: new Date().toISOString(),
         overall,
         bloating,
-        stool_normal: stoolNormal,
-        stool_type: stoolNormal ? undefined : stoolType || undefined,
+        stool_status: stoolStatus,
+        bristol_type:
+          stoolStatus === 'abnormal' && bristolType !== null
+            ? bristolType
+            : undefined,
         joint_pain: jointPain,
         neuro,
         sleep_quality: sleepQuality,
@@ -119,6 +160,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         diet_risk: dietRisk,
         supplements,
         sick,
+        hot_shower: hotShower,
         notes: notes || undefined,
       }
 
@@ -128,7 +170,6 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         await createEntry.mutateAsync(data)
       }
 
-      // Upload photos one by one
       for (let i = 0; i < photos.length; i++) {
         await uploadPhoto.mutateAsync({
           date,
@@ -175,23 +216,18 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       />
 
       <div className="space-y-3">
-        <BinaryInput
+        <ScaleInput
           label="Stool"
-          value={stoolNormal}
-          onChange={setStoolNormal}
-          trueLabel="Normal"
-          falseLabel="Abnormal"
+          value={stoolStatus}
+          onChange={(v) => setStoolStatus(v as StoolStatus)}
+          options={[
+            { value: 'normal', label: 'Normal' },
+            { value: 'abnormal', label: 'Abnormal' },
+            { value: 'none', label: 'No movement' },
+          ]}
         />
-        {!stoolNormal && (
-          <ScaleInput
-            label="Type"
-            value={stoolType}
-            onChange={(v) => setStoolType(v as string)}
-            options={[
-              { value: 'soft', label: 'Soft / Loose' },
-              { value: 'constipated', label: 'Constipated' },
-            ]}
-          />
+        {stoolStatus === 'abnormal' && (
+          <BristolInput value={bristolType} onChange={setBristolType} />
         )}
       </div>
 
@@ -240,7 +276,6 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         ]}
       />
 
-      {/* Diet risk - multi-select */}
       <div className="space-y-3">
         <label className="text-sm font-semibold">Diet risk</label>
         <div className="grid grid-cols-3 gap-2">
@@ -264,62 +299,13 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-semibold">Supplements taken</label>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setSupplements('nac,fish_oil,magnesium,beef_organs,allicin,oregano,vitamin_d_k2,dao,creatine')}
-              className="text-xs text-muted-foreground underline"
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => setSupplements('')}
-              className="text-xs text-muted-foreground underline"
-            >
-              None
-            </button>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { id: 'nac', label: 'NAC' },
-            { id: 'fish_oil', label: 'Fish Oil' },
-            { id: 'magnesium', label: 'Magnesium' },
-            { id: 'beef_organs', label: 'Beef Organs' },
-            { id: 'allicin', label: 'Allicin' },
-            { id: 'oregano', label: 'Oregano Oil' },
-            { id: 'vitamin_d_k2', label: 'D3 + K2' },
-            { id: 'dao', label: 'DAO' },
-            { id: 'creatine', label: 'Creatine' },
-          ].map((supp) => {
-            const taken = supplements.split(',').includes(supp.id)
-            return (
-              <button
-                key={supp.id}
-                type="button"
-                onClick={() => {
-                  const current = supplements ? supplements.split(',').filter(Boolean) : []
-                  const updated = taken
-                    ? current.filter((s) => s !== supp.id)
-                    : [...current, supp.id]
-                  setSupplements(updated.join(','))
-                }}
-                className={`min-h-[48px] rounded-xl border px-2 py-2.5 text-sm font-medium transition-all ${
-                  taken
-                    ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                    : 'border-border bg-background text-muted-foreground'
-                }`}
-              >
-                {supp.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <SupplementPicker
+        value={supplements}
+        onChange={(v) => {
+          setSupplements(v)
+          setSupplementsTouched(true)
+        }}
+      />
 
       <BinaryInput
         label="Sick / cold?"
@@ -329,9 +315,16 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         falseLabel="No"
       />
 
+      <BinaryInput
+        label="Full-body hot shower today?"
+        value={hotShower}
+        onChange={setHotShower}
+        trueLabel="Yes"
+        falseLabel="No"
+      />
+
       <NotesInput value={notes} onChange={setNotes} />
 
-      {/* Existing photos with delete */}
       {existingPhotos.length > 0 && (
         <div className="space-y-3">
           <label className="text-sm font-semibold">Uploaded photos</label>
