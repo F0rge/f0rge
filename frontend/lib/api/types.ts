@@ -6,20 +6,30 @@ export interface Photo {
   created_at: string
 }
 
+export type StoolStatus = 'normal' | 'abnormal' | 'none'
+
 export interface Entry {
   id: number
   date: string // YYYY-MM-DD
+  schema_version: number
+  entry_time: string | null
+  period_of_day: 'morning' | 'midday' | 'evening' | 'night' | null
   overall: number // 1-3 (Very Poor, Standard, Very Good)
   bloating: number // 0-3
-  stool_normal: boolean
+  // v1 legacy
+  stool_normal: boolean | null
   stool_type: string | null
+  // v2
+  stool_status: StoolStatus | null
+  bristol_type: number | null // 1-7
   joint_pain: number // 0-3
   neuro: number // -1, 0, 1
   sleep_quality: number // 1-3
   stress: number // 1-3
-  diet_risk: 'normal' | 'high-histamine' | 'high-fodmap' | 'gluten' | 'both' | 'not-sure'
+  diet_risk: string
   supplements: string // comma-separated supplement IDs
   sick: boolean
+  hot_shower: boolean
   notes: string | null
   photos: Photo[]
   created_at: string
@@ -28,10 +38,13 @@ export interface Entry {
 
 export interface EntryCreate {
   date: string
+  schema_version?: number
+  entry_time?: string
+  period_of_day?: string
   overall: number
   bloating: number
-  stool_normal: boolean
-  stool_type?: string
+  stool_status?: StoolStatus
+  bristol_type?: number
   joint_pain: number
   neuro: number
   sleep_quality: number
@@ -39,7 +52,18 @@ export interface EntryCreate {
   diet_risk: string
   supplements: string
   sick: boolean
+  hot_shower?: boolean
   notes?: string
+}
+
+export interface SupplementCatalogItem {
+  id: number
+  key: string
+  label: string
+  archived: boolean
+  first_used_at: string | null
+  last_used_at: string | null
+  sort_order: number
 }
 
 export interface AuthUser {

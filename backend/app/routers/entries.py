@@ -10,6 +10,7 @@ from app.config import settings
 from app.database import get_db
 from app.middleware.auth import get_current_session
 from app.models.entry import Entry
+from app.models.supplement_catalog import SupplementCatalogItem
 from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
 from app.services.obsidian import delete_daily_file, write_daily_file
 from app.services.photo_storage import delete_photo
@@ -21,6 +22,39 @@ router = APIRouter(
 )
 
 
+def _period_of_day(ts: datetime.datetime) -> str:
+    h = ts.hour
+    if 5 <= h < 12:
+        return "morning"
+    if 12 <= h < 17:
+        return "midday"
+    if 17 <= h < 21:
+        return "evening"
+    return "night"
+
+
+def _touch_supplement_catalog(db: Session, supplements: str | None) -> None:
+    if not supplements:
+        return
+    keys = [s.strip() for s in supplements.split(",") if s.strip()]
+    if not keys:
+        return
+    now = datetime.datetime.utcnow()
+    existing = {
+        item.key: item
+        for item in db.query(SupplementCatalogItem)
+        .filter(SupplementCatalogItem.key.in_(keys))
+        .all()
+    }
+    for key in keys:
+        item = existing.get(key)
+        if item is None:
+            continue
+        if item.first_used_at is None:
+            item.first_used_at = now
+        item.last_used_at = now
+
+
 @router.post("", response_model=EntryResponse, status_code=status.HTTP_201_CREATED)
 def create_entry(body: EntryCreate, db: Session = Depends(get_db)):
     existing = db.query(Entry).filter(Entry.date == body.date).first()
@@ -30,8 +64,17 @@ def create_entry(body: EntryCreate, db: Session = Depends(get_db)):
             detail=f"Entry for {body.date} already exists",
         )
 
-    entry = Entry(**body.model_dump())
+    data = body.model_dump()
+    if data.get("entry_time") is None:
+        data["entry_time"] = datetime.datetime.utcnow()
+    if data.get("period_of_day") is None:
+        data["period_of_day"] = _period_of_day(data["entry_time"])
+    if data.get("schema_version") is None:
+        data["schema_version"] = 2
+
+    entry = Entry(**data)
     db.add(entry)
+    _touch_supplement_catalog(db, entry.supplements)
     db.commit()
     db.refresh(entry)
 
@@ -85,6 +128,12 @@ def update_entry(
     for field, value in update_data.items():
         setattr(entry, field, value)
 
+    # Always refresh entry_time on update so we know when the user last touched it.
+    now = datetime.datetime.utcnow()
+    entry.entry_time = now
+    entry.period_of_day = _period_of_day(now)
+
+    _touch_supplement_catalog(db, entry.supplements)
     db.commit()
     db.refresh(entry)
 

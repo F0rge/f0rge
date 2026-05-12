@@ -65,6 +65,30 @@ function getDietLabel(v: string): string {
   }
 }
 
+const BRISTOL_HINTS: Record<number, string> = {
+  1: 'Type 1 - separate hard lumps',
+  2: 'Type 2 - lumpy sausage',
+  3: 'Type 3 - sausage with cracks',
+  4: 'Type 4 - smooth sausage (ideal)',
+  5: 'Type 5 - soft blobs',
+  6: 'Type 6 - mushy / fluffy',
+  7: 'Type 7 - liquid',
+}
+
+function getStoolLabel(entry: Entry): string {
+  const status =
+    entry.stool_status ??
+    (entry.stool_normal === false ? 'abnormal' : entry.stool_normal === true ? 'normal' : null)
+  if (status === 'none') return 'No movement today'
+  if (status === 'normal') return 'Normal'
+  if (status === 'abnormal') {
+    if (entry.bristol_type) return `Abnormal — ${BRISTOL_HINTS[entry.bristol_type] ?? `Bristol ${entry.bristol_type}`}`
+    if (entry.stool_type) return `Abnormal (${entry.stool_type})`
+    return 'Abnormal'
+  }
+  return 'Not recorded'
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between py-2">
@@ -87,7 +111,7 @@ function EntryDetail({ entry }: { entry: Entry }) {
       </div>
       <div className="divide-y divide-border px-4">
         <DetailRow label="Bloating" value={getBloatingLabel(entry.bloating)} />
-        <DetailRow label="Stool" value={entry.stool_normal ? 'Normal' : 'Abnormal'} />
+        <DetailRow label="Stool" value={getStoolLabel(entry)} />
         <DetailRow label="Joint pain" value={getJointPainLabel(entry.joint_pain)} />
         <DetailRow label="Neuro" value={getNeuroLabel(entry.neuro)} />
         <DetailRow label="Sleep" value={getSleepLabel(entry.sleep_quality)} />
@@ -95,6 +119,13 @@ function EntryDetail({ entry }: { entry: Entry }) {
         <DetailRow label="Diet risk" value={getDietLabel(entry.diet_risk)} />
         <DetailRow label="Supplements" value={entry.supplements.charAt(0).toUpperCase() + entry.supplements.slice(1)} />
         <DetailRow label="Sick" value={entry.sick ? 'Yes' : 'No'} />
+        <DetailRow label="Hot shower" value={entry.hot_shower ? 'Yes' : 'No'} />
+        {entry.entry_time && (
+          <DetailRow
+            label="Logged at"
+            value={`${new Date(entry.entry_time).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' })}${entry.period_of_day ? ` (${entry.period_of_day})` : ''}`}
+          />
+        )}
       </div>
 
       {entry.notes && (
