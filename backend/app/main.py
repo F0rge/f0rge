@@ -14,6 +14,7 @@ from app.routers import (
     auth,
     enriched,
     entries,
+    export,
     food_analysis,
     health_metrics,
     photos,
@@ -216,6 +217,7 @@ app.include_router(health_metrics.router)
 app.include_router(enriched.router)
 app.include_router(supplement_catalog.router)
 app.include_router(food_analysis.router)
+app.include_router(export.router)
 
 
 @app.get("/api/v1/health")
