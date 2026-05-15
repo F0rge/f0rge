@@ -245,6 +245,10 @@
 
   {"name": "olive oil", "category": "oils_fats", "score": 0},
   {"name": "coconut oil", "category": "oils_fats", "score": 0},
+  {"name": "coconut milk", "category": "fruit", "score": 0},
+  {"name": "coconut cream", "category": "fruit", "score": 0},
+  {"name": "coconut butter", "category": "fruit", "score": 0},
+  {"name": "coconut yogurt", "category": "fruit", "score": 0},
   {"name": "sunflower oil", "category": "oils_fats", "score": 0},
   {"name": "rapeseed oil", "category": "oils_fats", "score": 0},
   {"name": "avocado oil", "category": "oils_fats", "score": 0},
