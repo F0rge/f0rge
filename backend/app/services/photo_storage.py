@@ -9,9 +9,7 @@ from PIL import Image, ImageOps
 from app.config import settings
 
 
-def resize_image(
-    file_bytes: bytes, max_dim: int = 2048, quality: int = 85
-) -> bytes:
+def resize_image(file_bytes: bytes, max_dim: int = 2048, quality: int = 85) -> bytes:
     img = Image.open(io.BytesIO(file_bytes))
 
     # Handle EXIF rotation
@@ -35,6 +33,16 @@ def save_photo(file_bytes: bytes, filename: str, vault_path: str) -> None:
     photo_dir = os.path.abspath(settings.photo_dir)
     os.makedirs(photo_dir, exist_ok=True)
     local_path = os.path.join(photo_dir, filename)
+
+    # Defense-in-depth: refuse to overwrite an existing file. The caller
+    # (photo upload router) is responsible for picking a non-colliding
+    # filename; if it ever gets that wrong, we'd rather fail loudly here
+    # than silently destroy a prior photo on disk.
+    if os.path.exists(local_path):
+        raise FileExistsError(
+            f"Refusing to overwrite existing photo file: {local_path}"
+        )
+
     with open(local_path, "wb") as f:
         f.write(file_bytes)
 
