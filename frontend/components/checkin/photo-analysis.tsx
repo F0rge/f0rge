@@ -1,7 +1,14 @@
 'use client'
 
+import { useState } from 'react'
 import { Loader2, X, RefreshCw, Check } from 'lucide-react'
-import { usePhotoAnalysis, useConfirmAnalysis, useRetryAnalysis, useDeleteIngredient } from '@/lib/api/hooks'
+import {
+  usePhotoAnalysis,
+  useConfirmAnalysis,
+  useRetryAnalysis,
+  useDeleteIngredient,
+  useUpdateIngredient,
+} from '@/lib/api/hooks'
 import { IngredientEditor } from './ingredient-editor'
 import type { PhotoIngredient } from '@/lib/api/types'
 
@@ -76,22 +83,94 @@ function DietaryBadges({ ingredient }: { ingredient: PhotoIngredient }) {
 
 function IngredientRow({
   ingredient,
-  canDelete,
+  canEdit,
 }: {
   ingredient: PhotoIngredient
-  canDelete: boolean
+  canEdit: boolean
 }) {
   const deleteIngredient = useDeleteIngredient()
+  const updateIngredient = useUpdateIngredient()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(ingredient.name)
+
+  const startEdit = () => {
+    setDraft(ingredient.name)
+    setEditing(true)
+  }
+
+  const cancelEdit = () => {
+    setEditing(false)
+    setDraft(ingredient.name)
+  }
+
+  const saveEdit = async () => {
+    if (updateIngredient.isPending) return
+    const trimmed = draft.trim()
+    if (!trimmed || trimmed === ingredient.name) {
+      cancelEdit()
+      return
+    }
+    try {
+      await updateIngredient.mutateAsync({
+        ingredientId: ingredient.id,
+        data: { name: trimmed },
+      })
+      setEditing(false)
+    } catch {
+      // Error handled by React Query; keep input open so user can retry
+    }
+  }
+
+  if (editing && canEdit) {
+    return (
+      <div className="flex items-center gap-1.5 py-0.5">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              saveEdit()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              cancelEdit()
+            }
+          }}
+          onBlur={saveEdit}
+          disabled={updateIngredient.isPending}
+          autoFocus
+          aria-label="Edit ingredient name"
+          className="h-6 flex-1 rounded border border-border bg-background px-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+        />
+        {updateIngredient.isPending && (
+          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center gap-1.5 py-0.5">
-      <span className="text-xs text-foreground">{ingredient.name}</span>
+      {canEdit ? (
+        <button
+          type="button"
+          onClick={startEdit}
+          className="text-left text-xs text-foreground hover:underline"
+          aria-label={`Edit ingredient ${ingredient.name}`}
+        >
+          {ingredient.name}
+        </button>
+      ) : (
+        <span className="text-xs text-foreground">{ingredient.name}</span>
+      )}
       <DietaryBadges ingredient={ingredient} />
-      {canDelete && (
+      {canEdit && (
         <button
           type="button"
           onClick={() => deleteIngredient.mutate(ingredient.id)}
           className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={`Remove ingredient ${ingredient.name}`}
         >
           <X className="size-3" />
         </button>
@@ -176,7 +255,7 @@ export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
       {visibleIngredients.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
           {visibleIngredients.map((ing) => (
-            <IngredientRow key={ing.id} ingredient={ing} canDelete={!isConfirmed} />
+            <IngredientRow key={ing.id} ingredient={ing} canEdit={!isConfirmed} />
           ))}
         </div>
       )}
