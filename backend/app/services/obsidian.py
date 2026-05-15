@@ -43,6 +43,22 @@ SLEEP_LABELS = {1: "Poor", 2: "OK", 3: "Good"}
 
 STRESS_LABELS = {1: "Low", 2: "Medium", 3: "High"}
 
+BRISTOL_LABELS = {
+    1: "Type 1 - separate hard lumps",
+    2: "Type 2 - lumpy sausage",
+    3: "Type 3 - sausage with cracks",
+    4: "Type 4 - smooth sausage (normal)",
+    5: "Type 5 - soft blobs",
+    6: "Type 6 - mushy / fluffy",
+    7: "Type 7 - liquid",
+}
+
+STOOL_STATUS_LABELS = {
+    "normal": "Normal",
+    "abnormal": "Abnormal",
+    "none": "No movement today",
+}
+
 
 def _format_supplements(supplements_str: str) -> str:
     if not supplements_str:
@@ -52,25 +68,58 @@ def _format_supplements(supplements_str: str) -> str:
     return ", ".join(labels) if labels else "None"
 
 
+def _stool_summary(entry: Entry) -> str:
+    status = getattr(entry, "stool_status", None)
+    bristol = getattr(entry, "bristol_type", None)
+    if status == "none":
+        return "No movement today"
+    if status == "normal":
+        return "Normal"
+    if status == "abnormal":
+        if bristol is not None:
+            return f"Abnormal ({BRISTOL_LABELS.get(bristol, f'Bristol {bristol}')})"
+        if entry.stool_type:
+            return f"Abnormal ({entry.stool_type})"
+        return "Abnormal"
+    # Fallback for v1 entries that pre-date stool_status.
+    if entry.stool_normal is True:
+        return "Normal"
+    if entry.stool_normal is False:
+        suffix = f" ({entry.stool_type})" if entry.stool_type else ""
+        return f"Abnormal{suffix}"
+    return "Unknown"
+
+
 def _render_markdown(
     db_session: Session, entry: Entry, photos: Sequence[Photo]
 ) -> str:
     date_str = entry.date.isoformat()
-    stool_str = "true" if entry.stool_normal else "false"
     sick_str = "true" if entry.sick else "false"
+    hot_shower_str = "true" if getattr(entry, "hot_shower", False) else "false"
+    schema_version = getattr(entry, "schema_version", 1) or 1
+    stool_status = getattr(entry, "stool_status", None)
+    bristol_type = getattr(entry, "bristol_type", None)
+    entry_time = getattr(entry, "entry_time", None)
+    period_of_day = getattr(entry, "period_of_day", None)
 
+    # Frontmatter — keep deterministic field order so vault diffs stay clean.
     lines = [
         "---",
         "created-by: health-tracker",
         f"created: {date_str}",
         "modified-by: health-tracker",
         f"modified: {date_str}",
+        f"schema-version: {schema_version}",
+        f"entry-time: {entry_time.isoformat() if entry_time else ''}",
+        f"period-of-day: {period_of_day or ''}",
         "tags:",
         "  - daily-check-in",
         "  - symptom-log",
         f"overall: {entry.overall}",
         f"bloating: {entry.bloating}",
-        f"stool-normal: {stool_str}",
+        f"stool-status: {stool_status or ''}",
+        f"bristol-type: {bristol_type if bristol_type is not None else ''}",
+        f"stool-normal: {'' if entry.stool_normal is None else ('true' if entry.stool_normal else 'false')}",
         f"stool-type: {entry.stool_type or ''}",
         f"joint-pain: {entry.joint_pain}",
         f"neuro: {entry.neuro}",
@@ -79,6 +128,7 @@ def _render_markdown(
         f"diet-risk: {entry.diet_risk}",
         f"supplements: {entry.supplements}",
         f"sick: {sick_str}",
+        f"hot-shower: {hot_shower_str}",
         "---",
         "",
         f"# Daily Check-in: {date_str}",
@@ -89,7 +139,7 @@ def _render_markdown(
         "|----------|-------|",
         f"| Overall day | {OVERALL_LABELS.get(entry.overall, str(entry.overall))} ({entry.overall}/3) |",
         f"| Bloating | {BLOATING_LABELS.get(entry.bloating, str(entry.bloating))} |",
-        f"| Stool | {'Normal' if entry.stool_normal else 'Abnormal' + (' (' + entry.stool_type + ')' if entry.stool_type else '')} |",
+        f"| Stool | {_stool_summary(entry)} |",
         f"| Joint pain | {JOINT_PAIN_LABELS.get(entry.joint_pain, str(entry.joint_pain))} |",
         f"| Neuro | {NEURO_LABELS.get(entry.neuro, str(entry.neuro))} |",
         f"| Sleep quality | {SLEEP_LABELS.get(entry.sleep_quality, str(entry.sleep_quality))} |",
@@ -97,6 +147,8 @@ def _render_markdown(
         f"| Diet risk | {entry.diet_risk} |",
         f"| Supplements | {_format_supplements(entry.supplements)} |",
         f"| Sick | {sick_str} |",
+        f"| Hot shower (full body) | {hot_shower_str} |",
+        f"| Logged at | {entry_time.isoformat() if entry_time else 'unknown'} ({period_of_day or 'unknown'}) |",
         "",
         "## Notes",
         "",

@@ -1,8 +1,16 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, apiDelete, apiPostForm } from './client'
-import type { Entry, EntryCreate, AuthUser, WeatherDailySummary, HealthMetricResponse, EnrichedDayResponse } from './types'
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiPostForm } from './client'
+import type {
+  Entry,
+  EntryCreate,
+  AuthUser,
+  WeatherDailySummary,
+  HealthMetricResponse,
+  EnrichedDayResponse,
+  SupplementCatalogItem,
+} from './types'
 
 export function useAuth() {
   return useQuery<AuthUser>({
@@ -126,6 +134,41 @@ export function useEnrichedDay(date: string) {
     queryFn: () => apiGet(`/enriched/${date}`),
     enabled: !!date,
     retry: false,
+  })
+}
+
+export function useSupplementCatalog(includeArchived = false) {
+  const params = includeArchived ? '?include_archived=true' : ''
+  return useQuery<SupplementCatalogItem[]>({
+    queryKey: ['supplement-catalog', includeArchived],
+    queryFn: () => apiGet(`/supplements/catalog${params}`),
+  })
+}
+
+export function useAddSupplementCatalogItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { key: string; label: string }) =>
+      apiPost('/supplements/catalog', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['supplement-catalog'] })
+    },
+  })
+}
+
+export function useUpdateSupplementCatalogItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      key,
+      data,
+    }: {
+      key: string
+      data: { label?: string; archived?: boolean; sort_order?: number }
+    }) => apiPatch(`/supplements/catalog/${key}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['supplement-catalog'] })
+    },
   })
 }
 
