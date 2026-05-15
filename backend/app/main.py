@@ -19,6 +19,7 @@ from app.routers import (
     health_metrics,
     photos,
     supplement_catalog,
+    treatments,
     weather,
 )
 from app.services.weather import weather_background_loop
@@ -217,6 +218,7 @@ app.include_router(health_metrics.router)
 app.include_router(enriched.router)
 app.include_router(supplement_catalog.router)
 app.include_router(food_analysis.router)
+app.include_router(treatments.router)
 app.include_router(export.router)
 
 

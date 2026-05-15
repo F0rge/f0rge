@@ -9,6 +9,7 @@ from app.models.dietary_ingredient import DietaryIngredient
 from app.models.ingredient_alias import IngredientAlias
 from app.models.session import AuthSession
 from app.models.supplement_catalog import SupplementCatalogItem
+from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "WeatherReading",
     "HealthMetric",
     "SupplementCatalogItem",
+    "Treatment",
 ]
