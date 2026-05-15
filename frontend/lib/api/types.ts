@@ -3,6 +3,7 @@ export interface Photo {
   entry_id: number
   filename: string
   label: string | null
+  meal_time: string | null
   created_at: string
 }
 
@@ -31,6 +32,8 @@ export interface Entry {
   sick: boolean
   hot_shower: boolean
   notes: string | null
+  alcohol_units: number | null
+  caffeine_servings: number | null
   photos: Photo[]
   created_at: string
   updated_at: string
@@ -54,6 +57,8 @@ export interface EntryCreate {
   sick: boolean
   hot_shower?: boolean
   notes?: string
+  alcohol_units?: number | null
+  caffeine_servings?: number | null
 }
 
 export interface SupplementCatalogItem {

@@ -10,6 +10,7 @@ import { BristolInput } from './bristol-input'
 import { NotesInput } from './notes-input'
 import { PhotoCapture } from './photo-capture'
 import { SupplementPicker } from './supplement-picker'
+import { Stepper } from '@/components/ui/stepper'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useCreateEntry,
@@ -67,7 +68,10 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const [notes, setNotes] = useState('')
   const [photos, setPhotos] = useState<File[]>([])
   const [labels, setLabels] = useState<string[]>([])
+  const [mealTimes, setMealTimes] = useState<(Date | null)[]>([])
   const [existingPhotos, setExistingPhotos] = useState<Entry['photos']>([])
+  const [alcoholUnits, setAlcoholUnits] = useState(0)
+  const [caffeineServings, setCaffeineServings] = useState(0)
   const [submitting, setSubmitting] = useState(false)
 
   // When creating a new entry, pre-fill supplements with the current active catalog.
@@ -102,6 +106,8 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       setSick(existingEntry.sick)
       setHotShower(existingEntry.hot_shower ?? false)
       setNotes(existingEntry.notes || '')
+      setAlcoholUnits(existingEntry.alcohol_units ?? 0)
+      setCaffeineServings(existingEntry.caffeine_servings ?? 0)
       setExistingPhotos(existingEntry.photos || [])
     }
   }, [existingEntry])
@@ -167,6 +173,8 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         sick,
         hot_shower: hotShower,
         notes: notes || undefined,
+        alcohol_units: alcoholUnits,
+        caffeine_servings: caffeineServings,
       }
 
       if (existingEntry) {
@@ -180,6 +188,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
           date,
           file: photos[i],
           label: labels[i] || undefined,
+          mealTime: mealTimes[i] ?? undefined,
         })
       }
 
@@ -198,6 +207,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       toast.success(existingEntry ? 'Entry updated' : 'Entry saved')
       setPhotos([])
       setLabels([])
+      setMealTimes([])
       queryClient.invalidateQueries({ queryKey: ['entry', date] })
       onSuccess?.()
     } catch {
@@ -342,6 +352,28 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         }}
       />
 
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">Alcohol & Caffeine</label>
+        <div className="flex justify-around rounded-xl border border-border bg-background p-4">
+          <Stepper
+            value={alcoholUnits}
+            onChange={setAlcoholUnits}
+            min={0}
+            max={10}
+            label="Alcohol units"
+            tooltip="1 unit = small glass of wine / half a beer"
+          />
+          <Stepper
+            value={caffeineServings}
+            onChange={setCaffeineServings}
+            min={0}
+            max={10}
+            label="Caffeine servings"
+            tooltip="1 serving = one coffee / one strong tea"
+          />
+        </div>
+      </div>
+
       <BinaryInput
         label="Sick / cold?"
         value={sick}
@@ -395,8 +427,10 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       <PhotoCapture
         photos={photos}
         labels={labels}
+        mealTimes={mealTimes}
         onPhotosChange={setPhotos}
         onLabelsChange={setLabels}
+        onMealTimesChange={setMealTimes}
       />
 
       <button
