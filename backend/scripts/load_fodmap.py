@@ -7,11 +7,13 @@ import logging
 import sqlite3
 from pathlib import Path
 
+from scripts._paths import data_dir
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "health.db"
-DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "fodmap_list.json"
+DATA_PATH = data_dir() / "fodmap_list.json"
 
 
 def load() -> None:

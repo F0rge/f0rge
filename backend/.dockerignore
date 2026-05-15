@@ -1,0 +1,25 @@
+# Don't ship the local dev database — production uses a Docker volume
+data/health.db
+data/health.db-journal
+data/health.db-wal
+data/health.db-shm
+
+# Build artifacts and caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtualenvs and editor noise
+.venv/
+venv/
+.env
+.env.local
+.vscode/
+.idea/
+
+# Tests don't run in production
+tests/

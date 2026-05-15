@@ -11,6 +11,13 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 COPY ./app ./app
+COPY ./scripts ./scripts
+# Ship the dietary reference JSON files under a separate path so they
+# aren't shadowed by the runtime /app/data volume mount that holds health.db.
+COPY ./data /app/data-seed
+
+# Tell the seed scripts and the lifespan hook where to find the JSON files.
+ENV DIETARY_DATA_DIR=/app/data-seed
 
 RUN mkdir -p /app/data /app/photos && chown -R app:app /app
 

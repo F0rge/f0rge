@@ -140,12 +140,56 @@ def _seed_supplement_catalog() -> None:
         session.commit()
 
 
+def _seed_dietary_db_if_empty() -> None:
+    """Seed the dietary reference tables from bundled JSON on first boot.
+
+    Idempotent: if dietary_ingredients already has rows, skip silently. This
+    is what unblocks food analysis on fresh deploys — without it, every
+    ingredient renders as '?' because the lookup table is empty.
+
+    Graceful: if the seed scripts or JSON files are missing (e.g. someone
+    builds the image without the scripts/ COPY), log a warning and continue.
+    The feature degrades to '?' badges rather than crashing the app.
+    """
+    from sqlalchemy.orm import Session
+
+    from app.models.dietary_ingredient import DietaryIngredient
+
+    with Session(engine) as session:
+        existing = session.query(DietaryIngredient).count()
+
+    if existing > 0:
+        logger.info(
+            "Dietary tables already seeded (%d ingredients) — skipping",
+            existing,
+        )
+        return
+
+    logger.warning(
+        "Dietary tables empty — seeding from bundled JSON. "
+        "This runs once on a fresh data volume."
+    )
+    try:
+        from scripts.seed_dietary_db import main as seed_main
+
+        seed_main()
+        with Session(engine) as session:
+            count = session.query(DietaryIngredient).count()
+        logger.info("Dietary seed complete: %d ingredients loaded", count)
+    except Exception:
+        logger.exception(
+            "Dietary seed failed — analysis will show '?' for all ingredients "
+            "until reseeded manually"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _weather_task
     Base.metadata.create_all(bind=engine)
     _run_migrations()
     _seed_supplement_catalog()
+    _seed_dietary_db_if_empty()
     _warn_misconfigured_features()
     if settings.weather_fetch_enabled and settings.openweathermap_api_key:
         _weather_task = asyncio.create_task(weather_background_loop())
