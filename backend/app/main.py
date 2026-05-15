@@ -19,6 +19,7 @@ from app.routers import (
     export,
     food_analysis,
     health_metrics,
+    insights,
     photos,
     supplement_catalog,
     symptom_catalog,
@@ -289,6 +290,7 @@ app.include_router(enriched.router)
 app.include_router(supplement_catalog.router)
 app.include_router(symptom_catalog.router)
 app.include_router(food_analysis.router)
+app.include_router(insights.router)
 app.include_router(treatments.router)
 app.include_router(export.router)
 

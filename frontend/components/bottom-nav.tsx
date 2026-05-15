@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ClipboardCheck, Pill, CalendarDays } from 'lucide-react'
+import { ClipboardCheck, Pill, CalendarDays, TrendingUp, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { href: '/checkin', label: 'Today', icon: ClipboardCheck },
-  { href: '/treatments', label: 'Treatments', icon: Pill },
   { href: '/history', label: 'History', icon: CalendarDays },
+  { href: '/treatments', label: 'Treatments', icon: Pill },
+  { href: '/insights', label: 'Insights', icon: TrendingUp },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ] as const
 
 export function BottomNav() {
