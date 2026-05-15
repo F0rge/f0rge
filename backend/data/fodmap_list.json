@@ -156,6 +156,10 @@
 
   {"name": "olive oil", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
   {"name": "coconut oil", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
+  {"name": "coconut milk", "oligos": "low", "fructose": "low", "polyols": "moderate", "lactose": "low"},
+  {"name": "coconut cream", "oligos": "low", "fructose": "low", "polyols": "moderate", "lactose": "low"},
+  {"name": "coconut butter", "oligos": "low", "fructose": "low", "polyols": "moderate", "lactose": "low"},
+  {"name": "coconut yogurt", "oligos": "low", "fructose": "low", "polyols": "moderate", "lactose": "low"},
   {"name": "sunflower oil", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
   {"name": "sugar", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
   {"name": "maple syrup", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
