@@ -82,7 +82,11 @@ async def upload_photo(
     db.refresh(entry)
     write_daily_file(db, entry, entry.photos)
 
-    if settings.food_analysis_enabled:
+    # Only queue analysis if the feature is enabled AND configured. Skipping
+    # at the router avoids spinning up a background task that would only fail
+    # in trigger_analysis_background. The latter still has its own guard for
+    # robustness if the key is removed mid-upload.
+    if settings.food_analysis_enabled and settings.openrouter_api_key:
         background_tasks.add_task(trigger_analysis_background, photo.id)
 
     return photo
