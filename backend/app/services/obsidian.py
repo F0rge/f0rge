@@ -70,7 +70,15 @@ FODMAP_ABBREV = {
 
 
 def _format_ingredient(ing: PhotoIngredient) -> str:
-    """Format a single ingredient with dietary annotations."""
+    """Format a single ingredient with dietary annotations.
+
+    FODMAP markers:
+      - `high` levels emit the standard abbreviation (e.g. ``F:L``).
+      - `moderate` levels emit a ``?`` suffix (e.g. ``F:L?``) to flag
+        "be cautious — moderate, not high".
+      - For a given FODMAP category, `high` takes precedence over
+        `moderate` (we only emit one marker per category per ingredient).
+    """
     parts: list[str] = []
     if ing.histamine_score is not None:
         parts.append(f"H:{ing.histamine_score}")
@@ -82,6 +90,8 @@ def _format_ingredient(ing: PhotoIngredient) -> str:
         val = getattr(ing, f"fodmap_{field}", None)
         if val == "high":
             parts.append(abbrev)
+        elif val == "moderate":
+            parts.append(f"{abbrev}?")
     annotation = f" ({', '.join(parts)})" if parts else ""
     return f"{ing.name}{annotation}"
 
@@ -92,6 +102,11 @@ def _dietary_flags_line(analysis: PhotoAnalysis) -> str:
     Only considers visible ingredients (those the user confirmed in the UI).
     Inferred/hidden ingredients (visible=false) are excluded so the vault
     matches what the user reviewed on screen.
+
+    For each FODMAP category, `high` takes precedence over `moderate`:
+    if any visible ingredient is `high`, emit the bare label
+    (e.g. ``FODMAP-Lactose``). Otherwise, if any is `moderate`, emit
+    a `(moderate)`-suffixed label (e.g. ``FODMAP-Lactose (moderate)``).
     """
     visible = [i for i in analysis.ingredients if i.visible]
     flags: list[str] = []
@@ -111,8 +126,11 @@ def _dietary_flags_line(analysis: PhotoAnalysis) -> str:
         ("polyols", "FODMAP-Polyols"),
         ("lactose", "FODMAP-Lactose"),
     ):
-        if any(getattr(i, f"fodmap_{field}", None) == "high" for i in visible):
+        attr = f"fodmap_{field}"
+        if any(getattr(i, attr, None) == "high" for i in visible):
             flags.append(label)
+        elif any(getattr(i, attr, None) == "moderate" for i in visible):
+            flags.append(f"{label} (moderate)")
     return f"Dietary flags: {', '.join(flags)}" if flags else ""
 
 
@@ -147,14 +165,18 @@ def _compute_dietary_tags(
         if max_h >= 1:
             tags.append(f"histamine-{max_h}")
 
-    for field, tag_suffix in (
-        ("oligos", "fodmap-high-oligos"),
-        ("fructose", "fodmap-high-fructose"),
-        ("polyols", "fodmap-high-polyols"),
-        ("lactose", "fodmap-high-lactose"),
+    # For each FODMAP category, prefer `high` over `moderate` — never tag both.
+    for field, high_tag, mod_tag in (
+        ("oligos", "fodmap-high-oligos", "fodmap-moderate-oligos"),
+        ("fructose", "fodmap-high-fructose", "fodmap-moderate-fructose"),
+        ("polyols", "fodmap-high-polyols", "fodmap-moderate-polyols"),
+        ("lactose", "fodmap-high-lactose", "fodmap-moderate-lactose"),
     ):
-        if any(getattr(i, f"fodmap_{field}", None) == "high" for i in all_ingredients):
-            tags.append(tag_suffix)
+        attr = f"fodmap_{field}"
+        if any(getattr(i, attr, None) == "high" for i in all_ingredients):
+            tags.append(high_tag)
+        elif any(getattr(i, attr, None) == "moderate" for i in all_ingredients):
+            tags.append(mod_tag)
 
     if any(i.contains_gluten for i in all_ingredients):
         tags.append("contains-gluten")
