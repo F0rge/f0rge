@@ -37,7 +37,12 @@ function getSummary(entry: Entry): string {
     const level = entry.bloating === 1 ? 'mild' : entry.bloating === 2 ? 'moderate' : 'severe'
     parts.push(`${level} bloating`)
   }
-  if (!entry.stool_normal) parts.push('abnormal stool')
+  const stool = entry.stool_status ?? (entry.stool_normal === false ? 'abnormal' : entry.stool_normal === true ? 'normal' : null)
+  if (stool === 'abnormal') {
+    parts.push(entry.bristol_type ? `stool B${entry.bristol_type}` : 'abnormal stool')
+  } else if (stool === 'none') {
+    parts.push('no stool')
+  }
   if (entry.joint_pain > 0) {
     const level = entry.joint_pain === 1 ? 'mild' : entry.joint_pain === 2 ? 'moderate' : 'severe'
     parts.push(`${level} joint pain`)
@@ -45,6 +50,7 @@ function getSummary(entry: Entry): string {
   if (entry.neuro === -1) parts.push('neuro worse')
   if (entry.neuro === 1) parts.push('neuro better')
   if (entry.sick) parts.push('sick')
+  if (entry.hot_shower) parts.push('hot shower')
   if (parts.length === 0) return 'Baseline day'
   return parts.join(', ')
 }
