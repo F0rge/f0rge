@@ -76,6 +76,21 @@ def _run_migrations() -> None:
             conn.execute(
                 "ALTER TABLE entries ADD COLUMN hot_shower BOOLEAN NOT NULL DEFAULT 0"
             )
+        if "alcohol_units" not in existing:
+            conn.execute("ALTER TABLE entries ADD COLUMN alcohol_units INTEGER")
+        if "caffeine_servings" not in existing:
+            conn.execute("ALTER TABLE entries ADD COLUMN caffeine_servings INTEGER")
+
+        # Photos table migrations
+        photo_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(photos)").fetchall()
+        }
+        if "meal_time" not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN meal_time DATETIME")
+            # Backfill: existing photos get created_at as their meal_time.
+            conn.execute(
+                "UPDATE photos SET meal_time = created_at WHERE meal_time IS NULL"
+            )
 
         # Health metrics table migrations
         try:
