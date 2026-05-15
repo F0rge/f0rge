@@ -4,7 +4,16 @@ import datetime
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -15,6 +24,7 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.schemas.photo import PhotoResponse
 from app.services.obsidian import write_daily_file
+from app.services.food_analysis import trigger_analysis_background
 from app.services.photo_storage import delete_photo, resize_image, save_photo
 
 router = APIRouter(
@@ -31,6 +41,7 @@ router = APIRouter(
 )
 async def upload_photo(
     date: datetime.date,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     label: Optional[str] = Form(None),
     db: Session = Depends(get_db),
@@ -70,6 +81,9 @@ async def upload_photo(
     # Re-write vault file to include new photo
     db.refresh(entry)
     write_daily_file(db, entry, entry.photos)
+
+    if settings.food_analysis_enabled:
+        background_tasks.add_task(trigger_analysis_background, photo.id)
 
     return photo
 

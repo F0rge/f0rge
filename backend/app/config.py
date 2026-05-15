@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     openweathermap_city: str = "Luxembourg"
     weather_fetch_enabled: bool = True
     health_import_token: str = ""
+    openrouter_api_key: str = ""
+    openrouter_model: str = "google/gemini-3-flash-preview"
+    food_analysis_enabled: bool = True
 
     model_config = {"env_file": ".env"}
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+from typing import Optional
 
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -23,3 +24,6 @@ class Photo(Base):
     )
 
     entry: Mapped[Entry] = relationship("Entry", back_populates="photos")
+    analysis: Mapped[Optional[PhotoAnalysis]] = relationship(
+        "PhotoAnalysis", back_populates="photo", uselist=False
+    )

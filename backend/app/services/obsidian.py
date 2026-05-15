@@ -5,12 +5,14 @@ import os
 import tempfile
 from typing import Optional, Sequence
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
 from app.models.photo import Photo
+from app.models.photo_analysis import PhotoAnalysis
+from app.models.photo_ingredient import PhotoIngredient
 from app.services.weather import get_daily_summary
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,103 @@ STOOL_STATUS_LABELS = {
     "none": "No movement today",
 }
 
+FODMAP_ABBREV = {
+    "oligos": "F:O",
+    "fructose": "F:Fr",
+    "polyols": "F:P",
+    "lactose": "F:L",
+}
+
+
+def _format_ingredient(ing: PhotoIngredient) -> str:
+    """Format a single ingredient with dietary annotations."""
+    parts: list[str] = []
+    if ing.histamine_score is not None:
+        parts.append(f"H:{ing.histamine_score}")
+    if ing.contains_dairy:
+        parts.append("Dairy")
+    if ing.contains_gluten:
+        parts.append("Gluten")
+    for field, abbrev in FODMAP_ABBREV.items():
+        val = getattr(ing, f"fodmap_{field}", None)
+        if val == "high":
+            parts.append(abbrev)
+    annotation = f" ({', '.join(parts)})" if parts else ""
+    return f"{ing.name}{annotation}"
+
+
+def _dietary_flags_line(analysis: PhotoAnalysis) -> str:
+    """Build the 'Dietary flags: ...' summary for an analysis."""
+    flags: list[str] = []
+    max_h = max(
+        (
+            i.histamine_score
+            for i in analysis.ingredients
+            if i.histamine_score is not None
+        ),
+        default=None,
+    )
+    if max_h is not None and max_h >= 1:
+        flags.append(f"Histamine {max_h}")
+    if any(i.contains_dairy for i in analysis.ingredients):
+        flags.append("Dairy")
+    if any(i.contains_gluten for i in analysis.ingredients):
+        flags.append("Gluten")
+    for field, label in (
+        ("oligos", "FODMAP-Oligos"),
+        ("fructose", "FODMAP-Fructose"),
+        ("polyols", "FODMAP-Polyols"),
+        ("lactose", "FODMAP-Lactose"),
+    ):
+        if any(
+            getattr(i, f"fodmap_{field}", None) == "high" for i in analysis.ingredients
+        ):
+            flags.append(label)
+    return f"Dietary flags: {', '.join(flags)}" if flags else ""
+
+
+def _compute_dietary_tags(
+    confirmed: list[PhotoAnalysis],
+) -> tuple[dict[str, str], list[str]]:
+    """Return (frontmatter_fields, extra_tags) from confirmed analyses."""
+    fm: dict[str, str] = {}
+    tags: list[str] = []
+
+    if not confirmed:
+        return fm, tags
+
+    fm["food-photos"] = str(len(confirmed))
+    dishes = [a.dish_name for a in confirmed if a.dish_name]
+    if dishes:
+        fm["dishes"] = f'"{", ".join(dishes)}"'
+
+    all_ingredients = [i for a in confirmed for i in a.ingredients]
+
+    max_h = max(
+        (i.histamine_score for i in all_ingredients if i.histamine_score is not None),
+        default=None,
+    )
+    if max_h is not None:
+        fm["max-histamine"] = str(max_h)
+        if max_h >= 1:
+            tags.append(f"histamine-{max_h}")
+
+    for field, tag_suffix in (
+        ("oligos", "fodmap-high-oligos"),
+        ("fructose", "fodmap-high-fructose"),
+        ("polyols", "fodmap-high-polyols"),
+        ("lactose", "fodmap-high-lactose"),
+    ):
+        if any(getattr(i, f"fodmap_{field}", None) == "high" for i in all_ingredients):
+            tags.append(tag_suffix)
+
+    if any(i.contains_gluten for i in all_ingredients):
+        tags.append("contains-gluten")
+    if any(i.contains_dairy for i in all_ingredients):
+        tags.append("contains-dairy")
+
+    return fm, tags
+
 
 def _format_supplements(supplements_str: str) -> str:
     if not supplements_str:
@@ -102,6 +201,31 @@ def _render_markdown(
     entry_time = getattr(entry, "entry_time", None)
     period_of_day = getattr(entry, "period_of_day", None)
 
+    # Query confirmed analyses for all photos in this entry
+    photo_ids = [p.id for p in photos]
+    analyses: dict[int, PhotoAnalysis] = {}
+    if photo_ids:
+        confirmed = (
+            db_session.query(PhotoAnalysis)
+            .options(selectinload(PhotoAnalysis.ingredients))
+            .filter(
+                PhotoAnalysis.photo_id.in_(photo_ids),
+                PhotoAnalysis.status == "confirmed",
+            )
+            .all()
+        )
+        analyses = {a.photo_id: a for a in confirmed}
+
+    dietary_fm, dietary_tags = _compute_dietary_tags(list(analyses.values()))
+
+    tag_lines = [
+        "tags:",
+        "  - daily-check-in",
+        "  - symptom-log",
+    ]
+    for t in dietary_tags:
+        tag_lines.append(f"  - {t}")
+
     # Frontmatter — keep deterministic field order so vault diffs stay clean.
     lines = [
         "---",
@@ -112,9 +236,7 @@ def _render_markdown(
         f"schema-version: {schema_version}",
         f"entry-time: {entry_time.isoformat() if entry_time else ''}",
         f"period-of-day: {period_of_day or ''}",
-        "tags:",
-        "  - daily-check-in",
-        "  - symptom-log",
+        *tag_lines,
         f"overall: {entry.overall}",
         f"bloating: {entry.bloating}",
         f"stool-status: {stool_status or ''}",
@@ -129,32 +251,38 @@ def _render_markdown(
         f"supplements: {entry.supplements}",
         f"sick: {sick_str}",
         f"hot-shower: {hot_shower_str}",
-        "---",
-        "",
-        f"# Daily Check-in: {date_str}",
-        "",
-        "## Summary",
-        "",
-        "| Category | Value |",
-        "|----------|-------|",
-        f"| Overall day | {OVERALL_LABELS.get(entry.overall, str(entry.overall))} ({entry.overall}/3) |",
-        f"| Bloating | {BLOATING_LABELS.get(entry.bloating, str(entry.bloating))} |",
-        f"| Stool | {_stool_summary(entry)} |",
-        f"| Joint pain | {JOINT_PAIN_LABELS.get(entry.joint_pain, str(entry.joint_pain))} |",
-        f"| Neuro | {NEURO_LABELS.get(entry.neuro, str(entry.neuro))} |",
-        f"| Sleep quality | {SLEEP_LABELS.get(entry.sleep_quality, str(entry.sleep_quality))} |",
-        f"| Stress | {STRESS_LABELS.get(entry.stress, str(entry.stress))} |",
-        f"| Diet risk | {entry.diet_risk} |",
-        f"| Supplements | {_format_supplements(entry.supplements)} |",
-        f"| Sick | {sick_str} |",
-        f"| Hot shower (full body) | {hot_shower_str} |",
-        f"| Logged at | {entry_time.isoformat() if entry_time else 'unknown'} ({period_of_day or 'unknown'}) |",
-        "",
-        "## Notes",
-        "",
-        entry.notes if entry.notes else "No notes recorded.",
-        "",
     ]
+    for key, val in dietary_fm.items():
+        lines.append(f"{key}: {val}")
+    lines.extend(
+        [
+            "---",
+            "",
+            f"# Daily Check-in: {date_str}",
+            "",
+            "## Summary",
+            "",
+            "| Category | Value |",
+            "|----------|-------|",
+            f"| Overall day | {OVERALL_LABELS.get(entry.overall, str(entry.overall))} ({entry.overall}/3) |",
+            f"| Bloating | {BLOATING_LABELS.get(entry.bloating, str(entry.bloating))} |",
+            f"| Stool | {_stool_summary(entry)} |",
+            f"| Joint pain | {JOINT_PAIN_LABELS.get(entry.joint_pain, str(entry.joint_pain))} |",
+            f"| Neuro | {NEURO_LABELS.get(entry.neuro, str(entry.neuro))} |",
+            f"| Sleep quality | {SLEEP_LABELS.get(entry.sleep_quality, str(entry.sleep_quality))} |",
+            f"| Stress | {STRESS_LABELS.get(entry.stress, str(entry.stress))} |",
+            f"| Diet risk | {entry.diet_risk} |",
+            f"| Supplements | {_format_supplements(entry.supplements)} |",
+            f"| Sick | {sick_str} |",
+            f"| Hot shower (full body) | {hot_shower_str} |",
+            f"| Logged at | {entry_time.isoformat() if entry_time else 'unknown'} ({period_of_day or 'unknown'}) |",
+            "",
+            "## Notes",
+            "",
+            entry.notes if entry.notes else "No notes recorded.",
+            "",
+        ]
+    )
 
     if photos:
         lines.append("## Photos")
@@ -163,6 +291,19 @@ def _render_markdown(
             lines.append(f"![[attachments/{photo.filename}]]")
             if photo.label:
                 lines.append(f"*{photo.label}*")
+            analysis = analyses.get(photo.id)
+            if analysis:
+                conf_pct = (
+                    round(analysis.dish_confidence * 100)
+                    if analysis.dish_confidence
+                    else 0
+                )
+                lines.append(f"**{analysis.dish_name}** ({conf_pct}%)")
+                ing_parts = [_format_ingredient(i) for i in analysis.ingredients]
+                lines.append(f"Ingredients: {', '.join(ing_parts)}")
+                flags_line = _dietary_flags_line(analysis)
+                if flags_line:
+                    lines.append(flags_line)
             lines.append("")
 
     health = None
@@ -193,15 +334,15 @@ def _render_markdown(
         if health.sleep_hours is not None:
             lines.append(f"| Sleep | {health.sleep_hours} hours |")
         if health.sleep_deep_min is not None:
-            deep_pct = health.sleep_deep_pct if health.sleep_deep_pct is not None else "N/A"
-            lines.append(
-                f"| Deep sleep | {health.sleep_deep_min} min ({deep_pct}%) |"
+            deep_pct = (
+                health.sleep_deep_pct if health.sleep_deep_pct is not None else "N/A"
             )
+            lines.append(f"| Deep sleep | {health.sleep_deep_min} min ({deep_pct}%) |")
         if health.sleep_rem_min is not None:
-            rem_pct = health.sleep_rem_pct if health.sleep_rem_pct is not None else "N/A"
-            lines.append(
-                f"| REM sleep | {health.sleep_rem_min} min ({rem_pct}%) |"
+            rem_pct = (
+                health.sleep_rem_pct if health.sleep_rem_pct is not None else "N/A"
             )
+            lines.append(f"| REM sleep | {health.sleep_rem_min} min ({rem_pct}%) |")
         if health.sleep_core_min is not None:
             lines.append(f"| Core sleep | {health.sleep_core_min} min |")
         if health.sleep_awake_min is not None:
@@ -231,9 +372,7 @@ def _render_markdown(
         )
         lines.append(f"| Pressure | {weather.pressure_mean} hPa |")
         if weather.pressure_delta_24h is not None:
-            lines.append(
-                f"| Pressure delta (24h) | {weather.pressure_delta_24h} hPa |"
-            )
+            lines.append(f"| Pressure delta (24h) | {weather.pressure_delta_24h} hPa |")
         lines.append(f"| Humidity | {weather.humidity_mean}% |")
         lines.append(f"| Readings | {weather.reading_count} |")
         lines.append("")

@@ -17,6 +17,8 @@ import {
   useDeletePhoto,
   useSupplementCatalog,
 } from '@/lib/api/hooks'
+import { apiGet, apiPut } from '@/lib/api/client'
+import { PhotoAnalysis } from './photo-analysis'
 import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
 
 const DIET_OPTIONS = [
@@ -178,6 +180,18 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         })
       }
 
+      // Auto-confirm pending analyses
+      for (const photo of existingPhotos) {
+        try {
+          const analysis = await apiGet(`/photos/${photo.id}/analysis`)
+          if (analysis && analysis.status === 'complete') {
+            await apiPut(`/photos/${photo.id}/analysis/confirm`, {})
+          }
+        } catch {
+          // Ignore — analysis might not exist
+        }
+      }
+
       toast.success(existingEntry ? 'Entry updated' : 'Entry saved')
       setPhotos([])
       setLabels([])
@@ -330,24 +344,27 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
           <label className="text-sm font-semibold">Uploaded photos</label>
           <div className="grid grid-cols-2 gap-3">
             {existingPhotos.map((photo) => (
-              <div key={photo.id} className="relative rounded-xl border border-border overflow-hidden">
-                <img
-                  src={`/api/v1/photos/${photo.id}/file`}
-                  alt={photo.label || 'Photo'}
-                  className="aspect-square w-full object-cover"
-                />
-                {photo.label && (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
-                    {photo.label}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDeleteExistingPhoto(photo.id)}
-                  className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
-                >
-                  <X className="size-4" />
-                </button>
+              <div key={photo.id}>
+                <div className="relative rounded-xl border border-border overflow-hidden">
+                  <img
+                    src={`/api/v1/photos/${photo.id}/file`}
+                    alt={photo.label || 'Photo'}
+                    className="aspect-square w-full object-cover"
+                  />
+                  {photo.label && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                      {photo.label}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteExistingPhoto(photo.id)}
+                    className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+                <PhotoAnalysis photoId={photo.id} />
               </div>
             ))}
           </div>
