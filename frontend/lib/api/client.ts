@@ -22,6 +22,10 @@ async function handleResponse(res: Response) {
     const text = await res.text().catch(() => 'Unknown error')
     throw new ApiError(text, res.status)
   }
+  // 204 No Content — no body to parse
+  if (res.status === 204) {
+    return null
+  }
   const contentType = res.headers.get('content-type')
   if (contentType && contentType.includes('application/json')) {
     return res.json()
