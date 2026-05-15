@@ -103,6 +103,63 @@ def test_format_ingredient_with_all_flags() -> None:
     assert "F:L" in out
 
 
+# --- _format_ingredient: moderate FODMAP markers (issue #14) -----------
+
+
+def test_format_ingredient_moderate_lactose_emits_marker() -> None:
+    """Heavy cream is the canonical example: moderate-lactose alone must
+    still surface in the vault, with a `?` suffix to distinguish from high."""
+    ing = _ing(
+        "heavy cream",
+        contains_dairy=True,
+        fodmap_lactose="moderate",
+    )
+    out = _format_ingredient(ing)
+    assert "F:L?" in out
+    # Must NOT emit the high marker.
+    assert "F:L," not in out
+    assert not out.endswith("F:L)")
+
+
+def test_format_ingredient_moderate_each_fodmap_category() -> None:
+    """Every FODMAP category should emit a `?`-suffixed marker at moderate."""
+    ing = _ing(
+        "mixed",
+        fodmap_oligos="moderate",
+        fodmap_fructose="moderate",
+        fodmap_polyols="moderate",
+        fodmap_lactose="moderate",
+    )
+    out = _format_ingredient(ing)
+    assert "F:O?" in out
+    assert "F:Fr?" in out
+    assert "F:P?" in out
+    assert "F:L?" in out
+
+
+def test_format_ingredient_high_and_moderate_mixed_categories() -> None:
+    """When one category is `high` and another is `moderate`, both render
+    with their own marker (high gets the bare abbrev, moderate gets `?`)."""
+    ing = _ing(
+        "complex",
+        fodmap_lactose="high",
+        fodmap_oligos="moderate",
+    )
+    out = _format_ingredient(ing)
+    # Lactose at high: bare marker, not `F:L?`.
+    assert "F:L" in out
+    assert "F:L?" not in out
+    # Oligos at moderate: `?` marker.
+    assert "F:O?" in out
+
+
+def test_format_ingredient_low_fodmap_emits_no_marker() -> None:
+    """A `low` FODMAP value must not emit any marker."""
+    ing = _ing("rice", fodmap_oligos="low", fodmap_lactose="low")
+    out = _format_ingredient(ing)
+    assert "F:" not in out
+
+
 # --- _dietary_flags_line: must skip visible=false ----------------------
 
 
@@ -175,6 +232,65 @@ def test_dietary_flags_line_all_invisible_yields_empty() -> None:
     assert _dietary_flags_line(analysis) == ""
 
 
+# --- _dietary_flags_line: moderate FODMAP support (issue #14) ----------
+
+
+def test_dietary_flags_line_moderate_only_emits_suffixed_label() -> None:
+    """All-moderate FODMAP visible items must surface with `(moderate)` suffix."""
+    analysis = _analysis(
+        ingredients=[
+            _ing("heavy cream", contains_dairy=True, fodmap_lactose="moderate"),
+        ]
+    )
+    line = _dietary_flags_line(analysis)
+    assert "FODMAP-Lactose (moderate)" in line
+    # Must NOT emit the bare (high) form for this category.
+    assert "FODMAP-Lactose," not in line
+    assert not line.endswith("FODMAP-Lactose")
+
+
+def test_dietary_flags_line_high_beats_moderate_same_category() -> None:
+    """If any visible ingredient is `high` for a category, suppress the
+    `(moderate)` form for that same category — high wins."""
+    analysis = _analysis(
+        ingredients=[
+            _ing("cheese", fodmap_lactose="high"),
+            _ing("milk", fodmap_lactose="moderate"),
+        ]
+    )
+    line = _dietary_flags_line(analysis)
+    assert "FODMAP-Lactose" in line
+    # No `(moderate)` flag for the same category.
+    assert "FODMAP-Lactose (moderate)" not in line
+
+
+def test_dietary_flags_line_high_one_category_moderate_other() -> None:
+    """High for one category and moderate for another should produce both,
+    each with its own marker."""
+    analysis = _analysis(
+        ingredients=[
+            _ing("onion", fodmap_oligos="high"),
+            _ing("banana", fodmap_fructose="moderate"),
+        ]
+    )
+    line = _dietary_flags_line(analysis)
+    assert "FODMAP-Oligos" in line
+    assert "FODMAP-Oligos (moderate)" not in line
+    assert "FODMAP-Fructose (moderate)" in line
+
+
+def test_dietary_flags_line_moderate_ignored_when_invisible() -> None:
+    """Invisible moderate items must not surface (same rule as `high`)."""
+    analysis = _analysis(
+        ingredients=[
+            _ing("rice", fodmap_lactose="low"),
+            _ing("hidden-cream", visible=False, fodmap_lactose="moderate"),
+        ]
+    )
+    line = _dietary_flags_line(analysis)
+    assert "FODMAP-Lactose" not in line
+
+
 # --- _compute_dietary_tags: aggregates only visible --------------------
 
 
@@ -244,6 +360,80 @@ def test_compute_dietary_tags_aggregates_visible_across_analyses() -> None:
     assert fm["max-histamine"] == "2"
     assert "histamine-2" in tags
     assert "contains-dairy" not in tags
+
+
+# --- _compute_dietary_tags: moderate FODMAP frontmatter tags (issue #14)
+
+
+def test_compute_dietary_tags_moderate_only_emits_moderate_tag() -> None:
+    """Visible moderate-only FODMAP items must yield a `fodmap-moderate-*` tag."""
+    analysis = _analysis(
+        ingredients=[
+            _ing("heavy cream", contains_dairy=True, fodmap_lactose="moderate"),
+        ]
+    )
+    _, tags = _compute_dietary_tags([analysis])
+    assert "fodmap-moderate-lactose" in tags
+    # No high tag for a category that only has moderate.
+    assert "fodmap-high-lactose" not in tags
+
+
+def test_compute_dietary_tags_high_beats_moderate_same_category() -> None:
+    """For one category, when both `high` and `moderate` ingredients exist,
+    only the `high` tag is emitted (no duplicate moderate tag)."""
+    analysis = _analysis(
+        ingredients=[
+            _ing("cheese", fodmap_lactose="high"),
+            _ing("milk", fodmap_lactose="moderate"),
+        ]
+    )
+    _, tags = _compute_dietary_tags([analysis])
+    assert "fodmap-high-lactose" in tags
+    assert "fodmap-moderate-lactose" not in tags
+
+
+def test_compute_dietary_tags_high_one_category_moderate_other() -> None:
+    """High in one category and moderate in another should produce both tags
+    — high tag for the high category, moderate tag for the moderate category."""
+    analysis = _analysis(
+        ingredients=[
+            _ing("onion", fodmap_oligos="high"),
+            _ing("banana", fodmap_fructose="moderate"),
+        ]
+    )
+    _, tags = _compute_dietary_tags([analysis])
+    assert "fodmap-high-oligos" in tags
+    assert "fodmap-moderate-oligos" not in tags
+    assert "fodmap-moderate-fructose" in tags
+    assert "fodmap-high-fructose" not in tags
+
+
+def test_compute_dietary_tags_moderate_ignored_when_invisible() -> None:
+    """Invisible moderate ingredients must not contribute any tag."""
+    analysis = _analysis(
+        ingredients=[
+            _ing("rice", fodmap_lactose="low"),
+            _ing("hidden-cream", visible=False, fodmap_lactose="moderate"),
+        ]
+    )
+    _, tags = _compute_dietary_tags([analysis])
+    assert "fodmap-moderate-lactose" not in tags
+    assert "fodmap-high-lactose" not in tags
+
+
+def test_compute_dietary_tags_moderate_aggregates_across_analyses() -> None:
+    """Cross-analysis: a moderate level in one photo + high in another for
+    the same category should still resolve to only the high tag."""
+    a1 = _analysis(
+        ingredients=[_ing("milk", fodmap_lactose="moderate")],
+    )
+    a2 = _analysis(
+        dish_name="cheese plate",
+        ingredients=[_ing("cheese", fodmap_lactose="high")],
+    )
+    _, tags = _compute_dietary_tags([a1, a2])
+    assert "fodmap-high-lactose" in tags
+    assert "fodmap-moderate-lactose" not in tags
 
 
 # --- end-to-end via _render_markdown -----------------------------------
