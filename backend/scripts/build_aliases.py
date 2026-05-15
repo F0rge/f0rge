@@ -180,6 +180,15 @@ ALIASES: list[tuple[str, str, str]] = [
     ("smoked salmon", "salmon, smoked", "en"),
     ("lox", "salmon, smoked", "en"),
     ("prawns", "shrimp", "en"),
+    # Plant-based milk/cream/butter aliases
+    ("coconut cream", "coconut cream", "en"),
+    ("coconut yoghurt", "coconut yogurt", "en"),
+    ("oat cream", "oat milk", "en"),
+    ("soya milk", "soy milk", "en"),
+    ("almond cream", "almond milk", "en"),
+    ("rice cream", "rice milk", "en"),
+    ("cashew cream", "cashew milk", "en"),
+    ("hemp cream", "hemp milk", "en"),
     # Dairy aliases
     ("whole milk", "milk", "en"),
     ("skim milk", "milk", "en"),

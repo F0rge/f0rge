@@ -11,6 +11,17 @@ from app.models.ingredient_alias import IngredientAlias
 logger = logging.getLogger(__name__)
 
 
+_PLANT_QUALIFIERS = frozenset({
+    "coconut", "oat", "almond", "soy", "soya", "rice", "cashew",
+    "hemp", "peanut", "hazelnut", "macadamia", "pistachio",
+    "sunflower", "flax", "walnut", "pecan", "sesame", "cocoa",
+})
+
+_DAIRY_HEAD_NOUNS = frozenset({
+    "milk", "cream", "butter", "cheese", "yogurt", "yoghurt", "kefir",
+})
+
+
 class IngredientLookupService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -51,27 +62,38 @@ class IngredientLookupService:
         # word is usually the base ingredient (cherry tomato -> tomato,
         # wheat flour -> flour, fresh basil -> basil). Try the last word
         # as an exact canonical/alias match before the loose LIKE fallback.
+        #
+        # Guard: skip when a plant-based qualifier precedes a dairy head
+        # noun (e.g. "coconut milk", "oat cream") to avoid false allergen
+        # inheritance. No data is better than wrong data.
         words = normalised.split()
         if len(words) > 1:
             last_word = words[-1]
-            result = (
-                self.db.query(DietaryIngredient)
-                .filter(DietaryIngredient.canonical_name == last_word)
-                .first()
-            )
-            if result:
-                return result
-            alias = (
-                self.db.query(IngredientAlias)
-                .filter(IngredientAlias.alias == last_word)
-                .first()
-            )
-            if alias:
-                return (
+            qualifiers = set(words[:-1])
+            if last_word in _DAIRY_HEAD_NOUNS and qualifiers & _PLANT_QUALIFIERS:
+                logger.debug(
+                    "Skipping head-noun fallback for '%s' (plant-based qualifier)",
+                    normalised,
+                )
+            else:
+                result = (
                     self.db.query(DietaryIngredient)
-                    .filter(DietaryIngredient.canonical_name == alias.canonical_name)
+                    .filter(DietaryIngredient.canonical_name == last_word)
                     .first()
                 )
+                if result:
+                    return result
+                alias = (
+                    self.db.query(IngredientAlias)
+                    .filter(IngredientAlias.alias == last_word)
+                    .first()
+                )
+                if alias:
+                    return (
+                        self.db.query(DietaryIngredient)
+                        .filter(DietaryIngredient.canonical_name == alias.canonical_name)
+                        .first()
+                    )
 
         # 4. Case-insensitive LIKE on full search term
         return (
