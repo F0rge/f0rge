@@ -271,17 +271,19 @@ export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
 
       {/* Add ingredient + confirm (only when not confirmed) */}
       {!isConfirmed && (
-        <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="mt-2 space-y-2">
           <IngredientEditor photoId={photoId} onAdded={() => {}} />
-          <button
-            type="button"
-            onClick={() => confirmAnalysis.mutate(photoId)}
-            disabled={confirmAnalysis.isPending}
-            className="flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50"
-          >
-            <Check className="size-3" />
-            Confirm
-          </button>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => confirmAnalysis.mutate(photoId)}
+              disabled={confirmAnalysis.isPending}
+              className="flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              <Check className="size-3" />
+              Confirm
+            </button>
+          </div>
         </div>
       )}
     </div>
