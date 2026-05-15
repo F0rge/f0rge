@@ -187,9 +187,7 @@ def test_no_match_returns_none(db: Session) -> None:
 def test_alias_wins_over_head_noun(db: Session) -> None:
     """If a full-string alias exists, it should be used before falling back
     to the head-noun heuristic."""
-    db.add(
-        IngredientAlias(alias="san marzano tomato", canonical_name="tomato paste")
-    )
+    db.add(IngredientAlias(alias="san marzano tomato", canonical_name="tomato paste"))
     db.commit()
     svc = IngredientLookupService(db)
     result = svc.lookup("san marzano tomato")
@@ -224,3 +222,172 @@ def test_suggest_canonical_respects_limit(db: Session) -> None:
     svc = IngredientLookupService(db)
     results = svc.suggest_canonical("tomato", limit=1)
     assert len(results) == 1
+
+
+# ---------------------------------------------------------------------------
+# Expanded alias coverage (closes #15)
+#
+# The vision model surfaces a long tail of common food variants that
+# previously rendered as "?" in the UI. These regressions guard the
+# specific cases from the bug report plus the plurals/dressings batch.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def db_with_expanded_aliases() -> Generator[Session, None, None]:
+    """Fixture with the canonicals + aliases representative of the expanded
+    coverage. Mirrors the rows produced by `scripts/build_aliases.py` for
+    the cases under test, but stays self-contained so the test doesn't
+    depend on the production DB."""
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = SessionLocal()
+    session.add_all(
+        [
+            DietaryIngredient(canonical_name="bell pepper", histamine_score=0),
+            DietaryIngredient(canonical_name="black pepper", histamine_score=0),
+            DietaryIngredient(canonical_name="tahini", histamine_score=0),
+            DietaryIngredient(canonical_name="mixed salad greens", histamine_score=0),
+            DietaryIngredient(canonical_name="microgreens", histamine_score=0),
+            DietaryIngredient(canonical_name="tomato", histamine_score=2),
+            DietaryIngredient(canonical_name="onion", histamine_score=0),
+            DietaryIngredient(canonical_name="potato", histamine_score=0),
+            DietaryIngredient(canonical_name="carrot", histamine_score=0),
+            DietaryIngredient(canonical_name="mushroom", histamine_score=1),
+            DietaryIngredient(canonical_name="egg", histamine_score=0),
+            DietaryIngredient(canonical_name="mango", histamine_score=0),
+        ]
+    )
+    session.add_all(
+        [
+            # Bell pepper colour variants
+            IngredientAlias(alias="yellow bell pepper", canonical_name="bell pepper"),
+            IngredientAlias(alias="red bell pepper", canonical_name="bell pepper"),
+            IngredientAlias(alias="green bell pepper", canonical_name="bell pepper"),
+            IngredientAlias(alias="orange bell pepper", canonical_name="bell pepper"),
+            IngredientAlias(alias="sweet pepper", canonical_name="bell pepper"),
+            IngredientAlias(alias="sweet peppers", canonical_name="bell pepper"),
+            IngredientAlias(alias="bell peppers", canonical_name="bell pepper"),
+            IngredientAlias(alias="capsicum", canonical_name="bell pepper"),
+            # Microgreens / salad greens
+            IngredientAlias(alias="microgreen", canonical_name="microgreens"),
+            IngredientAlias(alias="micro greens", canonical_name="microgreens"),
+            IngredientAlias(alias="sprouts", canonical_name="microgreens"),
+            IngredientAlias(alias="baby greens", canonical_name="mixed salad greens"),
+            IngredientAlias(alias="mixed greens", canonical_name="mixed salad greens"),
+            IngredientAlias(alias="spring mix", canonical_name="mixed salad greens"),
+            # Tahini-based dressings
+            IngredientAlias(alias="tahini dressing", canonical_name="tahini"),
+            IngredientAlias(alias="tahini sauce", canonical_name="tahini"),
+            IngredientAlias(alias="sesame paste", canonical_name="tahini"),
+            # Plurals
+            IngredientAlias(alias="tomatoes", canonical_name="tomato"),
+            IngredientAlias(alias="onions", canonical_name="onion"),
+            IngredientAlias(alias="potatoes", canonical_name="potato"),
+            IngredientAlias(alias="carrots", canonical_name="carrot"),
+            IngredientAlias(alias="mushrooms", canonical_name="mushroom"),
+            IngredientAlias(alias="eggs", canonical_name="egg"),
+            IngredientAlias(alias="mangoes", canonical_name="mango"),
+        ]
+    )
+    session.commit()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def test_yellow_bell_pepper_resolves_to_bell_pepper(
+    db_with_expanded_aliases: Session,
+) -> None:
+    """Regression for #15: 'yellow bell pepper' must hit the bell-pepper
+    canonical, NOT 'black pepper' via a misleading head-noun fallback."""
+    svc = IngredientLookupService(db_with_expanded_aliases)
+    result = svc.lookup("yellow bell pepper")
+    assert result is not None
+    assert result.canonical_name == "bell pepper"
+    assert result.canonical_name != "black pepper"
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        "red bell pepper",
+        "green bell pepper",
+        "orange bell pepper",
+        "sweet pepper",
+        "sweet peppers",
+        "bell peppers",
+        "capsicum",
+    ],
+)
+def test_bell_pepper_variants(db_with_expanded_aliases: Session, variant: str) -> None:
+    svc = IngredientLookupService(db_with_expanded_aliases)
+    result = svc.lookup(variant)
+    assert result is not None, f"{variant!r} did not resolve"
+    assert result.canonical_name == "bell pepper"
+
+
+def test_microgreen_resolves_to_microgreens(
+    db_with_expanded_aliases: Session,
+) -> None:
+    svc = IngredientLookupService(db_with_expanded_aliases)
+    result = svc.lookup("microgreen")
+    assert result is not None
+    assert result.canonical_name == "microgreens"
+
+
+def test_microgreens_singular_and_plural(
+    db_with_expanded_aliases: Session,
+) -> None:
+    """Both 'microgreen' and 'microgreens' resolve — the canonical itself
+    is plural, and the alias covers the singular form."""
+    svc = IngredientLookupService(db_with_expanded_aliases)
+    assert svc.lookup("microgreens").canonical_name == "microgreens"
+    assert svc.lookup("microgreen").canonical_name == "microgreens"
+
+
+def test_baby_greens_resolves_to_mixed_salad_greens(
+    db_with_expanded_aliases: Session,
+) -> None:
+    svc = IngredientLookupService(db_with_expanded_aliases)
+    result = svc.lookup("baby greens")
+    assert result is not None
+    assert result.canonical_name == "mixed salad greens"
+
+
+def test_tahini_dressing_resolves_to_tahini(
+    db_with_expanded_aliases: Session,
+) -> None:
+    """Dressings inherit the dietary profile of their dominant base
+    ingredient (tahini) rather than failing to match."""
+    svc = IngredientLookupService(db_with_expanded_aliases)
+    result = svc.lookup("tahini dressing")
+    assert result is not None
+    assert result.canonical_name == "tahini"
+
+
+@pytest.mark.parametrize(
+    "plural,canonical",
+    [
+        ("tomatoes", "tomato"),
+        ("onions", "onion"),
+        ("potatoes", "potato"),
+        ("carrots", "carrot"),
+        ("mushrooms", "mushroom"),
+        ("eggs", "egg"),
+        ("mangoes", "mango"),
+    ],
+)
+def test_common_plurals_resolve(
+    db_with_expanded_aliases: Session, plural: str, canonical: str
+) -> None:
+    """Bare plural forms can't be resolved by the head-noun fallback (it
+    operates on the LAST word of a multi-word input), so they need
+    explicit aliases. This batch covers the most common ones surfaced by
+    the vision model."""
+    svc = IngredientLookupService(db_with_expanded_aliases)
+    result = svc.lookup(plural)
+    assert result is not None, f"{plural!r} did not resolve"
+    assert result.canonical_name == canonical

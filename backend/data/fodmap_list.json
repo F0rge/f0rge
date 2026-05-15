@@ -38,6 +38,8 @@
   {"name": "zucchini", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
   {"name": "cucumber", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
   {"name": "lettuce", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
+  {"name": "mixed salad greens", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
+  {"name": "microgreens", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
   {"name": "bell pepper", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
   {"name": "tomato", "oligos": "low", "fructose": "moderate", "polyols": "low", "lactose": "low"},
   {"name": "spinach", "oligos": "low", "fructose": "low", "polyols": "low", "lactose": "low"},
