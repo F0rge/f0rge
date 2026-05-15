@@ -305,8 +305,21 @@ def _render_markdown(db_session: Session, entry: Entry, photos: Sequence[Photo])
         f"supplements: {entry.supplements}",
         f"sick: {sick_str}",
         f"hot-shower: {hot_shower_str}",
-        f"active-treatments: [{', '.join(t.normalized_name for t in active_treatments)}]",
     ]
+    # Omit alcohol/caffeine keys entirely when zero or absent — cleaner vault diffs.
+    alcohol_units = getattr(entry, "alcohol_units", None)
+    caffeine_servings = getattr(entry, "caffeine_servings", None)
+    if alcohol_units is not None and alcohol_units > 0:
+        lines.append(f"alcohol-units: {alcohol_units}")
+        lines.append("had-alcohol: true")
+    if caffeine_servings is not None and caffeine_servings > 0:
+        lines.append(f"caffeine-servings: {caffeine_servings}")
+        lines.append("had-caffeine: true")
+    lines.extend(
+        [
+            f"active-treatments: [{', '.join(t.normalized_name for t in active_treatments)}]",
+        ]
+    )
     for key, val in dietary_fm.items():
         lines.append(f"{key}: {val}")
     lines.extend(
@@ -332,6 +345,15 @@ def _render_markdown(db_session: Session, entry: Entry, photos: Sequence[Photo])
             f"| Hot shower (full body) | {hot_shower_str} |",
             f"| Active treatments | {_format_active_treatments(active_treatments, entry.date)} |",
             f"| Logged at | {entry_time.isoformat() if entry_time else 'unknown'} ({period_of_day or 'unknown'}) |",
+        ]
+    )
+    # Omit alcohol/caffeine rows when zero or absent — same as frontmatter policy.
+    if alcohol_units is not None and alcohol_units > 0:
+        lines.append(f"| Alcohol | {alcohol_units} unit(s) |")
+    if caffeine_servings is not None and caffeine_servings > 0:
+        lines.append(f"| Caffeine | {caffeine_servings} serving(s) |")
+    lines.extend(
+        [
             "",
             "## Notes",
             "",
@@ -344,7 +366,14 @@ def _render_markdown(db_session: Session, entry: Entry, photos: Sequence[Photo])
         lines.append("## Photos")
         lines.append("")
         for photo in photos:
-            lines.append(f"![[attachments/{photo.filename}]]")
+            # Render meal_time as HH:MM (24-hour, local) inline with the embed.
+            # meal_time is always populated (backfilled from created_at on migration)
+            # but guard None to be safe.
+            meal_time = getattr(photo, "meal_time", None)
+            time_suffix = (
+                f" ({meal_time.strftime('%H:%M')})" if meal_time is not None else ""
+            )
+            lines.append(f"![[attachments/{photo.filename}]]{time_suffix}")
             if photo.label:
                 lines.append(f"*{photo.label}*")
             analysis = analyses.get(photo.id)

@@ -1,10 +1,11 @@
 'use client'
 
-import { use } from 'react'
+import { use, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Pencil, Loader2 } from 'lucide-react'
-import { useEntry } from '@/lib/api/hooks'
-import type { Entry } from '@/lib/api/types'
+import { useEntry, useUpdatePhotoMealTime } from '@/lib/api/hooks'
+import { MealTimeChips } from '@/components/checkin/meal-time-chips'
+import type { Entry, Photo } from '@/lib/api/types'
 
 function formatDisplayDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00')
@@ -89,6 +90,46 @@ function getStoolLabel(entry: Entry): string {
   return 'Not recorded'
 }
 
+function formatHHMM(isoStr: string): string {
+  const d = new Date(isoStr)
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+function PhotoWithMealTime({ photo }: { photo: Photo }) {
+  const updateMealTime = useUpdatePhotoMealTime()
+  const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(photo.meal_time)
+
+  const handleChange = (d: Date) => {
+    const iso = d.toISOString()
+    setOptimisticMealTime(iso)
+    updateMealTime.mutate({ photoId: photo.id, mealTime: iso })
+  }
+
+  const chipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/v1/photos/${photo.id}/file`}
+        alt={photo.label || `Photo ${photo.id}`}
+        className="aspect-square w-full object-cover"
+      />
+      {photo.label && (
+        <p className="bg-muted px-2 py-1 text-xs text-muted-foreground">{photo.label}</p>
+      )}
+      <div className="px-2 pb-2 pt-1.5">
+        {optimisticMealTime && (
+          <p className="mb-1 text-xs text-muted-foreground">
+            Meal time: {formatHHMM(optimisticMealTime)}
+          </p>
+        )}
+        <MealTimeChips value={chipValue} onChange={handleChange} />
+      </div>
+    </div>
+  )
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between py-2">
@@ -140,17 +181,7 @@ function EntryDetail({ entry }: { entry: Entry }) {
           <p className="mb-2 text-xs font-medium text-muted-foreground">Photos</p>
           <div className="grid grid-cols-2 gap-2">
             {entry.photos.map((photo) => (
-              <div key={photo.id} className="overflow-hidden rounded-lg">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`/api/v1/photos/${photo.id}/file`}
-                  alt={photo.label || `Photo ${photo.id}`}
-                  className="aspect-square w-full object-cover"
-                />
-                {photo.label && (
-                  <p className="bg-muted px-2 py-1 text-xs text-muted-foreground">{photo.label}</p>
-                )}
-              </div>
+              <PhotoWithMealTime key={photo.id} photo={photo} />
             ))}
           </div>
         </div>
