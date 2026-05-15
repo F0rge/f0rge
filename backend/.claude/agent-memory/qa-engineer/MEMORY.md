@@ -1,0 +1,6 @@
+- [Dev server startup](project_dev_server.md) — how to start backend+frontend for browser smoke tests; handles stale-server-already-running case
+- [Auth bypass for e2e](project_auth_bypass.md) — insert `auth_sessions` row + set `ht_session` cookie via JS instead of PIN flow
+- [Vault path varies by env](project_vault_path.md) — `.env` overrides default; check `backend/.env` for `VAULT_PATH` before grepping rendered markdown
+- [Ruff format regressions](feedback_ruff_format_regressions.md) — trailing-comma `lines.extend([...])` blocks. Always run `ruff format --check` on changed files, not just `ruff check`
+- [Pre-existing lint not blocking](feedback_preexisting_lint.md) — F821 on `Photo`/`Entry`/`PhotoAnalysis` forward refs and `pin-pad.tsx` set-state-in-effect are pre-existing; don't gate PRs on them
+- [Thin-router scope](feedback_thin_router_scope.md) — for fat pre-existing routers (e.g. `photos.upload_photo`), new endpoints must be thin; modifying a fat endpoint to add a param doesn't require refactoring it in the same PR

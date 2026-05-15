@@ -31,8 +31,8 @@ from app.config import settings
 from app.database import Base
 from app.models.entry import Entry
 from app.models.photo import Photo
-from app.routers.photos import remove_photo, upload_photo
 from app.services.photo_storage import save_photo
+from app.services.photos import PhotoService
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ def isolated_storage(
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     # Stub out the daily-file writer so tests don't depend on its schema.
-    monkeypatch.setattr("app.routers.photos.write_daily_file", lambda *a, **kw: None)
+    monkeypatch.setattr("app.services.photos.write_daily_file", lambda *a, **kw: None)
     yield
 
 
@@ -107,21 +107,22 @@ def _png_bytes() -> bytes:
 
 
 def _upload(db: Session, day: datetime.date, name: str = "x.png") -> Photo:
-    """Call the real `upload_photo` coroutine with a fresh fake UploadFile."""
+    """Upload via PhotoService directly (avoids FastAPI Form/Depends binding)."""
     upload = UploadFile(filename=name, file=io.BytesIO(_png_bytes()))
+    service = PhotoService(db)
     return asyncio.run(
-        upload_photo(
-            date=day,
-            background_tasks=BackgroundTasks(),
+        service.upload(
+            entry_date=day,
             file=upload,
             label=None,
-            db=db,
+            meal_time=None,
+            background_tasks=BackgroundTasks(),
         )
     )
 
 
 def _delete(db: Session, photo_id: int) -> None:
-    remove_photo(photo_id=photo_id, db=db)
+    PhotoService(db).delete(photo_id)
 
 
 # ---------------------------------------------------------------------------

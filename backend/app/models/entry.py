@@ -34,6 +34,8 @@ class Entry(Base):
     supplements: Mapped[str] = mapped_column(String, nullable=False)
     sick: Mapped[bool] = mapped_column(Boolean, nullable=False)
     hot_shower: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    alcohol_units: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    caffeine_servings: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         default=datetime.datetime.utcnow,

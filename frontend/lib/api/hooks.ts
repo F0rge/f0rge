@@ -96,12 +96,21 @@ export function useDeleteEntry() {
 export function useUploadPhoto() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ date, file, label }: { date: string; file: File; label?: string }) => {
+    mutationFn: ({
+      date,
+      file,
+      label,
+      mealTime,
+    }: {
+      date: string
+      file: File
+      label?: string
+      mealTime?: Date | null
+    }) => {
       const formData = new FormData()
       formData.append('file', file)
-      if (label) {
-        formData.append('label', label)
-      }
+      if (label) formData.append('label', label)
+      if (mealTime) formData.append('meal_time', mealTime.toISOString())
       return apiPostForm(`/entries/${date}/photos`, formData)
     },
     onSuccess: () => {
@@ -317,6 +326,18 @@ export function useDeleteTreatment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treatments'] })
       queryClient.invalidateQueries({ queryKey: ['treatment'] })
+    },
+  })
+}
+
+export function useUpdatePhotoMealTime() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ photoId, mealTime }: { photoId: number; mealTime: string }) =>
+      apiPatch(`/photos/${photoId}`, { meal_time: mealTime }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
     },
   })
 }

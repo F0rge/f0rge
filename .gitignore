@@ -33,6 +33,7 @@ Thumbs.db
 .playwright*/
 
 # Claude agent memory (runtime state, not source)
+# Match at any depth — sub-agents may write under nested .claude/ dirs (e.g. backend/.claude/)
 **/.claude/agent-memory/
 **/.claude/agent-memory-local/
 **/.claude/worktrees/
