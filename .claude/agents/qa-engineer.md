@@ -84,6 +84,31 @@ cd frontend && npm run build
 - Check frontmatter is valid YAML
 - Verify photo embeds use correct `![[attachments/...]]` syntax
 
+### Phase 4b: End-to-end UI test (REQUIRED when tools available)
+
+If the environment provides **Playwright MCP** (`mcp__plugin_playwright_playwright__*`) or **computer-use MCP** (`mcp__computer-use__*`), you MUST drive the full stack end-to-end through the actual UI. Curl + build-passes is not enough — it catches API contract issues but misses things like wrong status-derived columns, frontend state bugs, race conditions in async flows, and CORS/cookie issues. Only skip this phase if neither MCP is available; document why in the report.
+
+Setup:
+1. Start backend on port 8000 and frontend on port 3000 (use `run_in_background`).
+2. Verify both are up: `curl -sf http://localhost:8000/api/v1/health` and frontend returns 200.
+3. If the feature needs seed data (e.g. dietary reference tables), run the relevant seed script.
+4. Authenticate by inserting an `auth_sessions` row directly via Python + `SessionLocal()` and setting the `ht_session` cookie via `browser_evaluate` — this avoids needing the user's PIN. If today's entry is required for the test, create it the same way.
+
+Test plan:
+- Focus the e2e walk-through on the **NEW features in this PR**, not the whole app. Identify them from `git diff main...HEAD --stat` and the PR description.
+- Drive the golden path: load the page, perform the new flow as a real user would, verify the expected UI state appears.
+- Drive at least one error path: invalid input, unauthenticated request, missing dependency. Verify the UI fails gracefully (clear error, no broken state).
+- For async/background features (polling, websockets, queued jobs), wait the expected duration plus a small buffer, then verify the final state in both the UI and the database.
+- For features that write to external systems (Obsidian vault, S3, etc.), check that the side effect actually happened.
+
+Use real test data:
+- Food photos, document uploads, etc. should be actual files — download from a public source if needed.
+- File uploads via Playwright must be inside the allowed roots (e.g. `.playwright-mcp/`); copy from `/tmp` if necessary.
+
+After the test, check the **backend logs** for errors even if the UI looked fine — a 500 with a generic toast message can hide the real failure (this is how the `stool_normal` NOT NULL bug was eventually caught). When the app is deployed (Pi, Coolify, etc.), also tail container logs: `ssh rpi "docker logs --tail 100 <container>"`.
+
+If the test fails, do NOT just report PASS based on static analysis. The verdict is FAIL until the e2e flow works.
+
 ### Phase 5: Acceptance Criteria Validation
 
 For each acceptance criterion:
@@ -142,6 +167,14 @@ Your output MUST follow this exact format:
 | Backend starts | PASS/FAIL | |
 | Endpoints respond | PASS/FAIL | |
 | Frontend builds | PASS/FAIL | |
+
+### Phase 4b -- End-to-end UI test
+| Check | Status | Details |
+|-------|--------|---------|
+| Tools available (Playwright/computer-use) | YES/NO | [if NO, skipped — explain] |
+| Golden path through new feature | PASS/FAIL | [steps + outcome] |
+| Error path | PASS/FAIL | [scenario + observed behaviour] |
+| Backend logs clean during test | PASS/FAIL | [any 500s, exceptions] |
 
 ### Phase 5 -- Acceptance Criteria
 | Criterion | Met | How Verified |
