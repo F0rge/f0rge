@@ -175,11 +175,12 @@ def trigger_analysis_background(photo_id: int) -> None:
     db: Session = SessionLocal()
     analysis: Optional[PhotoAnalysis] = None
     try:
-        # Ensure no existing analysis for this photo
+        # Reuse a pending record (created by retry endpoint) or skip if
+        # an analysis is already running or finished for this photo.
         existing = (
             db.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == photo_id).first()
         )
-        if existing:
+        if existing and existing.status not in ("pending", "failed"):
             logger.info(
                 "Analysis already exists for photo %d (status=%s), skipping",
                 photo_id,
@@ -187,13 +188,19 @@ def trigger_analysis_background(photo_id: int) -> None:
             )
             return
 
-        # Create analysis record
-        analysis = PhotoAnalysis(
-            photo_id=photo_id,
-            status="analyzing",
-            model_id=settings.openrouter_model,
-        )
-        db.add(analysis)
+        if existing:
+            # Pending (from retry endpoint) or failed — take it over.
+            analysis = existing
+            analysis.status = "analyzing"
+            analysis.error_message = None
+            analysis.model_id = settings.openrouter_model
+        else:
+            analysis = PhotoAnalysis(
+                photo_id=photo_id,
+                status="analyzing",
+                model_id=settings.openrouter_model,
+            )
+            db.add(analysis)
         db.commit()
         db.refresh(analysis)
 
