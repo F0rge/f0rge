@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import logging
 import os
 import tempfile
@@ -13,6 +14,7 @@ from app.models.health_metrics import HealthMetric
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
+from app.models.treatment import Treatment
 from app.services.weather import get_daily_summary
 
 logger = logging.getLogger(__name__)
@@ -67,6 +69,19 @@ FODMAP_ABBREV = {
     "polyols": "F:P",
     "lactose": "F:L",
 }
+
+
+def _format_active_treatments(
+    treatments: list[Treatment],
+    as_of: datetime.date,
+) -> str:
+    if not treatments:
+        return "None"
+    parts = []
+    for t in treatments:
+        day_num = (as_of - t.start_date).days + 1
+        parts.append(f"{t.name} (day {day_num})")
+    return ", ".join(parts)
 
 
 def _format_ingredient(ing: PhotoIngredient) -> str:
@@ -216,9 +231,7 @@ def _stool_summary(entry: Entry) -> str:
     return "Unknown"
 
 
-def _render_markdown(
-    db_session: Session, entry: Entry, photos: Sequence[Photo]
-) -> str:
+def _render_markdown(db_session: Session, entry: Entry, photos: Sequence[Photo]) -> str:
     date_str = entry.date.isoformat()
     sick_str = "true" if entry.sick else "false"
     hot_shower_str = "true" if getattr(entry, "hot_shower", False) else "false"
@@ -244,6 +257,20 @@ def _render_markdown(
         analyses = {a.photo_id: a for a in confirmed}
 
     dietary_fm, dietary_tags = _compute_dietary_tags(list(analyses.values()))
+
+    active_treatments: list[Treatment] = []
+    try:
+        active_treatments = (
+            db_session.query(Treatment)
+            .filter(
+                Treatment.start_date <= entry.date,
+                (Treatment.end_date.is_(None)) | (Treatment.end_date >= entry.date),
+            )
+            .order_by(Treatment.name)
+            .all()
+        )
+    except Exception:
+        logger.exception("Failed to query treatments for %s", date_str)
 
     tag_lines = [
         "tags:",
@@ -278,6 +305,7 @@ def _render_markdown(
         f"supplements: {entry.supplements}",
         f"sick: {sick_str}",
         f"hot-shower: {hot_shower_str}",
+        f"active-treatments: [{', '.join(t.normalized_name for t in active_treatments)}]",
     ]
     for key, val in dietary_fm.items():
         lines.append(f"{key}: {val}")
@@ -302,6 +330,7 @@ def _render_markdown(
             f"| Supplements | {_format_supplements(entry.supplements)} |",
             f"| Sick | {sick_str} |",
             f"| Hot shower (full body) | {hot_shower_str} |",
+            f"| Active treatments | {_format_active_treatments(active_treatments, entry.date)} |",
             f"| Logged at | {entry_time.isoformat() if entry_time else 'unknown'} ({period_of_day or 'unknown'}) |",
             "",
             "## Notes",

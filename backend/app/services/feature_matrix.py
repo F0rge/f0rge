@@ -13,6 +13,7 @@ from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.supplement_catalog import SupplementCatalogItem
+from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
 
 FEATURE_SCHEMA_VERSION = 1
@@ -210,7 +211,23 @@ def build_feature_matrix(
         .all()
     )
     supp_keys = [s.key for s in supp_catalog]
-    columns = STATIC_COLUMNS + [f"supp_{k}" for k in supp_keys]
+
+    all_treatments = (
+        db.query(Treatment)
+        .filter(
+            Treatment.start_date <= end_date,
+            (Treatment.end_date.is_(None)) | (Treatment.end_date >= start_date),
+        )
+        .order_by(Treatment.normalized_name)
+        .all()
+    )
+    tx_names = sorted({t.normalized_name for t in all_treatments})
+
+    columns = (
+        STATIC_COLUMNS
+        + [f"supp_{k}" for k in supp_keys]
+        + [f"tx_{n}_active" for n in tx_names]
+    )
 
     rows: list[dict] = []
     current = start_date
@@ -276,6 +293,14 @@ def build_feature_matrix(
                     "hm_wrist_temp_deviation": hm.wrist_temp_deviation,
                 }
             )
+
+        active_tx = {
+            t.normalized_name
+            for t in all_treatments
+            if t.start_date <= current and (t.end_date is None or t.end_date >= current)
+        }
+        for n in tx_names:
+            row[f"tx_{n}_active"] = n in active_tx
 
         row.update(wx_agg)
         rows.append(row)

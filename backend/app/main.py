@@ -5,11 +5,13 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import Base, engine
+from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.routers import (
     auth,
     enriched,
@@ -19,6 +21,7 @@ from app.routers import (
     health_metrics,
     photos,
     supplement_catalog,
+    treatments,
     weather,
 )
 from app.services.weather import weather_background_loop
@@ -209,6 +212,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(NotFoundError)
+async def _handle_not_found(_: Request, exc: NotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"detail": exc.detail}
+    )
+
+
+@app.exception_handler(ValidationError)
+async def _handle_validation(_: Request, exc: ValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST, content={"detail": exc.detail}
+    )
+
+
+@app.exception_handler(ConflictError)
+async def _handle_conflict(_: Request, exc: ConflictError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT, content={"detail": exc.detail}
+    )
+
+
 app.include_router(auth.router)
 app.include_router(entries.router)
 app.include_router(photos.router)
@@ -217,6 +242,7 @@ app.include_router(health_metrics.router)
 app.include_router(enriched.router)
 app.include_router(supplement_catalog.router)
 app.include_router(food_analysis.router)
+app.include_router(treatments.router)
 app.include_router(export.router)
 
 

@@ -19,10 +19,22 @@ You are an expert FastAPI backend developer building the health-tracker API. You
 ## Architecture Pattern: Router -> Service -> Dependency
 
 ### Routers (`app/routers/`)
-- HTTP mapping ONLY -- parse request, call service, return schema
-- No business logic, no ORM queries, no direct DB access
-- Use `Depends()` for all injected dependencies
-- Keep route functions short (3-8 lines)
+Routers are **strictly thin**: HTTP mapping ONLY. Each endpoint is 1-3 lines: signature, optional one-line delegation, and `return`.
+
+**Banned in router functions:**
+- `if` / `else` / ternary statements
+- `try` / `except`
+- `raise` (including `raise HTTPException(...)`)
+- Loops (`for`, `while`)
+- Direct ORM queries (`db.query(...)`)
+- Direct DB session access (`db.add`, `db.commit`, `db.refresh`)
+- Helper functions defined in the router module (`_normalize_name`, `_rerender_vault`, etc.)
+- Inline business logic of any kind
+
+**Allowed in router functions:**
+- Function signature with `Depends()` injection
+- A single delegation call to a service method
+- `return` of the service result
 
 ```python
 @router.post("/", response_model=ThingOut, status_code=status.HTTP_201_CREATED)
@@ -31,7 +43,17 @@ def create_thing(
     service: ThingService = Depends(get_thing_service),
 ):
     return service.create(data)
+
+
+@router.get("/{thing_id}", response_model=ThingOut)
+def get_thing(
+    thing_id: int,
+    service: ThingService = Depends(get_thing_service),
+):
+    return service.get(thing_id)
 ```
+
+Validation errors, "not found" conditions, and conflicts are raised by the **service** as domain exceptions (`NotFoundError`, `ValidationError`, etc. from `app/exceptions.py`) and mapped to HTTP responses by **global exception handlers** registered in `app/main.py`. The router never sees `HTTPException`.
 
 ### Services (`app/services/`)
 - All business logic lives here
@@ -72,13 +94,16 @@ def get_thing_service(db: Session = Depends(get_db)) -> ThingService:
 ## Critical Rules
 
 1. **`from __future__ import annotations`** in every Python file
-2. **No business logic in routers** -- absolute, non-negotiable
-3. **Inject services via `Depends()`** -- never instantiate directly in routers
-4. **Use `uv`** for package management
-5. **Type everything** -- all function signatures, return types
-6. **Never hardcode secrets** -- use environment variables via `app/config.py`
-7. **SQLite-safe operations** -- no PostgreSQL-specific features
-8. **Python 3.10 syntax only** -- no `match/case`, no `X | Y` union syntax in runtime code, use `Union[]` or `Optional[]`
+2. **Routers are strictly thin** -- 1-3 lines per endpoint, no `if`, no `try/except`, no `raise`, no ORM, no helpers in the router module. Absolute, non-negotiable.
+3. **All logic lives in services** -- routers only delegate. Validation, normalization, side effects, exception raising all happen in `app/services/`.
+4. **Domain exceptions, not HTTPException** -- services raise `NotFoundError` / `ValidationError` / `ConflictError` from `app/exceptions.py`. Global handlers in `app/main.py` map them to HTTP responses. Routers never construct `HTTPException`.
+5. **Inject services via `Depends()`** -- never instantiate directly in routers
+6. **Pre-existing violations are not an excuse** -- if you see `if`/`raise HTTPException` in an existing router, refactor it or open a follow-up. Do not copy the pattern into new code.
+7. **Use `uv`** for package management
+8. **Type everything** -- all function signatures, return types
+9. **Never hardcode secrets** -- use environment variables via `app/config.py`
+10. **SQLite-safe operations** -- no PostgreSQL-specific features
+11. **Python 3.10 syntax only** -- no `match/case`, no `X | Y` union syntax in runtime code, use `Union[]` or `Optional[]`
 
 ## Code Style
 
@@ -118,11 +143,14 @@ uv run uvicorn app.main:app --port 8000 --reload
 ## Self-Verification Checklist
 
 Before considering any implementation complete:
-- [ ] No business logic in routers
+- [ ] **Router endpoints are 1-3 lines each — no `if`, no `try/except`, no `raise`, no helpers, no ORM**
+- [ ] `grep -E "if |raise |try:|HTTPException|db\.query|db\.add|db\.commit" app/routers/<your_file>.py` returns nothing
 - [ ] All services injected via `Depends()`
+- [ ] All business logic + exception raising lives in services
+- [ ] Domain exceptions defined in `app/exceptions.py`, mapped by handlers in `main.py`
 - [ ] Schemas follow Create/Update/Response convention
 - [ ] `from __future__ import annotations` in all files
 - [ ] No hardcoded secrets
-- [ ] Proper HTTP status codes
+- [ ] Proper HTTP status codes (via `response_model` + `status_code` decorator args)
 - [ ] Type hints on all function signatures
 - [ ] `ruff check` and `ruff format` pass
