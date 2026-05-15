@@ -175,6 +175,35 @@ def trigger_analysis_background(photo_id: int) -> None:
     db: Session = SessionLocal()
     analysis: Optional[PhotoAnalysis] = None
     try:
+        # Guard: without an API key we cannot call OpenRouter. Record a
+        # clear failure on the analysis record instead of crashing with
+        # "Illegal header value b'Bearer '" inside httpx.
+        if not settings.openrouter_api_key:
+            logger.warning(
+                "Food analysis skipped for photo %d: OPENROUTER_API_KEY not "
+                "configured. Set the env var or disable the feature with "
+                "FOOD_ANALYSIS_ENABLED=false.",
+                photo_id,
+            )
+            existing = (
+                db.query(PhotoAnalysis)
+                .filter(PhotoAnalysis.photo_id == photo_id)
+                .first()
+            )
+            if existing is None:
+                analysis = PhotoAnalysis(
+                    photo_id=photo_id,
+                    status="failed",
+                    model_id=settings.openrouter_model,
+                    error_message="OPENROUTER_API_KEY not configured",
+                )
+                db.add(analysis)
+            else:
+                existing.status = "failed"
+                existing.error_message = "OPENROUTER_API_KEY not configured"
+            db.commit()
+            return
+
         # Reuse a pending record (created by retry endpoint) or skip if
         # an analysis is already running or finished for this photo.
         existing = (

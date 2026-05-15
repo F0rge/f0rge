@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -20,6 +21,8 @@ from app.routers import (
     weather,
 )
 from app.services.weather import weather_background_loop
+
+logger = logging.getLogger(__name__)
 
 _weather_task = None
 
@@ -74,9 +77,7 @@ def _run_migrations() -> None:
         try:
             hm_cols = {
                 row[1]
-                for row in conn.execute(
-                    "PRAGMA table_info(health_metrics)"
-                ).fetchall()
+                for row in conn.execute("PRAGMA table_info(health_metrics)").fetchall()
             }
             for col in [
                 "sleep_deep_min",
@@ -105,6 +106,23 @@ def _run_migrations() -> None:
         pass  # Table may not exist yet, create_all will handle it
 
 
+def _warn_misconfigured_features() -> None:
+    """Log a loud warning when a feature flag is on but its required
+    credentials are missing. Catches deployments where the env var wasn't
+    added to Coolify/the host but the flag stayed enabled."""
+    if settings.food_analysis_enabled and not settings.openrouter_api_key:
+        logger.warning(
+            "FOOD_ANALYSIS_ENABLED=true but OPENROUTER_API_KEY is empty. "
+            "Photo analysis will be marked as failed for every upload. "
+            "Either set OPENROUTER_API_KEY or set FOOD_ANALYSIS_ENABLED=false."
+        )
+    if settings.weather_fetch_enabled and not settings.openweathermap_api_key:
+        logger.warning(
+            "WEATHER_FETCH_ENABLED=true but OPENWEATHERMAP_API_KEY is empty. "
+            "Weather background loop will not start."
+        )
+
+
 def _seed_supplement_catalog() -> None:
     """Seed the supplement_catalog table with the default list on first boot."""
     from sqlalchemy.orm import Session
@@ -128,6 +146,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Base.metadata.create_all(bind=engine)
     _run_migrations()
     _seed_supplement_catalog()
+    _warn_misconfigured_features()
     if settings.weather_fetch_enabled and settings.openweathermap_api_key:
         _weather_task = asyncio.create_task(weather_background_loop())
     yield

@@ -124,6 +124,23 @@ For each acceptance criterion:
 - [ ] Input validation on all user-facing endpoints
 - [ ] No SQL injection vectors (raw string formatting in queries)
 
+### Phase 7: Deployment Configuration Audit
+
+When the feature requires external configuration (API keys, feature flags, env vars), verify the deployed environment has them set. "Works on my machine" is not enough — production has a different `.env`.
+
+For EVERY new setting added to `app/config.py` in this PR, check:
+
+- [ ] Is it in `backend/.env.example` so future deploys know it exists?
+- [ ] Is the README / deployment doc updated if it's required (not optional)?
+- [ ] If the app is already deployed: is the variable set on the deployment target?
+  - Coolify on the Pi: `ssh rpi "docker inspect <backend-container> --format '{{range .Config.Env}}{{println .}}{{end}}' | grep <VAR_NAME>"`
+  - Confirm the value is non-empty if required
+- [ ] Does the code degrade gracefully when the env var is missing?
+  - A feature flag defaulting to `True` while its required key defaults to `""` is a footgun — the upload path will try to use the empty key and crash. Verify either: (a) the feature flag is gated on the key being present, OR (b) the code path explicitly handles empty/missing keys with a clear failure (status="failed", logged warning), not a generic crash.
+- [ ] Is there a startup warning when a feature is enabled but its credentials are missing? (See `_warn_misconfigured_features()` pattern in `main.py`.)
+
+The bar: someone redeploys without reading the PR description and the worst that happens is a "feature disabled" log line — not a 500 storm.
+
 ## Output Format
 
 Your output MUST follow this exact format:
@@ -187,6 +204,14 @@ Your output MUST follow this exact format:
 | No secrets in code | PASS/FAIL |
 | Auth on protected routes | PASS/FAIL |
 | Input validation | PASS/FAIL |
+
+### Phase 7 -- Deployment Configuration
+| Check | Status | Details |
+|-------|--------|---------|
+| New env vars in `.env.example` | PASS/FAIL | [list of vars] |
+| Deployed env has required vars set | PASS/FAIL/N/A | [confirmed via docker inspect / Coolify UI] |
+| Code degrades gracefully if missing | PASS/FAIL | [behaviour observed] |
+| Startup warning when misconfigured | PASS/FAIL | |
 
 ---
 
