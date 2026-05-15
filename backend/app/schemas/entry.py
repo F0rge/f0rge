@@ -31,6 +31,8 @@ class EntryCreate(BaseModel):
     supplements: str
     sick: bool
     hot_shower: Optional[bool] = False
+    alcohol_units: Optional[int] = Field(default=None, ge=0, le=10)
+    caffeine_servings: Optional[int] = Field(default=None, ge=0, le=10)
     notes: Optional[str] = None
 
 
@@ -52,6 +54,8 @@ class EntryUpdate(BaseModel):
     supplements: Optional[str] = None
     sick: Optional[bool] = None
     hot_shower: Optional[bool] = None
+    alcohol_units: Optional[int] = Field(default=None, ge=0, le=10)
+    caffeine_servings: Optional[int] = Field(default=None, ge=0, le=10)
     notes: Optional[str] = None
 
 
@@ -75,6 +79,8 @@ class EntryResponse(BaseModel):
     supplements: str
     sick: bool
     hot_shower: bool = False
+    alcohol_units: Optional[int] = None
+    caffeine_servings: Optional[int] = None
     notes: Optional[str] = None
     photos: list[PhotoResponse] = []
     created_at: datetime.datetime
