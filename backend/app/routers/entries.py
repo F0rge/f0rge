@@ -33,6 +33,24 @@ def _period_of_day(ts: datetime.datetime) -> str:
     return "night"
 
 
+def _derive_stool_normal(stool_status: str | None, current: bool | None) -> bool | None:
+    """Backfill stool_normal from v2 stool_status so writes satisfy the
+    legacy NOT NULL constraint on the production SQLite column.
+
+    The Entry model declares stool_normal nullable, but databases created
+    under the v1 schema have the column as NOT NULL — SQLite cannot drop
+    that constraint without a table rebuild. Derive a sensible value from
+    stool_status when the client doesn't send one.
+    """
+    if current is not None:
+        return current
+    if stool_status == "normal":
+        return True
+    if stool_status in ("abnormal", "none"):
+        return False
+    return None
+
+
 def _touch_supplement_catalog(db: Session, supplements: str | None) -> None:
     if not supplements:
         return
@@ -71,6 +89,9 @@ def create_entry(body: EntryCreate, db: Session = Depends(get_db)):
         data["period_of_day"] = _period_of_day(data["entry_time"])
     if data.get("schema_version") is None:
         data["schema_version"] = 2
+    data["stool_normal"] = _derive_stool_normal(
+        data.get("stool_status"), data.get("stool_normal")
+    )
 
     entry = Entry(**data)
     db.add(entry)
@@ -127,6 +148,10 @@ def update_entry(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(entry, field, value)
+
+    # Backfill stool_normal from stool_status to satisfy the legacy NOT NULL
+    # constraint when the client only sends v2 fields.
+    entry.stool_normal = _derive_stool_normal(entry.stool_status, entry.stool_normal)
 
     # Always refresh entry_time on update so we know when the user last touched it.
     now = datetime.datetime.utcnow()
