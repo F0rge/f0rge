@@ -18,9 +18,12 @@ class IngredientLookupService:
     def lookup(self, name: str) -> Optional[DietaryIngredient]:
         """Match an ingredient name to the dietary reference DB.
 
-        Chain: exact canonical -> alias -> case-insensitive LIKE.
+        Chain: exact canonical -> alias -> head-noun (last word) ->
+        case-insensitive LIKE.
         """
         normalised = name.lower().strip()
+        if not normalised:
+            return None
 
         # 1. Exact match on canonical_name
         result = (
@@ -44,7 +47,33 @@ class IngredientLookupService:
                 .first()
             )
 
-        # 3. Case-insensitive LIKE
+        # 3. Head-noun fallback: for English compound food names, the last
+        # word is usually the base ingredient (cherry tomato -> tomato,
+        # wheat flour -> flour, fresh basil -> basil). Try the last word
+        # as an exact canonical/alias match before the loose LIKE fallback.
+        words = normalised.split()
+        if len(words) > 1:
+            last_word = words[-1]
+            result = (
+                self.db.query(DietaryIngredient)
+                .filter(DietaryIngredient.canonical_name == last_word)
+                .first()
+            )
+            if result:
+                return result
+            alias = (
+                self.db.query(IngredientAlias)
+                .filter(IngredientAlias.alias == last_word)
+                .first()
+            )
+            if alias:
+                return (
+                    self.db.query(DietaryIngredient)
+                    .filter(DietaryIngredient.canonical_name == alias.canonical_name)
+                    .first()
+                )
+
+        # 4. Case-insensitive LIKE on full search term
         return (
             self.db.query(DietaryIngredient)
             .filter(DietaryIngredient.canonical_name.ilike(f"%{normalised}%"))
