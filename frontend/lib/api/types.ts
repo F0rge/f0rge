@@ -106,3 +106,32 @@ export interface EnrichedDayResponse {
   weather: WeatherDailySummary | null
   health_metrics: HealthMetricResponse | null
 }
+
+export interface PhotoIngredient {
+  id: number
+  name: string
+  canonical_name: string | null
+  visible: boolean
+  confidence: number
+  user_edited: boolean
+  histamine_score: number | null
+  fodmap_oligos: string | null
+  fodmap_fructose: string | null
+  fodmap_polyols: string | null
+  fodmap_lactose: string | null
+  contains_gluten: boolean | null
+  contains_dairy: boolean | null
+}
+
+export interface PhotoAnalysis {
+  id: number
+  photo_id: number
+  status: 'pending' | 'analyzing' | 'complete' | 'failed' | 'confirmed'
+  dish_name: string | null
+  cuisine: string | null
+  dish_confidence: number | null
+  ingredients: PhotoIngredient[]
+  error_message: string | null
+  created_at: string
+  updated_at: string
+}
