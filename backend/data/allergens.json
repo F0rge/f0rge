@@ -111,5 +111,8 @@
   {"name": "mustard", "contains_gluten": false, "contains_dairy": false},
   {"name": "salt", "contains_gluten": false, "contains_dairy": false},
   {"name": "black pepper", "contains_gluten": false, "contains_dairy": false},
-  {"name": "coffee", "contains_gluten": false, "contains_dairy": false}
+  {"name": "coffee", "contains_gluten": false, "contains_dairy": false},
+  {"name": "vegetable oil", "contains_gluten": false, "contains_dairy": false},
+  {"name": "cooking oil", "contains_gluten": false, "contains_dairy": false},
+  {"name": "baking powder", "contains_gluten": false, "contains_dairy": false}
 ]

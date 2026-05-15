@@ -235,6 +235,7 @@
   {"name": "coriander seed", "category": "spices", "score": 0},
   {"name": "bay leaf", "category": "spices", "score": 0},
   {"name": "saffron", "category": "spices", "score": 0},
+  {"name": "baking powder", "category": "spices", "score": 0},
   {"name": "vanilla", "category": "spices", "score": 0},
   {"name": "chili flakes", "category": "spices", "score": 1},
   {"name": "cayenne pepper", "category": "spices", "score": 1},
@@ -248,6 +249,8 @@
   {"name": "rapeseed oil", "category": "oils_fats", "score": 0},
   {"name": "avocado oil", "category": "oils_fats", "score": 0},
   {"name": "sesame oil", "category": "oils_fats", "score": 0},
+  {"name": "vegetable oil", "category": "oils_fats", "score": 0},
+  {"name": "cooking oil", "category": "oils_fats", "score": 0},
   {"name": "ghee", "category": "oils_fats", "score": 0},
   {"name": "lard", "category": "oils_fats", "score": 0},
 
