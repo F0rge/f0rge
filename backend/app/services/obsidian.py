@@ -87,21 +87,23 @@ def _format_ingredient(ing: PhotoIngredient) -> str:
 
 
 def _dietary_flags_line(analysis: PhotoAnalysis) -> str:
-    """Build the 'Dietary flags: ...' summary for an analysis."""
+    """Build the 'Dietary flags: ...' summary for an analysis.
+
+    Only considers visible ingredients (those the user confirmed in the UI).
+    Inferred/hidden ingredients (visible=false) are excluded so the vault
+    matches what the user reviewed on screen.
+    """
+    visible = [i for i in analysis.ingredients if i.visible]
     flags: list[str] = []
     max_h = max(
-        (
-            i.histamine_score
-            for i in analysis.ingredients
-            if i.histamine_score is not None
-        ),
+        (i.histamine_score for i in visible if i.histamine_score is not None),
         default=None,
     )
     if max_h is not None and max_h >= 1:
         flags.append(f"Histamine {max_h}")
-    if any(i.contains_dairy for i in analysis.ingredients):
+    if any(i.contains_dairy for i in visible):
         flags.append("Dairy")
-    if any(i.contains_gluten for i in analysis.ingredients):
+    if any(i.contains_gluten for i in visible):
         flags.append("Gluten")
     for field, label in (
         ("oligos", "FODMAP-Oligos"),
@@ -109,9 +111,7 @@ def _dietary_flags_line(analysis: PhotoAnalysis) -> str:
         ("polyols", "FODMAP-Polyols"),
         ("lactose", "FODMAP-Lactose"),
     ):
-        if any(
-            getattr(i, f"fodmap_{field}", None) == "high" for i in analysis.ingredients
-        ):
+        if any(getattr(i, f"fodmap_{field}", None) == "high" for i in visible):
             flags.append(label)
     return f"Dietary flags: {', '.join(flags)}" if flags else ""
 
@@ -119,7 +119,12 @@ def _dietary_flags_line(analysis: PhotoAnalysis) -> str:
 def _compute_dietary_tags(
     confirmed: list[PhotoAnalysis],
 ) -> tuple[dict[str, str], list[str]]:
-    """Return (frontmatter_fields, extra_tags) from confirmed analyses."""
+    """Return (frontmatter_fields, extra_tags) from confirmed analyses.
+
+    Only aggregates visible ingredients (those the user confirmed in the UI).
+    Inferred/hidden ingredients (visible=false) are excluded so frontmatter
+    fields and tags reflect exactly what the user reviewed on screen.
+    """
     fm: dict[str, str] = {}
     tags: list[str] = []
 
@@ -131,7 +136,7 @@ def _compute_dietary_tags(
     if dishes:
         fm["dishes"] = f'"{", ".join(dishes)}"'
 
-    all_ingredients = [i for a in confirmed for i in a.ingredients]
+    all_ingredients = [i for a in confirmed for i in a.ingredients if i.visible]
 
     max_h = max(
         (i.histamine_score for i in all_ingredients if i.histamine_score is not None),
@@ -299,8 +304,13 @@ def _render_markdown(
                     else 0
                 )
                 lines.append(f"**{analysis.dish_name}** ({conf_pct}%)")
-                ing_parts = [_format_ingredient(i) for i in analysis.ingredients]
-                lines.append(f"Ingredients: {', '.join(ing_parts)}")
+                # Only render ingredients the user saw in the UI (visible=true).
+                # Inferred items (visible=false) are excluded so the vault
+                # matches the confirmed set the user reviewed.
+                visible_ings = [i for i in analysis.ingredients if i.visible]
+                if visible_ings:
+                    ing_parts = [_format_ingredient(i) for i in visible_ings]
+                    lines.append(f"Ingredients: {', '.join(ing_parts)}")
                 flags_line = _dietary_flags_line(analysis)
                 if flags_line:
                     lines.append(flags_line)
