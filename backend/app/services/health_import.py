@@ -38,7 +38,6 @@ def parse_health_auto_export(
     # Accumulators per date
     hrv_values: dict[str, list[float]] = defaultdict(list)
     resting_hr_values: dict[str, list[float]] = defaultdict(list)
-    sleep_durations: dict[str, list[float]] = defaultdict(list)
     step_values: dict[str, list[float]] = defaultdict(list)
     spo2_values: dict[str, list[float]] = defaultdict(list)
     active_energy_values: dict[str, list[float]] = defaultdict(list)
@@ -62,31 +61,16 @@ def parse_health_auto_export(
         samples = metric.get("data", [])
 
         # Handle sleep analysis separately (different structure)
-        if "sleep" in name.lower():
+        # Exclude wrist/temperature metrics that happen to contain "sleep" in their name
+        if "sleep" in name.lower() and "temp" not in name and "wrist" not in name:
             logger.info("Sleep metric '%s' with %d samples, first sample keys: %s",
                        name, len(samples), list(samples[0].keys()) if samples else [])
             for sample in samples:
-                date_str = sample.get("date", sample.get("sleepStart", sample.get("startDate", "")))
+                date_str = sample.get("date", sample.get("sleepEnd", sample.get("endDate", sample.get("sleepStart", ""))))
                 parsed_date = _parse_date(str(date_str))
                 if parsed_date is None:
                     continue
                 date_key = parsed_date.isoformat()
-
-                # Extract total sleep duration in hours
-                hours = sample.get("qty")
-                if hours is None:
-                    total_sleep = sample.get("totalSleep")
-                    if total_sleep is not None:
-                        ts = float(total_sleep)
-                        # If totalSleep > 24, it's in minutes; otherwise hours
-                        hours = ts / 60.0 if ts > 24 else ts
-                    elif sample.get("asleep") is not None:
-                        a = float(sample["asleep"])
-                        hours = a / 60.0 if a > 24 else a
-                    elif sample.get("duration") is not None:
-                        hours = float(sample["duration"]) / 3600.0
-                if hours is not None:
-                    sleep_durations[date_key].append(float(hours))
 
                 # Extract stage durations — detect if hours or minutes
                 # Health Auto Export sends stages in hours (e.g. deep=0.58)
@@ -162,8 +146,6 @@ def parse_health_auto_export(
                 hrv_values[date_key].append(qty)
             elif name == "resting_heart_rate":
                 resting_hr_values[date_key].append(qty)
-            elif name == "sleep_analysis":
-                sleep_durations[date_key].append(qty)
             elif name == "step_count":
                 step_values[date_key].append(qty)
             elif name in ("blood_oxygen", "oxygen_saturation", "blood_oxygen_saturation", "spo2"):
@@ -178,7 +160,6 @@ def parse_health_auto_export(
     for d in (
         hrv_values,
         resting_hr_values,
-        sleep_durations,
         step_values,
         spo2_values,
         active_energy_values,
@@ -211,9 +192,14 @@ def parse_health_auto_export(
         if resting_hr_values[date_key]:
             resting_hr = round(statistics.mean(resting_hr_values[date_key]), 2)
 
-        sleep_hours = None
-        if sleep_durations[date_key]:
-            sleep_hours = round(sum(sleep_durations[date_key]), 2)
+        stage_total_min = sum(
+            sum(lst) for lst in [
+                sleep_deep_mins[date_key],
+                sleep_rem_mins[date_key],
+                sleep_core_mins[date_key],
+            ]
+        )
+        sleep_hours = round(stage_total_min / 60, 2) if stage_total_min > 0 else None
 
         steps = None
         if step_values[date_key]:
