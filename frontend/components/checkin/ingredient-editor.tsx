@@ -55,13 +55,13 @@ export function IngredientEditor({ photoId, onAdded }: IngredientEditorProps) {
         }}
         placeholder="Ingredient name"
         autoFocus
-        className="h-6 flex-1 rounded border border-border bg-background px-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        className="h-6 min-w-0 flex-1 rounded border border-border bg-background px-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
       />
       <button
         type="button"
         onClick={handleAdd}
         disabled={addIngredient.isPending || !name.trim()}
-        className="h-6 rounded bg-primary px-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
+        className="h-6 shrink-0 rounded bg-primary px-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
       >
         Add
       </button>
@@ -71,7 +71,7 @@ export function IngredientEditor({ photoId, onAdded }: IngredientEditorProps) {
           setAdding(false)
           setName('')
         }}
-        className="h-6 rounded px-1.5 text-xs text-muted-foreground hover:text-foreground"
+        className="h-6 shrink-0 rounded px-1.5 text-xs text-muted-foreground hover:text-foreground"
       >
         Cancel
       </button>
