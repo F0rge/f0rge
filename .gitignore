@@ -28,3 +28,9 @@ Thumbs.db
 
 # Cloudflare
 .cloudflared/
+
+# Playwright
+.playwright*/
+
+# Claude agent memory (runtime state, not source)
+*agent-memory/*
