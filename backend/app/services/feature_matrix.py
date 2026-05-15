@@ -13,10 +13,11 @@ from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.supplement_catalog import SupplementCatalogItem
+from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
 
-FEATURE_SCHEMA_VERSION = 1
+FEATURE_SCHEMA_VERSION = 2
 
 STATIC_COLUMNS = [
     "date",
@@ -216,6 +217,15 @@ def build_feature_matrix(
     )
     supp_keys = [s.key for s in supp_catalog]
 
+    sym_catalog = (
+        db.query(SymptomCatalogItem)
+        .filter(SymptomCatalogItem.first_used_at.isnot(None))
+        .filter(SymptomCatalogItem.archived.is_(False))
+        .order_by(SymptomCatalogItem.key)
+        .all()
+    )
+    sym_keys = [s.key for s in sym_catalog]
+
     all_treatments = (
         db.query(Treatment)
         .filter(
@@ -231,6 +241,7 @@ def build_feature_matrix(
         STATIC_COLUMNS
         + [f"supp_{k}" for k in supp_keys]
         + [f"tx_{n}_active" for n in tx_names]
+        + [f"sym_{k}" for k in sym_keys]
     )
 
     rows: list[dict] = []
@@ -278,6 +289,10 @@ def build_feature_matrix(
             )
             for k in supp_keys:
                 row[f"supp_{k}"] = k in taken_keys
+
+            row_symptoms = getattr(entry, "symptoms_json", {}) or {}
+            for k in sym_keys:
+                row[f"sym_{k}"] = row_symptoms.get(k)  # int or None
 
         if hm is not None:
             row.update(

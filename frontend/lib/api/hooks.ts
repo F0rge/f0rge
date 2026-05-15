@@ -18,6 +18,7 @@ import type {
   HealthMetricResponse,
   EnrichedDayResponse,
   SupplementCatalogItem,
+  SymptomCatalogItem,
   PhotoAnalysis,
   Treatment,
   TreatmentCreate,
@@ -189,6 +190,41 @@ export function useUpdateSupplementCatalogItem() {
     }) => apiPatch(`/supplements/catalog/${key}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supplement-catalog'] })
+    },
+  })
+}
+
+export function useSymptomCatalog(includeArchived = false) {
+  const params = includeArchived ? '?include_archived=true' : ''
+  return useQuery<SymptomCatalogItem[]>({
+    queryKey: ['symptom-catalog', includeArchived],
+    queryFn: () => apiGet(`/symptoms/catalog${params}`),
+  })
+}
+
+export function useAddSymptomCatalogItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { key: string; label: string }) =>
+      apiPost('/symptoms/catalog', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['symptom-catalog'] })
+    },
+  })
+}
+
+export function useUpdateSymptomCatalogItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      key,
+      data,
+    }: {
+      key: string
+      data: { label?: string; archived?: boolean; sort_order?: number }
+    }) => apiPatch(`/symptoms/catalog/${key}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['symptom-catalog'] })
     },
   })
 }

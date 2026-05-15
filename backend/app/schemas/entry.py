@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import datetime
+import re
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.photo import PhotoResponse
+
+_SYMPTOM_KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
 
 class EntryCreate(BaseModel):
     date: datetime.date
-    schema_version: Optional[int] = 2
+    schema_version: Optional[int] = 3
     entry_time: Optional[datetime.datetime] = None
     period_of_day: Optional[str] = None
     overall: int
@@ -34,6 +37,21 @@ class EntryCreate(BaseModel):
     alcohol_units: Optional[int] = Field(default=None, ge=0, le=10)
     caffeine_servings: Optional[int] = Field(default=None, ge=0, le=10)
     notes: Optional[str] = None
+    symptoms_json: Optional[dict] = None
+
+    @field_validator("symptoms_json", mode="after")
+    @classmethod
+    def validate_symptoms_json(cls, v: Optional[dict]) -> Optional[dict]:
+        if v is None:
+            return v
+        for key, value in v.items():
+            if not _SYMPTOM_KEY_RE.match(key):
+                raise ValueError("symptom key must match ^[a-z0-9_]+$")
+            if not isinstance(value, int):
+                raise ValueError("severity must be integer 0-10")
+            if not 0 <= value <= 10:
+                raise ValueError("severity must be integer 0-10")
+        return v
 
 
 class EntryUpdate(BaseModel):
@@ -57,6 +75,21 @@ class EntryUpdate(BaseModel):
     alcohol_units: Optional[int] = Field(default=None, ge=0, le=10)
     caffeine_servings: Optional[int] = Field(default=None, ge=0, le=10)
     notes: Optional[str] = None
+    symptoms_json: Optional[dict] = None
+
+    @field_validator("symptoms_json", mode="after")
+    @classmethod
+    def validate_symptoms_json(cls, v: Optional[dict]) -> Optional[dict]:
+        if v is None:
+            return v
+        for key, value in v.items():
+            if not _SYMPTOM_KEY_RE.match(key):
+                raise ValueError("symptom key must match ^[a-z0-9_]+$")
+            if not isinstance(value, int):
+                raise ValueError("severity must be integer 0-10")
+            if not 0 <= value <= 10:
+                raise ValueError("severity must be integer 0-10")
+        return v
 
 
 class EntryResponse(BaseModel):
@@ -82,6 +115,7 @@ class EntryResponse(BaseModel):
     alcohol_units: Optional[int] = None
     caffeine_servings: Optional[int] = None
     notes: Optional[str] = None
+    symptoms_json: dict = Field(default_factory=dict)
     photos: list[PhotoResponse] = []
     created_at: datetime.datetime
     updated_at: datetime.datetime
