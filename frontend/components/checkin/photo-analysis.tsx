@@ -43,18 +43,27 @@ function DietaryBadges({ ingredient }: { ingredient: PhotoIngredient }) {
     badges.push({ label: 'Dairy', className: 'bg-blue-100 text-blue-800' })
   }
 
-  // FODMAP flags
-  if (ingredient.fodmap_oligos === 'high') {
-    badges.push({ label: 'F:O', className: 'bg-orange-100 text-orange-800' })
-  }
-  if (ingredient.fodmap_fructose === 'high') {
-    badges.push({ label: 'F:Fr', className: 'bg-orange-100 text-orange-800' })
-  }
-  if (ingredient.fodmap_polyols === 'high') {
-    badges.push({ label: 'F:P', className: 'bg-orange-100 text-orange-800' })
-  }
-  if (ingredient.fodmap_lactose === 'high') {
-    badges.push({ label: 'F:L', className: 'bg-orange-100 text-orange-800' })
+  // FODMAP flags. For each category, `high` takes precedence over
+  // `moderate`. High = orange badge; moderate = softer amber badge with a
+  // `?` suffix so high vs moderate is also distinguishable in screenshots
+  // and copied text. See issue #14.
+  const FODMAP_HIGH = 'bg-orange-100 text-orange-800'
+  const FODMAP_MOD = 'bg-amber-100 text-amber-800'
+  const fodmapCategories: Array<{
+    value: string | null
+    abbrev: string
+  }> = [
+    { value: ingredient.fodmap_oligos, abbrev: 'F:O' },
+    { value: ingredient.fodmap_fructose, abbrev: 'F:Fr' },
+    { value: ingredient.fodmap_polyols, abbrev: 'F:P' },
+    { value: ingredient.fodmap_lactose, abbrev: 'F:L' },
+  ]
+  for (const { value, abbrev } of fodmapCategories) {
+    if (value === 'high') {
+      badges.push({ label: abbrev, className: FODMAP_HIGH })
+    } else if (value === 'moderate') {
+      badges.push({ label: `${abbrev}?`, className: FODMAP_MOD })
+    }
   }
 
   // If nothing is known at all, show unknown
