@@ -53,11 +53,32 @@ async def upload_photo(
             detail=f"No entry for {date}",
         )
 
-    # Determine next photo number for this date
-    existing_count = db.query(Photo).filter(Photo.entry_id == entry.id).count()
-    photo_number = existing_count + 1
+    # Determine next photo number for this date.
+    #
+    # We can't use COUNT here: after a photo is deleted, the count drops
+    # but the surviving photos keep their original numbers. Reusing a
+    # number would collide with an existing filename on disk and silently
+    # overwrite it (and produce two DB rows pointing at the same file).
+    #
+    # Instead, parse the photo_number from every existing filename for
+    # this entry and take max() + 1. Deleted numbers stay permanently
+    # retired -- gaps in the sequence are fine and intentional.
+    prefix = f"{date.isoformat()}_photo-"
+    suffix = ".jpg"
+    used_numbers: set[int] = set()
+    for (existing_filename,) in db.query(Photo.filename).filter(
+        Photo.entry_id == entry.id
+    ):
+        if existing_filename.startswith(prefix) and existing_filename.endswith(suffix):
+            try:
+                used_numbers.add(int(existing_filename[len(prefix) : -len(suffix)]))
+            except ValueError:
+                # Filename has the right prefix/suffix but a non-numeric
+                # middle (shouldn't happen, but don't crash uploads).
+                pass
+    photo_number = max(used_numbers, default=0) + 1
 
-    filename = f"{date.isoformat()}_photo-{photo_number}.jpg"
+    filename = f"{prefix}{photo_number}{suffix}"
 
     # Read and process the uploaded file
     raw_bytes = await file.read()
