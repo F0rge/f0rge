@@ -34,6 +34,7 @@ export interface Entry {
   notes: string | null
   alcohol_units: number | null
   caffeine_servings: number | null
+  symptoms_json: Record<string, number> | null
   photos: Photo[]
   created_at: string
   updated_at: string
@@ -59,9 +60,20 @@ export interface EntryCreate {
   notes?: string
   alcohol_units?: number | null
   caffeine_servings?: number | null
+  symptoms_json?: Record<string, number>
 }
 
 export interface SupplementCatalogItem {
+  id: number
+  key: string
+  label: string
+  archived: boolean
+  first_used_at: string | null
+  last_used_at: string | null
+  sort_order: number
+}
+
+export interface SymptomCatalogItem {
   id: number
   key: string
   label: string

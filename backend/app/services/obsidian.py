@@ -14,6 +14,7 @@ from app.models.health_metrics import HealthMetric
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
+from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.services.weather import get_daily_summary
 
@@ -209,6 +210,18 @@ def _format_supplements(supplements_str: str) -> str:
     return ", ".join(labels) if labels else "None"
 
 
+def _format_symptoms(
+    filtered_symptoms: dict,
+    active_sym_labels: dict,
+) -> str:
+    if not filtered_symptoms:
+        return "None today"
+    parts = [
+        f"{active_sym_labels[k]} {v}/10" for k, v in sorted(filtered_symptoms.items())
+    ]
+    return ", ".join(parts)
+
+
 def _stool_summary(entry: Entry) -> str:
     status = getattr(entry, "stool_status", None)
     bristol = getattr(entry, "bristol_type", None)
@@ -258,6 +271,21 @@ def _render_markdown(db_session: Session, entry: Entry, photos: Sequence[Photo])
 
     dietary_fm, dietary_tags = _compute_dietary_tags(list(analyses.values()))
 
+    # Symptoms: fetch active catalog labels to filter logged symptoms
+    symptoms = getattr(entry, "symptoms_json", {}) or {}
+    active_sym_labels: dict[str, str] = {}
+    try:
+        active_sym_labels = {
+            s.key: s.label
+            for s in db_session.query(SymptomCatalogItem)
+            .filter(SymptomCatalogItem.archived.is_(False))
+            .all()
+        }
+    except Exception:
+        logger.exception("Failed to query symptom catalog for %s", date_str)
+    # Only keep symptoms whose key is in the active catalog (drops archived keys)
+    filtered_symptoms = {k: v for k, v in symptoms.items() if k in active_sym_labels}
+
     active_treatments: list[Treatment] = []
     try:
         active_treatments = (
@@ -303,6 +331,9 @@ def _render_markdown(db_session: Session, entry: Entry, photos: Sequence[Photo])
         f"stress: {entry.stress}",
         f"diet-risk: {entry.diet_risk}",
         f"supplements: {entry.supplements}",
+        # Symptom severity lines (sorted by key for stable vault diffs)
+        *[f"sym-{k}: {v}" for k, v in sorted(filtered_symptoms.items())],
+        f"symptoms-count: {len(filtered_symptoms)}",
         f"sick: {sick_str}",
         f"hot-shower: {hot_shower_str}",
     ]
@@ -341,6 +372,7 @@ def _render_markdown(db_session: Session, entry: Entry, photos: Sequence[Photo])
             f"| Stress | {STRESS_LABELS.get(entry.stress, str(entry.stress))} |",
             f"| Diet risk | {entry.diet_risk} |",
             f"| Supplements | {_format_supplements(entry.supplements)} |",
+            f"| Symptoms | {_format_symptoms(filtered_symptoms, active_sym_labels)} |",
             f"| Sick | {sick_str} |",
             f"| Hot shower (full body) | {hot_shower_str} |",
             f"| Active treatments | {_format_active_treatments(active_treatments, entry.date)} |",

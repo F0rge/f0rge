@@ -10,6 +10,7 @@ import { BristolInput } from './bristol-input'
 import { NotesInput } from './notes-input'
 import { PhotoCapture } from './photo-capture'
 import { SupplementPicker } from './supplement-picker'
+import { SymptomPicker } from './symptom-picker'
 import { Stepper } from '@/components/ui/stepper'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -63,6 +64,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const [dietRisk, setDietRisk] = useState<string>('normal')
   const [supplements, setSupplements] = useState<string>('')
   const [supplementsTouched, setSupplementsTouched] = useState(false)
+  const [symptomsJson, setSymptomsJson] = useState<Record<string, number>>({})
   const [sick, setSick] = useState(false)
   const [hotShower, setHotShower] = useState(false)
   const [notes, setNotes] = useState('')
@@ -103,6 +105,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       setDietRisk(existingEntry.diet_risk)
       setSupplements(existingEntry.supplements)
       setSupplementsTouched(true)
+      setSymptomsJson(existingEntry.symptoms_json ?? {})
       setSick(existingEntry.sick)
       setHotShower(existingEntry.hot_shower ?? false)
       setNotes(existingEntry.notes || '')
@@ -175,6 +178,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         notes: notes || undefined,
         alcohol_units: alcoholUnits,
         caffeine_servings: caffeineServings,
+        symptoms_json: symptomsJson,
       }
 
       if (existingEntry) {
@@ -351,6 +355,8 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
           setSupplementsTouched(true)
         }}
       />
+
+      <SymptomPicker value={symptomsJson} onChange={setSymptomsJson} />
 
       <div className="space-y-2">
         <label className="text-sm font-semibold">Alcohol & Caffeine</label>
