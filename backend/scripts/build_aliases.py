@@ -53,16 +53,95 @@ ALIASES: list[tuple[str, str, str]] = [
     ("red pepper", "bell pepper", "en"),
     ("green pepper", "bell pepper", "en"),
     ("yellow pepper", "bell pepper", "en"),
+    ("orange pepper", "bell pepper", "en"),
+    ("red bell pepper", "bell pepper", "en"),
+    ("yellow bell pepper", "bell pepper", "en"),
+    ("green bell pepper", "bell pepper", "en"),
+    ("orange bell pepper", "bell pepper", "en"),
+    ("sweet pepper", "bell pepper", "en"),
+    ("sweet peppers", "bell pepper", "en"),
+    ("bell peppers", "bell pepper", "en"),
     ("baby spinach", "spinach", "en"),
+    ("spinach leaves", "spinach", "en"),
     ("romaine", "lettuce", "en"),
+    ("romaine lettuce", "lettuce", "en"),
     ("iceberg lettuce", "lettuce", "en"),
-    ("mixed greens", "lettuce", "en"),
+    ("iceberg", "lettuce", "en"),
+    ("butter lettuce", "lettuce", "en"),
+    ("bibb lettuce", "lettuce", "en"),
+    ("little gem", "lettuce", "en"),
+    ("mixed greens", "mixed salad greens", "en"),
+    ("salad greens", "mixed salad greens", "en"),
+    ("mixed salad", "mixed salad greens", "en"),
+    ("leafy greens", "mixed salad greens", "en"),
+    ("mesclun", "mixed salad greens", "en"),
+    ("spring mix", "mixed salad greens", "en"),
+    ("baby greens", "mixed salad greens", "en"),
+    ("microgreen", "microgreens", "en"),
+    ("micro greens", "microgreens", "en"),
+    ("sprouts", "microgreens", "en"),
+    ("alfalfa sprouts", "microgreens", "en"),
+    ("bean sprouts", "microgreens", "en"),
     ("button mushrooms", "mushroom", "en"),
+    ("button mushroom", "mushroom", "en"),
     ("mushrooms", "mushroom", "en"),
     ("portobello", "mushroom", "en"),
+    ("portobello mushroom", "mushroom", "en"),
+    ("portobello mushrooms", "mushroom", "en"),
     ("shiitake", "mushroom", "en"),
+    ("shiitake mushroom", "mushroom", "en"),
+    ("shiitake mushrooms", "mushroom", "en"),
     ("cremini", "mushroom", "en"),
+    ("cremini mushroom", "mushroom", "en"),
+    ("cremini mushrooms", "mushroom", "en"),
+    ("oyster mushroom", "mushroom", "en"),
+    ("oyster mushrooms", "mushroom", "en"),
     ("champignon", "mushroom", "fr"),
+    # Common vegetable plurals and varieties. The head-noun fallback
+    # handles many compound forms ("cherry tomato" -> "tomato"), but bare
+    # plurals like "tomatoes" can't be resolved that way — they need
+    # explicit aliases.
+    ("tomatoes", "tomato", "en"),
+    ("cherry tomatoes", "tomato", "en"),
+    ("cherry tomato", "tomato", "en"),
+    ("grape tomatoes", "tomato", "en"),
+    ("plum tomatoes", "tomato", "en"),
+    ("roma tomatoes", "tomato", "en"),
+    ("onions", "onion", "en"),
+    ("red onion", "onion", "en"),
+    ("red onions", "onion", "en"),
+    ("white onion", "onion", "en"),
+    ("yellow onion", "onion", "en"),
+    ("brown onion", "onion", "en"),
+    ("potatoes", "potato", "en"),
+    ("baby potatoes", "potato", "en"),
+    ("new potatoes", "potato", "en"),
+    ("roast potatoes", "potato", "en"),
+    ("mashed potato", "potato", "en"),
+    ("mashed potatoes", "potato", "en"),
+    ("sweet potatoes", "sweet potato", "en"),
+    ("yam", "sweet potato", "en"),
+    ("yams", "sweet potato", "en"),
+    ("carrots", "carrot", "en"),
+    ("baby carrots", "carrot", "en"),
+    ("cucumbers", "cucumber", "en"),
+    ("zucchinis", "zucchini", "en"),
+    ("eggplants", "eggplant", "en"),
+    ("aubergines", "eggplant", "en"),
+    ("avocados", "avocado", "en"),
+    ("radishes", "radish", "en"),
+    ("beets", "beet", "en"),
+    ("celery stalks", "celery", "en"),
+    ("garlic clove", "garlic", "en"),
+    ("garlic cloves", "garlic", "en"),
+    ("shallots", "shallot", "en"),
+    ("leeks", "leek", "en"),
+    ("chilies", "chili pepper", "en"),
+    ("chillies", "chili pepper", "en"),
+    ("jalapeno", "chili pepper", "en"),
+    ("jalapenos", "chili pepper", "en"),
+    ("serrano", "chili pepper", "en"),
+    ("habanero", "chili pepper", "en"),
     # Meat aliases
     ("beef", "beef, fresh", "en"),
     ("steak", "beef, fresh", "en"),
@@ -127,9 +206,15 @@ ALIASES: list[tuple[str, str, str]] = [
     # Egg aliases
     ("eggs", "egg", "en"),
     ("boiled egg", "egg", "en"),
+    ("boiled eggs", "egg", "en"),
     ("scrambled egg", "egg", "en"),
+    ("scrambled eggs", "egg", "en"),
     ("fried egg", "egg", "en"),
+    ("fried eggs", "egg", "en"),
     ("omelette", "egg", "en"),
+    ("omelet", "egg", "en"),
+    ("poached egg", "egg", "en"),
+    ("poached eggs", "egg", "en"),
     # Nut/seed aliases
     ("almond", "almonds", "en"),
     ("walnut", "walnuts", "en"),
@@ -155,6 +240,30 @@ ALIASES: list[tuple[str, str, str]] = [
     ("EVOO", "olive oil", "en"),
     ("rapeseed oil", "rapeseed oil", "en"),
     ("canola oil", "rapeseed oil", "en"),
+    # Tahini and sesame-based dressings — histamine profile is dominated
+    # by the tahini/sesame base, so route to that canonical.
+    ("tahini dressing", "tahini", "en"),
+    ("tahini sauce", "tahini", "en"),
+    ("sesame paste", "tahini", "en"),
+    ("sesame dressing", "sesame seeds", "en"),
+    # Other common dressings — map to closest sensible canonical.
+    ("vinaigrette", "vinegar", "en"),
+    ("balsamic dressing", "balsamic vinegar", "en"),
+    ("balsamic vinaigrette", "balsamic vinegar", "en"),
+    ("italian dressing", "olive oil", "en"),
+    ("french dressing", "olive oil", "en"),
+    ("olive oil dressing", "olive oil", "en"),
+    ("lemon dressing", "lemon", "en"),
+    ("yogurt dressing", "yogurt", "en"),
+    ("yoghurt dressing", "yogurt", "en"),
+    ("mustard dressing", "mustard", "en"),
+    ("honey mustard", "mustard", "en"),
+    # Sauces that share a dominant canonical.
+    ("marinara", "tomato sauce", "en"),
+    ("marinara sauce", "tomato sauce", "en"),
+    ("pasta sauce", "tomato sauce", "en"),
+    ("passata", "tomato sauce", "en"),
+    ("hummus dip", "chickpeas", "en"),
     # Fruit aliases
     ("strawberries", "strawberry", "en"),
     ("blueberries", "blueberry", "en"),
@@ -171,6 +280,21 @@ ALIASES: list[tuple[str, str, str]] = [
     ("sultanas", "raisin", "en"),
     ("dried cranberries", "cranberry", "en"),
     ("plantain", "banana", "en"),
+    ("apples", "apple", "en"),
+    ("pears", "pear", "en"),
+    ("peaches", "peach", "en"),
+    ("apricots", "apricot", "en"),
+    ("plums", "plum", "en"),
+    ("nectarines", "nectarine", "en"),
+    ("mangoes", "mango", "en"),
+    ("mangos", "mango", "en"),
+    ("pineapples", "pineapple", "en"),
+    ("avocadoes", "avocado", "en"),
+    ("watermelons", "watermelon", "en"),
+    ("kiwis", "kiwi", "en"),
+    ("kiwifruit", "kiwi", "en"),
+    ("bananas", "banana", "en"),
+    ("melons", "melon", "en"),
     # Legume aliases
     ("red lentils", "lentils", "en"),
     ("green lentils", "lentils", "en"),
@@ -346,12 +470,24 @@ def load() -> None:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
+    # Rebuild from scratch so the script is truly idempotent. The table
+    # has no UNIQUE constraint on `alias`, so repeated runs of the old
+    # INSERT-OR-REPLACE path would accumulate duplicate rows (PK is id).
+    cur.execute("DELETE FROM ingredient_aliases")
+
     inserted = 0
     skipped = 0
+    seen: set[str] = set()
 
     for alias, canonical, lang in ALIASES:
         alias_lower = alias.strip().lower()
         canonical_lower = canonical.strip().lower()
+
+        # Drop in-list duplicates so the source list defines a clean
+        # one-alias-to-one-canonical mapping (first occurrence wins).
+        if alias_lower in seen:
+            log.debug("Skipping duplicate alias '%s' in source list", alias_lower)
+            continue
 
         # Only insert if the canonical name exists in dietary_ingredients
         cur.execute(
@@ -368,10 +504,11 @@ def load() -> None:
             continue
 
         cur.execute(
-            """INSERT OR REPLACE INTO ingredient_aliases (alias, canonical_name, language)
+            """INSERT INTO ingredient_aliases (alias, canonical_name, language)
                VALUES (?, ?, ?)""",
             (alias_lower, canonical_lower, lang),
         )
+        seen.add(alias_lower)
         inserted += 1
 
     conn.commit()

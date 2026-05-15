@@ -96,6 +96,8 @@
   {"name": "zucchini", "category": "vegetables", "score": 0},
   {"name": "cucumber", "category": "vegetables", "score": 0},
   {"name": "lettuce", "category": "vegetables", "score": 0},
+  {"name": "mixed salad greens", "category": "vegetables", "score": 0},
+  {"name": "microgreens", "category": "vegetables", "score": 0},
   {"name": "broccoli", "category": "vegetables", "score": 0},
   {"name": "cauliflower", "category": "vegetables", "score": 0},
   {"name": "green beans", "category": "vegetables", "score": 0},
