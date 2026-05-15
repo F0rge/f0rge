@@ -2,14 +2,15 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Cloud, Heart, RefreshCw, Upload, ArrowLeft } from 'lucide-react'
+import { Cloud, Download, Heart, RefreshCw, Upload, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useTriggerWeatherFetch } from '@/lib/api/hooks'
-import { apiPostForm } from '@/lib/api/client'
+import { apiGetRaw, apiPostForm } from '@/lib/api/client'
 
 export default function SettingsPage() {
   const weatherFetch = useTriggerWeatherFetch()
   const [uploading, setUploading] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const handleWeatherFetch = async () => {
     try {
@@ -17,6 +18,29 @@ export default function SettingsPage() {
       toast.success('Weather data fetched')
     } catch {
       toast.error('Weather fetch failed — check API key')
+    }
+  }
+
+  const handleExportCsv = async () => {
+    setExporting(true)
+    try {
+      const res = await apiGetRaw('/export/feature-matrix.csv')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const disposition = res.headers.get('Content-Disposition')
+      const match = disposition?.match(/filename="?([^"]+)"?/)
+      a.download = match?.[1] ?? 'feature_matrix.csv'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('CSV export failed:', err)
+      toast.error('Export failed')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -89,6 +113,26 @@ export default function SettingsPage() {
               disabled={uploading}
             />
           </label>
+        </div>
+
+        {/* Export Data */}
+        <div className="rounded-xl border border-border p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Download className="size-5 text-green-500" />
+            <h2 className="font-semibold">Export Data</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Download all check-in and health metric data as a CSV feature matrix for analysis.
+          </p>
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={exporting}
+            className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition-all hover:bg-muted disabled:opacity-50"
+          >
+            <Download className={`size-4 ${exporting ? 'animate-pulse' : ''}`} />
+            {exporting ? 'Exporting...' : 'Download CSV'}
+          </button>
         </div>
 
         {/* Info */}
