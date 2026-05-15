@@ -33,6 +33,25 @@ async function handleResponse(res: Response) {
   return res.text()
 }
 
+export async function apiGetRaw(path: string): Promise<Response> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'GET',
+    credentials: 'include',
+  })
+  if (res.status === 401) {
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      const returnTo = encodeURIComponent(window.location.pathname)
+      window.location.href = `/login?redirect=${returnTo}`
+    }
+    throw new ApiError('Session expired', 401)
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => 'Unknown error')
+    throw new ApiError(text, res.status)
+  }
+  return res
+}
+
 export async function apiGet(path: string) {
   const res = await fetch(`${BASE}${path}`, {
     method: 'GET',
