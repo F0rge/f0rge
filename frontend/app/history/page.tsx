@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { ChevronLeft, ChevronRight, ArrowLeft, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { CalendarView } from '@/components/history/calendar-view'
 import { EntryCard } from '@/components/history/entry-card'
 import { useEntries } from '@/lib/api/hooks'
@@ -45,13 +44,6 @@ export default function HistoryPage() {
   return (
     <div className="mx-auto w-full max-w-lg p-4">
       <div className="mb-6">
-        <Link
-          href="/checkin"
-          className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Check-in
-        </Link>
         <h1 className="text-xl font-semibold tracking-tight">History</h1>
       </div>
 

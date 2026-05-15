@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { Loader2, X } from 'lucide-react'
+import Link from 'next/link'
+import { Loader2, Pill, X } from 'lucide-react'
 import { ScaleInput } from './scale-input'
 import { BinaryInput } from './binary-input'
 import { BristolInput } from './bristol-input'
@@ -16,6 +17,7 @@ import {
   useUploadPhoto,
   useDeletePhoto,
   useSupplementCatalog,
+  useTreatments,
 } from '@/lib/api/hooks'
 import { apiGet, apiPut } from '@/lib/api/client'
 import { PhotoAnalysis } from './photo-analysis'
@@ -42,6 +44,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const deletePhotoMutation = useDeletePhoto()
   const queryClient = useQueryClient()
   const { data: catalog } = useSupplementCatalog(false)
+  const { data: activeTreatments } = useTreatments(date)
 
   const defaultSupplements = (catalog ?? [])
     .filter((c) => !c.archived)
@@ -206,6 +209,24 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
 
   return (
     <div className="space-y-7 pb-8">
+      {activeTreatments && activeTreatments.length > 0 && (
+        <Link
+          href="/treatments"
+          className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-4 py-3 transition-colors hover:bg-muted"
+        >
+          <Pill className="size-4 shrink-0 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Active treatments: </span>
+            {activeTreatments.map((t) => {
+              const start = new Date(t.start_date + 'T00:00:00')
+              const current = new Date(date + 'T00:00:00')
+              const dayNum = Math.floor((current.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+              return `${t.name} (day ${dayNum})`
+            }).join(', ')}
+          </p>
+        </Link>
+      )}
+
       <ScaleInput
         label="How was your day?"
         value={overall}
