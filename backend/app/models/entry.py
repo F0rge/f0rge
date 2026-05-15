@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, String, Text
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -13,7 +14,7 @@ class Entry(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[datetime.date] = mapped_column(Date, unique=True, nullable=False)
-    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     entry_time: Mapped[datetime.datetime | None] = mapped_column(
         DateTime, nullable=True
     )
@@ -36,6 +37,9 @@ class Entry(Base):
     hot_shower: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     alcohol_units: Mapped[int | None] = mapped_column(Integer, nullable=True)
     caffeine_servings: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    symptoms_json: Mapped[dict] = mapped_column(
+        MutableDict.as_mutable(JSON), nullable=False, default=dict, server_default="{}"
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         default=datetime.datetime.utcnow,

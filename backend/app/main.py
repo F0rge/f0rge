@@ -21,6 +21,7 @@ from app.routers import (
     health_metrics,
     photos,
     supplement_catalog,
+    symptom_catalog,
     treatments,
     weather,
 )
@@ -40,6 +41,16 @@ DEFAULT_SUPPLEMENTS = [
     ("vitamin_d_k2", "D3 + K2"),
     ("dao", "DAO"),
     ("creatine", "Creatine"),
+]
+
+DEFAULT_SYMPTOMS = [
+    ("vss", "Visual Snow"),
+    ("tinnitus", "Tinnitus"),
+    ("fasciculations", "Fasciculations"),
+    ("photophobia", "Photophobia"),
+    ("fight_flight", "Fight-or-Flight"),
+    ("brain_fog", "Brain Fog"),
+    ("pem", "Post-Exertional Malaise"),
 ]
 
 
@@ -80,6 +91,10 @@ def _run_migrations() -> None:
             conn.execute("ALTER TABLE entries ADD COLUMN alcohol_units INTEGER")
         if "caffeine_servings" not in existing:
             conn.execute("ALTER TABLE entries ADD COLUMN caffeine_servings INTEGER")
+        if "symptoms_json" not in existing:
+            conn.execute(
+                "ALTER TABLE entries ADD COLUMN symptoms_json TEXT NOT NULL DEFAULT '{}'"
+            )
 
         # Photos table migrations
         photo_cols = {
@@ -159,6 +174,21 @@ def _seed_supplement_catalog() -> None:
         session.commit()
 
 
+def _seed_symptom_catalog() -> None:
+    """Seed the symptom_catalog table with the default list on first boot."""
+    from sqlalchemy.orm import Session
+
+    from app.models.symptom_catalog import SymptomCatalogItem
+
+    with Session(engine) as session:
+        existing_count = session.query(SymptomCatalogItem).count()
+        if existing_count > 0:
+            return
+        for sort_order, (key, label) in enumerate(DEFAULT_SYMPTOMS):
+            session.add(SymptomCatalogItem(key=key, label=label, sort_order=sort_order))
+        session.commit()
+
+
 def _seed_dietary_db_if_empty() -> None:
     """Seed the dietary reference tables from bundled JSON on first boot.
 
@@ -208,6 +238,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Base.metadata.create_all(bind=engine)
     _run_migrations()
     _seed_supplement_catalog()
+    _seed_symptom_catalog()
     _seed_dietary_db_if_empty()
     _warn_misconfigured_features()
     if settings.weather_fetch_enabled and settings.openweathermap_api_key:
@@ -256,6 +287,7 @@ app.include_router(weather.router)
 app.include_router(health_metrics.router)
 app.include_router(enriched.router)
 app.include_router(supplement_catalog.router)
+app.include_router(symptom_catalog.router)
 app.include_router(food_analysis.router)
 app.include_router(treatments.router)
 app.include_router(export.router)
