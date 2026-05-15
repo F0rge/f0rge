@@ -24,6 +24,13 @@ class Photo(Base):
     )
 
     entry: Mapped[Entry] = relationship("Entry", back_populates="photos")
+    # cascade="all, delete-orphan" is required: PhotoAnalysis.photo_id is
+    # NOT NULL, so without an ORM-level cascade SQLAlchemy tries to NULL
+    # the FK on photo delete and the commit blows up with an IntegrityError.
     analysis: Mapped[Optional[PhotoAnalysis]] = relationship(
-        "PhotoAnalysis", back_populates="photo", uselist=False
+        "PhotoAnalysis",
+        back_populates="photo",
+        uselist=False,
+        cascade="all, delete-orphan",
+        single_parent=True,
     )
