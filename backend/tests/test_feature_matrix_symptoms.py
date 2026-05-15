@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.database import Base
 from app.models.entry import Entry
 from app.models.symptom_catalog import SymptomCatalogItem
-from app.services.feature_matrix import STATIC_COLUMNS, build_feature_matrix
+from app.services.feature_matrix import (
+    FEATURE_SCHEMA_VERSION,
+    STATIC_COLUMNS,
+    _DIET_RISK_ORDINAL,
+    build_feature_matrix,
+)
 
 
 @pytest.fixture
@@ -157,3 +162,69 @@ def test_column_order_static_then_supp_then_tx_then_sym(db: Session) -> None:
         last_tx_idx = max(columns.index(c) for c in tx_cols)
         first_sym_idx = min(columns.index(c) for c in sym_cols)
         assert first_sym_idx > last_tx_idx
+
+
+# ---------------------------------------------------------------------------
+# diet_risk ordinal encoding
+# ---------------------------------------------------------------------------
+
+
+def _add_entry_with_diet_risk(
+    db: Session,
+    date: datetime.date,
+    diet_risk: str | None,
+) -> Entry:
+    entry = Entry(
+        date=date,
+        schema_version=3,
+        overall=2,
+        bloating=0,
+        stool_status="normal",
+        joint_pain=0,
+        neuro=0,
+        sleep_quality=2,
+        stress=1,
+        diet_risk=diet_risk,
+        supplements="",
+        sick=False,
+        hot_shower=False,
+        symptoms_json={},
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+def test_diet_risk_low_encodes_as_1(db: Session) -> None:
+    _add_entry_with_diet_risk(db, _DATE, "low")
+    rows, _ = build_feature_matrix(db, _DATE, _DATE)
+    assert rows[0]["diet_risk"] == 1
+
+
+def test_diet_risk_high_encodes_as_3(db: Session) -> None:
+    _add_entry_with_diet_risk(db, _DATE, "high")
+    rows, _ = build_feature_matrix(db, _DATE, _DATE)
+    assert rows[0]["diet_risk"] == 3
+
+
+def test_diet_risk_none_encodes_as_none() -> None:
+    # diet_risk=None cannot be persisted (NOT NULL column); test the mapping directly.
+    assert _DIET_RISK_ORDINAL.get(None) is None
+
+
+def test_diet_risk_minimal_encodes_as_0(db: Session) -> None:
+    _add_entry_with_diet_risk(db, _DATE, "minimal")
+    rows, _ = build_feature_matrix(db, _DATE, _DATE)
+    assert rows[0]["diet_risk"] == 0
+
+
+def test_diet_risk_normal_encodes_as_2(db: Session) -> None:
+    _add_entry_with_diet_risk(db, _DATE, "normal")
+    rows, _ = build_feature_matrix(db, _DATE, _DATE)
+    assert rows[0]["diet_risk"] == 2
+
+
+def test_feature_schema_version_is_3() -> None:
+    """Ordinal diet_risk encoding bumped the schema version to 3."""
+    assert FEATURE_SCHEMA_VERSION == 3

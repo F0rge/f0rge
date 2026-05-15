@@ -17,7 +17,7 @@ from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
 
-FEATURE_SCHEMA_VERSION = 2
+FEATURE_SCHEMA_VERSION = 3
 
 STATIC_COLUMNS = [
     "date",
@@ -79,6 +79,16 @@ STATIC_COLUMNS = [
 ]
 
 _FODMAP_LEVEL: dict[Optional[str], int] = {"high": 2, "moderate": 1, None: 0}
+
+# Ordinal encoding for diet_risk so it works as a numeric feature/outcome.
+# Direction: minimal < low < normal < high (ascending dietary risk).
+_DIET_RISK_ORDINAL: dict[Optional[str], Optional[int]] = {
+    "minimal": 0,
+    "low": 1,
+    "normal": 2,
+    "high": 3,
+    None: None,
+}
 
 
 def _compute_dietary_loads(photos: list[Photo]) -> dict:
@@ -273,7 +283,7 @@ def build_feature_matrix(
                     "neuro": entry.neuro,
                     "sleep_quality": entry.sleep_quality,
                     "stress": entry.stress,
-                    "diet_risk": entry.diet_risk,
+                    "diet_risk": _DIET_RISK_ORDINAL.get(entry.diet_risk),
                     "sick": entry.sick,
                     "hot_shower": entry.hot_shower,
                     "alcohol_units": entry.alcohol_units,
