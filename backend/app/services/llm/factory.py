@@ -12,10 +12,10 @@ from app.services.llm.base import EmbeddingClient, LLMClient
 from app.services.llm.encryption import decrypt
 from app.services.llm.openrouter import OpenRouterClient, OpenRouterEmbeddingClient
 
-_DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
+DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 
-async def _load_user_settings(db: AsyncSession) -> UserSettings | None:
+async def load_user_settings_singleton(db: AsyncSession) -> UserSettings | None:
     result = await db.execute(select(UserSettings).where(UserSettings.id == 1))
     return result.scalar_one_or_none()
 
@@ -45,7 +45,7 @@ def _resolve(
 
 async def resolve_llm_credentials(db: AsyncSession) -> tuple[str | None, str]:
     """Return (api_key, model) for the LLM provider. Callers handle missing key."""
-    row = await _load_user_settings(db)
+    row = await load_user_settings_singleton(db)
     return _resolve(
         row,
         key_attr="llm_api_key_encrypted",
@@ -56,26 +56,34 @@ async def resolve_llm_credentials(db: AsyncSession) -> tuple[str | None, str]:
 
 async def resolve_embedding_credentials(db: AsyncSession) -> tuple[str | None, str]:
     """Return (api_key, model) for the embedding provider. Callers handle missing key."""
-    row = await _load_user_settings(db)
+    row = await load_user_settings_singleton(db)
     return _resolve(
         row,
         key_attr="embedding_api_key_encrypted",
         model_attr="embedding_model",
-        default_model=_DEFAULT_EMBEDDING_MODEL,
+        default_model=DEFAULT_EMBEDDING_MODEL,
     )
 
 
-async def get_llm_client(db: AsyncSession = Depends(get_db)) -> LLMClient:
+async def build_llm_client(db: AsyncSession) -> LLMClient:
     api_key, model = await resolve_llm_credentials(db)
     if not api_key:
         raise ConflictError("LLM not configured. Set an API key in /settings.")
     return OpenRouterClient(api_key=api_key, default_model=model)
 
 
-async def get_embedding_client(db: AsyncSession = Depends(get_db)) -> EmbeddingClient:
+async def build_embedding_client(db: AsyncSession) -> EmbeddingClient:
     api_key, model = await resolve_embedding_credentials(db)
     if not api_key:
         raise ConflictError(
             "Embedding client not configured. Set an API key in /settings."
         )
     return OpenRouterEmbeddingClient(api_key=api_key, default_model=model)
+
+
+async def get_llm_client(db: AsyncSession = Depends(get_db)) -> LLMClient:
+    return await build_llm_client(db)
+
+
+async def get_embedding_client(db: AsyncSession = Depends(get_db)) -> EmbeddingClient:
+    return await build_embedding_client(db)

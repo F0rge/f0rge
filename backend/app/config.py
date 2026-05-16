@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "google/gemini-3-flash-preview"
     food_analysis_enabled: bool = True
+    mcp_readonly_database_url: str = ""
+    mcp_server_host: str = "0.0.0.0"
+    mcp_server_port: int = 8005
+    embedding_worker_poll_interval_seconds: int = 5
+    embedding_worker_batch_size: int = 10
+    embedding_worker_max_attempts: int = 5
 
     model_config = {"env_file": ".env"}
 

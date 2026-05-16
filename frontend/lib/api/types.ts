@@ -433,3 +433,7 @@ export interface TestConnectionResponse {
   ok: boolean
   detail?: string | null
 }
+
+export interface ExternalTokenResponse {
+  token: string // Plaintext bearer token. Exposed exactly once.
+}

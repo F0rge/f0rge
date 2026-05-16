@@ -36,3 +36,14 @@ class EmbeddingSettingsUpdate(BaseModel):
 class TestConnectionResponse(BaseModel):
     ok: bool
     detail: Optional[str] = None
+
+
+class ExternalTokenResponse(BaseModel):
+    """Plaintext token returned once on generation. Never returned by GET.
+    Store it immediately — it cannot be recovered after this response."""
+
+    token: str
+
+
+class TokenRevokedResponse(BaseModel):
+    revoked: bool = True

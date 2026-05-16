@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Cloud, Cpu, Download, Heart, Key, Lock, RefreshCw, Sparkles, Upload, ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Cloud, Copy, Cpu, Download, Heart, Key, Lock, RefreshCw, Sparkles, Trash2, Upload } from 'lucide-react'
 import Link from 'next/link'
 import {
   useTriggerWeatherFetch,
@@ -11,6 +11,8 @@ import {
   useUpdateEmbeddingSettings,
   useTestLLMConnection,
   useTestEmbeddingConnection,
+  useRegenerateExternalToken,
+  useRevokeExternalToken,
 } from '@/lib/api/hooks'
 import { apiGetRaw, apiPostForm } from '@/lib/api/client'
 
@@ -52,6 +54,40 @@ export default function SettingsPage() {
   const [embeddingModel, setEmbeddingModel] = useState('')
   const [embeddingCustomModel, setEmbeddingCustomModel] = useState('')
   const [embeddingUseCustom, setEmbeddingUseCustom] = useState(false)
+
+  // External Access Token state
+  const [plaintextToken, setPlaintextToken] = useState<string | null>(null)
+  const regenerate = useRegenerateExternalToken()
+  const revoke = useRevokeExternalToken()
+
+  const handleRegenerate = async () => {
+    try {
+      const result = await regenerate.mutateAsync()
+      setPlaintextToken(result.token)
+      toast.success('Token regenerated — copy it now; it will not be shown again')
+    } catch {
+      toast.error('Failed to regenerate token')
+    }
+  }
+
+  const handleRevoke = async () => {
+    try {
+      await revoke.mutateAsync()
+      setPlaintextToken(null)
+      toast.success('Token revoked')
+    } catch {
+      toast.error('Failed to revoke token')
+    }
+  }
+
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Copied to clipboard')
+    } catch {
+      toast.error('Copy failed — select and copy manually')
+    }
+  }
 
   const handleSaveLLM = async () => {
     const payload: { llm_api_key?: string; llm_model?: string } = {}
@@ -371,27 +407,148 @@ export default function SettingsPage() {
             <Lock className="size-5 text-muted-foreground" />
             <h2 className="font-semibold">External Access Token</h2>
           </div>
-          <input
-            type="text"
-            readOnly
-            value={
-              userSettings.data?.has_external_api_token
-                ? 'Token exists (hidden)'
-                : 'No token generated'
-            }
-            className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
-          />
           <p className="text-xs text-muted-foreground">
-            For external integrations (e.g., shortcut automations). Not active in this release.
+            For querying your health data from Claude Code or Claude Desktop via MCP.
           </p>
-          <button
-            type="button"
-            disabled
-            title="Coming soon (#49)"
-            className={BUTTON_CLASS}
-          >
-            Regenerate
-          </button>
+
+          {plaintextToken ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={plaintextToken}
+                  className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleCopy(plaintextToken)}
+                  aria-label="Copy token"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-border px-3 transition-all hover:bg-muted"
+                >
+                  <Copy className="size-4" />
+                </button>
+              </div>
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Copy this now — it will not be shown again. Closing this page will hide it.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleRegenerate}
+                  disabled={regenerate.isPending}
+                  className={BUTTON_CLASS}
+                >
+                  <RefreshCw className={`size-4 ${regenerate.isPending ? 'animate-spin' : ''}`} />
+                  {regenerate.isPending ? 'Regenerating...' : 'Regenerate'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRevoke}
+                  disabled={revoke.isPending}
+                  className={BUTTON_CLASS}
+                >
+                  <Trash2 className="size-4" />
+                  {revoke.isPending ? 'Revoking...' : 'Revoke'}
+                </button>
+              </div>
+            </div>
+          ) : userSettings.data?.has_external_api_token ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Token exists (hidden). Regenerate to view a new one, or Revoke to disable.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleRegenerate}
+                  disabled={regenerate.isPending}
+                  className={BUTTON_CLASS}
+                >
+                  <RefreshCw className={`size-4 ${regenerate.isPending ? 'animate-spin' : ''}`} />
+                  {regenerate.isPending ? 'Regenerating...' : 'Regenerate'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRevoke}
+                  disabled={revoke.isPending}
+                  className={BUTTON_CLASS}
+                >
+                  <Trash2 className="size-4" />
+                  {revoke.isPending ? 'Revoking...' : 'Revoke'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">No token generated yet.</p>
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={regenerate.isPending}
+                className={BUTTON_CLASS}
+              >
+                <RefreshCw className={`size-4 ${regenerate.isPending ? 'animate-spin' : ''}`} />
+                {regenerate.isPending ? 'Regenerating...' : 'Regenerate'}
+              </button>
+            </div>
+          )}
+
+          {/* Connection examples */}
+          <div className="space-y-2 pt-1">
+            <p className="text-xs font-medium text-muted-foreground">Connection examples</p>
+
+            <details className="rounded-lg border border-border">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">
+                Claude Code (stdio)
+              </summary>
+              <div className="border-t border-border px-3 py-2 space-y-2">
+                <pre className="overflow-x-auto rounded bg-muted p-2 text-xs leading-relaxed">{`claude mcp add health-tracker \\
+  --transport stdio \\
+  -- ssh leo@rpi -- docker exec -i health-tracker-mcp uv run python -m app.mcp --transport stdio`}</pre>
+                <p className="text-xs text-muted-foreground">
+                  stdio mode needs the bearer set in an env-var consumed by the wrapper script.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(`claude mcp add health-tracker \\\n  --transport stdio \\\n  -- ssh leo@rpi -- docker exec -i health-tracker-mcp uv run python -m app.mcp --transport stdio`)}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Copy className="size-3" />
+                  Copy
+                </button>
+              </div>
+            </details>
+
+            <details className="rounded-lg border border-border">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">
+                Claude Desktop (JSON config)
+              </summary>
+              <div className="border-t border-border px-3 py-2 space-y-2">
+                <pre className="overflow-x-auto rounded bg-muted p-2 text-xs leading-relaxed">{`{
+  "mcpServers": {
+    "health-tracker": {
+      "url": "https://health-mcp.leo-figueiredo.com/mcp",
+      "headers": {
+        "Authorization": "Bearer {TOKEN}"
+      }
+    }
+  }
+}`}</pre>
+                <p className="text-xs text-muted-foreground">
+                  Paste into <code className="rounded bg-muted px-1">~/Library/Application Support/Claude/claude_desktop_config.json</code>. Replace <code className="rounded bg-muted px-1">{'{TOKEN}'}</code> with the regenerated token above.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(`{\n  "mcpServers": {\n    "health-tracker": {\n      "url": "https://health-mcp.leo-figueiredo.com/mcp",\n      "headers": {\n        "Authorization": "Bearer {TOKEN}"\n      }\n    }\n  }\n}`)}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Copy className="size-3" />
+                  Copy
+                </button>
+              </div>
+            </details>
+          </div>
         </div>
 
         {/* Apple Health */}

@@ -76,6 +76,57 @@ services:
     networks:
       - health-tracker-network
 
+  mcp-server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: health-tracker-mcp
+    user: "1000:1000"
+    command: ["uv", "run", "python", "-m", "app.mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8005"]
+    # Host port 8005 is occupied on the Pi (entre-nos backend); host:8007 -> container:8005.
+    # Cloudflare tunnel ingress for health-mcp.leo-figueiredo.com must target localhost:8007.
+    ports:
+      - "8007:8005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
+      - MCP_READONLY_DATABASE_URL=postgresql+asyncpg://healthtracker_ro:${HEALTHTRACKER_RO_PASSWORD}@postgres:5432/health
+      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
+      - MCP_SERVER_HOST=0.0.0.0
+      - MCP_SERVER_PORT=8005
+    mem_limit: 256m
+    restart: unless-stopped
+    networks:
+      - health-tracker-network
+
+  embedding-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: health-tracker-embedding-worker
+    user: "1000:1000"
+    command: ["uv", "run", "python", "-m", "app.embedding_pipeline"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
+      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - EMBEDDING_WORKER_POLL_INTERVAL_SECONDS=5
+      - EMBEDDING_WORKER_BATCH_SIZE=10
+      - EMBEDDING_WORKER_MAX_ATTEMPTS=5
+    mem_limit: 512m
+    restart: unless-stopped
+    networks:
+      - health-tracker-network
+
   # Frontend is managed by a separate Coolify app (uuid o0kw8wwscooc00o4gkcosocs),
   # not by this compose stack. It owns port 3004 and deploys from ./frontend/Dockerfile.
 
