@@ -38,6 +38,12 @@ def main() -> None:
         default="stdio",
         help="Transport to use (default: stdio)",
     )
+    # --host and --port are accepted but ignored — bind address comes from
+    # MCP_SERVER_HOST / MCP_SERVER_PORT env vars (read by app.config.settings).
+    # Keeping the flags so the documented `docker-compose` command stays valid
+    # and so CLI invocations don't have to set env vars.
+    parser.add_argument("--host", help="(ignored; use MCP_SERVER_HOST)")
+    parser.add_argument("--port", type=int, help="(ignored; use MCP_SERVER_PORT)")
     args = parser.parse_args()
     asyncio.run(_run(args.transport))
 
