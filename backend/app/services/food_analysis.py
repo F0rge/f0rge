@@ -338,7 +338,7 @@ async def trigger_analysis_background(photo_id: int) -> None:
                 len(vision_result.ingredients),
             )
 
-    except Exception:
+    except Exception as e:
         logger.exception("Food analysis failed for photo %d", photo_id)
         if analysis is not None:
             try:
@@ -349,10 +349,11 @@ async def trigger_analysis_background(photo_id: int) -> None:
                         )
                     ).scalar_one_or_none()
                     if fresh:
-                        import traceback
-
                         fresh.status = "failed"
-                        fresh.error_message = traceback.format_exc()
+                        # Full traceback is already in logs via logger.exception above.
+                        # Store only a short human-readable summary so the UI doesn't
+                        # display a raw multi-line stack trace.
+                        fresh.error_message = f"{type(e).__name__}: {str(e)[:200]}"
                         await db.commit()
             except Exception:
                 logger.exception(
