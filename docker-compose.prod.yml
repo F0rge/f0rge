@@ -76,20 +76,8 @@ services:
     networks:
       - health-tracker-network
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        API_URL: http://backend:8000
-    container_name: health-tracker-frontend
-    ports:
-      - "3004:3000"
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - health-tracker-network
+  # Frontend is managed by a separate Coolify app (uuid o0kw8wwscooc00o4gkcosocs),
+  # not by this compose stack. It owns port 3004 and deploys from ./frontend/Dockerfile.
 
 volumes:
   health-postgres-data:
