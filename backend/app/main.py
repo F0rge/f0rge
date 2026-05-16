@@ -29,6 +29,7 @@ from app.routers import (
     lab_markers,
     labs,
     photos,
+    settings as settings_router,
     supplement_catalog,
     symptom_catalog,
     treatments,
@@ -242,6 +243,7 @@ app.include_router(insights.router)
 app.include_router(treatments.router)
 app.include_router(export.router)
 app.include_router(labs.router)
+app.include_router(settings_router.router)
 app.include_router(lab_markers.router)
 
 

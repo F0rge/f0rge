@@ -22,6 +22,7 @@ from typing import AsyncIterator, Iterator
 import httpx
 import pytest
 import pytest_asyncio
+import sqlalchemy as sa
 from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -72,6 +73,8 @@ async def async_engine(
     """One AsyncEngine for the whole session, with the schema created."""
     engine = create_async_engine(_async_url(postgres_container), echo=False)
     async with engine.begin() as conn:
+        # pgvector extension must be installed before any VECTOR column can be created.
+        await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     try:
         yield engine

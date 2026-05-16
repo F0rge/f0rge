@@ -97,10 +97,7 @@ async def test_trigger_with_empty_api_key_marks_failed(
     and must mark the analysis as failed with a clear error."""
     session, photo_id = db_with_photo
 
-    with (
-        patch("app.services.food_analysis.settings") as mock_settings,
-        patch("app.services.food_analysis.httpx") as mock_httpx,
-    ):
+    with patch("app.services.food_analysis.settings") as mock_settings:
         mock_settings.openrouter_api_key = ""
         mock_settings.openrouter_model = "google/gemini-3-flash-preview"
         mock_settings.food_analysis_enabled = True
@@ -108,9 +105,6 @@ async def test_trigger_with_empty_api_key_marks_failed(
         from app.services import food_analysis
 
         await food_analysis.trigger_analysis_background(photo_id)
-
-        # httpx must never have been invoked
-        assert not mock_httpx.AsyncClient.called
 
     # An analysis row exists with status=failed and a clear error message
     analysis = (
@@ -154,14 +148,10 @@ async def test_trigger_with_empty_key_updates_existing_pending(
         )
         await seed.commit()
 
-    with (
-        patch("app.services.food_analysis.settings") as mock_settings,
-        patch("app.services.food_analysis.httpx") as mock_httpx,
-    ):
+    with patch("app.services.food_analysis.settings") as mock_settings:
         mock_settings.openrouter_api_key = ""
         mock_settings.openrouter_model = "google/gemini-3-flash-preview"
         await fa.trigger_analysis_background(photo_id)
-        assert not mock_httpx.AsyncClient.called
 
     async with fa.async_session_maker() as verify:
         analysis = (

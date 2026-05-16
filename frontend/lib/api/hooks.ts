@@ -33,6 +33,10 @@ import type {
   LabMarkerCatalog,
   MarkerHistoryPoint,
   ExtractionResult,
+  UserSettings,
+  LLMSettingsUpdate,
+  EmbeddingSettingsUpdate,
+  TestConnectionResponse,
 } from './types'
 
 export function useAuth() {
@@ -544,6 +548,49 @@ export function useExtractLabUpload() {
       formData.append('file', file)
       return apiPostForm('/labs/extract-upload', formData) as Promise<ExtractionResult>
     },
+  })
+}
+
+// ── Settings hooks ─────────────────────────────────────────────────────────────
+
+export function useUserSettings() {
+  return useQuery<UserSettings>({
+    queryKey: ['settings'],
+    queryFn: () => apiGet('/settings'),
+  })
+}
+
+export function useUpdateLLMSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: LLMSettingsUpdate) => apiPut('/settings/llm', data) as Promise<UserSettings>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+}
+
+export function useUpdateEmbeddingSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: EmbeddingSettingsUpdate) =>
+      apiPut('/settings/embedding', data) as Promise<UserSettings>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+}
+
+export function useTestLLMConnection() {
+  return useMutation({
+    mutationFn: () => apiPost('/settings/llm/test', {}) as Promise<TestConnectionResponse>,
+  })
+}
+
+export function useTestEmbeddingConnection() {
+  return useMutation({
+    mutationFn: () =>
+      apiPost('/settings/embedding/test', {}) as Promise<TestConnectionResponse>,
   })
 }
 

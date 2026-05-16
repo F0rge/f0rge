@@ -6,7 +6,6 @@ import logging
 import os
 from typing import List
 
-import httpx
 from pydantic import ValidationError as PydanticValidationError
 
 from app.config import settings
@@ -98,27 +97,26 @@ def _cross_check_and_fix(
 
 async def _call_openrouter(messages: List[dict], model: str) -> str:
     """Make a single call to OpenRouter and return the raw content string."""
+    from app.services.llm.openrouter import OpenRouterClient
+    from app.exceptions import ExternalServiceError
+
     response_format = get_response_format(model)
-    async with httpx.AsyncClient(timeout=90.0) as client:
-        resp = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.openrouter_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": messages,
-                "temperature": 0.0,
-                "max_tokens": 8192,
-                "response_format": response_format,
-            },
+    llm_client = OpenRouterClient(
+        api_key=settings.openrouter_api_key,
+        default_model=model,
+    )
+    try:
+        return await llm_client.complete(
+            messages,
+            model=model,
+            response_format=response_format,
+            temperature=0.0,
+            max_tokens=8192,
         )
-    if resp.status_code >= 400:
-        raise ValidationError(
-            f"Upstream LLM error: {resp.status_code} {resp.text[:200]}"
-        )
-    return resp.json()["choices"][0]["message"]["content"]
+    except ExternalServiceError as exc:
+        # Preserve existing caller contract: upstream errors raise ValidationError.
+        # This mapping is intentionally wrong (502 -> 400) and tracked as a follow-up.
+        raise ValidationError(exc.detail) from exc
 
 
 async def _extract(
