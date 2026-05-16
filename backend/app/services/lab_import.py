@@ -48,12 +48,26 @@ class LabImportService:
         self.extraction_service = extraction_service
         self.attachment_storage = attachment_storage
 
+    def _existing_or_none(self, source_path: Optional[str], force: bool) -> Optional[Lab]:
+        """Return the existing Lab for this source_path when we'd skip it.
+
+        Lets each import_from_* method short-circuit BEFORE calling the LLM,
+        so re-runs of the vault import don't burn extraction credits on rows
+        that are already persisted.
+        """
+        if force or source_path is None:
+            return None
+        return self.db.query(Lab).filter(Lab.source_path == source_path).first()
+
     async def import_from_text(
         self,
         document_text: str,
         source_path: Optional[str] = None,
         force: bool = False,
     ) -> Lab:
+        existing = self._existing_or_none(source_path, force)
+        if existing is not None:
+            return existing
         hints = _build_catalog_hints(self.catalog_service)
         result = await self.extraction_service.extract_text(document_text, hints)
         return self._persist(
@@ -73,6 +87,9 @@ class LabImportService:
         force: bool = False,
     ) -> Lab:
         computed_source_path = source_path or _sha256_source_path(pdf_bytes)
+        existing = self._existing_or_none(computed_source_path, force)
+        if existing is not None:
+            return existing
         hints = _build_catalog_hints(self.catalog_service)
         result = await self.extraction_service.extract_pdf(pdf_bytes, hints)
         attachment_path = self.attachment_storage.save(
@@ -96,6 +113,9 @@ class LabImportService:
         force: bool = False,
     ) -> Lab:
         computed_source_path = source_path or _sha256_source_path(image_bytes)
+        existing = self._existing_or_none(computed_source_path, force)
+        if existing is not None:
+            return existing
         hints = _build_catalog_hints(self.catalog_service)
         result = await self.extraction_service.extract_image(
             image_bytes, mime_type, hints
