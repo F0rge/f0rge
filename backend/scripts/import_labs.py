@@ -157,6 +157,9 @@ def _count_markers(payload: object) -> tuple[int, int, int]:
 # ---------------------------------------------------------------------------
 
 
+_MAX_PDF_BYTES = 25 * 1024 * 1024  # 25 MB — OpenRouter/Gemini inline file cap
+
+
 async def _process_file(
     *,
     file_path: Path,
@@ -169,11 +172,28 @@ async def _process_file(
     catalog_svc: LabMarkerCatalogService,
 ) -> str:
     """Process one file. Returns the action string: inserted / skipped-duplicate /
-    forced-replaced / failed / dry-run."""
+    forced-replaced / failed / dry-run / skipped-too-large."""
     relative = _relative_source_path(file_path, source_dir)
     suffix = file_path.suffix.lower()
 
     source_kind = "pdf" if suffix == ".pdf" else "vault_markdown"
+
+    # Size guard for PDFs — OpenRouter inline-file uploads cap around 25 MB.
+    if suffix == ".pdf":
+        size = file_path.stat().st_size
+        if size > _MAX_PDF_BYTES:
+            _log_entry(
+                action="skipped-too-large",
+                source_path=relative,
+                source_kind=source_kind,
+                attempts=0,
+                confidence=0.0,
+                markers_total=0,
+                matched_existing=0,
+                created_canonical=0,
+                error=f"file size {size} > {_MAX_PDF_BYTES} bytes",
+            )
+            return "skipped-too-large"
 
     try:
         if dry_run:
@@ -330,6 +350,7 @@ async def main(args: argparse.Namespace) -> None:
     counters: dict[str, int] = {
         "inserted": 0,
         "skipped-duplicate": 0,
+        "skipped-too-large": 0,
         "forced-replaced": 0,
         "failed": 0,
         "dry-run": 0,
@@ -366,6 +387,7 @@ async def main(args: argparse.Namespace) -> None:
         f"Processed {total} files:"
         f" {counters.get('inserted', 0)} inserted,"
         f" {counters.get('skipped-duplicate', 0)} skipped,"
+        f" {counters.get('skipped-too-large', 0)} too-large,"
         f" {counters.get('forced-replaced', 0)} replaced,"
         f" {counters.get('failed', 0)} failed"
         + (f", {counters.get('dry-run', 0)} dry-run" if args.dry_run else "")
