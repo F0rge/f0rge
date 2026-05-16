@@ -6,6 +6,9 @@ __pycache__/
 venv/
 *.egg
 
+# Session-local MCP config (not committed; per-user)
+.mcp.json
+
 # Backend data
 backend/data/*.db
 backend/photos/
