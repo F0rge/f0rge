@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
-from pathlib import Path
 
+from scripts._db import SyncSession
 from scripts._paths import data_dir
+
+from app.models.dietary_ingredient import DietaryIngredient  # noqa: F401
+from app.database import Base  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "health.db"
 DATA_PATH = data_dir() / "allergens.json"
 
 
@@ -22,46 +23,34 @@ def load() -> None:
     with open(DATA_PATH) as f:
         items: list[dict] = json.load(f)
 
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
     inserted = 0
     updated = 0
 
-    for item in items:
-        name = item["name"].strip().lower()
-        gluten = 1 if item.get("contains_gluten", False) else 0
-        dairy = 1 if item.get("contains_dairy", False) else 0
+    with SyncSession() as session:
+        for item in items:
+            name = item["name"].strip().lower()
+            gluten = bool(item.get("contains_gluten", False))
+            dairy = bool(item.get("contains_dairy", False))
 
-        # Check if row already exists (e.g. from SIGHI or FODMAP loads)
-        cur.execute(
-            "SELECT id FROM dietary_ingredients WHERE canonical_name = ?",
-            (name,),
-        )
-        existing = cur.fetchone()
-
-        if existing:
-            cur.execute(
-                """UPDATE dietary_ingredients
-                   SET contains_gluten = ?,
-                       contains_dairy = ?,
-                       updated_at = datetime('now')
-                 WHERE canonical_name = ?""",
-                (gluten, dairy, name),
+            existing = (
+                session.query(DietaryIngredient)
+                .filter_by(canonical_name=name)
+                .first()
             )
-            updated += 1
-        else:
-            cur.execute(
-                """INSERT INTO dietary_ingredients
-                   (canonical_name, contains_gluten, contains_dairy,
-                    created_at, updated_at)
-                   VALUES (?, ?, ?, datetime('now'), datetime('now'))""",
-                (name, gluten, dairy),
-            )
-            inserted += 1
 
-    conn.commit()
-    conn.close()
+            if existing:
+                existing.contains_gluten = gluten
+                existing.contains_dairy = dairy
+                updated += 1
+            else:
+                session.add(
+                    DietaryIngredient(
+                        canonical_name=name,
+                        contains_gluten=gluten,
+                        contains_dairy=dairy,
+                    )
+                )
+                inserted += 1
 
     log.info(
         "Allergen load complete: %d inserted, %d updated, %d total processed",

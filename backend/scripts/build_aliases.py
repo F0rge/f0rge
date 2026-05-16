@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
-from pathlib import Path
+
+from scripts._db import SyncSession
+
+from app.models.dietary_ingredient import DietaryIngredient  # noqa: F401
+from app.models.ingredient_alias import IngredientAlias  # noqa: F401
+from app.database import Base  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
-
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "health.db"
 
 # (alias, canonical_name, language)
 ALIASES: list[tuple[str, str, str]] = [
@@ -492,54 +494,51 @@ ALIASES: list[tuple[str, str, str]] = [
 
 
 def load() -> None:
-    log.info("Building ingredient aliases in %s", DB_PATH)
+    log.info("Building ingredient aliases")
 
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    with SyncSession() as session:
+        # Rebuild from scratch so the script is truly idempotent. The table
+        # has no UNIQUE constraint on `alias`, so repeated runs would
+        # accumulate duplicate rows (PK is id).
+        session.query(IngredientAlias).delete()
 
-    # Rebuild from scratch so the script is truly idempotent. The table
-    # has no UNIQUE constraint on `alias`, so repeated runs of the old
-    # INSERT-OR-REPLACE path would accumulate duplicate rows (PK is id).
-    cur.execute("DELETE FROM ingredient_aliases")
+        inserted = 0
+        skipped = 0
+        seen: set[str] = set()
 
-    inserted = 0
-    skipped = 0
-    seen: set[str] = set()
+        for alias, canonical, lang in ALIASES:
+            alias_lower = alias.strip().lower()
+            canonical_lower = canonical.strip().lower()
 
-    for alias, canonical, lang in ALIASES:
-        alias_lower = alias.strip().lower()
-        canonical_lower = canonical.strip().lower()
+            # Drop in-list duplicates — first occurrence wins.
+            if alias_lower in seen:
+                log.debug("Skipping duplicate alias '%s' in source list", alias_lower)
+                continue
 
-        # Drop in-list duplicates so the source list defines a clean
-        # one-alias-to-one-canonical mapping (first occurrence wins).
-        if alias_lower in seen:
-            log.debug("Skipping duplicate alias '%s' in source list", alias_lower)
-            continue
-
-        # Only insert if the canonical name exists in dietary_ingredients
-        cur.execute(
-            "SELECT id FROM dietary_ingredients WHERE canonical_name = ?",
-            (canonical_lower,),
-        )
-        if not cur.fetchone():
-            log.debug(
-                "Skipping alias '%s' -> '%s': canonical name not found",
-                alias_lower,
-                canonical_lower,
+            # Only insert if the canonical exists in dietary_ingredients.
+            exists = (
+                session.query(DietaryIngredient)
+                .filter_by(canonical_name=canonical_lower)
+                .first()
             )
-            skipped += 1
-            continue
+            if not exists:
+                log.debug(
+                    "Skipping alias '%s' -> '%s': canonical name not found",
+                    alias_lower,
+                    canonical_lower,
+                )
+                skipped += 1
+                continue
 
-        cur.execute(
-            """INSERT INTO ingredient_aliases (alias, canonical_name, language)
-               VALUES (?, ?, ?)""",
-            (alias_lower, canonical_lower, lang),
-        )
-        seen.add(alias_lower)
-        inserted += 1
-
-    conn.commit()
-    conn.close()
+            session.add(
+                IngredientAlias(
+                    alias=alias_lower,
+                    canonical_name=canonical_lower,
+                    language=lang,
+                )
+            )
+            seen.add(alias_lower)
+            inserted += 1
 
     log.info(
         "Alias build complete: %d inserted, %d skipped (canonical not found)",

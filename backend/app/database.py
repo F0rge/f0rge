@@ -1,28 +1,30 @@
 from __future__ import annotations
 
-from typing import Generator
+from typing import AsyncIterator
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-connect_args = {}
-if settings.database_url.startswith("sqlite"):
-    connect_args["check_same_thread"] = False
+engine: AsyncEngine = create_async_engine(settings.database_url, echo=False)
 
-engine = create_engine(settings.database_url, connect_args=connect_args)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
+    engine,
+    expire_on_commit=False,
+    class_=AsyncSession,
+)
 
 
 class Base(DeclarativeBase):
     pass
 
 
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db() -> AsyncIterator[AsyncSession]:
+    async with async_session_maker() as session:
+        yield session

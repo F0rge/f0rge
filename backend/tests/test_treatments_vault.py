@@ -1,34 +1,18 @@
 from __future__ import annotations
 
 import datetime
-import tempfile
-from collections.abc import Generator
 from typing import Optional
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import Base
 from app.models.entry import Entry
 from app.models.treatment import Treatment
 from app.services.obsidian import _format_active_treatments, _render_markdown
 
 
-@pytest.fixture
-def db() -> Generator[Session, None, None]:
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
-
-
-def _make_treatment(
-    db: Session,
+async def _make_treatment(
+    db: AsyncSession,
     name: str,
     normalized_name: str,
     start_date: datetime.date,
@@ -42,12 +26,12 @@ def _make_treatment(
         end_date=end_date,
     )
     db.add(t)
-    db.commit()
-    db.refresh(t)
+    await db.commit()
+    await db.refresh(t)
     return t
 
 
-def _make_entry(db: Session, date: datetime.date) -> Entry:
+async def _make_entry(db: AsyncSession, date: datetime.date) -> Entry:
     entry = Entry(
         date=date,
         schema_version=2,
@@ -64,9 +48,41 @@ def _make_entry(db: Session, date: datetime.date) -> Entry:
         hot_shower=False,
     )
     db.add(entry)
-    db.commit()
-    db.refresh(entry)
+    await db.commit()
+    await db.refresh(entry)
     return entry
+
+
+async def _active_treatments(db: AsyncSession, as_of: datetime.date) -> list[Treatment]:
+    """Mirror app.services.obsidian_prefetch active-treatment selection so the
+    render-layer tests get the same input the production caller assembles."""
+    rows = (
+        (
+            await db.execute(
+                select(Treatment)
+                .where(Treatment.start_date <= as_of)
+                .where(
+                    (Treatment.end_date.is_(None)) | (Treatment.end_date >= as_of)
+                )
+                .order_by(Treatment.name.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return list(rows)
+
+
+def _render(entry: Entry, active_treatments: list[Treatment]) -> str:
+    return _render_markdown(
+        entry=entry,
+        photos=[],
+        analyses={},
+        active_sym_labels={},
+        active_treatments=active_treatments,
+        health=None,
+        weather=None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -127,29 +143,17 @@ def test_format_multiple_treatments() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def vault_dir() -> Generator[str, None, None]:
-    with tempfile.TemporaryDirectory() as tmp:
-        yield tmp
-
-
-def test_render_markdown_with_active_treatment(
-    db: Session,
-    vault_dir: str,
-    monkeypatch: pytest.MonkeyPatch,
+async def test_render_markdown_with_active_treatment(
+    async_db: AsyncSession,
 ) -> None:
     """active-treatments frontmatter and summary table row are written correctly."""
-    monkeypatch.setattr("app.services.obsidian.settings.vault_path", vault_dir)
-    monkeypatch.setattr(
-        "app.services.obsidian.get_daily_summary",
-        lambda db, date: None,
+    entry_date = datetime.date(2026, 5, 15)
+    entry = await _make_entry(async_db, entry_date)
+    await _make_treatment(
+        async_db, "Allicin", "allicin", datetime.date(2026, 5, 8)
     )
 
-    entry_date = datetime.date(2026, 5, 15)
-    entry = _make_entry(db, entry_date)
-    _make_treatment(db, "Allicin", "allicin", datetime.date(2026, 5, 8))
-
-    content = _render_markdown(db, entry, [])
+    content = _render(entry, await _active_treatments(async_db, entry_date))
 
     # Frontmatter: normalized_name appears in the list
     assert "active-treatments: [allicin]" in content
@@ -157,46 +161,34 @@ def test_render_markdown_with_active_treatment(
     assert "| Active treatments | Allicin (day 8) |" in content
 
 
-def test_render_markdown_no_active_treatment(
-    db: Session,
-    vault_dir: str,
-    monkeypatch: pytest.MonkeyPatch,
+async def test_render_markdown_no_active_treatment(
+    async_db: AsyncSession,
 ) -> None:
     """With no treatments, frontmatter list is empty and table row shows None."""
-    monkeypatch.setattr("app.services.obsidian.settings.vault_path", vault_dir)
-    monkeypatch.setattr(
-        "app.services.obsidian.get_daily_summary",
-        lambda db, date: None,
-    )
-
     entry_date = datetime.date(2026, 5, 15)
-    entry = _make_entry(db, entry_date)
+    entry = await _make_entry(async_db, entry_date)
 
-    content = _render_markdown(db, entry, [])
+    content = _render(entry, await _active_treatments(async_db, entry_date))
 
     assert "active-treatments: []" in content
     assert "| Active treatments | None |" in content
 
 
-def test_render_markdown_multiple_treatments(
-    db: Session,
-    vault_dir: str,
-    monkeypatch: pytest.MonkeyPatch,
+async def test_render_markdown_multiple_treatments(
+    async_db: AsyncSession,
 ) -> None:
     """Multiple active treatments all appear in frontmatter and table."""
-    monkeypatch.setattr("app.services.obsidian.settings.vault_path", vault_dir)
-    monkeypatch.setattr(
-        "app.services.obsidian.get_daily_summary",
-        lambda db, date: None,
+    entry_date = datetime.date(2026, 5, 15)
+    entry = await _make_entry(async_db, entry_date)
+    # Both are active on entry_date
+    await _make_treatment(
+        async_db, "Allicin", "allicin", datetime.date(2026, 5, 8)
+    )
+    await _make_treatment(
+        async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 13)
     )
 
-    entry_date = datetime.date(2026, 5, 15)
-    entry = _make_entry(db, entry_date)
-    # Both are active on entry_date
-    _make_treatment(db, "Allicin", "allicin", datetime.date(2026, 5, 8))
-    _make_treatment(db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 13))
-
-    content = _render_markdown(db, entry, [])
+    content = _render(entry, await _active_treatments(async_db, entry_date))
 
     # The obsidian service orders by Treatment.name
     assert "active-treatments: [allicin, rifaximin]" in content
@@ -204,58 +196,42 @@ def test_render_markdown_multiple_treatments(
     assert "Rifaximin (day 3)" in content
 
 
-def test_render_markdown_expired_treatment_excluded(
-    db: Session,
-    vault_dir: str,
-    monkeypatch: pytest.MonkeyPatch,
+async def test_render_markdown_expired_treatment_excluded(
+    async_db: AsyncSession,
 ) -> None:
     """Treatment that ended before the entry date must not appear."""
-    monkeypatch.setattr("app.services.obsidian.settings.vault_path", vault_dir)
-    monkeypatch.setattr(
-        "app.services.obsidian.get_daily_summary",
-        lambda db, date: None,
-    )
-
     entry_date = datetime.date(2026, 5, 15)
-    entry = _make_entry(db, entry_date)
+    entry = await _make_entry(async_db, entry_date)
     # Ended on May 14 — one day before entry
-    _make_treatment(
-        db,
+    await _make_treatment(
+        async_db,
         "OldDrug",
         "olddrug",
         datetime.date(2026, 5, 1),
         datetime.date(2026, 5, 14),
     )
 
-    content = _render_markdown(db, entry, [])
+    content = _render(entry, await _active_treatments(async_db, entry_date))
 
     assert "active-treatments: []" in content
     assert "OldDrug" not in content
 
 
-def test_render_markdown_treatment_active_on_last_day(
-    db: Session,
-    vault_dir: str,
-    monkeypatch: pytest.MonkeyPatch,
+async def test_render_markdown_treatment_active_on_last_day(
+    async_db: AsyncSession,
 ) -> None:
     """Treatment ending on the exact entry date is still active (inclusive)."""
-    monkeypatch.setattr("app.services.obsidian.settings.vault_path", vault_dir)
-    monkeypatch.setattr(
-        "app.services.obsidian.get_daily_summary",
-        lambda db, date: None,
-    )
-
     entry_date = datetime.date(2026, 5, 15)
-    entry = _make_entry(db, entry_date)
-    _make_treatment(
-        db,
+    entry = await _make_entry(async_db, entry_date)
+    await _make_treatment(
+        async_db,
         "Berberine",
         "berberine",
         datetime.date(2026, 5, 1),
         datetime.date(2026, 5, 15),  # ends today — still active
     )
 
-    content = _render_markdown(db, entry, [])
+    content = _render(entry, await _active_treatments(async_db, entry_date))
 
     assert "active-treatments: [berberine]" in content
     assert "Berberine (day 15)" in content

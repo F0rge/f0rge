@@ -1,34 +1,20 @@
 from __future__ import annotations
 
 import datetime
-from collections.abc import Generator
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import Base
 from app.models.entry import Entry
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.schemas.entry import EntryCreate, EntryResponse
 from app.services import symptom_catalog as symptom_catalog_service
 
 
-@pytest.fixture
-def db() -> Generator[Session, None, None]:
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
-
-
-def _make_entry(
-    db: Session,
+async def _make_entry(
+    db: AsyncSession,
     date: datetime.date,
     symptoms_json: dict | None = None,
 ) -> Entry:
@@ -50,8 +36,8 @@ def _make_entry(
         symptoms_json=symptoms_json if symptoms_json is not None else {},
     )
     db.add(entry)
-    db.commit()
-    db.refresh(entry)
+    await db.commit()
+    await db.refresh(entry)
     return entry
 
 
@@ -152,57 +138,71 @@ def test_schema_omitted_symptoms_json_defaults_to_none() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_entry_stores_and_retrieves_symptoms_json(db: Session) -> None:
-    _make_entry(db, _DATE, {"vss": 7, "tinnitus": 6})
+async def test_entry_stores_and_retrieves_symptoms_json(async_db: AsyncSession) -> None:
+    await _make_entry(async_db, _DATE, {"vss": 7, "tinnitus": 6})
     # Re-fetch from DB to verify persistence
-    fetched = db.query(Entry).filter(Entry.date == _DATE).one()
+    fetched = (
+        await async_db.execute(select(Entry).where(Entry.date == _DATE))
+    ).scalar_one()
     assert fetched.symptoms_json == {"vss": 7, "tinnitus": 6}
 
 
-def test_entry_omitted_symptoms_defaults_to_empty_dict(db: Session) -> None:
-    entry = _make_entry(db, _DATE)
+async def test_entry_omitted_symptoms_defaults_to_empty_dict(
+    async_db: AsyncSession,
+) -> None:
+    entry = await _make_entry(async_db, _DATE)
     assert entry.symptoms_json == {}
 
     response = EntryResponse.model_validate(entry)
     assert response.symptoms_json == {}
 
 
-def test_touch_sets_catalog_timestamps_after_create(db: Session) -> None:
+async def test_touch_sets_catalog_timestamps_after_create(
+    async_db: AsyncSession,
+) -> None:
     """After creating an entry that references 'vss', the catalog row should
     have first_used_at and last_used_at populated."""
-    symptom_catalog_service.create_item(db, "vss", "Visual Snow")
+    await symptom_catalog_service.create_item(async_db, "vss", "Visual Snow")
 
-    entry = _make_entry(db, _DATE, {"vss": 7})
+    entry = await _make_entry(async_db, _DATE, {"vss": 7})
     # Simulate what the router does after add/before commit
-    symptom_catalog_service.touch(db, list(entry.symptoms_json.keys()))
-    db.commit()
+    await symptom_catalog_service.touch(async_db, list(entry.symptoms_json.keys()))
+    await async_db.commit()
 
-    item = db.query(SymptomCatalogItem).filter(SymptomCatalogItem.key == "vss").one()
+    item = (
+        await async_db.execute(
+            select(SymptomCatalogItem).where(SymptomCatalogItem.key == "vss")
+        )
+    ).scalar_one()
     assert item.first_used_at is not None
     assert item.last_used_at is not None
 
 
-def test_touch_on_update_sets_first_used_at_for_new_symptom(db: Session) -> None:
+async def test_touch_on_update_sets_first_used_at_for_new_symptom(
+    async_db: AsyncSession,
+) -> None:
     """Adding a new symptom during an update should set first_used_at."""
-    symptom_catalog_service.create_item(db, "tinnitus", "Tinnitus")
-    entry = _make_entry(db, _DATE, {})
+    await symptom_catalog_service.create_item(async_db, "tinnitus", "Tinnitus")
+    entry = await _make_entry(async_db, _DATE, {})
 
     # Simulate update adding tinnitus
     entry.symptoms_json = {"tinnitus": 5}
-    db.add(entry)
-    symptom_catalog_service.touch(db, list(entry.symptoms_json.keys()))
-    db.commit()
-    db.refresh(entry)
+    async_db.add(entry)
+    await symptom_catalog_service.touch(async_db, list(entry.symptoms_json.keys()))
+    await async_db.commit()
+    await async_db.refresh(entry)
 
     item = (
-        db.query(SymptomCatalogItem).filter(SymptomCatalogItem.key == "tinnitus").one()
-    )
+        await async_db.execute(
+            select(SymptomCatalogItem).where(SymptomCatalogItem.key == "tinnitus")
+        )
+    ).scalar_one()
     assert item.first_used_at is not None
 
 
-def test_touch_silently_ignores_unknown_keys(db: Session) -> None:
+async def test_touch_silently_ignores_unknown_keys(async_db: AsyncSession) -> None:
     """touch() must not raise when a key is not in the catalog."""
-    entry = _make_entry(db, _DATE, {"unknown_xyz": 5})
+    entry = await _make_entry(async_db, _DATE, {"unknown_xyz": 5})
     # Should not raise
-    symptom_catalog_service.touch(db, list(entry.symptoms_json.keys()))
-    db.commit()
+    await symptom_catalog_service.touch(async_db, list(entry.symptoms_json.keys()))
+    await async_db.commit()

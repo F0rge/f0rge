@@ -23,12 +23,12 @@ router = APIRouter(
 
 
 @router.get("/catalog", response_model=List[LabMarkerCatalogResponse])
-def search_catalog(
+async def search_catalog(
     q: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     service: LabMarkerCatalogService = Depends(get_lab_catalog_service),
 ):
-    return service.search(q, limit)
+    return await service.search(q, limit)
 
 
 @router.post(
@@ -36,11 +36,11 @@ def search_catalog(
     response_model=LabMarkerCatalogResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_catalog_item(
+async def create_catalog_item(
     body: LabMarkerCatalogCreate,
     service: LabMarkerCatalogService = Depends(get_lab_catalog_service),
 ):
-    return service.create_catalog_item(body)
+    return await service.create_catalog_item(body)
 
 
 @router.post(
@@ -48,17 +48,17 @@ def create_catalog_item(
     response_model=LabMarkerAliasResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def add_alias(
+async def add_alias(
     catalog_id: int,
     body: LabMarkerAliasCreate,
     service: LabMarkerCatalogService = Depends(get_lab_catalog_service),
 ):
-    return service.add_alias(catalog_id, body.alias, body.language)
+    return await service.add_alias(catalog_id, body.alias, body.language)
 
 
 @router.get("/{canonical_name}/history", response_model=List[MarkerHistoryPoint])
-def get_marker_history(
+async def get_marker_history(
     canonical_name: str,
     service: LabMarkerCatalogService = Depends(get_lab_catalog_service),
 ):
-    return service.get_marker_history(canonical_name)
+    return await service.get_marker_history(canonical_name)

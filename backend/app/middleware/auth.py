@@ -3,15 +3,16 @@ from __future__ import annotations
 import datetime
 
 from fastapi import Cookie, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.session import AuthSession
 
 
-def get_current_session(
+async def get_current_session(
     ht_session: str = Cookie(default=None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> AuthSession:
     if not ht_session:
         raise HTTPException(
@@ -20,8 +21,9 @@ def get_current_session(
         )
 
     session = (
-        db.query(AuthSession).filter(AuthSession.token == ht_session).first()
-    )
+        await db.execute(select(AuthSession).where(AuthSession.token == ht_session))
+    ).scalar_one_or_none()
+
     if session is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -29,8 +31,8 @@ def get_current_session(
         )
 
     if session.expires_at < datetime.datetime.utcnow():
-        db.delete(session)
-        db.commit()
+        await db.delete(session)
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired",

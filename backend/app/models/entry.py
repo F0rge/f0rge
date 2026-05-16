@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -38,7 +39,7 @@ class Entry(Base):
     alcohol_units: Mapped[int | None] = mapped_column(Integer, nullable=True)
     caffeine_servings: Mapped[int | None] = mapped_column(Integer, nullable=True)
     symptoms_json: Mapped[dict] = mapped_column(
-        MutableDict.as_mutable(JSON), nullable=False, default=dict, server_default="{}"
+        MutableDict.as_mutable(JSONB), nullable=False, default=dict, server_default="{}"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -50,5 +51,5 @@ class Entry(Base):
     )
 
     photos: Mapped[list[Photo]] = relationship(
-        "Photo", back_populates="entry", cascade="all, delete-orphan"
+        "Photo", back_populates="entry", cascade="all, delete-orphan", lazy="selectin"
     )
