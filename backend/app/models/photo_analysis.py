@@ -13,7 +13,10 @@ class PhotoAnalysis(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     photo_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("photos.id"), unique=True, nullable=False
+        Integer,
+        ForeignKey("photos.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
     )
     status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
     dish_name: Mapped[str | None] = mapped_column(String, nullable=True)

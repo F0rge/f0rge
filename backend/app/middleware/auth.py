@@ -3,11 +3,11 @@ from __future__ import annotations
 import datetime
 
 from fastapi import Cookie, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.session import AuthSession
+from app.services.auth import get_session_by_token
 
 
 async def get_current_session(
@@ -20,9 +20,7 @@ async def get_current_session(
             detail="Not authenticated",
         )
 
-    session = (
-        await db.execute(select(AuthSession).where(AuthSession.token == ht_session))
-    ).scalar_one_or_none()
+    session = await get_session_by_token(db, ht_session)
 
     if session is None:
         raise HTTPException(

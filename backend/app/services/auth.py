@@ -2,14 +2,30 @@ from __future__ import annotations
 
 import datetime
 import secrets
+from typing import Optional
 
 import bcrypt
 from fastapi import Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.exceptions import UnauthorizedError, ValidationError
 from app.models.session import AuthSession
+
+
+async def get_session_by_token(
+    db: AsyncSession, token: Optional[str]
+) -> Optional[AuthSession]:
+    """Look up a session row by token. Returns None if token is falsy or not found.
+
+    Does NOT check expiry — caller is responsible for that check.
+    """
+    if not token:
+        return None
+    return (
+        await db.execute(select(AuthSession).where(AuthSession.token == token))
+    ).scalar_one_or_none()
 
 
 async def login(
