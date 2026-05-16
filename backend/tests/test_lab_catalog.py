@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import datetime
-from collections.abc import Generator
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+import pytest_asyncio
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import Base
 from app.exceptions import ConflictError, NotFoundError
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
@@ -17,25 +16,16 @@ from app.schemas.lab_marker import LabMarkerCatalogCreate
 from app.services.lab_catalog import LabMarkerCatalogService
 
 
-@pytest.fixture
-def db() -> Generator[Session, None, None]:
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+@pytest_asyncio.fixture
+async def service(async_db: AsyncSession) -> LabMarkerCatalogService:
+    return LabMarkerCatalogService(async_db)
 
 
-@pytest.fixture
-def service(db: Session) -> LabMarkerCatalogService:
-    return LabMarkerCatalogService(db)
-
-
-def _seed_catalog(
-    db: Session, canonical: str, display: str = "X", aliases: list[str] | None = None
+async def _seed_catalog(
+    db: AsyncSession,
+    canonical: str,
+    display: str = "X",
+    aliases: list[str] | None = None,
 ) -> LabMarkerCatalog:
     item = LabMarkerCatalog(
         canonical_name=canonical,
@@ -43,11 +33,11 @@ def _seed_catalog(
         common_units=[],
     )
     db.add(item)
-    db.flush()
+    await db.flush()
     for a in aliases or []:
         db.add(LabMarkerAlias(catalog_id=item.id, alias=a.lower(), language=None))
-    db.commit()
-    db.refresh(item)
+    await db.commit()
+    await db.refresh(item)
     return item
 
 
@@ -56,64 +46,72 @@ def _seed_catalog(
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_or_create_exact_canonical_hit(
-    db: Session, service: LabMarkerCatalogService
+async def test_resolve_or_create_exact_canonical_hit(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
-    existing = _seed_catalog(db, "hemoglobin", "Hemoglobin")
-    result = service.resolve_or_create("hemoglobin", "Hemoglobin")
+    existing = await _seed_catalog(async_db, "hemoglobin", "Hemoglobin")
+    result = await service.resolve_or_create("hemoglobin", "Hemoglobin")
     assert result.id == existing.id
     # No new alias should be created — input matches canonical exactly.
-    assert db.query(LabMarkerAlias).count() == 0
+    assert (
+        await async_db.execute(select(func.count()).select_from(LabMarkerAlias))
+    ).scalar_one() == 0
 
 
-def test_resolve_or_create_alias_hit_case_insensitive(
-    db: Session, service: LabMarkerCatalogService
+async def test_resolve_or_create_alias_hit_case_insensitive(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
-    existing = _seed_catalog(
-        db, "hemoglobin", "Hemoglobin", aliases=["hemoglobina", "hb"]
+    existing = await _seed_catalog(
+        async_db, "hemoglobin", "Hemoglobin", aliases=["hemoglobina", "hb"]
     )
     # Input is upper-case alias.
-    result = service.resolve_or_create("HEMOGLOBINA", "Hemoglobina")
+    result = await service.resolve_or_create("HEMOGLOBINA", "Hemoglobina")
     assert result.id == existing.id
     # Should not create a new catalog item.
-    assert db.query(LabMarkerCatalog).count() == 1
+    assert (
+        await async_db.execute(select(func.count()).select_from(LabMarkerCatalog))
+    ).scalar_one() == 1
 
 
-def test_resolve_or_create_ilike_canonical_hit(
-    db: Session, service: LabMarkerCatalogService
+async def test_resolve_or_create_ilike_canonical_hit(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
     """If exact lookup misses but ilike matches, return the existing item."""
-    # Seed canonical "hemoglobin" — ilike will match a more decorated input
-    # that normalizes back to the same string.
-    existing = _seed_catalog(db, "hemoglobin", "Hemoglobin")
+    existing = await _seed_catalog(async_db, "hemoglobin", "Hemoglobin")
     # Different casing — normalized form equals canonical, so ilike fires.
-    result = service.resolve_or_create("Hemoglobin", "Hemoglobin")
+    result = await service.resolve_or_create("Hemoglobin", "Hemoglobin")
     assert result.id == existing.id
 
 
-def test_resolve_or_create_creates_new_when_no_match(
-    db: Session, service: LabMarkerCatalogService
+async def test_resolve_or_create_creates_new_when_no_match(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
-    result = service.resolve_or_create("brand_new_marker", "Brand New Marker")
+    result = await service.resolve_or_create("brand_new_marker", "Brand New Marker")
     assert result.id is not None
     assert result.canonical_name == "brand_new_marker"
     assert result.display_name == "Brand New Marker"
     # When input == canonical, no alias is created.
-    assert db.query(LabMarkerAlias).count() == 0
+    assert (
+        await async_db.execute(select(func.count()).select_from(LabMarkerAlias))
+    ).scalar_one() == 0
 
 
-def test_resolve_or_create_registers_alias_when_input_differs(
-    db: Session, service: LabMarkerCatalogService
+async def test_resolve_or_create_registers_alias_when_input_differs(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
     """If we have to create a new entry AND input differs from canonical,
     register the input as an alias."""
-    # Input "Vitamin D-25 OH" normalizes to "vitamin_d_25_oh"; the raw input
-    # (lowered) is different from the canonical → registered as alias.
-    result = service.resolve_or_create("Vitamin D-25 OH", "Vitamin D")
+    result = await service.resolve_or_create("Vitamin D-25 OH", "Vitamin D")
     assert result.canonical_name == "vitamin_d_25_oh"
 
     aliases = (
-        db.query(LabMarkerAlias).filter(LabMarkerAlias.catalog_id == result.id).all()
+        (
+            await async_db.execute(
+                select(LabMarkerAlias).where(LabMarkerAlias.catalog_id == result.id)
+            )
+        )
+        .scalars()
+        .all()
     )
     assert len(aliases) == 1
     assert aliases[0].alias == "vitamin d-25 oh"
@@ -124,25 +122,27 @@ def test_resolve_or_create_registers_alias_when_input_differs(
 # ---------------------------------------------------------------------------
 
 
-def test_add_alias_happy_path(db: Session, service: LabMarkerCatalogService) -> None:
-    item = _seed_catalog(db, "hemoglobin", "Hemoglobin")
-    alias = service.add_alias(item.id, "Hb", language="en")
-    db.commit()
+async def test_add_alias_happy_path(
+    async_db: AsyncSession, service: LabMarkerCatalogService
+) -> None:
+    item = await _seed_catalog(async_db, "hemoglobin", "Hemoglobin")
+    alias = await service.add_alias(item.id, "Hb", language="en")
+    await async_db.commit()
     assert alias.alias == "hb"  # stored lowercased
     assert alias.language == "en"
 
 
-def test_add_alias_conflict_on_duplicate(
-    db: Session, service: LabMarkerCatalogService
+async def test_add_alias_conflict_on_duplicate(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
-    item = _seed_catalog(db, "hemoglobin", "Hemoglobin", aliases=["hb"])
+    item = await _seed_catalog(async_db, "hemoglobin", "Hemoglobin", aliases=["hb"])
     with pytest.raises(ConflictError):
-        service.add_alias(item.id, "HB", language=None)
+        await service.add_alias(item.id, "HB", language=None)
 
 
-def test_add_alias_not_found(service: LabMarkerCatalogService) -> None:
+async def test_add_alias_not_found(service: LabMarkerCatalogService) -> None:
     with pytest.raises(NotFoundError):
-        service.add_alias(99999, "anything", language=None)
+        await service.add_alias(99999, "anything", language=None)
 
 
 # ---------------------------------------------------------------------------
@@ -150,26 +150,26 @@ def test_add_alias_not_found(service: LabMarkerCatalogService) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_create_catalog_item_normalizes_canonical(
-    db: Session, service: LabMarkerCatalogService
+async def test_create_catalog_item_normalizes_canonical(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
     body = LabMarkerCatalogCreate(
         canonical_name="Vitamin D",
         display_name="Vitamin D",
         common_units=["ng/mL"],
     )
-    item = service.create_catalog_item(body)
-    db.commit()
+    item = await service.create_catalog_item(body)
+    await async_db.commit()
     assert item.canonical_name == "vitamin_d"
 
 
-def test_create_catalog_item_conflict_on_duplicate_canonical(
-    db: Session, service: LabMarkerCatalogService
+async def test_create_catalog_item_conflict_on_duplicate_canonical(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
-    _seed_catalog(db, "hemoglobin", "Hemoglobin")
+    await _seed_catalog(async_db, "hemoglobin", "Hemoglobin")
     body = LabMarkerCatalogCreate(canonical_name="Hemoglobin", display_name="Hb")
     with pytest.raises(ConflictError):
-        service.create_catalog_item(body)
+        await service.create_catalog_item(body)
 
 
 # ---------------------------------------------------------------------------
@@ -177,8 +177,8 @@ def test_create_catalog_item_conflict_on_duplicate_canonical(
 # ---------------------------------------------------------------------------
 
 
-def _add_lab_with_marker(
-    db: Session,
+async def _add_lab_with_marker(
+    db: AsyncSession,
     catalog_id: int,
     *,
     lab_date: datetime.date,
@@ -192,7 +192,7 @@ def _add_lab_with_marker(
         source_kind="text",
     )
     db.add(lab)
-    db.flush()
+    await db.flush()
     marker = LabMarker(
         lab_id=lab.id,
         catalog_id=catalog_id,
@@ -202,36 +202,36 @@ def _add_lab_with_marker(
         flag="normal" if value is not None else "unknown",
     )
     db.add(marker)
-    db.commit()
+    await db.commit()
 
 
-def test_get_marker_history_ascending_date(
-    db: Session, service: LabMarkerCatalogService
+async def test_get_marker_history_ascending_date(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
-    catalog = _seed_catalog(db, "hemoglobin", "Hemoglobin")
-    _add_lab_with_marker(
-        db,
+    catalog = await _seed_catalog(async_db, "hemoglobin", "Hemoglobin")
+    await _add_lab_with_marker(
+        async_db,
         catalog.id,
         lab_date=datetime.date(2026, 3, 1),
         canonical="hemoglobin",
         value=15.0,
     )
-    _add_lab_with_marker(
-        db,
+    await _add_lab_with_marker(
+        async_db,
         catalog.id,
         lab_date=datetime.date(2026, 1, 1),
         canonical="hemoglobin",
         value=14.0,
     )
-    _add_lab_with_marker(
-        db,
+    await _add_lab_with_marker(
+        async_db,
         catalog.id,
         lab_date=datetime.date(2026, 5, 1),
         canonical="hemoglobin",
         value=13.0,
     )
 
-    history = service.get_marker_history("hemoglobin")
+    history = await service.get_marker_history("hemoglobin")
     assert [p.lab_date for p in history] == [
         datetime.date(2026, 1, 1),
         datetime.date(2026, 3, 1),
@@ -240,41 +240,41 @@ def test_get_marker_history_ascending_date(
     assert [p.value for p in history] == [14.0, 15.0, 13.0]
 
 
-def test_get_marker_history_skips_null_values(
-    db: Session, service: LabMarkerCatalogService
+async def test_get_marker_history_skips_null_values(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
-    catalog = _seed_catalog(db, "hemoglobin", "Hemoglobin")
-    _add_lab_with_marker(
-        db,
+    catalog = await _seed_catalog(async_db, "hemoglobin", "Hemoglobin")
+    await _add_lab_with_marker(
+        async_db,
         catalog.id,
         lab_date=datetime.date(2026, 1, 1),
         canonical="hemoglobin",
         value=14.0,
     )
-    _add_lab_with_marker(
-        db,
+    await _add_lab_with_marker(
+        async_db,
         catalog.id,
         lab_date=datetime.date(2026, 2, 1),
         canonical="hemoglobin",
         value=None,
     )
-    _add_lab_with_marker(
-        db,
+    await _add_lab_with_marker(
+        async_db,
         catalog.id,
         lab_date=datetime.date(2026, 3, 1),
         canonical="hemoglobin",
         value=15.0,
     )
 
-    history = service.get_marker_history("hemoglobin")
+    history = await service.get_marker_history("hemoglobin")
     assert len(history) == 2
     assert [p.value for p in history] == [14.0, 15.0]
 
 
-def test_get_marker_history_unknown_canonical_returns_empty(
+async def test_get_marker_history_unknown_canonical_returns_empty(
     service: LabMarkerCatalogService,
 ) -> None:
-    assert service.get_marker_history("nonexistent") == []
+    assert await service.get_marker_history("nonexistent") == []
 
 
 # ---------------------------------------------------------------------------
@@ -282,25 +282,29 @@ def test_get_marker_history_unknown_canonical_returns_empty(
 # ---------------------------------------------------------------------------
 
 
-def test_search_no_query_returns_all(
-    db: Session, service: LabMarkerCatalogService
+async def test_search_no_query_returns_all(
+    async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
-    _seed_catalog(db, "hemoglobin", "Hemoglobin")
-    _seed_catalog(db, "ferritin", "Ferritin")
-    assert len(service.search(None)) == 2
+    await _seed_catalog(async_db, "hemoglobin", "Hemoglobin")
+    await _seed_catalog(async_db, "ferritin", "Ferritin")
+    assert len(await service.search(None)) == 2
 
 
-def test_search_by_canonical(db: Session, service: LabMarkerCatalogService) -> None:
-    _seed_catalog(db, "hemoglobin", "Hemoglobin")
-    _seed_catalog(db, "ferritin", "Ferritin")
-    results = service.search("hemo")
+async def test_search_by_canonical(
+    async_db: AsyncSession, service: LabMarkerCatalogService
+) -> None:
+    await _seed_catalog(async_db, "hemoglobin", "Hemoglobin")
+    await _seed_catalog(async_db, "ferritin", "Ferritin")
+    results = await service.search("hemo")
     assert len(results) == 1
     assert results[0].canonical_name == "hemoglobin"
 
 
-def test_search_by_alias(db: Session, service: LabMarkerCatalogService) -> None:
-    _seed_catalog(db, "hemoglobin", "Hemoglobin", aliases=["hemoglobina"])
-    _seed_catalog(db, "ferritin", "Ferritin")
-    results = service.search("hemoglobina")
+async def test_search_by_alias(
+    async_db: AsyncSession, service: LabMarkerCatalogService
+) -> None:
+    await _seed_catalog(async_db, "hemoglobin", "Hemoglobin", aliases=["hemoglobina"])
+    await _seed_catalog(async_db, "ferritin", "Ferritin")
+    results = await service.search("hemoglobina")
     assert len(results) == 1
     assert results[0].canonical_name == "hemoglobin"

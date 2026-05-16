@@ -16,7 +16,7 @@ class LabExtractionOrchestrator:
         self.extraction_service = extraction_service
         self.catalog_service = catalog_service
 
-    def _hints(self) -> list[CatalogHint]:
+    async def _hints(self) -> list[CatalogHint]:
         return [
             CatalogHint(
                 canonical=item.canonical_name,
@@ -24,11 +24,13 @@ class LabExtractionOrchestrator:
                 aliases=[a.alias for a in item.aliases],
                 common_units=item.common_units or [],
             )
-            for item in self.catalog_service.search(None, limit=10000)
+            for item in await self.catalog_service.search(None, limit=10000)
         ]
 
     async def preview_text(self, document_text: str) -> ExtractionResult:
-        return await self.extraction_service.extract_text(document_text, self._hints())
+        return await self.extraction_service.extract_text(
+            document_text, await self._hints()
+        )
 
     async def preview_upload(self, file: UploadFile) -> ExtractionResult:
         file_bytes = await file.read()
@@ -36,5 +38,5 @@ class LabExtractionOrchestrator:
             file_bytes,
             file.content_type or "",
             file.filename or "upload",
-            self._hints(),
+            await self._hints(),
         )

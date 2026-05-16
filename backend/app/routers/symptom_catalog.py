@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.middleware.auth import get_current_session
@@ -20,11 +20,13 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[SymptomCatalogItemResponse])
-def list_catalog(
+async def list_catalog(
     include_archived: bool = Query(False),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return symptom_catalog_service.list_items(db, include_archived=include_archived)
+    return await symptom_catalog_service.list_items(
+        db, include_archived=include_archived
+    )
 
 
 @router.post(
@@ -32,19 +34,19 @@ def list_catalog(
     response_model=SymptomCatalogItemResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_catalog_item(
+async def create_catalog_item(
     body: SymptomCatalogItemCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return symptom_catalog_service.create_item(db, body.key, body.label)
+    return await symptom_catalog_service.create_item(db, body.key, body.label)
 
 
 @router.patch("/{key}", response_model=SymptomCatalogItemResponse)
-def update_catalog_item(
+async def update_catalog_item(
     key: str,
     body: SymptomCatalogItemUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return symptom_catalog_service.update_item(
+    return await symptom_catalog_service.update_item(
         db, key, body.model_dump(exclude_unset=True)
     )

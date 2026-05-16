@@ -63,10 +63,19 @@ def parse_health_auto_export(
         # Handle sleep analysis separately (different structure)
         # Exclude wrist/temperature metrics that happen to contain "sleep" in their name
         if "sleep" in name.lower() and "temp" not in name and "wrist" not in name:
-            logger.info("Sleep metric '%s' with %d samples, first sample keys: %s",
-                       name, len(samples), list(samples[0].keys()) if samples else [])
+            logger.info(
+                "Sleep metric '%s' with %d samples, first sample keys: %s",
+                name,
+                len(samples),
+                list(samples[0].keys()) if samples else [],
+            )
             for sample in samples:
-                date_str = sample.get("date", sample.get("sleepEnd", sample.get("endDate", sample.get("sleepStart", ""))))
+                date_str = sample.get(
+                    "date",
+                    sample.get(
+                        "sleepEnd", sample.get("endDate", sample.get("sleepStart", ""))
+                    ),
+                )
                 parsed_date = _parse_date(str(date_str))
                 if parsed_date is None:
                     continue
@@ -81,7 +90,9 @@ def parse_health_auto_export(
                 core_raw = sample.get("core")
                 awake_raw = sample.get("awake")
 
-                stage_vals = [float(v) for v in [deep_raw, rem_raw, core_raw] if v is not None]
+                stage_vals = [
+                    float(v) for v in [deep_raw, rem_raw, core_raw] if v is not None
+                ]
                 stage_sum = sum(stage_vals)
 
                 # If stage values sum to < 24, they're in hours — convert to minutes
@@ -100,10 +111,16 @@ def parse_health_auto_export(
                     sleep_awake_mins[date_key].append(to_min(float(awake_raw)))
 
                 # Compute percentages (unit-agnostic since we use ratios)
-                total_stage = sum(float(v) for v in [deep_raw, rem_raw, core_raw] if v is not None)
+                total_stage = sum(
+                    float(v) for v in [deep_raw, rem_raw, core_raw] if v is not None
+                )
                 if total_stage > 0:
-                    sleep_deep_pcts[date_key].append(float(deep_raw or 0) / total_stage * 100)
-                    sleep_rem_pcts[date_key].append(float(rem_raw or 0) / total_stage * 100)
+                    sleep_deep_pcts[date_key].append(
+                        float(deep_raw or 0) / total_stage * 100
+                    )
+                    sleep_rem_pcts[date_key].append(
+                        float(rem_raw or 0) / total_stage * 100
+                    )
 
                 # Sleep efficiency
                 in_bed = sample.get("inBed") or sample.get("inBedDuration")
@@ -148,7 +165,12 @@ def parse_health_auto_export(
                 resting_hr_values[date_key].append(qty)
             elif name == "step_count":
                 step_values[date_key].append(qty)
-            elif name in ("blood_oxygen", "oxygen_saturation", "blood_oxygen_saturation", "spo2"):
+            elif name in (
+                "blood_oxygen",
+                "oxygen_saturation",
+                "blood_oxygen_saturation",
+                "spo2",
+            ):
                 spo2_values[date_key].append(qty)
             elif name == "active_energy_burned":
                 active_energy_values[date_key].append(qty)
@@ -193,7 +215,8 @@ def parse_health_auto_export(
             resting_hr = round(statistics.mean(resting_hr_values[date_key]), 2)
 
         stage_total_min = sum(
-            sum(lst) for lst in [
+            sum(lst)
+            for lst in [
                 sleep_deep_mins[date_key],
                 sleep_rem_mins[date_key],
                 sleep_core_mins[date_key],
@@ -228,11 +251,31 @@ def parse_health_auto_export(
         if sleep_rem_pcts[date_key]:
             sleep_rem_pct = round(statistics.mean(sleep_rem_pcts[date_key]), 1)
 
-        sleep_deep_min = round(sum(sleep_deep_mins[date_key]), 1) if sleep_deep_mins[date_key] else None
-        sleep_rem_min = round(sum(sleep_rem_mins[date_key]), 1) if sleep_rem_mins[date_key] else None
-        sleep_core_min = round(sum(sleep_core_mins[date_key]), 1) if sleep_core_mins[date_key] else None
-        sleep_awake_min = round(sum(sleep_awake_mins[date_key]), 1) if sleep_awake_mins[date_key] else None
-        sleep_efficiency = round(statistics.mean(sleep_efficiency_vals[date_key]), 1) if sleep_efficiency_vals[date_key] else None
+        sleep_deep_min = (
+            round(sum(sleep_deep_mins[date_key]), 1)
+            if sleep_deep_mins[date_key]
+            else None
+        )
+        sleep_rem_min = (
+            round(sum(sleep_rem_mins[date_key]), 1)
+            if sleep_rem_mins[date_key]
+            else None
+        )
+        sleep_core_min = (
+            round(sum(sleep_core_mins[date_key]), 1)
+            if sleep_core_mins[date_key]
+            else None
+        )
+        sleep_awake_min = (
+            round(sum(sleep_awake_mins[date_key]), 1)
+            if sleep_awake_mins[date_key]
+            else None
+        )
+        sleep_efficiency = (
+            round(statistics.mean(sleep_efficiency_vals[date_key]), 1)
+            if sleep_efficiency_vals[date_key]
+            else None
+        )
         sleep_start = sleep_starts.get(date_key)
         sleep_end = sleep_ends.get(date_key)
 

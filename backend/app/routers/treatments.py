@@ -17,45 +17,41 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[TreatmentResponse])
-def list_treatments(
+async def list_treatments(
     active_on: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     service: TreatmentService = Depends(get_treatment_service),
 ):
-    return service.list(active_on)
+    return await service.list(active_on)
 
 
 @router.get("/{treatment_id}", response_model=TreatmentResponse)
-def get_treatment(
+async def get_treatment(
     treatment_id: int,
     service: TreatmentService = Depends(get_treatment_service),
 ):
-    return service.get(treatment_id)
+    return await service.get(treatment_id)
 
 
-@router.post(
-    "",
-    response_model=TreatmentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_treatment(
+@router.post("", response_model=TreatmentResponse, status_code=status.HTTP_201_CREATED)
+async def create_treatment(
     body: TreatmentCreate,
     service: TreatmentService = Depends(get_treatment_service),
 ):
-    return service.create(body)
+    return await service.create(body)
 
 
 @router.put("/{treatment_id}", response_model=TreatmentResponse)
-def update_treatment(
+async def update_treatment(
     treatment_id: int,
     body: TreatmentUpdate,
     service: TreatmentService = Depends(get_treatment_service),
 ):
-    return service.update(treatment_id, body)
+    return await service.update(treatment_id, body)
 
 
 @router.delete("/{treatment_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_treatment(
+async def delete_treatment(
     treatment_id: int,
     service: TreatmentService = Depends(get_treatment_service),
 ):
-    service.delete(treatment_id)
+    await service.delete(treatment_id)

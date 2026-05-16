@@ -6,8 +6,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     pin_hash: str = ""
     vault_path: str = "/vault"
-    database_url: str = "sqlite:///data/health.db"
+    database_url: str = "postgresql+asyncpg://health:health@localhost:5432/health"
     secret_key: str = "change-me"
+    settings_encryption_key: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]
     photo_dir: str = "photos"
     openweathermap_api_key: str = ""

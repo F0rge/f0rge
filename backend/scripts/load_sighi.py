@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
-from pathlib import Path
 
+from scripts._db import SyncSession
 from scripts._paths import data_dir
+
+from app.models.dietary_ingredient import DietaryIngredient  # noqa: F401 (ensures Base is populated)
+from app.database import Base  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "health.db"
 DATA_PATH = data_dir() / "sighi_histamine.json"
 
 
@@ -22,48 +23,41 @@ def load() -> None:
     with open(DATA_PATH) as f:
         items: list[dict] = json.load(f)
 
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
     inserted = 0
     updated = 0
 
-    for item in items:
-        name = item["name"].strip().lower()
-        category = item.get("category", "").strip().lower() or None
-        score = item["score"]
+    with SyncSession() as session:
+        for item in items:
+            name = item["name"].strip().lower()
+            category = item.get("category", "").strip().lower() or None
+            score = item["score"]
 
-        # Check if row already exists
-        cur.execute(
-            "SELECT id FROM dietary_ingredients WHERE canonical_name = ?",
-            (name,),
-        )
-        existing = cur.fetchone()
-
-        if existing:
-            cur.execute(
-                """UPDATE dietary_ingredients
-                   SET category = COALESCE(?, category),
-                       histamine_score = ?,
-                       source = 'sighi',
-                       source_version = '2024',
-                       updated_at = datetime('now')
-                 WHERE canonical_name = ?""",
-                (category, score, name),
+            existing = (
+                session.query(DietaryIngredient)
+                .filter_by(canonical_name=name)
+                .first()
             )
-            updated += 1
-        else:
-            cur.execute(
-                """INSERT INTO dietary_ingredients
-                   (canonical_name, category, histamine_score, source, source_version,
-                    contains_gluten, contains_dairy, created_at, updated_at)
-                   VALUES (?, ?, ?, 'sighi', '2024', 0, 0, datetime('now'), datetime('now'))""",
-                (name, category, score),
-            )
-            inserted += 1
 
-    conn.commit()
-    conn.close()
+            if existing:
+                if category is not None:
+                    existing.category = category
+                existing.histamine_score = score
+                existing.source = "sighi"
+                existing.source_version = "2024"
+                updated += 1
+            else:
+                session.add(
+                    DietaryIngredient(
+                        canonical_name=name,
+                        category=category,
+                        histamine_score=score,
+                        source="sighi",
+                        source_version="2024",
+                        contains_gluten=False,
+                        contains_dairy=False,
+                    )
+                )
+                inserted += 1
 
     log.info(
         "SIGHI load complete: %d inserted, %d updated, %d total processed",
