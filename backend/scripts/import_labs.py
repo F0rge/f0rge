@@ -250,6 +250,7 @@ async def _process_file(
                 text,
                 source_path=relative,
                 force=force,
+                filename=file_path.name,
             )
             from app.models.lab import Lab as LabModel  # local import
 

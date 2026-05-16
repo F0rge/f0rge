@@ -211,15 +211,19 @@ class LabExtractionService:
         self,
         document_text: str,
         catalog_hints: List[CatalogHint],
+        filename: str | None = None,
     ) -> ExtractionResult:
         schema_json = ExtractedLabPayload.model_json_schema().__str__()
-        messages = build_text_messages(document_text, catalog_hints, schema_json)
+        messages = build_text_messages(
+            document_text, catalog_hints, schema_json, filename=filename
+        )
         return await _extract(messages, catalog_hints)
 
     async def extract_pdf(
         self,
         pdf_bytes: bytes,
         catalog_hints: List[CatalogHint],
+        filename: str | None = None,
     ) -> ExtractionResult:
         model = settings.openrouter_model
         caps = MODEL_CAPABILITIES.get(model, set())
@@ -229,7 +233,9 @@ class LabExtractionService:
                 "switch model or convert to image."
             )
         schema_json = ExtractedLabPayload.model_json_schema().__str__()
-        messages = build_pdf_messages(pdf_bytes, catalog_hints, schema_json)
+        messages = build_pdf_messages(
+            pdf_bytes, catalog_hints, schema_json, filename=filename
+        )
         return await _extract(messages, catalog_hints)
 
     async def extract_image(
@@ -237,6 +243,7 @@ class LabExtractionService:
         image_bytes: bytes,
         mime_type: str,
         catalog_hints: List[CatalogHint],
+        filename: str | None = None,
     ) -> ExtractionResult:
         model = settings.openrouter_model
         caps = MODEL_CAPABILITIES.get(model, set())
@@ -246,7 +253,7 @@ class LabExtractionService:
             )
         schema_json = ExtractedLabPayload.model_json_schema().__str__()
         messages = build_image_messages(
-            image_bytes, mime_type, catalog_hints, schema_json
+            image_bytes, mime_type, catalog_hints, schema_json, filename=filename
         )
         return await _extract(messages, catalog_hints)
 
@@ -263,7 +270,9 @@ class LabExtractionService:
         Does not persist anything to the database.
         """
         if mime_type == "application/pdf":
-            return await self.extract_pdf(file_bytes, catalog_hints)
+            return await self.extract_pdf(file_bytes, catalog_hints, filename=filename)
         if mime_type.startswith("image/"):
-            return await self.extract_image(file_bytes, mime_type, catalog_hints)
+            return await self.extract_image(
+                file_bytes, mime_type, catalog_hints, filename=filename
+            )
         raise ValidationError(f"Unsupported MIME type for extraction: {mime_type}")
