@@ -12,6 +12,8 @@ RUN uv sync --frozen --no-dev
 
 COPY ./app ./app
 COPY ./scripts ./scripts
+COPY ./alembic.ini ./alembic.ini
+COPY ./migrations ./migrations
 # Ship the dietary reference JSON files under a separate path so they
 # aren't shadowed by the runtime /app/data volume mount that holds health.db.
 COPY ./data /app/data-seed
