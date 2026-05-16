@@ -51,9 +51,13 @@ class PhotoService:
 
         # Determine next photo number via max(existing)+1 to avoid collision
         # after deletions. COUNT()+1 is wrong once any row is deleted.
+        # We union three sources so that orphan files (file on disk with no DB
+        # row) never cause a FileExistsError on the next upload.
         prefix = f"{entry_date.isoformat()}_photo-"
         suffix = ".jpg"
         used_numbers: set[int] = set()
+
+        # Source 1: DB rows for this entry.
         rows = (
             await self.db.execute(
                 select(Photo.filename).where(Photo.entry_id == entry.id)
@@ -67,14 +71,36 @@ class PhotoService:
                     used_numbers.add(int(existing_filename[len(prefix) : -len(suffix)]))
                 except ValueError:
                     pass
+
+        # Source 2: files in the local photos directory (catches orphans where
+        # the file was written but the DB commit failed).
+        photo_dir_abs = os.path.abspath(settings.photo_dir)
+        if os.path.isdir(photo_dir_abs):
+            for name in os.listdir(photo_dir_abs):
+                if name.startswith(prefix) and name.endswith(suffix):
+                    try:
+                        used_numbers.add(int(name[len(prefix) : -len(suffix)]))
+                    except ValueError:
+                        pass
+
+        # Source 3: vault attachments directory (catches vault-side orphans).
+        vault_path = settings.vault_path
+        if vault_path:
+            vault_attachments = os.path.join(vault_path, "attachments")
+            if os.path.isdir(vault_attachments):
+                for name in os.listdir(vault_attachments):
+                    if name.startswith(prefix) and name.endswith(suffix):
+                        try:
+                            used_numbers.add(int(name[len(prefix) : -len(suffix)]))
+                        except ValueError:
+                            pass
+
         photo_number = max(used_numbers, default=0) + 1
         filename = f"{prefix}{photo_number}{suffix}"
 
         raw_bytes = await file.read()
         processed_bytes = await asyncio.to_thread(resize_image, raw_bytes)
-        await asyncio.to_thread(
-            save_photo, processed_bytes, filename, settings.vault_path
-        )
+        await asyncio.to_thread(save_photo, processed_bytes, filename, vault_path)
 
         now = datetime.datetime.utcnow()
         photo = Photo(
@@ -85,8 +111,15 @@ class PhotoService:
             meal_time=meal_time if meal_time is not None else now,
             created_at=now,
         )
+        # Invariant: a file on disk implies a DB row exists.
+        # If the commit fails we clean up the file so the next upload
+        # doesn't collide with a phantom on disk.
         self.db.add(photo)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception:
+            await asyncio.to_thread(delete_photo, filename, vault_path)
+            raise
         await self.db.refresh(photo)
 
         # Re-render vault to include the new photo embed.
