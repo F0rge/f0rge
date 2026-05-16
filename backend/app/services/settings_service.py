@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +9,7 @@ from app.exceptions import ExternalServiceError
 from app.models.user_settings import UserSettings
 from app.schemas.settings import (
     EmbeddingSettingsUpdate,
+    ExternalTokenResponse,
     LLMSettingsUpdate,
     SettingsResponse,
     TestConnectionResponse,
@@ -76,6 +79,27 @@ class SettingsService:
             row.embedding_api_key_encrypted = encrypt(data.embedding_api_key)
         if data.embedding_model is not None:
             row.embedding_model = data.embedding_model
+        await self.db.commit()
+        await self.db.refresh(row)
+        return self._to_response(row)
+
+    async def regenerate_external_token(self) -> ExternalTokenResponse:
+        """Generate a new external API token, encrypt and store it, return the plaintext once.
+
+        The plaintext is never stored — only the Fernet-encrypted ciphertext lives in the DB.
+        Calling this again invalidates the previous token (new ciphertext produced each call).
+        """
+        row = await self._get_or_create_row()
+        plaintext = secrets.token_urlsafe(32)
+        row.external_api_token_encrypted = encrypt(plaintext)
+        await self.db.commit()
+        await self.db.refresh(row)
+        return ExternalTokenResponse(token=plaintext)
+
+    async def revoke_external_token(self) -> SettingsResponse:
+        """Clear the external API token, disabling all Bearer-token access."""
+        row = await self._get_or_create_row()
+        row.external_api_token_encrypted = None
         await self.db.commit()
         await self.db.refresh(row)
         return self._to_response(row)

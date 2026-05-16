@@ -37,6 +37,7 @@ import type {
   LLMSettingsUpdate,
   EmbeddingSettingsUpdate,
   TestConnectionResponse,
+  ExternalTokenResponse,
 } from './types'
 
 export function useAuth() {
@@ -591,6 +592,26 @@ export function useTestEmbeddingConnection() {
   return useMutation({
     mutationFn: () =>
       apiPost('/settings/embedding/test', {}) as Promise<TestConnectionResponse>,
+  })
+}
+
+export function useRegenerateExternalToken() {
+  const queryClient = useQueryClient()
+  return useMutation<ExternalTokenResponse, ApiError, void>({
+    mutationFn: () => apiPost('/settings/external-token/regenerate', {}) as Promise<ExternalTokenResponse>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+}
+
+export function useRevokeExternalToken() {
+  const queryClient = useQueryClient()
+  return useMutation<UserSettings, ApiError, void>({
+    mutationFn: () => apiPost('/settings/external-token/revoke', {}) as Promise<UserSettings>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
   })
 }
 

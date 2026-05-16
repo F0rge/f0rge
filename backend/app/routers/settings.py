@@ -7,6 +7,7 @@ from app.middleware.auth import get_current_session
 from app.models.session import AuthSession
 from app.schemas.settings import (
     EmbeddingSettingsUpdate,
+    ExternalTokenResponse,
     LLMSettingsUpdate,
     SettingsResponse,
     TestConnectionResponse,
@@ -60,3 +61,19 @@ async def test_embedding_connection(
     _session: AuthSession = Depends(get_current_session),
 ) -> TestConnectionResponse:
     return await service.test_embedding(emb)
+
+
+@router.post("/external-token/regenerate", response_model=ExternalTokenResponse)
+async def regenerate_external_token(
+    service: SettingsService = Depends(get_settings_service),
+    _session: AuthSession = Depends(get_current_session),
+) -> ExternalTokenResponse:
+    return await service.regenerate_external_token()
+
+
+@router.post("/external-token/revoke", response_model=SettingsResponse)
+async def revoke_external_token(
+    service: SettingsService = Depends(get_settings_service),
+    _session: AuthSession = Depends(get_current_session),
+) -> SettingsResponse:
+    return await service.revoke_external_token()
