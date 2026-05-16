@@ -294,7 +294,8 @@ def sqlite_db_path() -> Iterator[str]:
 
     # photo -> photo_analysis -> photo_ingredient
     cur.execute(
-        "INSERT INTO photos VALUES (1, 1, 'test.jpg', 'lunch', 'test.jpg', NULL, ?)", (now,)
+        "INSERT INTO photos VALUES (1, 1, 'test.jpg', 'lunch', 'test.jpg', NULL, ?)",
+        (now,),
     )
     cur.execute(
         "INSERT INTO photo_analyses VALUES (1, 1, 'complete', 'salad', 'french', 0.9, "
@@ -372,6 +373,10 @@ def migration_postgres_container():  # type: ignore[no-untyped-def]
         sync_url = raw_url
 
     engine = create_engine(sync_url)
+    # pgvector extension must exist before the VECTOR column can be created.
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        conn.commit()
     Base.metadata.create_all(engine)
     engine.dispose()
 
@@ -416,11 +421,25 @@ def test_migrate_sqlite_to_postgres(
         # Row counts
         assert session.execute(text("SELECT COUNT(*) FROM entries")).scalar() == 1
         assert session.execute(text("SELECT COUNT(*) FROM photos")).scalar() == 1
-        assert session.execute(text("SELECT COUNT(*) FROM photo_analyses")).scalar() == 1
-        assert session.execute(text("SELECT COUNT(*) FROM photo_ingredients")).scalar() == 2
-        assert session.execute(text("SELECT COUNT(*) FROM dietary_ingredients")).scalar() == 1
-        assert session.execute(text("SELECT COUNT(*) FROM ingredient_aliases")).scalar() == 1
-        assert session.execute(text("SELECT COUNT(*) FROM lab_marker_catalog")).scalar() == 1
+        assert (
+            session.execute(text("SELECT COUNT(*) FROM photo_analyses")).scalar() == 1
+        )
+        assert (
+            session.execute(text("SELECT COUNT(*) FROM photo_ingredients")).scalar()
+            == 2
+        )
+        assert (
+            session.execute(text("SELECT COUNT(*) FROM dietary_ingredients")).scalar()
+            == 1
+        )
+        assert (
+            session.execute(text("SELECT COUNT(*) FROM ingredient_aliases")).scalar()
+            == 1
+        )
+        assert (
+            session.execute(text("SELECT COUNT(*) FROM lab_marker_catalog")).scalar()
+            == 1
+        )
 
         # Pruned sessions: only the valid one should remain.
         assert session.execute(text("SELECT COUNT(*) FROM auth_sessions")).scalar() == 1
@@ -435,7 +454,9 @@ def test_migrate_sqlite_to_postgres(
         symptoms = entry.symptoms_json
         if isinstance(symptoms, str):
             symptoms = json.loads(symptoms)
-        assert symptoms == {"headache": 2, "fatigue": 1}, f"symptoms_json mismatch: {symptoms!r}"
+        assert symptoms == {"headache": 2, "fatigue": 1}, (
+            f"symptoms_json mismatch: {symptoms!r}"
+        )
 
         # JSON deep-equal: common_units
         from app.models.lab_marker_catalog import LabMarkerCatalog  # noqa: PLC0415
@@ -484,4 +505,6 @@ def test_migrate_sqlite_to_postgres(
         prune_expired_sessions=True,
         dry_run=False,
     )
-    assert exit_code2 == 1, f"Second run should exit 1 (already migrated), got {exit_code2}"
+    assert exit_code2 == 1, (
+        f"Second run should exit 1 (already migrated), got {exit_code2}"
+    )

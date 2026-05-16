@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import httpx
 from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -283,24 +282,15 @@ async def trigger_analysis_background(photo_id: int) -> None:
 
             image_bytes = await asyncio.to_thread(Path(photo_path).read_bytes)
 
-            # Build vision prompt and call OpenRouter
             messages = build_messages(image_bytes)
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {settings.openrouter_api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": settings.openrouter_model,
-                        "messages": messages,
-                    },
-                )
-                response.raise_for_status()
+            from app.services.llm.factory import resolve_llm_credentials
+            from app.services.llm.openrouter import OpenRouterClient
 
-            raw_content = response.json()["choices"][0]["message"]["content"]
+            api_key, model = await resolve_llm_credentials(db)
+            llm_client = OpenRouterClient(api_key=api_key or "", default_model=model)
+
+            raw_content = await llm_client.complete_with_image(messages)
             analysis.raw_response = raw_content
 
             vision_result = parse_vision_response(raw_content)

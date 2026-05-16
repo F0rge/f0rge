@@ -16,6 +16,8 @@ from app.models.lab import Lab
 from app.models.lab_marker_catalog import LabMarkerCatalog
 from app.models.lab_marker_alias import LabMarkerAlias
 from app.models.lab_marker import LabMarker
+from app.models.user_settings import UserSettings
+from app.models.embedding import Embedding
 
 __all__ = [
     "Entry",
@@ -34,4 +36,6 @@ __all__ = [
     "LabMarkerCatalog",
     "LabMarkerAlias",
     "LabMarker",
+    "UserSettings",
+    "Embedding",
 ]
