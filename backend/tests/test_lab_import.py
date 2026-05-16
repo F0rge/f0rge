@@ -155,13 +155,14 @@ async def test_import_from_text_second_run_is_noop(
     db: Session,
     import_service: LabImportService,
 ) -> None:
-    # The extraction call should only happen ONCE (no force).
-    # Idempotency check happens AFTER extraction in the current implementation,
-    # so we still need a response queued for the second call too.
+    # Idempotency must short-circuit BEFORE the LLM call so re-runs of the
+    # vault import don't burn extraction credits on rows that already exist.
+    # Only ONE response is queued; if a second call sneaks through, the patched
+    # _call_openrouter will raise AssertionError and the test fails.
     raw = json.dumps(
         _payload_for(canonical_match=None, proposed_canonical="hemoglobin")
     )
-    _patch_extraction(monkeypatch, [raw, raw])
+    _patch_extraction(monkeypatch, [raw])
 
     fixture = Path(__file__).parent / "fixtures" / "lab_blood.md"
     document = fixture.read_text()
@@ -225,14 +226,40 @@ async def test_import_from_pdf_sha256_dedup(
     db: Session,
     import_service: LabImportService,
 ) -> None:
+    # Re-uploading identical PDF bytes must short-circuit BEFORE the LLM call.
+    # Only ONE response queued; the patched _call_openrouter raises on second.
     raw = json.dumps(_payload_for())
-    # Two calls allowed; the second hits idempotency post-extraction.
-    _patch_extraction(monkeypatch, [raw, raw])
+    _patch_extraction(monkeypatch, [raw])
 
     pdf_bytes = b"%PDF-1.4\nidentical bytes\n%EOF"
 
     lab1 = await import_service.import_from_pdf(pdf_bytes, "first-name.pdf")
     lab2 = await import_service.import_from_pdf(pdf_bytes, "second-name.pdf")
+
+    assert lab1.id == lab2.id
+    assert db.query(Lab).count() == 1
+
+
+async def test_import_from_pdf_with_source_path_skips_extract_on_redo(
+    monkeypatch: pytest.MonkeyPatch,
+    db: Session,
+    import_service: LabImportService,
+) -> None:
+    # CLI re-run scenario: same vault-derived source_path on retry should NOT
+    # re-hit the LLM. This is the regression that caused PR #43 + import #2 to
+    # burn three failed-401 attempts on labs we'd already imported.
+    raw = json.dumps(_payload_for())
+    _patch_extraction(monkeypatch, [raw])
+
+    pdf_bytes = b"%PDF-1.4\nfirst-bytes\n%EOF"
+    src = "raw/2026-01-01_Exame-X.pdf"
+
+    lab1 = await import_service.import_from_pdf(pdf_bytes, "x.pdf", source_path=src)
+    # Different bytes but same explicit source_path → still a duplicate.
+    different_bytes = b"%PDF-1.4\nDIFFERENT-bytes\n%EOF"
+    lab2 = await import_service.import_from_pdf(
+        different_bytes, "x.pdf", source_path=src
+    )
 
     assert lab1.id == lab2.id
     assert db.query(Lab).count() == 1
