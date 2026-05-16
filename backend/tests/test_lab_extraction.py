@@ -11,13 +11,6 @@ from app.schemas.lab_marker import CatalogHint
 from app.services import lab_extraction as extraction_module
 from app.services.lab_extraction import LabExtractionService
 
-pytestmark = pytest.mark.anyio
-
-
-@pytest.fixture
-def anyio_backend() -> str:
-    return "asyncio"
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

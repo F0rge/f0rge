@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from typing import List, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ConflictError, NotFoundError
 from app.models.lab import Lab
@@ -25,36 +26,42 @@ def _normalize_canonical(name: str) -> str:
 
 
 class LabMarkerCatalogService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    def search(self, q: Optional[str], limit: int = 50) -> List[LabMarkerCatalog]:
+    async def search(self, q: Optional[str], limit: int = 50) -> List[LabMarkerCatalog]:
         """Search catalog by canonical name, display name, or alias (ilike)."""
-        query = self.db.query(LabMarkerCatalog)
+        stmt = select(LabMarkerCatalog)
         if q:
             pattern = f"%{q}%"
-            alias_ids = (
-                self.db.query(LabMarkerAlias.catalog_id)
-                .filter(LabMarkerAlias.alias.ilike(pattern))
+            alias_ids_stmt = (
+                select(LabMarkerAlias.catalog_id)
+                .where(LabMarkerAlias.alias.ilike(pattern))
                 .subquery()
             )
-            query = query.filter(
+            stmt = stmt.where(
                 LabMarkerCatalog.canonical_name.ilike(pattern)
                 | LabMarkerCatalog.display_name.ilike(pattern)
-                | LabMarkerCatalog.id.in_(alias_ids)
+                | LabMarkerCatalog.id.in_(alias_ids_stmt)
             )
-        return query.order_by(LabMarkerCatalog.canonical_name).limit(limit).all()
+        stmt = stmt.order_by(LabMarkerCatalog.canonical_name).limit(limit)
+        return list((await self.db.execute(stmt)).scalars().all())
 
-    def get_marker_history(self, canonical_name: str) -> List[MarkerHistoryPoint]:
+    async def get_marker_history(self, canonical_name: str) -> List[MarkerHistoryPoint]:
         """Return time-ordered numeric history for a canonical marker name."""
         rows = (
-            self.db.query(LabMarker)
-            .join(Lab, LabMarker.lab_id == Lab.id)
-            .filter(
-                LabMarker.canonical_name == canonical_name,
-                LabMarker.value.isnot(None),
+            (
+                await self.db.execute(
+                    select(LabMarker)
+                    .join(Lab, LabMarker.lab_id == Lab.id)
+                    .where(
+                        LabMarker.canonical_name == canonical_name,
+                        LabMarker.value.isnot(None),
+                    )
+                    .order_by(Lab.lab_date.asc())
+                )
             )
-            .order_by(Lab.lab_date.asc())
+            .scalars()
             .all()
         )
         return [
@@ -70,13 +77,17 @@ class LabMarkerCatalogService:
             for row in rows
         ]
 
-    def create_catalog_item(self, data: LabMarkerCatalogCreate) -> LabMarkerCatalog:
+    async def create_catalog_item(
+        self, data: LabMarkerCatalogCreate
+    ) -> LabMarkerCatalog:
         canonical = _normalize_canonical(data.canonical_name)
         existing = (
-            self.db.query(LabMarkerCatalog)
-            .filter(LabMarkerCatalog.canonical_name == canonical)
-            .first()
-        )
+            await self.db.execute(
+                select(LabMarkerCatalog).where(
+                    LabMarkerCatalog.canonical_name == canonical
+                )
+            )
+        ).scalar_one_or_none()
         if existing is not None:
             raise ConflictError(
                 f"Catalog item with canonical_name={canonical!r} already exists."
@@ -88,27 +99,27 @@ class LabMarkerCatalogService:
             description=data.description,
         )
         self.db.add(item)
-        self.db.flush()
-        self.db.refresh(item)
+        await self.db.flush()
+        await self.db.refresh(item)
         return item
 
-    def add_alias(
+    async def add_alias(
         self, catalog_id: int, alias: str, language: Optional[str]
     ) -> LabMarkerAlias:
         catalog = (
-            self.db.query(LabMarkerCatalog)
-            .filter(LabMarkerCatalog.id == catalog_id)
-            .first()
-        )
+            await self.db.execute(
+                select(LabMarkerCatalog).where(LabMarkerCatalog.id == catalog_id)
+            )
+        ).scalar_one_or_none()
         if catalog is None:
             raise NotFoundError(f"Catalog item {catalog_id} not found.")
 
         normalized = alias.strip().lower()
         existing = (
-            self.db.query(LabMarkerAlias)
-            .filter(LabMarkerAlias.alias == normalized)
-            .first()
-        )
+            await self.db.execute(
+                select(LabMarkerAlias).where(LabMarkerAlias.alias == normalized)
+            )
+        ).scalar_one_or_none()
         if existing is not None:
             raise ConflictError(
                 f"Alias {normalized!r} is already mapped to catalog item "
@@ -120,51 +131,48 @@ class LabMarkerCatalogService:
             language=language,
         )
         self.db.add(alias_obj)
-        self.db.flush()
-        self.db.refresh(alias_obj)
+        await self.db.flush()
+        await self.db.refresh(alias_obj)
         return alias_obj
 
-    def resolve_or_create(
+    async def resolve_or_create(
         self,
         name: str,
         display_name: str,
         units: Optional[List[str]] = None,
     ) -> LabMarkerCatalog:
-        """Find or create a catalog entry for the given marker name.
-
-        Lookup chain (stops at first match):
-        1. Exact canonical match.
-        2. Exact alias match (lowercased input).
-        3. Case-insensitive (ilike) canonical match.
-        4. Create new entry and register input as an alias if it differs.
-        """
+        """Find or create a catalog entry for the given marker name."""
         canonical = _normalize_canonical(name)
 
         # 1. Exact canonical
         item = (
-            self.db.query(LabMarkerCatalog)
-            .filter(LabMarkerCatalog.canonical_name == canonical)
-            .first()
-        )
+            await self.db.execute(
+                select(LabMarkerCatalog).where(
+                    LabMarkerCatalog.canonical_name == canonical
+                )
+            )
+        ).scalar_one_or_none()
         if item is not None:
             return item
 
         # 2. Exact alias
         normalized_input = name.strip().lower()
         alias_row = (
-            self.db.query(LabMarkerAlias)
-            .filter(LabMarkerAlias.alias == normalized_input)
-            .first()
-        )
+            await self.db.execute(
+                select(LabMarkerAlias).where(LabMarkerAlias.alias == normalized_input)
+            )
+        ).scalar_one_or_none()
         if alias_row is not None:
             return alias_row.catalog
 
         # 3. ilike canonical
         item = (
-            self.db.query(LabMarkerCatalog)
-            .filter(LabMarkerCatalog.canonical_name.ilike(canonical))
-            .first()
-        )
+            await self.db.execute(
+                select(LabMarkerCatalog).where(
+                    LabMarkerCatalog.canonical_name.ilike(canonical)
+                )
+            )
+        ).scalar_one_or_none()
         if item is not None:
             return item
 
@@ -175,10 +183,9 @@ class LabMarkerCatalogService:
             common_units=units or [],
         )
         self.db.add(item)
-        self.db.flush()
-        self.db.refresh(item)
+        await self.db.flush()
+        await self.db.refresh(item)
 
-        # Register the original input as an alias when it differs from canonical.
         if normalized_input != canonical:
             alias_obj = LabMarkerAlias(
                 catalog_id=item.id,
@@ -186,6 +193,6 @@ class LabMarkerCatalogService:
                 language=None,
             )
             self.db.add(alias_obj)
-            self.db.flush()
+            await self.db.flush()
 
         return item

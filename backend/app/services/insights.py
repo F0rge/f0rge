@@ -3,7 +3,8 @@ from __future__ import annotations
 import datetime
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ValidationError
 from app.models.treatment import Treatment
@@ -32,7 +33,7 @@ _CORE_OUTCOMES: frozenset[str] = frozenset(
         "sleep_quality",
         "stress",
         "sick",
-        "diet_risk",  # ordinal-encoded (minimal=0, low=1, normal=2, high=3) in feature_matrix
+        "diet_risk",
     }
 )
 
@@ -79,7 +80,6 @@ def _humanize(col: str) -> str:
         if label.startswith(prefix):
             label = label[len(prefix) :]
             break
-    # tx_<name>_active → strip tx_ and _active
     if label.startswith("tx_") and label.endswith("_active"):
         label = label[3:-7]
     elif label.startswith("tx_"):
@@ -88,16 +88,12 @@ def _humanize(col: str) -> str:
     return label.replace("_", " ").title()
 
 
-def _allowed_outcomes(
-    db: Session, columns: Optional[list[str]] = None
+async def _allowed_outcomes(
+    db: AsyncSession, columns: Optional[list[str]] = None
 ) -> frozenset[str]:
-    """Return the full whitelist of valid outcome column names.
-
-    Builds dynamically from static core set + any sym_* columns present in
-    the current schema (queried on demand, no global cache).
-    """
+    """Return the full whitelist of valid outcome column names."""
     if columns is None:
-        _, columns = build_feature_matrix(db, None, None)
+        _, columns = await build_feature_matrix(db, None, None)
     sym_cols = frozenset(c for c in columns if c.startswith("sym_"))
     return _CORE_OUTCOMES | sym_cols
 
@@ -125,21 +121,19 @@ def _coerce_numeric(val: object) -> Optional[float]:
         return float(val)
     if isinstance(val, (int, float)):
         return float(val)
-    # strings (stool_status, period_of_day, wx_condition, etc.) → not numeric
     return None
 
 
 # ── public service functions ───────────────────────────────────────────────────
 
 
-def compute_trends(
-    db: Session,
+async def compute_trends(
+    db: AsyncSession,
     start: Optional[datetime.date],
     end: Optional[datetime.date],
 ) -> TrendsResponse:
-    rows, columns = build_feature_matrix(db, start, end)
+    rows, columns = await build_feature_matrix(db, start, end)
 
-    # Gather sym_* columns present in this matrix
     sym_cols = [c for c in columns if c.startswith("sym_")]
     series_keys = _TREND_SERIES_KEYS + sym_cols
 
@@ -195,23 +189,22 @@ def compute_trends(
     return TrendsResponse(series=series_out)
 
 
-def compute_correlates(
-    db: Session,
+async def compute_correlates(
+    db: AsyncSession,
     start: Optional[datetime.date],
     end: Optional[datetime.date],
     outcome: str,
     category: Optional[str],
     min_n: int = 10,
 ) -> CorrelatesResponse:
-    rows, columns = build_feature_matrix(db, start, end)
-    allowed = _allowed_outcomes(db, columns)
+    rows, columns = await build_feature_matrix(db, start, end)
+    allowed = await _allowed_outcomes(db, columns)
 
     if outcome not in allowed:
         raise ValidationError(f"unknown outcome: {outcome!r}")
 
     y: list[Optional[float]] = [_coerce_numeric(row.get(outcome)) for row in rows]
 
-    # Columns we test as candidate features
     skip = _EXCLUDE_FROM_CORRELATES | {outcome}
     candidate_cols = [c for c in columns if c not in skip]
 
@@ -225,7 +218,7 @@ def compute_correlates(
         best_n: int = 0
         best_lag: int = 0
 
-        for lag in range(3):  # 0, 1, 2
+        for lag in range(3):
             if lag == 0:
                 x_aligned: list[Optional[float]] = [
                     _coerce_numeric(row.get(col)) for row in rows
@@ -235,8 +228,8 @@ def compute_correlates(
                 # feature at t-lag aligned with outcome at t
                 # x[i-lag] → y[i] means x values start lag earlier
                 x_raw = [_coerce_numeric(row.get(col)) for row in rows]
-                x_aligned = x_raw[:-lag]  # feature values (older)
-                y_aligned = y[lag:]  # outcome values (newer)
+                x_aligned = x_raw[:-lag]
+                y_aligned = y[lag:]
 
             rho, n = spearmanr(x_aligned, y_aligned)
 
@@ -272,21 +265,25 @@ def compute_correlates(
     return CorrelatesResponse(outcome=outcome, positive=positive, negative=negative)
 
 
-def compute_treatment_response(
-    db: Session,
+async def compute_treatment_response(
+    db: AsyncSession,
     outcome: str,
 ) -> TreatmentResponseList:
-    # Validate outcome using the full column set
-    _, columns = build_feature_matrix(db, None, None)
-    allowed = _allowed_outcomes(db, columns)
+    _, columns = await build_feature_matrix(db, None, None)
+    allowed = await _allowed_outcomes(db, columns)
     if outcome not in allowed:
         raise ValidationError(f"unknown outcome: {outcome!r}")
 
     today = datetime.date.today()
     treatments = (
-        db.query(Treatment)
-        .filter(Treatment.start_date.isnot(None))
-        .order_by(Treatment.start_date)
+        (
+            await db.execute(
+                select(Treatment)
+                .where(Treatment.start_date.isnot(None))
+                .order_by(Treatment.start_date)
+            )
+        )
+        .scalars()
         .all()
     )
 
@@ -302,7 +299,7 @@ def compute_treatment_response(
         during_end = end if end is not None else today
 
         # Fetch baseline window
-        baseline_rows, _ = build_feature_matrix(db, baseline_start, baseline_end)
+        baseline_rows, _ = await build_feature_matrix(db, baseline_start, baseline_end)
         baseline_vals: list[Optional[float]] = [
             _coerce_numeric(r.get(outcome)) for r in baseline_rows
         ]
@@ -313,7 +310,7 @@ def compute_treatment_response(
             continue
 
         # Fetch during window
-        during_rows, _ = build_feature_matrix(db, during_start, during_end)
+        during_rows, _ = await build_feature_matrix(db, during_start, during_end)
         during_vals: list[Optional[float]] = [
             _coerce_numeric(r.get(outcome)) for r in during_rows
         ]
@@ -326,7 +323,7 @@ def compute_treatment_response(
             after_start = end + datetime.timedelta(days=1)
             after_end = end + datetime.timedelta(days=30)
             if after_start <= today:
-                after_rows, _ = build_feature_matrix(db, after_start, after_end)
+                after_rows, _ = await build_feature_matrix(db, after_start, after_end)
                 after_vals = [_coerce_numeric(r.get(outcome)) for r in after_rows]
                 after_n = sum(1 for v in after_vals if v is not None)
 
@@ -358,15 +355,15 @@ def compute_treatment_response(
     return TreatmentResponseList(outcome=outcome, rows=rows_out)
 
 
-def compute_sleep_next_day(
-    db: Session,
+async def compute_sleep_next_day(
+    db: AsyncSession,
     start: Optional[datetime.date],
     end: Optional[datetime.date],
     outcome: str,
     metric: str,
 ) -> SleepNextDayResponse:
-    rows, columns = build_feature_matrix(db, start, end)
-    allowed = _allowed_outcomes(db, columns)
+    rows, columns = await build_feature_matrix(db, start, end)
+    allowed = await _allowed_outcomes(db, columns)
 
     if outcome not in allowed:
         raise ValidationError(f"unknown outcome: {outcome!r}")
@@ -380,7 +377,6 @@ def compute_sleep_next_day(
     n = len(rows)
     points: list[SleepNextDayPoint] = []
 
-    # Pair rows[i].metric with rows[i+1].outcome (next-day)
     for i in range(n - 1):
         sleep_val = _coerce_numeric(rows[i].get(metric))
         next_outcome = _coerce_numeric(rows[i + 1].get(outcome))

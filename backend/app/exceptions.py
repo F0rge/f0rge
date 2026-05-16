@@ -24,3 +24,11 @@ class ValidationError(DomainError):
 
 class ConflictError(DomainError):
     """Operation conflicts with existing state. Mapped to HTTP 409."""
+
+
+class UnauthorizedError(DomainError):
+    """Authentication failed or session invalid. Mapped to HTTP 401."""
+
+
+class ExternalServiceError(DomainError):
+    """Upstream service (weather API, LLM, etc.) failed. Mapped to HTTP 502."""

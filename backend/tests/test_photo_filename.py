@@ -16,19 +16,17 @@ loudly instead of corrupting data.
 
 from __future__ import annotations
 
-import asyncio
 import datetime
 import io
-from collections.abc import Generator
+from collections.abc import AsyncIterator
 
 import pytest
+import pytest_asyncio
 from fastapi import BackgroundTasks, UploadFile
 from PIL import Image
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import Base
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.services.photo_storage import save_photo
@@ -40,23 +38,10 @@ from app.services.photos import PhotoService
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def db() -> Generator[Session, None, None]:
-    """In-memory SQLite session, same pattern as test_photo_delete_cascade."""
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    session_local = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    session = session_local()
-    try:
-        yield session
-    finally:
-        session.close()
-
-
-@pytest.fixture
-def isolated_storage(
+@pytest_asyncio.fixture
+async def isolated_storage(
     tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> Generator[None, None, None]:
+) -> AsyncIterator[None]:
     """Point photo_dir + vault_path at tmp_path so tests never touch
     backend/photos/ or the real Obsidian vault."""
     photo_dir = tmp_path / "photos"
@@ -69,7 +54,14 @@ def isolated_storage(
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     # Stub out the daily-file writer so tests don't depend on its schema.
-    monkeypatch.setattr("app.services.photos.write_daily_file", lambda *a, **kw: None)
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "app.services.photos.render_and_write_daily_file", _noop, raising=False
+    )
+    monkeypatch.setattr("app.services.photos.write_daily_file", _noop, raising=False)
     yield
 
 
@@ -78,7 +70,7 @@ def isolated_storage(
 # ---------------------------------------------------------------------------
 
 
-def _make_entry(db: Session, day: datetime.date) -> Entry:
+async def _make_entry(db: AsyncSession, day: datetime.date) -> Entry:
     entry = Entry(
         date=day,
         overall=2,
@@ -94,7 +86,8 @@ def _make_entry(db: Session, day: datetime.date) -> Entry:
         hot_shower=False,
     )
     db.add(entry)
-    db.commit()
+    await db.commit()
+    await db.refresh(entry)
     return entry
 
 
@@ -106,23 +99,20 @@ def _png_bytes() -> bytes:
     return buf.getvalue()
 
 
-def _upload(db: Session, day: datetime.date, name: str = "x.png") -> Photo:
-    """Upload via PhotoService directly (avoids FastAPI Form/Depends binding)."""
+async def _upload(db: AsyncSession, day: datetime.date, name: str = "x.png") -> Photo:
     upload = UploadFile(filename=name, file=io.BytesIO(_png_bytes()))
     service = PhotoService(db)
-    return asyncio.run(
-        service.upload(
-            entry_date=day,
-            file=upload,
-            label=None,
-            meal_time=None,
-            background_tasks=BackgroundTasks(),
-        )
+    return await service.upload(
+        entry_date=day,
+        file=upload,
+        label=None,
+        meal_time=None,
+        background_tasks=BackgroundTasks(),
     )
 
 
-def _delete(db: Session, photo_id: int) -> None:
-    PhotoService(db).delete(photo_id)
+async def _delete(db: AsyncSession, photo_id: int) -> None:
+    await PhotoService(db).delete(photo_id)
 
 
 # ---------------------------------------------------------------------------
@@ -130,101 +120,109 @@ def _delete(db: Session, photo_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_first_upload_gets_photo_1(db: Session, isolated_storage: None) -> None:
+async def test_first_upload_gets_photo_1(
+    async_db: AsyncSession, isolated_storage: None
+) -> None:
     day = datetime.date(2026, 5, 15)
-    _make_entry(db, day)
+    await _make_entry(async_db, day)
 
-    photo = _upload(db, day)
+    photo = await _upload(async_db, day)
 
     assert photo.filename == "2026-05-15_photo-1.jpg"
 
 
-def test_second_upload_gets_photo_2(db: Session, isolated_storage: None) -> None:
+async def test_second_upload_gets_photo_2(
+    async_db: AsyncSession, isolated_storage: None
+) -> None:
     day = datetime.date(2026, 5, 15)
-    _make_entry(db, day)
+    await _make_entry(async_db, day)
 
-    _upload(db, day)
-    second = _upload(db, day)
+    await _upload(async_db, day)
+    second = await _upload(async_db, day)
 
     assert second.filename == "2026-05-15_photo-2.jpg"
 
 
-def test_delete_photo_1_then_upload_gets_photo_3(
-    db: Session, isolated_storage: None
+async def test_delete_photo_1_then_upload_gets_photo_3(
+    async_db: AsyncSession, isolated_storage: None
 ) -> None:
     """The regression case from issue #9: deleting photo-1 must NOT cause
     the next upload to be numbered 2 (which would collide with the existing
     photo-2 on disk)."""
     day = datetime.date(2026, 5, 15)
-    _make_entry(db, day)
+    await _make_entry(async_db, day)
 
-    first = _upload(db, day)
-    second = _upload(db, day)
+    first = await _upload(async_db, day)
+    second = await _upload(async_db, day)
     assert first.filename == "2026-05-15_photo-1.jpg"
     assert second.filename == "2026-05-15_photo-2.jpg"
 
-    _delete(db, first.id)
+    await _delete(async_db, first.id)
 
-    third = _upload(db, day)
+    third = await _upload(async_db, day)
     assert third.filename == "2026-05-15_photo-3.jpg", (
         "After deleting photo-1, the third upload must skip to photo-3. "
         "Reusing photo-2 would silently overwrite the existing file."
     )
 
 
-def test_delete_photo_2_then_upload_gets_photo_4(
-    db: Session, isolated_storage: None
+async def test_delete_photo_2_then_upload_gets_photo_4(
+    async_db: AsyncSession, isolated_storage: None
 ) -> None:
     """Same principle, deleting from the middle of the sequence."""
     day = datetime.date(2026, 5, 15)
-    _make_entry(db, day)
+    await _make_entry(async_db, day)
 
-    _upload(db, day)
-    second = _upload(db, day)
-    third = _upload(db, day)
+    await _upload(async_db, day)
+    second = await _upload(async_db, day)
+    third = await _upload(async_db, day)
     assert third.filename == "2026-05-15_photo-3.jpg"
 
-    _delete(db, second.id)
+    await _delete(async_db, second.id)
 
-    fourth = _upload(db, day)
+    fourth = await _upload(async_db, day)
     assert fourth.filename == "2026-05-15_photo-4.jpg"
 
 
-def test_gaps_in_numbering_are_preserved(db: Session, isolated_storage: None) -> None:
+async def test_gaps_in_numbering_are_preserved(
+    async_db: AsyncSession, isolated_storage: None
+) -> None:
     """Deleted numbers must stay retired forever -- the next upload always
     picks max(existing)+1, never fills holes."""
     day = datetime.date(2026, 5, 15)
-    _make_entry(db, day)
+    await _make_entry(async_db, day)
 
-    p1 = _upload(db, day)
-    _upload(db, day)
-    p3 = _upload(db, day)
-    _upload(db, day)
-    _upload(db, day)  # photo-5
+    p1 = await _upload(async_db, day)
+    await _upload(async_db, day)
+    p3 = await _upload(async_db, day)
+    await _upload(async_db, day)
+    await _upload(async_db, day)  # photo-5
 
-    _delete(db, p1.id)
-    _delete(db, p3.id)
+    await _delete(async_db, p1.id)
+    await _delete(async_db, p3.id)
 
     # Three uploads in a row -- they must be 6, 7, 8 (not 1, 3, 6).
-    sixth = _upload(db, day)
-    seventh = _upload(db, day)
-    eighth = _upload(db, day)
+    sixth = await _upload(async_db, day)
+    seventh = await _upload(async_db, day)
+    eighth = await _upload(async_db, day)
 
     assert sixth.filename == "2026-05-15_photo-6.jpg"
     assert seventh.filename == "2026-05-15_photo-7.jpg"
     assert eighth.filename == "2026-05-15_photo-8.jpg"
 
 
-def test_numbering_is_per_date(db: Session, isolated_storage: None) -> None:
+async def test_numbering_is_per_date(
+    async_db: AsyncSession, isolated_storage: None
+) -> None:
     """Sanity check: each date has its own independent numbering sequence."""
     day_a = datetime.date(2026, 5, 15)
     day_b = datetime.date(2026, 5, 16)
-    _make_entry(db, day_a)
-    _make_entry(db, day_b)
+    await _make_entry(async_db, day_a)
+    await _make_entry(async_db, day_b)
 
-    _upload(db, day_a)
-    _upload(db, day_a)
-    first_b = _upload(db, day_b)
+    await _upload(async_db, day_a)
+    await _upload(async_db, day_a)
+    first_b = await _upload(async_db, day_b)
 
     assert first_b.filename == "2026-05-16_photo-1.jpg"
 

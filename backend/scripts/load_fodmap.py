@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
-from pathlib import Path
 
+from scripts._db import SyncSession
 from scripts._paths import data_dir
+
+from app.models.dietary_ingredient import DietaryIngredient  # noqa: F401
+from app.database import Base  # noqa: F401
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "health.db"
 DATA_PATH = data_dir() / "fodmap_list.json"
 
 
@@ -22,52 +23,44 @@ def load() -> None:
     with open(DATA_PATH) as f:
         items: list[dict] = json.load(f)
 
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
     inserted = 0
     updated = 0
 
-    for item in items:
-        name = item["name"].strip().lower()
-        oligos = item.get("oligos", "low")
-        fructose = item.get("fructose", "low")
-        polyols = item.get("polyols", "low")
-        lactose = item.get("lactose", "low")
+    with SyncSession() as session:
+        for item in items:
+            name = item["name"].strip().lower()
+            oligos = item.get("oligos", "low")
+            fructose = item.get("fructose", "low")
+            polyols = item.get("polyols", "low")
+            lactose = item.get("lactose", "low")
 
-        # Check if row already exists (e.g. from SIGHI load)
-        cur.execute(
-            "SELECT id FROM dietary_ingredients WHERE canonical_name = ?",
-            (name,),
-        )
-        existing = cur.fetchone()
-
-        if existing:
-            cur.execute(
-                """UPDATE dietary_ingredients
-                   SET fodmap_oligos = ?,
-                       fodmap_fructose = ?,
-                       fodmap_polyols = ?,
-                       fodmap_lactose = ?,
-                       updated_at = datetime('now')
-                 WHERE canonical_name = ?""",
-                (oligos, fructose, polyols, lactose, name),
+            existing = (
+                session.query(DietaryIngredient)
+                .filter_by(canonical_name=name)
+                .first()
             )
-            updated += 1
-        else:
-            cur.execute(
-                """INSERT INTO dietary_ingredients
-                   (canonical_name, fodmap_oligos, fodmap_fructose, fodmap_polyols,
-                    fodmap_lactose, contains_gluten, contains_dairy,
-                    source, source_version, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, 0, 0, 'monash', '2024',
-                           datetime('now'), datetime('now'))""",
-                (name, oligos, fructose, polyols, lactose),
-            )
-            inserted += 1
 
-    conn.commit()
-    conn.close()
+            if existing:
+                existing.fodmap_oligos = oligos
+                existing.fodmap_fructose = fructose
+                existing.fodmap_polyols = polyols
+                existing.fodmap_lactose = lactose
+                updated += 1
+            else:
+                session.add(
+                    DietaryIngredient(
+                        canonical_name=name,
+                        fodmap_oligos=oligos,
+                        fodmap_fructose=fructose,
+                        fodmap_polyols=polyols,
+                        fodmap_lactose=lactose,
+                        contains_gluten=False,
+                        contains_dairy=False,
+                        source="monash",
+                        source_version="2024",
+                    )
+                )
+                inserted += 1
 
     log.info(
         "FODMAP load complete: %d inserted, %d updated, %d total processed",
