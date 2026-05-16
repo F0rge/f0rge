@@ -19,7 +19,7 @@ COPY ./data /app/data-seed
 # Tell the seed scripts and the lifespan hook where to find the JSON files.
 ENV DIETARY_DATA_DIR=/app/data-seed
 
-RUN mkdir -p /app/data /app/photos && chown -R app:app /app
+RUN mkdir -p /app/data /app/photos /app/lab_attachments && chown -R app:app /app
 
 USER app
 
