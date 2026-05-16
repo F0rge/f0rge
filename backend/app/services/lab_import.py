@@ -64,12 +64,19 @@ class LabImportService:
         document_text: str,
         source_path: Optional[str] = None,
         force: bool = False,
+        filename: Optional[str] = None,
     ) -> Lab:
         existing = self._existing_or_none(source_path, force)
         if existing is not None:
             return existing
         hints = _build_catalog_hints(self.catalog_service)
-        result = await self.extraction_service.extract_text(document_text, hints)
+        # Prefer caller-supplied filename; otherwise derive from source_path.
+        hint_name = filename or (
+            source_path.rsplit("/", 1)[-1] if source_path else None
+        )
+        result = await self.extraction_service.extract_text(
+            document_text, hints, filename=hint_name
+        )
         return self._persist(
             result=result,
             source_kind="text",
@@ -91,7 +98,9 @@ class LabImportService:
         if existing is not None:
             return existing
         hints = _build_catalog_hints(self.catalog_service)
-        result = await self.extraction_service.extract_pdf(pdf_bytes, hints)
+        result = await self.extraction_service.extract_pdf(
+            pdf_bytes, hints, filename=filename
+        )
         attachment_path = self.attachment_storage.save(
             pdf_bytes, filename, "application/pdf"
         )
@@ -118,7 +127,7 @@ class LabImportService:
             return existing
         hints = _build_catalog_hints(self.catalog_service)
         result = await self.extraction_service.extract_image(
-            image_bytes, mime_type, hints
+            image_bytes, mime_type, hints, filename=filename
         )
         attachment_path = self.attachment_storage.save(image_bytes, filename, mime_type)
         return self._persist(

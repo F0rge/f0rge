@@ -16,6 +16,42 @@ _ABNORMAL_REF_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Unidirectional reference-range patterns commonly seen in lab reports.
+# Captures things like "<5.18", ">60", "<=29", ">=0.27", "< 4.1", "≤14.0".
+# The numeric value is in group(1); leading whitespace and comparison
+# operators are normalised so both "<", "<=", "≤" are treated as "less-than".
+_REF_TEXT_LESS_RE = re.compile(r"^\s*[<≤]=?\s*(-?\d+(?:[.,]\d+)?)\s*$")
+_REF_TEXT_GREATER_RE = re.compile(r"^\s*[>≥]=?\s*(-?\d+(?:[.,]\d+)?)\s*$")
+
+
+def _parse_unidirectional_ref(ref_text: Optional[str]) -> tuple[Optional[float], Optional[float]]:
+    """Parse a unidirectional ref_text string into (implied_low, implied_high).
+
+    Returns numeric bounds when the text encodes an inequality:
+      "<5.18"  -> (None, 5.18)   # value must be below 5.18 → above is high
+      "<=29"   -> (None, 29.0)
+      ">60"    -> (60.0, None)   # value must be above 60 → below is low
+      ">=0.27" -> (0.27, None)
+    Returns (None, None) when the text doesn't match a known inequality form
+    (e.g. "Negative", "Normal", or a complex range).
+    """
+    if not ref_text:
+        return (None, None)
+    text = ref_text.replace(",", ".")
+    m = _REF_TEXT_LESS_RE.match(text)
+    if m:
+        try:
+            return (None, float(m.group(1)))
+        except ValueError:
+            return (None, None)
+    m = _REF_TEXT_GREATER_RE.match(text)
+    if m:
+        try:
+            return (float(m.group(1)), None)
+        except ValueError:
+            return (None, None)
+    return (None, None)
+
 
 class LabsService:
     def __init__(self, db: Session) -> None:
@@ -161,10 +197,13 @@ class LabsService:
         """Compute the clinical flag for a marker reading.
 
         Decision order:
-        1. No numeric value → "unknown".
-        2. Both ref bounds present → low / normal / high.
-        3. Only one ref bound → compare, else normal.
-        4. No numeric refs but ref_text looks abnormal and value_text matches → abnormal.
+        1. No numeric value → "unknown" (with abnormal heuristic when both
+           value_text and ref_text contain abnormal-leaning language).
+        2. Numeric refs win. If only ref_text is present and encodes a clean
+           unidirectional inequality (e.g. "<5.18", ">60"), derive the bound
+           from it.
+        3. Both ref bounds present → low / normal / high.
+        4. Only one ref bound → compare.
         5. Default → "unknown".
         """
         if value is None:
@@ -175,6 +214,10 @@ class LabsService:
                 ):
                     return "abnormal"
             return "unknown"
+
+        # Fall back to parsing ref_text when no numeric bounds were captured.
+        if ref_low is None and ref_high is None and ref_text:
+            ref_low, ref_high = _parse_unidirectional_ref(ref_text)
 
         if ref_low is not None and ref_high is not None:
             if value < ref_low:
