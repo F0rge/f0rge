@@ -6,14 +6,17 @@ import os
 import tempfile
 from typing import Optional, Sequence
 
+from sqlalchemy.orm import Session, selectinload
+
 from app.config import settings
 from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
+from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
-from app.schemas.weather import WeatherDailySummary
+from app.services.weather import get_daily_summary
 
 logger = logging.getLogger(__name__)
 
@@ -241,20 +244,7 @@ def _stool_summary(entry: Entry) -> str:
     return "Unknown"
 
 
-def _render_markdown(
-    entry: Entry,
-    photos: Sequence[Photo],
-    analyses: dict[int, PhotoAnalysis],
-    active_sym_labels: dict[str, str],
-    active_treatments: list[Treatment],
-    health: Optional[HealthMetric],
-    weather: Optional[WeatherDailySummary],
-) -> str:
-    """Render the Obsidian markdown file for one daily entry.
-
-    All data is pre-fetched by the async caller and passed in as plain objects.
-    This function performs NO database access — safe to run in a thread pool.
-    """
+def _render_markdown(db_session: Session, entry: Entry, photos: Sequence[Photo]) -> str:
     date_str = entry.date.isoformat()
     sick_str = "true" if entry.sick else "false"
     hot_shower_str = "true" if getattr(entry, "hot_shower", False) else "false"
@@ -264,11 +254,51 @@ def _render_markdown(
     entry_time = getattr(entry, "entry_time", None)
     period_of_day = getattr(entry, "period_of_day", None)
 
+    # Query confirmed analyses for all photos in this entry
+    photo_ids = [p.id for p in photos]
+    analyses: dict[int, PhotoAnalysis] = {}
+    if photo_ids:
+        confirmed = (
+            db_session.query(PhotoAnalysis)
+            .options(selectinload(PhotoAnalysis.ingredients))
+            .filter(
+                PhotoAnalysis.photo_id.in_(photo_ids),
+                PhotoAnalysis.status == "confirmed",
+            )
+            .all()
+        )
+        analyses = {a.photo_id: a for a in confirmed}
+
     dietary_fm, dietary_tags = _compute_dietary_tags(list(analyses.values()))
 
-    # Symptoms: filter to active catalog keys only
+    # Symptoms: fetch active catalog labels to filter logged symptoms
     symptoms = getattr(entry, "symptoms_json", {}) or {}
+    active_sym_labels: dict[str, str] = {}
+    try:
+        active_sym_labels = {
+            s.key: s.label
+            for s in db_session.query(SymptomCatalogItem)
+            .filter(SymptomCatalogItem.archived.is_(False))
+            .all()
+        }
+    except Exception:
+        logger.exception("Failed to query symptom catalog for %s", date_str)
+    # Only keep symptoms whose key is in the active catalog (drops archived keys)
     filtered_symptoms = {k: v for k, v in symptoms.items() if k in active_sym_labels}
+
+    active_treatments: list[Treatment] = []
+    try:
+        active_treatments = (
+            db_session.query(Treatment)
+            .filter(
+                Treatment.start_date <= entry.date,
+                (Treatment.end_date.is_(None)) | (Treatment.end_date >= entry.date),
+            )
+            .order_by(Treatment.name)
+            .all()
+        )
+    except Exception:
+        logger.exception("Failed to query treatments for %s", date_str)
 
     tag_lines = [
         "tags:",
@@ -369,6 +399,8 @@ def _render_markdown(
         lines.append("")
         for photo in photos:
             # Render meal_time as HH:MM (24-hour, local) inline with the embed.
+            # meal_time is always populated (backfilled from created_at on migration)
+            # but guard None to be safe.
             meal_time = getattr(photo, "meal_time", None)
             time_suffix = (
                 f" ({meal_time.strftime('%H:%M')})" if meal_time is not None else ""
@@ -385,6 +417,8 @@ def _render_markdown(
                 )
                 lines.append(f"**{analysis.dish_name}** ({conf_pct}%)")
                 # Only render ingredients the user saw in the UI (visible=true).
+                # Inferred items (visible=false) are excluded so the vault
+                # matches the confirmed set the user reviewed.
                 visible_ings = [i for i in analysis.ingredients if i.visible]
                 if visible_ings:
                     ing_parts = [_format_ingredient(i) for i in visible_ings]
@@ -393,6 +427,21 @@ def _render_markdown(
                 if flags_line:
                     lines.append(flags_line)
             lines.append("")
+
+    health = None
+    weather = None
+    try:
+        health = (
+            db_session.query(HealthMetric)
+            .filter(HealthMetric.date == entry.date)
+            .one_or_none()
+        )
+    except Exception:
+        logger.exception("Failed to query HealthMetric for %s", date_str)
+    try:
+        weather = get_daily_summary(db_session, entry.date)
+    except Exception:
+        logger.exception("Failed to query weather summary for %s", date_str)
 
     if health:
         lines.append("## Apple Watch Data")
@@ -465,19 +514,10 @@ def _render_markdown(
 
 
 def write_daily_file(
+    db_session: Session,
     entry: Entry,
-    photos: Optional[Sequence[Photo]],
-    analyses: dict[int, PhotoAnalysis],
-    active_sym_labels: dict[str, str],
-    active_treatments: list[Treatment],
-    health: Optional[HealthMetric],
-    weather: Optional[WeatherDailySummary],
+    photos: Optional[Sequence[Photo]] = None,
 ) -> None:
-    """Write/replace the Obsidian daily check-in file for the given entry.
-
-    All data is passed in as pre-fetched plain objects — no DB access here.
-    Safe to run in asyncio.to_thread().
-    """
     if not settings.vault_path:
         return
 
@@ -491,9 +531,7 @@ def write_daily_file(
         logger.warning("Vault path not writable: %s", logs_dir)
         return
 
-    content = _render_markdown(
-        entry, photos, analyses, active_sym_labels, active_treatments, health, weather
-    )
+    content = _render_markdown(db_session, entry, photos)
     target_path = os.path.join(logs_dir, f"{entry.date.isoformat()}.md")
 
     fd, tmp_path = tempfile.mkstemp(dir=logs_dir, suffix=".md.tmp")

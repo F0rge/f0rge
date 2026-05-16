@@ -1,17 +1,33 @@
 from __future__ import annotations
 
 import datetime
+from collections.abc import Generator
 from typing import Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.database import Base
 from app.models.entry import Entry
 from app.models.treatment import Treatment
 from app.services.feature_matrix import build_feature_matrix
 
 
-async def _add_treatment(
-    db: AsyncSession,
+@pytest.fixture
+def db() -> Generator[Session, None, None]:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def _add_treatment(
+    db: Session,
     name: str,
     normalized_name: str,
     start_date: datetime.date,
@@ -25,12 +41,12 @@ async def _add_treatment(
         end_date=end_date,
     )
     db.add(t)
-    await db.commit()
-    await db.refresh(t)
+    db.commit()
+    db.refresh(t)
     return t
 
 
-async def _add_entry(db: AsyncSession, date: datetime.date) -> Entry:
+def _add_entry(db: Session, date: datetime.date) -> Entry:
     entry = Entry(
         date=date,
         schema_version=2,
@@ -47,8 +63,8 @@ async def _add_entry(db: AsyncSession, date: datetime.date) -> Entry:
         hot_shower=False,
     )
     db.add(entry)
-    await db.commit()
-    await db.refresh(entry)
+    db.commit()
+    db.refresh(entry)
     return entry
 
 
@@ -66,12 +82,12 @@ def _rows_by_date(rows: list[dict]) -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 
 
-async def test_single_treatment_active_days(async_db: AsyncSession) -> None:
+def test_single_treatment_active_days(db: Session) -> None:
     """tx_allicin_active is True on all 3 days when treatment spans the range."""
-    await _add_treatment(async_db, "Allicin", "allicin", datetime.date(2026, 5, 1))
+    _add_treatment(db, "Allicin", "allicin", datetime.date(2026, 5, 1))
 
-    rows, columns = await build_feature_matrix(
-        async_db,
+    rows, columns = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 13),
         end_date=datetime.date(2026, 5, 15),
     )
@@ -83,14 +99,17 @@ async def test_single_treatment_active_days(async_db: AsyncSession) -> None:
     assert by_date["2026-05-15"]["tx_allicin_active"] is True
 
 
-async def test_single_treatment_inactive_outside_range(
-    async_db: AsyncSession,
-) -> None:
-    """Treatment that starts after the matrix range produces no tx_ column."""
-    await _add_treatment(async_db, "Allicin", "allicin", datetime.date(2026, 6, 1))
+def test_single_treatment_inactive_outside_range(db: Session) -> None:
+    """Treatment that starts after the matrix range produces no tx_ column.
 
-    rows, columns = await build_feature_matrix(
-        async_db,
+    build_feature_matrix pre-filters all_treatments to those overlapping
+    [start_date, end_date], so a treatment fully outside the range is
+    not represented in the column list at all.
+    """
+    _add_treatment(db, "Allicin", "allicin", datetime.date(2026, 6, 1))
+
+    rows, columns = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 13),
         end_date=datetime.date(2026, 5, 15),
     )
@@ -105,16 +124,12 @@ async def test_single_treatment_inactive_outside_range(
 # ---------------------------------------------------------------------------
 
 
-async def test_ongoing_treatment_active_through_end_of_range(
-    async_db: AsyncSession,
-) -> None:
+def test_ongoing_treatment_active_through_end_of_range(db: Session) -> None:
     """Ongoing treatment (end_date=None) is active on every day in the range."""
-    await _add_treatment(
-        async_db, "Allicin", "allicin", datetime.date(2026, 5, 1), end_date=None
-    )
+    _add_treatment(db, "Allicin", "allicin", datetime.date(2026, 5, 1), end_date=None)
 
-    rows, columns = await build_feature_matrix(
-        async_db,
+    rows, columns = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 13),
         end_date=datetime.date(2026, 5, 15),
     )
@@ -128,13 +143,13 @@ async def test_ongoing_treatment_active_through_end_of_range(
 # ---------------------------------------------------------------------------
 
 
-async def test_multiple_treatments_separate_columns(async_db: AsyncSession) -> None:
+def test_multiple_treatments_separate_columns(db: Session) -> None:
     """Each treatment gets its own tx_ column, sorted by normalized_name."""
-    await _add_treatment(async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 1))
-    await _add_treatment(async_db, "Allicin", "allicin", datetime.date(2026, 5, 1))
+    _add_treatment(db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 1))
+    _add_treatment(db, "Allicin", "allicin", datetime.date(2026, 5, 1))
 
-    rows, columns = await build_feature_matrix(
-        async_db,
+    rows, columns = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 15),
         end_date=datetime.date(2026, 5, 15),
     )
@@ -152,23 +167,26 @@ async def test_multiple_treatments_separate_columns(async_db: AsyncSession) -> N
     assert row["tx_rifaximin_active"] is True
 
 
-async def test_multiple_treatments_only_active_one_marked(
-    async_db: AsyncSession,
-) -> None:
-    """Only the treatment overlapping the range appears in columns."""
+def test_multiple_treatments_only_active_one_marked(db: Session) -> None:
+    """Only the treatment overlapping the range appears in columns.
+
+    An expired treatment wholly outside [start_date, end_date] is excluded
+    from all_treatments and gets no column. Only the currently-active one
+    produces a tx_ column, and it is True.
+    """
     # Allicin: ended April 30 — entirely before the May 15 range
-    await _add_treatment(
-        async_db,
+    _add_treatment(
+        db,
         "Allicin",
         "allicin",
         datetime.date(2026, 4, 1),
         datetime.date(2026, 4, 30),
     )
     # Rifaximin: active during range
-    await _add_treatment(async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 1))
+    _add_treatment(db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 1))
 
-    rows, columns = await build_feature_matrix(
-        async_db,
+    rows, columns = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 15),
         end_date=datetime.date(2026, 5, 15),
     )
@@ -185,11 +203,11 @@ async def test_multiple_treatments_only_active_one_marked(
 # ---------------------------------------------------------------------------
 
 
-async def test_no_treatments_no_tx_columns(async_db: AsyncSession) -> None:
-    await _add_entry(async_db, datetime.date(2026, 5, 15))
+def test_no_treatments_no_tx_columns(db: Session) -> None:
+    _add_entry(db, datetime.date(2026, 5, 15))
 
-    rows, columns = await build_feature_matrix(
-        async_db,
+    rows, columns = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 15),
         end_date=datetime.date(2026, 5, 15),
     )
@@ -203,18 +221,18 @@ async def test_no_treatments_no_tx_columns(async_db: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_boundary_active_on_start_date(async_db: AsyncSession) -> None:
+def test_boundary_active_on_start_date(db: Session) -> None:
     """First day of treatment is active (start_date is inclusive)."""
-    await _add_treatment(
-        async_db,
+    _add_treatment(
+        db,
         "Allicin",
         "allicin",
         datetime.date(2026, 5, 15),
         datetime.date(2026, 5, 31),
     )
 
-    rows, _ = await build_feature_matrix(
-        async_db,
+    rows, _ = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 15),
         end_date=datetime.date(2026, 5, 15),
     )
@@ -222,17 +240,22 @@ async def test_boundary_active_on_start_date(async_db: AsyncSession) -> None:
     assert rows[0]["tx_allicin_active"] is True
 
 
-async def test_boundary_day_before_start_is_false(async_db: AsyncSession) -> None:
-    """Day before treatment starts: treatment doesn't overlap the range at all."""
-    await _add_treatment(
-        async_db,
+def test_boundary_day_before_start_is_false(db: Session) -> None:
+    """Day before treatment starts: treatment doesn't overlap the range at all.
+
+    build_feature_matrix filters treatments by overlap with [start, end].
+    A treatment starting on May 15 does not overlap a range of May 14–14,
+    so no tx_ column is produced.
+    """
+    _add_treatment(
+        db,
         "Allicin",
         "allicin",
         datetime.date(2026, 5, 15),
     )
 
-    rows, columns = await build_feature_matrix(
-        async_db,
+    rows, columns = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 14),
         end_date=datetime.date(2026, 5, 14),
     )
@@ -242,18 +265,18 @@ async def test_boundary_day_before_start_is_false(async_db: AsyncSession) -> Non
     assert tx_cols == []
 
 
-async def test_boundary_active_on_end_date(async_db: AsyncSession) -> None:
+def test_boundary_active_on_end_date(db: Session) -> None:
     """Last day of treatment is active (end_date is inclusive)."""
-    await _add_treatment(
-        async_db,
+    _add_treatment(
+        db,
         "Allicin",
         "allicin",
         datetime.date(2026, 5, 1),
         datetime.date(2026, 5, 15),
     )
 
-    rows, _ = await build_feature_matrix(
-        async_db,
+    rows, _ = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 15),
         end_date=datetime.date(2026, 5, 15),
     )
@@ -261,18 +284,22 @@ async def test_boundary_active_on_end_date(async_db: AsyncSession) -> None:
     assert rows[0]["tx_allicin_active"] is True
 
 
-async def test_boundary_day_after_end_is_false(async_db: AsyncSession) -> None:
-    """Day after treatment ends: treatment doesn't overlap the range."""
-    await _add_treatment(
-        async_db,
+def test_boundary_day_after_end_is_false(db: Session) -> None:
+    """Day after treatment ends: treatment doesn't overlap the range.
+
+    A treatment ending on May 15 does not overlap a range of May 16–16,
+    so no tx_ column is produced.
+    """
+    _add_treatment(
+        db,
         "Allicin",
         "allicin",
         datetime.date(2026, 5, 1),
         datetime.date(2026, 5, 15),
     )
 
-    rows, columns = await build_feature_matrix(
-        async_db,
+    rows, columns = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 16),
         end_date=datetime.date(2026, 5, 16),
     )
@@ -287,18 +314,18 @@ async def test_boundary_day_after_end_is_false(async_db: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_partial_range_coverage(async_db: AsyncSession) -> None:
+def test_partial_range_coverage(db: Session) -> None:
     """Treatment covering only some days in range has mixed True/False."""
-    await _add_treatment(
-        async_db,
+    _add_treatment(
+        db,
         "Allicin",
         "allicin",
         datetime.date(2026, 5, 14),
         datetime.date(2026, 5, 15),
     )
 
-    rows, _ = await build_feature_matrix(
-        async_db,
+    rows, _ = build_feature_matrix(
+        db,
         start_date=datetime.date(2026, 5, 13),
         end_date=datetime.date(2026, 5, 16),
     )

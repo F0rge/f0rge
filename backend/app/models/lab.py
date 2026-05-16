@@ -35,5 +35,5 @@ class Lab(Base):
     )
 
     markers: Mapped[list[LabMarker]] = relationship(
-        "LabMarker", cascade="all, delete-orphan", back_populates="lab", lazy="selectin"
+        "LabMarker", cascade="all, delete-orphan", back_populates="lab"
     )

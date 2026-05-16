@@ -32,7 +32,5 @@ class LabMarker(Base):
     ref_text: Mapped[str | None] = mapped_column(String, nullable=True)
     flag: Mapped[str] = mapped_column(String, nullable=False)
 
-    lab: Mapped[Lab] = relationship("Lab", back_populates="markers", lazy="selectin")
-    catalog: Mapped[LabMarkerCatalog] = relationship(
-        "LabMarkerCatalog", lazy="selectin"
-    )
+    lab: Mapped[Lab] = relationship("Lab", back_populates="markers")
+    catalog: Mapped[LabMarkerCatalog] = relationship("LabMarkerCatalog")

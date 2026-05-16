@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.lab_attachment_storage import LabAttachmentStorage
@@ -12,13 +12,11 @@ from app.services.lab_import import LabImportService
 from app.services.labs import LabsService
 
 
-def get_labs_service(db: AsyncSession = Depends(get_db)) -> LabsService:
+def get_labs_service(db: Session = Depends(get_db)) -> LabsService:
     return LabsService(db)
 
 
-def get_lab_catalog_service(
-    db: AsyncSession = Depends(get_db),
-) -> LabMarkerCatalogService:
+def get_lab_catalog_service(db: Session = Depends(get_db)) -> LabMarkerCatalogService:
     return LabMarkerCatalogService(db)
 
 
@@ -38,7 +36,7 @@ def get_lab_extraction_orchestrator(
 
 
 def get_lab_import_service(
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     labs_service: LabsService = Depends(get_labs_service),
     catalog_service: LabMarkerCatalogService = Depends(get_lab_catalog_service),
     extraction_service: LabExtractionService = Depends(get_lab_extraction_service),

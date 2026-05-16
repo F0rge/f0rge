@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.dietary_ingredient import DietaryIngredient
 from app.models.ingredient_alias import IngredientAlias
@@ -12,47 +11,22 @@ from app.models.ingredient_alias import IngredientAlias
 logger = logging.getLogger(__name__)
 
 
-_PLANT_QUALIFIERS = frozenset(
-    {
-        "coconut",
-        "oat",
-        "almond",
-        "soy",
-        "soya",
-        "rice",
-        "cashew",
-        "hemp",
-        "peanut",
-        "hazelnut",
-        "macadamia",
-        "pistachio",
-        "sunflower",
-        "flax",
-        "walnut",
-        "pecan",
-        "sesame",
-        "cocoa",
-    }
-)
+_PLANT_QUALIFIERS = frozenset({
+    "coconut", "oat", "almond", "soy", "soya", "rice", "cashew",
+    "hemp", "peanut", "hazelnut", "macadamia", "pistachio",
+    "sunflower", "flax", "walnut", "pecan", "sesame", "cocoa",
+})
 
-_DAIRY_HEAD_NOUNS = frozenset(
-    {
-        "milk",
-        "cream",
-        "butter",
-        "cheese",
-        "yogurt",
-        "yoghurt",
-        "kefir",
-    }
-)
+_DAIRY_HEAD_NOUNS = frozenset({
+    "milk", "cream", "butter", "cheese", "yogurt", "yoghurt", "kefir",
+})
 
 
 class IngredientLookupService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: Session) -> None:
         self.db = db
 
-    async def lookup(self, name: str) -> Optional[DietaryIngredient]:
+    def lookup(self, name: str) -> Optional[DietaryIngredient]:
         """Match an ingredient name to the dietary reference DB.
 
         Chain: exact canonical -> alias -> head-noun (last word) ->
@@ -64,31 +38,34 @@ class IngredientLookupService:
 
         # 1. Exact match on canonical_name
         result = (
-            await self.db.execute(
-                select(DietaryIngredient).where(
-                    DietaryIngredient.canonical_name == normalised
-                )
-            )
-        ).scalar_one_or_none()
+            self.db.query(DietaryIngredient)
+            .filter(DietaryIngredient.canonical_name == normalised)
+            .first()
+        )
         if result:
             return result
 
         # 2. Alias lookup
         alias = (
-            await self.db.execute(
-                select(IngredientAlias).where(IngredientAlias.alias == normalised)
-            )
-        ).scalar_one_or_none()
+            self.db.query(IngredientAlias)
+            .filter(IngredientAlias.alias == normalised)
+            .first()
+        )
         if alias:
             return (
-                await self.db.execute(
-                    select(DietaryIngredient).where(
-                        DietaryIngredient.canonical_name == alias.canonical_name
-                    )
-                )
-            ).scalar_one_or_none()
+                self.db.query(DietaryIngredient)
+                .filter(DietaryIngredient.canonical_name == alias.canonical_name)
+                .first()
+            )
 
-        # 3. Head-noun fallback
+        # 3. Head-noun fallback: for English compound food names, the last
+        # word is usually the base ingredient (cherry tomato -> tomato,
+        # wheat flour -> flour, fresh basil -> basil). Try the last word
+        # as an exact canonical/alias match before the loose LIKE fallback.
+        #
+        # Guard: skip when a plant-based qualifier precedes a dairy head
+        # noun (e.g. "coconut milk", "oat cream") to avoid false allergen
+        # inheritance. No data is better than wrong data.
         words = normalised.split()
         if len(words) > 1:
             last_word = words[-1]
@@ -100,61 +77,41 @@ class IngredientLookupService:
                 )
             else:
                 result = (
-                    await self.db.execute(
-                        select(DietaryIngredient).where(
-                            DietaryIngredient.canonical_name == last_word
-                        )
-                    )
-                ).scalar_one_or_none()
+                    self.db.query(DietaryIngredient)
+                    .filter(DietaryIngredient.canonical_name == last_word)
+                    .first()
+                )
                 if result:
                     return result
                 alias = (
-                    await self.db.execute(
-                        select(IngredientAlias).where(
-                            IngredientAlias.alias == last_word
-                        )
-                    )
-                ).scalar_one_or_none()
+                    self.db.query(IngredientAlias)
+                    .filter(IngredientAlias.alias == last_word)
+                    .first()
+                )
                 if alias:
                     return (
-                        await self.db.execute(
-                            select(DietaryIngredient).where(
-                                DietaryIngredient.canonical_name == alias.canonical_name
-                            )
-                        )
-                    ).scalar_one_or_none()
+                        self.db.query(DietaryIngredient)
+                        .filter(DietaryIngredient.canonical_name == alias.canonical_name)
+                        .first()
+                    )
 
         # 4. Case-insensitive LIKE on full search term
         return (
-            await self.db.execute(
-                select(DietaryIngredient).where(
-                    DietaryIngredient.canonical_name.ilike(f"%{normalised}%")
-                )
-            )
-        ).scalar_one_or_none()
+            self.db.query(DietaryIngredient)
+            .filter(DietaryIngredient.canonical_name.ilike(f"%{normalised}%"))
+            .first()
+        )
 
-    async def lookup_batch(
-        self, names: list[str]
-    ) -> dict[str, Optional[DietaryIngredient]]:
+    def lookup_batch(self, names: list[str]) -> dict[str, Optional[DietaryIngredient]]:
         """Batch lookup for multiple ingredient names."""
-        result = {}
-        for name in names:
-            result[name] = await self.lookup(name)
-        return result
+        return {name: self.lookup(name) for name in names}
 
-    async def suggest_canonical(
-        self, name: str, limit: int = 5
-    ) -> list[DietaryIngredient]:
+    def suggest_canonical(self, name: str, limit: int = 5) -> list[DietaryIngredient]:
         """Return top matching dietary ingredients for autocomplete."""
         normalised = name.lower().strip()
-        return list(
-            (
-                await self.db.execute(
-                    select(DietaryIngredient)
-                    .where(DietaryIngredient.canonical_name.ilike(f"%{normalised}%"))
-                    .limit(limit)
-                )
-            )
-            .scalars()
+        return (
+            self.db.query(DietaryIngredient)
+            .filter(DietaryIngredient.canonical_name.ilike(f"%{normalised}%"))
+            .limit(limit)
             .all()
         )

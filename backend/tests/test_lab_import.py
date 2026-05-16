@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any, List
 
 import pytest
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.database import Base
 from app.models.lab import Lab
 from app.services import lab_attachment_storage as storage_module
 from app.services import lab_extraction as extraction_module
@@ -18,15 +20,34 @@ from app.services.lab_extraction import LabExtractionService
 from app.services.lab_import import LabImportService
 from app.services.labs import LabsService
 
+pytestmark = pytest.mark.anyio
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
 
 # ---------------------------------------------------------------------------
-# Fixture: real DB + import service wired with real catalog/labs services
+# Fixture: in-memory DB + import service wired with real catalog/labs services
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
+def db() -> Generator[Session, None, None]:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
 def import_service(
-    async_db: AsyncSession,
+    db: Session,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> LabImportService:
@@ -39,11 +60,11 @@ def import_service(
         str(tmp_path / "extraction_audit.jsonl"),
     )
 
-    labs = LabsService(async_db)
-    catalog = LabMarkerCatalogService(async_db)
+    labs = LabsService(db)
+    catalog = LabMarkerCatalogService(db)
     extraction = LabExtractionService()
     storage = LabAttachmentStorage()
-    return LabImportService(async_db, labs, catalog, extraction, storage)
+    return LabImportService(db, labs, catalog, extraction, storage)
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +152,7 @@ async def test_import_from_text_first_run_inserts(
 
 async def test_import_from_text_second_run_is_noop(
     monkeypatch: pytest.MonkeyPatch,
-    async_db: AsyncSession,
+    db: Session,
     import_service: LabImportService,
 ) -> None:
     # Idempotency must short-circuit BEFORE the LLM call so re-runs of the
@@ -150,14 +171,12 @@ async def test_import_from_text_second_run_is_noop(
     lab2 = await import_service.import_from_text(document, source_path="vault/x.md")
 
     assert lab1.id == lab2.id
-    assert (
-        await async_db.execute(select(func.count()).select_from(Lab))
-    ).scalar_one() == 1
+    assert db.query(Lab).count() == 1
 
 
 async def test_import_from_text_force_replaces(
     monkeypatch: pytest.MonkeyPatch,
-    async_db: AsyncSession,
+    db: Session,
     import_service: LabImportService,
 ) -> None:
     first = json.dumps(_payload_for(name="Original", value=15.5))
@@ -173,10 +192,8 @@ async def test_import_from_text_force_replaces(
 
     # force=True deletes the old row and inserts a new one with replacement data.
     assert lab2.name == "Replacement"
-    assert (
-        await async_db.execute(select(func.count()).select_from(Lab))
-    ).scalar_one() == 1
-    remaining = (await async_db.execute(select(Lab))).scalars().first()
+    assert db.query(Lab).count() == 1
+    remaining = db.query(Lab).first()
     assert remaining.name == "Replacement"
 
 
@@ -206,7 +223,7 @@ async def test_import_from_pdf_persists_file_and_sets_metadata(
 
 async def test_import_from_pdf_sha256_dedup(
     monkeypatch: pytest.MonkeyPatch,
-    async_db: AsyncSession,
+    db: Session,
     import_service: LabImportService,
 ) -> None:
     # Re-uploading identical PDF bytes must short-circuit BEFORE the LLM call.
@@ -220,14 +237,12 @@ async def test_import_from_pdf_sha256_dedup(
     lab2 = await import_service.import_from_pdf(pdf_bytes, "second-name.pdf")
 
     assert lab1.id == lab2.id
-    assert (
-        await async_db.execute(select(func.count()).select_from(Lab))
-    ).scalar_one() == 1
+    assert db.query(Lab).count() == 1
 
 
 async def test_import_from_pdf_with_source_path_skips_extract_on_redo(
     monkeypatch: pytest.MonkeyPatch,
-    async_db: AsyncSession,
+    db: Session,
     import_service: LabImportService,
 ) -> None:
     # CLI re-run scenario: same vault-derived source_path on retry should NOT
@@ -247,9 +262,7 @@ async def test_import_from_pdf_with_source_path_skips_extract_on_redo(
     )
 
     assert lab1.id == lab2.id
-    assert (
-        await async_db.execute(select(func.count()).select_from(Lab))
-    ).scalar_one() == 1
+    assert db.query(Lab).count() == 1
 
 
 async def test_import_from_pdf_low_confidence_sets_needs_review(

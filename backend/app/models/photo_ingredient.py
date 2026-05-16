@@ -32,5 +32,5 @@ class PhotoIngredient(Base):
     )
 
     analysis: Mapped[PhotoAnalysis] = relationship(
-        "PhotoAnalysis", back_populates="ingredients", lazy="selectin"
+        "PhotoAnalysis", back_populates="ingredients"
     )

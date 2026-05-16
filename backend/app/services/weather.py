@@ -6,23 +6,21 @@ import logging
 from typing import Optional
 
 import httpx
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import async_session_maker
-from app.exceptions import ExternalServiceError, NotFoundError
+from app.database import SessionLocal
 from app.models.weather import WeatherReading
 from app.schemas.weather import WeatherDailySummary
 
 logger = logging.getLogger(__name__)
 
 
-async def fetch_and_store_weather() -> Optional[WeatherReading]:
+def fetch_and_store_weather() -> Optional[WeatherReading]:
     """Fetch current weather from OpenWeatherMap and store it.
 
-    Uses async httpx and async SQLAlchemy with its own session.
-    Returns the reading or None if the hour was already recorded or the fetch failed.
+    Uses sync httpx and sync SQLAlchemy. Returns the reading or None
+    if the hour was already recorded or the fetch failed.
     """
     api_key = settings.openweathermap_api_key
     city = settings.openweathermap_city
@@ -34,10 +32,9 @@ async def fetch_and_store_weather() -> Optional[WeatherReading]:
     params = {"q": city, "appid": api_key, "units": "metric"}
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        resp = httpx.get(url, params=params, timeout=10.0)
+        resp.raise_for_status()
+        data = resp.json()
     except Exception:
         logger.exception("Failed to fetch weather data")
         return None
@@ -45,50 +42,50 @@ async def fetch_and_store_weather() -> Optional[WeatherReading]:
     now = datetime.datetime.utcnow()
     truncated = now.replace(minute=0, second=0, microsecond=0)
 
+    db = SessionLocal()
     try:
-        async with async_session_maker() as db:
-            existing = (
-                await db.execute(
-                    select(WeatherReading).where(WeatherReading.timestamp == truncated)
-                )
-            ).scalar_one_or_none()
+        existing = (
+            db.query(WeatherReading)
+            .filter(WeatherReading.timestamp == truncated)
+            .first()
+        )
+        if existing:
+            logger.debug("Weather reading for %s already exists, skipping", truncated)
+            return existing
 
-            if existing:
-                logger.debug(
-                    "Weather reading for %s already exists, skipping", truncated
-                )
-                return existing
+        weather_main = None
+        if data.get("weather") and len(data["weather"]) > 0:
+            weather_main = data["weather"][0].get("main")
 
-            weather_main = None
-            if data.get("weather") and len(data["weather"]) > 0:
-                weather_main = data["weather"][0].get("main")
-
-            main = data.get("main", {})
-            reading = WeatherReading(
-                timestamp=truncated,
-                date=truncated.date(),
-                temperature_c=main.get("temp", 0.0),
-                humidity_pct=main.get("humidity", 0.0),
-                pressure_hpa=main.get("pressure", 0.0),
-                weather_main=weather_main,
-            )
-            db.add(reading)
-            await db.commit()
-            await db.refresh(reading)
-            logger.info("Stored weather reading for %s", truncated)
-            return reading
+        main = data.get("main", {})
+        reading = WeatherReading(
+            timestamp=truncated,
+            date=truncated.date(),
+            temperature_c=main.get("temp", 0.0),
+            humidity_pct=main.get("humidity", 0.0),
+            pressure_hpa=main.get("pressure", 0.0),
+            weather_main=weather_main,
+        )
+        db.add(reading)
+        db.commit()
+        db.refresh(reading)
+        logger.info("Stored weather reading for %s", truncated)
+        return reading
     except Exception:
+        db.rollback()
         logger.exception("Failed to store weather reading")
         return None
+    finally:
+        db.close()
 
 
-async def get_daily_summary(
-    db: AsyncSession, date: datetime.date
+def get_daily_summary(
+    db: Session, date: datetime.date
 ) -> Optional[WeatherDailySummary]:
     """Compute daily weather aggregates for a given date."""
     readings = (
-        (await db.execute(select(WeatherReading).where(WeatherReading.date == date)))
-        .scalars()
+        db.query(WeatherReading)
+        .filter(WeatherReading.date == date)
         .all()
     )
 
@@ -106,15 +103,10 @@ async def get_daily_summary(
     # Compute pressure delta vs yesterday
     yesterday = date - datetime.timedelta(days=1)
     yesterday_readings = (
-        (
-            await db.execute(
-                select(WeatherReading).where(WeatherReading.date == yesterday)
-            )
-        )
-        .scalars()
+        db.query(WeatherReading)
+        .filter(WeatherReading.date == yesterday)
         .all()
     )
-
     pressure_delta_24h = None
     if yesterday_readings:
         yesterday_pressures = [r.pressure_hpa for r in yesterday_readings]
@@ -135,29 +127,11 @@ async def get_daily_summary(
     )
 
 
-async def trigger_weather_fetch() -> WeatherReading:
-    """Fetch and store weather; raise ExternalServiceError on failure."""
-    reading = await fetch_and_store_weather()
-    if reading is None:
-        raise ExternalServiceError("Failed to fetch weather data")
-    return reading
-
-
-async def get_daily_summary_or_404(
-    db: AsyncSession, date: datetime.date
-) -> WeatherDailySummary:
-    """Return daily summary or raise NotFoundError."""
-    summary = await get_daily_summary(db, date)
-    if summary is None:
-        raise NotFoundError(f"No weather data for {date}")
-    return summary
-
-
 async def weather_background_loop() -> None:
     """Run weather fetch every hour in a background task."""
     while True:
         try:
-            await fetch_and_store_weather()
+            await asyncio.to_thread(fetch_and_store_weather)
         except Exception:
             logger.exception("Error in weather background loop")
         await asyncio.sleep(3600)

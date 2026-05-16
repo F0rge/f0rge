@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import datetime
+from collections.abc import Generator
 from typing import Optional
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.database import Base
 from app.exceptions import NotFoundError
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
@@ -16,22 +17,32 @@ from app.schemas.lab import LabCreate, LabMarkerCreate, LabUpdate
 from app.services.labs import LabsService
 
 
-@pytest_asyncio.fixture
-async def service(async_db: AsyncSession) -> LabsService:
-    return LabsService(async_db)
+@pytest.fixture
+def db() -> Generator[Session, None, None]:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
-async def _make_catalog(
-    db: AsyncSession, canonical: str = "hemoglobin"
-) -> LabMarkerCatalog:
+@pytest.fixture
+def service(db: Session) -> LabsService:
+    return LabsService(db)
+
+
+def _make_catalog(db: Session, canonical: str = "hemoglobin") -> LabMarkerCatalog:
     item = LabMarkerCatalog(
         canonical_name=canonical,
         display_name=canonical.replace("_", " ").title(),
         common_units=["g/dL"],
     )
     db.add(item)
-    await db.commit()
-    await db.refresh(item)
+    db.commit()
+    db.refresh(item)
     return item
 
 
@@ -164,12 +175,11 @@ def test_compute_flag_parses_unidirectional_ref_text(
         ref_high=None,
         ref_text=ref_text,
     )
-    assert flag == expected, (
-        f"value={value} ref_text={ref_text!r} → {flag}, expected {expected}"
-    )
+    assert flag == expected, f"value={value} ref_text={ref_text!r} → {flag}, expected {expected}"
 
 
 def test_compute_flag_numeric_refs_take_precedence_over_ref_text() -> None:
+    # If both numeric bounds and ref_text exist, numeric bounds must win.
     flag = LabsService.compute_flag(
         value=15.0,
         value_text=None,
@@ -185,10 +195,8 @@ def test_compute_flag_numeric_refs_take_precedence_over_ref_text() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_create_lab_happy_path(
-    async_db: AsyncSession, service: LabsService
-) -> None:
-    catalog = await _make_catalog(async_db)
+def test_create_lab_happy_path(db: Session, service: LabsService) -> None:
+    catalog = _make_catalog(db)
     body = LabCreate(
         lab_date=datetime.date(2026, 5, 1),
         name="Test Blood Panel",
@@ -203,7 +211,7 @@ async def test_create_lab_happy_path(
             ),
         ],
     )
-    lab = await service.create_lab(body)
+    lab = service.create_lab(body)
 
     assert lab.id is not None
     assert lab.name == "Test Blood Panel"
@@ -216,17 +224,17 @@ async def test_create_lab_happy_path(
     assert flags == ["low", "normal"]
 
 
-async def test_create_lab_with_extraction_meta_sets_review_status(
-    async_db: AsyncSession, service: LabsService
+def test_create_lab_with_extraction_meta_sets_review_status(
+    db: Session, service: LabsService
 ) -> None:
-    catalog = await _make_catalog(async_db)
+    catalog = _make_catalog(db)
     body = LabCreate(
         lab_date=datetime.date(2026, 5, 1),
         name="Auto-Extracted Lab",
         type="blood",
         markers=[_marker_create(catalog.id)],
     )
-    lab = await service.create_lab(
+    lab = service.create_lab(
         body,
         extraction_meta={
             "extraction_model": "google/gemini-3-flash-preview",
@@ -248,15 +256,15 @@ async def test_create_lab_with_extraction_meta_sets_review_status(
 # ---------------------------------------------------------------------------
 
 
-async def _seed_labs(db: AsyncSession, service: LabsService) -> None:
-    catalog = await _make_catalog(db)
+def _seed_labs(db: Session, service: LabsService) -> None:
+    catalog = _make_catalog(db)
     for date_, type_, name in [
         (datetime.date(2026, 1, 1), "blood", "Lab A"),
         (datetime.date(2026, 3, 15), "blood", "Lab B"),
         (datetime.date(2026, 5, 30), "imaging", "Lab C"),
         (datetime.date(2026, 6, 30), "breath", "Lab D"),
     ]:
-        await service.create_lab(
+        service.create_lab(
             LabCreate(
                 lab_date=date_,
                 name=name,
@@ -266,47 +274,41 @@ async def _seed_labs(db: AsyncSession, service: LabsService) -> None:
         )
 
 
-async def test_list_labs_no_filters_returns_all_desc(
-    async_db: AsyncSession, service: LabsService
+def test_list_labs_no_filters_returns_all_desc(
+    db: Session, service: LabsService
 ) -> None:
-    await _seed_labs(async_db, service)
-    labs = await service.list_labs()
+    _seed_labs(db, service)
+    labs = service.list_labs()
     # Newest first
     assert [lab.name for lab in labs] == ["Lab D", "Lab C", "Lab B", "Lab A"]
 
 
-async def test_list_labs_date_range(
-    async_db: AsyncSession, service: LabsService
-) -> None:
-    await _seed_labs(async_db, service)
-    labs = await service.list_labs(
+def test_list_labs_date_range(db: Session, service: LabsService) -> None:
+    _seed_labs(db, service)
+    labs = service.list_labs(
         start_date=datetime.date(2026, 2, 1),
         end_date=datetime.date(2026, 6, 1),
     )
     assert {lab.name for lab in labs} == {"Lab B", "Lab C"}
 
 
-async def test_list_labs_filter_by_type(
-    async_db: AsyncSession, service: LabsService
-) -> None:
-    await _seed_labs(async_db, service)
-    labs = await service.list_labs(lab_type="blood")
+def test_list_labs_filter_by_type(db: Session, service: LabsService) -> None:
+    _seed_labs(db, service)
+    labs = service.list_labs(lab_type="blood")
     assert {lab.name for lab in labs} == {"Lab A", "Lab B"}
 
 
-async def test_list_labs_filter_by_type_and_date(
-    async_db: AsyncSession, service: LabsService
-) -> None:
-    await _seed_labs(async_db, service)
-    labs = await service.list_labs(
+def test_list_labs_filter_by_type_and_date(db: Session, service: LabsService) -> None:
+    _seed_labs(db, service)
+    labs = service.list_labs(
         start_date=datetime.date(2026, 3, 1),
         lab_type="blood",
     )
     assert [lab.name for lab in labs] == ["Lab B"]
 
 
-async def test_list_labs_empty(service: LabsService) -> None:
-    assert await service.list_labs() == []
+def test_list_labs_empty(service: LabsService) -> None:
+    assert service.list_labs() == []
 
 
 # ---------------------------------------------------------------------------
@@ -314,23 +316,23 @@ async def test_list_labs_empty(service: LabsService) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_get_lab_existing(async_db: AsyncSession, service: LabsService) -> None:
-    catalog = await _make_catalog(async_db)
+def test_get_lab_existing(db: Session, service: LabsService) -> None:
+    catalog = _make_catalog(db)
     body = LabCreate(
         lab_date=datetime.date(2026, 5, 1),
         name="Specific Lab",
         type="blood",
         markers=[_marker_create(catalog.id)],
     )
-    created = await service.create_lab(body)
-    fetched = await service.get_lab(created.id)
+    created = service.create_lab(body)
+    fetched = service.get_lab(created.id)
     assert fetched.id == created.id
     assert fetched.name == "Specific Lab"
 
 
-async def test_get_lab_nonexistent_raises_not_found(service: LabsService) -> None:
+def test_get_lab_nonexistent_raises_not_found(service: LabsService) -> None:
     with pytest.raises(NotFoundError):
-        await service.get_lab(99999)
+        service.get_lab(99999)
 
 
 # ---------------------------------------------------------------------------
@@ -338,10 +340,10 @@ async def test_get_lab_nonexistent_raises_not_found(service: LabsService) -> Non
 # ---------------------------------------------------------------------------
 
 
-async def test_update_lab_replaces_markers_wholesale(
-    async_db: AsyncSession, service: LabsService
+def test_update_lab_replaces_markers_wholesale(
+    db: Session, service: LabsService
 ) -> None:
-    catalog = await _make_catalog(async_db)
+    catalog = _make_catalog(db)
     body = LabCreate(
         lab_date=datetime.date(2026, 5, 1),
         name="Before",
@@ -351,48 +353,42 @@ async def test_update_lab_replaces_markers_wholesale(
             _marker_create(catalog.id, value=10.0),
         ],
     )
-    lab = await service.create_lab(body)
+    lab = service.create_lab(body)
     original_marker_ids = {m.id for m in lab.markers}
     assert len(original_marker_ids) == 2
 
     new_markers = [_marker_create(catalog.id, value=14.0)]
-    updated = await service.update_lab(
-        lab.id, LabUpdate(name="After", markers=new_markers)
-    )
+    updated = service.update_lab(lab.id, LabUpdate(name="After", markers=new_markers))
 
     assert updated.name == "After"
     assert len(updated.markers) == 1
     # Only one marker exists on this lab now — replacement deleted the originals.
     assert updated.markers[0].value == 14.0
-    db_markers = (
-        (await async_db.execute(select(LabMarker).where(LabMarker.lab_id == lab.id)))
-        .scalars()
-        .all()
-    )
+    db_markers = db.query(LabMarker).filter(LabMarker.lab_id == lab.id).all()
     assert len(db_markers) == 1
 
 
-async def test_update_lab_without_markers_leaves_them_alone(
-    async_db: AsyncSession, service: LabsService
+def test_update_lab_without_markers_leaves_them_alone(
+    db: Session, service: LabsService
 ) -> None:
-    catalog = await _make_catalog(async_db)
+    catalog = _make_catalog(db)
     body = LabCreate(
         lab_date=datetime.date(2026, 5, 1),
         name="Keep Markers",
         type="blood",
         markers=[_marker_create(catalog.id, value=15.5)],
     )
-    lab = await service.create_lab(body)
+    lab = service.create_lab(body)
     pre_ids = {m.id for m in lab.markers}
 
-    updated = await service.update_lab(lab.id, LabUpdate(notes="add a note"))
+    updated = service.update_lab(lab.id, LabUpdate(notes="add a note"))
     assert updated.notes == "add a note"
     assert {m.id for m in updated.markers} == pre_ids
 
 
-async def test_update_lab_nonexistent_raises_not_found(service: LabsService) -> None:
+def test_update_lab_nonexistent_raises_not_found(service: LabsService) -> None:
     with pytest.raises(NotFoundError):
-        await service.update_lab(99999, LabUpdate(name="nope"))
+        service.update_lab(99999, LabUpdate(name="nope"))
 
 
 # ---------------------------------------------------------------------------
@@ -400,10 +396,8 @@ async def test_update_lab_nonexistent_raises_not_found(service: LabsService) -> 
 # ---------------------------------------------------------------------------
 
 
-async def test_delete_lab_cascades_to_markers(
-    async_db: AsyncSession, service: LabsService
-) -> None:
-    catalog = await _make_catalog(async_db)
+def test_delete_lab_cascades_to_markers(db: Session, service: LabsService) -> None:
+    catalog = _make_catalog(db)
     body = LabCreate(
         lab_date=datetime.date(2026, 5, 1),
         name="Delete Me",
@@ -413,23 +407,17 @@ async def test_delete_lab_cascades_to_markers(
             _marker_create(catalog.id, value=14.0),
         ],
     )
-    lab = await service.create_lab(body)
+    lab = service.create_lab(body)
     lab_id = lab.id
     marker_ids = [m.id for m in lab.markers]
 
-    await service.delete_lab(lab_id)
+    service.delete_lab(lab_id)
 
-    assert (
-        await async_db.execute(select(Lab).where(Lab.id == lab_id))
-    ).scalar_one_or_none() is None
+    assert db.query(Lab).filter(Lab.id == lab_id).first() is None
     for mid in marker_ids:
-        assert (
-            await async_db.execute(select(LabMarker).where(LabMarker.id == mid))
-        ).scalar_one_or_none() is None
+        assert db.query(LabMarker).filter(LabMarker.id == mid).first() is None
 
 
-async def test_delete_lab_nonexistent_raises_not_found(
-    service: LabsService,
-) -> None:
+def test_delete_lab_nonexistent_raises_not_found(service: LabsService) -> None:
     with pytest.raises(NotFoundError):
-        await service.delete_lab(99999)
+        service.delete_lab(99999)

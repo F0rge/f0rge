@@ -4,9 +4,7 @@ import datetime
 import re
 from typing import List, Optional
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from app.exceptions import NotFoundError, ValidationError
 from app.models.lab import Lab
@@ -26,17 +24,16 @@ _REF_TEXT_LESS_RE = re.compile(r"^\s*[<≤]=?\s*(-?\d+(?:[.,]\d+)?)\s*$")
 _REF_TEXT_GREATER_RE = re.compile(r"^\s*[>≥]=?\s*(-?\d+(?:[.,]\d+)?)\s*$")
 
 
-def _parse_unidirectional_ref(
-    ref_text: Optional[str],
-) -> tuple[Optional[float], Optional[float]]:
+def _parse_unidirectional_ref(ref_text: Optional[str]) -> tuple[Optional[float], Optional[float]]:
     """Parse a unidirectional ref_text string into (implied_low, implied_high).
 
-    Examples:
-      "<5.18"  -> (None, 5.18)
+    Returns numeric bounds when the text encodes an inequality:
+      "<5.18"  -> (None, 5.18)   # value must be below 5.18 → above is high
       "<=29"   -> (None, 29.0)
-      ">60"    -> (60.0, None)
+      ">60"    -> (60.0, None)   # value must be above 60 → below is low
       ">=0.27" -> (0.27, None)
-    Returns (None, None) for non-inequality text ("Negative", "Normal", complex ranges).
+    Returns (None, None) when the text doesn't match a known inequality form
+    (e.g. "Negative", "Normal", or a complex range).
     """
     if not ref_text:
         return (None, None)
@@ -57,36 +54,36 @@ def _parse_unidirectional_ref(
 
 
 class LabsService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: Session) -> None:
         self.db = db
 
-    async def list_labs(
+    def list_labs(
         self,
         start_date: Optional[datetime.date] = None,
         end_date: Optional[datetime.date] = None,
         lab_type: Optional[str] = None,
     ) -> List[Lab]:
-        stmt = select(Lab).options(selectinload(Lab.markers))
+        query = self.db.query(Lab).options(selectinload(Lab.markers))
         if start_date is not None:
-            stmt = stmt.where(Lab.lab_date >= start_date)
+            query = query.filter(Lab.lab_date >= start_date)
         if end_date is not None:
-            stmt = stmt.where(Lab.lab_date <= end_date)
+            query = query.filter(Lab.lab_date <= end_date)
         if lab_type is not None:
-            stmt = stmt.where(Lab.type == lab_type)
-        stmt = stmt.order_by(Lab.lab_date.desc())
-        return list((await self.db.execute(stmt)).scalars().all())
+            query = query.filter(Lab.type == lab_type)
+        return query.order_by(Lab.lab_date.desc()).all()
 
-    async def get_lab(self, lab_id: int) -> Lab:
+    def get_lab(self, lab_id: int) -> Lab:
         lab = (
-            await self.db.execute(
-                select(Lab).options(selectinload(Lab.markers)).where(Lab.id == lab_id)
-            )
-        ).scalar_one_or_none()
+            self.db.query(Lab)
+            .options(selectinload(Lab.markers))
+            .filter(Lab.id == lab_id)
+            .first()
+        )
         if lab is None:
             raise NotFoundError("Lab not found.")
         return lab
 
-    async def create_lab(
+    def create_lab(
         self,
         data: LabCreate,
         *,
@@ -108,17 +105,17 @@ class LabsService:
             notes=data.notes,
         )
         self.db.add(lab)
-        await self.db.flush()
+        self.db.flush()
 
         for marker_data in data.markers:
-            await self._insert_marker(lab.id, marker_data)
+            self._insert_marker(lab.id, marker_data)
 
-        await self.db.commit()
-        await self.db.refresh(lab)
+        self.db.commit()
+        self.db.refresh(lab)
         return lab
 
-    async def update_lab(self, lab_id: int, data: LabUpdate) -> Lab:
-        lab = await self.get_lab(lab_id)
+    def update_lab(self, lab_id: int, data: LabUpdate) -> Lab:
+        lab = self.get_lab(lab_id)
         patch = data.model_dump(exclude_unset=True)
         markers_patch = patch.pop("markers", None)
 
@@ -128,34 +125,37 @@ class LabsService:
         if markers_patch is not None:
             # Replace-all strategy: delete existing, re-insert.
             for existing in list(lab.markers):
-                await self.db.delete(existing)
-            await self.db.flush()
+                self.db.delete(existing)
+            self.db.flush()
             for marker_data in markers_patch:
                 if isinstance(marker_data, dict):
                     marker_data = LabMarkerCreate(**marker_data)
-                await self._insert_marker(lab.id, marker_data)
+                self._insert_marker(lab.id, marker_data)
 
         lab.updated_at = datetime.datetime.utcnow()
-        await self.db.commit()
-        await self.db.refresh(lab)
+        self.db.commit()
+        self.db.refresh(lab)
         return lab
 
-    async def delete_lab(self, lab_id: int) -> None:
-        lab = await self.get_lab(lab_id)
-        await self.db.delete(lab)
-        await self.db.commit()
+    def delete_lab(self, lab_id: int) -> None:
+        lab = self.get_lab(lab_id)
+        self.db.delete(lab)
+        self.db.commit()
 
-    async def _insert_marker(self, lab_id: int, data: LabMarkerCreate) -> None:
+    def _insert_marker(self, lab_id: int, data: LabMarkerCreate) -> None:
         catalog_id = data.catalog_id
         canonical_name = data.canonical_name
 
         if not catalog_id:
+            # Lazy import to avoid circular dependency.
             from app.services.lab_catalog import LabMarkerCatalogService
 
             if not canonical_name and not data.display_name:
-                raise ValidationError("Marker requires canonical_name or display_name.")
+                raise ValidationError(
+                    "Marker requires canonical_name or display_name."
+                )
             lookup_name = canonical_name or data.display_name
-            catalog_entry = await LabMarkerCatalogService(self.db).resolve_or_create(
+            catalog_entry = LabMarkerCatalogService(self.db).resolve_or_create(
                 name=lookup_name,
                 display_name=data.display_name,
                 units=[data.unit] if data.unit else [],
@@ -184,7 +184,7 @@ class LabsService:
             flag=flag,
         )
         self.db.add(marker)
-        await self.db.flush()
+        self.db.flush()
 
     @staticmethod
     def compute_flag(
@@ -194,8 +194,20 @@ class LabsService:
         ref_high: Optional[float],
         ref_text: Optional[str],
     ) -> str:
-        """Compute the clinical flag for a marker reading."""
+        """Compute the clinical flag for a marker reading.
+
+        Decision order:
+        1. No numeric value → "unknown" (with abnormal heuristic when both
+           value_text and ref_text contain abnormal-leaning language).
+        2. Numeric refs win. If only ref_text is present and encodes a clean
+           unidirectional inequality (e.g. "<5.18", ">60"), derive the bound
+           from it.
+        3. Both ref bounds present → low / normal / high.
+        4. Only one ref bound → compare.
+        5. Default → "unknown".
+        """
         if value is None:
+            # Text-only row: check ref_text for "abnormal-like" language.
             if ref_text and value_text:
                 if _ABNORMAL_REF_RE.search(ref_text) or _ABNORMAL_REF_RE.search(
                     value_text
@@ -203,6 +215,7 @@ class LabsService:
                     return "abnormal"
             return "unknown"
 
+        # Fall back to parsing ref_text when no numeric bounds were captured.
         if ref_low is None and ref_high is None and ref_text:
             ref_low, ref_high = _parse_unidirectional_ref(ref_text)
 

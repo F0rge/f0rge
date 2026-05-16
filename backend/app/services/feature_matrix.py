@@ -4,9 +4,8 @@ import datetime
 from collections import Counter, defaultdict
 from typing import Optional
 
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy import func
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
@@ -171,8 +170,8 @@ def _aggregate_weather(
     }
 
 
-async def build_feature_matrix(
-    db: AsyncSession,
+def build_feature_matrix(
+    db: Session,
     start_date: Optional[datetime.date],
     end_date: Optional[datetime.date],
 ) -> tuple[list[dict], list[str]]:
@@ -184,7 +183,7 @@ async def build_feature_matrix(
     if end_date is None:
         end_date = datetime.date.today()
     if start_date is None:
-        earliest = (await db.execute(select(func.min(Entry.date)))).scalar()
+        earliest = db.query(func.min(Entry.date)).scalar()
         start_date = earliest if earliest is not None else end_date
 
     # Clamp: start must not exceed end
@@ -192,45 +191,28 @@ async def build_feature_matrix(
         start_date = end_date
 
     entries_q = (
-        (
-            await db.execute(
-                select(Entry)
-                .where(Entry.date.between(start_date, end_date))
-                .options(
-                    selectinload(Entry.photos)
-                    .selectinload(Photo.analysis)
-                    .selectinload(PhotoAnalysis.ingredients)
-                )
-            )
+        db.query(Entry)
+        .filter(Entry.date.between(start_date, end_date))
+        .options(
+            selectinload(Entry.photos)
+            .selectinload(Photo.analysis)
+            .selectinload(PhotoAnalysis.ingredients)
         )
-        .scalars()
         .all()
     )
     entry_by_date: dict[datetime.date, Entry] = {e.date: e for e in entries_q}
 
     hm_by_date: dict[datetime.date, HealthMetric] = {
         h.date: h
-        for h in (
-            await db.execute(
-                select(HealthMetric).where(
-                    HealthMetric.date.between(start_date, end_date)
-                )
-            )
-        )
-        .scalars()
+        for h in db.query(HealthMetric)
+        .filter(HealthMetric.date.between(start_date, end_date))
         .all()
     }
 
     weather_start = start_date - datetime.timedelta(days=1)
     all_weather = (
-        (
-            await db.execute(
-                select(WeatherReading).where(
-                    WeatherReading.date.between(weather_start, end_date)
-                )
-            )
-        )
-        .scalars()
+        db.query(WeatherReading)
+        .filter(WeatherReading.date.between(weather_start, end_date))
         .all()
     )
     weather_by_date: dict[datetime.date, list[WeatherReading]] = defaultdict(list)
@@ -238,46 +220,29 @@ async def build_feature_matrix(
         weather_by_date[r.date].append(r)
 
     supp_catalog = (
-        (
-            await db.execute(
-                select(SupplementCatalogItem)
-                .where(SupplementCatalogItem.first_used_at.isnot(None))
-                .order_by(SupplementCatalogItem.key)
-            )
-        )
-        .scalars()
+        db.query(SupplementCatalogItem)
+        .filter(SupplementCatalogItem.first_used_at.isnot(None))
+        .order_by(SupplementCatalogItem.key)
         .all()
     )
     supp_keys = [s.key for s in supp_catalog]
 
     sym_catalog = (
-        (
-            await db.execute(
-                select(SymptomCatalogItem)
-                .where(
-                    SymptomCatalogItem.first_used_at.isnot(None),
-                    SymptomCatalogItem.archived.is_(False),
-                )
-                .order_by(SymptomCatalogItem.key)
-            )
-        )
-        .scalars()
+        db.query(SymptomCatalogItem)
+        .filter(SymptomCatalogItem.first_used_at.isnot(None))
+        .filter(SymptomCatalogItem.archived.is_(False))
+        .order_by(SymptomCatalogItem.key)
         .all()
     )
     sym_keys = [s.key for s in sym_catalog]
 
     all_treatments = (
-        (
-            await db.execute(
-                select(Treatment)
-                .where(
-                    Treatment.start_date <= end_date,
-                    (Treatment.end_date.is_(None)) | (Treatment.end_date >= start_date),
-                )
-                .order_by(Treatment.normalized_name)
-            )
+        db.query(Treatment)
+        .filter(
+            Treatment.start_date <= end_date,
+            (Treatment.end_date.is_(None)) | (Treatment.end_date >= start_date),
         )
-        .scalars()
+        .order_by(Treatment.normalized_name)
         .all()
     )
     tx_names = sorted({t.normalized_name for t in all_treatments})
@@ -306,7 +271,7 @@ async def build_feature_matrix(
         row["date"] = current.isoformat()
 
         if entry is not None:
-            dietary = _compute_dietary_loads(list(entry.photos))
+            dietary = _compute_dietary_loads(entry.photos)
             taken_keys: set[str] = {
                 s.strip() for s in (entry.supplements or "").split(",") if s.strip()
             }
@@ -337,7 +302,7 @@ async def build_feature_matrix(
 
             row_symptoms = getattr(entry, "symptoms_json", {}) or {}
             for k in sym_keys:
-                row[f"sym_{k}"] = row_symptoms.get(k)
+                row[f"sym_{k}"] = row_symptoms.get(k)  # int or None
 
         if hm is not None:
             row.update(

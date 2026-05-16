@@ -44,25 +44,25 @@ async def upload_photo(
 
 
 @router.get("/photos/{photo_id}/file")
-async def serve_photo(
+def serve_photo(
     photo_id: int,
     service: PhotoService = Depends(get_photo_service),
 ) -> FileResponse:
-    return FileResponse(await service.get_file_path(photo_id), media_type="image/jpeg")
+    return FileResponse(service.get_file_path(photo_id), media_type="image/jpeg")
 
 
 @router.delete("/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_photo(
+def remove_photo(
     photo_id: int,
     service: PhotoService = Depends(get_photo_service),
 ) -> None:
-    await service.delete(photo_id)
+    service.delete(photo_id)
 
 
 @router.patch("/photos/{photo_id}", response_model=PhotoResponse)
-async def update_photo(
+def update_photo(
     photo_id: int,
     data: PhotoMealTimeUpdate,
     service: PhotoService = Depends(get_photo_service),
 ) -> Photo:
-    return await service.update_meal_time(photo_id, data.meal_time)
+    return service.update_meal_time(photo_id, data.meal_time)

@@ -24,9 +24,7 @@ class Photo(Base):
         default=datetime.datetime.utcnow,
     )
 
-    entry: Mapped[Entry] = relationship(
-        "Entry", back_populates="photos", lazy="selectin"
-    )
+    entry: Mapped[Entry] = relationship("Entry", back_populates="photos")
     # cascade="all, delete-orphan" is required: PhotoAnalysis.photo_id is
     # NOT NULL, so without an ORM-level cascade SQLAlchemy tries to NULL
     # the FK on photo delete and the commit blows up with an IntegrityError.
@@ -36,5 +34,4 @@ class Photo(Base):
         uselist=False,
         cascade="all, delete-orphan",
         single_parent=True,
-        lazy="selectin",
     )

@@ -10,14 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.database import async_session_maker
-from app.exceptions import (
-    ConflictError,
-    ExternalServiceError,
-    NotFoundError,
-    UnauthorizedError,
-    ValidationError,
-)
+from app.database import Base, engine
+from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.routers import (
     auth,
     enriched,
@@ -63,6 +57,92 @@ DEFAULT_SYMPTOMS = [
 ]
 
 
+def _run_migrations() -> None:
+    """Add any missing columns to existing tables."""
+    import sqlite3
+    from app.config import settings
+
+    db_path = settings.database_url.replace("sqlite:///", "")
+    if not db_path or "sqlite" not in settings.database_url:
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        # Entries table migrations
+        existing = {
+            row[1] for row in conn.execute("PRAGMA table_info(entries)").fetchall()
+        }
+        if "stool_type" not in existing:
+            conn.execute("ALTER TABLE entries ADD COLUMN stool_type VARCHAR")
+        if "schema_version" not in existing:
+            # Existing rows are v1 (coarse stool + no entry_time).
+            conn.execute(
+                "ALTER TABLE entries ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1"
+            )
+        if "entry_time" not in existing:
+            conn.execute("ALTER TABLE entries ADD COLUMN entry_time DATETIME")
+        if "period_of_day" not in existing:
+            conn.execute("ALTER TABLE entries ADD COLUMN period_of_day VARCHAR")
+        if "stool_status" not in existing:
+            conn.execute("ALTER TABLE entries ADD COLUMN stool_status VARCHAR")
+        if "bristol_type" not in existing:
+            conn.execute("ALTER TABLE entries ADD COLUMN bristol_type INTEGER")
+        if "hot_shower" not in existing:
+            conn.execute(
+                "ALTER TABLE entries ADD COLUMN hot_shower BOOLEAN NOT NULL DEFAULT 0"
+            )
+        if "alcohol_units" not in existing:
+            conn.execute("ALTER TABLE entries ADD COLUMN alcohol_units INTEGER")
+        if "caffeine_servings" not in existing:
+            conn.execute("ALTER TABLE entries ADD COLUMN caffeine_servings INTEGER")
+        if "symptoms_json" not in existing:
+            conn.execute(
+                "ALTER TABLE entries ADD COLUMN symptoms_json TEXT NOT NULL DEFAULT '{}'"
+            )
+
+        # Photos table migrations
+        photo_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(photos)").fetchall()
+        }
+        if "meal_time" not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN meal_time DATETIME")
+            # Backfill: existing photos get created_at as their meal_time.
+            conn.execute(
+                "UPDATE photos SET meal_time = created_at WHERE meal_time IS NULL"
+            )
+
+        # Health metrics table migrations
+        try:
+            hm_cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(health_metrics)").fetchall()
+            }
+            for col in [
+                "sleep_deep_min",
+                "sleep_rem_min",
+                "sleep_core_min",
+                "sleep_awake_min",
+                "sleep_efficiency",
+                "sleep_start",
+                "sleep_end",
+            ]:
+                if col not in hm_cols:
+                    col_type = (
+                        "VARCHAR"
+                        if col.startswith("sleep_s") or col.startswith("sleep_e")
+                        else "FLOAT"
+                    )
+                    conn.execute(
+                        f"ALTER TABLE health_metrics ADD COLUMN {col} {col_type}"
+                    )
+        except Exception:
+            pass  # Table may not exist yet
+
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass  # Table may not exist yet, create_all will handle it
+
+
 def _warn_misconfigured_features() -> None:
     """Log a loud warning when a feature flag is on but its required
     credentials are missing. Catches deployments where the env var wasn't
@@ -80,45 +160,39 @@ def _warn_misconfigured_features() -> None:
         )
 
 
-async def _seed_supplement_catalog() -> None:
+def _seed_supplement_catalog() -> None:
     """Seed the supplement_catalog table with the default list on first boot."""
-    from sqlalchemy import func, select
+    from sqlalchemy.orm import Session
 
     from app.models.supplement_catalog import SupplementCatalogItem
 
-    async with async_session_maker() as session:
-        existing_count = (
-            await session.execute(
-                select(func.count()).select_from(SupplementCatalogItem)
-            )
-        ).scalar_one()
+    with Session(engine) as session:
+        existing_count = session.query(SupplementCatalogItem).count()
         if existing_count > 0:
             return
         for sort_order, (key, label) in enumerate(DEFAULT_SUPPLEMENTS):
             session.add(
                 SupplementCatalogItem(key=key, label=label, sort_order=sort_order)
             )
-        await session.commit()
+        session.commit()
 
 
-async def _seed_symptom_catalog() -> None:
+def _seed_symptom_catalog() -> None:
     """Seed the symptom_catalog table with the default list on first boot."""
-    from sqlalchemy import func, select
+    from sqlalchemy.orm import Session
 
     from app.models.symptom_catalog import SymptomCatalogItem
 
-    async with async_session_maker() as session:
-        existing_count = (
-            await session.execute(select(func.count()).select_from(SymptomCatalogItem))
-        ).scalar_one()
+    with Session(engine) as session:
+        existing_count = session.query(SymptomCatalogItem).count()
         if existing_count > 0:
             return
         for sort_order, (key, label) in enumerate(DEFAULT_SYMPTOMS):
             session.add(SymptomCatalogItem(key=key, label=label, sort_order=sort_order))
-        await session.commit()
+        session.commit()
 
 
-async def _seed_dietary_db_if_empty() -> None:
+def _seed_dietary_db_if_empty() -> None:
     """Seed the dietary reference tables from bundled JSON on first boot.
 
     Idempotent: if dietary_ingredients already has rows, skip silently. This
@@ -129,14 +203,12 @@ async def _seed_dietary_db_if_empty() -> None:
     builds the image without the scripts/ COPY), log a warning and continue.
     The feature degrades to '?' badges rather than crashing the app.
     """
-    from sqlalchemy import func, select
+    from sqlalchemy.orm import Session
 
     from app.models.dietary_ingredient import DietaryIngredient
 
-    async with async_session_maker() as session:
-        existing = (
-            await session.execute(select(func.count()).select_from(DietaryIngredient))
-        ).scalar_one()
+    with Session(engine) as session:
+        existing = session.query(DietaryIngredient).count()
 
     if existing > 0:
         logger.info(
@@ -152,13 +224,9 @@ async def _seed_dietary_db_if_empty() -> None:
     try:
         from scripts.seed_dietary_db import main as seed_main
 
-        await asyncio.to_thread(seed_main)
-        async with async_session_maker() as session:
-            count = (
-                await session.execute(
-                    select(func.count()).select_from(DietaryIngredient)
-                )
-            ).scalar_one()
+        seed_main()
+        with Session(engine) as session:
+            count = session.query(DietaryIngredient).count()
         logger.info("Dietary seed complete: %d ingredients loaded", count)
     except Exception:
         logger.exception(
@@ -170,9 +238,11 @@ async def _seed_dietary_db_if_empty() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _weather_task
-    await _seed_supplement_catalog()
-    await _seed_symptom_catalog()
-    await _seed_dietary_db_if_empty()
+    Base.metadata.create_all(bind=engine)
+    _run_migrations()
+    _seed_supplement_catalog()
+    _seed_symptom_catalog()
+    _seed_dietary_db_if_empty()
     _warn_misconfigured_features()
     if settings.weather_fetch_enabled and settings.openweathermap_api_key:
         _weather_task = asyncio.create_task(weather_background_loop())
@@ -213,22 +283,6 @@ async def _handle_conflict(_: Request, exc: ConflictError) -> JSONResponse:
     )
 
 
-@app.exception_handler(UnauthorizedError)
-async def _handle_unauthorized(_: Request, exc: UnauthorizedError) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": exc.detail}
-    )
-
-
-@app.exception_handler(ExternalServiceError)
-async def _handle_external_service(
-    _: Request, exc: ExternalServiceError
-) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_502_BAD_GATEWAY, content={"detail": exc.detail}
-    )
-
-
 app.include_router(auth.router)
 app.include_router(entries.router)
 app.include_router(photos.router)
@@ -246,5 +300,5 @@ app.include_router(lab_markers.router)
 
 
 @app.get("/api/v1/health")
-async def health_check() -> dict[str, str]:
+def health_check() -> dict[str, str]:
     return {"status": "ok"}

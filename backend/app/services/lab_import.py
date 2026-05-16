@@ -4,8 +4,7 @@ import hashlib
 from typing import Optional
 
 from fastapi import UploadFile
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.exceptions import ValidationError
 from app.models.lab import Lab
@@ -21,10 +20,8 @@ def _sha256_source_path(file_bytes: bytes) -> str:
     return "upload:" + hashlib.sha256(file_bytes).hexdigest()
 
 
-async def _build_catalog_hints(
-    catalog_service: LabMarkerCatalogService,
-) -> list[CatalogHint]:
-    items = await catalog_service.search(None, limit=10000)
+def _build_catalog_hints(catalog_service: LabMarkerCatalogService) -> list[CatalogHint]:
+    items = catalog_service.search(None, limit=10000)
     return [
         CatalogHint(
             canonical=item.canonical_name,
@@ -39,7 +36,7 @@ async def _build_catalog_hints(
 class LabImportService:
     def __init__(
         self,
-        db: AsyncSession,
+        db: Session,
         labs_service: LabsService,
         catalog_service: LabMarkerCatalogService,
         extraction_service: LabExtractionService,
@@ -51,14 +48,16 @@ class LabImportService:
         self.extraction_service = extraction_service
         self.attachment_storage = attachment_storage
 
-    async def _existing_or_none(
-        self, source_path: Optional[str], force: bool
-    ) -> Optional[Lab]:
+    def _existing_or_none(self, source_path: Optional[str], force: bool) -> Optional[Lab]:
+        """Return the existing Lab for this source_path when we'd skip it.
+
+        Lets each import_from_* method short-circuit BEFORE calling the LLM,
+        so re-runs of the vault import don't burn extraction credits on rows
+        that are already persisted.
+        """
         if force or source_path is None:
             return None
-        return (
-            await self.db.execute(select(Lab).where(Lab.source_path == source_path))
-        ).scalar_one_or_none()
+        return self.db.query(Lab).filter(Lab.source_path == source_path).first()
 
     async def import_from_text(
         self,
@@ -67,17 +66,18 @@ class LabImportService:
         force: bool = False,
         filename: Optional[str] = None,
     ) -> Lab:
-        existing = await self._existing_or_none(source_path, force)
+        existing = self._existing_or_none(source_path, force)
         if existing is not None:
             return existing
-        hints = await _build_catalog_hints(self.catalog_service)
+        hints = _build_catalog_hints(self.catalog_service)
+        # Prefer caller-supplied filename; otherwise derive from source_path.
         hint_name = filename or (
             source_path.rsplit("/", 1)[-1] if source_path else None
         )
         result = await self.extraction_service.extract_text(
             document_text, hints, filename=hint_name
         )
-        return await self._persist(
+        return self._persist(
             result=result,
             source_kind="text",
             source_path=source_path,
@@ -94,17 +94,17 @@ class LabImportService:
         force: bool = False,
     ) -> Lab:
         computed_source_path = source_path or _sha256_source_path(pdf_bytes)
-        existing = await self._existing_or_none(computed_source_path, force)
+        existing = self._existing_or_none(computed_source_path, force)
         if existing is not None:
             return existing
-        hints = await _build_catalog_hints(self.catalog_service)
+        hints = _build_catalog_hints(self.catalog_service)
         result = await self.extraction_service.extract_pdf(
             pdf_bytes, hints, filename=filename
         )
         attachment_path = self.attachment_storage.save(
             pdf_bytes, filename, "application/pdf"
         )
-        return await self._persist(
+        return self._persist(
             result=result,
             source_kind="pdf",
             source_path=computed_source_path,
@@ -122,15 +122,15 @@ class LabImportService:
         force: bool = False,
     ) -> Lab:
         computed_source_path = source_path or _sha256_source_path(image_bytes)
-        existing = await self._existing_or_none(computed_source_path, force)
+        existing = self._existing_or_none(computed_source_path, force)
         if existing is not None:
             return existing
-        hints = await _build_catalog_hints(self.catalog_service)
+        hints = _build_catalog_hints(self.catalog_service)
         result = await self.extraction_service.extract_image(
             image_bytes, mime_type, hints, filename=filename
         )
         attachment_path = self.attachment_storage.save(image_bytes, filename, mime_type)
-        return await self._persist(
+        return self._persist(
             result=result,
             source_kind="image",
             source_path=computed_source_path,
@@ -160,10 +160,10 @@ class LabImportService:
             "Supported: application/pdf, image/jpeg, image/png, image/webp."
         )
 
-    async def _persist(
+    def _persist(
         self,
         *,
-        result: object,
+        result: object,  # ExtractionResult
         source_kind: str,
         source_path: Optional[str],
         raw_text: Optional[str],
@@ -171,21 +171,22 @@ class LabImportService:
         force: bool,
     ) -> Lab:
         """Resolve catalog entries, handle idempotency, and call LabsService.create_lab."""
-        from app.schemas.lab_marker import ExtractionResult
+        from app.schemas.lab_marker import (
+            ExtractionResult,
+        )  # local import avoids circular
 
         assert isinstance(result, ExtractionResult)
         payload = result.payload
         lab_data = payload.lab
 
+        # Idempotency: if source_path already exists, skip or replace.
         if source_path is not None:
-            existing = (
-                await self.db.execute(select(Lab).where(Lab.source_path == source_path))
-            ).scalar_one_or_none()
+            existing = self.db.query(Lab).filter(Lab.source_path == source_path).first()
             if existing is not None:
                 if not force:
                     return existing
-                await self.db.delete(existing)
-                await self.db.flush()
+                self.db.delete(existing)
+                self.db.flush()
 
         review_status = (
             "needs_review"
@@ -193,11 +194,12 @@ class LabImportService:
             else "confirmed"
         )
 
+        # Resolve catalog entries for each extracted marker.
         marker_creates: list[LabMarkerCreate] = []
         for em in payload.markers:
             canonical_name = em.canonical_match or em.proposed_canonical
-            assert canonical_name is not None
-            catalog_item = await self.catalog_service.resolve_or_create(
+            assert canonical_name is not None  # validated by schema
+            catalog_item = self.catalog_service.resolve_or_create(
                 name=canonical_name,
                 display_name=em.display_name,
                 units=[em.unit] if em.unit else None,
@@ -229,7 +231,7 @@ class LabImportService:
             markers=marker_creates,
         )
 
-        return await self.labs_service.create_lab(
+        return self.labs_service.create_lab(
             create_data,
             extraction_meta={
                 "extraction_model": result.model,

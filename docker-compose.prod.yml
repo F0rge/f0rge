@@ -1,54 +1,4 @@
 services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    container_name: health-tracker-postgres
-    environment:
-      - POSTGRES_USER=health
-      - POSTGRES_DB=health
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    command:
-      - postgres
-      - -c
-      - shared_buffers=128MB
-      - -c
-      - effective_cache_size=512MB
-      - -c
-      - work_mem=8MB
-      - -c
-      - max_connections=20
-    volumes:
-      - health-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    mem_limit: 768m
-    restart: unless-stopped
-    networks:
-      - health-tracker-network
-
-  postgres-backup:
-    image: postgres:16-alpine
-    container_name: health-tracker-postgres-backup
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      - PGHOST=postgres
-      - PGUSER=health
-      - PGPASSWORD=${POSTGRES_PASSWORD}
-      - PGDATABASE=health
-    volumes:
-      - /mnt/nvme/home/leo/vaults/brain/Health-Backups/:/backups/
-      - ./backend/scripts/pg_backup.sh:/usr/local/bin/pg_backup.sh:ro
-    command: ["sh", "-c", "while true; do /usr/local/bin/pg_backup.sh; sleep 604800; done"]
-    mem_limit: 128m
-    restart: unless-stopped
-    networks:
-      - health-tracker-network
-
   backend:
     build:
       context: ./backend
@@ -57,18 +7,15 @@ services:
     user: "1000:1000"
     ports:
       - "8004:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
     env_file:
       - .env
     environment:
       - VAULT_PATH=/vault
-      - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
-      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
+      - DATABASE_URL=sqlite:///data/health.db
       - CORS_ORIGINS=["https://health.leo-figueiredo.com","http://localhost:3004"]
       - PHOTO_DIR=/app/photos
     volumes:
+      - health-data:/app/data
       - health-photos:/app/photos
       - health-lab-attachments:/app/lab_attachments
       - /mnt/nvme/home/leo/vaults/brain:/vault:rw
@@ -92,7 +39,7 @@ services:
       - health-tracker-network
 
 volumes:
-  health-postgres-data:
+  health-data:
   health-photos:
   health-lab-attachments:
 

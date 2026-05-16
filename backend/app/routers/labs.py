@@ -31,37 +31,37 @@ router = APIRouter(
 
 
 @router.get("", response_model=List[LabResponse])
-async def list_labs(
+def list_labs(
     start_date: Optional[datetime.date] = Query(None),
     end_date: Optional[datetime.date] = Query(None),
     lab_type: Optional[str] = Query(None, alias="type"),
     service: LabsService = Depends(get_labs_service),
 ):
-    return await service.list_labs(start_date, end_date, lab_type)
+    return service.list_labs(start_date, end_date, lab_type)
 
 
 @router.get("/{lab_id}", response_model=LabResponse)
-async def get_lab(lab_id: int, service: LabsService = Depends(get_labs_service)):
-    return await service.get_lab(lab_id)
+def get_lab(lab_id: int, service: LabsService = Depends(get_labs_service)):
+    return service.get_lab(lab_id)
 
 
 @router.post("", response_model=LabResponse, status_code=status.HTTP_201_CREATED)
-async def create_lab(body: LabCreate, service: LabsService = Depends(get_labs_service)):
-    return await service.create_lab(body)
+def create_lab(body: LabCreate, service: LabsService = Depends(get_labs_service)):
+    return service.create_lab(body)
 
 
 @router.put("/{lab_id}", response_model=LabResponse)
-async def update_lab(
+def update_lab(
     lab_id: int,
     body: LabUpdate,
     service: LabsService = Depends(get_labs_service),
 ):
-    return await service.update_lab(lab_id, body)
+    return service.update_lab(lab_id, body)
 
 
 @router.delete("/{lab_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_lab(lab_id: int, service: LabsService = Depends(get_labs_service)):
-    await service.delete_lab(lab_id)
+def delete_lab(lab_id: int, service: LabsService = Depends(get_labs_service)):
+    service.delete_lab(lab_id)
 
 
 @router.post("/extract", response_model=ExtractionResult)

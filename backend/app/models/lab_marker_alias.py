@@ -19,5 +19,5 @@ class LabMarkerAlias(Base):
     language: Mapped[str | None] = mapped_column(String, nullable=True)
 
     catalog: Mapped[LabMarkerCatalog] = relationship(
-        "LabMarkerCatalog", back_populates="aliases", lazy="selectin"
+        "LabMarkerCatalog", back_populates="aliases"
     )

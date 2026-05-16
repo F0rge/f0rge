@@ -10,10 +10,14 @@ screen.
 from __future__ import annotations
 
 import datetime
+from collections.abc import Generator
 from types import SimpleNamespace
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.database import Base
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
@@ -433,16 +437,21 @@ def test_compute_dietary_tags_moderate_aggregates_across_analyses() -> None:
 
 
 # --- end-to-end via _render_markdown -----------------------------------
-#
-# _render_markdown no longer touches the DB — the async caller pre-fetches all
-# data and passes it as plain objects. The fixture builds Entry/Photo objects
-# in-memory (via async_db.add + commit so auto-IDs populate for FK targets)
-# and constructs the analyses dict that the renderer consumes.
 
 
-async def _seed_entry_with_mixed_visibility(
-    db: AsyncSession,
-) -> tuple[Entry, list[Photo], dict[int, PhotoAnalysis]]:
+@pytest.fixture
+def db() -> Generator[Session, None, None]:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def _seed_entry_with_mixed_visibility(db: Session) -> tuple[Entry, list[Photo]]:
     entry = Entry(
         date=datetime.date(2026, 5, 15),
         overall=2,
@@ -458,8 +467,7 @@ async def _seed_entry_with_mixed_visibility(
         hot_shower=False,
     )
     db.add(entry)
-    await db.commit()
-    await db.refresh(entry)
+    db.commit()
 
     photo = Photo(
         entry_id=entry.id,
@@ -468,8 +476,7 @@ async def _seed_entry_with_mixed_visibility(
         created_at=datetime.datetime.utcnow(),
     )
     db.add(photo)
-    await db.commit()
-    await db.refresh(photo)
+    db.commit()
 
     analysis = PhotoAnalysis(
         photo_id=photo.id,
@@ -479,78 +486,58 @@ async def _seed_entry_with_mixed_visibility(
         model_id="google/gemini-3-flash-preview",
     )
     db.add(analysis)
-    await db.commit()
-    await db.refresh(analysis)
+    db.commit()
 
-    ingredients = [
-        # Visible — should appear in markdown.
-        PhotoIngredient(
-            analysis_id=analysis.id,
-            name="spaghetti",
-            visible=True,
-            confidence=0.95,
-            user_edited=False,
-            contains_gluten=True,
-        ),
-        PhotoIngredient(
-            analysis_id=analysis.id,
-            name="egg",
-            visible=True,
-            confidence=0.9,
-            user_edited=False,
-            histamine_score=1,
-        ),
-        # Invisible — must NOT appear in markdown and must NOT affect tags.
-        PhotoIngredient(
-            analysis_id=analysis.id,
-            name="aged-pecorino-inferred",
-            visible=False,
-            confidence=0.4,
-            user_edited=False,
-            histamine_score=3,
-            contains_dairy=True,
-            fodmap_lactose="high",
-        ),
-        PhotoIngredient(
-            analysis_id=analysis.id,
-            name="garlic-inferred",
-            visible=False,
-            confidence=0.3,
-            user_edited=False,
-            fodmap_oligos="high",
-        ),
-    ]
-    for ing in ingredients:
-        db.add(ing)
-    await db.commit()
-    # Bind ingredients to the analysis collection so _render_markdown can iterate.
-    analysis.ingredients = ingredients
-    return entry, [photo], {photo.id: analysis}
-
-
-def _render(
-    entry: Entry,
-    photos: list[Photo],
-    analyses: dict[int, PhotoAnalysis],
-) -> str:
-    """Test wrapper supplying defaults for the optional context args."""
-    return _render_markdown(
-        entry=entry,
-        photos=photos,
-        analyses=analyses,
-        active_sym_labels={},
-        active_treatments=[],
-        health=None,
-        weather=None,
+    db.add_all(
+        [
+            # Visible — should appear in markdown.
+            PhotoIngredient(
+                analysis_id=analysis.id,
+                name="spaghetti",
+                visible=True,
+                confidence=0.95,
+                user_edited=False,
+                contains_gluten=True,
+            ),
+            PhotoIngredient(
+                analysis_id=analysis.id,
+                name="egg",
+                visible=True,
+                confidence=0.9,
+                user_edited=False,
+                histamine_score=1,
+            ),
+            # Invisible — must NOT appear in markdown and must NOT affect tags.
+            PhotoIngredient(
+                analysis_id=analysis.id,
+                name="aged-pecorino-inferred",
+                visible=False,
+                confidence=0.4,
+                user_edited=False,
+                histamine_score=3,
+                contains_dairy=True,
+                fodmap_lactose="high",
+            ),
+            PhotoIngredient(
+                analysis_id=analysis.id,
+                name="garlic-inferred",
+                visible=False,
+                confidence=0.3,
+                user_edited=False,
+                fodmap_oligos="high",
+            ),
+        ]
     )
+    db.commit()
+    return entry, [photo]
 
 
-async def test_render_markdown_excludes_invisible_from_inline_ingredients(
-    async_db: AsyncSession,
+def test_render_markdown_excludes_invisible_from_inline_ingredients(
+    db: Session,
 ) -> None:
     """The 'Ingredients: ...' line must list only visible items."""
-    entry, photos, analyses = await _seed_entry_with_mixed_visibility(async_db)
-    md = _render(entry, photos, analyses)
+    entry, photos = _seed_entry_with_mixed_visibility(db)
+    md = _render_markdown(db, entry, photos)
 
     ing_lines = [ln for ln in md.splitlines() if ln.startswith("Ingredients:")]
     assert len(ing_lines) == 1
@@ -563,12 +550,12 @@ async def test_render_markdown_excludes_invisible_from_inline_ingredients(
     assert "garlic-inferred" not in line
 
 
-async def test_render_markdown_excludes_invisible_from_dietary_flags(
-    async_db: AsyncSession,
+def test_render_markdown_excludes_invisible_from_dietary_flags(
+    db: Session,
 ) -> None:
     """Per-photo 'Dietary flags' line must ignore invisible items."""
-    entry, photos, analyses = await _seed_entry_with_mixed_visibility(async_db)
-    md = _render(entry, photos, analyses)
+    entry, photos = _seed_entry_with_mixed_visibility(db)
+    md = _render_markdown(db, entry, photos)
 
     flags_lines = [ln for ln in md.splitlines() if ln.startswith("Dietary flags:")]
     assert len(flags_lines) == 1
@@ -585,12 +572,12 @@ async def test_render_markdown_excludes_invisible_from_dietary_flags(
     assert "Gluten" in flags
 
 
-async def test_render_markdown_excludes_invisible_from_frontmatter_tags(
-    async_db: AsyncSession,
+def test_render_markdown_excludes_invisible_from_frontmatter_tags(
+    db: Session,
 ) -> None:
     """Frontmatter aggregates must reflect only visible ingredients."""
-    entry, photos, analyses = await _seed_entry_with_mixed_visibility(async_db)
-    md = _render(entry, photos, analyses)
+    entry, photos = _seed_entry_with_mixed_visibility(db)
+    md = _render_markdown(db, entry, photos)
 
     # max-histamine is 1 (from visible egg), not 3 (from invisible pecorino).
     assert "max-histamine: 1" in md
@@ -605,8 +592,8 @@ async def test_render_markdown_excludes_invisible_from_frontmatter_tags(
     assert "fodmap-high-oligos" not in md
 
 
-async def test_render_markdown_keeps_photo_embed_and_dish_when_all_invisible(
-    async_db: AsyncSession,
+def test_render_markdown_keeps_photo_embed_and_dish_when_all_invisible(
+    db: Session,
 ) -> None:
     """If every ingredient is invisible (rare edge case), the photo embed
     and dish header must still render — only the 'Ingredients:' line should
@@ -625,17 +612,15 @@ async def test_render_markdown_keeps_photo_embed_and_dish_when_all_invisible(
         sick=False,
         hot_shower=False,
     )
-    async_db.add(entry)
-    await async_db.commit()
-    await async_db.refresh(entry)
+    db.add(entry)
+    db.commit()
     photo = Photo(
         entry_id=entry.id,
         filename="2026-05-16_photo-1.jpg",
         created_at=datetime.datetime.utcnow(),
     )
-    async_db.add(photo)
-    await async_db.commit()
-    await async_db.refresh(photo)
+    db.add(photo)
+    db.commit()
     analysis = PhotoAnalysis(
         photo_id=photo.id,
         status="confirmed",
@@ -643,21 +628,20 @@ async def test_render_markdown_keeps_photo_embed_and_dish_when_all_invisible(
         dish_confidence=0.5,
         model_id="test-model",
     )
-    async_db.add(analysis)
-    await async_db.commit()
-    await async_db.refresh(analysis)
-    ing = PhotoIngredient(
-        analysis_id=analysis.id,
-        name="inferred-broth",
-        visible=False,
-        confidence=0.3,
-        user_edited=False,
+    db.add(analysis)
+    db.commit()
+    db.add(
+        PhotoIngredient(
+            analysis_id=analysis.id,
+            name="inferred-broth",
+            visible=False,
+            confidence=0.3,
+            user_edited=False,
+        )
     )
-    async_db.add(ing)
-    await async_db.commit()
-    analysis.ingredients = [ing]
+    db.commit()
 
-    md = _render(entry, [photo], {photo.id: analysis})
+    md = _render_markdown(db, entry, [photo])
     # Photo embed present.
     assert "![[attachments/2026-05-16_photo-1.jpg]]" in md
     # Dish header present.

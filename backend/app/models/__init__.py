@@ -9,7 +9,6 @@ from app.models.dietary_ingredient import DietaryIngredient
 from app.models.ingredient_alias import IngredientAlias
 from app.models.session import AuthSession
 from app.models.supplement_catalog import SupplementCatalogItem
-from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
 from app.models.lab import Lab
@@ -28,7 +27,6 @@ __all__ = [
     "WeatherReading",
     "HealthMetric",
     "SupplementCatalogItem",
-    "SymptomCatalogItem",
     "Treatment",
     "Lab",
     "LabMarkerCatalog",

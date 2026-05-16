@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import datetime
+from collections.abc import Generator
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.database import Base
 from app.models.entry import Entry
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.services.feature_matrix import (
@@ -14,8 +18,20 @@ from app.services.feature_matrix import (
 )
 
 
-async def _add_entry(
-    db: AsyncSession,
+@pytest.fixture
+def db() -> Generator[Session, None, None]:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def _add_entry(
+    db: Session,
     date: datetime.date,
     symptoms_json: dict | None = None,
 ) -> Entry:
@@ -36,13 +52,13 @@ async def _add_entry(
         symptoms_json=symptoms_json if symptoms_json is not None else {},
     )
     db.add(entry)
-    await db.commit()
-    await db.refresh(entry)
+    db.commit()
+    db.refresh(entry)
     return entry
 
 
-async def _add_sym_item(
-    db: AsyncSession,
+def _add_sym_item(
+    db: Session,
     key: str,
     label: str,
     archived: bool = False,
@@ -56,8 +72,8 @@ async def _add_sym_item(
         first_used_at=first_used_at,
     )
     db.add(item)
-    await db.commit()
-    await db.refresh(item)
+    db.commit()
+    db.refresh(item)
     return item
 
 
@@ -70,8 +86,8 @@ _NOW = datetime.datetime(2026, 5, 15, 12, 0, 0)
 # ---------------------------------------------------------------------------
 
 
-async def test_no_entries_no_sym_columns(async_db: AsyncSession) -> None:
-    rows, columns = await build_feature_matrix(async_db, _DATE, _DATE)
+def test_no_entries_no_sym_columns(db: Session) -> None:
+    rows, columns = build_feature_matrix(db, _DATE, _DATE)
     sym_cols = [c for c in columns if c.startswith("sym_")]
     assert sym_cols == []
 
@@ -81,11 +97,11 @@ async def test_no_entries_no_sym_columns(async_db: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_entry_with_symptom_creates_column(async_db: AsyncSession) -> None:
-    await _add_sym_item(async_db, "vss", "Visual Snow", first_used_at=_NOW)
-    await _add_entry(async_db, _DATE, {"vss": 7})
+def test_entry_with_symptom_creates_column(db: Session) -> None:
+    _add_sym_item(db, "vss", "Visual Snow", first_used_at=_NOW)
+    _add_entry(db, _DATE, {"vss": 7})
 
-    rows, columns = await build_feature_matrix(async_db, _DATE, _DATE)
+    rows, columns = build_feature_matrix(db, _DATE, _DATE)
     assert "sym_vss" in columns
     assert rows[0]["sym_vss"] == 7
 
@@ -95,13 +111,13 @@ async def test_entry_with_symptom_creates_column(async_db: AsyncSession) -> None
 # ---------------------------------------------------------------------------
 
 
-async def test_other_dates_get_none_for_symptom(async_db: AsyncSession) -> None:
-    await _add_sym_item(async_db, "vss", "Visual Snow", first_used_at=_NOW)
-    await _add_entry(async_db, _DATE, {"vss": 7})
+def test_other_dates_get_none_for_symptom(db: Session) -> None:
+    _add_sym_item(db, "vss", "Visual Snow", first_used_at=_NOW)
+    _add_entry(db, _DATE, {"vss": 7})
     other_date = _DATE - datetime.timedelta(days=1)
-    await _add_entry(async_db, other_date, {})
+    _add_entry(db, other_date, {})
 
-    rows, columns = await build_feature_matrix(async_db, other_date, _DATE)
+    rows, columns = build_feature_matrix(db, other_date, _DATE)
     by_date = {r["date"]: r for r in rows}
     assert by_date[other_date.isoformat()]["sym_vss"] is None
     assert by_date[_DATE.isoformat()]["sym_vss"] == 7
@@ -112,15 +128,11 @@ async def test_other_dates_get_none_for_symptom(async_db: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_archived_symptom_excluded_from_columns(
-    async_db: AsyncSession,
-) -> None:
-    await _add_sym_item(
-        async_db, "vss", "Visual Snow", archived=True, first_used_at=_NOW
-    )
-    await _add_entry(async_db, _DATE, {"vss": 7})
+def test_archived_symptom_excluded_from_columns(db: Session) -> None:
+    _add_sym_item(db, "vss", "Visual Snow", archived=True, first_used_at=_NOW)
+    _add_entry(db, _DATE, {"vss": 7})
 
-    rows, columns = await build_feature_matrix(async_db, _DATE, _DATE)
+    rows, columns = build_feature_matrix(db, _DATE, _DATE)
     sym_cols = [c for c in columns if c.startswith("sym_")]
     assert sym_cols == []
 
@@ -130,13 +142,11 @@ async def test_archived_symptom_excluded_from_columns(
 # ---------------------------------------------------------------------------
 
 
-async def test_column_order_static_then_supp_then_tx_then_sym(
-    async_db: AsyncSession,
-) -> None:
-    await _add_sym_item(async_db, "tinnitus", "Tinnitus", first_used_at=_NOW)
-    await _add_entry(async_db, _DATE, {"tinnitus": 5})
+def test_column_order_static_then_supp_then_tx_then_sym(db: Session) -> None:
+    _add_sym_item(db, "tinnitus", "Tinnitus", first_used_at=_NOW)
+    _add_entry(db, _DATE, {"tinnitus": 5})
 
-    rows, columns = await build_feature_matrix(async_db, _DATE, _DATE)
+    rows, columns = build_feature_matrix(db, _DATE, _DATE)
 
     supp_cols = [c for c in columns if c.startswith("supp_")]
     tx_cols = [c for c in columns if c.startswith("tx_")]
@@ -159,8 +169,8 @@ async def test_column_order_static_then_supp_then_tx_then_sym(
 # ---------------------------------------------------------------------------
 
 
-async def _add_entry_with_diet_risk(
-    db: AsyncSession,
+def _add_entry_with_diet_risk(
+    db: Session,
     date: datetime.date,
     diet_risk: str | None,
 ) -> Entry:
@@ -181,20 +191,20 @@ async def _add_entry_with_diet_risk(
         symptoms_json={},
     )
     db.add(entry)
-    await db.commit()
-    await db.refresh(entry)
+    db.commit()
+    db.refresh(entry)
     return entry
 
 
-async def test_diet_risk_low_encodes_as_1(async_db: AsyncSession) -> None:
-    await _add_entry_with_diet_risk(async_db, _DATE, "low")
-    rows, _ = await build_feature_matrix(async_db, _DATE, _DATE)
+def test_diet_risk_low_encodes_as_1(db: Session) -> None:
+    _add_entry_with_diet_risk(db, _DATE, "low")
+    rows, _ = build_feature_matrix(db, _DATE, _DATE)
     assert rows[0]["diet_risk"] == 1
 
 
-async def test_diet_risk_high_encodes_as_3(async_db: AsyncSession) -> None:
-    await _add_entry_with_diet_risk(async_db, _DATE, "high")
-    rows, _ = await build_feature_matrix(async_db, _DATE, _DATE)
+def test_diet_risk_high_encodes_as_3(db: Session) -> None:
+    _add_entry_with_diet_risk(db, _DATE, "high")
+    rows, _ = build_feature_matrix(db, _DATE, _DATE)
     assert rows[0]["diet_risk"] == 3
 
 
@@ -203,15 +213,15 @@ def test_diet_risk_none_encodes_as_none() -> None:
     assert _DIET_RISK_ORDINAL.get(None) is None
 
 
-async def test_diet_risk_minimal_encodes_as_0(async_db: AsyncSession) -> None:
-    await _add_entry_with_diet_risk(async_db, _DATE, "minimal")
-    rows, _ = await build_feature_matrix(async_db, _DATE, _DATE)
+def test_diet_risk_minimal_encodes_as_0(db: Session) -> None:
+    _add_entry_with_diet_risk(db, _DATE, "minimal")
+    rows, _ = build_feature_matrix(db, _DATE, _DATE)
     assert rows[0]["diet_risk"] == 0
 
 
-async def test_diet_risk_normal_encodes_as_2(async_db: AsyncSession) -> None:
-    await _add_entry_with_diet_risk(async_db, _DATE, "normal")
-    rows, _ = await build_feature_matrix(async_db, _DATE, _DATE)
+def test_diet_risk_normal_encodes_as_2(db: Session) -> None:
+    _add_entry_with_diet_risk(db, _DATE, "normal")
+    rows, _ = build_feature_matrix(db, _DATE, _DATE)
     assert rows[0]["diet_risk"] == 2
 
 

@@ -1,73 +1,66 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import BackgroundTasks
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from fastapi import HTTPException
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
-from app.database import async_session_maker
-from app.exceptions import NotFoundError
+from app.database import SessionLocal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.food_analysis import IngredientCreate, IngredientUpdate
 from app.services.ingredient_lookup import IngredientLookupService
-from app.services.obsidian_prefetch import render_and_write_daily_file
+from app.services.obsidian import write_daily_file
 from app.services.vision_prompt import build_messages, parse_vision_response
 
 logger = logging.getLogger(__name__)
 
 
 class FoodAnalysisService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: Session) -> None:
         self.db = db
 
-    async def get_analysis(self, photo_id: int) -> Optional[PhotoAnalysis]:
+    def get_analysis(self, photo_id: int) -> Optional[PhotoAnalysis]:
         """Get analysis for a photo, with eagerly loaded ingredients."""
         return (
-            await self.db.execute(
-                select(PhotoAnalysis)
-                .options(selectinload(PhotoAnalysis.ingredients))
-                .where(PhotoAnalysis.photo_id == photo_id)
-            )
-        ).scalar_one_or_none()
+            self.db.query(PhotoAnalysis)
+            .options(selectinload(PhotoAnalysis.ingredients))
+            .filter(PhotoAnalysis.photo_id == photo_id)
+            .first()
+        )
 
-    async def confirm_analysis(self, analysis_id: int) -> PhotoAnalysis:
+    def confirm_analysis(self, analysis_id: int) -> PhotoAnalysis:
         """Set analysis status to confirmed and re-render vault."""
         analysis = (
-            await self.db.execute(
-                select(PhotoAnalysis)
-                .options(selectinload(PhotoAnalysis.ingredients))
-                .where(PhotoAnalysis.id == analysis_id)
-            )
-        ).scalar_one_or_none()
+            self.db.query(PhotoAnalysis)
+            .options(selectinload(PhotoAnalysis.ingredients))
+            .filter(PhotoAnalysis.id == analysis_id)
+            .first()
+        )
         if not analysis:
-            raise NotFoundError("Analysis not found")
+            raise HTTPException(404, "Analysis not found")
         analysis.status = "confirmed"
-        await self.db.commit()
-        await self.db.refresh(analysis)
-        await self._rerender_vault(analysis.photo_id)
+        self.db.commit()
+        self.db.refresh(analysis)
+        self._rerender_vault(analysis.photo_id)
         return analysis
 
-    async def update_ingredient(
+    def update_ingredient(
         self, ingredient_id: int, updates: IngredientUpdate
     ) -> PhotoIngredient:
         """Update an ingredient and set user_edited flag."""
         ingredient = (
-            await self.db.execute(
-                select(PhotoIngredient).where(PhotoIngredient.id == ingredient_id)
-            )
-        ).scalar_one_or_none()
+            self.db.query(PhotoIngredient)
+            .filter(PhotoIngredient.id == ingredient_id)
+            .first()
+        )
         if not ingredient:
-            raise NotFoundError("Ingredient not found")
+            raise HTTPException(404, "Ingredient not found")
 
         update_data = updates.model_dump(exclude_unset=True)
         for key, value in update_data.items():
@@ -77,7 +70,7 @@ class FoodAnalysisService:
         # If name changed and no canonical_name override, re-lookup
         if "name" in update_data and "canonical_name" not in update_data:
             lookup = IngredientLookupService(self.db)
-            match = await lookup.lookup(ingredient.name)
+            match = lookup.lookup(ingredient.name)
             if match:
                 ingredient.canonical_name = match.canonical_name
                 ingredient.histamine_score = match.histamine_score
@@ -88,24 +81,23 @@ class FoodAnalysisService:
                 ingredient.contains_gluten = match.contains_gluten
                 ingredient.contains_dairy = match.contains_dairy
 
-        await self.db.commit()
-        await self.db.refresh(ingredient)
+        self.db.commit()
+        self.db.refresh(ingredient)
         return ingredient
 
-    async def add_ingredient(
+    def add_ingredient(
         self, analysis_id: int, data: IngredientCreate
     ) -> PhotoIngredient:
         """Add a manually-entered ingredient to an analysis."""
         analysis = (
-            await self.db.execute(
-                select(PhotoAnalysis).where(PhotoAnalysis.id == analysis_id)
-            )
-        ).scalar_one_or_none()
+            self.db.query(PhotoAnalysis).filter(PhotoAnalysis.id == analysis_id).first()
+        )
         if not analysis:
-            raise NotFoundError("Analysis not found")
+            raise HTTPException(404, "Analysis not found")
 
+        # Lookup dietary data
         lookup = IngredientLookupService(self.db)
-        match = await lookup.lookup(data.name)
+        match = lookup.lookup(data.name)
 
         ingredient = PhotoIngredient(
             analysis_id=analysis_id,
@@ -123,22 +115,20 @@ class FoodAnalysisService:
             contains_dairy=match.contains_dairy if match else None,
         )
         self.db.add(ingredient)
-        await self.db.commit()
-        await self.db.refresh(ingredient)
+        self.db.commit()
+        self.db.refresh(ingredient)
         return ingredient
 
-    async def delete_analysis(self, analysis_id: int) -> None:
+    def delete_analysis(self, analysis_id: int) -> None:
         """Delete an analysis and its ingredients (cascade)."""
         analysis = (
-            await self.db.execute(
-                select(PhotoAnalysis).where(PhotoAnalysis.id == analysis_id)
-            )
-        ).scalar_one_or_none()
+            self.db.query(PhotoAnalysis).filter(PhotoAnalysis.id == analysis_id).first()
+        )
         if analysis:
-            await self.db.delete(analysis)
-            await self.db.commit()
+            self.db.delete(analysis)
+            self.db.commit()
 
-    async def create_pending_analysis(self, photo_id: int) -> PhotoAnalysis:
+    def create_pending_analysis(self, photo_id: int) -> PhotoAnalysis:
         """Create a new pending analysis record for a photo."""
         analysis = PhotoAnalysis(
             photo_id=photo_id,
@@ -146,57 +136,29 @@ class FoodAnalysisService:
             model_id=settings.openrouter_model,
         )
         self.db.add(analysis)
-        await self.db.commit()
-        await self.db.refresh(analysis)
+        self.db.commit()
+        self.db.refresh(analysis)
         return analysis
 
-    async def delete_ingredient(self, ingredient_id: int) -> None:
+    def delete_ingredient(self, ingredient_id: int) -> None:
         """Delete an ingredient by id."""
         ingredient = (
-            await self.db.execute(
-                select(PhotoIngredient).where(PhotoIngredient.id == ingredient_id)
-            )
-        ).scalar_one_or_none()
+            self.db.query(PhotoIngredient)
+            .filter(PhotoIngredient.id == ingredient_id)
+            .first()
+        )
         if not ingredient:
-            raise NotFoundError("Ingredient not found")
-        await self.db.delete(ingredient)
-        await self.db.commit()
+            raise HTTPException(404, "Ingredient not found")
+        self.db.delete(ingredient)
+        self.db.commit()
 
-    async def get_analysis_or_404(self, photo_id: int) -> PhotoAnalysis:
-        """Get analysis for a photo; raise NotFoundError if absent."""
-        analysis = await self.get_analysis(photo_id)
-        if analysis is None:
-            raise NotFoundError("No analysis found for this photo")
-        return analysis
-
-    async def retry_analysis(
-        self, photo_id: int, background_tasks: BackgroundTasks
-    ) -> PhotoAnalysis:
-        existing = await self.get_analysis(photo_id)
-        if existing:
-            await self.delete_analysis(existing.id)
-        new_analysis = await self.create_pending_analysis(photo_id)
-        background_tasks.add_task(trigger_analysis_background, photo_id)
-        return new_analysis
-
-    async def add_ingredient_to_photo(
-        self, photo_id: int, data: IngredientCreate
-    ) -> PhotoIngredient:
-        """Add ingredient to the analysis for the given photo; raises NotFoundError if no analysis."""
-        analysis = await self.get_analysis(photo_id)
-        if analysis is None:
-            raise NotFoundError("No analysis found for this photo")
-        return await self.add_ingredient(analysis.id, data)
-
-    async def _rerender_vault(self, photo_id: int) -> None:
+    def _rerender_vault(self, photo_id: int) -> None:
         """Re-render the Obsidian vault file for the entry owning this photo."""
-        photo = (
-            await self.db.execute(select(Photo).where(Photo.id == photo_id))
-        ).scalar_one_or_none()
+        photo = self.db.query(Photo).filter(Photo.id == photo_id).first()
         if photo and photo.entry:
             entry = photo.entry
-            await self.db.refresh(entry)
-            await render_and_write_daily_file(self.db, entry, entry.photos)
+            self.db.refresh(entry)
+            write_daily_file(self.db, entry, entry.photos)
 
 
 # ---------------------------------------------------------------------------
@@ -204,167 +166,160 @@ class FoodAnalysisService:
 # ---------------------------------------------------------------------------
 
 
-async def trigger_analysis_background(photo_id: int) -> None:
+def trigger_analysis_background(photo_id: int) -> None:
     """Run food photo analysis in a background task.
 
-    Opens its own DB session because FastAPI BackgroundTasks execute
+    Creates its own DB session because FastAPI BackgroundTasks execute
     after the response is sent and the request session is closed.
     """
+    db: Session = SessionLocal()
     analysis: Optional[PhotoAnalysis] = None
     try:
-        async with async_session_maker() as db:
-            # Guard: without an API key we cannot call OpenRouter.
-            if not settings.openrouter_api_key:
-                logger.warning(
-                    "Food analysis skipped for photo %d: OPENROUTER_API_KEY not "
-                    "configured. Set the env var or disable the feature with "
-                    "FOOD_ANALYSIS_ENABLED=false.",
-                    photo_id,
-                )
-                existing = (
-                    await db.execute(
-                        select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id)
-                    )
-                ).scalar_one_or_none()
-                if existing is None:
-                    analysis = PhotoAnalysis(
-                        photo_id=photo_id,
-                        status="failed",
-                        model_id=settings.openrouter_model,
-                        error_message="OPENROUTER_API_KEY not configured",
-                    )
-                    db.add(analysis)
-                else:
-                    existing.status = "failed"
-                    existing.error_message = "OPENROUTER_API_KEY not configured"
-                await db.commit()
-                return
-
-            # Reuse a pending record or skip if already running/finished.
+        # Guard: without an API key we cannot call OpenRouter. Record a
+        # clear failure on the analysis record instead of crashing with
+        # "Illegal header value b'Bearer '" inside httpx.
+        if not settings.openrouter_api_key:
+            logger.warning(
+                "Food analysis skipped for photo %d: OPENROUTER_API_KEY not "
+                "configured. Set the env var or disable the feature with "
+                "FOOD_ANALYSIS_ENABLED=false.",
+                photo_id,
+            )
             existing = (
-                await db.execute(
-                    select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id)
-                )
-            ).scalar_one_or_none()
-
-            if existing and existing.status not in ("pending", "failed"):
-                logger.info(
-                    "Analysis already exists for photo %d (status=%s), skipping",
-                    photo_id,
-                    existing.status,
-                )
-                return
-
-            if existing:
-                analysis = existing
-                analysis.status = "analyzing"
-                analysis.error_message = None
-                analysis.model_id = settings.openrouter_model
-            else:
+                db.query(PhotoAnalysis)
+                .filter(PhotoAnalysis.photo_id == photo_id)
+                .first()
+            )
+            if existing is None:
                 analysis = PhotoAnalysis(
                     photo_id=photo_id,
-                    status="analyzing",
+                    status="failed",
                     model_id=settings.openrouter_model,
+                    error_message="OPENROUTER_API_KEY not configured",
                 )
                 db.add(analysis)
-            await db.commit()
-            await db.refresh(analysis)
+            else:
+                existing.status = "failed"
+                existing.error_message = "OPENROUTER_API_KEY not configured"
+            db.commit()
+            return
 
-            # Read photo file from disk (blocking I/O wrapped in thread)
-            photo = (
-                await db.execute(select(Photo).where(Photo.id == photo_id))
-            ).scalar_one_or_none()
-            if not photo:
-                raise ValueError(f"Photo {photo_id} not found in database")
-
-            photo_path = os.path.join(settings.photo_dir, photo.filename)
-            if not os.path.exists(photo_path):
-                raise FileNotFoundError(f"Photo file not found: {photo_path}")
-
-            image_bytes = await asyncio.to_thread(Path(photo_path).read_bytes)
-
-            # Build vision prompt and call OpenRouter
-            messages = build_messages(image_bytes)
-
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {settings.openrouter_api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": settings.openrouter_model,
-                        "messages": messages,
-                    },
-                )
-                response.raise_for_status()
-
-            raw_content = response.json()["choices"][0]["message"]["content"]
-            analysis.raw_response = raw_content
-
-            vision_result = parse_vision_response(raw_content)
-
-            analysis.dish_name = vision_result.dish_name
-            analysis.cuisine = vision_result.cuisine
-            analysis.dish_confidence = vision_result.confidence
-
-            lookup = IngredientLookupService(db)
-            for vi in vision_result.ingredients:
-                match = await lookup.lookup(vi.name)
-                ingredient = PhotoIngredient(
-                    analysis_id=analysis.id,
-                    name=vi.name,
-                    canonical_name=match.canonical_name if match else None,
-                    visible=vi.visible,
-                    confidence=vi.confidence,
-                    user_edited=False,
-                    histamine_score=match.histamine_score if match else None,
-                    fodmap_oligos=match.fodmap_oligos if match else None,
-                    fodmap_fructose=match.fodmap_fructose if match else None,
-                    fodmap_polyols=match.fodmap_polyols if match else None,
-                    fodmap_lactose=match.fodmap_lactose if match else None,
-                    contains_gluten=match.contains_gluten if match else None,
-                    contains_dairy=match.contains_dairy if match else None,
-                )
-                db.add(ingredient)
-
-            analysis.status = "complete"
-            await db.commit()
-
-            # Re-render Obsidian vault file
-            photo = (
-                await db.execute(select(Photo).where(Photo.id == photo_id))
-            ).scalar_one_or_none()
-            if photo and photo.entry:
-                entry = photo.entry
-                await db.refresh(entry)
-                await render_and_write_daily_file(db, entry, entry.photos)
-
+        # Reuse a pending record (created by retry endpoint) or skip if
+        # an analysis is already running or finished for this photo.
+        existing = (
+            db.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == photo_id).first()
+        )
+        if existing and existing.status not in ("pending", "failed"):
             logger.info(
-                "Analysis complete for photo %d: %s (%d ingredients)",
+                "Analysis already exists for photo %d (status=%s), skipping",
                 photo_id,
-                vision_result.dish_name,
-                len(vision_result.ingredients),
+                existing.status,
             )
+            return
+
+        if existing:
+            # Pending (from retry endpoint) or failed — take it over.
+            analysis = existing
+            analysis.status = "analyzing"
+            analysis.error_message = None
+            analysis.model_id = settings.openrouter_model
+        else:
+            analysis = PhotoAnalysis(
+                photo_id=photo_id,
+                status="analyzing",
+                model_id=settings.openrouter_model,
+            )
+            db.add(analysis)
+        db.commit()
+        db.refresh(analysis)
+
+        # Read photo file from disk
+        photo = db.query(Photo).filter(Photo.id == photo_id).first()
+        if not photo:
+            raise ValueError(f"Photo {photo_id} not found in database")
+
+        photo_path = os.path.join(settings.photo_dir, photo.filename)
+        if not os.path.exists(photo_path):
+            raise FileNotFoundError(f"Photo file not found: {photo_path}")
+
+        with open(photo_path, "rb") as f:
+            image_bytes = f.read()
+
+        # Build vision prompt and call OpenRouter
+        messages = build_messages(image_bytes)
+
+        response = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.openrouter_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": settings.openrouter_model,
+                "messages": messages,
+            },
+            timeout=60.0,
+        )
+        response.raise_for_status()
+
+        raw_content = response.json()["choices"][0]["message"]["content"]
+        analysis.raw_response = raw_content
+
+        # Parse the vision response
+        vision_result = parse_vision_response(raw_content)
+
+        analysis.dish_name = vision_result.dish_name
+        analysis.cuisine = vision_result.cuisine
+        analysis.dish_confidence = vision_result.confidence
+
+        # Create ingredient records with dietary lookup
+        lookup = IngredientLookupService(db)
+        for vi in vision_result.ingredients:
+            match = lookup.lookup(vi.name)
+            ingredient = PhotoIngredient(
+                analysis_id=analysis.id,
+                name=vi.name,
+                canonical_name=match.canonical_name if match else None,
+                visible=vi.visible,
+                confidence=vi.confidence,
+                user_edited=False,
+                histamine_score=match.histamine_score if match else None,
+                fodmap_oligos=match.fodmap_oligos if match else None,
+                fodmap_fructose=match.fodmap_fructose if match else None,
+                fodmap_polyols=match.fodmap_polyols if match else None,
+                fodmap_lactose=match.fodmap_lactose if match else None,
+                contains_gluten=match.contains_gluten if match else None,
+                contains_dairy=match.contains_dairy if match else None,
+            )
+            db.add(ingredient)
+
+        analysis.status = "complete"
+        db.commit()
+
+        # Re-render Obsidian vault file
+        photo = db.query(Photo).filter(Photo.id == photo_id).first()
+        if photo and photo.entry:
+            entry = photo.entry
+            db.refresh(entry)
+            write_daily_file(db, entry, entry.photos)
+
+        logger.info(
+            "Analysis complete for photo %d: %s (%d ingredients)",
+            photo_id,
+            vision_result.dish_name,
+            len(vision_result.ingredients),
+        )
 
     except Exception:
         logger.exception("Food analysis failed for photo %d", photo_id)
-        if analysis is not None:
+        if analysis:
             try:
-                async with async_session_maker() as db:
-                    fresh = (
-                        await db.execute(
-                            select(PhotoAnalysis).where(PhotoAnalysis.id == analysis.id)
-                        )
-                    ).scalar_one_or_none()
-                    if fresh:
-                        import traceback
-
-                        fresh.status = "failed"
-                        fresh.error_message = traceback.format_exc()
-                        await db.commit()
+                analysis.status = "failed"
+                analysis.error_message = str(__import__("traceback").format_exc())
+                db.commit()
             except Exception:
                 logger.exception(
                     "Failed to update analysis status for photo %d", photo_id
                 )
+    finally:
+        db.close()

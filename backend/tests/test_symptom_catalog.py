@@ -1,18 +1,28 @@
 from __future__ import annotations
 
-import pytest
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-)
+from collections.abc import Generator
 
-import app.main as main_module
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.database import Base
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.main import DEFAULT_SYMPTOMS, _seed_symptom_catalog
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.services import symptom_catalog as symptom_catalog_service
+
+
+@pytest.fixture
+def db() -> Generator[Session, None, None]:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 # ---------------------------------------------------------------------------
@@ -20,40 +30,36 @@ from app.services import symptom_catalog as symptom_catalog_service
 # ---------------------------------------------------------------------------
 
 
-async def test_create_normalizes_key(async_db: AsyncSession) -> None:
-    item = await symptom_catalog_service.create_item(async_db, "VSS", "Visual Snow")
+def test_create_normalizes_key(db: Session) -> None:
+    item = symptom_catalog_service.create_item(db, "VSS", "Visual Snow")
     assert item.id is not None
     assert item.key == "vss"
     assert item.label == "Visual Snow"
 
 
-async def test_create_returns_201_equivalent(async_db: AsyncSession) -> None:
+def test_create_returns_201_equivalent(db: Session) -> None:
     """create_item returns the persisted item with an id."""
-    item = await symptom_catalog_service.create_item(async_db, "tinnitus", "Tinnitus")
+    item = symptom_catalog_service.create_item(db, "tinnitus", "Tinnitus")
     assert item.id is not None
 
 
-async def test_create_bad_key_raises_validation_error(async_db: AsyncSession) -> None:
+def test_create_bad_key_raises_validation_error(db: Session) -> None:
     with pytest.raises(ValidationError):
-        await symptom_catalog_service.create_item(async_db, "!!!", "Bad Key")
+        symptom_catalog_service.create_item(db, "!!!", "Bad Key")
 
 
-async def test_create_duplicate_active_raises_conflict(
-    async_db: AsyncSession,
-) -> None:
-    await symptom_catalog_service.create_item(async_db, "vss", "Visual Snow")
+def test_create_duplicate_active_raises_conflict(db: Session) -> None:
+    symptom_catalog_service.create_item(db, "vss", "Visual Snow")
     with pytest.raises(ConflictError):
-        await symptom_catalog_service.create_item(async_db, "vss", "Visual Snow 2")
+        symptom_catalog_service.create_item(db, "vss", "Visual Snow 2")
 
 
-async def test_create_duplicate_archived_unarchives_and_updates_label(
-    async_db: AsyncSession,
-) -> None:
+def test_create_duplicate_archived_unarchives_and_updates_label(db: Session) -> None:
     """POST on an archived key un-archives it and updates the label (not 409)."""
-    item = await symptom_catalog_service.create_item(async_db, "vss", "Visual Snow")
-    await symptom_catalog_service.update_item(async_db, "vss", {"archived": True})
+    item = symptom_catalog_service.create_item(db, "vss", "Visual Snow")
+    symptom_catalog_service.update_item(db, "vss", {"archived": True})
 
-    restored = await symptom_catalog_service.create_item(async_db, "vss", "VSS Updated")
+    restored = symptom_catalog_service.create_item(db, "vss", "VSS Updated")
     assert restored.id == item.id
     assert restored.archived is False
     assert restored.label == "VSS Updated"
@@ -64,25 +70,19 @@ async def test_create_duplicate_archived_unarchives_and_updates_label(
 # ---------------------------------------------------------------------------
 
 
-async def test_update_archive_then_restore(async_db: AsyncSession) -> None:
-    await symptom_catalog_service.create_item(async_db, "vss", "Visual Snow")
+def test_update_archive_then_restore(db: Session) -> None:
+    symptom_catalog_service.create_item(db, "vss", "Visual Snow")
 
-    archived = await symptom_catalog_service.update_item(
-        async_db, "vss", {"archived": True}
-    )
+    archived = symptom_catalog_service.update_item(db, "vss", {"archived": True})
     assert archived.archived is True
 
-    restored = await symptom_catalog_service.update_item(
-        async_db, "vss", {"archived": False}
-    )
+    restored = symptom_catalog_service.update_item(db, "vss", {"archived": False})
     assert restored.archived is False
 
 
-async def test_update_not_found_raises(async_db: AsyncSession) -> None:
+def test_update_not_found_raises(db: Session) -> None:
     with pytest.raises(NotFoundError):
-        await symptom_catalog_service.update_item(
-            async_db, "nonexistent", {"archived": True}
-        )
+        symptom_catalog_service.update_item(db, "nonexistent", {"archived": True})
 
 
 # ---------------------------------------------------------------------------
@@ -90,25 +90,23 @@ async def test_update_not_found_raises(async_db: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_list_defaults_to_active_only(async_db: AsyncSession) -> None:
-    await symptom_catalog_service.create_item(async_db, "vss", "Visual Snow")
-    await symptom_catalog_service.create_item(async_db, "tinnitus", "Tinnitus")
-    await symptom_catalog_service.update_item(async_db, "tinnitus", {"archived": True})
+def test_list_defaults_to_active_only(db: Session) -> None:
+    symptom_catalog_service.create_item(db, "vss", "Visual Snow")
+    symptom_catalog_service.create_item(db, "tinnitus", "Tinnitus")
+    symptom_catalog_service.update_item(db, "tinnitus", {"archived": True})
 
-    active = await symptom_catalog_service.list_items(async_db)
+    active = symptom_catalog_service.list_items(db)
     keys = [i.key for i in active]
     assert "vss" in keys
     assert "tinnitus" not in keys
 
 
-async def test_list_include_archived(async_db: AsyncSession) -> None:
-    await symptom_catalog_service.create_item(async_db, "vss", "Visual Snow")
-    await symptom_catalog_service.create_item(async_db, "tinnitus", "Tinnitus")
-    await symptom_catalog_service.update_item(async_db, "tinnitus", {"archived": True})
+def test_list_include_archived(db: Session) -> None:
+    symptom_catalog_service.create_item(db, "vss", "Visual Snow")
+    symptom_catalog_service.create_item(db, "tinnitus", "Tinnitus")
+    symptom_catalog_service.update_item(db, "tinnitus", {"archived": True})
 
-    all_items = await symptom_catalog_service.list_items(
-        async_db, include_archived=True
-    )
+    all_items = symptom_catalog_service.list_items(db, include_archived=True)
     keys = [i.key for i in all_items]
     assert "vss" in keys
     assert "tinnitus" in keys
@@ -119,43 +117,19 @@ async def test_list_include_archived(async_db: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_seed_idempotent(
-    async_engine: AsyncEngine,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Calling the seed function twice must produce exactly len(DEFAULT_SYMPTOMS) rows.
+def test_seed_idempotent(db: Session) -> None:
+    """Calling the seed function twice must produce exactly 7 rows."""
+    import app.main as main_module
 
-    The seed uses ``async_session_maker`` from ``app.database`` (re-exported into
-    ``app.main``). Patch it to point at the test container so the seed touches
-    the same Postgres as the rest of the suite. Use a dedicated transaction
-    here (the seed function commits, which would conflict with the SAVEPOINT
-    fixture).
-    """
-    test_session_maker = async_sessionmaker(
-        async_engine, expire_on_commit=False, class_=AsyncSession
-    )
-    monkeypatch.setattr(main_module, "async_session_maker", test_session_maker)
-
-    # Ensure a clean catalog before seeding (other tests may have left rows
-    # committed outside the savepoint — they wouldn't, but be defensive).
-    async with test_session_maker() as session:
-        await session.execute(SymptomCatalogItem.__table__.delete())
-        await session.commit()
-
+    # Patch engine so _seed_symptom_catalog uses the test in-memory DB.
+    original_engine = main_module.engine
+    main_module.engine = db.get_bind()
     try:
-        await _seed_symptom_catalog()
-        await _seed_symptom_catalog()
-
-        async with test_session_maker() as session:
-            count = (
-                await session.execute(
-                    select(func.count()).select_from(SymptomCatalogItem)
-                )
-            ).scalar_one()
-        assert count == len(DEFAULT_SYMPTOMS)
-        assert count == 7
+        _seed_symptom_catalog()
+        _seed_symptom_catalog()
     finally:
-        # Clean up so subsequent tests don't see the seeded rows.
-        async with test_session_maker() as session:
-            await session.execute(SymptomCatalogItem.__table__.delete())
-            await session.commit()
+        main_module.engine = original_engine
+
+    count = db.query(SymptomCatalogItem).count()
+    assert count == len(DEFAULT_SYMPTOMS)
+    assert count == 7
