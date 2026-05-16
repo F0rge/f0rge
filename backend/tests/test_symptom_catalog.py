@@ -106,7 +106,9 @@ async def test_list_include_archived(async_db: AsyncSession) -> None:
     await symptom_catalog_service.create_item(async_db, "tinnitus", "Tinnitus")
     await symptom_catalog_service.update_item(async_db, "tinnitus", {"archived": True})
 
-    all_items = await symptom_catalog_service.list_items(async_db, include_archived=True)
+    all_items = await symptom_catalog_service.list_items(
+        async_db, include_archived=True
+    )
     keys = [i.key for i in all_items]
     assert "vss" in keys
     assert "tinnitus" in keys

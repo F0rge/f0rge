@@ -10,9 +10,7 @@ from app.models.symptom_catalog import SymptomCatalogItem
 from app.services.obsidian import _render_markdown
 
 
-async def _make_entry(
-    db: AsyncSession, symptoms_json: dict | None = None
-) -> Entry:
+async def _make_entry(db: AsyncSession, symptoms_json: dict | None = None) -> Entry:
     entry = Entry(
         date=datetime.date(2026, 5, 15),
         schema_version=3,
@@ -54,9 +52,7 @@ async def _active_labels(db: AsyncSession) -> dict[str, str]:
     rows = (
         (
             await db.execute(
-                select(SymptomCatalogItem).where(
-                    SymptomCatalogItem.archived.is_(False)
-                )
+                select(SymptomCatalogItem).where(SymptomCatalogItem.archived.is_(False))
             )
         )
         .scalars()
@@ -65,9 +61,7 @@ async def _active_labels(db: AsyncSession) -> dict[str, str]:
     return {r.key: r.label for r in rows}
 
 
-def _render(
-    entry: Entry, active_labels: dict[str, str]
-) -> str:
+def _render(entry: Entry, active_labels: dict[str, str]) -> str:
     return _render_markdown(
         entry=entry,
         photos=[],

@@ -157,14 +157,17 @@ async def compute_trends(
                 )
             )
 
+        # Current = last non-null value
         current: Optional[float] = None
         for v in reversed(raw_values):
             if v is not None:
                 current = v
                 break
 
+        # Rolling avg at latest point
         latest_rolling = points[-1].rolling_avg_7 if points else None
 
+        # delta_30d: compare last non-null with the rolling avg ~30 days ago
         delta_30d: Optional[float] = None
         if len(points) >= 30 and current is not None:
             ref_rolling = points[-30].rolling_avg_7
@@ -222,6 +225,8 @@ async def compute_correlates(
                 ]
                 y_aligned = y
             else:
+                # feature at t-lag aligned with outcome at t
+                # x[i-lag] → y[i] means x values start lag earlier
                 x_raw = [_coerce_numeric(row.get(col)) for row in rows]
                 x_aligned = x_raw[:-lag]
                 y_aligned = y[lag:]
@@ -293,21 +298,25 @@ async def compute_treatment_response(
         during_start = start
         during_end = end if end is not None else today
 
+        # Fetch baseline window
         baseline_rows, _ = await build_feature_matrix(db, baseline_start, baseline_end)
         baseline_vals: list[Optional[float]] = [
             _coerce_numeric(r.get(outcome)) for r in baseline_rows
         ]
         baseline_n = sum(1 for v in baseline_vals if v is not None)
 
+        # Skip treatments with insufficient baseline data
         if baseline_n < 5:
             continue
 
+        # Fetch during window
         during_rows, _ = await build_feature_matrix(db, during_start, during_end)
         during_vals: list[Optional[float]] = [
             _coerce_numeric(r.get(outcome)) for r in during_rows
         ]
         during_n = sum(1 for v in during_vals if v is not None)
 
+        # Fetch after window (only if treatment has ended)
         after_vals: list[Optional[float]] = []
         after_n = 0
         if end is not None:

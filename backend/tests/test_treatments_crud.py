@@ -249,9 +249,7 @@ async def test_list_active_on_invalid_format_raises_validation(
 # ---------------------------------------------------------------------------
 
 
-async def test_get_existing(
-    async_db: AsyncSession, service: TreatmentService
-) -> None:
+async def test_get_existing(async_db: AsyncSession, service: TreatmentService) -> None:
     t = await _add_treatment(async_db, "Allicin", datetime.date(2026, 1, 1))
     result = await service.get(t.id)
     assert result.id == t.id

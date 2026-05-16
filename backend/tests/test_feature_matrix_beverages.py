@@ -83,9 +83,7 @@ async def test_had_alcohol_is_one_when_units_nonzero(
     async_db: AsyncSession,
 ) -> None:
     await _add_entry(async_db, _DATE, alcohol_units=3)
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["had_alcohol"] == 1
 
@@ -94,9 +92,7 @@ async def test_had_alcohol_is_zero_when_units_zero(
     async_db: AsyncSession,
 ) -> None:
     await _add_entry(async_db, _DATE, alcohol_units=0)
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["had_alcohol"] == 0
 
@@ -105,18 +101,14 @@ async def test_had_alcohol_is_zero_when_units_none(
     async_db: AsyncSession,
 ) -> None:
     await _add_entry(async_db, _DATE, alcohol_units=None)
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["had_alcohol"] == 0
 
 
 async def test_had_alcohol_is_none_when_no_entry(async_db: AsyncSession) -> None:
     # No entry for the date — row should have None (pre-fill default)
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["had_alcohol"] is None
 
@@ -140,18 +132,14 @@ async def test_caffeine_servings_present_when_nonzero(
 
 async def test_caffeine_servings_zero(async_db: AsyncSession) -> None:
     await _add_entry(async_db, _DATE, caffeine_servings=0)
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["caffeine_servings"] == 0
 
 
 async def test_caffeine_servings_none(async_db: AsyncSession) -> None:
     await _add_entry(async_db, _DATE, caffeine_servings=None)
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["caffeine_servings"] is None
 
@@ -165,9 +153,7 @@ async def test_had_caffeine_is_one_when_servings_nonzero(
     async_db: AsyncSession,
 ) -> None:
     await _add_entry(async_db, _DATE, caffeine_servings=2)
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["had_caffeine"] == 1
 
@@ -176,9 +162,7 @@ async def test_had_caffeine_is_zero_when_servings_zero(
     async_db: AsyncSession,
 ) -> None:
     await _add_entry(async_db, _DATE, caffeine_servings=0)
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["had_caffeine"] == 0
 
@@ -187,17 +171,13 @@ async def test_had_caffeine_is_zero_when_servings_none(
     async_db: AsyncSession,
 ) -> None:
     await _add_entry(async_db, _DATE, caffeine_servings=None)
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["had_caffeine"] == 0
 
 
 async def test_had_caffeine_is_none_when_no_entry(async_db: AsyncSession) -> None:
-    rows, _ = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, _ = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["had_caffeine"] is None
 
@@ -232,9 +212,7 @@ async def test_column_order_preserved_in_build_output(
     async_db: AsyncSession,
 ) -> None:
     await _add_entry(async_db, _DATE, alcohol_units=1, caffeine_servings=3)
-    _, columns = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    _, columns = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     hot_idx = columns.index("hot_shower")
     assert columns[hot_idx + 1] == "alcohol_units"
@@ -252,9 +230,7 @@ async def test_csv_header_includes_all_four_new_columns(
     async_db: AsyncSession,
 ) -> None:
     await _add_entry(async_db, _DATE)
-    _, columns = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    _, columns = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     for col in ("alcohol_units", "caffeine_servings", "had_alcohol", "had_caffeine"):
         assert col in columns, f"{col!r} missing from columns"

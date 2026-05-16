@@ -130,9 +130,7 @@ async def test_ongoing_treatment_active_through_end_of_range(
 
 async def test_multiple_treatments_separate_columns(async_db: AsyncSession) -> None:
     """Each treatment gets its own tx_ column, sorted by normalized_name."""
-    await _add_treatment(
-        async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 1)
-    )
+    await _add_treatment(async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 1))
     await _add_treatment(async_db, "Allicin", "allicin", datetime.date(2026, 5, 1))
 
     rows, columns = await build_feature_matrix(
@@ -167,9 +165,7 @@ async def test_multiple_treatments_only_active_one_marked(
         datetime.date(2026, 4, 30),
     )
     # Rifaximin: active during range
-    await _add_treatment(
-        async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 1)
-    )
+    await _add_treatment(async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 1))
 
     rows, columns = await build_feature_matrix(
         async_db,

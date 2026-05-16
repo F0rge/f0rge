@@ -61,9 +61,7 @@ async def _active_treatments(db: AsyncSession, as_of: datetime.date) -> list[Tre
             await db.execute(
                 select(Treatment)
                 .where(Treatment.start_date <= as_of)
-                .where(
-                    (Treatment.end_date.is_(None)) | (Treatment.end_date >= as_of)
-                )
+                .where((Treatment.end_date.is_(None)) | (Treatment.end_date >= as_of))
                 .order_by(Treatment.name.asc())
             )
         )
@@ -149,9 +147,7 @@ async def test_render_markdown_with_active_treatment(
     """active-treatments frontmatter and summary table row are written correctly."""
     entry_date = datetime.date(2026, 5, 15)
     entry = await _make_entry(async_db, entry_date)
-    await _make_treatment(
-        async_db, "Allicin", "allicin", datetime.date(2026, 5, 8)
-    )
+    await _make_treatment(async_db, "Allicin", "allicin", datetime.date(2026, 5, 8))
 
     content = _render(entry, await _active_treatments(async_db, entry_date))
 
@@ -181,9 +177,7 @@ async def test_render_markdown_multiple_treatments(
     entry_date = datetime.date(2026, 5, 15)
     entry = await _make_entry(async_db, entry_date)
     # Both are active on entry_date
-    await _make_treatment(
-        async_db, "Allicin", "allicin", datetime.date(2026, 5, 8)
-    )
+    await _make_treatment(async_db, "Allicin", "allicin", datetime.date(2026, 5, 8))
     await _make_treatment(
         async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 13)
     )

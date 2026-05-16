@@ -135,9 +135,7 @@ async def test_add_alias_happy_path(
 async def test_add_alias_conflict_on_duplicate(
     async_db: AsyncSession, service: LabMarkerCatalogService
 ) -> None:
-    item = await _seed_catalog(
-        async_db, "hemoglobin", "Hemoglobin", aliases=["hb"]
-    )
+    item = await _seed_catalog(async_db, "hemoglobin", "Hemoglobin", aliases=["hb"])
     with pytest.raises(ConflictError):
         await service.add_alias(item.id, "HB", language=None)
 

@@ -154,9 +154,7 @@ async def test_trends_includes_sym_columns(async_db: AsyncSession) -> None:
 async def test_trends_rolling_avg_7_computed(async_db: AsyncSession) -> None:
     # Seed 10 days with overall = day index (0-9)
     for i in range(10):
-        await _add_entry(
-            async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i
-        )
+        await _add_entry(async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i)
     result = await compute_trends(
         async_db, _BASE_DATE, _BASE_DATE + datetime.timedelta(days=9)
     )
@@ -183,9 +181,7 @@ async def test_trends_delta_30d_computed(async_db: AsyncSession) -> None:
 
 async def test_correlates_invalid_outcome_raises(async_db: AsyncSession) -> None:
     with pytest.raises(ValidationError):
-        await compute_correlates(
-            async_db, None, None, "not_a_real_outcome", None, 3
-        )
+        await compute_correlates(async_db, None, None, "not_a_real_outcome", None, 3)
 
 
 async def test_correlates_hrv_correlates_with_overall(
@@ -349,9 +345,7 @@ async def test_treatment_response_no_after_window_when_ongoing(
 ) -> None:
     """Ongoing treatment (no end_date) should have after_mean=None, after_n=0."""
     tx_start = _BASE_DATE + datetime.timedelta(days=35)
-    await _add_treatment(
-        async_db, "Ongoing Tx", "medication", tx_start, end_date=None
-    )
+    await _add_treatment(async_db, "Ongoing Tx", "medication", tx_start, end_date=None)
 
     for i in range(30):
         d = tx_start - datetime.timedelta(days=30 - i)
@@ -385,9 +379,7 @@ async def test_sleep_next_day_invalid_metric_raises(
     async_db: AsyncSession,
 ) -> None:
     for i in range(5):
-        await _add_entry(
-            async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i
-        )
+        await _add_entry(async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i)
     with pytest.raises(ValidationError):
         await compute_sleep_next_day(
             async_db, None, None, "overall", "hm_invalid_metric"
@@ -450,9 +442,7 @@ async def test_correlates_diet_risk_is_valid_outcome(
         await _add_entry(async_db, d, diet_risk=risk)
 
     # Must not raise ValidationError
-    result = await compute_correlates(
-        async_db, None, None, "diet_risk", None, min_n=3
-    )
+    result = await compute_correlates(async_db, None, None, "diet_risk", None, min_n=3)
     assert result.outcome == "diet_risk"
 
 

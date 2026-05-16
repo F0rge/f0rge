@@ -314,9 +314,7 @@ async def test_list_labs_empty(service: LabsService) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_get_lab_existing(
-    async_db: AsyncSession, service: LabsService
-) -> None:
+async def test_get_lab_existing(async_db: AsyncSession, service: LabsService) -> None:
     catalog = await _make_catalog(async_db)
     body = LabCreate(
         lab_date=datetime.date(2026, 5, 1),
@@ -367,11 +365,7 @@ async def test_update_lab_replaces_markers_wholesale(
     # Only one marker exists on this lab now — replacement deleted the originals.
     assert updated.markers[0].value == 14.0
     db_markers = (
-        (
-            await async_db.execute(
-                select(LabMarker).where(LabMarker.lab_id == lab.id)
-            )
-        )
+        (await async_db.execute(select(LabMarker).where(LabMarker.lab_id == lab.id)))
         .scalars()
         .all()
     )
@@ -430,9 +424,7 @@ async def test_delete_lab_cascades_to_markers(
     ).scalar_one_or_none() is None
     for mid in marker_ids:
         assert (
-            await async_db.execute(
-                select(LabMarker).where(LabMarker.id == mid)
-            )
+            await async_db.execute(select(LabMarker).where(LabMarker.id == mid))
         ).scalar_one_or_none() is None
 
 

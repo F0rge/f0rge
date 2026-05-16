@@ -61,9 +61,7 @@ async def isolated_storage(
     monkeypatch.setattr(
         "app.services.photos.render_and_write_daily_file", _noop, raising=False
     )
-    monkeypatch.setattr(
-        "app.services.photos.write_daily_file", _noop, raising=False
-    )
+    monkeypatch.setattr("app.services.photos.write_daily_file", _noop, raising=False)
     yield
 
 
@@ -101,9 +99,7 @@ def _png_bytes() -> bytes:
     return buf.getvalue()
 
 
-async def _upload(
-    db: AsyncSession, day: datetime.date, name: str = "x.png"
-) -> Photo:
+async def _upload(db: AsyncSession, day: datetime.date, name: str = "x.png") -> Photo:
     upload = UploadFile(filename=name, file=io.BytesIO(_png_bytes()))
     service = PhotoService(db)
     return await service.upload(

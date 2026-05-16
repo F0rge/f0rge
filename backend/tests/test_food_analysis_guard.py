@@ -72,9 +72,7 @@ async def db_with_photo(
         entry_id = entry.id
 
     # Patch the trigger's session maker to point at the same engine.
-    monkeypatch.setattr(
-        "app.services.food_analysis.async_session_maker", real_maker
-    )
+    monkeypatch.setattr("app.services.food_analysis.async_session_maker", real_maker)
 
     try:
         yield async_db, photo_id
@@ -86,12 +84,8 @@ async def db_with_photo(
                     PhotoAnalysis.photo_id == photo_id
                 )
             )
-            await cleanup.execute(
-                Photo.__table__.delete().where(Photo.id == photo_id)
-            )
-            await cleanup.execute(
-                Entry.__table__.delete().where(Entry.id == entry_id)
-            )
+            await cleanup.execute(Photo.__table__.delete().where(Photo.id == photo_id))
+            await cleanup.execute(Entry.__table__.delete().where(Entry.id == entry_id))
             await cleanup.commit()
 
 

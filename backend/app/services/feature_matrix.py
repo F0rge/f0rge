@@ -114,6 +114,7 @@ def _compute_dietary_loads(photos: list[Photo]) -> dict:
         fructose += _FODMAP_LEVEL.get(i.fodmap_fructose, 0)
         polyols += _FODMAP_LEVEL.get(i.fodmap_polyols, 0)
         lactose += _FODMAP_LEVEL.get(i.fodmap_lactose, 0)
+        # bool() guards against None on these nullable columns
         gluten = gluten or bool(i.contains_gluten)
         dairy = dairy or bool(i.contains_dairy)
 
@@ -186,6 +187,7 @@ async def build_feature_matrix(
         earliest = (await db.execute(select(func.min(Entry.date)))).scalar()
         start_date = earliest if earliest is not None else end_date
 
+    # Clamp: start must not exceed end
     if start_date > end_date:
         start_date = end_date
 
@@ -299,6 +301,7 @@ async def build_feature_matrix(
             weather_by_date.get(current - one_day, []),
         )
 
+        # Pre-fill every column with None; populate only what exists
         row: dict = {col: None for col in columns}
         row["date"] = current.isoformat()
 

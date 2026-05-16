@@ -56,9 +56,7 @@ async def isolated_storage(
     monkeypatch.setattr(
         "app.services.photos.render_and_write_daily_file", _noop, raising=False
     )
-    monkeypatch.setattr(
-        "app.services.photos.write_daily_file", _noop, raising=False
-    )
+    monkeypatch.setattr("app.services.photos.write_daily_file", _noop, raising=False)
     yield
 
 
