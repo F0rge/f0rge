@@ -9,7 +9,12 @@ venv/
 # Backend data
 backend/data/*.db
 backend/photos/
+backend/lab_attachments/
 backend/.env
+
+# Lab import runtime artifacts
+backend/scripts/extraction_audit.jsonl
+backend/scripts/import_labs.log
 
 # Node
 node_modules/

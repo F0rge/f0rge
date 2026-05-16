@@ -20,6 +20,8 @@ from app.routers import (
     food_analysis,
     health_metrics,
     insights,
+    lab_markers,
+    labs,
     photos,
     supplement_catalog,
     symptom_catalog,
@@ -293,6 +295,8 @@ app.include_router(food_analysis.router)
 app.include_router(insights.router)
 app.include_router(treatments.router)
 app.include_router(export.router)
+app.include_router(labs.router)
+app.include_router(lab_markers.router)
 
 
 @app.get("/api/v1/health")
