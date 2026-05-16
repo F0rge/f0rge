@@ -132,6 +132,65 @@ def test_compute_flag_abnormal_ref_text_with_matching_value_text() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Unidirectional ref_text parsing — labs often report ranges as "<5.18", ">60"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "ref_text", "expected"),
+    [
+        # "<X" — value above X is high, below is normal
+        (4.5, "<5.18", "normal"),
+        (5.18, "<5.18", "normal"),
+        (6.0, "<5.18", "high"),
+        # "<= X" with spaces and comma decimal separator
+        (28.9, "<= 29,0", "normal"),
+        (29.5, "<=29,0", "high"),
+        # ">X" — value below X is low, above is normal
+        (75.0, ">60", "normal"),
+        (60.0, ">60", "normal"),  # equals threshold
+        (45.0, ">60", "low"),
+        # ">=X"
+        (0.30, ">=0.27", "normal"),
+        (0.20, ">=0.27", "low"),
+        # Unicode comparison operators (Gemini sometimes emits these)
+        (5.0, "≤4.1", "high"),
+        (10.0, "≥8.0", "normal"),
+        # Non-parseable ref_text — falls through to "unknown"
+        (50.0, "Negative", "unknown"),
+        (50.0, "Normal", "unknown"),
+        (50.0, "see method", "unknown"),
+    ],
+)
+def test_compute_flag_parses_unidirectional_ref_text(
+    value: float, ref_text: str, expected: str
+) -> None:
+    """The LLM frequently emits ref_low/ref_high as null and stuffs the bound
+    into ref_text when the source uses inequality notation. compute_flag must
+    extract the numeric bound rather than collapse to 'unknown'."""
+    flag = LabsService.compute_flag(
+        value=value,
+        value_text=None,
+        ref_low=None,
+        ref_high=None,
+        ref_text=ref_text,
+    )
+    assert flag == expected, f"value={value} ref_text={ref_text!r} → {flag}, expected {expected}"
+
+
+def test_compute_flag_numeric_refs_take_precedence_over_ref_text() -> None:
+    # If both numeric bounds and ref_text exist, numeric bounds must win.
+    flag = LabsService.compute_flag(
+        value=15.0,
+        value_text=None,
+        ref_low=10.0,
+        ref_high=20.0,
+        ref_text="<5.0",  # contradictory; numeric wins
+    )
+    assert flag == "normal"
+
+
+# ---------------------------------------------------------------------------
 # create_lab
 # ---------------------------------------------------------------------------
 
