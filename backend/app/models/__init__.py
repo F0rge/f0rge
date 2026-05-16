@@ -11,6 +11,10 @@ from app.models.session import AuthSession
 from app.models.supplement_catalog import SupplementCatalogItem
 from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
+from app.models.lab import Lab
+from app.models.lab_marker_catalog import LabMarkerCatalog
+from app.models.lab_marker_alias import LabMarkerAlias
+from app.models.lab_marker import LabMarker
 
 __all__ = [
     "Entry",
@@ -24,4 +28,8 @@ __all__ = [
     "HealthMetric",
     "SupplementCatalogItem",
     "Treatment",
+    "Lab",
+    "LabMarkerCatalog",
+    "LabMarkerAlias",
+    "LabMarker",
 ]
