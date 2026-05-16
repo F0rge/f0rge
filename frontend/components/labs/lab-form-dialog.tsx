@@ -131,20 +131,37 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
     setRows((prev) => [...prev, emptyRow()])
   }
 
+  function normalizeCanonical(raw: string): string {
+    return raw
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_')
+      .replace(/[^a-z0-9_]/g, '')
+  }
+
   function buildMarkers(): LabMarkerCreate[] {
     return rows
-      .filter((r) => r.canonical_name.trim() && r.display_name.trim())
-      .map((r) => ({
-        catalog_id: r.catalog_id ?? 0,
-        canonical_name: r.canonical_name.trim(),
-        display_name: r.display_name.trim(),
-        value: r.value !== '' ? parseFloat(r.value) : null,
-        value_text: r.value_text.trim() || null,
-        unit: r.unit.trim() || null,
-        ref_low: r.ref_low !== '' ? parseFloat(r.ref_low) : null,
-        ref_high: r.ref_high !== '' ? parseFloat(r.ref_high) : null,
-        ref_text: r.ref_text.trim() || null,
-      }))
+      .filter((r) => {
+        const hasName = r.display_name.trim() || r.canonical_name.trim()
+        const hasData = r.value !== '' || r.value_text.trim() !== ''
+        return hasName && hasData
+      })
+      .map((r) => {
+        const display = r.display_name.trim() || r.canonical_name.trim()
+        const canonical =
+          r.canonical_name.trim() || normalizeCanonical(display)
+        return {
+          catalog_id: r.catalog_id ?? 0,
+          canonical_name: canonical,
+          display_name: display,
+          value: r.value !== '' ? parseFloat(r.value) : null,
+          value_text: r.value_text.trim() || null,
+          unit: r.unit.trim() || null,
+          ref_low: r.ref_low !== '' ? parseFloat(r.ref_low) : null,
+          ref_high: r.ref_high !== '' ? parseFloat(r.ref_high) : null,
+          ref_text: r.ref_text.trim() || null,
+        }
+      })
   }
 
   async function handleSubmit() {

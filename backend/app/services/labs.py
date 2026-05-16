@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session, selectinload
 
-from app.exceptions import NotFoundError
+from app.exceptions import NotFoundError, ValidationError
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.schemas.lab import LabCreate, LabUpdate, LabMarkerCreate
@@ -107,6 +107,26 @@ class LabsService:
         self.db.commit()
 
     def _insert_marker(self, lab_id: int, data: LabMarkerCreate) -> None:
+        catalog_id = data.catalog_id
+        canonical_name = data.canonical_name
+
+        if not catalog_id:
+            # Lazy import to avoid circular dependency.
+            from app.services.lab_catalog import LabMarkerCatalogService
+
+            if not canonical_name and not data.display_name:
+                raise ValidationError(
+                    "Marker requires canonical_name or display_name."
+                )
+            lookup_name = canonical_name or data.display_name
+            catalog_entry = LabMarkerCatalogService(self.db).resolve_or_create(
+                name=lookup_name,
+                display_name=data.display_name,
+                units=[data.unit] if data.unit else [],
+            )
+            catalog_id = catalog_entry.id
+            canonical_name = catalog_entry.canonical_name
+
         flag = self.compute_flag(
             value=data.value,
             value_text=data.value_text,
@@ -116,8 +136,8 @@ class LabsService:
         )
         marker = LabMarker(
             lab_id=lab_id,
-            catalog_id=data.catalog_id,
-            canonical_name=data.canonical_name,
+            catalog_id=catalog_id,
+            canonical_name=canonical_name,
             display_name=data.display_name,
             value=data.value,
             value_text=data.value_text,
