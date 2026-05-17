@@ -148,6 +148,18 @@ async def test_like_fallback_when_search_is_substring_of_canonical(
     assert result.canonical_name == "basil"
 
 
+async def test_like_fallback_with_multiple_matches_returns_shortest(
+    db: AsyncSession,
+) -> None:
+    # Regression for MultipleResultsFound: when the ilike fallback matches
+    # several rows (e.g. vision returns "tomat" → "tomato" + "tomato paste"),
+    # lookup must not crash. Shortest canonical_name wins (most general).
+    svc = IngredientLookupService(db)
+    result = await svc.lookup("tomat")
+    assert result is not None
+    assert result.canonical_name == "tomato"
+
+
 # ---------------------------------------------------------------------------
 # Empty / no-match
 # ---------------------------------------------------------------------------

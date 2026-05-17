@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dietary_ingredient import DietaryIngredient
@@ -124,14 +124,24 @@ class IngredientLookupService:
                         )
                     ).scalar_one_or_none()
 
-        # 4. Case-insensitive LIKE on full search term
+        # 4. Case-insensitive LIKE on full search term. This is a fuzzy
+        # fallback (e.g. vision returns "cheese" -> matches many cheese
+        # variants). Order by canonical_name length so the shortest /
+        # most general match wins, and use .first() since the query is
+        # explicitly allowed to match multiple rows.
         return (
-            await self.db.execute(
-                select(DietaryIngredient).where(
-                    DietaryIngredient.canonical_name.ilike(f"%{normalised}%")
+            (
+                await self.db.execute(
+                    select(DietaryIngredient)
+                    .where(
+                        DietaryIngredient.canonical_name.ilike(f"%{normalised}%")
+                    )
+                    .order_by(func.length(DietaryIngredient.canonical_name))
                 )
             )
-        ).scalar_one_or_none()
+            .scalars()
+            .first()
+        )
 
     async def lookup_batch(
         self, names: list[str]
