@@ -146,25 +146,6 @@ function PhotoDerivedRow({ signal, photoCount }: PhotoDerivedRowProps) {
       ) : (
         <p className="text-xs text-muted-foreground">Photos confirmed — no risk flags detected.</p>
       )}
-
-      <div className="grid grid-cols-4 gap-2">
-        {[
-          { value: signal.scores.histamine_load, label: 'Hist. load' },
-          { value: signal.scores.fodmap_count, label: 'FODMAP' },
-          { value: signal.scores.gluten_count, label: 'Gluten' },
-          { value: signal.scores.dairy_count, label: 'Dairy' },
-        ].map(({ value, label }) => (
-          <div
-            key={label}
-            className="flex flex-col gap-0.5 rounded-xl bg-muted px-3 py-2 min-w-0"
-          >
-            <span className="text-lg font-semibold tabular-nums leading-none">{value}</span>
-            <span className="text-[0.625rem] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
-              {label}
-            </span>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
