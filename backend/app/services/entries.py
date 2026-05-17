@@ -16,32 +16,15 @@ from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
 from app.schemas.photo import PhotoResponse
 from app.services import supplement_catalog as supplement_catalog_service
 from app.services import symptom_catalog as symptom_catalog_service
-from app.services.diet_flags import compute_photo_signal
+from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
 from app.services.obsidian import delete_daily_file
 from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.photo_storage import delete_photo
 
-# Known flag vocabulary — "normal" and "not-sure" are legacy non-flags dropped on parse.
-_FLAG_VOCAB: frozenset[str] = frozenset(
-    {"high-histamine", "high-fodmap", "gluten", "dairy"}
-)
-
-
-def _parse_diet_risk_csv(raw: Optional[str]) -> set[str]:
-    """Parse the legacy ``diet_risk`` column into user-added flag strings.
-
-    Drops ``"normal"`` and ``"not-sure"`` (they are not flags under the new model).
-    Filters to the known flag vocabulary only.
-    """
-    if not raw:
-        return set()
-    tokens = {t.strip() for t in raw.split(",") if t.strip()}
-    return tokens & _FLAG_VOCAB
-
 
 def _build_response(entry: Entry) -> EntryResponse:
     """Construct an ``EntryResponse`` with all computed diet-signal fields."""
-    user_added = _parse_diet_risk_csv(entry.diet_risk)
+    user_added = parse_diet_risk_csv(entry.diet_risk)
     signal = compute_photo_signal(entry)
     return EntryResponse.model_validate(
         {

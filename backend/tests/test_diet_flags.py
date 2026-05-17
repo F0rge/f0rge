@@ -413,7 +413,7 @@ async def test_effective_counts_user_adds_gluten_not_in_photos(
     await async_db.commit()
     await async_db.refresh(entry)
 
-    counts = compute_effective_counts(entry, user_added_flags=["gluten"])
+    counts = compute_effective_counts(compute_photo_signal(entry), ["gluten"])
 
     assert counts["gluten_count"] == 1
 
@@ -427,7 +427,7 @@ async def test_effective_counts_no_double_count_when_photos_and_user_agree(
     await async_db.commit()
 
     entry = await _load_entry(async_db, entry_id)
-    counts = compute_effective_counts(entry, user_added_flags=["gluten"])
+    counts = compute_effective_counts(compute_photo_signal(entry), ["gluten"])
 
     # Photos already found gluten (count=2); user also asserts gluten — no extra bump
     assert counts["gluten_count"] == 2
@@ -443,6 +443,6 @@ async def test_effective_counts_manual_histamine_does_not_bump_load(
     await async_db.commit()
 
     entry = await _load_entry(async_db, entry_id)
-    counts = compute_effective_counts(entry, user_added_flags=["high-histamine"])
+    counts = compute_effective_counts(compute_photo_signal(entry), ["high-histamine"])
 
     assert counts["histamine_load"] == 7

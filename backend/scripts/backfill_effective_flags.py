@@ -5,26 +5,25 @@ and writes a CSV report comparing photo-derived flags to the legacy diet_risk
 field. Read-only — does NOT modify any row.
 
 Usage:
-    cd backend && uv run python -m scripts.backfill_effective_flags [--database-url URL]
+    cd backend && uv run python -m scripts.backfill_effective_flags
 
 Output: backfill_report.csv in the working directory.
 """
 
 from __future__ import annotations
 
-import argparse
 import csv
 from pathlib import Path
 
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, selectinload, sessionmaker
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
-import app.models  # noqa: F401 — registers all ORM classes with Base.metadata
-from app.config import settings
+import app.models  # noqa: F401 - registers all ORM classes with Base.metadata
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.services.diet_flags import compute_photo_signal
+from scripts._db import SyncSession
 
 _OUTPUT_FILE = "backfill_report.csv"
 _CSV_FIELDNAMES = [
@@ -41,13 +40,13 @@ _CSV_FIELDNAMES = [
 ]
 
 
-def _sync_url(database_url: str) -> str:
-    """Convert async URL to sync-compatible URL."""
-    return database_url.replace("+asyncpg", "+psycopg2")
-
-
 def _parse_legacy_flags(diet_risk: str) -> set[str]:
-    """Split comma-separated diet_risk string into a set of flag strings."""
+    """Split comma-separated diet_risk string into a set of flag strings.
+
+    Unlike parse_diet_risk_csv in app.services.diet_flags, this preserves all
+    legacy tokens (including "normal" and unknown values) so the report shows
+    exactly what was in the column.
+    """
     if not diet_risk or diet_risk.strip().lower() == "normal":
         return set()
     return {f.strip() for f in diet_risk.split(",") if f.strip()}
@@ -67,12 +66,8 @@ def _load_entries(session: Session) -> list[Entry]:
     return list(result.scalars().all())
 
 
-def run(database_url: str) -> None:
-    sync_url = _sync_url(database_url)
-    engine = create_engine(sync_url)
-    factory = sessionmaker(bind=engine)
-
-    with factory() as session:
+def run() -> None:
+    with SyncSession() as session:
         entries = _load_entries(session)
 
     n_total = len(entries)
@@ -120,18 +115,5 @@ def run(database_url: str) -> None:
     )
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Diff legacy diet_risk strings against photo-derived flags."
-    )
-    parser.add_argument(
-        "--database-url",
-        default=settings.database_url,
-        help="SQLAlchemy database URL (default: read from app.config.settings)",
-    )
-    args = parser.parse_args()
-    run(args.database_url)
-
-
 if __name__ == "__main__":
-    main()
+    run()

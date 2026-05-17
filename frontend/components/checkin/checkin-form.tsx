@@ -178,21 +178,18 @@ interface DietRiskSectionProps {
 
 function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle }: DietRiskSectionProps) {
   const hasPhotos = existingPhotos.length > 0
-  const signal = existingEntry?.photo_signal ?? null
+  // Default to an empty signal for entries that pre-date the deploy.
+  const signal: PhotoSignal = existingEntry?.photo_signal ?? {
+    flags: [],
+    scores: { histamine_load: 0, fodmap_count: 0, gluten_count: 0, dairy_count: 0 },
+    sources: {},
+  }
 
-  // Signal is "live" if it has any flags or non-zero scores.
-  const signalIsLive =
-    signal !== null &&
-    (signal.flags.length > 0 ||
-      signal.scores.histamine_load > 0 ||
-      signal.scores.fodmap_count > 0 ||
-      signal.scores.gluten_count > 0 ||
-      signal.scores.dairy_count > 0)
+  // Signal is "live" if photos have produced any flags or the cumulative histamine load is non-zero.
+  // (Counts > 0 always also produce flags, so they're not separate signals.)
+  const signalIsLive = signal.flags.length > 0 || signal.scores.histamine_load > 0
 
-  const lockedFlags = signal?.flags ?? []
-
-  // Manual options: hide any flag already locked from photos.
-  const manualOptions = DIET_OPTIONS.filter((o) => !lockedFlags.includes(o.id))
+  const manualOptions = DIET_OPTIONS.filter((o) => !signal.flags.includes(o.id))
   const selectedFlags = dietRisk ? dietRisk.split(',').filter(Boolean) : []
 
   return (
@@ -201,7 +198,7 @@ function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle }: 
 
       {hasPhotos ? (
         signalIsLive ? (
-          <PhotoDerivedRow signal={signal!} photoCount={existingPhotos.length} />
+          <PhotoDerivedRow signal={signal} photoCount={existingPhotos.length} />
         ) : (
           <div className="rounded-xl border border-dashed border-border bg-background p-3">
             <div className="flex items-center gap-1.5 text-muted-foreground">

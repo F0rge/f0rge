@@ -15,9 +15,9 @@ from app.models.photo_ingredient import PhotoIngredient
 from app.models.treatment import Treatment
 from app.schemas.weather import WeatherDailySummary
 from app.services.diet_flags import (
-    HISTAMINE_FLAG_THRESHOLD,
-    PhotoScores,
-    PhotoSignal,
+    compute_effective_counts,
+    compute_signal_from_analyses,
+    parse_diet_risk_csv,
 )
 
 logger = logging.getLogger(__name__)
@@ -246,93 +246,19 @@ def _stool_summary(entry: Entry) -> str:
     return "Unknown"
 
 
-def _photo_signal_from_analyses(
-    analyses: dict[int, PhotoAnalysis],
-) -> PhotoSignal:
-    """Compute PhotoSignal from the pre-fetched analyses dict.
-
-    Thread-safe: uses plain Python objects already loaded in the async context;
-    does not trigger any ORM lazy loads. Mirrors compute_photo_signal but takes
-    the pre-fetched ``{photo_id: PhotoAnalysis}`` dict instead of an Entry ORM object.
-    """
-    flags: set[str] = set()
-    histamine_load = 0
-    fodmap_ingredient_ids: set[int] = set()
-    gluten_count = 0
-    dairy_count = 0
-    sources: dict[str, list[str]] = {}
-    seen_histamine: set[str] = set()
-    seen_fodmap: set[str] = set()
-    seen_gluten: set[str] = set()
-    seen_dairy: set[str] = set()
-
-    for analysis in analyses.values():
-        for ing in analysis.ingredients:
-            score = ing.histamine_score or 0
-            histamine_load += score
-
-            if score >= HISTAMINE_FLAG_THRESHOLD:
-                flags.add("high-histamine")
-                if ing.name not in seen_histamine:
-                    seen_histamine.add(ing.name)
-                    sources.setdefault("high-histamine", []).append(ing.name)
-
-            is_high_fodmap = any(
-                getattr(ing, col) == "high"
-                for col in (
-                    "fodmap_oligos",
-                    "fodmap_fructose",
-                    "fodmap_polyols",
-                    "fodmap_lactose",
-                )
-            )
-            if is_high_fodmap:
-                flags.add("high-fodmap")
-                fodmap_ingredient_ids.add(ing.id)
-                if ing.name not in seen_fodmap:
-                    seen_fodmap.add(ing.name)
-                    sources.setdefault("high-fodmap", []).append(ing.name)
-
-            if ing.contains_gluten:
-                flags.add("gluten")
-                gluten_count += 1
-                if ing.name not in seen_gluten:
-                    seen_gluten.add(ing.name)
-                    sources.setdefault("gluten", []).append(ing.name)
-
-            if ing.contains_dairy:
-                flags.add("dairy")
-                dairy_count += 1
-                if ing.name not in seen_dairy:
-                    seen_dairy.add(ing.name)
-                    sources.setdefault("dairy", []).append(ing.name)
-
-    return PhotoSignal(
-        flags=flags,
-        scores=PhotoScores(
-            histamine_load=histamine_load,
-            fodmap_count=len(fodmap_ingredient_ids),
-            gluten_count=gluten_count,
-            dairy_count=dairy_count,
-        ),
-        sources=sources,
-    )
-
-
 def _diet_provenance_lines(
-    effective_flags: list[str],
     photo_flags: set[str],
     user_added: set[str],
 ) -> list[str]:
     """Build the ``diet-risk-provenance:`` YAML block for vault frontmatter.
 
-    Only emits lines for flags that are actually present in ``effective_flags``.
     Iteration order is alphabetical for stable vault diffs.
     """
-    if not effective_flags:
+    effective = photo_flags | user_added
+    if not effective:
         return []
     lines = ["diet-risk-provenance:"]
-    for flag in sorted(effective_flags):
+    for flag in sorted(effective):
         in_photos = flag in photo_flags
         in_manual = flag in user_added
         if in_photos and in_manual:
@@ -368,42 +294,14 @@ def _render_markdown(
     entry_time = getattr(entry, "entry_time", None)
     period_of_day = getattr(entry, "period_of_day", None)
 
-    # Diet signal — computed from pre-fetched analyses + user-added CSV flags.
-    # Uses _photo_signal_from_analyses (thread-safe) rather than compute_photo_signal
-    # (which would trigger lazy ORM loads from a thread, causing MissingGreenlet).
-    _flag_vocab: frozenset[str] = frozenset(
-        {"high-histamine", "high-fodmap", "gluten", "dairy"}
-    )
-    _raw_diet_risk = getattr(entry, "diet_risk", None) or ""
-    _user_added_flags: set[str] = {
-        t.strip() for t in _raw_diet_risk.split(",") if t.strip()
-    } & _flag_vocab
-    _photo_signal = _photo_signal_from_analyses(analyses)
-    _effective_flags: list[str] = sorted(_photo_signal.flags | _user_added_flags)
+    # Diet signal — compute from pre-fetched analyses, not entry.photos[*].analysis,
+    # because the latter would trigger ORM lazy loads inside asyncio.to_thread and
+    # raise MissingGreenlet. See obsidian_prefetch._fetch_obsidian_deps.
+    _user_added_flags = parse_diet_risk_csv(getattr(entry, "diet_risk", None))
+    _photo_signal = compute_signal_from_analyses(analyses.values())
+    _effective_flags = sorted(_photo_signal.flags | _user_added_flags)
     _effective_str = ", ".join(_effective_flags) if _effective_flags else "normal"
-    # Use effective_counts from the photo-signal-from-analyses to avoid double-loading.
-    _eff_counts: dict[str, int] = {
-        "histamine_load": _photo_signal.scores.histamine_load,
-        "fodmap_count": _photo_signal.scores.fodmap_count
-        + (
-            1
-            if "high-fodmap" in _user_added_flags
-            and "high-fodmap" not in _photo_signal.flags
-            else 0
-        ),
-        "gluten_count": _photo_signal.scores.gluten_count
-        + (
-            1
-            if "gluten" in _user_added_flags and "gluten" not in _photo_signal.flags
-            else 0
-        ),
-        "dairy_count": _photo_signal.scores.dairy_count
-        + (
-            1
-            if "dairy" in _user_added_flags and "dairy" not in _photo_signal.flags
-            else 0
-        ),
-    }
+    _eff_counts = compute_effective_counts(_photo_signal, _user_added_flags)
 
     dietary_fm, dietary_tags = _compute_dietary_tags(list(analyses.values()))
 
@@ -445,9 +343,7 @@ def _render_markdown(
         f"diet-fodmap-count: {_eff_counts['fodmap_count']}",
         f"diet-gluten-count: {_eff_counts['gluten_count']}",
         f"diet-dairy-count: {_eff_counts['dairy_count']}",
-        *_diet_provenance_lines(
-            _effective_flags, _photo_signal.flags, _user_added_flags
-        ),
+        *_diet_provenance_lines(_photo_signal.flags, _user_added_flags),
         f"supplements: {entry.supplements}",
         # Symptom severity lines (sorted by key for stable vault diffs)
         *[f"sym-{k}: {v}" for k, v in sorted(filtered_symptoms.items())],

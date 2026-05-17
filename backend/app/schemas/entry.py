@@ -150,6 +150,6 @@ class EntryResponse(BaseModel):
     effective_flags: list[str] = Field(default_factory=list)
     photo_derived_flags: list[str] = Field(default_factory=list)
     user_added_flags: list[str] = Field(default_factory=list)
-    photo_signal: Optional[PhotoSignal] = None
+    photo_signal: PhotoSignal
 
     model_config = ConfigDict(from_attributes=True)

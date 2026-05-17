@@ -52,7 +52,7 @@ export interface Entry {
   effective_flags: string[]
   photo_derived_flags: string[]
   user_added_flags: string[]
-  photo_signal: PhotoSignal | null
+  photo_signal: PhotoSignal
   created_at: string
   updated_at: string
 }

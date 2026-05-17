@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.entry import Entry
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.schemas.entry import EntryCreate, EntryResponse
+from app.services import entries as entries_service
 from app.services import symptom_catalog as symptom_catalog_service
 
 
@@ -153,7 +154,7 @@ async def test_entry_omitted_symptoms_defaults_to_empty_dict(
     entry = await _make_entry(async_db, _DATE)
     assert entry.symptoms_json == {}
 
-    response = EntryResponse.model_validate(entry)
+    response = entries_service._build_response(entry)
     assert response.symptoms_json == {}
 
 
