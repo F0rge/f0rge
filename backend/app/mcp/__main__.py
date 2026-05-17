@@ -13,10 +13,13 @@ from app.mcp.tools import register_tools
 
 
 def _configure_logging() -> None:
+    # MCP stdio transport uses stdout exclusively for JSON-RPC messages — any
+    # log line landing there breaks the framing for strict clients (Claude
+    # Desktop). Always log to stderr so both transports work cleanly.
     logging.basicConfig(
         format='{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "msg": "%(message)s"}',
         level=logging.INFO,
-        stream=sys.stdout,
+        stream=sys.stderr,
     )
 
 
