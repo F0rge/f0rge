@@ -242,6 +242,7 @@ export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
   // Complete or Confirmed
   const isConfirmed = analysis.status === 'confirmed'
   const visibleIngredients = analysis.ingredients.filter((ing) => ing.visible)
+  const inferredIngredients = analysis.ingredients.filter((ing) => !ing.visible)
 
   return (
     <div className="mt-2 rounded-lg border border-border p-2.5">
@@ -266,6 +267,21 @@ export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
           {visibleIngredients.map((ing) => (
             <IngredientRow key={ing.id} ingredient={ing} canEdit={!isConfirmed} />
           ))}
+        </div>
+      )}
+
+      {/* Inferred ingredients — implied by the dish but not directly visible in the photo.
+          Counted toward diet flags so the day's total reflects what was actually eaten. */}
+      {inferredIngredients.length > 0 && (
+        <div className="mt-2 border-t border-dashed border-border pt-1.5">
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            Inferred (counted but not visible in photo)
+          </div>
+          <div className="space-y-0.5 opacity-70">
+            {inferredIngredients.map((ing) => (
+              <IngredientRow key={ing.id} ingredient={ing} canEdit={!isConfirmed} />
+            ))}
+          </div>
         </div>
       )}
 
