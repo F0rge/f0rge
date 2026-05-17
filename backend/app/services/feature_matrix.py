@@ -88,19 +88,19 @@ _FODMAP_LEVEL: dict[Optional[str], int] = {"high": 2, "moderate": 1, None: 0}
 
 
 def _compute_dietary_loads(photos: list[Photo]) -> dict:
-    visible: list[PhotoIngredient] = []
+    # Counts both visible and inferred ingredients — matches diet_flags._aggregate
+    # so stats and the photo_signal converge on the same numbers.
+    ingredients: list[PhotoIngredient] = []
     confirmed_photo_count = 0
 
     for photo in photos:
         if photo.analysis and photo.analysis.status == "confirmed":
             confirmed_photo_count += 1
-            for ing in photo.analysis.ingredients:
-                if ing.visible:
-                    visible.append(ing)
+            ingredients.extend(photo.analysis.ingredients)
 
     hist_sum = hist_max = oligos = fructose = polyols = lactose = 0
     gluten = dairy = False
-    for i in visible:
+    for i in ingredients:
         h = i.histamine_score or 0
         hist_sum += h
         if h > hist_max:
@@ -123,7 +123,7 @@ def _compute_dietary_loads(photos: list[Photo]) -> dict:
         "gluten_exposure": gluten,
         "dairy_exposure": dairy,
         "photo_count": confirmed_photo_count,
-        "ingredient_count": len(visible),
+        "ingredient_count": len(ingredients),
     }
 
 
