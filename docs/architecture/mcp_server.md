@@ -20,7 +20,7 @@ Claude Code (Mac)                                      Claude Desktop (remote)
         | ssh leo@rpi                                           | https://health-mcp.leo-figueiredo.com
         v                                                       v
    docker exec -i                                       Cloudflare Access (JWT)
-   health-tracker-mcp                                          |
+   mcp-server-<coolify-id>                                     |
    (stdio transport)                                           v
         |                                              cloudflared tunnel
         |                                              (homelab-services)
@@ -136,4 +136,4 @@ Verify with `claude mcp list` (the new server should appear) and then within a `
 - **`permission denied for table X`** — expected behaviour for any DML statement issued via the read-only role. The fix is not to grant DML; the fix is to wire the operation through the regular backend API which uses the read-write role.
 - **`role "healthtracker_ro" does not exist`** — migration `004` was not applied. Run `alembic upgrade head` inside `health-tracker-backend`.
 - **`connection refused` from cloudflared logs** — `mcp-server` container isn't up, or it's bound to a different port than the ingress rule expects. Check `docker compose ps` and the `ports:` line in `docker-compose.prod.yml`.
-- **stdio wrapper exits immediately** — usually means the SSH alias is wrong, the container name is wrong (it's `health-tracker-mcp`, not `health-tracker-mcp-server`), or `docker exec` can't allocate a TTY because `-i` was dropped. The template uses `-i` only — no `-t`.
+- **stdio wrapper exits immediately** — usually means the SSH alias is wrong, no `mcp-server-*` container is running on the Pi (check with `ssh leo@rpi 'docker ps --filter name=^mcp-server- --format "{{.Names}}"'`), or `docker exec` can't allocate a TTY because `-i` was dropped. The template uses `-i` only — no `-t`. The template resolves the container name at runtime via `docker ps | grep ^mcp-server-` because Coolify renames containers on every redeploy (the `container_name:` directive in the compose file is silently ignored — verified in production 2026-05-17).
