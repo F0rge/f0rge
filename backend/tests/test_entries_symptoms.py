@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.entry import Entry
 from app.models.symptom_catalog import SymptomCatalogItem
-from app.schemas.entry import EntryCreate, EntryResponse
+from app.schemas.entry import EntryCreate
 from app.services import entries as entries_service
 from app.services import symptom_catalog as symptom_catalog_service
 

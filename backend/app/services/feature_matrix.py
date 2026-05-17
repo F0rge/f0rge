@@ -329,7 +329,9 @@ async def build_feature_matrix(
                     "had_alcohol": 1 if (entry.alcohol_units or 0) > 0 else 0,
                     "had_caffeine": 1 if (entry.caffeine_servings or 0) > 0 else 0,
                     **{
-                        col: 1 if flag in _user_flags and flag not in _photo_flags else 0
+                        col: 1
+                        if flag in _user_flags and flag not in _photo_flags
+                        else 0
                         for flag, col in _manual_extra.items()
                     },
                     "stool_status": entry.stool_status,
