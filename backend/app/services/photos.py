@@ -103,12 +103,20 @@ class PhotoService:
         await asyncio.to_thread(save_photo, processed_bytes, filename, vault_path)
 
         now = datetime.datetime.utcnow()
+
+        # Strip timezone from meal_time before asyncpg binds to TIMESTAMP WITHOUT TIME ZONE.
+        # Same fix as EntryCreate — convert tz-aware datetimes to UTC and drop tzinfo.
+        normalized_meal_time = meal_time
+        if normalized_meal_time is not None and normalized_meal_time.tzinfo is not None:
+            utc_offset = normalized_meal_time.utcoffset()
+            normalized_meal_time = (normalized_meal_time - utc_offset).replace(tzinfo=None)
+
         photo = Photo(
             entry_id=entry.id,
             filename=filename,
             label=label,
             original_filename=file.filename,
-            meal_time=meal_time if meal_time is not None else now,
+            meal_time=normalized_meal_time if normalized_meal_time is not None else now,
             created_at=now,
         )
         # Invariant: a file on disk implies a DB row exists.
