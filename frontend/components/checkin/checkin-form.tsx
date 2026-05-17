@@ -21,7 +21,7 @@ import {
   useSupplementCatalog,
   useTreatments,
 } from '@/lib/api/hooks'
-import { apiGet, apiPut } from '@/lib/api/client'
+import { apiGet, apiPut, ApiError } from '@/lib/api/client'
 import { PhotoAnalysis } from './photo-analysis'
 import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
 
@@ -214,8 +214,27 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       setMealTimes([])
       queryClient.invalidateQueries({ queryKey: ['entry', date] })
       onSuccess?.()
-    } catch {
-      toast.error('Failed to save entry')
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        toast.info('Entry already saved — switching to edit mode')
+        queryClient.invalidateQueries({ queryKey: ['entry', date] })
+      } else if (err instanceof ApiError && err.status === 422) {
+        let detail = 'Validation error'
+        try {
+          const parsed = JSON.parse(err.message) as { detail?: string | { msg: string }[] }
+          if (typeof parsed.detail === 'string') {
+            detail = parsed.detail
+          } else if (Array.isArray(parsed.detail) && parsed.detail[0]?.msg) {
+            detail = parsed.detail[0].msg
+          }
+        } catch {
+          // unparseable — use the generic label
+        }
+        toast.error(detail)
+      } else {
+        console.error('Failed to save entry', err)
+        toast.error('Failed to save. Please try again.')
+      }
     } finally {
       setSubmitting(false)
     }

@@ -498,7 +498,7 @@ export function useDeleteLab() {
 }
 
 export function useMarkerCatalog(q?: string) {
-  const params = q ? `?q=${encodeURIComponent(q)}&limit=50` : '?limit=50'
+  const params = q ? `?q=${encodeURIComponent(q)}&limit=500` : '?limit=500'
   return useQuery<LabMarkerCatalog[]>({
     queryKey: ['marker-catalog', q ?? ''],
     queryFn: () => apiGet(`/lab-markers/catalog${params}`),
