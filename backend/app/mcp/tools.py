@@ -13,6 +13,8 @@ from app.models.entry import Entry
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.models.treatment import Treatment
+from app.services.diet_flags import compute_photo_signal
+from app.services.entries import _parse_diet_risk_csv
 from app.services.llm.factory import (
     build_embedding_client,
     resolve_embedding_credentials,
@@ -232,6 +234,10 @@ def register_tools(server: FastMCP) -> None:
 
 
 def _entry_to_dict(row: Entry) -> dict[str, Any]:
+    _user_added = _parse_diet_risk_csv(row.diet_risk)
+    _signal = compute_photo_signal(row)
+    # effective_flags: canonical merged flag set (photos + user-added), sorted
+    _effective = sorted(_signal.flags | _user_added)
     return {
         "id": row.id,
         "date": str(row.date),
@@ -241,7 +247,10 @@ def _entry_to_dict(row: Entry) -> dict[str, Any]:
         "neuro": row.neuro,
         "sleep_quality": row.sleep_quality,
         "stress": row.stress,
+        # diet_risk: raw column preserved as audit trail (legacy CSV or user-added flags)
         "diet_risk": row.diet_risk,
+        # effective_flags: authoritative view combining photos + user assertions
+        "effective_flags": _effective,
         "sick": row.sick,
         "hot_shower": row.hot_shower,
         "alcohol_units": row.alcohol_units,

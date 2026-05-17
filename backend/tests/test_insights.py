@@ -432,18 +432,17 @@ async def test_sleep_next_day_orphaned_last_day_dropped(
         assert pt.sleep_value is not None
 
 
-async def test_correlates_diet_risk_is_valid_outcome(
+async def test_correlates_sick_is_valid_outcome(
     async_db: AsyncSession,
 ) -> None:
-    """diet_risk is ordinal-encoded; compute_correlates must accept it without raising."""
+    """sick is a core outcome; compute_correlates must accept it without raising."""
     for i in range(15):
         d = _BASE_DATE + datetime.timedelta(days=i)
-        risk = ["minimal", "low", "normal", "high"][i % 4]
-        await _add_entry(async_db, d, diet_risk=risk)
+        await _add_entry(async_db, d)
 
     # Must not raise ValidationError
-    result = await compute_correlates(async_db, None, None, "diet_risk", None, min_n=3)
-    assert result.outcome == "diet_risk"
+    result = await compute_correlates(async_db, None, None, "sick", None, min_n=3)
+    assert result.outcome == "sick"
 
 
 async def test_sleep_next_day_rho_returned(async_db: AsyncSession) -> None:

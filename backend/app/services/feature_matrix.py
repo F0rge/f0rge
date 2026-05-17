@@ -17,8 +17,10 @@ from app.models.supplement_catalog import SupplementCatalogItem
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
+from app.services.diet_flags import compute_photo_signal
+from app.services.entries import _parse_diet_risk_csv
 
-FEATURE_SCHEMA_VERSION = 3
+FEATURE_SCHEMA_VERSION = 4
 
 STATIC_COLUMNS = [
     "date",
@@ -29,13 +31,17 @@ STATIC_COLUMNS = [
     "neuro",
     "sleep_quality",
     "stress",
-    "diet_risk",
     "sick",
     "hot_shower",
     "alcohol_units",
     "caffeine_servings",
     "had_alcohol",
     "had_caffeine",
+    # Manual diet-risk flag assertions (user-added flags not already in photo signal)
+    "manual_extra_dairy",
+    "manual_extra_fodmap",
+    "manual_extra_gluten",
+    "manual_extra_histamine",
     "stool_status",
     "bristol_type",
     "period_of_day",
@@ -80,16 +86,6 @@ STATIC_COLUMNS = [
 ]
 
 _FODMAP_LEVEL: dict[Optional[str], int] = {"high": 2, "moderate": 1, None: 0}
-
-# Ordinal encoding for diet_risk so it works as a numeric feature/outcome.
-# Direction: minimal < low < normal < high (ascending dietary risk).
-_DIET_RISK_ORDINAL: dict[Optional[str], Optional[int]] = {
-    "minimal": 0,
-    "low": 1,
-    "normal": 2,
-    "high": 3,
-    None: None,
-}
 
 
 def _compute_dietary_loads(photos: list[Photo]) -> dict:
@@ -310,6 +306,9 @@ async def build_feature_matrix(
             taken_keys: set[str] = {
                 s.strip() for s in (entry.supplements or "").split(",") if s.strip()
             }
+            # Manual flags the user asserted that photos didn't already flag.
+            _user_flags = _parse_diet_risk_csv(entry.diet_risk)
+            _photo_flags: set[str] = compute_photo_signal(entry).flags
             row.update(
                 {
                     "overall": entry.overall,
@@ -318,13 +317,35 @@ async def build_feature_matrix(
                     "neuro": entry.neuro,
                     "sleep_quality": entry.sleep_quality,
                     "stress": entry.stress,
-                    "diet_risk": _DIET_RISK_ORDINAL.get(entry.diet_risk),
                     "sick": entry.sick,
                     "hot_shower": entry.hot_shower,
                     "alcohol_units": entry.alcohol_units,
                     "caffeine_servings": entry.caffeine_servings,
                     "had_alcohol": 1 if (entry.alcohol_units or 0) > 0 else 0,
                     "had_caffeine": 1 if (entry.caffeine_servings or 0) > 0 else 0,
+                    # manual_extra_* = user flagged AND photos didn't catch it (0/1 int)
+                    "manual_extra_dairy": (
+                        1
+                        if "dairy" in _user_flags and "dairy" not in _photo_flags
+                        else 0
+                    ),
+                    "manual_extra_fodmap": (
+                        1
+                        if "high-fodmap" in _user_flags
+                        and "high-fodmap" not in _photo_flags
+                        else 0
+                    ),
+                    "manual_extra_gluten": (
+                        1
+                        if "gluten" in _user_flags and "gluten" not in _photo_flags
+                        else 0
+                    ),
+                    "manual_extra_histamine": (
+                        1
+                        if "high-histamine" in _user_flags
+                        and "high-histamine" not in _photo_flags
+                        else 0
+                    ),
                     "stool_status": entry.stool_status,
                     "bristol_type": entry.bristol_type,
                     "period_of_day": entry.period_of_day,
