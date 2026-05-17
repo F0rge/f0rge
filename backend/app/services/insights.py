@@ -33,7 +33,6 @@ _CORE_OUTCOMES: frozenset[str] = frozenset(
         "sleep_quality",
         "stress",
         "sick",
-        "diet_risk",
     }
 )
 

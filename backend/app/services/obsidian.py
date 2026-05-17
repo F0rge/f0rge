@@ -14,6 +14,11 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.treatment import Treatment
 from app.schemas.weather import WeatherDailySummary
+from app.services.diet_flags import (
+    compute_effective_counts,
+    compute_signal_from_analyses,
+    parse_diet_risk_csv,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +246,31 @@ def _stool_summary(entry: Entry) -> str:
     return "Unknown"
 
 
+def _diet_provenance_lines(
+    photo_flags: set[str],
+    user_added: set[str],
+) -> list[str]:
+    """Build the ``diet-risk-provenance:`` YAML block for vault frontmatter.
+
+    Iteration order is alphabetical for stable vault diffs.
+    """
+    effective = photo_flags | user_added
+    if not effective:
+        return []
+    lines = ["diet-risk-provenance:"]
+    for flag in sorted(effective):
+        in_photos = flag in photo_flags
+        in_manual = flag in user_added
+        if in_photos and in_manual:
+            provenance = "both"
+        elif in_photos:
+            provenance = "photos"
+        else:
+            provenance = "manual"
+        lines.append(f"  - {flag}: {provenance}")
+    return lines
+
+
 def _render_markdown(
     entry: Entry,
     photos: Sequence[Photo],
@@ -263,6 +293,15 @@ def _render_markdown(
     bristol_type = getattr(entry, "bristol_type", None)
     entry_time = getattr(entry, "entry_time", None)
     period_of_day = getattr(entry, "period_of_day", None)
+
+    # Diet signal — compute from pre-fetched analyses, not entry.photos[*].analysis,
+    # because the latter would trigger ORM lazy loads inside asyncio.to_thread and
+    # raise MissingGreenlet. See obsidian_prefetch._fetch_obsidian_deps.
+    _user_added_flags = parse_diet_risk_csv(getattr(entry, "diet_risk", None))
+    _photo_signal = compute_signal_from_analyses(analyses.values())
+    _effective_flags = sorted(_photo_signal.flags | _user_added_flags)
+    _effective_str = ", ".join(_effective_flags) if _effective_flags else "normal"
+    _eff_counts = compute_effective_counts(_photo_signal, _user_added_flags)
 
     dietary_fm, dietary_tags = _compute_dietary_tags(list(analyses.values()))
 
@@ -299,7 +338,12 @@ def _render_markdown(
         f"neuro: {entry.neuro}",
         f"sleep-quality: {entry.sleep_quality}",
         f"stress: {entry.stress}",
-        f"diet-risk: {entry.diet_risk}",
+        f"diet-risk: {_effective_str}",
+        f"diet-histamine-load: {_eff_counts['histamine_load']}",
+        f"diet-fodmap-count: {_eff_counts['fodmap_count']}",
+        f"diet-gluten-count: {_eff_counts['gluten_count']}",
+        f"diet-dairy-count: {_eff_counts['dairy_count']}",
+        *_diet_provenance_lines(_photo_signal.flags, _user_added_flags),
         f"supplements: {entry.supplements}",
         # Symptom severity lines (sorted by key for stable vault diffs)
         *[f"sym-{k}: {v}" for k, v in sorted(filtered_symptoms.items())],
@@ -340,7 +384,7 @@ def _render_markdown(
             f"| Neuro | {NEURO_LABELS.get(entry.neuro, str(entry.neuro))} |",
             f"| Sleep quality | {SLEEP_LABELS.get(entry.sleep_quality, str(entry.sleep_quality))} |",
             f"| Stress | {STRESS_LABELS.get(entry.stress, str(entry.stress))} |",
-            f"| Diet risk | {entry.diet_risk} |",
+            f"| Diet risk | {_effective_str} |",
             f"| Supplements | {_format_supplements(entry.supplements)} |",
             f"| Symptoms | {_format_symptoms(filtered_symptoms, active_sym_labels)} |",
             f"| Sick | {sick_str} |",

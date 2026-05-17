@@ -87,7 +87,10 @@ def categorize_feature(col: str) -> str:
         "had_caffeine",
         "photo_count",
         "ingredient_count",
-        "diet_risk",
+        "manual_extra_dairy",
+        "manual_extra_fodmap",
+        "manual_extra_gluten",
+        "manual_extra_histamine",
     }
 
     if col.startswith("supp_"):

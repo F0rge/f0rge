@@ -10,6 +10,7 @@ from app.models.lab import Lab
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.treatment import Treatment
+from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
 
 
 async def serialize_entry(db: AsyncSession, source_id: int) -> Optional[str]:
@@ -28,7 +29,10 @@ async def serialize_entry(db: AsyncSession, source_id: int) -> Optional[str]:
     parts.append(f"Neuro: {row.neuro}/10")
     parts.append(f"Sleep quality: {row.sleep_quality}/10")
     parts.append(f"Stress: {row.stress}/10")
-    parts.append(f"Diet risk: {row.diet_risk}")
+    _effective = sorted(
+        compute_photo_signal(row).flags | parse_diet_risk_csv(row.diet_risk)
+    )
+    parts.append(f"Diet risk: {', '.join(_effective) if _effective else 'normal'}")
     parts.append(f"Sick: {row.sick}")
     if row.stool_status:
         parts.append(f"Stool status: {row.stool_status}")

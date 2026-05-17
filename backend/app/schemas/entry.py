@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.photo import PhotoResponse
+from app.services.diet_flags import PhotoSignal
 
 _SYMPTOM_KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
@@ -145,5 +146,10 @@ class EntryResponse(BaseModel):
     photos: list[PhotoResponse] = []
     created_at: datetime.datetime
     updated_at: datetime.datetime
+    # Computed fields — not stored in DB; populated by the service on every read.
+    effective_flags: list[str] = Field(default_factory=list)
+    photo_derived_flags: list[str] = Field(default_factory=list)
+    user_added_flags: list[str] = Field(default_factory=list)
+    photo_signal: PhotoSignal
 
     model_config = ConfigDict(from_attributes=True)

@@ -12,12 +12,33 @@ from app.config import settings
 from app.exceptions import ConflictError, NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
-from app.schemas.entry import EntryCreate, EntryUpdate
+from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
+from app.schemas.photo import PhotoResponse
 from app.services import supplement_catalog as supplement_catalog_service
 from app.services import symptom_catalog as symptom_catalog_service
+from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
 from app.services.obsidian import delete_daily_file
 from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.photo_storage import delete_photo
+
+
+def _build_response(entry: Entry) -> EntryResponse:
+    """Construct an ``EntryResponse`` with all computed diet-signal fields."""
+    user_added = parse_diet_risk_csv(entry.diet_risk)
+    signal = compute_photo_signal(entry)
+    return EntryResponse.model_validate(
+        {
+            **{c.name: getattr(entry, c.name) for c in entry.__table__.columns},
+            "photos": [
+                PhotoResponse.model_validate(p, from_attributes=True)
+                for p in entry.photos
+            ],
+            "photo_signal": signal,
+            "photo_derived_flags": sorted(signal.flags),
+            "user_added_flags": sorted(user_added),
+            "effective_flags": sorted(signal.flags | user_added),
+        }
+    )
 
 
 def _period_of_day(ts: datetime.datetime) -> str:
@@ -43,7 +64,7 @@ def _derive_stool_normal(
     return None
 
 
-async def create_entry(db: AsyncSession, body: EntryCreate) -> Entry:
+async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
     existing = (
         await db.execute(select(Entry).where(Entry.date == body.date))
     ).scalar_one_or_none()
@@ -76,10 +97,12 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> Entry:
 
     await render_and_write_daily_file(db, entry, entry.photos)
 
-    return entry
+    return _build_response(entry)
 
 
-async def list_entries(db: AsyncSession, month: Optional[str] = None) -> list[Entry]:
+async def list_entries(
+    db: AsyncSession, month: Optional[str] = None
+) -> list[EntryResponse]:
     stmt = select(Entry)
     if month:
         year, mon = month.split("-")
@@ -90,21 +113,22 @@ async def list_entries(db: AsyncSession, month: Optional[str] = None) -> list[En
             end = datetime.date(int(year), int(mon) + 1, 1)
         stmt = stmt.where(Entry.date >= start, Entry.date < end)
     stmt = stmt.order_by(Entry.date.desc())
-    return list((await db.execute(stmt)).scalars().all())
+    entries = list((await db.execute(stmt)).scalars().all())
+    return [_build_response(e) for e in entries]
 
 
-async def get_entry(db: AsyncSession, date: datetime.date) -> Entry:
+async def get_entry(db: AsyncSession, date: datetime.date) -> EntryResponse:
     entry = (
         await db.execute(select(Entry).where(Entry.date == date))
     ).scalar_one_or_none()
     if not entry:
         raise NotFoundError(f"No entry for {date}")
-    return entry
+    return _build_response(entry)
 
 
 async def update_entry(
     db: AsyncSession, date: datetime.date, body: EntryUpdate
-) -> Entry:
+) -> EntryResponse:
     entry = (
         await db.execute(select(Entry).where(Entry.date == date))
     ).scalar_one_or_none()
@@ -132,7 +156,7 @@ async def update_entry(
 
     await render_and_write_daily_file(db, entry, entry.photos)
 
-    return entry
+    return _build_response(entry)
 
 
 async def delete_entry(db: AsyncSession, date: datetime.date) -> None:

@@ -9,7 +9,6 @@ from app.models.symptom_catalog import SymptomCatalogItem
 from app.services.feature_matrix import (
     FEATURE_SCHEMA_VERSION,
     STATIC_COLUMNS,
-    _DIET_RISK_ORDINAL,
     build_feature_matrix,
 )
 
@@ -155,14 +154,14 @@ async def test_column_order_static_then_supp_then_tx_then_sym(
 
 
 # ---------------------------------------------------------------------------
-# diet_risk ordinal encoding
+# manual_extra_* boolean columns
 # ---------------------------------------------------------------------------
 
 
 async def _add_entry_with_diet_risk(
     db: AsyncSession,
     date: datetime.date,
-    diet_risk: str | None,
+    diet_risk: str,
 ) -> Entry:
     entry = Entry(
         date=date,
@@ -186,35 +185,47 @@ async def _add_entry_with_diet_risk(
     return entry
 
 
-async def test_diet_risk_low_encodes_as_1(async_db: AsyncSession) -> None:
-    await _add_entry_with_diet_risk(async_db, _DATE, "low")
+async def test_manual_extra_fodmap_set_when_user_flagged_no_photos(
+    async_db: AsyncSession,
+) -> None:
+    """Entry with diet_risk=high-fodmap and no photos → manual_extra_fodmap=1."""
+    await _add_entry_with_diet_risk(async_db, _DATE, "high-fodmap")
     rows, _ = await build_feature_matrix(async_db, _DATE, _DATE)
-    assert rows[0]["diet_risk"] == 1
+    assert rows[0]["manual_extra_fodmap"] == 1
 
 
-async def test_diet_risk_high_encodes_as_3(async_db: AsyncSession) -> None:
-    await _add_entry_with_diet_risk(async_db, _DATE, "high")
+async def test_manual_extra_histamine_set_when_user_flagged(
+    async_db: AsyncSession,
+) -> None:
+    """Entry with diet_risk=high-histamine and no photos → manual_extra_histamine=1."""
+    await _add_entry_with_diet_risk(async_db, _DATE, "high-histamine")
     rows, _ = await build_feature_matrix(async_db, _DATE, _DATE)
-    assert rows[0]["diet_risk"] == 3
+    assert rows[0]["manual_extra_histamine"] == 1
 
 
-def test_diet_risk_none_encodes_as_none() -> None:
-    # diet_risk=None cannot be persisted (NOT NULL column); test the mapping directly.
-    assert _DIET_RISK_ORDINAL.get(None) is None
-
-
-async def test_diet_risk_minimal_encodes_as_0(async_db: AsyncSession) -> None:
-    await _add_entry_with_diet_risk(async_db, _DATE, "minimal")
-    rows, _ = await build_feature_matrix(async_db, _DATE, _DATE)
-    assert rows[0]["diet_risk"] == 0
-
-
-async def test_diet_risk_normal_encodes_as_2(async_db: AsyncSession) -> None:
+async def test_manual_extra_columns_zero_for_normal_diet_risk(
+    async_db: AsyncSession,
+) -> None:
+    """Entry with diet_risk=normal → all manual_extra_* are 0."""
     await _add_entry_with_diet_risk(async_db, _DATE, "normal")
     rows, _ = await build_feature_matrix(async_db, _DATE, _DATE)
-    assert rows[0]["diet_risk"] == 2
+    assert rows[0]["manual_extra_dairy"] == 0
+    assert rows[0]["manual_extra_fodmap"] == 0
+    assert rows[0]["manual_extra_gluten"] == 0
+    assert rows[0]["manual_extra_histamine"] == 0
 
 
-def test_feature_schema_version_is_3() -> None:
-    """Ordinal diet_risk encoding bumped the schema version to 3."""
-    assert FEATURE_SCHEMA_VERSION == 3
+async def test_manual_extra_columns_none_when_no_entry(
+    async_db: AsyncSession,
+) -> None:
+    """Date with no entry → all manual_extra_* are None (pre-filled null row)."""
+    rows, _ = await build_feature_matrix(async_db, _DATE, _DATE)
+    assert rows[0]["manual_extra_dairy"] is None
+    assert rows[0]["manual_extra_fodmap"] is None
+    assert rows[0]["manual_extra_gluten"] is None
+    assert rows[0]["manual_extra_histamine"] is None
+
+
+def test_feature_schema_version_is_4() -> None:
+    """diet_risk column removed and manual_extra_* columns added → schema version bumped to 4."""
+    assert FEATURE_SCHEMA_VERSION == 4

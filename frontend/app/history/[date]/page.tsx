@@ -56,15 +56,6 @@ function getStressLabel(v: number): string {
   return ['', 'Low', 'Medium', 'High'][v] ?? 'Unknown'
 }
 
-function getDietLabel(v: string): string {
-  switch (v) {
-    case 'normal': return 'Normal'
-    case 'high-histamine': return 'High-histamine'
-    case 'high-fodmap': return 'High-FODMAP'
-    case 'both': return 'Both'
-    default: return v
-  }
-}
 
 const BRISTOL_HINTS: Record<number, string> = {
   1: 'Type 1 - separate hard lumps',
@@ -157,7 +148,14 @@ function EntryDetail({ entry }: { entry: Entry }) {
         <DetailRow label="Neuro" value={getNeuroLabel(entry.neuro)} />
         <DetailRow label="Sleep" value={getSleepLabel(entry.sleep_quality)} />
         <DetailRow label="Stress" value={getStressLabel(entry.stress)} />
-        <DetailRow label="Diet risk" value={getDietLabel(entry.diet_risk)} />
+        <DetailRow
+          label="Diet risk"
+          value={
+            entry.effective_flags && entry.effective_flags.length > 0
+              ? entry.effective_flags.join(', ')
+              : 'Normal'
+          }
+        />
         <DetailRow label="Supplements" value={entry.supplements.charAt(0).toUpperCase() + entry.supplements.slice(1)} />
         <DetailRow label="Sick" value={entry.sick ? 'Yes' : 'No'} />
         <DetailRow label="Hot shower" value={entry.hot_shower ? 'Yes' : 'No'} />

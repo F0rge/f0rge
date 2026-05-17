@@ -6,6 +6,7 @@ Usage:
 Finds every photo without a completed analysis and calls the same
 trigger_analysis_background() used by the normal upload flow.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -77,14 +78,16 @@ def main() -> None:
         db2 = SessionLocal()
         try:
             analysis = (
-                db2.query(PhotoAnalysis)
-                .filter(PhotoAnalysis.photo_id == pid)
-                .first()
+                db2.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == pid).first()
             )
             if analysis and analysis.status == "complete":
-                print(f"  -> {analysis.dish_name} ({len(analysis.ingredients)} ingredients)")
+                print(
+                    f"  -> {analysis.dish_name} ({len(analysis.ingredients)} ingredients)"
+                )
             elif analysis and analysis.status == "failed":
-                print(f"  -> FAILED: {analysis.error_message[:120] if analysis.error_message else 'unknown'}")
+                print(
+                    f"  -> FAILED: {analysis.error_message[:120] if analysis.error_message else 'unknown'}"
+                )
             else:
                 status = analysis.status if analysis else "no record"
                 print(f"  -> status: {status}")

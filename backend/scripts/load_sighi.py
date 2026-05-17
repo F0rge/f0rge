@@ -33,9 +33,7 @@ def load() -> None:
             score = item["score"]
 
             existing = (
-                session.query(DietaryIngredient)
-                .filter_by(canonical_name=name)
-                .first()
+                session.query(DietaryIngredient).filter_by(canonical_name=name).first()
             )
 
             if existing:

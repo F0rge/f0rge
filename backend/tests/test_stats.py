@@ -179,7 +179,7 @@ def test_categorize_food() -> None:
     assert categorize_feature("histamine_load_sum") == "food"
     assert categorize_feature("had_alcohol") == "food"
     assert categorize_feature("caffeine_servings") == "food"
-    assert categorize_feature("diet_risk") == "food"
+    assert categorize_feature("manual_extra_histamine") == "food"
     assert categorize_feature("gluten_exposure") == "food"
 
 
