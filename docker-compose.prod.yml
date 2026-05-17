@@ -40,10 +40,57 @@ services:
       - PGUSER=health
       - PGPASSWORD=${POSTGRES_PASSWORD}
       - PGDATABASE=health
+      - BACKUP_DIR=/backups
+      - KEEP_DAYS=14
+      - KEEP_COUNT=14
     volumes:
       - /mnt/nvme/home/leo/vaults/brain/Health-Backups/:/backups/
-      - ./backend/scripts/pg_backup.sh:/usr/local/bin/pg_backup.sh:ro
-    command: ["sh", "-c", "while true; do /usr/local/bin/pg_backup.sh; sleep 604800; done"]
+    # NOTE: the backup logic is INLINED here on purpose.
+    # We previously bind-mounted ./backend/scripts/pg_backup.sh, but Coolify's
+    # dockercompose build-pack does not materialise repo files unless they are
+    # compose bind-mount sources at build time, and we hit a state where the
+    # file was missing and the container crash-looped. Inlining removes the
+    # file dependency entirely — the script lives in the compose, so as long
+    # as the compose deploys, the backup logic deploys with it.
+    # The trigger lives on the Pi host at /home/leo/run-health-pg-backup.sh
+    # (daily cron) which `docker exec`s into this container and runs
+    # /usr/local/bin/pg_backup.sh. The long sleep is just a keepalive.
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -eu
+        cat > /usr/local/bin/pg_backup.sh <<'PGBACKUP'
+        #!/bin/sh
+        # Daily Postgres backup for health-tracker (inlined from docker-compose).
+        # Writes a custom-format dump (-Fc, internally compressed) to $BACKUP_DIR
+        # and prunes by count + age. Expects PGHOST/PGUSER/PGPASSWORD/PGDATABASE
+        # plus BACKUP_DIR/KEEP_DAYS/KEEP_COUNT in the environment.
+        set -eu
+        set -o pipefail 2>/dev/null || true
+        backup_dir="${BACKUP_DIR:-/backups}"
+        keep_days="${KEEP_DAYS:-14}"
+        keep_count="${KEEP_COUNT:-14}"
+        ts="$(date -u +%Y%m%dT%H%M%SZ)"
+        dump_file="${backup_dir}/health-${ts}.dump"
+        log() { printf "[%s] %s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+        mkdir -p "$backup_dir"
+        log "starting pg_dump (host=$PGHOST db=$PGDATABASE -> $dump_file)"
+        if ! pg_dump -Fc --no-owner --no-privileges -f "$dump_file"; then
+            log "pg_dump FAILED (exit $?), removing partial file"
+            rm -f "$dump_file"
+            exit 1
+        fi
+        size=$(stat -c %s "$dump_file" 2>/dev/null || echo "?")
+        log "pg_dump OK, size=${size} bytes"
+        log "pruning: keep newest $keep_count, drop older than ${keep_days}d"
+        ls -1t "$backup_dir"/health-*.dump 2>/dev/null | tail -n +$((keep_count + 1)) | xargs -r rm -v
+        find "$backup_dir" -maxdepth 1 -name "health-*.dump" -mtime "+${keep_days}" -print -delete
+        log "done"
+        PGBACKUP
+        chmod +x /usr/local/bin/pg_backup.sh
+        # Run once at startup, then idle. Daily trigger is the host cron job.
+        /usr/local/bin/pg_backup.sh || true
+        exec sleep infinity
     mem_limit: 128m
     restart: unless-stopped
     networks:
