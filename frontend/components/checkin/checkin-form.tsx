@@ -175,7 +175,10 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         supplements,
         sick,
         hot_shower: hotShower,
-        notes: notes || undefined,
+        // Always send notes (even when empty) so updates can clear it.
+        // Otherwise Pydantic exclude_unset drops the field and the
+        // existing value survives.
+        notes: notes,
         alcohol_units: alcoholUnits,
         caffeine_servings: caffeineServings,
         symptoms_json: symptomsJson,
