@@ -133,9 +133,7 @@ class IngredientLookupService:
             (
                 await self.db.execute(
                     select(DietaryIngredient)
-                    .where(
-                        DietaryIngredient.canonical_name.ilike(f"%{normalised}%")
-                    )
+                    .where(DietaryIngredient.canonical_name.ilike(f"%{normalised}%"))
                     .order_by(func.length(DietaryIngredient.canonical_name))
                 )
             )

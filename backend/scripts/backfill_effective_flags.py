@@ -9,6 +9,7 @@ Usage:
 
 Output: backfill_report.csv in the working directory.
 """
+
 from __future__ import annotations
 
 import argparse

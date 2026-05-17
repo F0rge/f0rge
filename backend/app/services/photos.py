@@ -109,7 +109,9 @@ class PhotoService:
         normalized_meal_time = meal_time
         if normalized_meal_time is not None and normalized_meal_time.tzinfo is not None:
             utc_offset = normalized_meal_time.utcoffset()
-            normalized_meal_time = (normalized_meal_time - utc_offset).replace(tzinfo=None)
+            normalized_meal_time = (normalized_meal_time - utc_offset).replace(
+                tzinfo=None
+            )
 
         photo = Photo(
             entry_id=entry.id,

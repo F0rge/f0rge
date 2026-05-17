@@ -88,7 +88,9 @@ def migrate_table(
     rows = src.scalars(stmt).all()
 
     if dry_run:
-        log.info("  [dry-run] would migrate %d rows from %s", len(rows), Model.__tablename__)
+        log.info(
+            "  [dry-run] would migrate %d rows from %s", len(rows), Model.__tablename__
+        )
         return len(rows)
 
     count = 0
@@ -136,7 +138,9 @@ def _fk_orphan_check(dst: Session) -> list[str]:
             )
         ).scalar()
         if result:
-            errors.append(f"FK orphans: {child_tbl}.{fk_col} -> {parent_tbl}: {result} rows")
+            errors.append(
+                f"FK orphans: {child_tbl}.{fk_col} -> {parent_tbl}: {result} rows"
+            )
     return errors
 
 
@@ -148,7 +152,9 @@ def _json_sample_check(src: Session, dst: Session) -> list[str]:
     errors: list[str] = []
 
     # entries.symptoms_json
-    all_entry_ids = [r for (r,) in src.execute(text("SELECT id FROM entries")).fetchall()]
+    all_entry_ids = [
+        r for (r,) in src.execute(text("SELECT id FROM entries")).fetchall()
+    ]
     sample_size = max(1, len(all_entry_ids) // 10)
     sample_ids = random.sample(all_entry_ids, min(sample_size, len(all_entry_ids)))
     for eid in sample_ids:
@@ -165,10 +171,14 @@ def _json_sample_check(src: Session, dst: Session) -> list[str]:
         if isinstance(dst_val, str):
             dst_val = json.loads(dst_val)
         if src_val != dst_val:
-            errors.append(f"Entry id={eid} symptoms_json mismatch: {src_val!r} != {dst_val!r}")
+            errors.append(
+                f"Entry id={eid} symptoms_json mismatch: {src_val!r} != {dst_val!r}"
+            )
 
     # lab_marker_catalog.common_units
-    all_cat_ids = [r for (r,) in src.execute(text("SELECT id FROM lab_marker_catalog")).fetchall()]
+    all_cat_ids = [
+        r for (r,) in src.execute(text("SELECT id FROM lab_marker_catalog")).fetchall()
+    ]
     cat_sample_size = max(1, len(all_cat_ids) // 10)
     cat_sample_ids = random.sample(all_cat_ids, min(cat_sample_size, len(all_cat_ids)))
     for cid in cat_sample_ids:
@@ -250,23 +260,41 @@ def run_migration(
     if prune_expired_sessions:
         session_where = AuthSession.expires_at >= now
 
-    src_total_sessions = src.execute(text("SELECT COUNT(*) FROM auth_sessions")).scalar() or 0
+    src_total_sessions = (
+        src.execute(text("SELECT COUNT(*) FROM auth_sessions")).scalar() or 0
+    )
 
     counts: dict[str, int] = {}
 
-    counts["auth_sessions"] = migrate_table(src, dst, AuthSession, where=session_where, dry_run=dry_run)
-    counts["supplement_catalog"] = migrate_table(src, dst, SupplementCatalogItem, dry_run=dry_run)
-    counts["symptom_catalog"] = migrate_table(src, dst, SymptomCatalogItem, dry_run=dry_run)
-    counts["dietary_ingredients"] = migrate_table(src, dst, DietaryIngredient, dry_run=dry_run)
-    counts["weather_readings"] = migrate_table(src, dst, WeatherReading, dry_run=dry_run)
+    counts["auth_sessions"] = migrate_table(
+        src, dst, AuthSession, where=session_where, dry_run=dry_run
+    )
+    counts["supplement_catalog"] = migrate_table(
+        src, dst, SupplementCatalogItem, dry_run=dry_run
+    )
+    counts["symptom_catalog"] = migrate_table(
+        src, dst, SymptomCatalogItem, dry_run=dry_run
+    )
+    counts["dietary_ingredients"] = migrate_table(
+        src, dst, DietaryIngredient, dry_run=dry_run
+    )
+    counts["weather_readings"] = migrate_table(
+        src, dst, WeatherReading, dry_run=dry_run
+    )
     counts["treatments"] = migrate_table(src, dst, Treatment, dry_run=dry_run)
-    counts["lab_marker_catalog"] = migrate_table(src, dst, LabMarkerCatalog, dry_run=dry_run)
+    counts["lab_marker_catalog"] = migrate_table(
+        src, dst, LabMarkerCatalog, dry_run=dry_run
+    )
 
     # ------------------------------------------------------------------
     # Step 2: Children of step 1
     # ------------------------------------------------------------------
-    counts["ingredient_aliases"] = migrate_table(src, dst, IngredientAlias, dry_run=dry_run)
-    counts["lab_marker_aliases"] = migrate_table(src, dst, LabMarkerAlias, dry_run=dry_run)
+    counts["ingredient_aliases"] = migrate_table(
+        src, dst, IngredientAlias, dry_run=dry_run
+    )
+    counts["lab_marker_aliases"] = migrate_table(
+        src, dst, LabMarkerAlias, dry_run=dry_run
+    )
 
     # ------------------------------------------------------------------
     # Step 3: Independent of step 1 children
@@ -289,7 +317,9 @@ def run_migration(
     # ------------------------------------------------------------------
     # Step 6: Children of photo_analyses
     # ------------------------------------------------------------------
-    counts["photo_ingredients"] = migrate_table(src, dst, PhotoIngredient, dry_run=dry_run)
+    counts["photo_ingredients"] = migrate_table(
+        src, dst, PhotoIngredient, dry_run=dry_run
+    )
 
     # ------------------------------------------------------------------
     # Sequence resets (Postgres only; skipped on dry-run)
@@ -374,7 +404,9 @@ def main() -> None:
         description="Migrate live SQLite health.db to Postgres."
     )
     parser.add_argument("--sqlite", required=True, help="Path to SQLite file")
-    parser.add_argument("--postgres", required=True, help="Postgres SQLAlchemy URL (psycopg2 dialect)")
+    parser.add_argument(
+        "--postgres", required=True, help="Postgres SQLAlchemy URL (psycopg2 dialect)"
+    )
     parser.add_argument(
         "--prune-expired-sessions",
         dest="prune_expired_sessions",
