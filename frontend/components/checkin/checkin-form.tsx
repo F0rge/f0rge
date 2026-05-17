@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { Loader2, Pill, X } from 'lucide-react'
+import { Camera, Loader2, Pill, X } from 'lucide-react'
 import { ScaleInput } from './scale-input'
 import { BinaryInput } from './binary-input'
 import { BristolInput } from './bristol-input'
@@ -23,15 +23,234 @@ import {
 } from '@/lib/api/hooks'
 import { apiGet, apiPut, ApiError } from '@/lib/api/client'
 import { PhotoAnalysis } from './photo-analysis'
-import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
+import type { Entry, EntryCreate, PhotoSignal, StoolStatus } from '@/lib/api/types'
 
 const DIET_OPTIONS = [
-  { id: 'normal', label: 'Normal' },
   { id: 'high-histamine', label: 'High-histamine' },
   { id: 'high-fodmap', label: 'High-FODMAP' },
   { id: 'gluten', label: 'Gluten' },
-  { id: 'not-sure', label: 'Not sure' },
+  { id: 'dairy', label: 'Dairy' },
 ]
+
+// Score to display on the locked chip for each flag.
+function getFlagScore(flag: string, signal: PhotoSignal): number {
+  switch (flag) {
+    case 'high-histamine': return signal.scores.histamine_load
+    case 'high-fodmap': return signal.scores.fodmap_count
+    case 'gluten': return signal.scores.gluten_count
+    case 'dairy': return signal.scores.dairy_count
+    default: return 0
+  }
+}
+
+// Build a human-readable attribution line from signal.sources.
+function buildSourceLine(signal: PhotoSignal): string {
+  return signal.flags
+    .map((flag) => {
+      const ingredients = signal.sources[flag]
+      if (!ingredients || ingredients.length === 0) return null
+      return `${DIET_OPTIONS.find((o) => o.id === flag)?.label ?? flag}: ${ingredients.join(', ')}`
+    })
+    .filter(Boolean)
+    .join(' · ')
+}
+
+interface LockedChipProps {
+  flag: string
+  label: string
+  score: number
+  title: string
+}
+
+function LockedChip({ flag, label, score, title }: LockedChipProps) {
+  return (
+    <span
+      key={flag}
+      title={title}
+      className={[
+        'inline-flex items-center gap-2 min-h-[48px]',
+        'rounded-xl border border-primary bg-foreground text-primary-foreground',
+        'px-3 py-2.5 text-sm font-medium cursor-not-allowed shadow-sm',
+      ].join(' ')}
+    >
+      <span className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full bg-white/20">
+        <Camera className="size-2.5" />
+      </span>
+      {label}
+      <span
+        className={[
+          'inline-flex min-w-[22px] h-[22px] items-center justify-center',
+          'rounded-full px-1.5 text-xs font-bold bg-white/20 text-primary-foreground',
+          'tabular-nums',
+        ].join(' ')}
+      >
+        {score}
+      </span>
+    </span>
+  )
+}
+
+interface PhotoDerivedRowProps {
+  signal: PhotoSignal
+  photoCount: number
+}
+
+function PhotoDerivedRow({ signal, photoCount }: PhotoDerivedRowProps) {
+  const sourceLine = buildSourceLine(signal)
+
+  // Count total unique ingredient mentions across all source lists.
+  const ingredientCount = Object.values(signal.sources).reduce(
+    (sum, arr) => sum + arr.length,
+    0,
+  )
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Camera className="size-3.5" />
+          From photos (locked)
+        </div>
+        <span className="text-xs text-muted-foreground">
+          {photoCount} {photoCount === 1 ? 'photo' : 'photos'} &middot; {ingredientCount} ingredients
+        </span>
+      </div>
+
+      {signal.flags.length > 0 ? (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {signal.flags.map((flag) => {
+              const opt = DIET_OPTIONS.find((o) => o.id === flag)
+              const score = getFlagScore(flag, signal)
+              const sources = signal.sources[flag] ?? []
+              const flagLabel = opt?.label ?? flag
+              const scoreDescription =
+                flag === 'high-histamine'
+                  ? `Σ histamine_score = ${score}`
+                  : `${score} ingredient${score !== 1 ? 's' : ''}`
+              return (
+                <LockedChip
+                  key={flag}
+                  flag={flag}
+                  label={flagLabel}
+                  score={score}
+                  title={`${scoreDescription}${sources.length > 0 ? `: ${sources.join(', ')}` : ''}`}
+                />
+              )
+            })}
+          </div>
+          {sourceLine && (
+            <p className="text-[0.7rem] leading-[1.4] text-muted-foreground">{sourceLine}</p>
+          )}
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">Photos confirmed — no risk flags detected.</p>
+      )}
+
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { value: signal.scores.histamine_load, label: 'Hist. load' },
+          { value: signal.scores.fodmap_count, label: 'FODMAP' },
+          { value: signal.scores.gluten_count, label: 'Gluten' },
+          { value: signal.scores.dairy_count, label: 'Dairy' },
+        ].map(({ value, label }) => (
+          <div
+            key={label}
+            className="flex flex-col gap-0.5 rounded-xl bg-muted px-3 py-2 min-w-0"
+          >
+            <span className="text-lg font-semibold tabular-nums leading-none">{value}</span>
+            <span className="text-[0.625rem] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface DietRiskSectionProps {
+  existingEntry?: Entry | null
+  existingPhotos: Entry['photos']
+  dietRisk: string
+  onToggle: (id: string) => void
+}
+
+function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle }: DietRiskSectionProps) {
+  const hasPhotos = existingPhotos.length > 0
+  const signal = existingEntry?.photo_signal ?? null
+
+  // Signal is "live" if it has any flags or non-zero scores.
+  const signalIsLive =
+    signal !== null &&
+    (signal.flags.length > 0 ||
+      signal.scores.histamine_load > 0 ||
+      signal.scores.fodmap_count > 0 ||
+      signal.scores.gluten_count > 0 ||
+      signal.scores.dairy_count > 0)
+
+  const lockedFlags = signal?.flags ?? []
+
+  // Manual options: hide any flag already locked from photos.
+  const manualOptions = DIET_OPTIONS.filter((o) => !lockedFlags.includes(o.id))
+  const selectedFlags = dietRisk ? dietRisk.split(',').filter(Boolean) : []
+
+  return (
+    <div className="space-y-3">
+      <label className="text-sm font-semibold">Diet risk</label>
+
+      {hasPhotos ? (
+        signalIsLive ? (
+          <PhotoDerivedRow signal={signal!} photoCount={existingPhotos.length} />
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-background p-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Camera className="size-3.5" />
+              <span className="text-xs">Photos still analyzing — flags will update once confirmed.</span>
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="rounded-xl border border-dashed border-border bg-background p-3">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Camera className="size-3.5" />
+            <span className="text-xs">No food photos for today — anything below is fully manual.</span>
+          </div>
+        </div>
+      )}
+
+      {signalIsLive && <div className="h-px bg-border" />}
+
+      <div className="space-y-2">
+        <p className="text-xs text-muted-foreground">
+          {hasPhotos ? 'Add anything else you ate or drank' : 'Add anything you ate or drank'}
+        </p>
+        {manualOptions.length > 0 && (
+          <div className="grid grid-cols-2 gap-2">
+            {manualOptions.map((opt) => {
+              const selected = selectedFlags.includes(opt.id)
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => onToggle(opt.id)}
+                  className={[
+                    'min-h-[48px] rounded-xl border px-2 py-2.5 text-sm font-medium transition-all',
+                    selected
+                      ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                      : 'border-border bg-background text-muted-foreground',
+                  ].join(' ')}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 interface CheckinFormProps {
   date: string
@@ -61,7 +280,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const [neuro, setNeuro] = useState(0)
   const [sleepQuality, setSleepQuality] = useState(2)
   const [stress, setStress] = useState(1)
-  const [dietRisk, setDietRisk] = useState<string>('normal')
+  const [dietRisk, setDietRisk] = useState<string>('')
   const [supplements, setSupplements] = useState<string>('')
   const [supplementsTouched, setSupplementsTouched] = useState(false)
   const [symptomsJson, setSymptomsJson] = useState<Record<string, number>>({})
@@ -102,7 +321,13 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       setNeuro(existingEntry.neuro)
       setSleepQuality(existingEntry.sleep_quality)
       setStress(existingEntry.stress)
-      setDietRisk(existingEntry.diet_risk)
+      // Use user_added_flags when available (new entries); fall back to
+      // diet_risk string for old entries deployed before Wave 2.
+      setDietRisk(
+        existingEntry.user_added_flags !== undefined
+          ? existingEntry.user_added_flags.join(',')
+          : existingEntry.diet_risk,
+      )
       setSupplements(existingEntry.supplements)
       setSupplementsTouched(true)
       setSymptomsJson(existingEntry.symptoms_json ?? {})
@@ -122,19 +347,10 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
 
   const handleDietToggle = (id: string) => {
     const current = dietRisk ? dietRisk.split(',').filter(Boolean) : []
-
-    if (id === 'normal') {
-      setDietRisk('normal')
-      return
-    }
-
-    const withoutNormal = current.filter((d) => d !== 'normal')
-
-    if (withoutNormal.includes(id)) {
-      const updated = withoutNormal.filter((d) => d !== id)
-      setDietRisk(updated.length === 0 ? 'normal' : updated.join(','))
+    if (current.includes(id)) {
+      setDietRisk(current.filter((d) => d !== id).join(','))
     } else {
-      setDietRisk([...withoutNormal, id].join(','))
+      setDietRisk([...current, id].join(','))
     }
   }
 
@@ -347,28 +563,12 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         ]}
       />
 
-      <div className="space-y-3">
-        <label className="text-sm font-semibold">Diet risk</label>
-        <div className="grid grid-cols-3 gap-2">
-          {DIET_OPTIONS.map((opt) => {
-            const selected = dietRisk.split(',').includes(opt.id)
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => handleDietToggle(opt.id)}
-                className={`min-h-[48px] rounded-xl border px-2 py-2.5 text-sm font-medium transition-all ${
-                  selected
-                    ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                    : 'border-border bg-background text-muted-foreground'
-                }`}
-              >
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <DietRiskSection
+        existingEntry={existingEntry}
+        existingPhotos={existingPhotos}
+        dietRisk={dietRisk}
+        onToggle={handleDietToggle}
+      />
 
       <SupplementPicker
         value={supplements}

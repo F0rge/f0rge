@@ -7,6 +7,19 @@ export interface Photo {
   created_at: string
 }
 
+export interface PhotoScores {
+  histamine_load: number
+  fodmap_count: number
+  gluten_count: number
+  dairy_count: number
+}
+
+export interface PhotoSignal {
+  flags: string[]
+  scores: PhotoScores
+  sources: Record<string, string[]>
+}
+
 export type StoolStatus = 'normal' | 'abnormal' | 'none'
 
 export interface Entry {
@@ -36,6 +49,10 @@ export interface Entry {
   caffeine_servings: number | null
   symptoms_json: Record<string, number> | null
   photos: Photo[]
+  effective_flags: string[]
+  photo_derived_flags: string[]
+  user_added_flags: string[]
+  photo_signal: PhotoSignal | null
   created_at: string
   updated_at: string
 }
