@@ -20,17 +20,15 @@ function formatDisplayDate(dateStr: string): string {
 function getOverallLabel(overall: number): string {
   switch (overall) {
     case 1: return 'Very Poor'
-    case 2: return 'Poor'
-    case 3: return 'Standard'
-    case 4: return 'Good'
-    case 5: return 'Very Good'
+    case 2: return 'Standard'
+    case 3: return 'Very Good'
     default: return 'Unknown'
   }
 }
 
 function getOverallBadgeClass(overall: number): string {
-  if (overall >= 4) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-  if (overall === 3) return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+  if (overall === 3) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+  if (overall === 2) return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
   return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
 }
 
@@ -123,9 +121,9 @@ function PhotoWithMealTime({ photo }: { photo: Photo }) {
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between py-2">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium">{value}</span>
+    <div className="flex items-start justify-between gap-3 py-2">
+      <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
+      <span className="min-w-0 break-words text-right text-sm font-medium">{value}</span>
     </div>
   )
 }
@@ -161,7 +159,7 @@ function EntryDetail({ entry }: { entry: Entry }) {
         <DetailRow label="Hot shower" value={entry.hot_shower ? 'Yes' : 'No'} />
         {entry.entry_time && (
           <DetailRow
-            label="Logged at"
+            label="Last logged at"
             value={`${new Date(entry.entry_time).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' })}${entry.period_of_day ? ` (${entry.period_of_day})` : ''}`}
           />
         )}
