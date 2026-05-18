@@ -38,7 +38,7 @@ import json
 import sys
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 import app.models  # noqa: F401 - registers ORM classes with Base.metadata
@@ -185,14 +185,35 @@ def step_prune_orphans(dry_run: bool) -> None:
         for r in orphans:
             print(f"  - {r.canonical_name}")
 
+        orphan_names = [r.canonical_name for r in orphans]
+        alias_count = session.execute(
+            select(func.count())
+            .select_from(IngredientAlias)
+            .where(IngredientAlias.canonical_name.in_(orphan_names))
+        ).scalar_one()
+        if alias_count:
+            print(
+                f"  ({alias_count} alias row(s) point to these — will be deleted first.)"
+            )
+
         if dry_run:
             print("--dry-run: no rows deleted.")
             return
 
+        # Cascade aliases first; FK constraint blocks parent deletion otherwise.
+        if alias_count:
+            session.execute(
+                delete(IngredientAlias).where(
+                    IngredientAlias.canonical_name.in_(orphan_names)
+                )
+            )
         for r in orphans:
             session.delete(r)
         session.commit()
-        print(f"Deleted {len(orphans)} orphan row(s).")
+        print(
+            f"Deleted {len(orphans)} orphan row(s) "
+            f"(+ {alias_count} dependent alias row(s))."
+        )
 
 
 def step_rescore_photos(dry_run: bool) -> None:
