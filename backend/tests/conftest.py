@@ -17,26 +17,38 @@ suite.
 
 from __future__ import annotations
 
-from typing import AsyncIterator, Iterator
+import os
 
-import httpx
-import pytest
-import pytest_asyncio
-import sqlalchemy as sa
-from httpx import ASGITransport
-from sqlalchemy.ext.asyncio import (
+# Pin a Postgres-flavoured placeholder DATABASE_URL before any app import.
+# ``app/database.py`` constructs an ``AsyncEngine`` at module-load time using
+# ``settings.database_url``; we don't want that to inadvertently pick up a
+# ``sqlite+aiosqlite://`` value from the developer's local ``.env``. The real
+# engine the tests use is built below against a freshly spawned testcontainer.
+os.environ.setdefault(
+    "DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/test",
+)
+
+from typing import AsyncIterator, Iterator  # noqa: E402
+
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+import sqlalchemy as sa  # noqa: E402
+from httpx import ASGITransport  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from testcontainers.postgres import PostgresContainer
+from testcontainers.postgres import PostgresContainer  # noqa: E402
 
 # Import models so Base.metadata knows every table before create_all runs.
-import app.models  # noqa: F401
+import app.models  # noqa: F401, E402
 
-from app.database import Base, get_db
-from app.main import app
+from app.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

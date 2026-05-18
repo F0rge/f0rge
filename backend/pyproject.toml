@@ -16,7 +16,6 @@ dependencies = [
     "alembic>=1.13",
     "cryptography>=42.0",
     "greenlet>=3.3.2",
-    "aiosqlite>=0.22.1",
     "pgvector>=0.3",
     "mcp>=1.10",
 ]

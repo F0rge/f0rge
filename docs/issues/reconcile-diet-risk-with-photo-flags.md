@@ -181,7 +181,7 @@ Drop the separate ordinal encoding of `diet_risk`. The `histamine_load_sum` / `f
 - Write the backfill script (do not run it on prod data without approval)
 
 **Ask first:**
-- Running the backfill script against the live SQLite DB
+- Running the backfill script against the live Postgres DB
 - Schema migration that drops or renames `diet_risk`
 - Changing histamine threshold from `>=2`
 - Adding categories beyond the four named
@@ -215,7 +215,7 @@ Spin up `./start.sh`. Drive each scenario in a browser, screenshot end state:
 
 **Diagnostic / vault:**
 
-- Backfill against a copy of the SQLite DB; inspect CSV report; no entries lose information vs. their original `diet_risk` string (manual additions preserved as `user_added_flags`)
+- Backfill against a copy of the Postgres DB; inspect CSV report; no entries lose information vs. their original `diet_risk` string (manual additions preserved as `user_added_flags`)
 - Stats endpoint after change: ordinal `diet_risk` column no longer appears in the feature matrix
 
 ## Dependencies

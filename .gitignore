@@ -10,7 +10,6 @@ venv/
 .mcp.json
 
 # Backend data
-backend/data/*.db
 backend/photos/
 backend/lab_attachments/
 backend/.env
