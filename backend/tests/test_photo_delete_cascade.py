@@ -1,5 +1,5 @@
-"""Regression test for the production bug where deleting a Photo failed with:
-    sqlite3.IntegrityError: NOT NULL constraint failed: photo_analyses.photo_id
+"""Regression test for the production bug where deleting a Photo failed with
+an integrity error on the photo_analyses.photo_id FK.
 
 Caused by missing cascade on Photo.analysis — SQLAlchemy tried to NULL the
 FK on photo delete instead of deleting the orphaned analysis row.

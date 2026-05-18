@@ -4,7 +4,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 ## Stack
 
-- Backend: FastAPI + SQLAlchemy + SQLite (Python 3.10)
+- Backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.10
 - Frontend: Next.js 15 + React 19 + Tailwind 4 + shadcn/ui
 - Auth: PIN-based session cookies (bcrypt)
 
@@ -20,7 +20,7 @@ cd frontend && npm run dev   # Frontend only
 
 - Backend API: http://localhost:8000/api/v1
 - Frontend: http://localhost:3000
-- SQLite DB: backend/data/health.db
+- Database: Postgres on the Pi (deployed via Coolify); `DATABASE_URL` env var must use the asyncpg driver, e.g. `postgresql+asyncpg://health:...@host:5432/health`. Tests spin up a disposable Postgres via `testcontainers` (see `backend/tests/conftest.py`).
 - Photo storage: backend/photos/
 - Obsidian vault (Mac): /Users/leo/Library/Mobile Documents/iCloud~md~obsidian/Documents/Brain/
 - Obsidian vault (container): /vault (bind mount of /mnt/nvme/home/leo/vaults/brain on Pi)

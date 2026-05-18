@@ -7,10 +7,10 @@ Covers:
 - PATCH on a missing photo returns 404
 - alcohol_units / caffeine_servings round-trip on Entry create and update
 
-The two SQLite migration-pattern tests were dropped — Alembic now owns
-the schema lifecycle (see ``backend/migrations/``), so simulating an
-ad-hoc ``ALTER TABLE`` against an old SQLite schema no longer represents
-the real upgrade path.
+Two legacy ad-hoc migration-pattern tests were dropped — Alembic now owns
+the schema lifecycle (see ``backend/migrations/``), so simulating a manual
+``ALTER TABLE`` against the historical schema no longer represents the real
+upgrade path.
 """
 
 from __future__ import annotations
