@@ -22,7 +22,7 @@ import {
   useTreatments,
 } from '@/lib/api/hooks'
 import { apiGet, apiPut, ApiError } from '@/lib/api/client'
-import { PhotoAnalysis } from './photo-analysis'
+import { PhotoAnalysis } from '@/components/shared/food-analysis'
 import type { Entry, EntryCreate, PhotoSignal, StoolStatus } from '@/lib/api/types'
 
 const DIET_OPTIONS = [
