@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Health Tracker — UI Redesign Mockups</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #f5f5f4;
+      color: #1c1917;
+      -webkit-font-smoothing: antialiased;
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 500; padding: 2px 8px;
+      border-radius: 999px; line-height: 1.4;
+    }
+    .preview-frame {
+      aspect-ratio: 16 / 10;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #e7e5e4;
+      background: #fafaf9;
+      position: relative;
+    }
+    .preview-iframe {
+      width: 1400px;
+      height: 900px;
+      transform: scale(0.35);
+      transform-origin: top left;
+      border: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <header class="bg-white border-b border-stone-200">
+    <div class="max-w-6xl mx-auto px-8 py-12">
+      <div class="text-xs text-stone-500 uppercase tracking-widest mb-3">Internal mockups · not implemented</div>
+      <h1 class="text-4xl font-bold leading-tight">Health Tracker UI redesign — 4 directions</h1>
+      <p class="text-lg text-stone-600 mt-4 max-w-3xl">
+        Today's app is mobile‑first and squeezes the same single‑column form onto desktop and iPhone alike.
+        On phones it feels cramped (tiny ingredient inputs, 6pt edit buttons). On desktop it wastes the
+        space. Below are four responsive redesigns, each with a desktop view and an iPhone view, that
+        treat the two form factors as different surfaces — not the same layout at different widths.
+      </p>
+      <div class="mt-6 flex items-center gap-4 text-xs text-stone-500">
+        <div class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-emerald-500"></span> Same data &amp; backend</div>
+        <div class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-amber-500"></span> Tailwind <code class="text-[10px]">lg:</code> breakpoint flips layout</div>
+        <div class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-blue-500"></span> Reuses existing components where possible</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-8 py-12 space-y-12">
+
+    <!-- The pain summary -->
+    <section class="bg-white border border-stone-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold mb-1">What we're fixing</h2>
+      <p class="text-sm text-stone-600 mb-4">Three concrete pain points came out of the live UI walkthrough:</p>
+      <div class="grid grid-cols-3 gap-4">
+        <div class="p-4 bg-rose-50 rounded-xl border border-rose-100">
+          <div class="flex items-center gap-2 text-rose-900 font-semibold text-sm mb-1">
+            <i data-lucide="smartphone" class="size-4"></i>
+            Cramped on iPhone
+          </div>
+          <p class="text-xs text-rose-900/80">Ingredient editor input ends up ~6pt with text wrapping mid‑word. H‑score badges and × buttons crash together. Hard to tap accurately.</p>
+        </div>
+        <div class="p-4 bg-amber-50 rounded-xl border border-amber-100">
+          <div class="flex items-center gap-2 text-amber-900 font-semibold text-sm mb-1">
+            <i data-lucide="monitor" class="size-4"></i>
+            Wasted desktop space
+          </div>
+          <p class="text-xs text-amber-900/80">A 32rem column floats in the middle of a 1440px screen with nothing on either side. Insights, history, and inspector panels could live there.</p>
+        </div>
+        <div class="p-4 bg-sky-50 rounded-xl border border-sky-100">
+          <div class="flex items-center gap-2 text-sky-900 font-semibold text-sm mb-1">
+            <i data-lucide="layers" class="size-4"></i>
+            One mental model
+          </div>
+          <p class="text-xs text-sky-900/80">The whole day is one giant form. Easy to lose place. No way to peek at correlations or last‑week context while logging.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 directions -->
+    <section>
+      <h2 class="text-2xl font-bold mb-1">The four directions</h2>
+      <p class="text-sm text-stone-600 mb-8">Each link below opens a single mockup page with both desktop (1280) and iPhone (375) views, plus the design rationale. V4 is a remix of V2 and V3.</p>
+
+      <div class="space-y-8">
+
+        <!-- V1 -->
+        <a href="v1-workspace.html" class="group block bg-white border border-stone-200 rounded-2xl overflow-hidden hover:shadow-xl transition-shadow">
+          <div class="grid grid-cols-[1fr_2fr]">
+            <div class="p-8 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="chip" style="background:#d1fae5;color:#047857">Direction 1</span>
+                  <span class="chip" style="background:#f5f5f4;color:#78716c">Notion / Linear flavor</span>
+                </div>
+                <h3 class="text-2xl font-bold group-hover:text-emerald-700">Workspace<br/>split‑pane productivity</h3>
+                <p class="text-sm text-stone-600 mt-3 leading-relaxed">
+                  Desktop = sidebar · canvas · inspector. The inspector is the punchline — selecting
+                  any photo opens a roomy ingredient editor on the right. On mobile, the inspector
+                  becomes a 90% bottom sheet with the same big, comfortable inputs.
+                </p>
+              </div>
+              <div class="mt-6 space-y-1.5 text-xs text-stone-600">
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-emerald-600"></i> Ingredient editor finally has space</div>
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-emerald-600"></i> Power users get keyboard nav (⌘K)</div>
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-emerald-600"></i> Closest to the current form mental model — easiest migration</div>
+                <div class="flex items-center gap-2"><i data-lucide="alert-triangle" class="size-3.5 text-amber-600"></i> Form is still long — no re‑frame, just better packaging</div>
+              </div>
+              <div class="mt-6 text-sm font-semibold text-emerald-700 flex items-center gap-1">
+                Open mockup
+                <i data-lucide="arrow-right" class="size-4 group-hover:translate-x-1 transition-transform"></i>
+              </div>
+            </div>
+            <div class="p-6 bg-gradient-to-br from-emerald-50 to-stone-50 grid place-items-center">
+              <div class="w-full grid grid-cols-3 gap-3">
+                <div class="aspect-[3/4] rounded-lg bg-white border border-stone-200 p-2 flex flex-col gap-1.5">
+                  <div class="h-4 bg-stone-100 rounded-sm"></div>
+                  <div class="h-2 w-3/4 bg-stone-100 rounded-sm"></div>
+                  <div class="h-2 w-2/3 bg-stone-100 rounded-sm"></div>
+                  <div class="flex-1 mt-1 bg-stone-50 rounded-sm"></div>
+                </div>
+                <div class="aspect-[3/4] rounded-lg bg-white border border-stone-200 p-2 flex flex-col gap-1.5">
+                  <div class="h-2 bg-stone-100 rounded-sm"></div>
+                  <div class="grid grid-cols-2 gap-1 mt-1">
+                    <div class="h-3 bg-stone-100 rounded-sm"></div>
+                    <div class="h-3 bg-stone-200 rounded-sm"></div>
+                  </div>
+                  <div class="h-8 bg-stone-50 rounded-sm mt-1"></div>
+                  <div class="h-3 w-2/3 bg-stone-100 rounded-sm"></div>
+                  <div class="h-3 w-1/2 bg-stone-100 rounded-sm"></div>
+                </div>
+                <div class="aspect-[3/4] rounded-lg bg-white border-2 border-emerald-300 p-2 flex flex-col gap-1.5 ring-2 ring-emerald-100">
+                  <div class="aspect-square bg-gradient-to-br from-orange-100 to-amber-300 rounded-sm"></div>
+                  <div class="h-2 bg-stone-200 rounded-sm"></div>
+                  <div class="h-2 bg-stone-200 rounded-sm"></div>
+                  <div class="h-2 w-2/3 bg-stone-200 rounded-sm"></div>
+                  <div class="mt-1 h-4 bg-emerald-100 rounded-sm"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </a>
+
+        <!-- V2 -->
+        <a href="v2-cards.html" class="group block bg-white border border-stone-200 rounded-2xl overflow-hidden hover:shadow-xl transition-shadow">
+          <div class="grid grid-cols-[1fr_2fr]">
+            <div class="p-8 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="chip" style="background:#e0e7ff;color:#4338ca">Direction 2</span>
+                  <span class="chip" style="background:#f5f5f4;color:#78716c">Trello / Notion blocks flavor</span>
+                </div>
+                <h3 class="text-2xl font-bold group-hover:text-indigo-700">Cards Canvas<br/>modular dashboard</h3>
+                <p class="text-sm text-stone-600 mt-3 leading-relaxed">
+                  The day stops being one form and becomes a set of cards — Food, Wellbeing, Gut,
+                  Supplements, Notes — that lay out in a 12‑col masonry on desktop and stack on mobile.
+                  Each card has a “focus mode” that opens a full‑screen editor.
+                </p>
+              </div>
+              <div class="mt-6 space-y-1.5 text-xs text-stone-600">
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-indigo-600"></i> Cards can be reordered to match how you log</div>
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-indigo-600"></i> Hero stats strip surfaces day at a glance</div>
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-indigo-600"></i> Focus mode on mobile = clean comfortable editing</div>
+                <div class="flex items-center gap-2"><i data-lucide="alert-triangle" class="size-3.5 text-amber-600"></i> More tap‑to‑expand = more taps; could feel clicky if overdone</div>
+              </div>
+              <div class="mt-6 text-sm font-semibold text-indigo-700 flex items-center gap-1">
+                Open mockup
+                <i data-lucide="arrow-right" class="size-4 group-hover:translate-x-1 transition-transform"></i>
+              </div>
+            </div>
+            <div class="p-6 bg-gradient-to-br from-indigo-50 to-amber-50 grid place-items-center">
+              <div class="w-full grid grid-cols-12 gap-2">
+                <div class="col-span-8 row-span-2 aspect-[16/9] rounded-lg bg-white border border-stone-200 p-2 flex flex-col gap-1.5">
+                  <div class="flex gap-1">
+                    <div class="h-2 w-12 bg-stone-100 rounded-sm"></div>
+                    <div class="ml-auto h-2 w-8 bg-orange-200 rounded-sm"></div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-1 mt-1">
+                    <div class="aspect-[16/7] bg-gradient-to-br from-amber-100 to-amber-300 rounded-sm"></div>
+                    <div class="aspect-[16/7] bg-gradient-to-br from-orange-100 to-amber-300 rounded-sm border border-indigo-300"></div>
+                  </div>
+                  <div class="grid grid-cols-4 gap-1 mt-1">
+                    <div class="h-2 bg-stone-100 rounded-sm"></div>
+                    <div class="h-2 bg-stone-100 rounded-sm"></div>
+                    <div class="h-2 bg-orange-100 rounded-sm"></div>
+                    <div class="h-2 bg-stone-100 rounded-sm"></div>
+                  </div>
+                </div>
+                <div class="col-span-4 aspect-[3/2] rounded-lg bg-white border border-stone-200 p-2 flex flex-col gap-1">
+                  <div class="h-2 bg-stone-100 rounded-sm"></div>
+                  <div class="flex items-end gap-0.5 h-8 mt-1">
+                    <div class="w-1 h-2 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-3 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-5 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-2 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-6 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-3 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-7 bg-orange-500 rounded-sm"></div>
+                  </div>
+                </div>
+                <div class="col-span-4 aspect-[3/2] rounded-lg bg-white border border-stone-200 p-2"></div>
+                <div class="col-span-4 aspect-[3/2] rounded-lg bg-white border border-stone-200 p-2"></div>
+                <div class="col-span-4 aspect-[3/2] rounded-lg bg-white border border-stone-200 p-2"></div>
+                <div class="col-span-4 aspect-[3/2] rounded-lg bg-white border border-stone-200 p-2"></div>
+              </div>
+            </div>
+          </div>
+        </a>
+
+        <!-- V3 -->
+        <a href="v3-timeline.html" class="group block bg-white border border-stone-200 rounded-2xl overflow-hidden hover:shadow-xl transition-shadow">
+          <div class="grid grid-cols-[1fr_2fr]">
+            <div class="p-8 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="chip" style="background:#e0f2fe;color:#0369a1">Direction 3</span>
+                  <span class="chip" style="background:#f5f5f4;color:#78716c">Diary / journal flavor</span>
+                </div>
+                <h3 class="text-2xl font-bold group-hover:text-sky-700">Daily Log Timeline<br/>event stream + composer</h3>
+                <p class="text-sm text-stone-600 mt-3 leading-relaxed">
+                  The biggest re‑frame. Stop treating a day as one form. Log meals, supplements, symptoms,
+                  mood as separate <em>events</em> in a vertical timeline. Desktop adds a live insights rail
+                  that recalculates as you go. Mobile compresses to a feed with a FAB composer.
+                </p>
+              </div>
+              <div class="mt-6 space-y-1.5 text-xs text-stone-600">
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-sky-600"></i> Matches how the day actually unfolds</div>
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-sky-600"></i> Real‑time pattern surfacing while logging</div>
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-sky-600"></i> FAB pattern is fast and habit‑forming</div>
+                <div class="flex items-center gap-2"><i data-lucide="alert-triangle" class="size-3.5 text-amber-600"></i> Biggest schema implication — needs event timestamps everywhere</div>
+                <div class="flex items-center gap-2"><i data-lucide="alert-triangle" class="size-3.5 text-amber-600"></i> Loses the "fill once at end of day" affordance — would need an end‑of‑day rollup</div>
+              </div>
+              <div class="mt-6 text-sm font-semibold text-sky-700 flex items-center gap-1">
+                Open mockup
+                <i data-lucide="arrow-right" class="size-4 group-hover:translate-x-1 transition-transform"></i>
+              </div>
+            </div>
+            <div class="p-6 bg-gradient-to-br from-sky-50 to-slate-50 grid place-items-center">
+              <div class="w-full grid grid-cols-[1fr_1.5fr_1fr] gap-3 h-56">
+                <!-- timeline -->
+                <div class="rounded-lg bg-white border border-stone-200 p-3 flex flex-col gap-2 relative">
+                  <div class="absolute left-5 top-3 bottom-3 w-px bg-stone-200"></div>
+                  <div class="text-[8px] uppercase tracking-wider text-stone-400">Morning</div>
+                  <div class="flex items-start gap-2 relative">
+                    <div class="size-2 rounded-full bg-white border-2 border-indigo-500 mt-0.5 z-10"></div>
+                    <div class="h-3 flex-1 bg-indigo-50 rounded-sm"></div>
+                  </div>
+                  <div class="flex items-start gap-2 relative">
+                    <div class="size-2 rounded-full bg-white border-2 border-green-500 mt-0.5 z-10"></div>
+                    <div class="h-3 flex-1 bg-green-50 rounded-sm"></div>
+                  </div>
+                  <div class="text-[8px] uppercase tracking-wider text-stone-400 mt-1">Midday</div>
+                  <div class="flex items-start gap-2 relative">
+                    <div class="size-2 rounded-full bg-white border-2 border-amber-500 mt-0.5 z-10"></div>
+                    <div class="h-3 flex-1 bg-amber-50 rounded-sm"></div>
+                  </div>
+                  <div class="text-[8px] uppercase tracking-wider text-stone-400 mt-1">Evening</div>
+                  <div class="flex items-start gap-2 relative">
+                    <div class="size-2 rounded-full bg-white border-2 border-amber-500 mt-0.5 z-10"></div>
+                    <div class="h-3 flex-1 bg-amber-50 rounded-sm ring-1 ring-sky-300"></div>
+                  </div>
+                </div>
+                <!-- composer -->
+                <div class="rounded-lg bg-white border border-stone-200 p-3 flex flex-col gap-2">
+                  <div class="flex items-center gap-1.5">
+                    <div class="size-5 rounded-md bg-gradient-to-br from-orange-100 to-amber-300"></div>
+                    <div class="h-2 w-20 bg-stone-200 rounded-sm"></div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-1 mt-1">
+                    <div class="h-2 bg-stone-100 rounded-sm"></div>
+                    <div class="h-2 bg-stone-100 rounded-sm"></div>
+                    <div class="h-2 bg-orange-100 rounded-sm"></div>
+                    <div class="h-2 bg-stone-100 rounded-sm"></div>
+                    <div class="h-2 bg-stone-100 rounded-sm"></div>
+                    <div class="h-2 bg-orange-100 rounded-sm"></div>
+                  </div>
+                  <div class="mt-1 h-6 bg-sky-50 border border-sky-200 rounded-sm"></div>
+                </div>
+                <!-- insights -->
+                <div class="rounded-lg bg-white border border-stone-200 p-3 flex flex-col gap-2">
+                  <div class="h-2 w-12 bg-stone-200 rounded-sm"></div>
+                  <div class="h-1.5 bg-gradient-to-r from-emerald-500 via-amber-500 to-red-500 rounded-full"></div>
+                  <div class="h-8 bg-amber-50 rounded-sm mt-1 border border-amber-200"></div>
+                  <div class="flex items-end gap-0.5 h-6 mt-1">
+                    <div class="w-1 h-2 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-3 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-2 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-4 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-1 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-2 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-5 bg-orange-500 rounded-sm"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </a>
+
+        <!-- V4 — Remix -->
+        <a href="v4-board.html" class="group block bg-white border-2 border-teal-300 rounded-2xl overflow-hidden hover:shadow-xl transition-shadow ring-2 ring-teal-100">
+          <div class="grid grid-cols-[1fr_2fr]">
+            <div class="p-8 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="chip" style="background:#ccfbf1;color:#0f766e">Direction 4</span>
+                  <span class="chip" style="background:#fef3c7;color:#854d0e">★ Remix · V2 × V3</span>
+                </div>
+                <h3 class="text-2xl font-bold group-hover:text-teal-700">Daily Board<br/>cards on a timeline spine</h3>
+                <p class="text-sm text-stone-600 mt-3 leading-relaxed">
+                  Take V2's rich, scannable cards and lay them out chronologically along V3's timeline.
+                  Time‑grouped sections (Morning · Midday · Evening · End of day) give the day shape,
+                  while a pinned <strong>End of day rollup card</strong> preserves the "fill once at night"
+                  flow. Hero stats strip + insights rail stay.
+                </p>
+              </div>
+              <div class="mt-6 space-y-1.5 text-xs text-stone-600">
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-teal-600"></i> Best of both: scannable cards + time narrative</div>
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-teal-600"></i> Rollup card means power users + casual users both happy</div>
+                <div class="flex items-center gap-2"><i data-lucide="check" class="size-3.5 text-teal-600"></i> Three‑lens layout (rail · board · patterns) like Linear</div>
+                <div class="flex items-center gap-2"><i data-lucide="alert-triangle" class="size-3.5 text-amber-600"></i> Still needs event timestamps on the schema (like V3)</div>
+              </div>
+              <div class="mt-6 text-sm font-semibold text-teal-700 flex items-center gap-1">
+                Open mockup
+                <i data-lucide="arrow-right" class="size-4 group-hover:translate-x-1 transition-transform"></i>
+              </div>
+            </div>
+            <div class="p-6 bg-gradient-to-br from-teal-50 via-amber-50/40 to-violet-50/40 grid place-items-center">
+              <div class="w-full grid grid-cols-[0.6fr_1.8fr_0.8fr] gap-2 h-60">
+                <!-- rail with jump nav -->
+                <div class="rounded-lg bg-white border border-stone-200 p-2 flex flex-col gap-1.5">
+                  <div class="text-[7px] uppercase tracking-wider text-stone-400">Jump</div>
+                  <div class="h-3 bg-amber-100 rounded-sm flex items-center px-1.5">
+                    <span class="text-[7px] text-amber-700">☀ AM</span>
+                  </div>
+                  <div class="h-3 bg-orange-100 rounded-sm flex items-center px-1.5">
+                    <span class="text-[7px] text-orange-700">🌤 Mid</span>
+                  </div>
+                  <div class="h-3 bg-violet-200 rounded-sm flex items-center px-1.5 ring-1 ring-teal-400">
+                    <span class="text-[7px] text-violet-800">🌙 PM</span>
+                  </div>
+                  <div class="h-3 bg-teal-100 rounded-sm flex items-center px-1.5">
+                    <span class="text-[7px] text-teal-700">⏷ EOD</span>
+                  </div>
+                  <div class="mt-1 h-4 bg-teal-600 rounded-sm flex items-center justify-center">
+                    <span class="text-[7px] text-white font-bold">+ Log</span>
+                  </div>
+                </div>
+                <!-- cards on timeline -->
+                <div class="rounded-lg bg-white border border-stone-200 p-2 flex flex-col gap-1.5">
+                  <div class="text-[7px] uppercase tracking-wider text-amber-700 font-bold">☀ Morning · 3</div>
+                  <div class="ml-2 pl-2 border-l border-stone-200 space-y-1 relative">
+                    <div class="flex items-center gap-1.5 relative">
+                      <div class="absolute -left-3 size-1.5 rounded-full bg-white border border-indigo-500"></div>
+                      <div class="h-2 flex-1 bg-stone-100 rounded-sm"></div>
+                    </div>
+                    <div class="flex items-center gap-1.5 relative">
+                      <div class="absolute -left-3 size-1.5 rounded-full bg-white border border-green-500"></div>
+                      <div class="h-2 flex-1 bg-stone-100 rounded-sm"></div>
+                    </div>
+                  </div>
+                  <div class="text-[7px] uppercase tracking-wider text-violet-700 font-bold mt-1">🌙 Evening · 2</div>
+                  <div class="ml-2 pl-2 border-l border-stone-200 space-y-1 relative">
+                    <div class="relative">
+                      <div class="absolute -left-3 top-1 size-1.5 rounded-full bg-white border border-amber-500"></div>
+                      <div class="h-8 bg-white border-2 border-teal-300 rounded-sm p-1 flex gap-1 ring-1 ring-teal-100">
+                        <div class="size-6 bg-gradient-to-br from-orange-100 to-amber-300 rounded-sm flex-shrink-0"></div>
+                        <div class="flex-1 flex flex-col gap-0.5 justify-center">
+                          <div class="h-1 bg-stone-200 rounded-sm"></div>
+                          <div class="flex gap-0.5">
+                            <div class="h-1 w-2 bg-orange-300 rounded-sm"></div>
+                            <div class="h-1 w-2 bg-blue-300 rounded-sm"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="text-[7px] uppercase tracking-wider text-teal-700 font-bold mt-1">⏷ End of day</div>
+                  <div class="h-6 bg-teal-50 border border-teal-200 rounded-sm grid grid-cols-4 gap-0.5 p-0.5">
+                    <div class="bg-white rounded-sm"></div>
+                    <div class="bg-amber-400 rounded-sm"></div>
+                    <div class="bg-white rounded-sm"></div>
+                    <div class="bg-white rounded-sm"></div>
+                  </div>
+                </div>
+                <!-- insights -->
+                <div class="rounded-lg bg-white border border-stone-200 p-2 flex flex-col gap-1.5">
+                  <div class="text-[7px] uppercase tracking-wider text-stone-400">Patterns</div>
+                  <div class="h-1.5 bg-gradient-to-r from-emerald-500 via-amber-500 to-red-500 rounded-full"></div>
+                  <div class="h-6 bg-amber-50 border border-amber-200 rounded-sm"></div>
+                  <div class="flex items-end gap-0.5 h-5">
+                    <div class="w-1 h-2 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-3 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-1 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-2 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-1 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-2 bg-stone-200 rounded-sm"></div>
+                    <div class="w-1 h-4 bg-orange-500 rounded-sm"></div>
+                  </div>
+                  <div class="h-3 bg-teal-50 border border-teal-200 rounded-sm"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <!-- Compare-at-a-glance -->
+    <section class="bg-white border border-stone-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold mb-4">At a glance</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
+          <thead>
+            <tr class="text-left text-xs uppercase tracking-wider text-stone-500 border-b border-stone-200">
+              <th class="py-3 pr-4 font-semibold">Dimension</th>
+              <th class="py-3 px-4 font-semibold">V1 Workspace</th>
+              <th class="py-3 px-4 font-semibold">V2 Cards</th>
+              <th class="py-3 px-4 font-semibold">V3 Timeline</th>
+              <th class="py-3 px-4 font-semibold bg-teal-50/50">V4 Board ★</th>
+            </tr>
+          </thead>
+          <tbody class="text-stone-700">
+            <tr class="border-b border-stone-100">
+              <td class="py-3 pr-4 font-semibold text-stone-900">Information architecture</td>
+              <td class="py-3 px-4">One scrolling form, with inspector context</td>
+              <td class="py-3 px-4">Independent cards, reorderable</td>
+              <td class="py-3 px-4">Event stream / journal</td>
+              <td class="py-3 px-4 bg-teal-50/30">Cards on a chronological spine + EOD rollup</td>
+            </tr>
+            <tr class="border-b border-stone-100">
+              <td class="py-3 pr-4 font-semibold text-stone-900">Desktop strategy</td>
+              <td class="py-3 px-4">3‑pane split: nav · canvas · inspector</td>
+              <td class="py-3 px-4">12‑col masonry grid + hero stats</td>
+              <td class="py-3 px-4">Timeline rail · composer · live patterns</td>
+              <td class="py-3 px-4 bg-teal-50/30">Jump rail · time‑grouped card board · patterns</td>
+            </tr>
+            <tr class="border-b border-stone-100">
+              <td class="py-3 pr-4 font-semibold text-stone-900">Mobile editing strategy</td>
+              <td class="py-3 px-4">Bottom sheet (90% height)</td>
+              <td class="py-3 px-4">Full‑screen focus mode per card</td>
+              <td class="py-3 px-4">FAB action sheet → focused composer</td>
+              <td class="py-3 px-4 bg-teal-50/30">Card focus mode + FAB compose</td>
+            </tr>
+            <tr class="border-b border-stone-100">
+              <td class="py-3 pr-4 font-semibold text-stone-900">"Fill once at night" still works?</td>
+              <td class="py-3 px-4 text-emerald-700">Yes (one form)</td>
+              <td class="py-3 px-4 text-emerald-700">Yes (cards)</td>
+              <td class="py-3 px-4 text-rose-700">No — event‑native only</td>
+              <td class="py-3 px-4 bg-teal-50/30 text-emerald-700">Yes — pinned EOD rollup card</td>
+            </tr>
+            <tr class="border-b border-stone-100">
+              <td class="py-3 pr-4 font-semibold text-stone-900">Backend impact</td>
+              <td class="py-3 px-4">None — same data model</td>
+              <td class="py-3 px-4">Add card‑order preference</td>
+              <td class="py-3 px-4">Add event timestamp + type to entries</td>
+              <td class="py-3 px-4 bg-teal-50/30">Same as V3 — event timestamps</td>
+            </tr>
+            <tr class="border-b border-stone-100">
+              <td class="py-3 pr-4 font-semibold text-stone-900">Migration cost</td>
+              <td class="py-3 px-4 text-emerald-700">Low</td>
+              <td class="py-3 px-4 text-amber-700">Medium</td>
+              <td class="py-3 px-4 text-rose-700">High</td>
+              <td class="py-3 px-4 bg-teal-50/30 text-amber-700">Medium‑high</td>
+            </tr>
+            <tr>
+              <td class="py-3 pr-4 font-semibold text-stone-900">Vibe</td>
+              <td class="py-3 px-4">Notion / Linear · power tool</td>
+              <td class="py-3 px-4">Trello / dashboard · modular</td>
+              <td class="py-3 px-4">Day One / journal · narrative</td>
+              <td class="py-3 px-4 bg-teal-50/30">Linear board × Day One · structured journal</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Recommendation -->
+    <section class="bg-stone-900 text-stone-100 rounded-2xl p-8">
+      <div class="flex items-start gap-4">
+        <div class="size-10 rounded-xl bg-stone-800 grid place-items-center text-stone-300">
+          <i data-lucide="sparkles" class="size-5"></i>
+        </div>
+        <div>
+          <div class="text-xs uppercase tracking-widest text-stone-400 mb-1">Recommendation</div>
+          <h3 class="text-xl font-bold">V4 (Daily Board) is the strongest target. Ship in two phases.</h3>
+          <p class="text-sm text-stone-300 mt-3 max-w-3xl leading-relaxed">
+            V4 captures the best of both worlds — V2's rich, scannable cards as the unit of interaction,
+            arranged along V3's chronological spine, with the pinned <strong>End‑of‑day rollup card</strong>
+            keeping the "fill once at night" muscle memory alive. It needs a backend change (event
+            timestamps on entries) but is closer to V2's migration cost than V3's full rewrite.
+          </p>
+          <div class="mt-5 grid grid-cols-2 gap-4 max-w-3xl">
+            <div class="p-4 rounded-xl bg-stone-800 border border-stone-700">
+              <div class="text-xs font-bold text-teal-300 uppercase tracking-wider mb-1">Phase 1 · ship now</div>
+              <p class="text-xs text-stone-300 leading-relaxed">
+                Lift V2's hero stats strip + card grid onto the existing form. Big ingredient editor uses
+                V1's bottom‑sheet on mobile and full‑width card on desktop. No schema change yet — the
+                cards just render today's existing entry fields.
+              </p>
+            </div>
+            <div class="p-4 rounded-xl bg-stone-800 border border-stone-700">
+              <div class="text-xs font-bold text-teal-300 uppercase tracking-wider mb-1">Phase 2 · 2026 Q3</div>
+              <p class="text-xs text-stone-300 leading-relaxed">
+                Add <code class="text-[10px] bg-stone-900 px-1.5 py-0.5 rounded">event_time</code> +
+                <code class="text-[10px] bg-stone-900 px-1.5 py-0.5 rounded">event_type</code> to
+                ingestion. Render the time‑grouped timeline. Wire the FAB compose flow. End‑of‑day rollup
+                card stays — it's a saved query, not a separate model.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="text-center text-xs text-stone-500 py-12">
+    Mockups · May 2026 · Local prototypes, no backend wiring.
+  </footer>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
