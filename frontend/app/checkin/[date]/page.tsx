@@ -3,7 +3,7 @@
 import { use, useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Loader2 } from 'lucide-react'
-import { CheckinForm } from '@/components/checkin/checkin-form'
+import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { useEntry } from '@/lib/api/hooks'
@@ -67,7 +67,7 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
   }, [])
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <div className="mx-auto w-full max-w-7xl p-4 lg:px-8">
       <div className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <Link
@@ -93,7 +93,7 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <CheckinForm
+        <CheckinBoard
           date={date}
           existingEntry={entry ?? null}
           onAutosaveStateChange={handleAutosaveStateChange}
