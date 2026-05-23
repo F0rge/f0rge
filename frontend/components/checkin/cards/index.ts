@@ -1,7 +1,6 @@
 export { HeroStats } from './hero-stats'
 export { TreatmentBanner } from './treatment-banner'
 export { FoodCard } from './food-card'
-export { InsightsCard } from './insights-card'
 export { WellbeingCard } from './wellbeing-card'
 export { GutCard } from './gut-card'
 export { SupplementsCard } from './supplements-card'
