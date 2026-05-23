@@ -12,6 +12,10 @@
  *
  * The col-span class is applied to this wrapper (not the inner Card), since the
  * wrapper IS the grid item. The inner Card uses `h-full` to fill the wrapper.
+ *
+ * When isDragging is true this element is the placeholder — the DragOverlay in
+ * CheckinBoard renders the visible floating copy. Dim the placeholder so it reads
+ * as a ghost and the overlay reads as the live card.
  */
 
 import { useSortable } from '@dnd-kit/sortable'
@@ -50,7 +54,9 @@ export function SortableCard({ id, colSpanClass, children }: SortableCardProps) 
       className={cn(
         colSpanClass,
         'group relative',
-        isDragging && 'z-50 opacity-50',
+        // When dragging: dim the original so the DragOverlay (above) reads as the "live" card.
+        // z-50 is NOT needed here — DragOverlay renders above the entire page via a portal.
+        isDragging && 'opacity-30',
       )}
     >
       {/* Drag handle — hidden on desktop until card is hovered; always visible on touch */}
