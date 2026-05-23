@@ -32,6 +32,7 @@ from app.routers import (
     settings as settings_router,
     supplement_catalog,
     symptom_catalog,
+    trackers,
     treatments,
     weather,
 )
@@ -245,6 +246,7 @@ app.include_router(export.router)
 app.include_router(labs.router)
 app.include_router(settings_router.router)
 app.include_router(lab_markers.router)
+app.include_router(trackers.router)
 
 
 @app.get("/api/v1/health")
