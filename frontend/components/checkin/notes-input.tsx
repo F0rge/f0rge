@@ -5,9 +5,10 @@ import { useRef, useEffect } from 'react'
 interface NotesInputProps {
   value: string
   onChange: (value: string) => void
+  onBlur?: () => void
 }
 
-export function NotesInput({ value, onChange }: NotesInputProps) {
+export function NotesInput({ value, onChange, onBlur }: NotesInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export function NotesInput({ value, onChange }: NotesInputProps) {
             onChange(e.target.value)
           }
         }}
+        onBlur={onBlur}
         placeholder="Anything notable today... meals, events, how you felt"
         className="w-full min-h-[80px] resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         rows={3}

@@ -1,55 +1,139 @@
 'use client'
 
-import { useRef } from 'react'
-import { Camera, ImageIcon, X } from 'lucide-react'
+import { useRef, useState, useCallback } from 'react'
+import { Camera, ImageIcon, X, Loader2, Check, AlertTriangle } from 'lucide-react'
 import { MealTimeChips } from './meal-time-chips'
+import { useUploadPhoto, useDeletePhoto } from '@/lib/api/hooks'
 
-interface PhotoCaptureProps {
-  photos: File[]
-  labels: string[]
-  mealTimes: (Date | null)[]
-  onPhotosChange: (photos: File[]) => void
-  onLabelsChange: (labels: string[]) => void
-  onMealTimesChange: (mealTimes: (Date | null)[]) => void
+interface StagedPhoto {
+  id: string
+  file: File
+  label: string
+  mealTime: Date
+  status: 'uploading' | 'uploaded' | 'error'
+  serverPhotoId?: number
+  errorMessage?: string
 }
 
-export function PhotoCapture({
-  photos,
-  labels,
-  mealTimes,
-  onPhotosChange,
-  onLabelsChange,
-  onMealTimesChange,
-}: PhotoCaptureProps) {
+interface PhotoCaptureProps {
+  date: string
+  ensureEntryExists: () => Promise<void>
+  onEntryEnsured?: () => void
+}
+
+function generateId(): string {
+  return Math.random().toString(36).slice(2)
+}
+
+export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoCaptureProps) {
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
+  const uploadPhoto = useUploadPhoto()
+  const deletePhoto = useDeletePhoto()
 
-  const handleFileSelect = (files: FileList | null) => {
-    if (!files) return
+  const [photos, setPhotos] = useState<StagedPhoto[]>([])
+
+  const handleFileSelect = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return
     const incoming = Array.from(files)
     const now = new Date()
-    onPhotosChange([...photos, ...incoming])
-    onLabelsChange([...labels, ...incoming.map(() => '')])
-    onMealTimesChange([...mealTimes, ...incoming.map(() => new Date(now))])
-  }
 
-  const removePhoto = (index: number) => {
-    onPhotosChange(photos.filter((_, i) => i !== index))
-    onLabelsChange(labels.filter((_, i) => i !== index))
-    onMealTimesChange(mealTimes.filter((_, i) => i !== index))
-  }
+    // Stage all files immediately so UI shows them.
+    const staged: StagedPhoto[] = incoming.map((file) => ({
+      id: generateId(),
+      file,
+      label: '',
+      mealTime: new Date(now),
+      status: 'uploading',
+    }))
+    setPhotos((prev) => [...prev, ...staged])
 
-  const updateLabel = (index: number, label: string) => {
-    const next = [...labels]
-    next[index] = label
-    onLabelsChange(next)
-  }
+    // Ensure entry exists before any upload. Mark form dirty so subsequent
+    // field edits autosave (enabled gate requires isDirty).
+    await ensureEntryExists()
+    onEntryEnsured?.()
 
-  const updateMealTime = (index: number, d: Date) => {
-    const next = [...mealTimes]
-    next[index] = d
-    onMealTimesChange(next)
-  }
+    // Upload each file and update its status.
+    for (const photo of staged) {
+      try {
+        const result = await uploadPhoto.mutateAsync({
+          date,
+          file: photo.file,
+          label: photo.label || undefined,
+          mealTime: photo.mealTime,
+        }) as { id: number }
+
+        setPhotos((prev) =>
+          prev.map((p) =>
+            p.id === photo.id
+              ? { ...p, status: 'uploaded', serverPhotoId: result.id }
+              : p,
+          ),
+        )
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Upload failed'
+        setPhotos((prev) =>
+          prev.map((p) =>
+            p.id === photo.id
+              ? { ...p, status: 'error', errorMessage: msg }
+              : p,
+          ),
+        )
+      }
+    }
+  }, [date, ensureEntryExists, onEntryEnsured, uploadPhoto])
+
+  const removePhoto = useCallback(async (id: string) => {
+    const photo = photos.find((p) => p.id === id)
+    if (!photo) return
+
+    if (photo.status === 'uploaded' && photo.serverPhotoId !== undefined) {
+      try {
+        await deletePhoto.mutateAsync(photo.serverPhotoId)
+      } catch {
+        // Ignore delete errors — remove locally anyway.
+      }
+    }
+    setPhotos((prev) => prev.filter((p) => p.id !== id))
+  }, [photos, deletePhoto])
+
+  const retryUpload = useCallback(async (id: string) => {
+    const photo = photos.find((p) => p.id === id)
+    if (!photo) return
+
+    setPhotos((prev) =>
+      prev.map((p) => p.id === id ? { ...p, status: 'uploading', errorMessage: undefined } : p),
+    )
+
+    await ensureEntryExists()
+    onEntryEnsured?.()
+
+    try {
+      const result = await uploadPhoto.mutateAsync({
+        date,
+        file: photo.file,
+        label: photo.label || undefined,
+        mealTime: photo.mealTime,
+      }) as { id: number }
+
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, status: 'uploaded', serverPhotoId: result.id }
+            : p,
+        ),
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed'
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, status: 'error', errorMessage: msg }
+            : p,
+        ),
+      )
+    }
+  }, [photos, date, ensureEntryExists, onEntryEnsured, uploadPhoto])
 
   return (
     <div className="space-y-3">
@@ -79,55 +163,103 @@ export function PhotoCapture({
         type="file"
         accept="image/*"
         capture="environment"
-        onChange={(e) => handleFileSelect(e.target.files)}
+        onChange={(e) => { void handleFileSelect(e.target.files) }}
         className="hidden"
       />
       <input
         ref={galleryRef}
         type="file"
         accept="image/*"
-        onChange={(e) => handleFileSelect(e.target.files)}
+        onChange={(e) => { void handleFileSelect(e.target.files) }}
         className="hidden"
       />
 
       {photos.length > 0 && (
         <div className="space-y-3">
-          {photos.map((photo, index) => (
-            <div key={index} className="rounded-lg border border-border p-3 space-y-2">
+          {photos.map((photo) => (
+            <div key={photo.id} className="rounded-lg border border-border p-3 space-y-2">
               <div className="flex items-start gap-3">
                 <div className="relative size-16 shrink-0 overflow-hidden rounded-md bg-muted">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={URL.createObjectURL(photo)}
-                    alt={`Photo ${index + 1}`}
+                    src={URL.createObjectURL(photo.file)}
+                    alt={`Photo ${photo.label || photo.file.name}`}
                     className="size-full object-cover"
                   />
+                  {/* Status overlay */}
+                  {photo.status === 'uploading' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <Loader2 className="size-5 animate-spin text-white" />
+                    </div>
+                  )}
+                  {photo.status === 'uploaded' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                      <Check className="size-5 text-white" />
+                    </div>
+                  )}
+                  {photo.status === 'error' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <AlertTriangle className="size-5 text-amber-400" />
+                    </div>
+                  )}
                 </div>
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={labels[index] || ''}
-                    onChange={(e) => updateLabel(index, e.target.value)}
-                    placeholder="Label (optional)"
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">{photo.name}</p>
+                <div className="flex-1 min-w-0">
+                  {photo.status === 'uploaded' ? (
+                    <p className="text-xs text-muted-foreground">
+                      {photo.label || photo.file.name}
+                    </p>
+                  ) : (
+                    <input
+                      type="text"
+                      value={photo.label}
+                      onChange={(e) => {
+                        const label = e.target.value
+                        setPhotos((prev) =>
+                          prev.map((p) => p.id === photo.id ? { ...p, label } : p),
+                        )
+                      }}
+                      disabled={photo.status === 'uploading'}
+                      placeholder="Label (optional)"
+                      className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                    />
+                  )}
+                  <p className="mt-1 text-xs text-muted-foreground truncate">{photo.file.name}</p>
+                  {photo.status === 'error' && (
+                    <button
+                      type="button"
+                      onClick={() => void retryUpload(photo.id)}
+                      className="mt-1 text-xs text-amber-600 underline underline-offset-2 dark:text-amber-400"
+                    >
+                      Retry upload
+                    </button>
+                  )}
+                  {photo.status === 'uploaded' && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Label and meal-time edits available after save (coming soon)
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
-                  onClick={() => removePhoto(index)}
+                  onClick={() => void removePhoto(photo.id)}
                   className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <X className="size-4" />
                 </button>
               </div>
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
-                <MealTimeChips
-                  value={mealTimes[index] ?? null}
-                  onChange={(d) => updateMealTime(index, d)}
-                />
-              </div>
+              {photo.status !== 'uploaded' && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
+                  <MealTimeChips
+                    value={photo.mealTime}
+                    onChange={(d) => {
+                      setPhotos((prev) =>
+                        prev.map((p) => p.id === photo.id ? { ...p, mealTime: d } : p),
+                      )
+                    }}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
