@@ -502,6 +502,7 @@ export function CheckinBoard({
         onSickChange={setSickDirty}
         hotShower={hotShower}
         onHotShowerChange={setHotShowerDirty}
+        date={date}
       />
     ),
     notes: () => (
