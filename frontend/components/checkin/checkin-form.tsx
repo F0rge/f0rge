@@ -19,7 +19,7 @@ import type { Entry, EntryCreate, PhotoSignal, StoolStatus } from '@/lib/api/typ
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useDeletePhoto } from '@/lib/api/hooks'
-import { X } from 'lucide-react'
+import { X, Maximize2 } from 'lucide-react'
 
 const DIET_OPTIONS = [
   { id: 'high-histamine', label: 'High-histamine' },
@@ -239,9 +239,15 @@ interface CheckinFormProps {
    * The parent stores these in refs — no state, no re-render.
    */
   onAutosaveFnsReady?: (fns: AutosaveFns) => void
+  /**
+   * Called when the user requests the comfortable focus-mode editor for a
+   * specific photo (taps the thumbnail on mobile, or the Maximize icon on
+   * desktop). Parent owns the overlay state. See issue #76.
+   */
+  onOpenPhotoFocus?: (photoId: number) => void
 }
 
-export function CheckinForm({ date, existingEntry, onAutosaveStateChange, onAutosaveFnsReady }: CheckinFormProps) {
+export function CheckinForm({ date, existingEntry, onAutosaveStateChange, onAutosaveFnsReady, onOpenPhotoFocus }: CheckinFormProps) {
   const deletePhotoMutation = useDeletePhoto()
   const queryClient = useQueryClient()
   const { data: catalog } = useSupplementCatalog(false)
@@ -615,17 +621,49 @@ export function CheckinForm({ date, existingEntry, onAutosaveStateChange, onAuto
           <div className="grid grid-cols-2 gap-3">
             {existingPhotos.map((photo) => (
               <div key={photo.id}>
-                <div className="relative rounded-xl border border-border overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/api/v1/photos/${photo.id}/file`}
-                    alt={photo.label || 'Photo'}
-                    className="aspect-square w-full object-cover"
-                  />
+                <div className="group relative rounded-xl border border-border overflow-hidden">
+                  {/* Tap target covering the image — opens the focus overlay
+                      when a handler is provided. Falls back to a plain image
+                      so the form keeps working if no parent wires it up. */}
+                  {onOpenPhotoFocus ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenPhotoFocus(photo.id)}
+                      className="block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Open focus editor for ${photo.label || 'photo'}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/v1/photos/${photo.id}/file`}
+                        alt={photo.label || 'Photo'}
+                        className="aspect-square w-full object-cover"
+                      />
+                    </button>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={`/api/v1/photos/${photo.id}/file`}
+                      alt={photo.label || 'Photo'}
+                      className="aspect-square w-full object-cover"
+                    />
+                  )}
                   {photo.label && (
                     <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
                       {photo.label}
                     </div>
+                  )}
+                  {/* Maximize affordance — always present so desktop users
+                      who prefer a precise click target have one. Sits at top-left
+                      to avoid clashing with the delete button. */}
+                  {onOpenPhotoFocus && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenPhotoFocus(photo.id)}
+                      className="absolute left-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Open focus editor for ${photo.label || 'photo'}`}
+                    >
+                      <Maximize2 className="size-3.5" />
+                    </button>
                   )}
                   <button
                     type="button"
