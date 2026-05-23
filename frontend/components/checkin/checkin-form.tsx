@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { toast } from 'sonner'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { Camera, Loader2, Pill, X } from 'lucide-react'
+import { Camera, Pill } from 'lucide-react'
 import { ScaleInput } from './scale-input'
 import { BinaryInput } from './binary-input'
 import { BristolInput } from './bristol-input'
@@ -12,18 +11,15 @@ import { PhotoCapture } from './photo-capture'
 import { SupplementPicker } from './supplement-picker'
 import { SymptomPicker } from './symptom-picker'
 import { Stepper } from '@/components/ui/stepper'
-import { useQueryClient } from '@tanstack/react-query'
-import {
-  useCreateEntry,
-  useUpdateEntry,
-  useUploadPhoto,
-  useDeletePhoto,
-  useSupplementCatalog,
-  useTreatments,
-} from '@/lib/api/hooks'
-import { apiGet, apiPut, ApiError } from '@/lib/api/client'
+import { useSupplementCatalog, useTreatments } from '@/lib/api/hooks'
 import { PhotoAnalysis } from '@/components/shared/food-analysis'
+import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
+import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, PhotoSignal, StoolStatus } from '@/lib/api/types'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { useDeletePhoto } from '@/lib/api/hooks'
+import { X } from 'lucide-react'
 
 const DIET_OPTIONS = [
   { id: 'high-histamine', label: 'High-histamine' },
@@ -98,7 +94,6 @@ interface PhotoDerivedRowProps {
 function PhotoDerivedRow({ signal, photoCount }: PhotoDerivedRowProps) {
   const sourceLine = buildSourceLine(signal)
 
-  // Count total unique ingredient mentions across all source lists.
   const ingredientCount = Object.values(signal.sources).reduce(
     (sum, arr) => sum + arr.length,
     0,
@@ -159,15 +154,12 @@ interface DietRiskSectionProps {
 
 function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle }: DietRiskSectionProps) {
   const hasPhotos = existingPhotos.length > 0
-  // Default to an empty signal for entries that pre-date the deploy.
   const signal: PhotoSignal = existingEntry?.photo_signal ?? {
     flags: [],
     scores: { histamine_load: 0, fodmap_count: 0, gluten_count: 0, dairy_count: 0 },
     sources: {},
   }
 
-  // Signal is "live" if photos have produced any flags or the cumulative histamine load is non-zero.
-  // (Counts > 0 always also produce flags, so they're not separate signals.)
   const signalIsLive = signal.flags.length > 0 || signal.scores.histamine_load > 0
 
   const manualOptions = DIET_OPTIONS.filter((o) => !signal.flags.includes(o.id))
@@ -230,16 +222,26 @@ function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle }: 
   )
 }
 
+interface AutosaveFns {
+  flush: () => void
+  forceFlush: () => Promise<void>
+  retry: () => void
+  flushBeacon: () => void
+}
+
 interface CheckinFormProps {
   date: string
   existingEntry?: Entry | null
-  onSuccess?: () => void
+  /** Called whenever the pill status changes (status, lastSavedAt, errorMessage). */
+  onAutosaveStateChange?: (state: AutosaveState) => void
+  /**
+   * Called once on mount with stable flush/forceFlush/retry refs.
+   * The parent stores these in refs — no state, no re-render.
+   */
+  onAutosaveFnsReady?: (fns: AutosaveFns) => void
 }
 
-export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps) {
-  const createEntry = useCreateEntry()
-  const updateEntry = useUpdateEntry()
-  const uploadPhoto = useUploadPhoto()
+export function CheckinForm({ date, existingEntry, onAutosaveStateChange, onAutosaveFnsReady }: CheckinFormProps) {
   const deletePhotoMutation = useDeletePhoto()
   const queryClient = useQueryClient()
   const { data: catalog } = useSupplementCatalog(false)
@@ -265,15 +267,41 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   const [sick, setSick] = useState(false)
   const [hotShower, setHotShower] = useState(false)
   const [notes, setNotes] = useState('')
-  const [photos, setPhotos] = useState<File[]>([])
-  const [labels, setLabels] = useState<string[]>([])
-  const [mealTimes, setMealTimes] = useState<(Date | null)[]>([])
   const [existingPhotos, setExistingPhotos] = useState<Entry['photos']>([])
   const [alcoholUnits, setAlcoholUnits] = useState(0)
   const [caffeineServings, setCaffeineServings] = useState(0)
-  const [submitting, setSubmitting] = useState(false)
+
+  // isDirty: true once the user has made a real change. Prevents autosave from
+  // firing during the hydration effect or the supplements pre-fill effect.
+  // We use both a ref (for synchronous reads) and state (to trigger re-renders
+  // so the autosave hook sees the updated `enabled` flag).
+  const dirtyRef = useRef(false)
+  const [isDirty, setIsDirty] = useState(false)
+  const markDirty = useCallback(() => {
+    if (!dirtyRef.current) {
+      dirtyRef.current = true
+      setIsDirty(true)
+    }
+  }, [])
+
+  // Wrappers that mark dirty before updating state.
+  const setOverallDirty = useCallback((v: number) => { markDirty(); setOverall(v) }, [markDirty])
+  const setBloatingDirty = useCallback((v: number) => { markDirty(); setBloating(v) }, [markDirty])
+  const setStoolStatusDirty = useCallback((v: StoolStatus) => { markDirty(); setStoolStatus(v) }, [markDirty])
+  const setBristolTypeDirty = useCallback((v: number | null) => { markDirty(); setBristolType(v) }, [markDirty])
+  const setJointPainDirty = useCallback((v: number) => { markDirty(); setJointPain(v) }, [markDirty])
+  const setNeuroDirty = useCallback((v: number) => { markDirty(); setNeuro(v) }, [markDirty])
+  const setSleepQualityDirty = useCallback((v: number) => { markDirty(); setSleepQuality(v) }, [markDirty])
+  const setStressDirty = useCallback((v: number) => { markDirty(); setStress(v) }, [markDirty])
+  const setNotesDirty = useCallback((v: string) => { markDirty(); setNotes(v) }, [markDirty])
+  const setSickDirty = useCallback((v: boolean) => { markDirty(); setSick(v) }, [markDirty])
+  const setHotShowerDirty = useCallback((v: boolean) => { markDirty(); setHotShower(v) }, [markDirty])
+  const setSymptomsJsonDirty = useCallback((v: Record<string, number>) => { markDirty(); setSymptomsJson(v) }, [markDirty])
+  const setAlcoholUnitsDirty = useCallback((v: number) => { markDirty(); setAlcoholUnits(v) }, [markDirty])
+  const setCaffeineServingsDirty = useCallback((v: number) => { markDirty(); setCaffeineServings(v) }, [markDirty])
 
   // When creating a new entry, pre-fill supplements with the current active catalog.
+  // This does NOT mark dirty — it's an initialization, not a user change.
   useEffect(() => {
     if (!existingEntry && !supplementsTouched && defaultSupplements) {
       setSupplements(defaultSupplements)
@@ -284,7 +312,6 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
     if (existingEntry) {
       setOverall(existingEntry.overall)
       setBloating(existingEntry.bloating)
-      // Map v1 entries onto the v2 stool fields.
       if (existingEntry.stool_status) {
         setStoolStatus(existingEntry.stool_status)
       } else if (existingEntry.stool_normal === false) {
@@ -299,8 +326,6 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       setNeuro(existingEntry.neuro)
       setSleepQuality(existingEntry.sleep_quality)
       setStress(existingEntry.stress)
-      // Use user_added_flags when available (new entries); fall back to
-      // diet_risk string for old entries deployed before Wave 2.
       setDietRisk(
         existingEntry.user_added_flags !== undefined
           ? existingEntry.user_added_flags.join(',')
@@ -324,6 +349,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
   }, [stoolStatus])
 
   const handleDietToggle = (id: string) => {
+    markDirty()
     const current = dietRisk ? dietRisk.split(',').filter(Boolean) : []
     if (current.includes(id)) {
       setDietRisk(current.filter((d) => d !== id).join(','))
@@ -343,99 +369,76 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
     }
   }
 
-  const handleSubmit = async () => {
-    if (stoolStatus === 'abnormal' && bristolType === null) {
-      toast.error('Pick a Bristol type, or switch stool back to Normal / None')
-      return
-    }
-    setSubmitting(true)
-    try {
-      const data: EntryCreate = {
-        date,
-        schema_version: 2,
-        entry_time: new Date().toISOString(),
-        overall,
-        bloating,
-        stool_status: stoolStatus,
-        bristol_type:
-          stoolStatus === 'abnormal' && bristolType !== null
-            ? bristolType
-            : undefined,
-        joint_pain: jointPain,
-        neuro,
-        sleep_quality: sleepQuality,
-        stress,
-        diet_risk: dietRisk,
-        supplements,
-        sick,
-        hot_shower: hotShower,
-        // Always send notes (even when empty) so updates can clear it.
-        // Otherwise Pydantic exclude_unset drops the field and the
-        // existing value survives.
-        notes: notes,
-        alcohol_units: alcoholUnits,
-        caffeine_servings: caffeineServings,
-        symptoms_json: symptomsJson,
-      }
+  // Bristol gate: user must pick a Bristol type before autosave is enabled.
+  const bristolBlocked = stoolStatus === 'abnormal' && bristolType === null
 
-      if (existingEntry) {
-        await updateEntry.mutateAsync({ date, data })
-      } else {
-        await createEntry.mutateAsync(data)
-      }
+  // Memoized payload — only recomputes when scalar values change.
+  // entry_time is omitted from the payload to avoid thrashing the column on every save;
+  // the first POST sets it, subsequent PUTs let the backend use updated_at.
+  const payload = useMemo<EntryCreate>(() => ({
+    date,
+    schema_version: 2,
+    overall,
+    bloating,
+    stool_status: stoolStatus,
+    bristol_type:
+      stoolStatus === 'abnormal' && bristolType !== null ? bristolType : undefined,
+    joint_pain: jointPain,
+    neuro,
+    sleep_quality: sleepQuality,
+    stress,
+    diet_risk: dietRisk,
+    supplements,
+    sick,
+    hot_shower: hotShower,
+    // Always send notes (even when empty) — see memory: form payload patterns.
+    notes,
+    alcohol_units: alcoholUnits,
+    caffeine_servings: caffeineServings,
+    symptoms_json: symptomsJson,
+  }), [
+    date, overall, bloating, stoolStatus, bristolType, jointPain, neuro,
+    sleepQuality, stress, dietRisk, supplements, sick, hotShower, notes,
+    alcoholUnits, caffeineServings, symptomsJson,
+  ])
 
-      for (let i = 0; i < photos.length; i++) {
-        await uploadPhoto.mutateAsync({
-          date,
-          file: photos[i],
-          label: labels[i] || undefined,
-          mealTime: mealTimes[i] ?? undefined,
-        })
-      }
+  const autosave = useAutosaveEntry({
+    date,
+    payload,
+    enabled: !bristolBlocked && isDirty,
+    blocked: bristolBlocked,
+    hasExistingEntry: !!existingEntry,
+  })
 
-      // Auto-confirm pending analyses
-      for (const photo of existingPhotos) {
-        try {
-          const analysis = await apiGet(`/photos/${photo.id}/analysis`)
-          if (analysis && analysis.status === 'complete') {
-            await apiPut(`/photos/${photo.id}/analysis/confirm`, {})
-          }
-        } catch {
-          // Ignore — analysis might not exist
-        }
-      }
+  // Surface plain serializable state to parent pill — only re-runs when
+  // status/lastSavedAt/errorMessage change. flush/forceFlush/retry are
+  // registered once via onAutosaveFnsReady below to break the re-render cycle.
+  useEffect(() => {
+    onAutosaveStateChange?.({
+      status: autosave.status,
+      lastSavedAt: autosave.lastSavedAt,
+      errorMessage: autosave.errorMessage,
+    })
+  }, [autosave.status, autosave.lastSavedAt, autosave.errorMessage, onAutosaveStateChange])
 
-      toast.success(existingEntry ? 'Entry updated' : 'Entry saved')
-      setPhotos([])
-      setLabels([])
-      setMealTimes([])
-      queryClient.invalidateQueries({ queryKey: ['entry', date] })
-      onSuccess?.()
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        toast.info('Entry already saved — switching to edit mode')
-        queryClient.invalidateQueries({ queryKey: ['entry', date] })
-      } else if (err instanceof ApiError && err.status === 422) {
-        let detail = 'Validation error'
-        try {
-          const parsed = JSON.parse(err.message) as { detail?: string | { msg: string }[] }
-          if (typeof parsed.detail === 'string') {
-            detail = parsed.detail
-          } else if (Array.isArray(parsed.detail) && parsed.detail[0]?.msg) {
-            detail = parsed.detail[0].msg
-          }
-        } catch {
-          // unparseable — use the generic label
-        }
-        toast.error(detail)
-      } else {
-        console.error('Failed to save entry', err)
-        toast.error('Failed to save. Please try again.')
-      }
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  // Register flush/forceFlush/retry refs with parent once on mount.
+  // These are stored as refs in the parent — no setState, no re-render cycle.
+  const autosaveRef = useRef(autosave)
+  useEffect(() => { autosaveRef.current = autosave })
+  useEffect(() => {
+    onAutosaveFnsReady?.({
+      flush: () => autosaveRef.current.flush(),
+      forceFlush: () => autosaveRef.current.forceFlush(),
+      retry: () => autosaveRef.current.retry(),
+      flushBeacon: () => autosaveRef.current.flushBeacon(),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally empty — register once
+
+  // Flush autosave on blur of the notes field (and any text input).
+  const handleBlur = useCallback(() => {
+    autosave.flush()
+  }, [autosave])
 
   return (
     <div className="space-y-7 pb-8">
@@ -460,7 +463,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       <ScaleInput
         label="How was your day?"
         value={overall}
-        onChange={(v) => setOverall(v as number)}
+        onChange={(v) => setOverallDirty(v as number)}
         options={[
           { value: 1, label: 'Very Poor' },
           { value: 2, label: 'Standard' },
@@ -471,7 +474,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       <ScaleInput
         label="Bloating"
         value={bloating}
-        onChange={(v) => setBloating(v as number)}
+        onChange={(v) => setBloatingDirty(v as number)}
         options={[
           { value: 0, label: 'None' },
           { value: 1, label: 'Mild' },
@@ -484,7 +487,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
         <ScaleInput
           label="Stool"
           value={stoolStatus}
-          onChange={(v) => setStoolStatus(v as StoolStatus)}
+          onChange={(v) => setStoolStatusDirty(v as StoolStatus)}
           options={[
             { value: 'normal', label: 'Normal' },
             { value: 'abnormal', label: 'Abnormal' },
@@ -492,14 +495,21 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
           ]}
         />
         {stoolStatus === 'abnormal' && (
-          <BristolInput value={bristolType} onChange={setBristolType} />
+          <>
+            <BristolInput value={bristolType} onChange={setBristolTypeDirty} />
+            {bristolBlocked && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Pick a Bristol type to keep saving
+              </p>
+            )}
+          </>
         )}
       </div>
 
       <ScaleInput
         label="Joint pain / crepitus"
         value={jointPain}
-        onChange={(v) => setJointPain(v as number)}
+        onChange={(v) => setJointPainDirty(v as number)}
         options={[
           { value: 0, label: 'None' },
           { value: 1, label: 'Mild' },
@@ -511,7 +521,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       <ScaleInput
         label="Neuro symptoms"
         value={neuro}
-        onChange={(v) => setNeuro(v as number)}
+        onChange={(v) => setNeuroDirty(v as number)}
         options={[
           { value: -1, label: 'Worse' },
           { value: 0, label: 'Baseline' },
@@ -522,7 +532,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       <ScaleInput
         label="Sleep quality (last night)"
         value={sleepQuality}
-        onChange={(v) => setSleepQuality(v as number)}
+        onChange={(v) => setSleepQualityDirty(v as number)}
         options={[
           { value: 1, label: 'Poor' },
           { value: 2, label: 'OK' },
@@ -533,7 +543,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       <ScaleInput
         label="Stress level"
         value={stress}
-        onChange={(v) => setStress(v as number)}
+        onChange={(v) => setStressDirty(v as number)}
         options={[
           { value: 1, label: 'Low' },
           { value: 2, label: 'Medium' },
@@ -551,19 +561,20 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       <SupplementPicker
         value={supplements}
         onChange={(v) => {
+          markDirty()
           setSupplements(v)
           setSupplementsTouched(true)
         }}
       />
 
-      <SymptomPicker value={symptomsJson} onChange={setSymptomsJson} />
+      <SymptomPicker value={symptomsJson} onChange={setSymptomsJsonDirty} />
 
       <div className="space-y-2">
         <label className="text-sm font-semibold">Alcohol & Caffeine</label>
         <div className="flex justify-around rounded-xl border border-border bg-background p-4">
           <Stepper
             value={alcoholUnits}
-            onChange={setAlcoholUnits}
+            onChange={setAlcoholUnitsDirty}
             min={0}
             max={10}
             label="Alcohol units"
@@ -571,7 +582,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
           />
           <Stepper
             value={caffeineServings}
-            onChange={setCaffeineServings}
+            onChange={setCaffeineServingsDirty}
             min={0}
             max={10}
             label="Caffeine servings"
@@ -583,7 +594,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       <BinaryInput
         label="Sick / cold?"
         value={sick}
-        onChange={setSick}
+        onChange={setSickDirty}
         trueLabel="Yes"
         falseLabel="No"
       />
@@ -591,12 +602,12 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       <BinaryInput
         label="Full-body hot shower today?"
         value={hotShower}
-        onChange={setHotShower}
+        onChange={setHotShowerDirty}
         trueLabel="Yes"
         falseLabel="No"
       />
 
-      <NotesInput value={notes} onChange={setNotes} />
+      <NotesInput value={notes} onChange={setNotesDirty} onBlur={handleBlur} />
 
       {existingPhotos.length > 0 && (
         <div className="space-y-3">
@@ -605,6 +616,7 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
             {existingPhotos.map((photo) => (
               <div key={photo.id}>
                 <div className="relative rounded-xl border border-border overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/api/v1/photos/${photo.id}/file`}
                     alt={photo.label || 'Photo'}
@@ -631,31 +643,10 @@ export function CheckinForm({ date, existingEntry, onSuccess }: CheckinFormProps
       )}
 
       <PhotoCapture
-        photos={photos}
-        labels={labels}
-        mealTimes={mealTimes}
-        onPhotosChange={setPhotos}
-        onLabelsChange={setLabels}
-        onMealTimesChange={setMealTimes}
+        date={date}
+        ensureEntryExists={autosave.forceFlush}
+        onEntryEnsured={markDirty}
       />
-
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={submitting}
-        className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50 shadow-sm"
-      >
-        {submitting ? (
-          <>
-            <Loader2 className="size-4 animate-spin" />
-            Saving...
-          </>
-        ) : existingEntry ? (
-          'Update Entry'
-        ) : (
-          'Save Entry'
-        )}
-      </button>
     </div>
   )
 }
