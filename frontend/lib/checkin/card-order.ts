@@ -8,7 +8,6 @@ const STORAGE_KEY = 'ht.cards-v2.order'
 
 export type CardId =
   | 'food'
-  | 'insights'
   | 'wellbeing'
   | 'gut'
   | 'supplements'
@@ -18,7 +17,6 @@ export type CardId =
 
 export const DEFAULT_CARD_ORDER: readonly CardId[] = [
   'food',
-  'insights',
   'wellbeing',
   'gut',
   'supplements',
@@ -32,7 +30,7 @@ const KNOWN_IDS = new Set<string>(DEFAULT_CARD_ORDER)
 /**
  * Load the saved order from localStorage.
  *
- * - Filters out any unknown IDs (removed cards).
+ * - Filters out any unknown IDs (removed cards, e.g. 'insights' from pre-2026-05 saves).
  * - Appends any default IDs not present (newly added cards).
  * - Returns DEFAULT_CARD_ORDER on any error, missing key, or SSR.
  */
