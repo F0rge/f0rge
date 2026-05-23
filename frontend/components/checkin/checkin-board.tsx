@@ -221,7 +221,13 @@ export function CheckinBoard({
       } else {
         setStoolStatus('normal')
       }
-      setBristolType(existingEntry.bristol_type ?? null)
+      // Default to 4 when entry was saved with abnormal stool but no bristol type.
+      // Prevents autosave being gated on load for pre-existing entries.
+      const resolvedStool = existingEntry.stool_status
+        ?? (existingEntry.stool_normal === false ? 'abnormal' : 'normal')
+      const resolvedBristol = existingEntry.bristol_type
+        ?? (resolvedStool === 'abnormal' ? 4 : null)
+      setBristolType(resolvedBristol)
       setJointPain(existingEntry.joint_pain)
       setNeuro(existingEntry.neuro)
       setSleepQuality(existingEntry.sleep_quality)
@@ -243,12 +249,16 @@ export function CheckinBoard({
     }
   }, [existingEntry])
 
-  // Clear Bristol when leaving abnormal state.
+  // Manage Bristol type based on stool status:
+  // - Leaving abnormal: clear bristol (it only applies to abnormal).
+  // - Entering abnormal with no bristol set: default to 4 so autosave is never gated.
   useEffect(() => {
-    if (stoolStatus !== 'abnormal') setBristolType(null)
+    if (stoolStatus !== 'abnormal') {
+      setBristolType(null)
+    } else {
+      setBristolType((prev) => prev ?? 4)
+    }
   }, [stoolStatus])
-
-  const bristolBlocked = stoolStatus === 'abnormal' && bristolType === null
 
   // ── Payload memo ────────────────────────────────────────────────────────
   const payload = useMemo<EntryCreate>(() => ({
@@ -280,8 +290,8 @@ export function CheckinBoard({
   const autosave = useAutosaveEntry({
     date,
     payload,
-    enabled: !bristolBlocked && isDirty,
-    blocked: bristolBlocked,
+    enabled: isDirty,
+    blocked: false,
     hasExistingEntry: !!existingEntry,
   })
 
@@ -402,7 +412,6 @@ export function CheckinBoard({
         onBristolTypeChange={setBristolTypeDirty}
         jointPain={jointPain}
         onJointPainChange={setJointPainDirty}
-        bristolBlocked={bristolBlocked}
       />
     ),
     supplements: () => (

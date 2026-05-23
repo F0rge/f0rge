@@ -4,7 +4,6 @@ import { Activity } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { ScaleInput } from '@/components/checkin/scale-input'
 import { BristolInput } from '@/components/checkin/bristol-input'
-import { cn } from '@/lib/utils'
 import type { StoolStatus } from '@/lib/api/types'
 
 interface GutCardProps {
@@ -16,7 +15,6 @@ interface GutCardProps {
   onBristolTypeChange: (v: number | null) => void
   jointPain: number
   onJointPainChange: (v: number) => void
-  bristolBlocked: boolean
 }
 
 export function GutCard({
@@ -24,13 +22,9 @@ export function GutCard({
   stoolStatus, onStoolStatusChange,
   bristolType, onBristolTypeChange,
   jointPain, onJointPainChange,
-  bristolBlocked,
 }: GutCardProps) {
   return (
-    <Card className={cn(
-      'h-full transition-shadow',
-      bristolBlocked && 'ring-2 ring-amber-400 ring-offset-2 ring-offset-background bg-amber-50/40 dark:bg-amber-950/20',
-    )}>
+    <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <Activity className="size-4" />
@@ -61,14 +55,7 @@ export function GutCard({
             ]}
           />
           {stoolStatus === 'abnormal' && (
-            <>
-              <BristolInput value={bristolType} onChange={onBristolTypeChange} />
-              {bristolBlocked && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Pick a Bristol type to keep saving
-                </p>
-              )}
-            </>
+            <BristolInput value={bristolType} onChange={onBristolTypeChange} />
           )}
         </div>
         <ScaleInput
