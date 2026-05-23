@@ -71,9 +71,7 @@ jobs:
 
       - run: npm ci
 
-      # ESLint currently has one pre-existing error (react-hooks/set-state-in-effect
-      # in app/(checkin)/pin/page.tsx). Re-enable once that's fixed.
-      # - run: npm run lint
+      - run: npm run lint
 
       - run: npm run typecheck
 

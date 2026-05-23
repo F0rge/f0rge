@@ -11,6 +11,10 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const login = useLogin()
   const [error, setError] = useState(false)
+  // Bumped on each wrong PIN. Used as `key` on <PinPad> so the component remounts
+  // and its useState(error) initializer re-seeds shake=true. Avoids calling
+  // setState inside a useEffect in PinPad.
+  const [errorKey, setErrorKey] = useState(0)
 
   const handleSubmit = async (pin: string) => {
     setError(false)
@@ -20,12 +24,14 @@ function LoginForm() {
       router.replace(redirect)
     } catch {
       setError(true)
+      setErrorKey((k) => k + 1)
       toast.error('Wrong PIN')
     }
   }
 
   return (
     <PinPad
+      key={errorKey}
       onSubmit={handleSubmit}
       error={error}
       loading={login.isPending}

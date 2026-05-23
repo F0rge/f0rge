@@ -76,10 +76,7 @@ jobs:
 
       - run: npm ci
 
-      # ESLint: see ci-develop.yml. Re-enable after the pre-existing
-      # react-hooks/set-state-in-effect error in app/(checkin)/pin/page.tsx
-      # is fixed.
-      # - run: npm run lint
+      - run: npm run lint
 
       - run: npm run typecheck
 
