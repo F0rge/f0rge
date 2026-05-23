@@ -273,9 +273,7 @@ export function TrackersCard({
                 tracker={tracker}
                 value={value}
                 onChange={onChange}
-                onArchive={
-                  !tracker.is_seed ? () => handleArchive(tracker.id, tracker.name) : undefined
-                }
+                onArchive={() => handleArchive(tracker.id, tracker.name)}
               />
             )
           })}

@@ -176,13 +176,14 @@ export function TrackerRow({
         <CompactStepper value={value} onChange={onChange} label={tracker.name} />
       )}
 
-      {!tracker.is_seed && onArchive && (
+      {onArchive && (
         <button
           type="button"
           onClick={onArchive}
           aria-label={`Archive ${tracker.name}`}
-          className="shrink-0 rounded p-1 opacity-0 transition-opacity
-            group-hover:opacity-100 focus-visible:opacity-100 hover:text-destructive"
+          className="shrink-0 rounded p-1 text-muted-foreground/60 transition-opacity
+            opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100
+            hover:text-destructive"
         >
           <Archive className="size-4" />
         </button>
