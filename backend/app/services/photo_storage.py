@@ -5,8 +5,16 @@ import os
 import shutil
 
 from PIL import Image, ImageOps
+from pillow_heif import register_heif_opener
 
 from app.config import settings
+
+# Register HEIF/HEIC support with Pillow at import time. iPhone defaults to
+# HEIC for camera-roll photos, and without this call Image.open() raises
+# UnidentifiedImageError on .heic uploads. Idempotent — safe to call once.
+# The resize_image() pipeline below always re-encodes to JPEG, so this
+# only widens the input format set, not the on-disk storage format.
+register_heif_opener()
 
 
 def resize_image(file_bytes: bytes, max_dim: int = 2048, quality: int = 85) -> bytes:
@@ -39,9 +47,7 @@ def save_photo(file_bytes: bytes, filename: str, vault_path: str) -> None:
     # filename; if it ever gets that wrong, we'd rather fail loudly here
     # than silently destroy a prior photo on disk.
     if os.path.exists(local_path):
-        raise FileExistsError(
-            f"Refusing to overwrite existing photo file: {local_path}"
-        )
+        raise FileExistsError(f"Refusing to overwrite existing photo file: {local_path}")
 
     with open(local_path, "wb") as f:
         f.write(file_bytes)
