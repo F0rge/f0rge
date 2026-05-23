@@ -31,13 +31,11 @@ import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
 import { computeHeroStats } from '@/lib/checkin/hero-stats'
-import { detectPatterns } from '@/lib/checkin/patterns'
 import { DEFAULT_CARD_ORDER, loadCardOrder, saveCardOrder, type CardId } from '@/lib/checkin/card-order'
 import {
   HeroStats,
   TreatmentBanner,
   FoodCard,
-  InsightsCard,
   WellbeingCard,
   GutCard,
   SupplementsCard,
@@ -354,20 +352,12 @@ export function CheckinBoard({
     [todayForStats, last7, activeTreatments, date],
   )
 
-  const todaySupplements = supplements ? supplements.split(',').filter(Boolean) : []
-  const pattern = useMemo(
-    () => detectPatterns(todayForStats, last7, todaySupplements),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todayForStats, last7, supplements],
-  )
-
   // ── Card renderers + col-span map ────────────────────────────────────────
   // col-span classes previously lived on each Card's className prop.
   // They now live here so SortableCard can apply them to its wrapper div.
   // The inner Card components no longer carry col-span classes.
   const CARD_COL_SPAN: Record<CardId, string> = {
-    food:        'col-span-12 lg:col-span-8',
-    insights:    'col-span-12 lg:col-span-4',
+    food:        'col-span-12',
     wellbeing:   'col-span-12 lg:col-span-4',
     gut:         'col-span-12 lg:col-span-4',
     supplements: 'col-span-12 lg:col-span-4',
@@ -388,13 +378,6 @@ export function CheckinBoard({
         ensureEntryExists={autosave.forceFlush}
         onEntryEnsured={markDirty}
         onOpenPhotoFocus={onOpenPhotoFocus}
-      />
-    ),
-    insights: () => (
-      <InsightsCard
-        today={todayForStats}
-        last7={last7}
-        pattern={pattern}
       />
     ),
     wellbeing: () => (
