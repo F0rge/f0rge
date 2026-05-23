@@ -1,10 +1,11 @@
 /**
- * card-order.ts — localStorage persistence for check-in card order.
+ * card-order.ts — localStorage persistence for check-in card order and visibility.
  *
  * SSR-safe (all localStorage access guarded by typeof window check).
  */
 
 const STORAGE_KEY = 'ht.cards-v2.order'
+const HIDDEN_KEY = 'ht.cards-v2.hidden'
 
 export type CardId =
   | 'food'
@@ -73,4 +74,53 @@ export function resetCardOrder(): void {
 export function hasCustomOrder(): boolean {
   if (typeof window === 'undefined') return false
   return localStorage.getItem(STORAGE_KEY) !== null
+}
+
+// ── Hidden cards ─────────────────────────────────────────────────────────────
+
+/**
+ * Load the set of hidden card IDs from localStorage.
+ *
+ * - Filters to only known IDs so stale saves don't include removed cards.
+ * - Returns [] on any error, missing key, or SSR.
+ */
+export function loadHiddenCards(): CardId[] {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const raw = localStorage.getItem(HIDDEN_KEY)
+    if (!raw) return []
+
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+
+    return parsed.filter(
+      (id): id is CardId => typeof id === 'string' && KNOWN_IDS.has(id),
+    )
+  } catch {
+    return []
+  }
+}
+
+export function saveHiddenCards(hidden: CardId[]): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(HIDDEN_KEY, JSON.stringify(hidden))
+}
+
+export function resetHiddenCards(): void {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(HIDDEN_KEY)
+}
+
+/** Returns true when at least one card is currently hidden. */
+export function hasHiddenCards(): boolean {
+  if (typeof window === 'undefined') return false
+  const raw = localStorage.getItem(HIDDEN_KEY)
+  if (!raw) return false
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) && parsed.length > 0
+  } catch {
+    return false
+  }
 }

@@ -45,7 +45,7 @@ import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
 import { computeHeroStats } from '@/lib/checkin/hero-stats'
-import { DEFAULT_CARD_ORDER, loadCardOrder, saveCardOrder, type CardId } from '@/lib/checkin/card-order'
+import { DEFAULT_CARD_ORDER, loadCardOrder, saveCardOrder, loadHiddenCards, saveHiddenCards, type CardId } from '@/lib/checkin/card-order'
 import {
   HeroStats,
   TreatmentBanner,
@@ -122,6 +122,24 @@ export function CheckinBoard({
     setCardOrder((prev) =>
       prev.length === saved.length && prev.every((id, i) => id === saved[i]) ? prev : saved,
     )
+  }, [])
+
+  // ── Hidden cards state ───────────────────────────────────────────────────
+  // Same SSR-safe pattern as cardOrder: start empty, swap in from localStorage on mount.
+  const [hiddenCards, setHiddenCards] = useState<CardId[]>([])
+  useEffect(() => {
+    const saved = loadHiddenCards()
+    setHiddenCards((prev) =>
+      prev.length === saved.length && prev.every((id, i) => id === saved[i]) ? prev : saved,
+    )
+  }, [])
+
+  const handleToggleHidden = useCallback((id: CardId) => {
+    setHiddenCards((prev) => {
+      const next = prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id]
+      saveHiddenCards(next)
+      return next
+    })
   }, [])
 
   // ── Drag state — only used in reorder mode ──────────────────────────────
@@ -525,6 +543,8 @@ export function CheckinBoard({
                   total={cardOrder.length}
                   onMoveUp={() => handleMoveUp(id)}
                   onMoveDown={() => handleMoveDown(id)}
+                  isHidden={hiddenCards.includes(id)}
+                  onToggleHidden={() => handleToggleHidden(id)}
                 >
                   {/* children not rendered in reorder mode */}
                   {null}
@@ -557,21 +577,23 @@ export function CheckinBoard({
             checkinDate={date}
           />
 
-          {cardOrder.map((id, index) => (
-            <SortableCard
-              key={id}
-              id={id}
-              colSpanClass={CARD_COL_SPAN[id]}
-              meta={CARD_META[id]}
-              isReorderMode={false}
-              index={index}
-              total={cardOrder.length}
-              onMoveUp={() => handleMoveUp(id)}
-              onMoveDown={() => handleMoveDown(id)}
-            >
-              {cardRenderers[id]()}
-            </SortableCard>
-          ))}
+          {cardOrder
+            .filter((id) => !hiddenCards.includes(id))
+            .map((id, index, visibleOrder) => (
+              <SortableCard
+                key={id}
+                id={id}
+                colSpanClass={CARD_COL_SPAN[id]}
+                meta={CARD_META[id]}
+                isReorderMode={false}
+                index={index}
+                total={visibleOrder.length}
+                onMoveUp={() => handleMoveUp(id)}
+                onMoveDown={() => handleMoveDown(id)}
+              >
+                {cardRenderers[id]()}
+              </SortableCard>
+            ))}
         </div>
       )}
     </div>
