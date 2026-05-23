@@ -18,6 +18,13 @@ COPY ./migrations ./migrations
 # aren't shadowed by the runtime /app/data volume mount that holds health.db.
 COPY ./data /app/data-seed
 
+# Entrypoint runs `alembic upgrade head` before the CMD when RUN_MIGRATIONS=1.
+# See backend/docker-entrypoint.sh for the opt-in mechanic (only the backend
+# service sets the flag; mcp-server and embedding-worker share the image but
+# skip migrations to avoid racing on DDL locks).
+COPY ./docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Tell the seed scripts and the lifespan hook where to find the JSON files.
 ENV DIETARY_DATA_DIR=/app/data-seed
 
@@ -27,4 +34,5 @@ USER app
 
 EXPOSE 8000
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
