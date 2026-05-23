@@ -4,9 +4,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { Loader2, Settings } from 'lucide-react'
 import { CheckinForm } from '@/components/checkin/checkin-form'
+import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { useEntry } from '@/lib/api/hooks'
+import { readCardsV2 } from '@/lib/checkin/feature-flag'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 
 function getTodayDate() {
@@ -27,6 +29,7 @@ function formatDisplayDate(dateStr: string) {
 export default function CheckinPage() {
   const today = getTodayDate()
   const { data: entry, isLoading } = useEntry(today)
+  const useV2 = readCardsV2()
 
   const [autosaveState, setAutosaveState] = useState<AutosaveState>({
     status: 'idle',
@@ -73,7 +76,7 @@ export default function CheckinPage() {
   }, [])
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <div className={useV2 ? 'mx-auto w-full max-w-7xl p-4 lg:px-8' : 'mx-auto w-full max-w-lg p-4'}>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Check-in</h1>
@@ -99,6 +102,14 @@ export default function CheckinPage() {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
+      ) : useV2 ? (
+        <CheckinBoard
+          date={today}
+          existingEntry={entry ?? null}
+          onAutosaveStateChange={handleAutosaveStateChange}
+          onAutosaveFnsReady={handleAutosaveFnsReady}
+          onOpenPhotoFocus={setFocusedPhotoId}
+        />
       ) : (
         <CheckinForm
           date={today}
