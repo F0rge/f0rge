@@ -62,7 +62,7 @@ export function PhotoFocusOverlay({
     >
       <DialogContent
         showCloseButton={false}
-        className="grid max-h-[92vh] w-full max-w-[calc(100%-1rem)] grid-rows-[auto_auto_1fr] gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        className="grid grid-cols-1 min-w-0 max-h-[92vh] w-full max-w-[calc(100%-1rem)] grid-rows-[auto_auto_1fr] gap-0 overflow-hidden p-0 sm:max-w-2xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
