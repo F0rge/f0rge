@@ -10,6 +10,19 @@ Personal daily symptom check-in app for Leo's health research vault.
 - Frontend: Next.js 15 + React 19 + Tailwind 4 + shadcn/ui
 - Auth: PIN-based session cookies (bcrypt)
 
+## Environments
+
+| Env | Branch | Frontend | Backend API | MCP | Coolify project |
+|---|---|---|---|---|---|
+| Production | `main` | https://health.leo-figueiredo.com | (internal, behind frontend rewrite) | https://health-mcp.leo-figueiredo.com | Health Tracker |
+| Develop | `develop` | https://health-dev.leo-figueiredo.com | https://health-dev-api.leo-figueiredo.com | https://health-dev-mcp.leo-figueiredo.com | Health Tracker Dev |
+
+- `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
+- Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).
+- Dev stack has NO vault mount (VAULT_PATH=""), NO backup sidecar, and a disposable Postgres. PIN must be seeded manually after first deploy.
+- Dev host ports on the Pi: backend 8104, MCP 8107, frontend 3104. Do not collide.
+- Compose files: `docker-compose.prod.yml` (main) and `docker-compose.dev.yml` (develop). Both are deployed by Coolify's dockercompose build-pack — Coolify does NOT run a full repo checkout, only paths referenced as bind-mount sources are materialized on the Pi (see `~/.claude/agent-memory/devops/project_health_tracker_backup_strategy_2026-05-17.md`).
+
 ## Running
 
 ```bash

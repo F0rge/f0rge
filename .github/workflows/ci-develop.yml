@@ -1,0 +1,76 @@
+name: CI (develop)
+
+# Runs on PRs targeting `develop` and on push to `develop`. This is the
+# inner ring: cheap lint/format/test, no production-shaped builds.
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+
+# Cancel older runs on the same ref when a new commit lands.
+concurrency:
+  group: ci-develop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (ruff + pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Pin Python 3.10
+        run: uv python install 3.10
+
+      - name: Install deps (incl. dev group for ruff/pytest/testcontainers)
+        run: uv sync --frozen
+
+      - name: Install ruff
+        # ruff isn't in pyproject — install it explicitly into the project venv.
+        run: uv tool install ruff@latest
+
+      - name: ruff check
+        run: uv tool run ruff check .
+
+      - name: ruff format --check
+        run: uv tool run ruff format --check .
+
+      - name: pytest
+        # testcontainers needs a Docker daemon — ubuntu-latest runners ship with one.
+        run: uv run pytest -ra
+
+  frontend:
+    name: frontend (lint + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - name: next build
+        run: npm run build
