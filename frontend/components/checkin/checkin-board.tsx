@@ -30,7 +30,7 @@ import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
 import { computeHeroStats } from '@/lib/checkin/hero-stats'
 import { detectPatterns } from '@/lib/checkin/patterns'
-import { loadCardOrder, saveCardOrder, type CardId } from '@/lib/checkin/card-order'
+import { DEFAULT_CARD_ORDER, loadCardOrder, saveCardOrder, type CardId } from '@/lib/checkin/card-order'
 import {
   HeroStats,
   TreatmentBanner,
@@ -83,8 +83,16 @@ export function CheckinBoard({
     .join(',')
 
   // ── Card order (drag-to-reorder) ────────────────────────────────────────
-  // Seeded from localStorage on mount (re-seeds when layoutVersion bumps via key on parent).
-  const [cardOrder, setCardOrder] = useState<CardId[]>(() => loadCardOrder())
+  // Start with DEFAULT so SSR + client first paint agree (localStorage is client-only,
+  // so initializing from it would cause React hydration mismatch — error #418).
+  // Swap in any saved order via useEffect on mount; one-frame default→saved is acceptable.
+  const [cardOrder, setCardOrder] = useState<CardId[]>(() => [...DEFAULT_CARD_ORDER])
+  useEffect(() => {
+    const saved = loadCardOrder()
+    setCardOrder((prev) =>
+      prev.length === saved.length && prev.every((id, i) => id === saved[i]) ? prev : saved,
+    )
+  }, [])
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
