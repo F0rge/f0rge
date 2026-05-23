@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Pencil, Loader2 } from 'lucide-react'
 import { useEntry, useUpdatePhotoMealTime } from '@/lib/api/hooks'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
+import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-disclosure'
 import type { Entry, Photo } from '@/lib/api/types'
 
 function formatDisplayDate(dateStr: string): string {
@@ -97,24 +98,27 @@ function PhotoWithMealTime({ photo }: { photo: Photo }) {
   const chipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`/api/v1/photos/${photo.id}/file`}
-        alt={photo.label || `Photo ${photo.id}`}
-        className="aspect-square w-full object-cover"
-      />
-      {photo.label && (
-        <p className="bg-muted px-2 py-1 text-xs text-muted-foreground">{photo.label}</p>
-      )}
-      <div className="px-2 pb-2 pt-1.5">
-        {optimisticMealTime && (
-          <p className="mb-1 text-xs text-muted-foreground">
-            Meal time: {formatHHMM(optimisticMealTime)}
-          </p>
+    <div className="flex flex-col gap-2">
+      <div className="overflow-hidden rounded-lg border border-border">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/api/v1/photos/${photo.id}/file`}
+          alt={photo.label || `Photo ${photo.id}`}
+          className="aspect-square w-full object-cover"
+        />
+        {photo.label && (
+          <p className="bg-muted px-2 py-1 text-xs text-muted-foreground">{photo.label}</p>
         )}
-        <MealTimeChips value={chipValue} onChange={handleChange} />
+        <div className="px-2 pb-2 pt-1.5">
+          {optimisticMealTime && (
+            <p className="mb-1 text-xs text-muted-foreground">
+              Meal time: {formatHHMM(optimisticMealTime)}
+            </p>
+          )}
+          <MealTimeChips value={chipValue} onChange={handleChange} />
+        </div>
       </div>
+      <PhotoAnalysisDisclosure photoId={photo.id} photoLabel={photo.label} />
     </div>
   )
 }

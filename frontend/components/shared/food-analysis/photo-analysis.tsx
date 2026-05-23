@@ -12,14 +12,17 @@ import {
 import { IngredientEditor } from './ingredient-editor'
 import type { PhotoIngredient } from '@/lib/api/types'
 
+type PhotoAnalysisMode = 'view' | 'edit'
+
 interface PhotoAnalysisProps {
   photoId: number
+  mode?: PhotoAnalysisMode
+  hideConfirmButton?: boolean
 }
 
 function DietaryBadges({ ingredient }: { ingredient: PhotoIngredient }) {
   const badges: { label: string; className: string }[] = []
 
-  // Histamine score
   if (ingredient.histamine_score !== null) {
     const hColors: Record<number, string> = {
       0: 'bg-green-100 text-green-800',
@@ -33,12 +36,10 @@ function DietaryBadges({ ingredient }: { ingredient: PhotoIngredient }) {
     })
   }
 
-  // Gluten
   if (ingredient.contains_gluten) {
     badges.push({ label: 'Gluten', className: 'bg-red-100 text-red-800' })
   }
 
-  // Dairy
   if (ingredient.contains_dairy) {
     badges.push({ label: 'Dairy', className: 'bg-blue-100 text-blue-800' })
   }
@@ -66,7 +67,6 @@ function DietaryBadges({ ingredient }: { ingredient: PhotoIngredient }) {
     }
   }
 
-  // If nothing is known at all, show unknown
   if (
     badges.length === 0 &&
     ingredient.histamine_score === null &&
@@ -188,12 +188,17 @@ function IngredientRow({
   )
 }
 
-export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
+export function PhotoAnalysis({
+  photoId,
+  mode = 'edit',
+  hideConfirmButton = false,
+}: PhotoAnalysisProps) {
   const { data: analysis, isLoading } = usePhotoAnalysis(photoId)
   const confirmAnalysis = useConfirmAnalysis()
   const retryAnalysis = useRetryAnalysis()
 
-  // No analysis exists yet
+  const canEdit = mode === 'edit'
+
   if (isLoading) {
     return null
   }
@@ -202,7 +207,6 @@ export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
     return null
   }
 
-  // Pending / Analyzing
   if (analysis.status === 'pending' || analysis.status === 'analyzing') {
     return (
       <div className="mt-2 rounded-lg border border-border p-2.5">
@@ -219,7 +223,6 @@ export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
     )
   }
 
-  // Failed
   if (analysis.status === 'failed') {
     return (
       <div className="mt-2 rounded-lg border border-border p-2.5">
@@ -239,14 +242,17 @@ export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
     )
   }
 
-  // Complete or Confirmed
   const isConfirmed = analysis.status === 'confirmed'
   const visibleIngredients = analysis.ingredients.filter((ing) => ing.visible)
   const inferredIngredients = analysis.ingredients.filter((ing) => !ing.visible)
 
+  // In the original check-in flow (mode='edit'), edit affordances were gated
+  // behind !isConfirmed. Now canEdit is derived solely from mode, so the
+  // history page can unlock editing on confirmed analyses without a status change.
+  const showEditAffordances = canEdit
+
   return (
     <div className="mt-2 rounded-lg border border-border p-2.5">
-      {/* Dish header */}
       {analysis.dish_name && (
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold text-foreground">{analysis.dish_name}</span>
@@ -261,17 +267,14 @@ export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
         </div>
       )}
 
-      {/* Ingredients */}
       {visibleIngredients.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
           {visibleIngredients.map((ing) => (
-            <IngredientRow key={ing.id} ingredient={ing} canEdit={!isConfirmed} />
+            <IngredientRow key={ing.id} ingredient={ing} canEdit={showEditAffordances} />
           ))}
         </div>
       )}
 
-      {/* Inferred ingredients — implied by the dish but not directly visible in the photo.
-          Counted toward diet flags so the day's total reflects what was actually eaten. */}
       {inferredIngredients.length > 0 && (
         <div className="mt-2 border-t border-dashed border-border pt-1.5">
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -279,27 +282,28 @@ export function PhotoAnalysis({ photoId }: PhotoAnalysisProps) {
           </div>
           <div className="space-y-0.5 opacity-70">
             {inferredIngredients.map((ing) => (
-              <IngredientRow key={ing.id} ingredient={ing} canEdit={!isConfirmed} />
+              <IngredientRow key={ing.id} ingredient={ing} canEdit={showEditAffordances} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Add ingredient + confirm (only when not confirmed) */}
-      {!isConfirmed && (
+      {showEditAffordances && (
         <div className="mt-2 space-y-2">
           <IngredientEditor photoId={photoId} onAdded={() => {}} />
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => confirmAnalysis.mutate(photoId)}
-              disabled={confirmAnalysis.isPending}
-              className="flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50"
-            >
-              <Check className="size-3" />
-              Confirm
-            </button>
-          </div>
+          {!hideConfirmButton && !isConfirmed && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => confirmAnalysis.mutate(photoId)}
+                disabled={confirmAnalysis.isPending}
+                className="flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                <Check className="size-3" />
+                Confirm
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

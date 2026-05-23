@@ -307,6 +307,7 @@ export function useUpdateIngredient() {
       apiPut(`/ingredients/${ingredientId}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
     },
   })
 }
@@ -318,6 +319,7 @@ export function useAddIngredient() {
       apiPost(`/photos/${photoId}/analysis/ingredients`, { name }),
     onSuccess: (_data, { photoId }) => {
       queryClient.invalidateQueries({ queryKey: ['photo-analysis', photoId] })
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
     },
   })
 }
@@ -328,6 +330,7 @@ export function useDeleteIngredient() {
     mutationFn: (ingredientId: number) => apiDelete(`/ingredients/${ingredientId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
     },
   })
 }
