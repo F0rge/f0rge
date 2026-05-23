@@ -20,6 +20,7 @@ from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
 from app.services.obsidian import delete_daily_file
 from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.photo_storage import delete_photo
+from app.services.trackers import sync_seed_tracker_log_from_entry
 
 
 def _build_response(entry: Entry) -> EntryResponse:
@@ -95,6 +96,8 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
     await db.commit()
     await db.refresh(entry)
 
+    await sync_seed_tracker_log_from_entry(db, entry)
+
     await render_and_write_daily_file(db, entry, entry.photos)
 
     return _build_response(entry)
@@ -153,6 +156,8 @@ async def update_entry(
 
     await db.commit()
     await db.refresh(entry)
+
+    await sync_seed_tracker_log_from_entry(db, entry)
 
     await render_and_write_daily_file(db, entry, entry.photos)
 
