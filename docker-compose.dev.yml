@@ -70,6 +70,9 @@ services:
       - CORS_ORIGINS=["https://health-dev.leo-figueiredo.com","https://health-dev-api.leo-figueiredo.com","http://localhost:3104"]
       - PHOTO_DIR=/app/photos
       - PIN_HASH=${PIN_HASH}
+      # Backend owns Alembic. mcp-server and embedding-worker share the image
+      # but must NOT run migrations (avoids 3-way DDL race on every deploy).
+      - RUN_MIGRATIONS=1
     volumes:
       - health-dev-photos:/app/photos
       - health-dev-lab-attachments:/app/lab_attachments
