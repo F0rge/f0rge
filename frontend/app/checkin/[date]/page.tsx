@@ -3,8 +3,9 @@
 import { use, useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Loader2 } from 'lucide-react'
-import { CheckinForm } from '@/components/checkin/checkin-form'
+import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
+import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { useEntry } from '@/lib/api/hooks'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 
@@ -33,6 +34,16 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
   const flushBeaconRef = useRef<(() => void) | null>(null)
   const retryRef = useRef<(() => void) | null>(null)
 
+  // Focus-mode overlay state. `null` = closed; a photo id = open and editing
+  // that photo's ingredients in the comfortable full-width Dialog.
+  // See issue #76 — PhotoFocusOverlay.
+  const [focusedPhotoId, setFocusedPhotoId] = useState<number | null>(null)
+  const handleClosePhotoFocus = useCallback(() => {
+    setFocusedPhotoId(null)
+    // Land any pending ingredient edits before the inline thumbnail re-renders.
+    flushRef.current?.()
+  }, [])
+
   const handleAutosaveStateChange = useCallback((state: AutosaveState) => {
     setAutosaveState(state)
   }, [])
@@ -56,7 +67,7 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
   }, [])
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <div className="mx-auto w-full max-w-7xl p-4 lg:px-8">
       <div className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <Link
@@ -82,13 +93,21 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <CheckinForm
+        <CheckinBoard
           date={date}
           existingEntry={entry ?? null}
           onAutosaveStateChange={handleAutosaveStateChange}
           onAutosaveFnsReady={handleAutosaveFnsReady}
+          onOpenPhotoFocus={setFocusedPhotoId}
         />
       )}
+
+      <PhotoFocusOverlay
+        photoId={focusedPhotoId}
+        photos={entry?.photos ?? []}
+        onClose={handleClosePhotoFocus}
+        onSelectPhoto={setFocusedPhotoId}
+      />
     </div>
   )
 }

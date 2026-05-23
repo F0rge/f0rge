@@ -39,6 +39,9 @@ Thumbs.db
 # Playwright
 .playwright*/
 
+# QA screenshots (local agent evidence; not committed)
+qa-screenshots/
+
 # Claude agent state — runtime only, never tracked
 # Stripped from history; restore locally from backup if needed.
 **/.claude/

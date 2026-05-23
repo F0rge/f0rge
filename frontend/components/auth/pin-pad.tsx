@@ -12,18 +12,19 @@ interface PinPadProps {
 
 export function PinPad({ onSubmit, error = false, loading = false, pinLength = 4 }: PinPadProps) {
   const [pin, setPin] = useState('')
-  const [shake, setShake] = useState(false)
+  // Shake is seeded from `error` on mount via the useState initializer (no setState
+  // inside the effect body). The parent bumps `key` on each error so this component
+  // remounts and the initializer re-runs with the new error value.
+  const [shake, setShake] = useState(error)
 
   useEffect(() => {
-    if (error) {
-      setShake(true)
-      const timer = setTimeout(() => {
-        setShake(false)
-        setPin('')
-      }, 500)
-      return () => clearTimeout(timer)
-    }
-  }, [error])
+    if (!shake) return
+    const timer = setTimeout(() => {
+      setShake(false)
+      setPin('')
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [shake])
 
   const addDigit = useCallback(
     (digit: string) => {

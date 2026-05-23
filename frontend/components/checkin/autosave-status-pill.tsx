@@ -75,11 +75,5 @@ export function AutosaveStatusPill({
     )
   }
 
-  // blocked
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">
-      <AlertTriangle className="size-3" />
-      Pick a Bristol type to keep saving
-    </span>
-  )
+  return null
 }

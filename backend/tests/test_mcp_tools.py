@@ -311,9 +311,18 @@ async def test_read_sql_dml_returns_error_structure(async_db: AsyncSession) -> N
     assert "error" in result
 
 
-async def test_search_health_data_empty_table(async_db: AsyncSession) -> None:
+async def test_search_health_data_empty_table(
+    async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """When embedding table is empty, return empty results with a note."""
+    from app.config import settings
     from app.mcp import tools as t_mod
+
+    # Ensure build_embedding_client() can resolve credentials. Locally the dev
+    # .env supplies OPENROUTER_API_KEY; CI has none, so the env fallback in
+    # _resolve() returns None and the factory raises ConflictError before we
+    # ever reach the empty-table probe under test. Pin it to a dummy value.
+    monkeypatch.setattr(settings, "openrouter_api_key", "test-key-not-real")
 
     with (
         patch("app.mcp.tools.make_main_session") as mock_main,
