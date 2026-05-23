@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Health Tracker — V1: Workspace (split-pane)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --surface-2: #f4f4f3;
+      --border: #e7e5e4;
+      --border-strong: #d6d3d1;
+      --text: #1c1917;
+      --text-muted: #78716c;
+      --text-subtle: #a8a29e;
+      --accent: #047857;
+      --accent-soft: #d1fae5;
+      --warn: #c2410c;
+      --warn-soft: #ffedd5;
+      --bad: #b91c1c;
+      --bad-soft: #fee2e2;
+      --good: #15803d;
+      --good-soft: #dcfce7;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #f5f5f4;
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    .device-desktop {
+      width: 1280px;
+      height: 820px;
+      background: var(--bg);
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      box-shadow: 0 24px 48px -16px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.04);
+      overflow: hidden;
+      position: relative;
+    }
+    .device-chrome {
+      height: 32px;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+    }
+    .chrome-dot { width: 10px; height: 10px; border-radius: 999px; }
+    .iphone {
+      width: 375px;
+      height: 812px;
+      background: #000;
+      border-radius: 44px;
+      padding: 11px;
+      box-shadow: 0 24px 48px -16px rgba(0,0,0,0.25);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .iphone-screen {
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      border-radius: 33px;
+      overflow: hidden;
+      position: relative;
+    }
+    .iphone-notch {
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 30px;
+      background: #000;
+      border-radius: 0 0 18px 18px;
+      z-index: 50;
+    }
+    .iphone-status {
+      height: 44px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding: 0 28px 6px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .scroll-hidden::-webkit-scrollbar { display: none; }
+    .scroll-hidden { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Scale large desktop frame down on smaller viewports so it always fits */
+    @media (max-width: 1400px) {
+      .scale-wrap-desktop {
+        transform: scale(0.78);
+        transform-origin: top center;
+        height: 640px;
+      }
+    }
+    @media (max-width: 1100px) {
+      .scale-wrap-desktop {
+        transform: scale(0.6);
+        height: 492px;
+      }
+    }
+
+    /* Scale phones down for small viewports too */
+    @media (max-width: 900px) {
+      .scale-wrap-phone {
+        transform: scale(0.78);
+        transform-origin: top center;
+        height: 634px;
+      }
+    }
+
+    /* shared pill / chip styles */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 999px;
+      line-height: 1.4;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .nav-item:hover { background: var(--surface-2); color: var(--text); }
+    .nav-item.active {
+      background: var(--text);
+      color: white;
+    }
+    .nav-item.active svg { color: white; }
+    .scale-btn {
+      flex: 1;
+      padding: 10px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .scale-btn.active {
+      background: var(--text);
+      color: white;
+      border-color: var(--text);
+    }
+    .field-label { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px; display: block; }
+    .section { padding: 14px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Header bar -->
+  <header class="bg-white border-b border-stone-200 px-8 py-5 sticky top-0 z-30">
+    <div class="max-w-[1400px] mx-auto flex items-center justify-between">
+      <div>
+        <div class="flex items-center gap-3">
+          <a href="index.html" class="text-xs text-stone-500 hover:text-stone-900">← Back to gallery</a>
+          <span class="text-stone-300">/</span>
+          <span class="chip" style="background:#d1fae5;color:#047857">Direction 1</span>
+        </div>
+        <h1 class="text-2xl font-bold mt-1">Workspace — split‑pane productivity</h1>
+        <p class="text-sm text-stone-600 mt-1 max-w-2xl">
+          Treat the app like a Notion/Linear‑style productivity tool. Desktop earns its
+          screen with a 3‑pane layout (nav · canvas · inspector). Mobile stays focused
+          single‑column, but heavy editing tasks open in roomy bottom sheets instead of
+          cramping themselves inline.
+        </p>
+      </div>
+      <nav class="flex gap-2 text-sm">
+        <a href="v1-workspace.html" class="px-3 py-1.5 rounded-lg bg-stone-900 text-white">V1 Workspace</a>
+        <a href="v2-cards.html" class="px-3 py-1.5 rounded-lg text-stone-600 hover:bg-stone-100">V2 Cards</a>
+        <a href="v3-timeline.html" class="px-3 py-1.5 rounded-lg text-stone-600 hover:bg-stone-100">V3 Timeline</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-[1400px] mx-auto px-6 py-10 space-y-16">
+
+    <!-- Design principles -->
+    <section class="grid grid-cols-3 gap-4">
+      <div class="p-4 bg-white rounded-xl border border-stone-200">
+        <div class="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Desktop wins</div>
+        <h3 class="font-semibold mt-2 mb-1">Inspector panel always shows context</h3>
+        <p class="text-sm text-stone-600">Tap a photo, an ingredient, an entry — the right rail expands it. The ingredient editor finally has the room it needs.</p>
+      </div>
+      <div class="p-4 bg-white rounded-xl border border-stone-200">
+        <div class="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Mobile wins</div>
+        <h3 class="font-semibold mt-2 mb-1">Bottom sheets replace cramped inline edits</h3>
+        <p class="text-sm text-stone-600">Editing ingredients on iPhone opens a 90% bottom sheet — full‑width inputs, big touch targets, drag‑to‑dismiss.</p>
+      </div>
+      <div class="p-4 bg-white rounded-xl border border-stone-200">
+        <div class="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Cohesion</div>
+        <h3 class="font-semibold mt-2 mb-1">Same data, restructured for the device</h3>
+        <p class="text-sm text-stone-600">No feature gap between mobile and desktop — just different containers. Tailwind <code class="text-xs">lg:</code> breakpoint flips the layout.</p>
+      </div>
+    </section>
+
+    <!-- Desktop view -->
+    <section>
+      <div class="flex items-baseline gap-3 mb-4">
+        <h2 class="text-lg font-semibold">Desktop · 1280 width</h2>
+        <span class="text-xs text-stone-500">Today check‑in with right inspector focused on the chicken photo</span>
+      </div>
+      <div class="flex justify-center">
+        <div class="scale-wrap-desktop">
+          <div class="device-desktop">
+            <div class="device-chrome">
+              <span class="chrome-dot bg-red-400"></span>
+              <span class="chrome-dot bg-amber-400"></span>
+              <span class="chrome-dot bg-emerald-400"></span>
+              <span class="ml-4 text-[11px] text-stone-500">health.leo-figueiredo.com / check‑in</span>
+            </div>
+
+            <!-- App body -->
+            <div class="grid h-[788px]" style="grid-template-columns: 240px 1fr 380px;">
+
+              <!-- Left rail -->
+              <aside class="border-r border-stone-200 p-4 flex flex-col gap-1 bg-white">
+                <div class="flex items-center gap-2 px-2 mb-4">
+                  <div class="size-7 rounded-lg bg-emerald-700 grid place-items-center text-white text-xs font-bold">P</div>
+                  <span class="font-semibold text-sm">Pulse</span>
+                </div>
+                <div class="nav-item active"><i data-lucide="circle-dot" class="size-4"></i> Today</div>
+                <div class="nav-item"><i data-lucide="calendar" class="size-4"></i> History</div>
+                <div class="nav-item"><i data-lucide="pill" class="size-4"></i> Treatments</div>
+                <div class="nav-item"><i data-lucide="flask-conical" class="size-4"></i> Labs</div>
+                <div class="nav-item"><i data-lucide="trending-up" class="size-4"></i> Insights</div>
+                <div class="nav-item"><i data-lucide="settings" class="size-4"></i> Settings</div>
+
+                <div class="mt-6 mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-stone-500">Last 7 days</div>
+                <div class="px-2 space-y-1.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-stone-600">Today · Fri</span>
+                    <span class="chip" style="background:#dcfce7;color:#15803d">Standard</span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-stone-600">Thu 22</span>
+                    <span class="chip" style="background:#dcfce7;color:#15803d">Good</span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-stone-600">Wed 21</span>
+                    <span class="chip" style="background:#ffedd5;color:#c2410c">Mild bloating</span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-stone-600">Tue 20</span>
+                    <span class="chip" style="background:#dcfce7;color:#15803d">Good</span>
+                  </div>
+                </div>
+
+                <div class="mt-auto p-3 bg-stone-50 rounded-lg text-xs text-stone-600">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <i data-lucide="sparkles" class="size-3.5 text-emerald-700"></i>
+                    <span class="font-semibold text-stone-800">AI noticed</span>
+                  </div>
+                  Two high‑histamine days this week. Joint pain ↑ next morning both times.
+                </div>
+              </aside>
+
+              <!-- Center canvas -->
+              <section class="overflow-y-auto bg-stone-50">
+                <div class="px-8 py-6 max-w-3xl">
+                  <!-- Header row -->
+                  <div class="flex items-center justify-between mb-6">
+                    <div>
+                      <div class="text-xs text-stone-500">Friday</div>
+                      <h1 class="text-2xl font-bold leading-tight">23 May 2026</h1>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <span class="chip" style="background:#dcfce7;color:#15803d">
+                        <i data-lucide="check" class="size-3"></i>
+                        Saved 10:22
+                      </span>
+                      <button class="text-xs text-stone-500 hover:text-stone-900 flex items-center gap-1">
+                        <i data-lucide="keyboard" class="size-3.5"></i>
+                        ⌘K
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Treatments banner -->
+                  <div class="mb-5 flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5">
+                    <i data-lucide="pill" class="size-4 text-stone-500"></i>
+                    <p class="text-xs text-stone-600">
+                      <span class="font-medium text-stone-900">Active treatment: </span>
+                      Low‑histamine elimination (day 12)
+                    </p>
+                  </div>
+
+                  <!-- Overall feeling — hero row -->
+                  <div class="section mb-4">
+                    <label class="field-label">How was your day?</label>
+                    <div class="flex gap-2">
+                      <button class="scale-btn">Very Poor</button>
+                      <button class="scale-btn active">Standard</button>
+                      <button class="scale-btn">Very Good</button>
+                    </div>
+                  </div>
+
+                  <!-- 2-col scale grid -->
+                  <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="section">
+                      <label class="field-label">Sleep quality</label>
+                      <div class="flex gap-2">
+                        <button class="scale-btn">Poor</button>
+                        <button class="scale-btn">OK</button>
+                        <button class="scale-btn active">Good</button>
+                      </div>
+                    </div>
+                    <div class="section">
+                      <label class="field-label">Stress level</label>
+                      <div class="flex gap-2">
+                        <button class="scale-btn active">Low</button>
+                        <button class="scale-btn">Medium</button>
+                        <button class="scale-btn">High</button>
+                      </div>
+                    </div>
+                    <div class="section">
+                      <label class="field-label">Bloating</label>
+                      <div class="flex gap-2">
+                        <button class="scale-btn">None</button>
+                        <button class="scale-btn active">Mild</button>
+                        <button class="scale-btn">Mod</button>
+                        <button class="scale-btn">Sev</button>
+                      </div>
+                    </div>
+                    <div class="section">
+                      <label class="field-label">Stool</label>
+                      <div class="flex gap-2">
+                        <button class="scale-btn active">Normal</button>
+                        <button class="scale-btn">Abnormal</button>
+                        <button class="scale-btn">No mvmt</button>
+                      </div>
+                    </div>
+                    <div class="section">
+                      <label class="field-label">Joint pain / crepitus</label>
+                      <div class="flex gap-2">
+                        <button class="scale-btn active">None</button>
+                        <button class="scale-btn">Mild</button>
+                        <button class="scale-btn">Mod</button>
+                        <button class="scale-btn">Sev</button>
+                      </div>
+                    </div>
+                    <div class="section">
+                      <label class="field-label">Neuro symptoms</label>
+                      <div class="flex gap-2">
+                        <button class="scale-btn">Worse</button>
+                        <button class="scale-btn active">Baseline</button>
+                        <button class="scale-btn">Better</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Food / photos -->
+                  <div class="section mb-4">
+                    <div class="flex items-center justify-between mb-3">
+                      <label class="field-label !mb-0">Food today</label>
+                      <button class="text-xs text-emerald-700 font-medium flex items-center gap-1 hover:underline">
+                        <i data-lucide="camera" class="size-3.5"></i>
+                        Add photo
+                      </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                      <!-- photo card 1 -->
+                      <div class="rounded-xl border border-stone-200 overflow-hidden bg-stone-50">
+                        <div class="aspect-square bg-gradient-to-br from-amber-100 to-amber-300 grid place-items-center">
+                          <span class="text-xs text-amber-800">🍷</span>
+                        </div>
+                        <div class="p-2">
+                          <div class="text-xs font-medium truncate">White wine</div>
+                          <div class="text-[10px] text-stone-500 mt-0.5">11:44 · 90%</div>
+                        </div>
+                      </div>
+
+                      <!-- photo card 2 (selected) -->
+                      <div class="rounded-xl border-2 border-emerald-600 overflow-hidden bg-white ring-2 ring-emerald-100">
+                        <div class="aspect-square bg-gradient-to-br from-orange-100 to-amber-300 grid place-items-center relative">
+                          <span class="text-2xl">🍗</span>
+                          <span class="absolute top-1.5 right-1.5 chip" style="background:white;color:#047857;border:1px solid #d1fae5">selected</span>
+                        </div>
+                        <div class="p-2">
+                          <div class="text-xs font-medium truncate">Roasted chicken</div>
+                          <div class="text-[10px] text-stone-500 mt-0.5">18:03 · 95%</div>
+                        </div>
+                      </div>
+
+                      <!-- add card -->
+                      <button class="aspect-square rounded-xl border-2 border-dashed border-stone-300 text-stone-500 hover:border-stone-400 grid place-items-center text-center">
+                        <div>
+                          <i data-lucide="plus" class="size-5 mx-auto"></i>
+                          <div class="text-[10px] mt-1">Add</div>
+                        </div>
+                      </button>
+                    </div>
+
+                    <!-- locked flags chips -->
+                    <div class="mt-4 pt-3 border-t border-stone-200">
+                      <div class="flex items-center gap-2 text-[10px] text-stone-500 mb-2">
+                        <i data-lucide="camera" class="size-3"></i>
+                        FROM PHOTOS (LOCKED)
+                      </div>
+                      <div class="flex flex-wrap gap-1.5">
+                        <span class="chip" style="background:#1c1917;color:white">High‑histamine <strong class="ml-1">4</strong></span>
+                        <span class="chip" style="background:#1c1917;color:white">Dairy <strong class="ml-1">1</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Supplements & Symptoms (compressed) -->
+                  <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="section">
+                      <label class="field-label">Supplements (3)</label>
+                      <div class="flex flex-wrap gap-1.5">
+                        <span class="chip" style="background:#f5f5f4;color:#1c1917">Magnesium ✓</span>
+                        <span class="chip" style="background:#f5f5f4;color:#1c1917">DAO ✓</span>
+                        <span class="chip" style="background:#f5f5f4;color:#1c1917">Quercetin ✓</span>
+                        <button class="chip" style="background:white;color:#78716c;border:1px dashed #d6d3d1">+ Add</button>
+                      </div>
+                    </div>
+                    <div class="section">
+                      <label class="field-label">Symptoms (none today)</label>
+                      <button class="chip" style="background:white;color:#78716c;border:1px dashed #d6d3d1">+ Log a symptom</button>
+                    </div>
+                  </div>
+
+                  <!-- Notes -->
+                  <div class="section">
+                    <label class="field-label">Notes</label>
+                    <textarea class="w-full text-sm bg-transparent outline-none resize-none" rows="2" placeholder="Anything else worth remembering…">Felt fine after dinner despite olives + strawberry — DAO before meal seems to be helping.</textarea>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Right inspector -->
+              <aside class="border-l border-stone-200 bg-white overflow-y-auto">
+                <div class="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between z-10">
+                  <div class="flex items-center gap-2">
+                    <i data-lucide="image" class="size-4 text-stone-500"></i>
+                    <span class="text-xs font-semibold text-stone-700">Photo inspector</span>
+                  </div>
+                  <button class="text-stone-400 hover:text-stone-700">
+                    <i data-lucide="x" class="size-4"></i>
+                  </button>
+                </div>
+
+                <div class="p-5">
+                  <!-- thumbnail -->
+                  <div class="aspect-[4/3] rounded-xl bg-gradient-to-br from-orange-100 to-amber-300 grid place-items-center mb-3">
+                    <span class="text-5xl">🍗</span>
+                  </div>
+
+                  <div class="flex items-baseline gap-2 mb-1">
+                    <h3 class="font-semibold text-sm">Roasted chicken with mashed potatoes &amp; side salad</h3>
+                  </div>
+                  <div class="flex items-center gap-2 text-xs text-stone-500 mb-4">
+                    <span>Dinner · 18:03</span>
+                    <span>·</span>
+                    <span class="chip" style="background:#dcfce7;color:#15803d">95% confident</span>
+                  </div>
+
+                  <!-- Ingredient list with breathing room -->
+                  <div class="mb-3">
+                    <div class="text-[10px] font-semibold uppercase tracking-wider text-stone-500 mb-2">Ingredients (8)</div>
+                    <div class="space-y-1">
+                      <div class="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-stone-50 group">
+                        <span class="flex-1 text-sm">chicken thigh</span>
+                        <span class="chip" style="background:#dcfce7;color:#15803d">H:0</span>
+                        <button class="text-stone-300 group-hover:text-stone-500 opacity-0 group-hover:opacity-100">
+                          <i data-lucide="x" class="size-3.5"></i>
+                        </button>
+                      </div>
+                      <div class="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-stone-50 group">
+                        <span class="flex-1 text-sm">potato</span>
+                        <span class="chip" style="background:#dcfce7;color:#15803d">H:0</span>
+                        <button class="text-stone-300 group-hover:text-stone-500 opacity-0 group-hover:opacity-100">
+                          <i data-lucide="x" class="size-3.5"></i>
+                        </button>
+                      </div>
+                      <div class="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-stone-50 group">
+                        <span class="flex-1 text-sm">carrot</span>
+                        <span class="chip" style="background:#dcfce7;color:#15803d">H:0</span>
+                        <button class="text-stone-300 group-hover:text-stone-500 opacity-0 group-hover:opacity-100">
+                          <i data-lucide="x" class="size-3.5"></i>
+                        </button>
+                      </div>
+                      <div class="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-stone-50 group">
+                        <span class="flex-1 text-sm">green olive</span>
+                        <span class="chip" style="background:#ffedd5;color:#c2410c">H:2</span>
+                        <button class="text-stone-300 group-hover:text-stone-500 opacity-0 group-hover:opacity-100">
+                          <i data-lucide="x" class="size-3.5"></i>
+                        </button>
+                      </div>
+                      <div class="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-stone-50 group">
+                        <span class="flex-1 text-sm">lettuce</span>
+                        <span class="chip" style="background:#dcfce7;color:#15803d">H:0</span>
+                        <button class="text-stone-300 group-hover:text-stone-500 opacity-0 group-hover:opacity-100">
+                          <i data-lucide="x" class="size-3.5"></i>
+                        </button>
+                      </div>
+                      <div class="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-stone-50 group">
+                        <span class="flex-1 text-sm">radicchio</span>
+                        <span class="chip" style="background:#f5f5f4;color:#78716c">?</span>
+                        <button class="text-stone-300 group-hover:text-stone-500 opacity-0 group-hover:opacity-100">
+                          <i data-lucide="x" class="size-3.5"></i>
+                        </button>
+                      </div>
+                      <div class="flex items-center gap-2 py-2 px-2 rounded-lg hover:bg-stone-50 group">
+                        <span class="flex-1 text-sm">strawberry</span>
+                        <span class="chip" style="background:#ffedd5;color:#c2410c">H:2</span>
+                        <button class="text-stone-300 group-hover:text-stone-500 opacity-0 group-hover:opacity-100">
+                          <i data-lucide="x" class="size-3.5"></i>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="mt-3 pt-3 border-t border-dashed border-stone-200">
+                      <div class="text-[10px] uppercase tracking-wider text-stone-500 mb-2">Inferred · not in photo</div>
+                      <div class="flex items-center gap-2 py-1.5 px-2 rounded-lg opacity-70">
+                        <span class="flex-1 text-sm">butter</span>
+                        <span class="chip" style="background:#dbeafe;color:#1e40af">Dairy</span>
+                      </div>
+                      <div class="flex items-center gap-2 py-1.5 px-2 rounded-lg opacity-70">
+                        <span class="flex-1 text-sm">olive oil</span>
+                        <span class="chip" style="background:#dcfce7;color:#15803d">H:0</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Big always-visible input -->
+                  <div class="border border-stone-200 rounded-xl p-2 flex gap-2 bg-stone-50 focus-within:ring-2 focus-within:ring-emerald-200 focus-within:border-emerald-400">
+                    <input type="text" placeholder="Add an ingredient…" class="flex-1 bg-transparent text-sm outline-none px-1" />
+                    <button class="px-3 py-1.5 rounded-lg bg-emerald-700 text-white text-xs font-semibold">Add</button>
+                  </div>
+
+                  <!-- Insight -->
+                  <div class="mt-5 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                    <div class="flex items-center gap-2 text-xs font-semibold text-amber-900 mb-1">
+                      <i data-lucide="sparkles" class="size-3.5"></i>
+                      Pattern
+                    </div>
+                    <p class="text-xs text-amber-900/80 leading-relaxed">
+                      Histamine load = 4. Last 2 high‑histamine evenings preceded mild bloating + joint stiffness the next morning.
+                    </p>
+                  </div>
+
+                  <button class="mt-4 w-full py-2 rounded-lg bg-stone-900 text-white text-sm font-semibold flex items-center justify-center gap-2 hover:bg-stone-800">
+                    <i data-lucide="check" class="size-4"></i>
+                    Confirm analysis
+                  </button>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mobile views -->
+    <section>
+      <div class="flex items-baseline gap-3 mb-4">
+        <h2 class="text-lg font-semibold">iPhone · 375 width</h2>
+        <span class="text-xs text-stone-500">Left: today form. Right: bottom sheet open for ingredient editing.</span>
+      </div>
+      <div class="flex justify-center gap-10 flex-wrap scale-wrap-phone">
+
+        <!-- Phone 1: today -->
+        <div>
+          <div class="text-center text-xs text-stone-500 mb-2">Today · check‑in</div>
+          <div class="iphone">
+            <div class="iphone-notch"></div>
+            <div class="iphone-screen">
+              <div class="iphone-status">
+                <span>10:22</span>
+                <span class="flex items-center gap-1">
+                  <i data-lucide="wifi" class="size-3.5"></i>
+                  <i data-lucide="battery-full" class="size-4"></i>
+                </span>
+              </div>
+
+              <!-- Header -->
+              <div class="px-5 py-2 flex items-center justify-between">
+                <button class="size-9 rounded-full hover:bg-stone-100 grid place-items-center">
+                  <i data-lucide="menu" class="size-5"></i>
+                </button>
+                <div class="text-center">
+                  <div class="text-[10px] text-stone-500">Friday</div>
+                  <div class="text-sm font-semibold">23 May</div>
+                </div>
+                <span class="chip" style="background:#dcfce7;color:#15803d">
+                  <i data-lucide="check" class="size-3"></i> 10:22
+                </span>
+              </div>
+
+              <!-- Scrollable body -->
+              <div class="px-5 pt-2 pb-24 overflow-y-auto scroll-hidden" style="height: 645px;">
+
+                <!-- Treatment banner -->
+                <div class="mb-4 flex items-center gap-2 rounded-xl bg-stone-50 px-3 py-2 border border-stone-200">
+                  <i data-lucide="pill" class="size-3.5 text-stone-500"></i>
+                  <span class="text-xs text-stone-700"><strong class="text-stone-900">Low‑histamine</strong> · day 12</span>
+                </div>
+
+                <!-- Overall -->
+                <div class="mb-5">
+                  <label class="field-label">How was your day?</label>
+                  <div class="flex gap-2">
+                    <button class="scale-btn">Poor</button>
+                    <button class="scale-btn active">Standard</button>
+                    <button class="scale-btn">Good</button>
+                  </div>
+                </div>
+
+                <!-- Sleep -->
+                <div class="mb-5">
+                  <label class="field-label">Sleep quality</label>
+                  <div class="flex gap-2">
+                    <button class="scale-btn">Poor</button>
+                    <button class="scale-btn">OK</button>
+                    <button class="scale-btn active">Good</button>
+                  </div>
+                </div>
+
+                <!-- Bloating -->
+                <div class="mb-5">
+                  <label class="field-label">Bloating</label>
+                  <div class="grid grid-cols-4 gap-1.5">
+                    <button class="scale-btn">None</button>
+                    <button class="scale-btn active">Mild</button>
+                    <button class="scale-btn">Mod</button>
+                    <button class="scale-btn">Sev</button>
+                  </div>
+                </div>
+
+                <!-- Food today -->
+                <div class="mb-5">
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="field-label !mb-0">Food today</label>
+                    <button class="text-xs text-emerald-700 font-medium flex items-center gap-1">
+                      <i data-lucide="camera" class="size-3.5"></i>
+                      Add
+                    </button>
+                  </div>
+
+                  <!-- Photo cards -->
+                  <div class="space-y-2">
+                    <button class="w-full flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-2.5 text-left">
+                      <div class="size-14 rounded-lg bg-gradient-to-br from-amber-100 to-amber-300 grid place-items-center text-xl">🍷</div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium truncate">White wine</div>
+                        <div class="text-[11px] text-stone-500">11:44 · 90% · H:1</div>
+                      </div>
+                      <i data-lucide="chevron-right" class="size-4 text-stone-400"></i>
+                    </button>
+
+                    <button class="w-full flex items-center gap-3 rounded-xl border-2 border-emerald-300 bg-emerald-50/40 p-2.5 text-left">
+                      <div class="size-14 rounded-lg bg-gradient-to-br from-orange-100 to-amber-300 grid place-items-center text-xl">🍗</div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium truncate">Roasted chicken &amp; sides</div>
+                        <div class="text-[11px] text-stone-500">18:03 · 95% · H:4 · Dairy</div>
+                      </div>
+                      <i data-lucide="chevron-right" class="size-4 text-emerald-700"></i>
+                    </button>
+                  </div>
+
+                  <!-- Locked chips summary -->
+                  <div class="mt-3 flex flex-wrap gap-1.5">
+                    <span class="chip" style="background:#1c1917;color:white">High‑histamine <strong class="ml-1">4</strong></span>
+                    <span class="chip" style="background:#1c1917;color:white">Dairy <strong class="ml-1">1</strong></span>
+                  </div>
+                </div>
+
+                <!-- Notes -->
+                <div class="mb-2">
+                  <label class="field-label">Notes</label>
+                  <div class="rounded-xl border border-stone-200 bg-white p-3">
+                    <p class="text-sm text-stone-700">Felt fine after dinner despite olives + strawberry…</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bottom nav -->
+              <div class="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-stone-200 px-2 pt-2 pb-6">
+                <div class="grid grid-cols-5 gap-1">
+                  <button class="py-1.5 grid place-items-center text-stone-900">
+                    <i data-lucide="circle-dot" class="size-5"></i>
+                    <span class="text-[10px] mt-0.5 font-medium">Today</span>
+                  </button>
+                  <button class="py-1.5 grid place-items-center text-stone-400">
+                    <i data-lucide="calendar" class="size-5"></i>
+                    <span class="text-[10px] mt-0.5">History</span>
+                  </button>
+                  <button class="py-1.5 grid place-items-center text-stone-400">
+                    <i data-lucide="trending-up" class="size-5"></i>
+                    <span class="text-[10px] mt-0.5">Insights</span>
+                  </button>
+                  <button class="py-1.5 grid place-items-center text-stone-400">
+                    <i data-lucide="pill" class="size-5"></i>
+                    <span class="text-[10px] mt-0.5">Treat</span>
+                  </button>
+                  <button class="py-1.5 grid place-items-center text-stone-400">
+                    <i data-lucide="more-horizontal" class="size-5"></i>
+                    <span class="text-[10px] mt-0.5">More</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phone 2: bottom sheet open for ingredient editor -->
+        <div>
+          <div class="text-center text-xs text-stone-500 mb-2">Tap photo → bottom sheet</div>
+          <div class="iphone">
+            <div class="iphone-notch"></div>
+            <div class="iphone-screen">
+              <div class="iphone-status">
+                <span>10:22</span>
+                <span class="flex items-center gap-1">
+                  <i data-lucide="wifi" class="size-3.5"></i>
+                  <i data-lucide="battery-full" class="size-4"></i>
+                </span>
+              </div>
+
+              <!-- Dimmed background hint -->
+              <div class="px-5 py-2 opacity-30">
+                <div class="flex items-center justify-between">
+                  <button class="size-9 rounded-full grid place-items-center">
+                    <i data-lucide="menu" class="size-5"></i>
+                  </button>
+                  <div class="text-center">
+                    <div class="text-[10px] text-stone-500">Friday</div>
+                    <div class="text-sm font-semibold">23 May</div>
+                  </div>
+                  <span class="chip" style="background:#dcfce7;color:#15803d">10:22</span>
+                </div>
+              </div>
+
+              <!-- Backdrop -->
+              <div class="absolute inset-0 bg-black/30 z-30" style="top: 44px;"></div>
+
+              <!-- Bottom sheet -->
+              <div class="absolute bottom-0 left-0 right-0 z-40 bg-white rounded-t-3xl shadow-2xl" style="height: 660px;">
+                <!-- drag handle -->
+                <div class="flex justify-center pt-2 pb-1">
+                  <div class="w-12 h-1.5 rounded-full bg-stone-300"></div>
+                </div>
+
+                <!-- Header -->
+                <div class="px-5 pt-1 pb-3 border-b border-stone-100">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <div class="size-10 rounded-lg bg-gradient-to-br from-orange-100 to-amber-300 grid place-items-center text-lg flex-shrink-0">🍗</div>
+                      <div class="min-w-0">
+                        <div class="text-sm font-semibold truncate">Roasted chicken &amp; sides</div>
+                        <div class="text-[11px] text-stone-500">18:03 · 95% confident</div>
+                      </div>
+                    </div>
+                    <button class="size-8 rounded-full bg-stone-100 grid place-items-center flex-shrink-0">
+                      <i data-lucide="x" class="size-4"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Big ingredient input pinned at top -->
+                <div class="px-5 pt-3 pb-2">
+                  <div class="flex gap-2 bg-stone-50 rounded-xl p-2 border border-stone-200 focus-within:ring-2 focus-within:ring-emerald-200">
+                    <i data-lucide="plus" class="size-4 text-stone-400 mt-1.5 ml-1"></i>
+                    <input type="text" placeholder="Add an ingredient…" class="flex-1 bg-transparent outline-none text-sm py-1.5" />
+                    <button class="px-4 py-1.5 rounded-lg bg-emerald-700 text-white text-sm font-semibold">Add</button>
+                  </div>
+                </div>
+
+                <!-- Ingredients list -->
+                <div class="px-5 py-2 overflow-y-auto scroll-hidden" style="max-height: 470px;">
+                  <div class="text-[10px] uppercase tracking-wider text-stone-500 mb-2 mt-1">Ingredients (8)</div>
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-3 py-3 px-2 rounded-xl bg-stone-50">
+                      <span class="flex-1 text-sm font-medium">chicken thigh</span>
+                      <span class="chip" style="background:#dcfce7;color:#15803d">H:0</span>
+                      <button class="size-7 rounded-full grid place-items-center bg-white border border-stone-200">
+                        <i data-lucide="x" class="size-3.5 text-stone-500"></i>
+                      </button>
+                    </div>
+                    <div class="flex items-center gap-3 py-3 px-2 rounded-xl bg-stone-50">
+                      <span class="flex-1 text-sm font-medium">potato</span>
+                      <span class="chip" style="background:#dcfce7;color:#15803d">H:0</span>
+                      <button class="size-7 rounded-full grid place-items-center bg-white border border-stone-200">
+                        <i data-lucide="x" class="size-3.5 text-stone-500"></i>
+                      </button>
+                    </div>
+                    <div class="flex items-center gap-3 py-3 px-2 rounded-xl bg-stone-50">
+                      <span class="flex-1 text-sm font-medium">green olive</span>
+                      <span class="chip" style="background:#ffedd5;color:#c2410c">H:2</span>
+                      <button class="size-7 rounded-full grid place-items-center bg-white border border-stone-200">
+                        <i data-lucide="x" class="size-3.5 text-stone-500"></i>
+                      </button>
+                    </div>
+                    <div class="flex items-center gap-3 py-3 px-2 rounded-xl bg-stone-50">
+                      <!-- inline editing variant — input replaces text -->
+                      <input type="text" value="strawberry" class="flex-1 text-sm font-medium bg-white px-2 py-1 rounded border border-emerald-400 outline-none" />
+                      <span class="chip" style="background:#ffedd5;color:#c2410c">H:2</span>
+                      <button class="size-7 rounded-full grid place-items-center bg-emerald-600 text-white">
+                        <i data-lucide="check" class="size-3.5"></i>
+                      </button>
+                    </div>
+                    <div class="flex items-center gap-3 py-3 px-2 rounded-xl bg-stone-50">
+                      <span class="flex-1 text-sm font-medium">lettuce</span>
+                      <span class="chip" style="background:#dcfce7;color:#15803d">H:0</span>
+                      <button class="size-7 rounded-full grid place-items-center bg-white border border-stone-200">
+                        <i data-lucide="x" class="size-3.5 text-stone-500"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="mt-4 pt-3 border-t border-dashed border-stone-200">
+                    <div class="text-[10px] uppercase tracking-wider text-stone-500 mb-2">Inferred · not in photo</div>
+                    <div class="flex items-center gap-3 py-2.5 px-2 rounded-xl bg-stone-50 opacity-70">
+                      <span class="flex-1 text-sm">butter</span>
+                      <span class="chip" style="background:#dbeafe;color:#1e40af">Dairy</span>
+                      <button class="size-7 rounded-full grid place-items-center bg-white border border-stone-200">
+                        <i data-lucide="x" class="size-3.5 text-stone-500"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Sticky action -->
+                <div class="absolute bottom-0 left-0 right-0 px-5 py-3 bg-white border-t border-stone-200">
+                  <button class="w-full py-3 rounded-xl bg-stone-900 text-white text-sm font-semibold flex items-center justify-center gap-2">
+                    <i data-lucide="check" class="size-4"></i>
+                    Done editing
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- footer -->
+    <section class="text-center text-xs text-stone-500 py-10">
+      Mockup only — not implemented. <a href="index.html" class="underline">← Back to gallery</a>
+    </section>
+  </main>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>

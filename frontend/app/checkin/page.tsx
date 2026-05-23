@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Loader2, Settings } from 'lucide-react'
 import { CheckinForm } from '@/components/checkin/checkin-form'
 import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
+import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { useEntry } from '@/lib/api/hooks'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 
@@ -38,6 +39,16 @@ export default function CheckinPage() {
   const flushRef = useRef<(() => void) | null>(null)
   const flushBeaconRef = useRef<(() => void) | null>(null)
   const retryRef = useRef<(() => void) | null>(null)
+
+  // Focus-mode overlay state. `null` = closed; a photo id = open and editing
+  // that photo's ingredients in the comfortable full-width Dialog.
+  // See issue #76 — PhotoFocusOverlay.
+  const [focusedPhotoId, setFocusedPhotoId] = useState<number | null>(null)
+  const handleClosePhotoFocus = useCallback(() => {
+    setFocusedPhotoId(null)
+    // Land any pending ingredient edits before the inline thumbnail re-renders.
+    flushRef.current?.()
+  }, [])
 
   const handleAutosaveStateChange = useCallback((state: AutosaveState) => {
     setAutosaveState(state)
@@ -94,8 +105,16 @@ export default function CheckinPage() {
           existingEntry={entry ?? null}
           onAutosaveStateChange={handleAutosaveStateChange}
           onAutosaveFnsReady={handleAutosaveFnsReady}
+          onOpenPhotoFocus={setFocusedPhotoId}
         />
       )}
+
+      <PhotoFocusOverlay
+        photoId={focusedPhotoId}
+        photos={entry?.photos ?? []}
+        onClose={handleClosePhotoFocus}
+        onSelectPhoto={setFocusedPhotoId}
+      />
     </div>
   )
 }
