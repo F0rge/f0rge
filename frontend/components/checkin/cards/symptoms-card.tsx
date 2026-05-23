@@ -11,7 +11,7 @@ interface SymptomsCardProps {
 
 export function SymptomsCard({ value, onChange }: SymptomsCardProps) {
   return (
-    <Card className="col-span-12 lg:col-span-6">
+    <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <AlertCircle className="size-4" />

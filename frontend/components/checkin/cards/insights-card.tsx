@@ -55,7 +55,7 @@ export function InsightsCard({ today, last7, pattern }: InsightsCardProps) {
   const bloatingTodayClass = bloatingColorClass(todayBloating)
 
   return (
-    <Card className="col-span-12 lg:col-span-4">
+    <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <Sparkles className="size-4 text-indigo-500" />

@@ -12,7 +12,7 @@ interface SupplementsCardProps {
 
 export function SupplementsCard({ value, onChange, onTouched }: SupplementsCardProps) {
   return (
-    <Card className="col-span-12 lg:col-span-4">
+    <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <Pill className="size-4" />

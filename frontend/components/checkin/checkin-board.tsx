@@ -9,13 +9,28 @@
  * with PhotoCapture) is preserved verbatim.
  */
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable'
 import { useSupplementCatalog, useTreatments, useEntries } from '@/lib/api/hooks'
 import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
 import { computeHeroStats } from '@/lib/checkin/hero-stats'
 import { detectPatterns } from '@/lib/checkin/patterns'
+import { loadCardOrder, saveCardOrder, type CardId } from '@/lib/checkin/card-order'
 import {
   HeroStats,
   TreatmentBanner,
@@ -28,6 +43,7 @@ import {
   TrackersCard,
   NotesCard,
 } from './cards'
+import { SortableCard } from './cards/sortable-card'
 
 interface AutosaveFns {
   flush: () => void
@@ -42,6 +58,8 @@ interface CheckinBoardProps {
   onAutosaveStateChange?: (state: AutosaveState) => void
   onAutosaveFnsReady?: (fns: AutosaveFns) => void
   onOpenPhotoFocus?: (photoId: number) => void
+  /** Called whenever the user drags cards into a new order (after save to localStorage). */
+  onCardOrderChange?: () => void
 }
 
 export function CheckinBoard({
@@ -50,6 +68,7 @@ export function CheckinBoard({
   onAutosaveStateChange,
   onAutosaveFnsReady,
   onOpenPhotoFocus,
+  onCardOrderChange,
 }: CheckinBoardProps) {
   const { data: catalog } = useSupplementCatalog(false)
   const { data: activeTreatments } = useTreatments(date)
@@ -62,6 +81,34 @@ export function CheckinBoard({
     .filter((c) => !c.archived)
     .map((c) => c.key)
     .join(',')
+
+  // ── Card order (drag-to-reorder) ────────────────────────────────────────
+  // Seeded from localStorage on mount (re-seeds when layoutVersion bumps via key on parent).
+  const [cardOrder, setCardOrder] = useState<CardId[]>(() => loadCardOrder())
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      // Small distance constraint so click-inside-card still works.
+      activationConstraint: { distance: 4 },
+    }),
+    useSensor(TouchSensor, {
+      // 350ms long-press before drag activates — preserves vertical scroll.
+      activationConstraint: { delay: 350, tolerance: 5 },
+    }),
+  )
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setCardOrder((prev) => {
+      const oldIndex = prev.indexOf(active.id as CardId)
+      const newIndex = prev.indexOf(over.id as CardId)
+      const next = arrayMove(prev, oldIndex, newIndex)
+      saveCardOrder(next)
+      return next
+    })
+    onCardOrderChange?.()
+  }, [onCardOrderChange])
 
   // ── Form state (mirrors checkin-form.tsx exactly) ──────────────────────
   const [overall, setOverall] = useState(2)
@@ -285,88 +332,134 @@ export function CheckinBoard({
     [todayForStats, last7, supplements],
   )
 
+  // ── Card renderers + col-span map ────────────────────────────────────────
+  // col-span classes previously lived on each Card's className prop.
+  // They now live here so SortableCard can apply them to its wrapper div.
+  // The inner Card components no longer carry col-span classes.
+  const CARD_COL_SPAN: Record<CardId, string> = {
+    food:        'col-span-12 lg:col-span-8',
+    insights:    'col-span-12 lg:col-span-4',
+    wellbeing:   'col-span-12 lg:col-span-4',
+    gut:         'col-span-12 lg:col-span-4',
+    supplements: 'col-span-12 lg:col-span-4',
+    symptoms:    'col-span-12 lg:col-span-6',
+    trackers:    'col-span-12 lg:col-span-6',
+    notes:       'col-span-12 lg:col-span-6',
+  }
+
+  const cardRenderers: Record<CardId, () => React.ReactNode> = {
+    food: () => (
+      <FoodCard
+        date={date}
+        existingEntry={existingEntry}
+        existingPhotos={existingPhotos}
+        dietRisk={dietRisk}
+        onDietToggle={handleDietToggle}
+        onPhotosChange={setExistingPhotos}
+        ensureEntryExists={autosave.forceFlush}
+        onEntryEnsured={markDirty}
+        onOpenPhotoFocus={onOpenPhotoFocus}
+      />
+    ),
+    insights: () => (
+      <InsightsCard
+        today={todayForStats}
+        last7={last7}
+        pattern={pattern}
+      />
+    ),
+    wellbeing: () => (
+      <WellbeingCard
+        overall={overall}
+        onOverallChange={setOverallDirty}
+        sleepQuality={sleepQuality}
+        onSleepQualityChange={setSleepQualityDirty}
+        stress={stress}
+        onStressChange={setStressDirty}
+        neuro={neuro}
+        onNeuroChange={setNeuroDirty}
+      />
+    ),
+    gut: () => (
+      <GutCard
+        bloating={bloating}
+        onBloatingChange={setBloatingDirty}
+        stoolStatus={stoolStatus}
+        onStoolStatusChange={setStoolStatusDirty}
+        bristolType={bristolType}
+        onBristolTypeChange={setBristolTypeDirty}
+        jointPain={jointPain}
+        onJointPainChange={setJointPainDirty}
+        bristolBlocked={bristolBlocked}
+      />
+    ),
+    supplements: () => (
+      <SupplementsCard
+        value={supplements}
+        onChange={handleSupplementChange}
+        onTouched={handleSupplementTouched}
+      />
+    ),
+    symptoms: () => (
+      <SymptomsCard
+        value={symptomsJson}
+        onChange={setSymptomsJsonDirty}
+      />
+    ),
+    trackers: () => (
+      <TrackersCard
+        alcoholUnits={alcoholUnits}
+        onAlcoholUnitsChange={setAlcoholUnitsDirty}
+        caffeineServings={caffeineServings}
+        onCaffeineServingsChange={setCaffeineServingsDirty}
+        sick={sick}
+        onSickChange={setSickDirty}
+        hotShower={hotShower}
+        onHotShowerChange={setHotShowerDirty}
+      />
+    ),
+    notes: () => (
+      <NotesCard
+        value={notes}
+        onChange={setNotesDirty}
+        onBlur={handleBlur}
+      />
+    ),
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 pb-8">
-      {/* Hero stats strip — full width above grid */}
+      {/* Hero stats strip — full width above grid, NOT sortable */}
       <HeroStats data={heroStats} />
 
       {/* 12-column card grid */}
-      <div className="grid grid-cols-12 gap-4 auto-rows-min">
-        <TreatmentBanner
-          treatments={activeTreatments ?? []}
-          checkinDate={date}
-        />
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid grid-cols-12 gap-4 auto-rows-min">
+          {/* Treatment banner — fixed position, outside SortableContext */}
+          <TreatmentBanner
+            treatments={activeTreatments ?? []}
+            checkinDate={date}
+          />
 
-        <FoodCard
-          date={date}
-          existingEntry={existingEntry}
-          existingPhotos={existingPhotos}
-          dietRisk={dietRisk}
-          onDietToggle={handleDietToggle}
-          onPhotosChange={setExistingPhotos}
-          ensureEntryExists={autosave.forceFlush}
-          onEntryEnsured={markDirty}
-          onOpenPhotoFocus={onOpenPhotoFocus}
-        />
-
-        <InsightsCard
-          today={todayForStats}
-          last7={last7}
-          pattern={pattern}
-        />
-
-        <WellbeingCard
-          overall={overall}
-          onOverallChange={setOverallDirty}
-          sleepQuality={sleepQuality}
-          onSleepQualityChange={setSleepQualityDirty}
-          stress={stress}
-          onStressChange={setStressDirty}
-          neuro={neuro}
-          onNeuroChange={setNeuroDirty}
-        />
-
-        <GutCard
-          bloating={bloating}
-          onBloatingChange={setBloatingDirty}
-          stoolStatus={stoolStatus}
-          onStoolStatusChange={setStoolStatusDirty}
-          bristolType={bristolType}
-          onBristolTypeChange={setBristolTypeDirty}
-          jointPain={jointPain}
-          onJointPainChange={setJointPainDirty}
-          bristolBlocked={bristolBlocked}
-        />
-
-        <SupplementsCard
-          value={supplements}
-          onChange={handleSupplementChange}
-          onTouched={handleSupplementTouched}
-        />
-
-        <SymptomsCard
-          value={symptomsJson}
-          onChange={setSymptomsJsonDirty}
-        />
-
-        <TrackersCard
-          alcoholUnits={alcoholUnits}
-          onAlcoholUnitsChange={setAlcoholUnitsDirty}
-          caffeineServings={caffeineServings}
-          onCaffeineServingsChange={setCaffeineServingsDirty}
-          sick={sick}
-          onSickChange={setSickDirty}
-          hotShower={hotShower}
-          onHotShowerChange={setHotShowerDirty}
-        />
-
-        <NotesCard
-          value={notes}
-          onChange={setNotesDirty}
-          onBlur={handleBlur}
-        />
-      </div>
+          {/* Sortable cards */}
+          <SortableContext items={cardOrder} strategy={rectSortingStrategy}>
+            {cardOrder.map((id) => (
+              <SortableCard
+                key={id}
+                id={id}
+                colSpanClass={CARD_COL_SPAN[id]}
+              >
+                {cardRenderers[id]()}
+              </SortableCard>
+            ))}
+          </SortableContext>
+        </div>
+      </DndContext>
     </div>
   )
 }

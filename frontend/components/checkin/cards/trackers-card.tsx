@@ -28,7 +28,7 @@ export function TrackersCard({
   hotShower, onHotShowerChange,
 }: TrackersCardProps) {
   return (
-    <Card className="col-span-12 lg:col-span-6">
+    <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <BarChart2 className="size-4" />
