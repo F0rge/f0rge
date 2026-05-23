@@ -1,5 +1,7 @@
 # Health Tracker
 
+**Extends `~/.claude/CLAUDE.md`** — see there for global preferences, stack defaults, git workflow, boundaries, sub-agent delegation rules, family disambiguations, self-update protocol, and Brain vault encouragement. This file holds only project-specific rules.
+
 Personal daily symptom check-in app for Leo's health research vault.
 
 ## Stack
