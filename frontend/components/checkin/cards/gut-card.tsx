@@ -28,8 +28,8 @@ export function GutCard({
 }: GutCardProps) {
   return (
     <Card className={cn(
-      'col-span-12 lg:col-span-4',
-      bristolBlocked && 'ring-2 ring-amber-400',
+      'col-span-12 lg:col-span-4 transition-shadow',
+      bristolBlocked && 'ring-2 ring-amber-400 ring-offset-2 ring-offset-background bg-amber-50/40 dark:bg-amber-950/20',
     )}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
