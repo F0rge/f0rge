@@ -238,7 +238,7 @@ export function FoodCard({
   }
 
   return (
-    <Card className="col-span-12 lg:col-span-8">
+    <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <Camera className="size-4" />

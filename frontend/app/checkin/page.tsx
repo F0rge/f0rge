@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { Loader2, Settings } from 'lucide-react'
+import { Loader2, Settings, LayoutGrid } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { useEntry } from '@/lib/api/hooks'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
+import { hasCustomOrder, resetCardOrder } from '@/lib/checkin/card-order'
 
 function getTodayDate() {
   const now = new Date()
@@ -39,6 +40,22 @@ export default function CheckinPage() {
   const flushRef = useRef<(() => void) | null>(null)
   const flushBeaconRef = useRef<(() => void) | null>(null)
   const retryRef = useRef<(() => void) | null>(null)
+
+  // Layout version — bumping remounts CheckinBoard so it re-reads card order from localStorage.
+  const [layoutVersion, setLayoutVersion] = useState(0)
+  // Show Reset button only when a custom order is saved. Re-derived on each render cycle
+  // triggered by layoutVersion change; no effect needed since this reads sync from localStorage.
+  const [hasCustomLayout, setHasCustomLayout] = useState(() => hasCustomOrder())
+
+  const handleCardOrderChange = useCallback(() => {
+    setHasCustomLayout(true)
+  }, [])
+
+  const handleResetLayout = useCallback(() => {
+    resetCardOrder()
+    setHasCustomLayout(false)
+    setLayoutVersion((v) => v + 1)
+  }, [])
 
   // Focus-mode overlay state. `null` = closed; a photo id = open and editing
   // that photo's ingredients in the comfortable full-width Dialog.
@@ -86,6 +103,15 @@ export default function CheckinPage() {
             errorMessage={autosaveState.errorMessage}
             onRetry={() => retryRef.current?.()}
           />
+          {hasCustomLayout && (
+            <button
+              onClick={handleResetLayout}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Reset card layout to default"
+            >
+              <LayoutGrid className="size-4" />
+            </button>
+          )}
           <Link
             href="/settings"
             className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -101,11 +127,13 @@ export default function CheckinPage() {
         </div>
       ) : (
         <CheckinBoard
+          key={layoutVersion}
           date={today}
           existingEntry={entry ?? null}
           onAutosaveStateChange={handleAutosaveStateChange}
           onAutosaveFnsReady={handleAutosaveFnsReady}
           onOpenPhotoFocus={setFocusedPhotoId}
+          onCardOrderChange={handleCardOrderChange}
         />
       )}
 
