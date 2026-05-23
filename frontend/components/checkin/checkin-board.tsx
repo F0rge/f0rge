@@ -7,6 +7,11 @@
  * subscription. Cards are pure presentational props-in, onChange-out. No Context,
  * no Zustand. The autosave contract (payload memo, dirtyRef, forceFlush handshake
  * with PhotoCapture) is preserved verbatim.
+ *
+ * Card reordering uses a dedicated reorder mode (isReorderMode). In normal mode
+ * there are no drag handles and no DndContext overhead. In reorder mode, cards
+ * collapse to uniform tiles with drag grips and up/down arrow buttons — no
+ * card morphing is possible because all tiles have the same height.
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
@@ -24,8 +29,17 @@ import {
 import {
   SortableContext,
   arrayMove,
-  rectSortingStrategy,
+  verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import {
+  Activity,
+  Apple,
+  BookOpen,
+  Heart,
+  Moon,
+  Pill,
+  Zap,
+} from 'lucide-react'
 import { useSupplementCatalog, useTreatments, useEntries } from '@/lib/api/hooks'
 import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
@@ -44,6 +58,8 @@ import {
   NotesCard,
 } from './cards'
 import { SortableCard } from './cards/sortable-card'
+import { ReorderTile } from './cards/reorder-tile'
+import type { CardMeta } from './cards/reorder-tile'
 
 interface AutosaveFns {
   flush: () => void
@@ -58,8 +74,22 @@ interface CheckinBoardProps {
   onAutosaveStateChange?: (state: AutosaveState) => void
   onAutosaveFnsReady?: (fns: AutosaveFns) => void
   onOpenPhotoFocus?: (photoId: number) => void
-  /** Called whenever the user drags cards into a new order (after save to localStorage). */
+  /** Called whenever the user saves a new card order to localStorage. */
   onCardOrderChange?: () => void
+  /** Controlled reorder mode — set by page header button. Defaults to false. */
+  isReorderMode?: boolean
+}
+
+// Card metadata (icon + label) for reorder tiles.
+// Defined at module scope to satisfy react-hooks/static-components rule.
+const CARD_META: Record<CardId, CardMeta> = {
+  food:        { id: 'food',        icon: <Apple className="size-4" />,    label: 'Food & Diet' },
+  wellbeing:   { id: 'wellbeing',   icon: <Moon className="size-4" />,     label: 'Wellbeing' },
+  gut:         { id: 'gut',         icon: <Activity className="size-4" />, label: 'Gut' },
+  supplements: { id: 'supplements', icon: <Pill className="size-4" />,     label: 'Supplements' },
+  symptoms:    { id: 'symptoms',    icon: <Zap className="size-4" />,      label: 'Symptoms' },
+  trackers:    { id: 'trackers',    icon: <Heart className="size-4" />,    label: 'Trackers' },
+  notes:       { id: 'notes',       icon: <BookOpen className="size-4" />, label: 'Notes' },
 }
 
 export function CheckinBoard({
@@ -69,6 +99,7 @@ export function CheckinBoard({
   onAutosaveFnsReady,
   onOpenPhotoFocus,
   onCardOrderChange,
+  isReorderMode = false,
 }: CheckinBoardProps) {
   const { data: catalog } = useSupplementCatalog(false)
   const { data: activeTreatments } = useTreatments(date)
@@ -82,9 +113,8 @@ export function CheckinBoard({
     .map((c) => c.key)
     .join(',')
 
-  // ── Card order + drag overlay state ─────────────────────────────────────
-  // Start with DEFAULT so SSR + client first paint agree (localStorage is client-only,
-  // so initializing from it would cause React hydration mismatch — error #418).
+  // ── Card order state ────────────────────────────────────────────────────
+  // Start with DEFAULT so SSR + client first paint agree (localStorage is client-only).
   // Swap in any saved order via useEffect on mount; one-frame default→saved is acceptable.
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => [...DEFAULT_CARD_ORDER])
   useEffect(() => {
@@ -94,29 +124,24 @@ export function CheckinBoard({
     )
   }, [])
 
-  // activeId tracks which card is currently being dragged (null = no drag in progress).
-  // dragOverlayWidth captures the source card's pixel width at drag-start so the floating
-  // overlay matches the original card size (col-span classes have no effect outside the grid).
+  // ── Drag state — only used in reorder mode ──────────────────────────────
+  // In reorder mode, tiles are uniform height so no width capture is needed.
   const [activeId, setActiveId] = useState<CardId | null>(null)
-  const [dragOverlayWidth, setDragOverlayWidth] = useState<number | undefined>(undefined)
 
+  // In reorder mode, pointer drag needs no distance constraint (tiles have no
+  // inner interactive content). Touch drag also needs no long-press delay —
+  // the tile IS the drag target, there's nothing else to tap inside it.
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      // Small distance constraint so click-inside-card still works.
       activationConstraint: { distance: 4 },
     }),
     useSensor(TouchSensor, {
-      // 350ms long-press before drag activates — preserves vertical scroll.
-      activationConstraint: { delay: 350, tolerance: 5 },
+      activationConstraint: { delay: 150, tolerance: 8 },
     }),
   )
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as CardId)
-    // Capture the source element's pixel width so the overlay matches exactly.
-    // event.active.rect.current.initial is the source node's DOMRect at drag-start.
-    const rect = event.active.rect.current.initial
-    setDragOverlayWidth(rect ? rect.width : undefined)
   }, [])
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -136,6 +161,29 @@ export function CheckinBoard({
   const handleDragCancel = useCallback(() => {
     setActiveId(null)
   }, [])
+
+  // ── Arrow (tap-to-move) handlers ────────────────────────────────────────
+  const handleMoveUp = useCallback((id: CardId) => {
+    setCardOrder((prev) => {
+      const idx = prev.indexOf(id)
+      if (idx <= 0) return prev
+      const next = arrayMove(prev, idx, idx - 1)
+      saveCardOrder(next)
+      return next
+    })
+    onCardOrderChange?.()
+  }, [onCardOrderChange])
+
+  const handleMoveDown = useCallback((id: CardId) => {
+    setCardOrder((prev) => {
+      const idx = prev.indexOf(id)
+      if (idx < 0 || idx >= prev.length - 1) return prev
+      const next = arrayMove(prev, idx, idx + 1)
+      saveCardOrder(next)
+      return next
+    })
+    onCardOrderChange?.()
+  }, [onCardOrderChange])
 
   // ── Form state (mirrors checkin-form.tsx exactly) ──────────────────────
   const [overall, setOverall] = useState(2)
@@ -363,8 +411,7 @@ export function CheckinBoard({
   )
 
   // ── Card renderers + col-span map ────────────────────────────────────────
-  // col-span classes previously lived on each Card's className prop.
-  // They now live here so SortableCard can apply them to its wrapper div.
+  // col-span classes live here so SortableCard can apply them to its wrapper div.
   // The inner Card components no longer carry col-span classes.
   const CARD_COL_SPAN: Record<CardId, string> = {
     food:        'col-span-12',
@@ -454,52 +501,79 @@ export function CheckinBoard({
       {/* Hero stats strip — full width above grid, NOT sortable */}
       <HeroStats data={heroStats} />
 
-      {/* 12-column card grid */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragCancel={handleDragCancel}
-      >
+      {isReorderMode ? (
+        // ── Reorder mode: vertical list of uniform tiles ─────────────────
+        // All tiles are full-width (col-span-12), same height — no morphing.
+        // verticalListSortingStrategy is correct here since it IS a single column.
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <SortableContext items={cardOrder} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-2">
+              {cardOrder.map((id, index) => (
+                <SortableCard
+                  key={id}
+                  id={id}
+                  colSpanClass=""
+                  meta={CARD_META[id]}
+                  isReorderMode={true}
+                  index={index}
+                  total={cardOrder.length}
+                  onMoveUp={() => handleMoveUp(id)}
+                  onMoveDown={() => handleMoveDown(id)}
+                >
+                  {/* children not rendered in reorder mode */}
+                  {null}
+                </SortableCard>
+              ))}
+            </div>
+          </SortableContext>
+
+          {/* DragOverlay: uniform tile, no width capture needed (full-width list) */}
+          <DragOverlay>
+            {activeId !== null ? (
+              <ReorderTile
+                meta={CARD_META[activeId]}
+                dragListeners={undefined}
+                isDragging={true}
+                isFirst={false}
+                isLast={false}
+                onMoveUp={() => {}}
+                onMoveDown={() => {}}
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        // ── Normal mode: 12-column card grid, no drag ────────────────────
         <div className="grid grid-cols-12 gap-4 auto-rows-min">
-          {/* Treatment banner — fixed position, outside SortableContext */}
+          {/* Treatment banner — fixed position, not sortable */}
           <TreatmentBanner
             treatments={activeTreatments ?? []}
             checkinDate={date}
           />
 
-          {/* Sortable cards */}
-          <SortableContext items={cardOrder} strategy={rectSortingStrategy}>
-            {cardOrder.map((id) => (
-              <SortableCard
-                key={id}
-                id={id}
-                colSpanClass={CARD_COL_SPAN[id]}
-              >
-                {cardRenderers[id]()}
-              </SortableCard>
-            ))}
-          </SortableContext>
+          {cardOrder.map((id, index) => (
+            <SortableCard
+              key={id}
+              id={id}
+              colSpanClass={CARD_COL_SPAN[id]}
+              meta={CARD_META[id]}
+              isReorderMode={false}
+              index={index}
+              total={cardOrder.length}
+              onMoveUp={() => handleMoveUp(id)}
+              onMoveDown={() => handleMoveDown(id)}
+            >
+              {cardRenderers[id]()}
+            </SortableCard>
+          ))}
         </div>
-
-        {/*
-          DragOverlay renders via a portal at the document root — above all page content.
-          It shows a snapshot of the dragged card at its original pixel width so the card
-          doesn't stretch or morph as dnd-kit moves it around the grid.
-
-          The overlay gets the captured width from drag-start so it matches the source card
-          regardless of whether the card is full-width (mobile) or a col-span fraction.
-          defaultDropAnimation snaps the overlay back to the drop position smoothly.
-        */}
-        <DragOverlay>
-          {activeId !== null ? (
-            <div style={{ width: dragOverlayWidth }}>
-              {cardRenderers[activeId]()}
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+      )}
     </div>
   )
 }

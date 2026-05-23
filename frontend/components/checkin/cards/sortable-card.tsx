@@ -3,36 +3,54 @@
 /**
  * SortableCard — dnd-kit sortable wrapper for check-in grid cards.
  *
- * The drag handle (GripVertical icon) is wired to useSortable listeners/attributes,
- * NOT the whole card, so taps and clicks inside cards still work normally.
+ * Two modes:
+ *  - Normal mode (isReorderMode=false): plain wrapper with no drag handles,
+ *    no grip icons. Cards render at full content. dnd-kit is not active.
+ *  - Reorder mode (isReorderMode=true): card content is replaced by a
+ *    uniform-height ReorderTile (icon + label + up/down arrows + drag grip).
+ *    All tiles have the same height — no morphing during drag.
  *
- * Desktop (lg+): handle is hidden, revealed on parent card hover via group-hover.
- * Mobile (<lg): handle is always visible — touch users can't hover; long-press
- *               350ms (via dnd-kit TouchSensor activation constraint) starts drag.
- *
- * The col-span class is applied to this wrapper (not the inner Card), since the
- * wrapper IS the grid item. The inner Card uses `h-full` to fill the wrapper.
- *
- * When isDragging is true this element is the placeholder — the DragOverlay in
- * CheckinBoard renders the visible floating copy. Dim the placeholder so it reads
- * as a ghost and the overlay reads as the live card.
+ * The col-span class always lives on this wrapper (not the inner Card) so
+ * dnd-kit transforms apply to the correct grid item.
  */
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import type { CardId } from '@/lib/checkin/card-order'
+import { ReorderTile, type CardMeta } from './reorder-tile'
 
 interface SortableCardProps {
   id: CardId
-  /** col-span classes that were previously on the inner Card element. */
+  /** col-span classes applied to the outer wrapper div (the grid item). */
   colSpanClass: string
+  /** Card metadata shown in the reorder tile (icon + label). */
+  meta: CardMeta
+  /** When true, show the compact reorder tile instead of card content. */
+  isReorderMode: boolean
+  /** Index of this card in the current order (for up/down buttons). */
+  index: number
+  /** Total number of sortable cards (for disabling first/last arrows). */
+  total: number
+  /** Called when user taps the up arrow in reorder mode. */
+  onMoveUp: () => void
+  /** Called when user taps the down arrow in reorder mode. */
+  onMoveDown: () => void
   children: ReactNode
 }
 
-export function SortableCard({ id, colSpanClass, children }: SortableCardProps) {
+export function SortableCard({
+  id,
+  colSpanClass,
+  meta,
+  isReorderMode,
+  index,
+  total,
+  onMoveUp,
+  onMoveDown,
+  children,
+}: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -52,33 +70,27 @@ export function SortableCard({ id, colSpanClass, children }: SortableCardProps) 
       ref={setNodeRef}
       style={style}
       className={cn(
-        colSpanClass,
-        'group relative',
-        // When dragging: dim the original so the DragOverlay (above) reads as the "live" card.
-        // z-50 is NOT needed here — DragOverlay renders above the entire page via a portal.
+        // In normal mode use the provided col-span; reorder mode ignores it
+        // (the flex column container controls layout instead of CSS grid).
+        !isReorderMode && colSpanClass,
+        // Dim the placeholder when DragOverlay is floating above it.
         isDragging && 'opacity-30',
       )}
     >
-      {/* Drag handle — hidden on desktop until card is hovered; always visible on touch */}
-      <button
-        {...attributes}
-        {...listeners}
-        aria-label="Drag to reorder card"
-        className={cn(
-          'absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-md',
-          'text-muted-foreground/40 transition-opacity',
-          // Mobile (<lg): always visible — touch users can't hover.
-          // Desktop (lg+): hidden until card is hovered.
-          'opacity-100 lg:opacity-0 lg:group-hover:opacity-100',
-          // Active drag: full opacity regardless of breakpoint.
-          isDragging && 'opacity-100',
-          'cursor-grab active:cursor-grabbing',
-        )}
-      >
-        <GripVertical className="size-4" />
-      </button>
-
-      {children}
+      {isReorderMode ? (
+        <ReorderTile
+          meta={meta}
+          dragListeners={listeners}
+          dragAttributes={attributes}
+          isDragging={isDragging}
+          isFirst={index === 0}
+          isLast={index === total - 1}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+        />
+      ) : (
+        children
+      )}
     </div>
   )
 }

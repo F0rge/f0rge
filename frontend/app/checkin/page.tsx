@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { Loader2, Settings, LayoutGrid } from 'lucide-react'
+import { Loader2, Settings, LayoutList } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { useEntry } from '@/lib/api/hooks'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
-import { hasCustomOrder, resetCardOrder } from '@/lib/checkin/card-order'
+import { resetCardOrder } from '@/lib/checkin/card-order'
 
 function getTodayDate() {
   const now = new Date()
@@ -36,34 +36,46 @@ export default function CheckinPage() {
   })
 
   // Stable refs to autosave functions — registered once by the form via onAutosaveFnsReady.
-  // Stored as refs (not state) so updating them never triggers a re-render.
   const flushRef = useRef<(() => void) | null>(null)
   const flushBeaconRef = useRef<(() => void) | null>(null)
   const retryRef = useRef<(() => void) | null>(null)
 
   // Layout version — bumping remounts CheckinBoard so it re-reads card order from localStorage.
   const [layoutVersion, setLayoutVersion] = useState(0)
-  // Show Reset button only when a custom order is saved. Re-derived on each render cycle
-  // triggered by layoutVersion change; no effect needed since this reads sync from localStorage.
-  const [hasCustomLayout, setHasCustomLayout] = useState(() => hasCustomOrder())
+
+  // Reorder mode — toggled by the LayoutList button in the header.
+  // When active, CheckinBoard shows the compact tile list instead of full cards.
+  const [isReorderMode, setIsReorderMode] = useState(false)
 
   const handleCardOrderChange = useCallback(() => {
-    setHasCustomLayout(true)
+    // No-op: we no longer track hasCustomLayout separately.
+    // The order is persisted in localStorage by CheckinBoard itself.
   }, [])
 
-  const handleResetLayout = useCallback(() => {
-    resetCardOrder()
-    setHasCustomLayout(false)
+  const handleEnterReorderMode = useCallback(() => {
+    setIsReorderMode(true)
+  }, [])
+
+  const handleExitReorderMode = useCallback(() => {
+    setIsReorderMode(false)
+    // Bump layout version so CheckinBoard remounts and re-reads the saved order.
     setLayoutVersion((v) => v + 1)
   }, [])
 
-  // Focus-mode overlay state. `null` = closed; a photo id = open and editing
-  // that photo's ingredients in the comfortable full-width Dialog.
-  // See issue #76 — PhotoFocusOverlay.
+  // "Reset layout" is now surfaced as a button only inside reorder mode (in the future),
+  // or via the existing resetCardOrder export. Keep the function available.
+  const handleResetLayout = useCallback(() => {
+    resetCardOrder()
+    setIsReorderMode(false)
+    setLayoutVersion((v) => v + 1)
+  }, [])
+  // Suppress unused-variable warning — will be wired to a tile in a future iteration.
+  void handleResetLayout
+
+  // Focus-mode overlay state. `null` = closed; a photo id = open and editing that photo.
   const [focusedPhotoId, setFocusedPhotoId] = useState<number | null>(null)
   const handleClosePhotoFocus = useCallback(() => {
     setFocusedPhotoId(null)
-    // Land any pending ingredient edits before the inline thumbnail re-renders.
     flushRef.current?.()
   }, [])
 
@@ -97,21 +109,35 @@ export default function CheckinPage() {
           <p className="text-sm text-muted-foreground">{formatDisplayDate(today)}</p>
         </div>
         <div className="flex items-center gap-2">
-          <AutosaveStatusPill
-            status={autosaveState.status}
-            lastSavedAt={autosaveState.lastSavedAt}
-            errorMessage={autosaveState.errorMessage}
-            onRetry={() => retryRef.current?.()}
-          />
-          {hasCustomLayout && (
+          {/* Autosave pill — hidden in reorder mode to reduce visual noise */}
+          {!isReorderMode && (
+            <AutosaveStatusPill
+              status={autosaveState.status}
+              lastSavedAt={autosaveState.lastSavedAt}
+              errorMessage={autosaveState.errorMessage}
+              onRetry={() => retryRef.current?.()}
+            />
+          )}
+
+          {/* Reorder / Done toggle */}
+          {isReorderMode ? (
             <button
-              onClick={handleResetLayout}
-              className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="Reset card layout to default"
+              onClick={handleExitReorderMode}
+              className="rounded-lg px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-muted"
             >
-              <LayoutGrid className="size-4" />
+              Done
+            </button>
+          ) : (
+            <button
+              onClick={handleEnterReorderMode}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Reorder cards"
+              title="Reorder cards"
+            >
+              <LayoutList className="size-4" />
             </button>
           )}
+
           <Link
             href="/settings"
             className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -134,6 +160,7 @@ export default function CheckinPage() {
           onAutosaveFnsReady={handleAutosaveFnsReady}
           onOpenPhotoFocus={setFocusedPhotoId}
           onCardOrderChange={handleCardOrderChange}
+          isReorderMode={isReorderMode}
         />
       )}
 
