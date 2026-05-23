@@ -104,7 +104,7 @@ export function CheckinBoard({
   const { data: catalog } = useSupplementCatalog(false)
   const { data: activeTreatments } = useTreatments(date)
 
-  // entries for the current month — used by InsightsCard + HeroStats.
+  // entries for the current month — used by HeroStats.
   const currentMonth = date.slice(0, 7) // YYYY-MM
   const { data: monthEntries } = useEntries(currentMonth)
 
