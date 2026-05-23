@@ -12,12 +12,14 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -82,7 +84,7 @@ export function CheckinBoard({
     .map((c) => c.key)
     .join(',')
 
-  // ── Card order (drag-to-reorder) ────────────────────────────────────────
+  // ── Card order + drag overlay state ─────────────────────────────────────
   // Start with DEFAULT so SSR + client first paint agree (localStorage is client-only,
   // so initializing from it would cause React hydration mismatch — error #418).
   // Swap in any saved order via useEffect on mount; one-frame default→saved is acceptable.
@@ -93,6 +95,12 @@ export function CheckinBoard({
       prev.length === saved.length && prev.every((id, i) => id === saved[i]) ? prev : saved,
     )
   }, [])
+
+  // activeId tracks which card is currently being dragged (null = no drag in progress).
+  // dragOverlayWidth captures the source card's pixel width at drag-start so the floating
+  // overlay matches the original card size (col-span classes have no effect outside the grid).
+  const [activeId, setActiveId] = useState<CardId | null>(null)
+  const [dragOverlayWidth, setDragOverlayWidth] = useState<number | undefined>(undefined)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -105,7 +113,16 @@ export function CheckinBoard({
     }),
   )
 
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(event.active.id as CardId)
+    // Capture the source element's pixel width so the overlay matches exactly.
+    // event.active.rect.current.initial is the source node's DOMRect at drag-start.
+    const rect = event.active.rect.current.initial
+    setDragOverlayWidth(rect ? rect.width : undefined)
+  }, [])
+
   const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
     setCardOrder((prev) => {
@@ -117,6 +134,10 @@ export function CheckinBoard({
     })
     onCardOrderChange?.()
   }, [onCardOrderChange])
+
+  const handleDragCancel = useCallback(() => {
+    setActiveId(null)
+  }, [])
 
   // ── Form state (mirrors checkin-form.tsx exactly) ──────────────────────
   const [overall, setOverall] = useState(2)
@@ -445,7 +466,9 @@ export function CheckinBoard({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
         <div className="grid grid-cols-12 gap-4 auto-rows-min">
           {/* Treatment banner — fixed position, outside SortableContext */}
@@ -467,6 +490,23 @@ export function CheckinBoard({
             ))}
           </SortableContext>
         </div>
+
+        {/*
+          DragOverlay renders via a portal at the document root — above all page content.
+          It shows a snapshot of the dragged card at its original pixel width so the card
+          doesn't stretch or morph as dnd-kit moves it around the grid.
+
+          The overlay gets the captured width from drag-start so it matches the source card
+          regardless of whether the card is full-width (mobile) or a col-span fraction.
+          defaultDropAnimation snaps the overlay back to the drop position smoothly.
+        */}
+        <DragOverlay>
+          {activeId !== null ? (
+            <div style={{ width: dragOverlayWidth }}>
+              {cardRenderers[activeId]()}
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </div>
   )
