@@ -37,6 +37,10 @@ interface SortableCardProps {
   onMoveUp: () => void
   /** Called when user taps the down arrow in reorder mode. */
   onMoveDown: () => void
+  /** Whether this card is hidden in normal mode (shown in reorder mode with indicator). */
+  isHidden?: boolean
+  /** Called when user taps the eye toggle in reorder mode. */
+  onToggleHidden?: () => void
   children: ReactNode
 }
 
@@ -49,6 +53,8 @@ export function SortableCard({
   total,
   onMoveUp,
   onMoveDown,
+  isHidden = false,
+  onToggleHidden,
   children,
 }: SortableCardProps) {
   const {
@@ -87,6 +93,8 @@ export function SortableCard({
           isLast={index === total - 1}
           onMoveUp={onMoveUp}
           onMoveDown={onMoveDown}
+          isHidden={isHidden}
+          onToggleHidden={onToggleHidden}
         />
       ) : (
         children
