@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Persistent Header — A · Floating Glass Capsule</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          background: '#fafafa',
+          foreground: '#0a0a0a',
+          card: '#ffffff',
+          'card-foreground': '#0a0a0a',
+          muted: '#f4f4f5',
+          'muted-foreground': '#71717a',
+          border: '#e4e4e7',
+          primary: '#0a0a0a',
+          'primary-foreground': '#fafafa',
+        },
+        borderRadius: { xl: '0.875rem' },
+      },
+    },
+  }
+</script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  .label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #71717a; text-transform: uppercase; }
+
+  /* Glass capsule */
+  .glass-capsule {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    z-index: 50;
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0,0,0,0.04);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease, transform 280ms cubic-bezier(.2,.8,.2,1);
+  }
+  .glass-capsule.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+  }
+
+  /* Saving dot pulse */
+  @keyframes savingSpin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes savedFlash {
+    0% { background-color: rgba(34,197,94,0); }
+    20% { background-color: rgba(34,197,94,0.18); }
+    100% { background-color: rgba(34,197,94,0); }
+  }
+  .status-saving svg { animation: savingSpin 0.9s linear infinite; }
+  .status-saved.flash { animation: savedFlash 700ms ease-out; }
+
+  /* Make sure the scroll demo has enough room */
+  .scroll-room { min-height: 1800px; }
+</style>
+</head>
+<body class="bg-background text-foreground">
+
+  <!-- FLOATING GLASS CAPSULE — fades in when scrolled past the original header -->
+  <div id="capsule" class="glass-capsule rounded-full px-3.5 py-1.5 flex items-center gap-2.5 text-xs">
+    <!-- Date -->
+    <span class="font-semibold text-foreground">Sun 24 May</span>
+    <span class="text-border">·</span>
+    <!-- Save status (dynamic) -->
+    <span id="capsuleStatus" class="inline-flex items-center gap-1.5 text-muted-foreground status-saved">
+      <svg class="size-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <span id="capsuleStatusText">Saved just now</span>
+    </span>
+  </div>
+
+  <!-- Page content -->
+  <div class="mx-auto w-full max-w-3xl p-4 lg:px-8">
+
+    <!-- Design intent banner -->
+    <div class="mb-6 rounded-xl border border-dashed border-border bg-card p-4 text-sm">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="label mb-1">Mockup A</div>
+          <h2 class="font-semibold text-base">Floating glass capsule (top-center)</h2>
+          <p class="mt-1 text-muted-foreground leading-relaxed">The full header behaves normally at the top of the page. Once you scroll past it, a slim glassmorphism capsule fades in at the top-center showing <em>date · save status</em>. Original header scrolls naturally — capsule never overlaps it. Click below to simulate states.</p>
+        </div>
+        <div class="flex flex-col gap-1.5 shrink-0">
+          <button onclick="setState('saving')" class="rounded-md border border-border bg-card px-2 py-1 text-xs hover:bg-muted">Saving…</button>
+          <button onclick="setState('saved')" class="rounded-md border border-border bg-card px-2 py-1 text-xs hover:bg-muted">Saved</button>
+          <button onclick="setState('error')" class="rounded-md border border-border bg-card px-2 py-1 text-xs hover:bg-muted">Error</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORIGINAL HEADER — unchanged, scrolls away naturally -->
+    <div id="original-header" class="mb-6 flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight">Check-in</h1>
+        <p class="text-sm text-muted-foreground">Sunday, 24 May 2026</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <!-- Resting autosave pill (same as today) -->
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
+          <svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Saved just now
+        </span>
+        <button class="rounded-lg p-2 text-muted-foreground hover:bg-muted">
+          <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+        </button>
+        <button class="rounded-lg p-2 text-muted-foreground hover:bg-muted">
+          <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mock check-in cards so the page actually scrolls -->
+    <div class="scroll-room space-y-3">
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Mood</div>
+        <div class="flex gap-2">
+          <button class="flex-1 rounded-lg border border-border py-3 text-2xl">😖</button>
+          <button class="flex-1 rounded-lg border border-border py-3 text-2xl">😕</button>
+          <button class="flex-1 rounded-lg border-2 border-primary bg-muted py-3 text-2xl">😐</button>
+          <button class="flex-1 rounded-lg border border-border py-3 text-2xl">🙂</button>
+          <button class="flex-1 rounded-lg border border-border py-3 text-2xl">😄</button>
+        </div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Bristol stool</div>
+        <div class="grid grid-cols-7 gap-1.5">
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">1</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">2</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">3</button>
+          <button class="aspect-square rounded-md border-2 border-primary bg-muted text-sm font-semibold">4</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">5</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">6</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">7</button>
+        </div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Daily trackers</div>
+        <ul class="divide-y divide-border -mx-4">
+          <li class="flex items-center gap-3 px-4 py-3">
+            <div class="size-9 rounded-lg bg-muted"></div>
+            <div class="flex-1 text-sm font-medium">Alcohol units</div>
+            <div class="text-sm font-semibold">2</div>
+          </li>
+          <li class="flex items-center gap-3 px-4 py-3">
+            <div class="size-9 rounded-lg bg-muted"></div>
+            <div class="flex-1 text-sm font-medium">Caffeine</div>
+            <div class="text-sm font-semibold">1</div>
+          </li>
+          <li class="flex items-center gap-3 px-4 py-3">
+            <div class="size-9 rounded-lg bg-muted"></div>
+            <div class="flex-1 text-sm font-medium">Water</div>
+            <div class="text-sm font-semibold">4</div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Notes</div>
+        <div class="h-32 rounded-md bg-muted/40"></div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Symptoms</div>
+        <div class="flex flex-wrap gap-2">
+          <span class="rounded-full bg-muted px-3 py-1 text-xs">Bloating</span>
+          <span class="rounded-full bg-muted px-3 py-1 text-xs">Headache</span>
+          <span class="rounded-full bg-muted px-3 py-1 text-xs">+ add</span>
+        </div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Supplements</div>
+        <div class="h-20 rounded-md bg-muted/40"></div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Meals</div>
+        <div class="h-40 rounded-md bg-muted/40"></div>
+      </div>
+    </div>
+
+    <p class="mt-8 text-center text-xs text-muted-foreground">↑ Scroll up and down to see the capsule fade in/out</p>
+  </div>
+
+<script>
+  // Show/hide capsule based on scroll position
+  const header = document.getElementById('original-header');
+  const capsule = document.getElementById('capsule');
+  const statusEl = document.getElementById('capsuleStatus');
+  const statusText = document.getElementById('capsuleStatusText');
+
+  function updateCapsule() {
+    const headerBottom = header.getBoundingClientRect().bottom;
+    if (headerBottom < 8) {
+      capsule.classList.add('visible');
+    } else {
+      capsule.classList.remove('visible');
+    }
+  }
+  window.addEventListener('scroll', updateCapsule, { passive: true });
+  updateCapsule();
+
+  // State simulation
+  const SAVING_HTML = `
+    <svg class="size-3 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+    <span id="capsuleStatusText">Saving…</span>`;
+  const SAVED_HTML = `
+    <svg class="size-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    <span id="capsuleStatusText">Saved just now</span>`;
+  const ERROR_HTML = `
+    <svg class="size-3 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+    <span class="text-amber-700 font-medium" id="capsuleStatusText">Couldn't save — Retry</span>`;
+
+  function setState(state) {
+    statusEl.classList.remove('status-saving', 'status-saved', 'status-error', 'flash');
+    if (state === 'saving') {
+      statusEl.classList.add('status-saving');
+      statusEl.innerHTML = SAVING_HTML;
+    } else if (state === 'saved') {
+      statusEl.classList.add('status-saved', 'flash');
+      statusEl.innerHTML = SAVED_HTML;
+    } else if (state === 'error') {
+      statusEl.classList.add('status-error');
+      statusEl.innerHTML = ERROR_HTML;
+    }
+  }
+</script>
+</body>
+</html>

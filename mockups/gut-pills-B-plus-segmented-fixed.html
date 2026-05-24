@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GUT pills — B+ · Segmented control, fixed</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          background: '#fafafa',
+          foreground: '#0a0a0a',
+          card: '#ffffff',
+          'card-foreground': '#0a0a0a',
+          muted: '#f4f4f5',
+          'muted-foreground': '#71717a',
+          border: '#e4e4e7',
+          primary: '#0a0a0a',
+          'primary-foreground': '#fafafa',
+        },
+        borderRadius: { xl: '0.875rem' },
+      },
+    },
+  }
+</script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  .label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #71717a; text-transform: uppercase; }
+
+  /* B+ segmented control
+     Fixes vs B:
+       1. Track tint is darker (zinc-200) → stronger thumb contrast
+       2. Selected thumb has a real shadow + dark ring → unambiguous lift
+       3. Selected text is bold foreground; unselected is medium muted-foreground
+       4. min-height 44px → Apple HIG touch target
+  */
+  .segmented {
+    display: grid;
+    width: 100%;
+    background: #e4e4e7;        /* darker track than B (was zinc-100) */
+    border-radius: 12px;
+    padding: 4px;
+    gap: 2px;
+  }
+  .segmented.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .segmented.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+  .segment {
+    white-space: nowrap;
+    min-height: 44px;            /* WCAG 2.5.5 / Apple HIG */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: transparent;
+    border: 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #52525b;
+    cursor: pointer;
+    transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  }
+  .segment:hover { color: #0a0a0a; }
+  .segment:active { transform: scale(0.98); }
+
+  .segment.selected {
+    background: #ffffff;
+    color: #0a0a0a;
+    font-weight: 600;
+    /* Contrast carriers: real shadow + dark ring (not just a hairline). */
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 2px 6px rgba(0, 0, 0, 0.06),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Focus-visible for keyboard nav */
+  .segment:focus-visible {
+    outline: 2px solid #0a0a0a;
+    outline-offset: 2px;
+  }
+
+  /* For side-by-side comparison */
+  .seg-old {
+    display: grid;
+    width: 100%;
+    background: #f4f4f5;
+    border-radius: 10px;
+    padding: 4px;
+    gap: 2px;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .seg-old > button {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    border-radius: 7px;
+    background: transparent;
+    border: 0;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #52525b;
+    cursor: pointer;
+  }
+  .seg-old > button.selected {
+    background: #ffffff;
+    color: #0a0a0a;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04);
+  }
+</style>
+</head>
+<body class="bg-background text-foreground p-4">
+  <div class="mx-auto max-w-md space-y-4">
+
+    <header class="space-y-1">
+      <h1 class="text-xl font-bold">Mockup B+ — Segmented control, fixed</h1>
+      <p class="text-sm text-muted-foreground">Mockup B with three principled fixes: (1) <strong>"No movement" → "Skipped"</strong> so no label ever ellipsises, (2) <strong>darker track + real shadow + dark ring</strong> on the selected thumb so contrast is unambiguous, (3) <strong>44px min-height</strong> to clear the Apple HIG / WCAG 2.5.5 touch-target bar.</p>
+    </header>
+
+    <!-- GUT card with B+ -->
+    <div class="bg-card rounded-xl border border-border shadow-sm p-4 space-y-5">
+      <div class="flex items-center gap-2">
+        <svg class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.5.5 0 0 1-.96 0L9.68 3.18a.5.5 0 0 0-.96 0l-2.35 8.36A2 2 0 0 1 4.44 13H2"/></svg>
+        <span class="label">Gut</span>
+      </div>
+
+      <div>
+        <div class="text-sm font-semibold mb-2">Bloating</div>
+        <div class="segmented cols-4">
+          <button class="segment selected">None</button>
+          <button class="segment">Mild</button>
+          <button class="segment">Moderate</button>
+          <button class="segment">Severe</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-sm font-semibold mb-2">Stool</div>
+        <div class="segmented cols-3">
+          <button class="segment selected">Normal</button>
+          <button class="segment">Abnormal</button>
+          <button class="segment">Skipped</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-sm font-semibold mb-2">Joint pain / crepitus</div>
+        <div class="segmented cols-4">
+          <button class="segment selected">None</button>
+          <button class="segment">Mild</button>
+          <button class="segment">Moderate</button>
+          <button class="segment">Severe</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Side-by-side: B (old) vs B+ for the Stool row, since that's where the fixes land hardest -->
+    <div class="bg-card rounded-xl border border-border shadow-sm p-4 space-y-4">
+      <div class="label">Before / after — Stool row</div>
+
+      <div class="space-y-2">
+        <div class="text-xs font-bold text-muted-foreground uppercase tracking-wider">B (before)</div>
+        <div class="seg-old">
+          <button class="selected">Normal</button>
+          <button>Abnormal</button>
+          <button>No movement</button>
+        </div>
+        <ul class="text-xs text-muted-foreground space-y-0.5 pl-3 list-disc">
+          <li>Selected thumb hard to spot (white-on-zinc-100 ≈ 1.06:1)</li>
+          <li>36px height — under the 44px touch-target floor</li>
+          <li>"No movement" risks ellipsis at narrow widths</li>
+        </ul>
+      </div>
+
+      <div class="space-y-2 pt-2 border-t border-border">
+        <div class="text-xs font-bold text-muted-foreground uppercase tracking-wider">B+ (after)</div>
+        <div class="segmented cols-3">
+          <button class="segment selected">Normal</button>
+          <button class="segment">Abnormal</button>
+          <button class="segment">Skipped</button>
+        </div>
+        <ul class="text-xs text-muted-foreground space-y-0.5 pl-3 list-disc">
+          <li>Selected thumb pops via darker track + shadow + 1px dark ring</li>
+          <li>44px touch target on every segment</li>
+          <li>"Skipped" never ellipsises — same meaning, half the width</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Narrow viewport stress test -->
+    <div class="bg-card rounded-xl border border-border shadow-sm p-4 space-y-3">
+      <div class="label">Stress test — 280px container width</div>
+      <div style="max-width: 280px">
+        <div class="text-sm font-semibold mb-2">Stool</div>
+        <div class="segmented cols-3">
+          <button class="segment selected">Normal</button>
+          <button class="segment">Abnormal</button>
+          <button class="segment">Skipped</button>
+        </div>
+      </div>
+      <p class="text-xs text-muted-foreground">All three labels fully visible. No ellipsis, no wrap, equal widths, height locked.</p>
+    </div>
+
+    <!-- All selection states for the bloating-style row -->
+    <div class="bg-card rounded-xl border border-border shadow-sm p-4 space-y-3">
+      <div class="label">All four selection states (severity row)</div>
+
+      <div class="segmented cols-4">
+        <button class="segment selected">None</button>
+        <button class="segment">Mild</button>
+        <button class="segment">Moderate</button>
+        <button class="segment">Severe</button>
+      </div>
+      <div class="segmented cols-4">
+        <button class="segment">None</button>
+        <button class="segment selected">Mild</button>
+        <button class="segment">Moderate</button>
+        <button class="segment">Severe</button>
+      </div>
+      <div class="segmented cols-4">
+        <button class="segment">None</button>
+        <button class="segment">Mild</button>
+        <button class="segment selected">Moderate</button>
+        <button class="segment">Severe</button>
+      </div>
+      <div class="segmented cols-4">
+        <button class="segment">None</button>
+        <button class="segment">Mild</button>
+        <button class="segment">Moderate</button>
+        <button class="segment selected">Severe</button>
+      </div>
+    </div>
+
+    <!-- Principles scorecard for the recommendation -->
+    <div class="rounded-xl border border-dashed border-border bg-card p-3 text-xs text-muted-foreground space-y-1.5">
+      <p><strong class="text-foreground">Passes:</strong> visibility of information (no ellipsis, no wrap), recognition over recall (all labels always shown), state visibility (shadow + ring + bold text — three contrast carriers, not just background tint), touch target (44px), keyboard focus (focus-visible ring), reduced visual variance (unified chrome absorbs width differences).</p>
+      <p><strong class="text-foreground">Open call:</strong> the "Skipped" copy needs Leo's sign-off — semantically it should still map to <code>StoolStatus.none</code> in the API; only the UI string changes. Could also be "None today" if "Skipped" feels too action-y for a passive event.</p>
+    </div>
+
+  </div>
+</body>
+</html>
