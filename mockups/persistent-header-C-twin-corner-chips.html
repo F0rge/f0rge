@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Persistent Header — C · Twin Floating Corner Chips</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          background: '#fafafa',
+          foreground: '#0a0a0a',
+          card: '#ffffff',
+          'card-foreground': '#0a0a0a',
+          muted: '#f4f4f5',
+          'muted-foreground': '#71717a',
+          border: '#e4e4e7',
+          primary: '#0a0a0a',
+          'primary-foreground': '#fafafa',
+        },
+        borderRadius: { xl: '0.875rem' },
+      },
+    },
+  }
+</script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  .label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #71717a; text-transform: uppercase; }
+
+  /* Floating chips — two independent islands, no connecting bar */
+  .chip {
+    position: fixed;
+    top: 12px;
+    z-index: 50;
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 6px 20px -8px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.04);
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+  .chip:hover {
+    transform: translateY(1px);
+    box-shadow: 0 4px 14px -6px rgba(0,0,0,0.18);
+  }
+  .chip-left  { left: 12px; }
+  .chip-right { right: 12px; }
+
+  /* The date chip has a small calendar-style top tab in primary color for character */
+  .date-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px 6px 8px;
+    border-radius: 10px;
+  }
+  .date-chip .daynum {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: #0a0a0a;
+    color: #fafafa;
+    font-weight: 700;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .date-chip .meta { line-height: 1.1; }
+  .date-chip .meta .top { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #71717a; }
+  .date-chip .meta .bot { font-size: 12px; font-weight: 600; color: #0a0a0a; }
+
+  /* Save chip */
+  .save-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .save-chip.saving   { color: #52525b; }
+  .save-chip.saved    { color: #15803d; }
+  .save-chip.error    { color: #b45309; background: rgba(254, 243, 199, 0.85); }
+
+  /* Status dot with state */
+  .dot {
+    width: 8px; height: 8px; border-radius: 999px; display: inline-block;
+  }
+  .dot-saving { background: #71717a; position: relative; }
+  .dot-saving::after {
+    content: '';
+    position: absolute; inset: -3px;
+    border-radius: 999px;
+    border: 2px solid rgba(113,113,122,0.35);
+    border-top-color: transparent;
+    animation: spin 0.85s linear infinite;
+  }
+  .dot-saved  { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.18); }
+  .dot-error  { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.20); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Subtle pulse on saved transition */
+  @keyframes savedPulse {
+    0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+    100% { box-shadow: 0 0 0 14px rgba(34,197,94,0); }
+  }
+  .save-chip.saved .dot-saved.pulse { animation: savedPulse 700ms ease-out; }
+
+  /* Safe inset for chips so they don't crash into page content on narrow viewports */
+  @media (max-width: 480px) {
+    .chip { top: 8px; }
+    .chip-left { left: 8px; }
+    .chip-right { right: 8px; }
+  }
+
+  .scroll-room { min-height: 1800px; }
+</style>
+</head>
+<body class="bg-background text-foreground">
+
+  <!-- TWIN FLOATING CORNER CHIPS — always visible, no connecting bar -->
+
+  <!-- LEFT chip: Date -->
+  <button class="chip chip-left date-chip" title="Open date picker">
+    <span class="daynum">24</span>
+    <span class="meta">
+      <span class="top block">Sun · May</span>
+      <span class="bot block">2026</span>
+    </span>
+  </button>
+
+  <!-- RIGHT chip: Save status -->
+  <span id="saveChip" class="chip chip-right save-chip saved">
+    <span class="dot dot-saved pulse" id="saveDot"></span>
+    <span id="saveText">Saved just now</span>
+  </span>
+
+  <!-- Page content -->
+  <div class="mx-auto w-full max-w-3xl p-4 lg:px-8">
+
+    <!-- Design intent banner -->
+    <div class="mb-6 mt-12 rounded-xl border border-dashed border-border bg-card p-4 text-sm">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="label mb-1">Mockup C</div>
+          <h2 class="font-semibold text-base">Twin floating corner chips</h2>
+          <p class="mt-1 text-muted-foreground leading-relaxed">Date lives in a glassy chip pinned top-left, save status lives in a glassy chip pinned top-right. <strong>No bar connecting them</strong> — they're independent islands. The in-page header drops the date and pill entirely (those moved to the chips), so it's free to scroll away naturally without redundancy. Date chip doubles as a date picker tap target.</p>
+        </div>
+        <div class="flex flex-col gap-1.5 shrink-0">
+          <button onclick="setState('saving')" class="rounded-md border border-border bg-card px-2 py-1 text-xs hover:bg-muted">Saving…</button>
+          <button onclick="setState('saved')" class="rounded-md border border-border bg-card px-2 py-1 text-xs hover:bg-muted">Saved</button>
+          <button onclick="setState('error')" class="rounded-md border border-border bg-card px-2 py-1 text-xs hover:bg-muted">Error</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- IN-PAGE HEADER — date and save pill removed; only the title + utility actions remain -->
+    <div class="mb-6 flex items-center justify-between">
+      <h1 class="text-xl font-semibold tracking-tight">Check-in</h1>
+      <div class="flex items-center gap-1">
+        <button class="rounded-lg p-2 text-muted-foreground hover:bg-muted">
+          <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+        </button>
+        <button class="rounded-lg p-2 text-muted-foreground hover:bg-muted">
+          <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mock content -->
+    <div class="scroll-room space-y-3">
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Mood</div>
+        <div class="flex gap-2">
+          <button class="flex-1 rounded-lg border border-border py-3 text-2xl">😖</button>
+          <button class="flex-1 rounded-lg border border-border py-3 text-2xl">😕</button>
+          <button class="flex-1 rounded-lg border-2 border-primary bg-muted py-3 text-2xl">😐</button>
+          <button class="flex-1 rounded-lg border border-border py-3 text-2xl">🙂</button>
+          <button class="flex-1 rounded-lg border border-border py-3 text-2xl">😄</button>
+        </div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Bristol stool</div>
+        <div class="grid grid-cols-7 gap-1.5">
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">1</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">2</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">3</button>
+          <button class="aspect-square rounded-md border-2 border-primary bg-muted text-sm font-semibold">4</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">5</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">6</button>
+          <button class="aspect-square rounded-md border border-border text-sm font-semibold">7</button>
+        </div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Daily trackers</div>
+        <ul class="divide-y divide-border -mx-4">
+          <li class="flex items-center gap-3 px-4 py-3"><div class="size-9 rounded-lg bg-muted"></div><div class="flex-1 text-sm font-medium">Alcohol units</div><div class="text-sm font-semibold">2</div></li>
+          <li class="flex items-center gap-3 px-4 py-3"><div class="size-9 rounded-lg bg-muted"></div><div class="flex-1 text-sm font-medium">Caffeine</div><div class="text-sm font-semibold">1</div></li>
+          <li class="flex items-center gap-3 px-4 py-3"><div class="size-9 rounded-lg bg-muted"></div><div class="flex-1 text-sm font-medium">Water</div><div class="text-sm font-semibold">4</div></li>
+        </ul>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Notes</div>
+        <div class="h-32 rounded-md bg-muted/40"></div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Symptoms</div>
+        <div class="flex flex-wrap gap-2">
+          <span class="rounded-full bg-muted px-3 py-1 text-xs">Bloating</span>
+          <span class="rounded-full bg-muted px-3 py-1 text-xs">Headache</span>
+          <span class="rounded-full bg-muted px-3 py-1 text-xs">+ add</span>
+        </div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Supplements</div>
+        <div class="h-20 rounded-md bg-muted/40"></div>
+      </div>
+
+      <div class="bg-card rounded-xl border border-border shadow-sm p-4">
+        <div class="label mb-3">Meals</div>
+        <div class="h-40 rounded-md bg-muted/40"></div>
+      </div>
+    </div>
+
+    <p class="mt-8 text-center text-xs text-muted-foreground">↑ Scroll — chips stay anchored at the corners</p>
+  </div>
+
+<script>
+  const saveChip = document.getElementById('saveChip');
+  function setState(state) {
+    saveChip.className = 'chip chip-right save-chip ' + state;
+    if (state === 'saving') {
+      saveChip.innerHTML = `<span class="dot dot-saving"></span><span>Saving…</span>`;
+    } else if (state === 'saved') {
+      saveChip.innerHTML = `<span class="dot dot-saved pulse"></span><span>Saved just now</span>`;
+    } else if (state === 'error') {
+      saveChip.innerHTML = `<span class="dot dot-error"></span><span>Couldn't save — Retry</span>`;
+    }
+  }
+</script>
+</body>
+</html>

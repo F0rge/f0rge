@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
+import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { useEntry } from '@/lib/api/hooks'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
@@ -22,6 +23,7 @@ function formatDisplayDate(dateStr: string) {
 export default function CheckinDatePage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = use(params)
   const { data: entry, isLoading } = useEntry(date)
+  const headerRef = useRef<HTMLDivElement | null>(null)
 
   const [autosaveState, setAutosaveState] = useState<AutosaveState>({
     status: 'idle',
@@ -67,8 +69,18 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
   }, [])
 
   return (
-    <div className="mx-auto w-full max-w-7xl p-4 lg:px-8">
-      <div className="mb-6">
+    <>
+      <FloatingStatusCapsule
+        date={date}
+        status={autosaveState.status}
+        lastSavedAt={autosaveState.lastSavedAt}
+        errorMessage={autosaveState.errorMessage}
+        onRetry={() => retryRef.current?.()}
+        sentinelRef={headerRef}
+        hidden={isLoading}
+      />
+      <div className="mx-auto w-full max-w-7xl p-4 lg:px-8">
+      <div ref={headerRef} className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <Link
             href="/history"
@@ -109,5 +121,6 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
         onSelectPhoto={setFocusedPhotoId}
       />
     </div>
+    </>
   )
 }
