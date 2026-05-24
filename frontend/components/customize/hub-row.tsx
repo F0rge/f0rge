@@ -17,7 +17,8 @@ interface HubRowProps {
   icon: ReactNode
   title: string
   description: string
-  tier: Tier
+  /** Omit for meta rows (e.g. Reorder & visibility) that span all tiers. */
+  tier?: Tier
   /** When true, renders as a muted non-interactive row with "Coming soon" label. */
   comingSoon?: boolean
 }
@@ -47,7 +48,7 @@ export function HubRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{title}</span>
-          <TierPill tier={tier} />
+          {tier && <TierPill tier={tier} />}
           {comingSoon && (
             <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               Soon

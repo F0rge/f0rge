@@ -33,7 +33,6 @@ export default function CustomizePage() {
           icon={<Layers className="size-4" />}
           title="Reorder & visibility"
           description="Drag to reorder sections. Toggle which ones show on your daily check-in."
-          tier="core"
         />
         <HubRow
           href="/customize/core-scales"
