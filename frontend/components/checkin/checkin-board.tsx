@@ -112,8 +112,8 @@ export function CheckinBoard({
     )
   }, [])
 
-  // Re-read order + hidden whenever the window regains focus (user may have
-  // changed them in /customize/reorder and navigated back).
+  // Re-syncs on focus to cover bfcache restore and tab-switch — SPA navigation already
+  // remounts via Next.js, but back-button to a cached page does not.
   useEffect(() => {
     const handleFocus = () => {
       const savedOrder = loadCardOrder()
