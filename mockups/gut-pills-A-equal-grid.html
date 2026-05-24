@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GUT pills — A · Equal-width grid + nowrap</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          background: '#fafafa',
+          foreground: '#0a0a0a',
+          card: '#ffffff',
+          'card-foreground': '#0a0a0a',
+          muted: '#f4f4f5',
+          'muted-foreground': '#71717a',
+          border: '#e4e4e7',
+          primary: '#0a0a0a',
+          'primary-foreground': '#fafafa',
+        },
+        borderRadius: { xl: '0.875rem' },
+      },
+    },
+  }
+</script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  .label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #71717a; text-transform: uppercase; }
+
+  /* Equal-width grid: every pill in a row gets the same width via 1fr columns */
+  .pill-grid {
+    display: grid;
+    gap: 8px;
+  }
+  .pill-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .pill-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+  .pill {
+    /* Single-line by default — no wrap, no surprise height */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Consistent height across all pills regardless of label length */
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border-radius: 12px;
+    border: 1px solid #e4e4e7;
+    background: #ffffff;
+    font-size: 14px;
+    font-weight: 500;
+    color: #0a0a0a;
+    cursor: pointer;
+    transition: background-color 120ms, border-color 120ms;
+  }
+  .pill:hover { background: #fafafa; }
+  .pill.selected {
+    background: #0a0a0a;
+    color: #fafafa;
+    border-color: #0a0a0a;
+  }
+</style>
+</head>
+<body class="bg-background text-foreground p-4">
+  <div class="mx-auto max-w-md space-y-4">
+
+    <header class="space-y-1">
+      <h1 class="text-xl font-bold">Mockup A — Equal-width grid + nowrap</h1>
+      <p class="text-sm text-muted-foreground">CSS grid forces every pill in a row to the <strong>same width</strong>, and <code>white-space: nowrap</code> keeps each pill on a single line. "No movement" no longer wraps and forces its siblings to grow uniformly. Minimal change from today — same pill chrome, just laid out as a grid.</p>
+    </header>
+
+    <!-- GUT card -->
+    <div class="bg-card rounded-xl border border-border shadow-sm p-4 space-y-5">
+      <div class="flex items-center gap-2">
+        <svg class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.5.5 0 0 1-.96 0L9.68 3.18a.5.5 0 0 0-.96 0l-2.35 8.36A2 2 0 0 1 4.44 13H2"/></svg>
+        <span class="label">Gut</span>
+      </div>
+
+      <!-- Bloating: 4 options, ordinal -->
+      <div>
+        <div class="text-sm font-semibold mb-2">Bloating</div>
+        <div class="pill-grid cols-4">
+          <button class="pill selected">None</button>
+          <button class="pill">Mild</button>
+          <button class="pill">Moderate</button>
+          <button class="pill">Severe</button>
+        </div>
+      </div>
+
+      <!-- Stool: 3 options, categorical — and this is where today breaks -->
+      <div>
+        <div class="text-sm font-semibold mb-2">Stool</div>
+        <div class="pill-grid cols-3">
+          <button class="pill selected">Normal</button>
+          <button class="pill">Abnormal</button>
+          <button class="pill">No movement</button>
+        </div>
+      </div>
+
+      <!-- Joint pain -->
+      <div>
+        <div class="text-sm font-semibold mb-2">Joint pain / crepitus</div>
+        <div class="pill-grid cols-4">
+          <button class="pill selected">None</button>
+          <button class="pill">Mild</button>
+          <button class="pill">Moderate</button>
+          <button class="pill">Severe</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trade-off note -->
+    <div class="rounded-xl border border-dashed border-border bg-card p-3 text-xs text-muted-foreground space-y-1.5">
+      <p><strong class="text-foreground">Wins:</strong> single-line pills always; equal widths within a row; truncation fallback if a label is ever absurdly long; minimal code change.</p>
+      <p><strong class="text-foreground">Trade-offs:</strong> short labels (Normal, Abnormal) get extra padding around them — visually a touch loose. Cross-row widths still differ (4-col cells narrower than 3-col), but that's hard to perceive when rows are stacked.</p>
+    </div>
+
+    <!-- Compact size variant for context -->
+    <div class="bg-card rounded-xl border border-border shadow-sm p-4 space-y-3">
+      <div class="label">Same pattern, narrower 320px window</div>
+      <div style="max-width: 280px">
+        <div class="text-sm font-semibold mb-2">Stool</div>
+        <div class="pill-grid cols-3">
+          <button class="pill selected">Normal</button>
+          <button class="pill">Abnormal</button>
+          <button class="pill">No movement</button>
+        </div>
+      </div>
+      <p class="text-xs text-muted-foreground">If the container ever gets too narrow for "No movement" on one line, the text ellipsises rather than wraps — height stays constant. (Real product fallback: shorten copy to "Skipped" or rely on the abbreviation.)</p>
+    </div>
+
+  </div>
+</body>
+</html>

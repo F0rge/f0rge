@@ -51,7 +51,7 @@ export function GutCard({
             options={[
               { value: 'normal', label: 'Normal' },
               { value: 'abnormal', label: 'Abnormal' },
-              { value: 'none', label: 'No movement' },
+              { value: 'none', label: 'Skipped' },
             ]}
           />
           {stoolStatus === 'abnormal' && (
