@@ -7,17 +7,18 @@ import { TierPill } from '@/components/customize/tier-pill'
 export const metadata = { title: 'Core scales' }
 
 // Scale definitions — static, read-only by design.
+// Labels and values must match wellbeing-card.tsx and gut-card.tsx exactly.
 const WELLBEING_SCALES = [
-  { label: 'Overall',       values: 'Poor · Okay · Good' },
-  { label: 'Sleep quality', values: 'Poor · Okay · Good' },
-  { label: 'Stress',        values: 'Low · Med · High' },
-  { label: 'Neuro clarity', values: 'Foggy · Okay · Sharp' },
+  { label: 'How was your day?',       values: 'Very Poor · Standard · Very Good' },
+  { label: 'Sleep quality (last night)', values: 'Poor · OK · Good' },
+  { label: 'Stress level',            values: 'Low · Medium · High' },
+  { label: 'Neuro symptoms',          values: 'Worse · Baseline · Better' },
 ]
 
 const GUT_SCALES = [
-  { label: 'Bloating',   values: 'None · Mild · Moderate · Severe' },
-  { label: 'Stool',      values: 'Normal · Off · Skipped · plus Bristol type (1–7)' },
-  { label: 'Joint pain', values: 'None · Mild · Moderate · Severe' },
+  { label: 'Bloating',            values: 'None · Mild · Moderate · Severe' },
+  { label: 'Stool',               values: 'Normal · Abnormal · Skipped (when Abnormal: Bristol type 1–7)' },
+  { label: 'Joint pain / crepitus', values: 'None · Mild · Moderate · Severe' },
 ]
 
 interface ScaleRowProps {
