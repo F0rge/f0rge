@@ -8,7 +8,7 @@
  * and the same dnd-kit wiring (verticalListSortingStrategy — single-column list).
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import {
   DndContext,
@@ -52,6 +52,28 @@ const CARD_META: Record<CardId, CardMeta & { meta: string }> = {
   symptoms:    { id: 'symptoms',    icon: <Zap className="size-4" />,      label: 'Symptoms',        meta: 'Custom' },
   trackers:    { id: 'trackers',    icon: <Heart className="size-4" />,    label: 'Daily trackers',  meta: 'Custom' },
   notes:       { id: 'notes',       icon: <BookOpen className="size-4" />, label: 'Notes',           meta: 'Free text' },
+}
+
+// ── Module-level stores for useSyncExternalStore ─────────────────────────────
+// useSyncExternalStore is SSR-safe: getServerSnapshot runs on the server and
+// during hydration (returning the stable default), getSnapshot runs on the client
+// after hydration (returning the real localStorage value). React reconciles without
+// a hydration mismatch. After hydration, any call to notify() triggers a re-read.
+// 'use client' does NOT skip SSR — App Router still prerenders client components.
+
+const cardOrderListeners = new Set<() => void>()
+const hiddenCardsListeners = new Set<() => void>()
+
+function notifyCardOrder() { cardOrderListeners.forEach((fn) => fn()) }
+function notifyHiddenCards() { hiddenCardsListeners.forEach((fn) => fn()) }
+
+function subscribeCardOrder(fn: () => void) {
+  cardOrderListeners.add(fn)
+  return () => { cardOrderListeners.delete(fn) }
+}
+function subscribeHiddenCards(fn: () => void) {
+  hiddenCardsListeners.add(fn)
+  return () => { hiddenCardsListeners.delete(fn) }
 }
 
 // ── SortableReorderRow ────────────────────────────────────────────────────────
@@ -110,10 +132,21 @@ function SortableReorderRow({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReorderPage() {
-  // Initialize directly from localStorage — this is a client-only page ('use client')
-  // so there is no SSR mismatch risk. loadCardOrder/loadHiddenCards guard typeof window.
-  const [cardOrder, setCardOrder] = useState<CardId[]>(loadCardOrder)
-  const [hiddenCards, setHiddenCards] = useState<CardId[]>(loadHiddenCards)
+  // useSyncExternalStore: SSR-safe reads from localStorage.
+  // getServerSnapshot returns the stable default (same on every server render).
+  // getSnapshot returns the real localStorage value on the client.
+  // Mutations call save* helpers then notify* to re-read from localStorage.
+  const cardOrder = useSyncExternalStore(
+    subscribeCardOrder,
+    () => loadCardOrder(),
+    () => [...DEFAULT_CARD_ORDER] as CardId[],
+  )
+  const hiddenCards = useSyncExternalStore(
+    subscribeHiddenCards,
+    () => loadHiddenCards(),
+    () => [] as CardId[],
+  )
+
   const [activeId, setActiveId] = useState<CardId | null>(null)
 
   // ── dnd-kit sensors ───────────────────────────────────────────────────────
@@ -135,13 +168,12 @@ export default function ReorderPage() {
     setActiveId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
-    setCardOrder((prev) => {
-      const oldIndex = prev.indexOf(active.id as CardId)
-      const newIndex = prev.indexOf(over.id as CardId)
-      const next = arrayMove(prev, oldIndex, newIndex)
-      saveCardOrder(next)
-      return next
-    })
+    const prev = loadCardOrder()
+    const oldIndex = prev.indexOf(active.id as CardId)
+    const newIndex = prev.indexOf(over.id as CardId)
+    const next = arrayMove(prev, oldIndex, newIndex)
+    saveCardOrder(next)
+    notifyCardOrder()
   }, [])
 
   const handleDragCancel = useCallback(() => {
@@ -150,40 +182,37 @@ export default function ReorderPage() {
 
   // ── Arrow move handlers ───────────────────────────────────────────────────
   const handleMoveUp = useCallback((id: CardId) => {
-    setCardOrder((prev) => {
-      const idx = prev.indexOf(id)
-      if (idx <= 0) return prev
-      const next = arrayMove(prev, idx, idx - 1)
-      saveCardOrder(next)
-      return next
-    })
+    const prev = loadCardOrder()
+    const idx = prev.indexOf(id)
+    if (idx <= 0) return
+    const next = arrayMove(prev, idx, idx - 1)
+    saveCardOrder(next)
+    notifyCardOrder()
   }, [])
 
   const handleMoveDown = useCallback((id: CardId) => {
-    setCardOrder((prev) => {
-      const idx = prev.indexOf(id)
-      if (idx < 0 || idx >= prev.length - 1) return prev
-      const next = arrayMove(prev, idx, idx + 1)
-      saveCardOrder(next)
-      return next
-    })
+    const prev = loadCardOrder()
+    const idx = prev.indexOf(id)
+    if (idx < 0 || idx >= prev.length - 1) return
+    const next = arrayMove(prev, idx, idx + 1)
+    saveCardOrder(next)
+    notifyCardOrder()
   }, [])
 
   // ── Visibility toggle ─────────────────────────────────────────────────────
   const handleToggleHidden = useCallback((id: CardId) => {
-    setHiddenCards((prev) => {
-      const next = prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id]
-      saveHiddenCards(next)
-      return next
-    })
+    const prev = loadHiddenCards()
+    const next = prev.includes(id) ? prev.filter((h) => h !== id) : [...prev, id]
+    saveHiddenCards(next)
+    notifyHiddenCards()
   }, [])
 
   // ── Reset ─────────────────────────────────────────────────────────────────
   const handleReset = useCallback(() => {
     resetCardOrder()
     resetHiddenCards()
-    setCardOrder([...DEFAULT_CARD_ORDER])
-    setHiddenCards([])
+    notifyCardOrder()
+    notifyHiddenCards()
   }, [])
 
   return (
