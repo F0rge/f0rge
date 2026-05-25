@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { toast } from 'sonner'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { CatalogSection } from '@/components/customize/catalog-section'
 import {
@@ -19,11 +20,17 @@ export default function CatalogsClient() {
   const updateDietTag = useUpdateDietTagCatalogItem()
 
   function handleToggleSupplement(key: string, currentArchived: boolean) {
-    updateSupplement.mutate({ key, data: { archived: !currentArchived } })
+    updateSupplement.mutate(
+      { key, data: { archived: !currentArchived } },
+      { onError: () => toast.error('Failed to update supplement') },
+    )
   }
 
   function handleToggleDietTag(key: string, currentArchived: boolean) {
-    updateDietTag.mutate({ key, data: { archived: !currentArchived } })
+    updateDietTag.mutate(
+      { key, data: { archived: !currentArchived } },
+      { onError: () => toast.error('Failed to update diet tag') },
+    )
   }
 
   const activeSupplements = supplements.filter((s) => !s.archived).length

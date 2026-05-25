@@ -101,10 +101,8 @@ export function CatalogSection({
       {/* Request stub */}
       <button
         type="button"
-        aria-disabled="true"
-        onClick={undefined}
+        disabled
         className="mt-2 w-full rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground opacity-50 cursor-not-allowed"
-        tabIndex={-1}
       >
         + Request a new item
       </button>

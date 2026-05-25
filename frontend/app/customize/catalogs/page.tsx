@@ -5,6 +5,12 @@
  *
  * Loaded via next/dynamic({ ssr: false }) so the client component
  * can use React Query hooks without any SSR mismatch risk.
+ *
+ * NOTE: in Next.js 16, `dynamic({ ssr: false })` is only valid inside
+ * a Client Component. Removing the `'use client'` directive here
+ * breaks the build with "ssr: false is not allowed with next/dynamic
+ * in Server Components" — verified 2026-05-25. Same constraint applies
+ * to `customize/reorder/page.tsx`.
  */
 
 import dynamic from 'next/dynamic'
