@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from sqlalchemy import update
 
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.tracker import Tracker
@@ -76,8 +74,29 @@ async def update_tracker(db: AsyncSession, tracker_id: int, body: TrackerUpdate)
 
 
 async def reorder_trackers(db: AsyncSession, order: list[int]) -> list[Tracker]:
+    # Only non-seed, non-archived trackers are reorderable.
+    eligible_rows = (
+        await db.execute(
+            select(Tracker.id).where(
+                Tracker.archived.is_(False),
+                Tracker.is_seed.is_(False),
+            )
+        )
+    ).scalars().all()
+    eligible_ids = set(eligible_rows)
+    unknown = [tid for tid in order if tid not in eligible_ids]
+    if unknown:
+        raise ValidationError(f"Cannot reorder tracker ids {unknown}: not found or not reorderable")
+
+    # Offset past seed positions so customs always sort after seeds on the daily card.
+    seed_count = (
+        await db.execute(select(func.count()).select_from(Tracker).where(Tracker.is_seed.is_(True)))
+    ).scalar() or 0
+
     for idx, tracker_id in enumerate(order):
-        await db.execute(update(Tracker).where(Tracker.id == tracker_id).values(position=idx))
+        await db.execute(
+            update(Tracker).where(Tracker.id == tracker_id).values(position=idx + seed_count)
+        )
     await db.commit()
     return await list_trackers(db, include_archived=False)
 

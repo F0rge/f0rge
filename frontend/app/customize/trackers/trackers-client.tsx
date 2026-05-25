@@ -178,8 +178,9 @@ export default function TrackersClient() {
   // Archived section toggle
   const [archivedOpen, setArchivedOpen] = useState(false)
 
-  // dnd-kit drag state (track active id for DragOverlay)
+  // dnd-kit drag state (track active id + initial width so DragOverlay matches the source row)
   const [activeId, setActiveId] = useState<number | null>(null)
+  const [dragOverlayWidth, setDragOverlayWidth] = useState<number | undefined>(undefined)
   const activeTracker = active.find((t) => t.id === activeId) ?? null
 
   const sensors = useSensors(
@@ -189,6 +190,10 @@ export default function TrackersClient() {
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as number)
+    // Capture the source row's rendered width so the overlay doesn't collapse
+    // when it renders outside the parent list (see dnd_kit_grid_drag_reorder.md).
+    const rect = event.active.rect.current.initial
+    setDragOverlayWidth(rect ? rect.width : undefined)
   }, [])
 
   function handleDragEnd(event: DragEndEvent) {
@@ -309,7 +314,11 @@ export default function TrackersClient() {
           </SortableContext>
 
           <DragOverlay>
-            {activeTracker !== null ? <GhostRow tracker={activeTracker} /> : null}
+            {activeTracker !== null ? (
+              <div style={{ width: dragOverlayWidth }}>
+                <GhostRow tracker={activeTracker} />
+              </div>
+            ) : null}
           </DragOverlay>
         </DndContext>
       )}

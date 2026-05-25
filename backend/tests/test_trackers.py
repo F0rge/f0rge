@@ -31,6 +31,7 @@ from app.services.trackers import (
     create_tracker,
     list_tracker_values,
     list_trackers,
+    reorder_trackers,
     sync_seed_tracker_log_from_entry,
     update_tracker,
     upsert_tracker_value,
@@ -86,6 +87,32 @@ async def _get_seeded_tracker(db: AsyncSession, name: str) -> Tracker:
     ).scalar_one_or_none()
     assert tracker is not None, f"Seeded tracker '{name}' not found — run create_all"
     return tracker
+
+
+async def _insert_seeds(db: AsyncSession) -> None:
+    """Insert the 4 seed trackers that Alembic migration 006 would create.
+
+    create_all does NOT run migrations, so tests that depend on seed presence
+    (e.g. reorder position offsets) must call this first.
+    """
+    for name, kind, icon, unit, position in [
+        ("Alcohol units", "counter", "wine", "units", 0),
+        ("Caffeine servings", "counter", "coffee", "servings", 1),
+        ("Sick", "binary", "thermometer", None, 2),
+        ("Hot shower", "binary", "droplets", None, 3),
+    ]:
+        db.add(
+            Tracker(
+                name=name,
+                kind=kind,
+                icon=icon,
+                unit=unit,
+                position=position,
+                archived=False,
+                is_seed=True,
+            )
+        )
+    await db.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +264,85 @@ async def test_update_tracker_rejects_kind_change(async_db: AsyncSession) -> Non
 async def test_update_tracker_not_found(async_db: AsyncSession) -> None:
     with pytest.raises(NotFoundError):
         await update_tracker(async_db, 999999, TrackerUpdate(name="Ghost"))
+
+
+# ---------------------------------------------------------------------------
+# reorder_trackers — bulk position update offset past seed range
+# ---------------------------------------------------------------------------
+
+
+async def test_reorder_trackers_persists_order_offset_past_seeds(
+    async_db: AsyncSession,
+) -> None:
+    """Reorder writes positions = idx + seed_count so customs sort after the 4 seeds."""
+    await _insert_seeds(async_db)
+    a = await create_tracker(async_db, TrackerCreate(name="ReorderA", kind="counter"))
+    b = await create_tracker(async_db, TrackerCreate(name="ReorderB", kind="counter"))
+    c = await create_tracker(async_db, TrackerCreate(name="ReorderC", kind="counter"))
+
+    result = await reorder_trackers(async_db, [c.id, a.id, b.id])
+
+    by_id = {t.id: t.position for t in result}
+    # 4 seeded trackers occupy positions 0..3, customs get 4, 5, 6 in given order.
+    assert by_id[c.id] == 4
+    assert by_id[a.id] == 5
+    assert by_id[b.id] == 6
+
+    # list_trackers sorts by position then name → seeds first, then customs in given order.
+    active = await list_trackers(async_db, include_archived=False)
+    custom_names_in_order = [t.name for t in active if not t.is_seed]
+    assert custom_names_in_order == ["ReorderC", "ReorderA", "ReorderB"]
+
+
+async def test_reorder_trackers_keeps_seeds_first_on_daily_card(
+    async_db: AsyncSession,
+) -> None:
+    """After reorder, list_trackers returns seeds at positions 0..3 then customs at 4+."""
+    await _insert_seeds(async_db)
+    a = await create_tracker(async_db, TrackerCreate(name="ReorderA", kind="counter"))
+    b = await create_tracker(async_db, TrackerCreate(name="ReorderB", kind="counter"))
+    await reorder_trackers(async_db, [b.id, a.id])
+
+    active = await list_trackers(async_db, include_archived=False)
+    # First 4 are seeds (positions 0..3), then customs in the chosen order.
+    assert [t.is_seed for t in active] == [True, True, True, True, False, False]
+    assert [t.name for t in active[-2:]] == ["ReorderB", "ReorderA"]
+
+
+async def test_reorder_trackers_rejects_unknown_id(async_db: AsyncSession) -> None:
+    a = await create_tracker(async_db, TrackerCreate(name="ReorderKnown", kind="counter"))
+    with pytest.raises(ValidationError):
+        await reorder_trackers(async_db, [a.id, 999999])
+
+
+async def test_reorder_trackers_rejects_seeded_id(async_db: AsyncSession) -> None:
+    """Seeded trackers are not reorderable through this endpoint."""
+    await _insert_seeds(async_db)
+    seed = await _get_seeded_tracker(async_db, "Alcohol units")
+    custom = await create_tracker(async_db, TrackerCreate(name="ReorderCustom", kind="counter"))
+    with pytest.raises(ValidationError):
+        await reorder_trackers(async_db, [custom.id, seed.id])
+
+
+async def test_reorder_trackers_rejects_archived_id(async_db: AsyncSession) -> None:
+    tracker = await create_tracker(async_db, TrackerCreate(name="ReorderArchived", kind="counter"))
+    await update_tracker(async_db, tracker.id, TrackerUpdate(archived=True))
+    with pytest.raises(ValidationError):
+        await reorder_trackers(async_db, [tracker.id])
+
+
+# ---------------------------------------------------------------------------
+# OrderRequest schema validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_order_request_rejects_duplicates() -> None:
+    from app.schemas.tracker import OrderRequest
+    from pydantic import ValidationError as PydanticValidationError
+
+    with pytest.raises(PydanticValidationError, match="duplicate"):
+        OrderRequest(order=[1, 2, 1])
 
 
 # ---------------------------------------------------------------------------
