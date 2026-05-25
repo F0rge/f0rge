@@ -5,6 +5,8 @@ import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import update
+
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
@@ -71,6 +73,13 @@ async def update_tracker(db: AsyncSession, tracker_id: int, body: TrackerUpdate)
     await db.commit()
     await db.refresh(tracker)
     return tracker
+
+
+async def reorder_trackers(db: AsyncSession, order: list[int]) -> list[Tracker]:
+    for idx, tracker_id in enumerate(order):
+        await db.execute(update(Tracker).where(Tracker.id == tracker_id).values(position=idx))
+    await db.commit()
+    return await list_trackers(db, include_archived=False)
 
 
 async def list_tracker_values(db: AsyncSession, date: datetime.date) -> list[TrackerLog]:

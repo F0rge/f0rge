@@ -49,3 +49,7 @@ class TrackerValueResponse(BaseModel):
 
 class TrackerValueUpsert(BaseModel):
     value: int
+
+
+class OrderRequest(BaseModel):
+    order: list[int]
