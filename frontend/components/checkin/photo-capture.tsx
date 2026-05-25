@@ -10,7 +10,7 @@ interface StagedPhoto {
   file: File
   label: string
   mealTime: Date
-  status: 'uploading' | 'uploaded' | 'error'
+  status: 'staged' | 'uploading' | 'uploaded' | 'error'
   serverPhotoId?: number
   errorMessage?: string
 }
@@ -38,50 +38,17 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     const incoming = Array.from(files)
     const now = new Date()
 
-    // Stage all files immediately so UI shows them.
+    // Stage all files so the UI shows them immediately. Upload is triggered
+    // manually after the user sets the label and meal time.
     const staged: StagedPhoto[] = incoming.map((file) => ({
       id: generateId(),
       file,
       label: '',
       mealTime: new Date(now),
-      status: 'uploading',
+      status: 'staged',
     }))
     setPhotos((prev) => [...prev, ...staged])
-
-    // Ensure entry exists before any upload. Mark form dirty so subsequent
-    // field edits autosave (enabled gate requires isDirty).
-    await ensureEntryExists()
-    onEntryEnsured?.()
-
-    // Upload each file and update its status.
-    for (const photo of staged) {
-      try {
-        const result = await uploadPhoto.mutateAsync({
-          date,
-          file: photo.file,
-          label: photo.label || undefined,
-          mealTime: photo.mealTime,
-        }) as { id: number }
-
-        setPhotos((prev) =>
-          prev.map((p) =>
-            p.id === photo.id
-              ? { ...p, status: 'uploaded', serverPhotoId: result.id }
-              : p,
-          ),
-        )
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Upload failed'
-        setPhotos((prev) =>
-          prev.map((p) =>
-            p.id === photo.id
-              ? { ...p, status: 'error', errorMessage: msg }
-              : p,
-          ),
-        )
-      }
-    }
-  }, [date, ensureEntryExists, onEntryEnsured, uploadPhoto])
+  }, [])
 
   const removePhoto = useCallback(async (id: string) => {
     const photo = photos.find((p) => p.id === id)
@@ -100,6 +67,44 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
   const retryUpload = useCallback(async (id: string) => {
     const photo = photos.find((p) => p.id === id)
     if (!photo) return
+
+    setPhotos((prev) =>
+      prev.map((p) => p.id === id ? { ...p, status: 'uploading', errorMessage: undefined } : p),
+    )
+
+    await ensureEntryExists()
+    onEntryEnsured?.()
+
+    try {
+      const result = await uploadPhoto.mutateAsync({
+        date,
+        file: photo.file,
+        label: photo.label || undefined,
+        mealTime: photo.mealTime,
+      }) as { id: number }
+
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, status: 'uploaded', serverPhotoId: result.id }
+            : p,
+        ),
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed'
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, status: 'error', errorMessage: msg }
+            : p,
+        ),
+      )
+    }
+  }, [photos, date, ensureEntryExists, onEntryEnsured, uploadPhoto])
+
+  const triggerUpload = useCallback(async (id: string) => {
+    const photo = photos.find((p) => p.id === id)
+    if (!photo || photo.status !== 'staged') return
 
     setPhotos((prev) =>
       prev.map((p) => p.id === id ? { ...p, status: 'uploading', errorMessage: undefined } : p),
@@ -219,6 +224,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                         )
                       }}
                       disabled={photo.status === 'uploading'}
+                      ref={(el) => { if (photo.status === 'staged' && el) el.focus() }}
                       placeholder="Label (optional)"
                       className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                     />
@@ -233,11 +239,6 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                       Retry upload
                     </button>
                   )}
-                  {photo.status === 'uploaded' && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Label and meal-time edits available after save (coming soon)
-                    </p>
-                  )}
                 </div>
                 <button
                   type="button"
@@ -247,6 +248,15 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                   <X className="size-4" />
                 </button>
               </div>
+              {photo.status === 'staged' && (
+                <button
+                  type="button"
+                  onClick={() => void triggerUpload(photo.id)}
+                  className="mt-2 flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  Upload
+                </button>
+              )}
               {photo.status !== 'uploaded' && (
                 <div>
                   <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
