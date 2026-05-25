@@ -222,17 +222,6 @@ export function useDietTagCatalog(includeArchived = false) {
   })
 }
 
-export function useAddDietTagCatalogItem() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (data: { key: string; label: string }) =>
-      apiPost('/diet-tags/catalog', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['diet-tag-catalog'] })
-    },
-  })
-}
-
 export function useUpdateDietTagCatalogItem() {
   const queryClient = useQueryClient()
   return useMutation({

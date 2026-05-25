@@ -122,9 +122,10 @@ interface DietRiskSectionProps {
   dietRisk: string
   onToggle: (key: string) => void
   catalog: DietTagCatalogItem[]
+  catalogLoading: boolean
 }
 
-function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle, catalog }: DietRiskSectionProps) {
+function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle, catalog, catalogLoading }: DietRiskSectionProps) {
   const hasPhotos = existingPhotos.length > 0
   const signal: PhotoSignal = existingEntry?.photo_signal ?? {
     flags: [],
@@ -162,7 +163,13 @@ function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle, ca
         <p className="text-xs text-muted-foreground">
           {hasPhotos ? 'Add anything else you ate or drank' : 'Add anything you ate or drank'}
         </p>
-        {manualOptions.length > 0 && (
+        {catalogLoading ? (
+          <div className="grid grid-cols-2 gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-12 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+        ) : manualOptions.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {manualOptions.map((opt) => {
               const selected = selectedFlags.includes(opt.key)
@@ -219,7 +226,7 @@ export function FoodCard({
   const deletePhotoMutation = useDeletePhoto()
   const queryClient = useQueryClient()
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const { data: dietCatalog = [] } = useDietTagCatalog(false)
+  const { data: dietCatalog = [], isLoading: dietCatalogLoading } = useDietTagCatalog(false)
 
   const handleDeletePhoto = async (photoId: number) => {
     setDeletingId(photoId)
@@ -251,6 +258,7 @@ export function FoodCard({
           dietRisk={dietRisk}
           onToggle={onDietToggle}
           catalog={dietCatalog}
+          catalogLoading={dietCatalogLoading}
         />
 
         {existingPhotos.length > 0 && (

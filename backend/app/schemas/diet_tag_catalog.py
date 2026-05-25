@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,8 +10,6 @@ class DietTagCatalogItemResponse(BaseModel):
     key: str
     label: str
     archived: bool
-    first_used_at: Optional[datetime.datetime] = None
-    last_used_at: Optional[datetime.datetime] = None
     sort_order: int
 
     model_config = ConfigDict(from_attributes=True)

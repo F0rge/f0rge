@@ -13,11 +13,22 @@ import {
 } from '@/lib/api/hooks'
 
 export default function CatalogsClient() {
-  const { data: supplements = [] } = useSupplementCatalog(true)
-  const { data: dietTags = [] } = useDietTagCatalog(true)
+  const {
+    data: supplements = [],
+    isLoading: supplementsLoading,
+    isError: supplementsError,
+  } = useSupplementCatalog(true)
+  const {
+    data: dietTags = [],
+    isLoading: dietTagsLoading,
+    isError: dietTagsError,
+  } = useDietTagCatalog(true)
 
   const updateSupplement = useUpdateSupplementCatalogItem()
   const updateDietTag = useUpdateDietTagCatalogItem()
+
+  const isLoading = supplementsLoading || dietTagsLoading
+  const hasError = supplementsError || dietTagsError
 
   function handleToggleSupplement(key: string, currentArchived: boolean) {
     updateSupplement.mutate(
@@ -56,21 +67,36 @@ export default function CatalogsClient() {
         entries keep their tags.
       </TierBanner>
 
-      <CatalogSection
-        title="Supplements"
-        items={supplements}
-        onToggleArchive={handleToggleSupplement}
-        selectedCount={activeSupplements}
-        totalCount={supplements.length}
-      />
+      {hasError ? (
+        <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          Couldn&apos;t load catalogs. Refresh the page to try again.
+        </div>
+      ) : isLoading ? (
+        <div className="mt-4 space-y-3">
+          <div className="h-5 w-28 animate-pulse rounded bg-muted" />
+          <div className="h-10 w-full animate-pulse rounded bg-muted" />
+          <div className="h-5 w-28 animate-pulse rounded bg-muted" />
+          <div className="h-10 w-full animate-pulse rounded bg-muted" />
+        </div>
+      ) : (
+        <>
+          <CatalogSection
+            title="Supplements"
+            items={supplements}
+            onToggleArchive={handleToggleSupplement}
+            selectedCount={activeSupplements}
+            totalCount={supplements.length}
+          />
 
-      <CatalogSection
-        title="Diet tags"
-        items={dietTags}
-        onToggleArchive={handleToggleDietTag}
-        selectedCount={activeDietTags}
-        totalCount={dietTags.length}
-      />
+          <CatalogSection
+            title="Diet tags"
+            items={dietTags}
+            onToggleArchive={handleToggleDietTag}
+            selectedCount={activeDietTags}
+            totalCount={dietTags.length}
+          />
+        </>
+      )}
     </div>
   )
 }

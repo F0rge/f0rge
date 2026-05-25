@@ -95,8 +95,6 @@ export interface DietTagCatalogItem {
   key: string
   label: string
   archived: boolean
-  first_used_at: string | null
-  last_used_at: string | null
   sort_order: number
 }
 
