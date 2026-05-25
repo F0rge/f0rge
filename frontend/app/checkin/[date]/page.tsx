@@ -2,9 +2,8 @@
 
 import { use, useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Settings2 } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
-import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { useEntry } from '@/lib/api/hooks'
@@ -89,12 +88,13 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
             <ArrowLeft className="size-4" />
             Back
           </Link>
-          <AutosaveStatusPill
-            status={autosaveState.status}
-            lastSavedAt={autosaveState.lastSavedAt}
-            errorMessage={autosaveState.errorMessage}
-            onRetry={() => retryRef.current?.()}
-          />
+          <Link
+            href="/customize"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Settings2 className="size-3.5" />
+            Customize
+          </Link>
         </div>
         <h1 className="text-xl font-semibold tracking-tight">Edit Entry</h1>
         <p className="text-sm text-muted-foreground">{formatDisplayDate(date)}</p>

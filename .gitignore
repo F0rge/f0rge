@@ -42,6 +42,9 @@ Thumbs.db
 # QA screenshots (local agent evidence; not committed)
 qa-screenshots/
 
-# Claude agent state — runtime only, never tracked
-# Stripped from history; restore locally from backup if needed.
-**/.claude/
+# Claude agent state — runtime only, never tracked.
+# Exception: .claude/agents/ holds project-level sub-agent instructions
+# (UX contracts, conventions) that ARE intended to ship in the repo so
+# every contributor / future clone gets the same agent behavior.
+.claude/*
+!.claude/agents/
