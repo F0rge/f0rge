@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.middleware.auth import get_current_session
 from app.schemas.tracker import (
+    OrderRequest,
     TrackerCreate,
     TrackerResponse,
     TrackerUpdate,
@@ -37,6 +38,14 @@ async def create_tracker(
     db: AsyncSession = Depends(get_db),
 ):
     return await trackers_service.create_tracker(db, body)
+
+
+@router.patch("/trackers/reorder", response_model=list[TrackerResponse])
+async def reorder_trackers(
+    body: OrderRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    return await trackers_service.reorder_trackers(db, body.order)
 
 
 @router.patch("/trackers/{tracker_id}", response_model=TrackerResponse)
