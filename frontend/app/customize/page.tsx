@@ -47,7 +47,6 @@ export default function CustomizePage() {
           title="Catalogs"
           description="Pick supplements and diet tags to track from curated lists."
           tier="catalog"
-          comingSoon
         />
         <HubRow
           href="/customize/trackers"

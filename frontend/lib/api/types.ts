@@ -90,6 +90,14 @@ export interface SupplementCatalogItem {
   sort_order: number
 }
 
+export interface DietTagCatalogItem {
+  id: number
+  key: string
+  label: string
+  archived: boolean
+  sort_order: number
+}
+
 export interface SymptomCatalogItem {
   id: number
   key: string

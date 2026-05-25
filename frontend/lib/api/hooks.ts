@@ -18,6 +18,7 @@ import type {
   HealthMetricResponse,
   EnrichedDayResponse,
   SupplementCatalogItem,
+  DietTagCatalogItem,
   SymptomCatalogItem,
   PhotoAnalysis,
   Treatment,
@@ -209,6 +210,30 @@ export function useUpdateSupplementCatalogItem() {
     }) => apiPatch(`/supplements/catalog/${key}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supplement-catalog'] })
+    },
+  })
+}
+
+export function useDietTagCatalog(includeArchived = false) {
+  const params = includeArchived ? '?include_archived=true' : ''
+  return useQuery<DietTagCatalogItem[]>({
+    queryKey: ['diet-tag-catalog', includeArchived],
+    queryFn: () => apiGet(`/diet-tags/catalog${params}`),
+  })
+}
+
+export function useUpdateDietTagCatalogItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      key,
+      data,
+    }: {
+      key: string
+      data: { label?: string; archived?: boolean; sort_order?: number }
+    }) => apiPatch(`/diet-tags/catalog/${key}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['diet-tag-catalog'] })
     },
   })
 }
