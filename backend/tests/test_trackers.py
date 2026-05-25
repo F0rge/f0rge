@@ -214,6 +214,23 @@ async def test_create_tracker_duplicate_name_raises_conflict(async_db: AsyncSess
         await create_tracker(async_db, TrackerCreate(name="UniqueTracker", kind="counter"))
 
 
+async def test_create_tracker_slots_at_end_past_seeds(async_db: AsyncSession) -> None:
+    """New customs must slot after the 4 seeds (positions 0..3), not collide
+    with them. Client-provided body.position is ignored."""
+    await _insert_seeds(async_db)
+    # Client tries to set position=0 (legacy frontend behavior); server overrides.
+    tracker = await create_tracker(
+        async_db, TrackerCreate(name="SlotCheck", kind="counter", position=0)
+    )
+    assert tracker.position == 4  # max(seeds=0..3) + 1
+
+    # A second custom slots after the first.
+    second = await create_tracker(
+        async_db, TrackerCreate(name="SlotCheck2", kind="counter", position=0)
+    )
+    assert second.position == 5
+
+
 # ---------------------------------------------------------------------------
 # update_tracker
 # ---------------------------------------------------------------------------
@@ -331,12 +348,23 @@ async def test_reorder_trackers_rejects_archived_id(async_db: AsyncSession) -> N
         await reorder_trackers(async_db, [tracker.id])
 
 
+async def test_reorder_trackers_rejects_partial_order(async_db: AsyncSession) -> None:
+    """Caller must include every eligible custom tracker in `order`; partial lists
+    would leave the omitted trackers with stale positions that collide with the
+    newly assigned ones."""
+    a = await create_tracker(async_db, TrackerCreate(name="PartialA", kind="counter"))
+    b = await create_tracker(async_db, TrackerCreate(name="PartialB", kind="counter"))
+    with pytest.raises(ValidationError, match="exactly all"):
+        await reorder_trackers(async_db, [a.id])  # missing b.id
+    # Reference b so the test doesn't trip "unused variable" lint.
+    assert b.id != a.id
+
+
 # ---------------------------------------------------------------------------
 # OrderRequest schema validation
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_order_request_rejects_duplicates() -> None:
     from app.schemas.tracker import OrderRequest
     from pydantic import ValidationError as PydanticValidationError

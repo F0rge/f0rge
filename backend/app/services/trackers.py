@@ -37,12 +37,23 @@ async def create_tracker(db: AsyncSession, body: TrackerCreate) -> Tracker:
     if existing is not None:
         raise ConflictError(f"Tracker '{body.name}' already exists.")
 
+    # New customs always slot at the end (after seeds + existing customs).
+    # Ignore body.position: legacy clients send 0-based custom indices that
+    # collide with seed positions 0..3 and interleave on the daily card.
+    next_position = (
+        await db.execute(
+            select(func.coalesce(func.max(Tracker.position), -1)).where(
+                Tracker.archived.is_(False)
+            )
+        )
+    ).scalar() or -1
+
     tracker = Tracker(
         name=body.name,
         kind=body.kind,
         icon=body.icon,
         unit=body.unit,
-        position=body.position,
+        position=next_position + 1,
         archived=False,
         is_seed=False,
     )
@@ -75,22 +86,31 @@ async def update_tracker(db: AsyncSession, tracker_id: int, body: TrackerUpdate)
 
 async def reorder_trackers(db: AsyncSession, order: list[int]) -> list[Tracker]:
     # Only non-seed, non-archived trackers are reorderable.
-    eligible_rows = (
+    eligible_ids = set(
+        (
+            await db.execute(
+                select(Tracker.id).where(
+                    Tracker.archived.is_(False),
+                    Tracker.is_seed.is_(False),
+                )
+            )
+        ).scalars().all()
+    )
+    if set(order) != eligible_ids:
+        raise ValidationError(
+            "order must contain exactly all active custom tracker ids "
+            f"(got {len(order)}, expected {len(eligible_ids)})"
+        )
+
+    # Offset past visible seed positions so customs always sort after seeds.
+    # Count only active seeds — an archived seed no longer occupies a visible slot.
+    seed_count = (
         await db.execute(
-            select(Tracker.id).where(
+            select(func.count()).select_from(Tracker).where(
+                Tracker.is_seed.is_(True),
                 Tracker.archived.is_(False),
-                Tracker.is_seed.is_(False),
             )
         )
-    ).scalars().all()
-    eligible_ids = set(eligible_rows)
-    unknown = [tid for tid in order if tid not in eligible_ids]
-    if unknown:
-        raise ValidationError(f"Cannot reorder tracker ids {unknown}: not found or not reorderable")
-
-    # Offset past seed positions so customs always sort after seeds on the daily card.
-    seed_count = (
-        await db.execute(select(func.count()).select_from(Tracker).where(Tracker.is_seed.is_(True)))
     ).scalar() or 0
 
     for idx, tracker_id in enumerate(order):
