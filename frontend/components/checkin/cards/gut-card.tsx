@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { ScaleInput } from '@/components/checkin/scale-input'
 import { BristolInput } from '@/components/checkin/bristol-input'
 import type { StoolStatus } from '@/lib/api/types'
+import { TierPill } from '@/components/customize/tier-pill'
 
 interface GutCardProps {
   bloating: number
@@ -29,6 +30,7 @@ export function GutCard({
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <Activity className="size-4" />
           Gut
+          <TierPill tier="core" />
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">

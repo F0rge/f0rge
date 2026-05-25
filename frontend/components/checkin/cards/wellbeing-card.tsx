@@ -3,6 +3,7 @@
 import { Moon } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { ScaleInput } from '@/components/checkin/scale-input'
+import { TierPill } from '@/components/customize/tier-pill'
 
 interface WellbeingCardProps {
   overall: number
@@ -27,6 +28,7 @@ export function WellbeingCard({
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <Moon className="size-4" />
           Wellbeing
+          <TierPill tier="core" />
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
