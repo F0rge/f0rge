@@ -55,7 +55,6 @@ export default function CustomizePage() {
           title="Custom trackers"
           description="Add, edit, archive, and reorder your personal trackers."
           tier="custom"
-          comingSoon
         />
         <HubRow
           href="/customize/symptoms"
