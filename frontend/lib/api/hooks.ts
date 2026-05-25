@@ -679,6 +679,14 @@ export function useUpdateTracker() {
   })
 }
 
+export function useReorderTrackers() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (order: number[]) => apiPatch('/trackers/reorder', { order }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trackers'] }),
+  })
+}
+
 export function useEntryTrackerValues(date: string) {
   return useQuery<TrackerValue[]>({
     queryKey: ['tracker-values', date],
