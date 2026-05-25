@@ -4,22 +4,16 @@ import { Camera, Maximize2, X } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { PhotoCapture } from '@/components/checkin/photo-capture'
 import { PhotoAnalysis } from '@/components/shared/food-analysis'
-import type { Entry, PhotoSignal } from '@/lib/api/types'
-import { useDeletePhoto } from '@/lib/api/hooks'
+import type { Entry, PhotoSignal, DietTagCatalogItem } from '@/lib/api/types'
+import { useDeletePhoto, useDietTagCatalog } from '@/lib/api/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useState } from 'react'
+import { TierPill } from '@/components/customize/tier-pill'
 
 // ---------------------------------------------------------------------------
-// DietRiskSection — extracted from checkin-form.tsx, props shape unchanged.
+// DietRiskSection — data-entry section for diet risk flags.
 // ---------------------------------------------------------------------------
-
-const DIET_OPTIONS = [
-  { id: 'high-histamine', label: 'High-histamine' },
-  { id: 'high-fodmap', label: 'High-FODMAP' },
-  { id: 'gluten', label: 'Gluten' },
-  { id: 'dairy', label: 'Dairy' },
-]
 
 function getFlagScore(flag: string, signal: PhotoSignal): number {
   switch (flag) {
@@ -31,12 +25,13 @@ function getFlagScore(flag: string, signal: PhotoSignal): number {
   }
 }
 
-function buildSourceLine(signal: PhotoSignal): string {
+function buildSourceLine(signal: PhotoSignal, catalog: DietTagCatalogItem[]): string {
   return signal.flags
     .map((flag) => {
       const ingredients = signal.sources[flag]
       if (!ingredients || ingredients.length === 0) return null
-      return `${DIET_OPTIONS.find((o) => o.id === flag)?.label ?? flag}: ${ingredients.join(', ')}`
+      const catalogItem = catalog.find((o) => o.key === flag)
+      return `${catalogItem?.label ?? flag}: ${ingredients.join(', ')}`
     })
     .filter(Boolean)
     .join(' · ')
@@ -70,10 +65,11 @@ function LockedChip({ flag, label, score, title }: LockedChipProps) {
 interface PhotoDerivedRowProps {
   signal: PhotoSignal
   photoCount: number
+  catalog: DietTagCatalogItem[]
 }
 
-function PhotoDerivedRow({ signal, photoCount }: PhotoDerivedRowProps) {
-  const sourceLine = buildSourceLine(signal)
+function PhotoDerivedRow({ signal, photoCount, catalog }: PhotoDerivedRowProps) {
+  const sourceLine = buildSourceLine(signal, catalog)
   const ingredientCount = Object.values(signal.sources).reduce((sum, arr) => sum + arr.length, 0)
 
   return (
@@ -91,10 +87,10 @@ function PhotoDerivedRow({ signal, photoCount }: PhotoDerivedRowProps) {
         <>
           <div className="flex flex-wrap gap-2">
             {signal.flags.map((flag) => {
-              const opt = DIET_OPTIONS.find((o) => o.id === flag)
+              const catalogItem = catalog.find((o) => o.key === flag)
               const score = getFlagScore(flag, signal)
               const sources = signal.sources[flag] ?? []
-              const flagLabel = opt?.label ?? flag
+              const flagLabel = catalogItem?.label ?? flag
               const scoreDescription = flag === 'high-histamine'
                 ? `Σ histamine_score = ${score}`
                 : `${score} ingredient${score !== 1 ? 's' : ''}`
@@ -124,10 +120,11 @@ interface DietRiskSectionProps {
   existingEntry?: Entry | null
   existingPhotos: Entry['photos']
   dietRisk: string
-  onToggle: (id: string) => void
+  onToggle: (key: string) => void
+  catalog: DietTagCatalogItem[]
 }
 
-function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle }: DietRiskSectionProps) {
+function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle, catalog }: DietRiskSectionProps) {
   const hasPhotos = existingPhotos.length > 0
   const signal: PhotoSignal = existingEntry?.photo_signal ?? {
     flags: [],
@@ -135,7 +132,7 @@ function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle }: 
     sources: {},
   }
   const signalIsLive = signal.flags.length > 0 || signal.scores.histamine_load > 0
-  const manualOptions = DIET_OPTIONS.filter((o) => !signal.flags.includes(o.id))
+  const manualOptions = catalog.filter((o) => !signal.flags.includes(o.key))
   const selectedFlags = dietRisk ? dietRisk.split(',').filter(Boolean) : []
 
   return (
@@ -143,7 +140,7 @@ function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle }: 
       <label className="text-sm font-semibold">Diet risk</label>
       {hasPhotos ? (
         signalIsLive ? (
-          <PhotoDerivedRow signal={signal} photoCount={existingPhotos.length} />
+          <PhotoDerivedRow signal={signal} photoCount={existingPhotos.length} catalog={catalog} />
         ) : (
           <div className="rounded-xl border border-dashed border-border bg-background p-3">
             <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -168,12 +165,12 @@ function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle }: 
         {manualOptions.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {manualOptions.map((opt) => {
-              const selected = selectedFlags.includes(opt.id)
+              const selected = selectedFlags.includes(opt.key)
               return (
                 <button
-                  key={opt.id}
+                  key={opt.key}
                   type="button"
-                  onClick={() => onToggle(opt.id)}
+                  onClick={() => onToggle(opt.key)}
                   className={[
                     'min-h-[48px] rounded-xl border px-2 py-2.5 text-sm font-medium transition-all',
                     selected
@@ -222,6 +219,7 @@ export function FoodCard({
   const deletePhotoMutation = useDeletePhoto()
   const queryClient = useQueryClient()
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const { data: dietCatalog = [] } = useDietTagCatalog(false)
 
   const handleDeletePhoto = async (photoId: number) => {
     setDeletingId(photoId)
@@ -243,6 +241,7 @@ export function FoodCard({
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <Camera className="size-4" />
           Food &amp; drinks
+          <TierPill tier="core" />
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -251,6 +250,7 @@ export function FoodCard({
           existingPhotos={existingPhotos}
           dietRisk={dietRisk}
           onToggle={onDietToggle}
+          catalog={dietCatalog}
         />
 
         {existingPhotos.length > 0 && (
