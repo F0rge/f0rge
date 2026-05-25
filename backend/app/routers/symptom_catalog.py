@@ -9,6 +9,7 @@ from app.schemas.symptom_catalog import (
     SymptomCatalogItemCreate,
     SymptomCatalogItemResponse,
     SymptomCatalogItemUpdate,
+    SymptomOrderRequest,
 )
 from app.services import symptom_catalog as symptom_catalog_service
 
@@ -39,6 +40,14 @@ async def create_catalog_item(
     db: AsyncSession = Depends(get_db),
 ):
     return await symptom_catalog_service.create_item(db, body.key, body.label)
+
+
+@router.patch("/reorder", response_model=list[SymptomCatalogItemResponse])
+async def reorder_catalog(
+    body: SymptomOrderRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    return await symptom_catalog_service.reorder_items(db, body.order)
 
 
 @router.patch("/{key}", response_model=SymptomCatalogItemResponse)

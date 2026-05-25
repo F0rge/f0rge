@@ -61,7 +61,6 @@ export default function CustomizePage() {
           title="Custom symptoms"
           description="Manage your personal symptom list."
           tier="custom"
-          comingSoon
         />
       </Card>
 

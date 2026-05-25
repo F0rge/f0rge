@@ -273,6 +273,33 @@ export function useUpdateSymptomCatalogItem() {
   })
 }
 
+export function useReorderSymptomCatalog() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (order: string[]) => apiPatch('/symptoms/catalog/reorder', { order }),
+    onMutate: async (order: string[]) => {
+      await queryClient.cancelQueries({ queryKey: ['symptom-catalog'] })
+      const snapshots: { key: readonly unknown[]; data: SymptomCatalogItem[] | undefined }[] = []
+      const queries = queryClient.getQueriesData<SymptomCatalogItem[]>({ queryKey: ['symptom-catalog'] })
+      for (const [key, data] of queries) {
+        snapshots.push({ key, data })
+        if (!data) continue
+        const byKey = new Map(data.map((s) => [s.key, s]))
+        const reordered = order
+          .map((k) => byKey.get(k))
+          .filter((s): s is SymptomCatalogItem => s !== undefined)
+        const remaining = data.filter((s) => !order.includes(s.key))
+        queryClient.setQueryData<SymptomCatalogItem[]>(key, [...remaining, ...reordered])
+      }
+      return { snapshots }
+    },
+    onError: (_err, _order, context) => {
+      context?.snapshots.forEach(({ key, data }) => queryClient.setQueryData(key, data))
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['symptom-catalog'] }),
+  })
+}
+
 export function useTriggerWeatherFetch() {
   const queryClient = useQueryClient()
   return useMutation({
