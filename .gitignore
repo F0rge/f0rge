@@ -43,8 +43,9 @@ Thumbs.db
 qa-screenshots/
 
 # Claude agent state — runtime only, never tracked.
-# Exception: .claude/agents/ holds project-level sub-agent instructions
-# (UX contracts, conventions) that ARE intended to ship in the repo so
-# every contributor / future clone gets the same agent behavior.
+# Exceptions tracked in repo:
+#   .claude/agents/         — project-level sub-agent definitions
+#   .claude/review-context/ — PR-review-bot playbooks (see .github/workflows/claude-pr-review.yml)
 .claude/*
 !.claude/agents/
+!.claude/review-context/

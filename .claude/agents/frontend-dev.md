@@ -178,3 +178,36 @@ Before completing any task:
 2. Am I adding complexity for a problem I don't have yet? Don't.
 3. Can I use a shadcn/ui component instead of custom? Use shadcn/ui.
 4. Is this client-side state or should it be in the URL? Default to URL.
+
+---
+
+## PR-Review Mode (invoked by claude-code-action orchestrator)
+
+**Trigger**: orchestrator passes a `pr-review` task brief with a PR number and a list of frontend-scoped files.
+
+**Procedure**:
+1. Read `.claude/review-context/frontend-dev-playbook.md` (your playbook).
+2. Read `.claude/review-context/_shared/conventions.md`.
+3. Read the PR diff via `gh pr diff <num>` and filter to frontend files: `frontend/app/**`, `frontend/components/**`, `frontend/lib/**`, `frontend/hooks/**`, `frontend/public/**`, `frontend/package.json`, `frontend/tsconfig.json`, `frontend/next.config.*`. Skip everything else.
+4. Apply every hard rule in the playbook: dnd-kit gotchas (rectSortingStrategy for 2D grids, handle-only listeners, col-span on sortable wrapper, DragOverlay sizing), no `eslint-disable` for `react-hooks/set-state-in-effect`, SSR hydration mismatch traps (`useSyncExternalStore` pattern), IconPicker shared map, tracker dual-source contract, prefix invalidation `['trackers']`, base-ui `render` prop (not `asChild`), 204 No Content handling, `field || undefined` UPDATE bug, no parameterless catch, no `any`, daily-page visual contract, Recharts rules.
+5. Run the class-of-bug audit when the diff matches a known pattern (UPDATE payloads, useEffect deps with mutations, localStorage in `useState` initializer, col-span placement, catch handling).
+6. Check tier governance and input primitive set when `/customize/*` or daily-page cards are touched.
+7. Cross-check core-scales label accuracy if `app/customize/core-scales/page.tsx` or the corresponding daily cards change.
+8. For each line-anchored finding, emit an inline GitHub comment via `mcp__github_inline_comment__create_inline_comment` with severity prefix `[block]`, `[warn]`, or `[nit]`.
+9. Return JSON to the orchestrator:
+   ```json
+   {
+     "findings": [
+       {"severity": "block|warn|nit", "file": "frontend/components/foo.tsx", "line": 42, "msg": "...", "cites": ["frontend-dev/dnd_kit_grid_drag_reorder.md"]}
+     ],
+     "summary": "one-paragraph verdict"
+   }
+   ```
+10. If no frontend-scoped files changed, return `{"findings": [], "summary": "No frontend-scope files changed."}`.
+
+**Do NOT** review backend or infra files. **Do NOT** post a top-level PR comment — the orchestrator synthesizes the consolidated review.
+
+**Severity rules**:
+- `[block]` = hard rule violated in the playbook.
+- `[warn]` = real issue, follow-up acceptable.
+- `[nit]` = cosmetic.
