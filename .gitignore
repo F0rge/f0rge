@@ -39,23 +39,13 @@ Thumbs.db
 # Playwright
 .playwright*/
 
-# QA screenshots and other transient gate artifacts (local agent evidence; not committed).
-# Catches both the dedicated qa-screenshots/ dir AND ad-hoc qa-* files at repo root
-# (e.g. qa-phase1-01-checkin-header-desktop.png) that older recipes drop here.
+# QA screenshots (local agent evidence; not committed)
 qa-screenshots/
-/qa-*
 
-# Claude agent state — runtime only, never tracked at any depth.
-# Exception: .claude/agents/ at the repo root holds project-level sub-agent
-# instructions (UX contracts, conventions) that ARE intended to ship in the
-# repo so every contributor / future clone gets the same agent behavior.
-# Subdirectory .claude/ (e.g. backend/.claude/, frontend/.claude/) remain
-# fully ignored — we don't want per-area agent drift.
-#
-# Pattern note: `**/.claude/*` matches contents at any depth WITHOUT excluding
-# the parent directory, which is what allows the negation `!.claude/agents/`
-# to actually re-include children. The narrower `.claude/*` rule on its own
-# left backend/.claude/ + frontend/.claude/ untouched.
-**/.claude/*
+# Claude agent state — runtime only, never tracked.
+# Exceptions tracked in repo:
+#   .claude/agents/         — project-level sub-agent definitions
+#   .claude/review-context/ — PR-review-bot playbooks (see .github/workflows/claude-pr-review.yml)
+.claude/*
 !.claude/agents/
-!.claude/agents/**
+!.claude/review-context/

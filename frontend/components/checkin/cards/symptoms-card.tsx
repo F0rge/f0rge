@@ -3,6 +3,7 @@
 import { AlertCircle } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { SymptomPicker } from '@/components/checkin/symptom-picker'
+import { TierPill } from '@/components/customize/tier-pill'
 
 interface SymptomsCardProps {
   value: Record<string, number>
@@ -16,6 +17,7 @@ export function SymptomsCard({ value, onChange }: SymptomsCardProps) {
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           <AlertCircle className="size-4" />
           Symptoms today
+          <TierPill tier="custom" />
         </CardTitle>
       </CardHeader>
       <CardContent>

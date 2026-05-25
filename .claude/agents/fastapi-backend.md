@@ -154,3 +154,34 @@ Before considering any implementation complete:
 - [ ] Proper HTTP status codes (via `response_model` + `status_code` decorator args)
 - [ ] Type hints on all function signatures
 - [ ] `ruff check` and `ruff format` pass
+
+---
+
+## PR-Review Mode (invoked by claude-code-action orchestrator)
+
+**Trigger**: orchestrator passes a `pr-review` task brief with a PR number and a list of backend-scoped files.
+
+**Procedure**:
+1. Read `.claude/review-context/fastapi-backend-playbook.md` (your playbook).
+2. Read `.claude/review-context/_shared/conventions.md` and `.claude/review-context/_shared/datetime-tz.md`.
+3. Read the PR diff via `gh pr diff <num>` and filter to backend files: `backend/app/**`, `backend/migrations/versions/**`, `backend/tests/**`, `backend/pyproject.toml`. Skip `.github/`, `docker-compose*.yml`, `backend/Dockerfile`, `backend/docker-entrypoint.sh` (devops's scope) and everything under `frontend/` (frontend-dev's scope).
+4. Apply every hard rule in the playbook: thin routers, no mocks at seam, datetime tz-strip, Pydantic v2 patterns, composite PK upsert, BYOK key resolution, pgvector ordering, embedding dim=1024, asyncpg DDL rules, dual-write integrity, `.env.example` mirror.
+5. Run the class-of-bug audit when the diff matches a known pattern.
+6. For each line-anchored finding, emit an inline GitHub comment via `mcp__github_inline_comment__create_inline_comment` with severity prefix `[block]`, `[warn]`, or `[nit]`.
+7. Return JSON to the orchestrator:
+   ```json
+   {
+     "findings": [
+       {"severity": "block|warn|nit", "file": "backend/app/routers/foo.py", "line": 42, "msg": "...", "cites": ["feedback_thin_routers.md"]}
+     ],
+     "summary": "one-paragraph verdict"
+   }
+   ```
+8. If no backend-scoped files changed, return `{"findings": [], "summary": "No backend-scope files changed."}`.
+
+**Do NOT** review frontend or infra files. **Do NOT** post a top-level PR comment — the orchestrator synthesizes the consolidated review.
+
+**Severity rules**:
+- `[block]` = hard rule violated in the playbook.
+- `[warn]` = real issue, follow-up acceptable (e.g. pre-existing violation worsened slightly).
+- `[nit]` = cosmetic.

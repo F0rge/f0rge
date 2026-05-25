@@ -4,13 +4,14 @@ import datetime
 import re
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.symptom_catalog import SymptomCatalogItem
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
+RESERVED_KEYS = frozenset({"reorder"})
 
 
 def normalize_key(raw: str) -> str:
@@ -36,6 +37,8 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SymptomCatalogI
     normalized = normalize_key(key)
     if not normalized or not _KEY_RE.match(normalized):
         raise ValidationError("Invalid key; must contain a-z, 0-9, or underscore.")
+    if normalized in RESERVED_KEYS:
+        raise ValidationError(f"'{normalized}' is a reserved key name.")
 
     existing = (
         await db.execute(
@@ -86,6 +89,33 @@ async def update_item(db: AsyncSession, key: str, data: dict) -> SymptomCatalogI
     await db.commit()
     await db.refresh(item)
     return item
+
+
+async def reorder_items(
+    db: AsyncSession, order: list[str]
+) -> list[SymptomCatalogItem]:
+    eligible_keys = set(
+        (
+            await db.execute(
+                select(SymptomCatalogItem.key).where(SymptomCatalogItem.archived.is_(False))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if set(order) != eligible_keys:
+        raise ValidationError(
+            "order must contain exactly all active symptom keys "
+            f"(got {len(order)}, expected {len(eligible_keys)})"
+        )
+    for idx, key in enumerate(order):
+        await db.execute(
+            update(SymptomCatalogItem)
+            .where(SymptomCatalogItem.key == key)
+            .values(sort_order=idx)
+        )
+    await db.commit()
+    return await list_items(db, include_archived=False)
 
 
 async def touch(db: AsyncSession, keys: Iterable[str]) -> None:

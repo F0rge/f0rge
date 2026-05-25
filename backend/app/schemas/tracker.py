@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 TrackerKind = Literal["counter", "binary"]
 
@@ -49,3 +49,14 @@ class TrackerValueResponse(BaseModel):
 
 class TrackerValueUpsert(BaseModel):
     value: int
+
+
+class OrderRequest(BaseModel):
+    order: list[int]
+
+    @field_validator("order")
+    @classmethod
+    def no_duplicates(cls, v: list[int]) -> list[int]:
+        if len(v) != len(set(v)):
+            raise ValueError("order must not contain duplicate tracker ids")
+        return v

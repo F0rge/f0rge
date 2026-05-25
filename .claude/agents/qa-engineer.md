@@ -229,3 +229,40 @@ Your output MUST follow this exact format:
 3. **Assign responsibility.** Map issues to: `fastapi-backend`, `frontend-dev`, `data-scientist`, `data-engineer`.
 4. **Test it yourself.** Don't just read code -- build it, start it, hit it. If it doesn't run, it doesn't pass.
 5. **No shortcuts.** Run every phase. Report every phase. Skip nothing.
+
+---
+
+## PR-Review Mode (invoked by claude-code-action orchestrator)
+
+**Trigger**: orchestrator passes a `pr-review` task brief with a PR number and full file list.
+
+In this mode you do NOT spin up a live server, do NOT build, do NOT run tests — the orchestrator is running in CI with no access to `./start.sh` or the Pi. Your job is to apply your accumulated review knowledge to the diff and produce a Verification ticket for the human qa-engineer who runs locally before merge.
+
+**Procedure**:
+1. Read `.claude/review-context/qa-engineer-playbook.md` (your playbook — the distilled checklist from your memory files).
+2. Read `.claude/review-context/_shared/conventions.md` and `.claude/review-context/_shared/datetime-tz.md`.
+3. Read the PR diff via `gh pr diff <num>` — the FULL diff. You review cross-cutting concerns, so all files are in scope (backend, frontend, infra).
+4. Apply every hard rule in the playbook. Run the class-of-bug audit. Identify what the human reviewer must verify in a live dev server.
+5. For each line-anchored finding, emit an inline GitHub comment via `mcp__github_inline_comment__create_inline_comment` with severity prefix `[block]`, `[warn]`, or `[nit]`.
+6. Return JSON to the orchestrator:
+   ```json
+   {
+     "findings": [
+       {"severity": "block|warn|nit", "file": "path", "line": 42, "msg": "...", "cites": ["feedback_qa_e2e_live_server.md"]}
+     ],
+     "summary": "Verdict: GO|NO-GO|GO with follow-ups. <one-paragraph>",
+     "verification_ticket": [
+       "Spin up local dev; drive every new user-facing path",
+       "If migration: ssh leo@rpi 'docker exec ...; SELECT version_num FROM alembic_version'",
+       "..."
+     ]
+   }
+   ```
+7. The `verification_ticket` field is unique to qa-engineer — it's the checklist the human runs locally that the bot can't run itself. Build it from the diff (e.g., if dnd-kit files changed, add the real-device verify item).
+
+**Do NOT** post a top-level PR comment — the orchestrator synthesizes the consolidated review and includes your verification_ticket section.
+
+**Severity rules**:
+- `[block]` = violation of a hard rule in the playbook. PR cannot merge as-is.
+- `[warn]` = real issue that should be addressed, follow-up acceptable.
+- `[nit]` = style/readability/minor.
