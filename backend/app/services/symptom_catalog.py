@@ -4,7 +4,7 @@ import datetime
 import re
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ConflictError, NotFoundError, ValidationError
@@ -86,6 +86,33 @@ async def update_item(db: AsyncSession, key: str, data: dict) -> SymptomCatalogI
     await db.commit()
     await db.refresh(item)
     return item
+
+
+async def reorder_items(
+    db: AsyncSession, order: list[str]
+) -> list[SymptomCatalogItem]:
+    eligible_keys = set(
+        (
+            await db.execute(
+                select(SymptomCatalogItem.key).where(SymptomCatalogItem.archived.is_(False))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if set(order) != eligible_keys:
+        raise ValidationError(
+            "order must contain exactly all active symptom keys "
+            f"(got {len(order)}, expected {len(eligible_keys)})"
+        )
+    for idx, key in enumerate(order):
+        await db.execute(
+            update(SymptomCatalogItem)
+            .where(SymptomCatalogItem.key == key)
+            .values(sort_order=idx)
+        )
+    await db.commit()
+    return await list_items(db, include_archived=False)
 
 
 async def touch(db: AsyncSession, keys: Iterable[str]) -> None:
