@@ -1,0 +1,157 @@
+name: Claude PR Review (multi-agent)
+
+# Multi-agent PR review using anthropics/claude-code-action@v1.
+#
+# Architecture:
+#   1. Orchestrator triages the diff by file path.
+#   2. Delegates IN PARALLEL via the Task tool to project sub-agents:
+#        - backend/**          -> fastapi-backend
+#        - frontend/**         -> frontend-dev
+#        - .github/, compose, Dockerfile, migrations entrypoint -> devops
+#        - ALWAYS              -> qa-engineer (cross-cutting + verification ticket)
+#   3. Synthesizes findings into ONE consolidated sticky comment.
+#
+# Each sub-agent reads its playbook at .claude/review-context/<name>-playbook.md
+# plus _shared/ files. See .claude/agents/<name>.md for the PR-Review Mode contract.
+#
+# Auth: OAuth from Leo's Claude Code Max plan (CLAUDE_CODE_OAUTH_TOKEN secret).
+# Generate via `claude setup-token`. Free under the Max quota — no API invoice.
+#
+# Bypass: add the label `skip-ai-review` to a PR to skip this workflow.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    branches: [develop, main]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  review:
+    name: Multi-agent review
+    if: |
+      github.event.pull_request.draft == false &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-ai-review')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          # Full history so the action can compute the base-vs-head diff cleanly.
+          fetch-depth: 0
+
+      - name: Run multi-agent review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Sticky comment: re-edit the same PR comment on each push instead of
+          # spawning a new one per synchronize event.
+          use_sticky_comment: true
+          prompt: |
+            You are the PR review orchestrator. Do NOT review the diff yourself.
+            Your job is to triage, delegate, and synthesize.
+
+            REPO: ${{ github.repository }}
+            PR:   #${{ github.event.pull_request.number }}
+            BASE: ${{ github.event.pull_request.base.ref }}
+            HEAD: ${{ github.event.pull_request.head.sha }}
+            TITLE: ${{ github.event.pull_request.title }}
+
+            ## Step 1 — Triage
+
+            Run: `gh pr diff ${{ github.event.pull_request.number }} --name-only`
+
+            Classify each changed file into ONE of these buckets:
+              - backend   = backend/app/**, backend/migrations/versions/**,
+                            backend/tests/**, backend/pyproject.toml
+              - frontend  = frontend/app/**, frontend/components/**, frontend/lib/**,
+                            frontend/hooks/**, frontend/public/**, frontend/package.json,
+                            frontend/tsconfig.json, frontend/next.config.*
+              - devops    = .github/**, docker-compose*.yml, backend/Dockerfile,
+                            backend/docker-entrypoint.sh, backend/migrations/env.py,
+                            backend/alembic.ini, frontend/Dockerfile, frontend/next.config.*
+                            (only when it affects the build image), root scripts,
+                            .dockerignore, .gitignore
+              - other     = everything else (.md, .claude/, mockups/, etc.)
+
+            ## Step 2 — Delegate IN PARALLEL via the Task tool
+
+            Spawn the relevant sub-agents simultaneously. Each gets the same PR
+            number and is told to operate in "PR-Review Mode" per their .claude/agents/<name>.md.
+
+            - If backend bucket is non-empty: spawn `fastapi-backend` with the
+              backend file list. Brief: "PR-Review Mode for PR #${{ github.event.pull_request.number }}.
+              Review only backend files. Follow your PR-Review Mode protocol.
+              Return JSON findings + summary."
+
+            - If frontend bucket is non-empty: spawn `frontend-dev` with the
+              frontend file list. Same brief shape.
+
+            - If devops bucket is non-empty: spawn `devops` with the devops file
+              list. Same brief shape.
+
+            - ALWAYS spawn `qa-engineer` with the FULL file list. Brief: "PR-Review Mode
+              for PR #${{ github.event.pull_request.number }}. Cross-cutting review.
+              Return JSON findings + summary + verification_ticket per your protocol."
+
+            Run these in parallel for speed. Wait for all to return.
+
+            ## Step 3 — Synthesize
+
+            Build ONE consolidated PR review comment with these sections:
+
+              ### Verdict
+              GO | NO-GO | GO with follow-ups
+              (NO-GO if ANY sub-agent returned a `block`-severity finding.)
+
+              ### Backend (fastapi-backend)
+              Summary line + block findings as bullets. "No changes in this area."
+              if the bucket was empty.
+
+              ### Frontend (frontend-dev)
+              Same shape.
+
+              ### DevOps / Infra (devops)
+              Same shape.
+
+              ### Cross-cutting (qa-engineer)
+              Same shape.
+
+              ### Verification ticket (human runs locally before merge)
+              The `verification_ticket` array from qa-engineer's response. This
+              is the checklist the human runs in a live dev server. Format as
+              GitHub task list `- [ ] item`.
+
+              ### Counts
+              <N> block | <M> warn | <K> nit
+
+            Inline comments for line-anchored findings are posted directly by
+            each sub-agent via mcp__github_inline_comment__create_inline_comment.
+            Do not re-post them in the top-level summary — link to them.
+
+            ## Failure semantics
+
+            If a sub-agent errors out (timeout, parse failure), continue with the
+            others and note the failure in its section. Do not block the whole
+            review.
+
+            If ALL buckets are empty (PR only touched .md or .claude/), produce
+            a minimal "No reviewable files in this PR." comment.
+
+            ## Tone
+
+            Terse. No emoji. No "Great work!" filler. Direct verdict, specific
+            findings, actionable verification ticket.
+
+          claude_args: |
+            --max-turns 15
+            --model claude-opus-4-7
+            --allowedTools "Task,Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),mcp__github_inline_comment__create_inline_comment"
