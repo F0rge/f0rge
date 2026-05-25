@@ -11,6 +11,7 @@ from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.symptom_catalog import SymptomCatalogItem
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
+RESERVED_KEYS = frozenset({"reorder"})
 
 
 def normalize_key(raw: str) -> str:
@@ -36,6 +37,8 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SymptomCatalogI
     normalized = normalize_key(key)
     if not normalized or not _KEY_RE.match(normalized):
         raise ValidationError("Invalid key; must contain a-z, 0-9, or underscore.")
+    if normalized in RESERVED_KEYS:
+        raise ValidationError(f"'{normalized}' is a reserved key name.")
 
     existing = (
         await db.execute(
