@@ -8,12 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.diet_tag_catalog import DietTagCatalogItem
 
-_KEY_RE = re.compile(r"^[a-z0-9_]+$")
+_KEY_RE = re.compile(r"^[a-z0-9-]+$")
 
 
 def normalize_key(raw: str) -> str:
-    key = raw.strip().lower().replace("-", "_").replace(" ", "_")
-    key = re.sub(r"[^a-z0-9_]", "", key)
+    # Diet tags use HYPHENATED keys (high-histamine, high-fodmap, ...) to match
+    # the entry.diet_risk CSV format and diet_flags.FLAG_VOCAB. Do NOT mirror
+    # supplement_catalog.normalize_key — that converts hyphens to underscores
+    # and would break compat with seeded rows and historical entries.
+    key = raw.strip().lower().replace(" ", "-").replace("_", "-")
+    key = re.sub(r"[^a-z0-9-]", "", key)
     return key
 
 
@@ -33,7 +37,7 @@ async def list_items(
 async def create_item(db: AsyncSession, key: str, label: str) -> DietTagCatalogItem:
     normalized = normalize_key(key)
     if not normalized or not _KEY_RE.match(normalized):
-        raise ValidationError("Invalid key; must contain a-z, 0-9, or underscore.")
+        raise ValidationError("Invalid key; must contain a-z, 0-9, or hyphen.")
 
     existing = (
         await db.execute(
