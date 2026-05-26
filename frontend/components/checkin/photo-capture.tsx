@@ -1,17 +1,16 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import { Camera, ImageIcon, X, Loader2, Check, AlertTriangle } from 'lucide-react'
+import { Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
 import { MealTimeChips } from './meal-time-chips'
-import { useUploadPhoto, useDeletePhoto } from '@/lib/api/hooks'
+import { useUploadPhoto } from '@/lib/api/hooks'
 
 interface StagedPhoto {
   id: string
   file: File
   label: string
   mealTime: Date
-  status: 'staged' | 'uploading' | 'uploaded' | 'error'
-  serverPhotoId?: number
+  status: 'staged' | 'uploading' | 'error'
   errorMessage?: string
 }
 
@@ -29,7 +28,6 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const uploadPhoto = useUploadPhoto()
-  const deletePhoto = useDeletePhoto()
 
   const [photos, setPhotos] = useState<StagedPhoto[]>([])
 
@@ -50,19 +48,9 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     setPhotos((prev) => [...prev, ...staged])
   }, [])
 
-  const removePhoto = useCallback(async (id: string) => {
-    const photo = photos.find((p) => p.id === id)
-    if (!photo) return
-
-    if (photo.status === 'uploaded' && photo.serverPhotoId !== undefined) {
-      try {
-        await deletePhoto.mutateAsync(photo.serverPhotoId)
-      } catch {
-        // Ignore delete errors — remove locally anyway.
-      }
-    }
+  const removePhoto = useCallback((id: string) => {
     setPhotos((prev) => prev.filter((p) => p.id !== id))
-  }, [photos, deletePhoto])
+  }, [])
 
   const retryUpload = useCallback(async (id: string) => {
     const photo = photos.find((p) => p.id === id)
@@ -76,20 +64,14 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     onEntryEnsured?.()
 
     try {
-      const result = await uploadPhoto.mutateAsync({
+      await uploadPhoto.mutateAsync({
         date,
         file: photo.file,
         label: photo.label || undefined,
         mealTime: photo.mealTime,
-      }) as { id: number }
+      })
 
-      setPhotos((prev) =>
-        prev.map((p) =>
-          p.id === id
-            ? { ...p, status: 'uploaded', serverPhotoId: result.id }
-            : p,
-        ),
-      )
+      setPhotos((prev) => prev.filter((p) => p.id !== id))
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Upload failed'
       setPhotos((prev) =>
@@ -114,20 +96,14 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     onEntryEnsured?.()
 
     try {
-      const result = await uploadPhoto.mutateAsync({
+      await uploadPhoto.mutateAsync({
         date,
         file: photo.file,
         label: photo.label || undefined,
         mealTime: photo.mealTime,
-      }) as { id: number }
+      })
 
-      setPhotos((prev) =>
-        prev.map((p) =>
-          p.id === id
-            ? { ...p, status: 'uploaded', serverPhotoId: result.id }
-            : p,
-        ),
-      )
+      setPhotos((prev) => prev.filter((p) => p.id !== id))
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Upload failed'
       setPhotos((prev) =>
@@ -197,11 +173,6 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                       <Loader2 className="size-5 animate-spin text-white" />
                     </div>
                   )}
-                  {photo.status === 'uploaded' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                      <Check className="size-5 text-white" />
-                    </div>
-                  )}
                   {photo.status === 'error' && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                       <AlertTriangle className="size-5 text-amber-400" />
@@ -209,26 +180,20 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  {photo.status === 'uploaded' ? (
-                    <p className="text-xs text-muted-foreground">
-                      {photo.label || photo.file.name}
-                    </p>
-                  ) : (
-                    <input
-                      type="text"
-                      value={photo.label}
-                      onChange={(e) => {
-                        const label = e.target.value
-                        setPhotos((prev) =>
-                          prev.map((p) => p.id === photo.id ? { ...p, label } : p),
-                        )
-                      }}
-                      disabled={photo.status === 'uploading'}
-                      ref={(el) => { if (photo.status === 'staged' && el) el.focus() }}
-                      placeholder="Label (optional)"
-                      className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-                    />
-                  )}
+                  <input
+                    type="text"
+                    value={photo.label}
+                    onChange={(e) => {
+                      const label = e.target.value
+                      setPhotos((prev) =>
+                        prev.map((p) => p.id === photo.id ? { ...p, label } : p),
+                      )
+                    }}
+                    disabled={photo.status === 'uploading'}
+                    ref={(el) => { if (photo.status === 'staged' && el) el.focus() }}
+                    placeholder="Label (optional)"
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  />
                   <p className="mt-1 text-xs text-muted-foreground truncate">{photo.file.name}</p>
                   {photo.status === 'error' && (
                     <button
@@ -242,7 +207,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                 </div>
                 <button
                   type="button"
-                  onClick={() => void removePhoto(photo.id)}
+                  onClick={() => removePhoto(photo.id)}
                   className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <X className="size-4" />
@@ -257,19 +222,17 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                   Upload
                 </button>
               )}
-              {photo.status !== 'uploaded' && (
-                <div>
-                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
-                  <MealTimeChips
-                    value={photo.mealTime}
-                    onChange={(d) => {
-                      setPhotos((prev) =>
-                        prev.map((p) => p.id === photo.id ? { ...p, mealTime: d } : p),
-                      )
-                    }}
-                  />
-                </div>
-              )}
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
+                <MealTimeChips
+                  value={photo.mealTime}
+                  onChange={(d) => {
+                    setPhotos((prev) =>
+                      prev.map((p) => p.id === photo.id ? { ...p, mealTime: d } : p),
+                    )
+                  }}
+                />
+              </div>
             </div>
           ))}
         </div>
