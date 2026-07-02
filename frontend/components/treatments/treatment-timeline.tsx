@@ -43,7 +43,13 @@ export function TreatmentTimeline({ treatments, onTreatmentClick }: TreatmentTim
     d.setHours(0, 0, 0, 0)
     return d
   }, [])
-  const [rangeStart, setRangeStart] = useState(() => addDays(today, -60))
+  const [rangeStart, setRangeStart] = useState(() => {
+    const activeStarts = treatments
+      .filter((t) => t.end_date === null || toDate(t.end_date) >= today)
+      .map((t) => toDate(t.start_date).getTime())
+    if (activeStarts.length === 0) return addDays(today, -60)
+    return addDays(new Date(Math.min(...activeStarts)), -7)
+  })
   const rangeDays = 90
   const rangeEnd = useMemo(() => addDays(rangeStart, rangeDays - 1), [rangeStart])
 
@@ -129,13 +135,16 @@ export function TreatmentTimeline({ treatments, onTreatmentClick }: TreatmentTim
             </div>
 
             {visibleTreatments.map((t) => {
+              const isOngoing = !t.end_date
               const start = toDate(t.start_date)
-              const end = t.end_date ? toDate(t.end_date) : today
+              const end = isOngoing ? rangeEnd : toDate(t.end_date as string)
               const barStart = Math.max(0, daysBetween(rangeStart, start))
               const barEnd = Math.min(rangeDays - 1, daysBetween(rangeStart, end))
               const leftPct = (barStart / rangeDays) * 100
               const widthPct = ((barEnd - barStart + 1) / rangeDays) * 100
               const barClass = TYPE_BAR_CLASSES[t.type] ?? TYPE_BAR_CLASSES.other
+              const clippedLeft = start < rangeStart
+              const clippedRight = !isOngoing && end > rangeEnd
 
               return (
                 <button
@@ -161,7 +170,9 @@ export function TreatmentTimeline({ treatments, onTreatmentClick }: TreatmentTim
                     className={cn(
                       'absolute top-2 bottom-2 rounded-full',
                       barClass,
-                      !t.end_date && 'rounded-r-none bg-gradient-to-r from-current to-transparent',
+                      clippedLeft && 'rounded-l-none',
+                      (clippedRight || isOngoing) && 'rounded-r-none',
+                      isOngoing && '[mask-image:linear-gradient(to_right,black_70%,transparent_98%)]',
                     )}
                     style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: '4px' }}
                   />
