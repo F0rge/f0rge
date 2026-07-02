@@ -1,5 +1,6 @@
 'use client'
 
+import { formatLocalDate } from '@/lib/utils'
 import type { Entry } from '@/lib/api/types'
 
 interface CalendarViewProps {
@@ -38,7 +39,7 @@ export function CalendarView({ month, entries, onDayClick }: CalendarViewProps) 
     entryMap.set(entry.date, entry)
   })
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = formatLocalDate(new Date())
 
   const cells: (number | null)[] = []
   for (let i = 0; i < firstDay; i++) {
