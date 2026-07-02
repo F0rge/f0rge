@@ -81,32 +81,11 @@ services:
     networks:
       - health-tracker-dev-network
 
-  mcp-server:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: health-tracker-dev-mcp
-    user: "1000:1000"
-    command: ["uv", "run", "python", "-m", "app.mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8005"]
-    # Dev MCP: host:8107 -> container:8005. Prod uses 8007.
-    # Cloudflare ingress for health-dev-mcp.leo-figueiredo.com must target localhost:8107.
-    ports:
-      - "8107:8005"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
-      - MCP_READONLY_DATABASE_URL=postgresql+asyncpg://healthtracker_ro:${HEALTHTRACKER_RO_PASSWORD}@postgres:5432/health
-      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
-      - MCP_SERVER_HOST=0.0.0.0
-      - MCP_SERVER_PORT=8005
-    mem_limit: 256m
-    restart: unless-stopped
-    networks:
-      - health-tracker-dev-network
+  # mcp-server was SPLIT OUT of this stack into docker-compose.mcp.dev.yml
+  # (its own Coolify app) so a backend-stack redeploy no longer cycles host
+  # port 8107. Coolify's `--force-recreate` recreates every service in a stack
+  # on every deploy; keeping mcp-server here meant a ~6s 8107 flap per develop
+  # push. See docker-compose.mcp.dev.yml for the full rationale + wiring.
 
   embedding-worker:
     build:

@@ -131,32 +131,12 @@ services:
     networks:
       - health-tracker-network
 
-  mcp-server:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: health-tracker-mcp
-    user: "1000:1000"
-    command: ["uv", "run", "python", "-m", "app.mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8005"]
-    # Host port 8005 is occupied on the Pi (entre-nos backend); host:8007 -> container:8005.
-    # Cloudflare tunnel ingress for health-mcp.leo-figueiredo.com must target localhost:8007.
-    ports:
-      - "8007:8005"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
-      - MCP_READONLY_DATABASE_URL=postgresql+asyncpg://healthtracker_ro:${HEALTHTRACKER_RO_PASSWORD}@postgres:5432/health
-      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
-      - MCP_SERVER_HOST=0.0.0.0
-      - MCP_SERVER_PORT=8005
-    mem_limit: 256m
-    restart: unless-stopped
-    networks:
-      - health-tracker-network
+  # mcp-server was SPLIT OUT of this stack into docker-compose.mcp.prod.yml
+  # (its own Coolify app) so a backend-stack redeploy no longer cycles host
+  # port 8007. Coolify's `--force-recreate` recreates every service in a stack
+  # on every deploy; keeping mcp-server here meant a ~6s 8007 flap per main push,
+  # which cross-routed pinned MCP clients (2026-07-02 "prod served dev data"
+  # incident). See docker-compose.mcp.prod.yml for the full rationale + wiring.
 
   embedding-worker:
     build:
