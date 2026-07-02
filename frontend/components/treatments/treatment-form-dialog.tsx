@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateTreatment, useUpdateTreatment, useDeleteTreatment } from '@/lib/api/hooks'
 import type { Treatment, TreatmentType } from '@/lib/api/types'
-import { cn } from '@/lib/utils'
+import { cn, formatLocalDate } from '@/lib/utils'
 
 interface TreatmentFormDialogProps {
   open: boolean
@@ -33,18 +33,11 @@ const TREATMENT_TYPES: { value: TreatmentType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
-function getTodayDate(): string {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
-}
-
 export function TreatmentFormDialog({ open, onOpenChange, treatment }: TreatmentFormDialogProps) {
   const isEdit = !!treatment
   const [name, setName] = useState(treatment?.name ?? '')
   const [type, setType] = useState<TreatmentType>(treatment?.type ?? 'other')
-  const [startDate, setStartDate] = useState(treatment?.start_date ?? getTodayDate())
+  const [startDate, setStartDate] = useState(treatment?.start_date ?? formatLocalDate(new Date()))
   const [endDate, setEndDate] = useState(treatment?.end_date ?? '')
   const [ongoing, setOngoing] = useState(!treatment?.end_date)
   const [dose, setDose] = useState(treatment?.dose ?? '')

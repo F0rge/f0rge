@@ -6,12 +6,12 @@ import { TrendGrid } from '@/components/insights/trend-grid'
 import { CorrelatesTable } from '@/components/insights/correlates-table'
 import { TreatmentResponse } from '@/components/insights/treatment-response'
 import { SleepNextDay } from '@/components/insights/sleep-next-day'
+import { formatLocalDate as fmt } from '@/lib/utils'
 
 function getDefaultDates(): { start: string; end: string } {
   const end = new Date()
   const start = new Date()
   start.setDate(end.getDate() - 90)
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
   return { start: fmt(start), end: fmt(end) }
 }
 
