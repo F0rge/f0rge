@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateLab, useUpdateLab } from '@/lib/api/hooks'
 import { MarkerPicker } from './marker-picker'
-import { cn } from '@/lib/utils'
+import { cn, formatLocalDate } from '@/lib/utils'
 import type { Lab, LabType, LabMarkerCreate, ExtractedLabPayload } from '@/lib/api/types'
 
 interface LabFormDialogProps {
@@ -36,10 +36,6 @@ const LAB_TYPES: { value: LabType; label: string }[] = [
   { value: 'comprehensive', label: 'Comprehensive' },
   { value: 'other', label: 'Other' },
 ]
-
-function todayStr(): string {
-  return new Date().toISOString().split('T')[0]
-}
 
 interface MarkerRow {
   id: string // local key only
@@ -102,7 +98,7 @@ function labToRows(lab: Lab): MarkerRow[] {
 export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta }: LabFormDialogProps) {
   const isEdit = !!lab
 
-  const initDate = prefill?.lab.lab_date ?? lab?.lab_date ?? todayStr()
+  const initDate = prefill?.lab.lab_date ?? lab?.lab_date ?? formatLocalDate(new Date())
   const initName = prefill?.lab.name ?? lab?.name ?? ''
   const initType: LabType = prefill?.lab.type ?? lab?.type ?? 'blood'
   const initLocation = prefill?.lab.lab_location ?? lab?.lab_location ?? ''

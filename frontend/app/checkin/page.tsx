@@ -7,12 +7,8 @@ import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { useEntry } from '@/lib/api/hooks'
+import { formatLocalDate } from '@/lib/utils'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
-
-function getTodayDate() {
-  const now = new Date()
-  return now.toISOString().split('T')[0]
-}
 
 function formatDisplayDate(dateStr: string) {
   const date = new Date(dateStr + 'T00:00:00')
@@ -25,7 +21,7 @@ function formatDisplayDate(dateStr: string) {
 }
 
 export default function CheckinPage() {
-  const today = getTodayDate()
+  const today = formatLocalDate(new Date())
   const { data: entry, isLoading } = useEntry(today)
   const headerRef = useRef<HTMLDivElement | null>(null)
 
