@@ -2,13 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // ponytail: CI (ci-develop.yml / ci-main.yml) already runs `npm run typecheck`
-  // and `npm run lint` on every PR, so re-running them inside the Docker build on
-  // the Pi is redundant memory + time. Skipping them here cuts the build's peak
-  // RAM, which is what OOM-kills it under concurrent-build pressure. If CI ever
-  // stops gating types/lint, remove these.
+  // ponytail: CI (ci-develop.yml / ci-main.yml) runs `npm run typecheck` on every
+  // PR, so re-type-checking inside the Docker build on the Pi is redundant memory
+  // + time — and peak RAM is what OOM-kills the build under concurrent-build
+  // pressure. If CI ever stops gating types, remove this. (This Next version has
+  // no in-build ESLint, so there is no eslint key to skip.)
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
   async rewrites() {
     return [
       {
