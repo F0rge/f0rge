@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -33,7 +34,10 @@ const TREATMENT_TYPES: { value: TreatmentType; label: string }[] = [
 ]
 
 function getTodayDate(): string {
-  return new Date().toISOString().split('T')[0]
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
 }
 
 export function TreatmentFormDialog({ open, onOpenChange, treatment }: TreatmentFormDialogProps) {
@@ -111,6 +115,9 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Treatment' : 'Add Treatment'}</DialogTitle>
+          <DialogDescription>
+            Track a treatment course. Leave the end date empty while ongoing.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -162,7 +169,6 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
                 type="date"
                 value={endDate}
                 onChange={(e) => { setEndDate(e.target.value); setOngoing(false) }}
-                disabled={ongoing}
               />
             </div>
           </div>

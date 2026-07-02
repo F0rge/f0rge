@@ -14,14 +14,17 @@ export default function TreatmentsPage() {
   const [view, setView] = useState<'list' | 'timeline'>('list')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTreatment, setEditTreatment] = useState<Treatment | null>(null)
+  const [dialogKey, setDialogKey] = useState(0)
 
   function openAdd() {
     setEditTreatment(null)
+    setDialogKey((k) => k + 1)
     setDialogOpen(true)
   }
 
   function openEdit(t: Treatment) {
     setEditTreatment(t)
+    setDialogKey((k) => k + 1)
     setDialogOpen(true)
   }
 
@@ -99,7 +102,7 @@ export default function TreatmentsPage() {
       )}
 
       <TreatmentFormDialog
-        key={editTreatment?.id ?? 'add'}
+        key={dialogKey}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         treatment={editTreatment}
