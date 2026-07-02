@@ -1,0 +1,65 @@
+# docker-compose.mcp.prod.yml
+#
+# Production MCP server, SPLIT OUT of docker-compose.prod.yml into its own
+# Coolify compose app so it no longer cycles every time the backend stack
+# redeploys.
+#
+# WHY THIS EXISTS
+# ---------------
+# Coolify deploys every compose app with:
+#     docker compose up -d --pull always --remove-orphans --force-recreate
+# `--force-recreate` recreates ALL containers in the stack on EVERY deploy,
+# regardless of whether their image or config changed. There is no per-service
+# skip and no per-app toggle. So while mcp-server lived in docker-compose.prod.yml
+# it was torn down + rebuilt on every main push, unbinding host port 8007 for
+# ~6s each time (measured 14:46:04->14:46:10Z on 2026-07-02). During that window
+# a streamable-http MCP client that reconnects can get pinned to the wrong
+# stack's session -> prod hostname served DEV data (the 2026-07-02 incident).
+#
+# Splitting mcp-server into its own single-service Coolify app means a backend
+# stack redeploy never touches host port 8007. This app only redeploys when its
+# own image source changes — set `watch_paths=backend/**` on the Coolify app so
+# a frontend- or compose-only push does not recreate it.
+#
+# HOW IT REACHES POSTGRES (no DB split, no data-layer change)
+# -----------------------------------------------------------
+# The prod backend stack owns an external Docker network named after its Coolify
+# app UUID (`mk404cskowkgcow48g8s8okw`). That network persists across deploys and
+# postgres carries the DNS alias `postgres` on it. We attach this app's
+# mcp-server to that SAME external network, so `postgres:5432` resolves to the
+# backend stack's postgres — the exact same DB the backend writes to. No second
+# postgres, no host-port publish of postgres.
+#
+# Image source: ./backend (same Dockerfile as the backend + embedding-worker).
+
+services:
+  mcp-server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: health-tracker-mcp
+    user: "1000:1000"
+    command: ["uv", "run", "python", "-m", "app.mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8005"]
+    # Prod MCP: host:8007 -> container:8005. Host port 8005 is taken (entre-nos).
+    # Cloudflare ingress for health-mcp.leo-figueiredo.com targets localhost:8007.
+    ports:
+      - "8007:8005"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
+      - MCP_READONLY_DATABASE_URL=postgresql+asyncpg://healthtracker_ro:${HEALTHTRACKER_RO_PASSWORD}@postgres:5432/health
+      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
+      - MCP_SERVER_HOST=0.0.0.0
+      - MCP_SERVER_PORT=8005
+    mem_limit: 256m
+    restart: unless-stopped
+    networks:
+      # The prod backend stack's external UUID network. `postgres` resolves here.
+      # NOTE: no depends_on postgres — this is a separate Coolify app; the DB is
+      # managed by the backend stack. asyncpg pools reconnect if postgres cycles.
+      - mk404cskowkgcow48g8s8okw
+
+networks:
+  mk404cskowkgcow48g8s8okw:
+    external: true
