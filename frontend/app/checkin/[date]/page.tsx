@@ -106,6 +106,7 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
         </div>
       ) : (
         <CheckinBoard
+          key={date}
           date={date}
           existingEntry={entry ?? null}
           onAutosaveStateChange={handleAutosaveStateChange}
