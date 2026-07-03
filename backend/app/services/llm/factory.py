@@ -55,11 +55,14 @@ async def resolve_llm_credentials(db: AsyncSession) -> tuple[str | None, str]:
 
 
 async def resolve_embedding_credentials(db: AsyncSession) -> tuple[str | None, str]:
-    """Return (api_key, model) for the embedding provider. Callers handle missing key."""
+    """Return (api_key, model) for the embedding provider. Callers handle missing key.
+
+    Key resolution shares llm_api_key_encrypted with resolve_llm_credentials — there is
+    only one stored BYOK key, used by both clients. Model resolution stays independent."""
     row = await load_user_settings_singleton(db)
     return _resolve(
         row,
-        key_attr="embedding_api_key_encrypted",
+        key_attr="llm_api_key_encrypted",
         model_attr="embedding_model",
         default_model=DEFAULT_EMBEDDING_MODEL,
     )
@@ -75,9 +78,7 @@ async def build_llm_client(db: AsyncSession) -> LLMClient:
 async def build_embedding_client(db: AsyncSession) -> EmbeddingClient:
     api_key, model = await resolve_embedding_credentials(db)
     if not api_key:
-        raise ConflictError(
-            "Embedding client not configured. Set an API key in /settings."
-        )
+        raise ConflictError("Embedding client not configured. Set an API key in /settings.")
     return OpenRouterEmbeddingClient(api_key=api_key, default_model=model)
 
 

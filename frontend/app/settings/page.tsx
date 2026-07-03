@@ -50,7 +50,6 @@ export default function SettingsPage() {
   const [llmCustomModel, setLlmCustomModel] = useState('')
   const [llmUseCustom, setLlmUseCustom] = useState(false)
 
-  const [embeddingApiKey, setEmbeddingApiKey] = useState('')
   const [embeddingModel, setEmbeddingModel] = useState('')
   const [embeddingCustomModel, setEmbeddingCustomModel] = useState('')
   const [embeddingUseCustom, setEmbeddingUseCustom] = useState(false)
@@ -117,13 +116,11 @@ export default function SettingsPage() {
   }
 
   const handleSaveEmbedding = async () => {
-    const payload: { embedding_api_key?: string; embedding_model?: string } = {}
-    if (embeddingApiKey) payload.embedding_api_key = embeddingApiKey
+    const payload: { embedding_model?: string } = {}
     const model = embeddingUseCustom ? embeddingCustomModel.trim() : embeddingModel
     if (model) payload.embedding_model = model
     try {
       await updateEmbedding.mutateAsync(payload)
-      setEmbeddingApiKey('')
       toast.success('Embedding settings saved')
     } catch {
       toast.error('Failed to save embedding settings')
@@ -247,7 +244,8 @@ export default function SettingsPage() {
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              {userSettings.data?.has_llm_api_key
+              Used for both AI analysis and embeddings.{' '}
+              {userSettings.data?.has_api_key
                 ? 'Key set (re-enter to change)'
                 : 'No key set'}
             </p>
@@ -321,26 +319,8 @@ export default function SettingsPage() {
             <label className="text-xs font-medium text-muted-foreground">Provider</label>
             <p className="text-sm">OpenRouter</p>
             <p className="text-xs text-muted-foreground">
-              Used for future RAG / semantic search. Not currently populated.
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Key className="size-3" />
-              API Key
-            </label>
-            <input
-              type="password"
-              placeholder="sk-or-..."
-              value={embeddingApiKey}
-              onChange={(e) => setEmbeddingApiKey(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            />
-            <p className="text-xs text-muted-foreground">
-              {userSettings.data?.has_embedding_api_key
-                ? 'Key set (re-enter to change)'
-                : 'No key set'}
+              Used for future RAG / semantic search. Not currently populated. Uses the API
+              key configured above.
             </p>
           </div>
 
@@ -500,29 +480,7 @@ export default function SettingsPage() {
 
             <details className="rounded-lg border border-border">
               <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">
-                Claude Code (stdio)
-              </summary>
-              <div className="border-t border-border px-3 py-2 space-y-2">
-                <pre className="overflow-x-auto rounded bg-muted p-2 text-xs leading-relaxed">{`claude mcp add health-tracker \\
-  --transport stdio \\
-  -- ssh leo@rpi -- docker exec -i health-tracker-mcp uv run python -m app.mcp --transport stdio`}</pre>
-                <p className="text-xs text-muted-foreground">
-                  stdio mode needs the bearer set in an env-var consumed by the wrapper script.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(`claude mcp add health-tracker \\\n  --transport stdio \\\n  -- ssh leo@rpi -- docker exec -i health-tracker-mcp uv run python -m app.mcp --transport stdio`)}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Copy className="size-3" />
-                  Copy
-                </button>
-              </div>
-            </details>
-
-            <details className="rounded-lg border border-border">
-              <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">
-                Claude Desktop (JSON config)
+                Claude Desktop / Claude Code (JSON config)
               </summary>
               <div className="border-t border-border px-3 py-2 space-y-2">
                 <pre className="overflow-x-auto rounded bg-muted p-2 text-xs leading-relaxed">{`{
