@@ -17,6 +17,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -88,6 +89,9 @@ export function SymptomFormModal({ open, onClose, symptom }: SymptomFormModalPro
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit symptom' : 'Add symptom'}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? 'Update the symptom label.' : 'Name a custom symptom to track daily.'}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

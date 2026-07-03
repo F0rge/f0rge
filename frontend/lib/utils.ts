@@ -15,3 +15,9 @@ export function formatLocalDate(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0")
   return `${year}-${month}-${day}`
 }
+
+// en-GB "12 Jan 2026" display formatting for a YYYY-MM-DD date string.
+export function formatDisplayDate(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00")
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+}

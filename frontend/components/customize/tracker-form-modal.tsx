@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -101,6 +102,9 @@ export function TrackerFormModal({
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit tracker' : 'Add tracker'}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? 'Update the tracker name, icon, or unit.' : 'Set up a new custom tracker.'}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
