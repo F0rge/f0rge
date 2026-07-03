@@ -1,4 +1,3 @@
-export { HeroStats } from './hero-stats'
 export { TreatmentBanner } from './treatment-banner'
 export { FoodCard } from './food-card'
 export { WellbeingCard } from './wellbeing-card'
