@@ -12,9 +12,7 @@ class HealthMetric(Base):
     __tablename__ = "health_metrics"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    date: Mapped[datetime.date] = mapped_column(
-        Date, unique=True, nullable=False, index=True
-    )
+    date: Mapped[datetime.date] = mapped_column(Date, unique=True, nullable=False, index=True)
     hrv_mean: Mapped[float | None] = mapped_column(Float, nullable=True)
     hrv_std: Mapped[float | None] = mapped_column(Float, nullable=True)
     resting_hr: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -32,12 +30,8 @@ class HealthMetric(Base):
     active_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
     spo2: Mapped[float | None] = mapped_column(Float, nullable=True)
     wrist_temp_deviation: Mapped[float | None] = mapped_column(Float, nullable=True)
-    source: Mapped[str] = mapped_column(
-        String, nullable=False, default="health_auto_export"
-    )
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        default=datetime.datetime.utcnow
-    )
+    source: Mapped[str] = mapped_column(String, nullable=False, default="health_auto_export")
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
     updated_at: Mapped[datetime.datetime] = mapped_column(
         default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )

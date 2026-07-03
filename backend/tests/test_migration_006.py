@@ -64,9 +64,7 @@ def _load_migration(filename: str) -> Any:
     Needed because filenames start with digits, which are illegal as Python
     identifiers for regular imports.
     """
-    versions_dir = os.path.join(
-        os.path.dirname(__file__), "..", "migrations", "versions"
-    )
+    versions_dir = os.path.join(os.path.dirname(__file__), "..", "migrations", "versions")
     spec = importlib.util.spec_from_file_location(
         f"migration_{filename}",
         os.path.join(versions_dir, filename),
@@ -89,8 +87,7 @@ def _run_migration(engine: sa.Engine, fn: Any) -> None:
 def _table_exists(conn: sa.Connection, table_name: str) -> bool:
     result = conn.execute(
         text(
-            "SELECT 1 FROM information_schema.tables "
-            "WHERE table_schema='public' AND table_name=:t"
+            "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=:t"
         ),
         {"t": table_name},
     )
@@ -164,10 +161,7 @@ def test_migration_006_round_trip(migration_postgres_container: PostgresContaine
         assert _table_exists(conn, "tracker_log"), "tracker_log table missing after 006 upgrade"
 
         rows = conn.execute(
-            text(
-                "SELECT name, kind, icon, unit, position, is_seed "
-                "FROM tracker ORDER BY position"
-            )
+            text("SELECT name, kind, icon, unit, position, is_seed FROM tracker ORDER BY position")
         ).fetchall()
 
         assert len(rows) == 4, f"Expected 4 seeded trackers, got {len(rows)}: {rows}"
@@ -267,7 +261,9 @@ def test_migration_006_round_trip(migration_postgres_container: PostgresContaine
         assert count == 4, f"Re-running seed INSERT duplicated tracker rows: {count}"
 
         log_count = conn.execute(text("SELECT COUNT(*) FROM tracker_log")).scalar()
-        assert log_count == 4, f"Re-running backfill INSERT duplicated tracker_log rows: {log_count}"
+        assert log_count == 4, (
+            f"Re-running backfill INSERT duplicated tracker_log rows: {log_count}"
+        )
 
     # -----------------------------------------------------------------------
     # Step 7: downgrade — tracker + tracker_log gone; entries intact.

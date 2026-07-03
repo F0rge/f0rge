@@ -238,9 +238,7 @@ async def _process_file(
             from app.models.lab import Lab as LabModel  # local import
 
             existing_count = (
-                import_svc.db.query(LabModel)
-                .filter(LabModel.source_path == relative)
-                .count()
+                import_svc.db.query(LabModel).filter(LabModel.source_path == relative).count()
             )
             action = _infer_action(force=force, existing_count=existing_count)
         else:
@@ -255,9 +253,7 @@ async def _process_file(
             from app.models.lab import Lab as LabModel  # local import
 
             existing_count = (
-                import_svc.db.query(LabModel)
-                .filter(LabModel.source_path == relative)
-                .count()
+                import_svc.db.query(LabModel).filter(LabModel.source_path == relative).count()
             )
             action = _infer_action(force=force, existing_count=existing_count)
 
@@ -334,9 +330,7 @@ async def main(args: argparse.Namespace) -> None:
     )
 
     if not files:
-        log.info(
-            "No files found to process in %s (mode=%s).", source_dir, args.input_mode
-        )
+        log.info("No files found to process in %s (mode=%s).", source_dir, args.input_mode)
         print("Processed 0 files: 0 inserted, 0 skipped, 0 replaced, 0 failed")
         return
 

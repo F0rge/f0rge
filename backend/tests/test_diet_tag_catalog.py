@@ -21,9 +21,7 @@ async def test_create_preserves_hyphenated_key(async_db: AsyncSession) -> None:
     convert hyphens to underscores, silently splitting the catalog from the
     seed convention and breaking historical-entry chip rendering.
     """
-    item = await diet_tag_catalog_service.create_item(
-        async_db, "high-histamine", "High-histamine"
-    )
+    item = await diet_tag_catalog_service.create_item(async_db, "high-histamine", "High-histamine")
     assert item.key == "high-histamine"
 
 
@@ -36,9 +34,7 @@ async def test_create_normalizes_case_and_whitespace(async_db: AsyncSession) -> 
 
 async def test_create_converts_underscore_to_hyphen(async_db: AsyncSession) -> None:
     """Underscore inputs are coerced to the hyphen convention."""
-    item = await diet_tag_catalog_service.create_item(
-        async_db, "high_histamine", "High-histamine"
-    )
+    item = await diet_tag_catalog_service.create_item(async_db, "high_histamine", "High-histamine")
     assert item.key == "high-histamine"
 
 
@@ -67,9 +63,7 @@ async def test_create_duplicate_archived_unarchives_and_updates_label(
     item = await diet_tag_catalog_service.create_item(async_db, "gluten", "Gluten")
     await diet_tag_catalog_service.update_item(async_db, "gluten", {"archived": True})
 
-    restored = await diet_tag_catalog_service.create_item(
-        async_db, "gluten", "Gluten Updated"
-    )
+    restored = await diet_tag_catalog_service.create_item(async_db, "gluten", "Gluten Updated")
     assert restored.id == item.id
     assert restored.archived is False
     assert restored.label == "Gluten Updated"
@@ -83,22 +77,16 @@ async def test_create_duplicate_archived_unarchives_and_updates_label(
 async def test_update_archive_then_restore(async_db: AsyncSession) -> None:
     await diet_tag_catalog_service.create_item(async_db, "gluten", "Gluten")
 
-    archived = await diet_tag_catalog_service.update_item(
-        async_db, "gluten", {"archived": True}
-    )
+    archived = await diet_tag_catalog_service.update_item(async_db, "gluten", {"archived": True})
     assert archived.archived is True
 
-    restored = await diet_tag_catalog_service.update_item(
-        async_db, "gluten", {"archived": False}
-    )
+    restored = await diet_tag_catalog_service.update_item(async_db, "gluten", {"archived": False})
     assert restored.archived is False
 
 
 async def test_update_not_found_raises(async_db: AsyncSession) -> None:
     with pytest.raises(NotFoundError):
-        await diet_tag_catalog_service.update_item(
-            async_db, "nonexistent", {"archived": True}
-        )
+        await diet_tag_catalog_service.update_item(async_db, "nonexistent", {"archived": True})
 
 
 # ---------------------------------------------------------------------------
@@ -122,9 +110,7 @@ async def test_list_include_archived(async_db: AsyncSession) -> None:
     await diet_tag_catalog_service.create_item(async_db, "dairy", "Dairy")
     await diet_tag_catalog_service.update_item(async_db, "dairy", {"archived": True})
 
-    all_items = await diet_tag_catalog_service.list_items(
-        async_db, include_archived=True
-    )
+    all_items = await diet_tag_catalog_service.list_items(async_db, include_archived=True)
     keys = [i.key for i in all_items]
     assert "gluten" in keys
     assert "dairy" in keys

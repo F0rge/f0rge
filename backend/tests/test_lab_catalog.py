@@ -300,9 +300,7 @@ async def test_search_by_canonical(
     assert results[0].canonical_name == "hemoglobin"
 
 
-async def test_search_by_alias(
-    async_db: AsyncSession, service: LabMarkerCatalogService
-) -> None:
+async def test_search_by_alias(async_db: AsyncSession, service: LabMarkerCatalogService) -> None:
     await _seed_catalog(async_db, "hemoglobin", "Hemoglobin", aliases=["hemoglobina"])
     await _seed_catalog(async_db, "ferritin", "Ferritin")
     results = await service.search("hemoglobina")

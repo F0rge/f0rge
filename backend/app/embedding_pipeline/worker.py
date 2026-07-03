@@ -80,9 +80,7 @@ async def _process_row(
 
     serializer = SERIALIZERS.get(row.source_table)
     if serializer is None:
-        logger.warning(
-            {"event": "unknown_source_table", "source_table": row.source_table}
-        )
+        logger.warning({"event": "unknown_source_table", "source_table": row.source_table})
         await _delete_queue_row(db, row.id)
         return
 
@@ -216,9 +214,7 @@ async def run() -> None:
         await raw_conn.execute(f"LISTEN {_LISTEN_CHANNEL}")
         logger.info({"event": "listen_registered", "channel": _LISTEN_CHANNEL})
     except Exception as exc:
-        logger.warning(
-            {"event": "listen_failed", "error": str(exc), "fallback": "poll-only"}
-        )
+        logger.warning({"event": "listen_failed", "error": str(exc), "fallback": "poll-only"})
         raw_conn = None
 
     notify_queue: asyncio.Queue[bool] = asyncio.Queue()

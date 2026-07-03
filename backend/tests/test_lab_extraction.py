@@ -92,9 +92,7 @@ def _patch_call(
         if capture is not None:
             capture.append(messages)
         if not queue:
-            raise AssertionError(
-                "fake _call_openrouter called more times than expected"
-            )
+            raise AssertionError("fake _call_openrouter called more times than expected")
         item = queue.pop(0)
         if isinstance(item, Exception):
             raise item
@@ -137,9 +135,7 @@ async def test_extract_unknown_marker_preserves_proposed_canonical(
     hints: List[CatalogHint],
     audit_log_path: Path,
 ) -> None:
-    raw = json.dumps(
-        _valid_payload(canonical_match=None, proposed_canonical="brand_new_marker")
-    )
+    raw = json.dumps(_valid_payload(canonical_match=None, proposed_canonical="brand_new_marker"))
     _patch_call(monkeypatch, [raw])
 
     result = await LabExtractionService().extract_text("doc", hints)
@@ -262,9 +258,7 @@ async def test_canonical_hallucination_demoted_to_proposed(
     # NOT a retry — single call, single attempt.
     assert result.attempts == 1
     # But the demotion is logged.
-    assert any(
-        "hallucinated" in msg or "demoted" in msg for msg in result.retried_due_to
-    )
+    assert any("hallucinated" in msg or "demoted" in msg for msg in result.retried_due_to)
     m = result.payload.markers[0]
     assert m.canonical_match is None
     assert m.proposed_canonical == "hallucinated_canonical"

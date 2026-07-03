@@ -18,7 +18,5 @@ router = APIRouter(
 
 
 @router.get("/{date}", response_model=EnrichedDayResponse)
-async def get_enriched_day_endpoint(
-    date: datetime.date, db: AsyncSession = Depends(get_db)
-):
+async def get_enriched_day_endpoint(date: datetime.date, db: AsyncSession = Depends(get_db)):
     return await get_enriched_day(db, date)

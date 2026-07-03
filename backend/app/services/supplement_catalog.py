@@ -55,9 +55,7 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SupplementCatal
     max_item = (
         (
             await db.execute(
-                select(SupplementCatalogItem).order_by(
-                    SupplementCatalogItem.sort_order.desc()
-                )
+                select(SupplementCatalogItem).order_by(SupplementCatalogItem.sort_order.desc())
             )
         )
         .scalars()
@@ -74,9 +72,7 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SupplementCatal
 
 async def update_item(db: AsyncSession, key: str, data: dict) -> SupplementCatalogItem:
     item = (
-        await db.execute(
-            select(SupplementCatalogItem).where(SupplementCatalogItem.key == key)
-        )
+        await db.execute(select(SupplementCatalogItem).where(SupplementCatalogItem.key == key))
     ).scalar_one_or_none()
     if not item:
         raise NotFoundError(f"Catalog item '{key}' not found.")
@@ -98,9 +94,7 @@ async def touch(db: AsyncSession, keys: Iterable[str]) -> None:
         item.key: item
         for item in (
             await db.execute(
-                select(SupplementCatalogItem).where(
-                    SupplementCatalogItem.key.in_(key_list)
-                )
+                select(SupplementCatalogItem).where(SupplementCatalogItem.key.in_(key_list))
             )
         )
         .scalars()

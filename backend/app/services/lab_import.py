@@ -51,9 +51,7 @@ class LabImportService:
         self.extraction_service = extraction_service
         self.attachment_storage = attachment_storage
 
-    async def _existing_or_none(
-        self, source_path: Optional[str], force: bool
-    ) -> Optional[Lab]:
+    async def _existing_or_none(self, source_path: Optional[str], force: bool) -> Optional[Lab]:
         if force or source_path is None:
             return None
         return (
@@ -71,9 +69,7 @@ class LabImportService:
         if existing is not None:
             return existing
         hints = await _build_catalog_hints(self.catalog_service)
-        hint_name = filename or (
-            source_path.rsplit("/", 1)[-1] if source_path else None
-        )
+        hint_name = filename or (source_path.rsplit("/", 1)[-1] if source_path else None)
         result = await self.extraction_service.extract_text(
             document_text, hints, filename=hint_name
         )
@@ -98,12 +94,8 @@ class LabImportService:
         if existing is not None:
             return existing
         hints = await _build_catalog_hints(self.catalog_service)
-        result = await self.extraction_service.extract_pdf(
-            pdf_bytes, hints, filename=filename
-        )
-        attachment_path = self.attachment_storage.save(
-            pdf_bytes, filename, "application/pdf"
-        )
+        result = await self.extraction_service.extract_pdf(pdf_bytes, hints, filename=filename)
+        attachment_path = self.attachment_storage.save(pdf_bytes, filename, "application/pdf")
         return await self._persist(
             result=result,
             source_kind="pdf",
@@ -152,9 +144,7 @@ class LabImportService:
         if content_type == "application/pdf":
             return await self.import_from_pdf(file_bytes, filename, force=force)
         if content_type.startswith("image/"):
-            return await self.import_from_image(
-                file_bytes, content_type, filename, force=force
-            )
+            return await self.import_from_image(file_bytes, content_type, filename, force=force)
         raise ValidationError(
             f"Unsupported upload MIME type: {content_type!r}. "
             "Supported: application/pdf, image/jpeg, image/png, image/webp."
@@ -188,9 +178,7 @@ class LabImportService:
                 await self.db.flush()
 
         review_status = (
-            "needs_review"
-            if payload.confidence < 0.7 or result.attempts > 1
-            else "confirmed"
+            "needs_review" if payload.confidence < 0.7 or result.attempts > 1 else "confirmed"
         )
 
         marker_creates: list[LabMarkerCreate] = []

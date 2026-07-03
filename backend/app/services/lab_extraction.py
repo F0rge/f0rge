@@ -80,8 +80,7 @@ def _cross_check_and_fix(
     for m in payload.markers:
         if m.canonical_match is not None and m.canonical_match not in valid:
             retried_due_to.append(
-                f"hallucinated canonical_match={m.canonical_match!r}; "
-                f"demoted to proposed_canonical"
+                f"hallucinated canonical_match={m.canonical_match!r}; demoted to proposed_canonical"
             )
             fixed = m.model_copy(
                 update={
@@ -197,9 +196,7 @@ async def _extract(
         retried_due_to=retried_due_to,
         raw_response=last_raw,
     )
-    raise ValidationError(
-        f"Lab extraction failed after {_MAX_ATTEMPTS} attempts: {last_error}"
-    )
+    raise ValidationError(f"Lab extraction failed after {_MAX_ATTEMPTS} attempts: {last_error}")
 
 
 class LabExtractionService:
@@ -212,9 +209,7 @@ class LabExtractionService:
         filename: str | None = None,
     ) -> ExtractionResult:
         schema_json = ExtractedLabPayload.model_json_schema().__str__()
-        messages = build_text_messages(
-            document_text, catalog_hints, schema_json, filename=filename
-        )
+        messages = build_text_messages(document_text, catalog_hints, schema_json, filename=filename)
         return await _extract(messages, catalog_hints)
 
     async def extract_pdf(
@@ -227,13 +222,10 @@ class LabExtractionService:
         caps = MODEL_CAPABILITIES.get(model, set())
         if "pdf" not in caps:
             raise ValidationError(
-                f"Current model {model!r} does not support PDF; "
-                "switch model or convert to image."
+                f"Current model {model!r} does not support PDF; switch model or convert to image."
             )
         schema_json = ExtractedLabPayload.model_json_schema().__str__()
-        messages = build_pdf_messages(
-            pdf_bytes, catalog_hints, schema_json, filename=filename
-        )
+        messages = build_pdf_messages(pdf_bytes, catalog_hints, schema_json, filename=filename)
         return await _extract(messages, catalog_hints)
 
     async def extract_image(
@@ -246,9 +238,7 @@ class LabExtractionService:
         model = settings.openrouter_model
         caps = MODEL_CAPABILITIES.get(model, set())
         if "image" not in caps:
-            raise ValidationError(
-                f"Current model {model!r} does not support image input."
-            )
+            raise ValidationError(f"Current model {model!r} does not support image input.")
         schema_json = ExtractedLabPayload.model_json_schema().__str__()
         messages = build_image_messages(
             image_bytes, mime_type, catalog_hints, schema_json, filename=filename
@@ -270,7 +260,5 @@ class LabExtractionService:
         if mime_type == "application/pdf":
             return await self.extract_pdf(file_bytes, catalog_hints, filename=filename)
         if mime_type.startswith("image/"):
-            return await self.extract_image(
-                file_bytes, mime_type, catalog_hints, filename=filename
-            )
+            return await self.extract_image(file_bytes, mime_type, catalog_hints, filename=filename)
         raise ValidationError(f"Unsupported MIME type for extraction: {mime_type}")

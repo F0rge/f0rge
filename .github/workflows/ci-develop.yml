@@ -45,9 +45,10 @@ jobs:
         # (E/F/W, minus E501/F821). Follow-up: enable I + UP + B + SIM + RUF.
         run: uv tool run ruff check .
 
-      # `ruff format --check` is intentionally OFF in this first pass —
-      # the codebase has not been run through `ruff format` yet (89 files
-      # would reformat). Land a one-shot formatting PR, then enable this.
+      - name: ruff format --check
+        # Guards against format drift re-accumulating after the one-shot
+        # `ruff format` sweep. Run `uv run ruff format .` in backend/ to fix.
+        run: uv tool run ruff format --check .
 
       - name: pytest
         # testcontainers needs a Docker daemon — ubuntu-latest runners ship with one.

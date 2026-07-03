@@ -16,9 +16,7 @@ class Entry(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[datetime.date] = mapped_column(Date, unique=True, nullable=False)
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
-    entry_time: Mapped[datetime.datetime | None] = mapped_column(
-        DateTime, nullable=True
-    )
+    entry_time: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
     period_of_day: Mapped[str | None] = mapped_column(String, nullable=True)
     overall: Mapped[int] = mapped_column(Integer, nullable=False)
     bloating: Mapped[int] = mapped_column(Integer, nullable=False)

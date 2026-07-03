@@ -32,9 +32,7 @@ def load() -> None:
             gluten = bool(item.get("contains_gluten", False))
             dairy = bool(item.get("contains_dairy", False))
 
-            existing = (
-                session.query(DietaryIngredient).filter_by(canonical_name=name).first()
-            )
+            existing = session.query(DietaryIngredient).filter_by(canonical_name=name).first()
 
             if existing:
                 existing.contains_gluten = gluten

@@ -48,9 +48,7 @@ _DATE = datetime.date(2026, 5, 15)
 
 async def test_alcohol_units_present_when_nonzero(async_db: AsyncSession) -> None:
     await _add_entry(async_db, _DATE, alcohol_units=3)
-    rows, columns = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, columns = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert "alcohol_units" in columns
     assert rows[0]["alcohol_units"] == 3
@@ -58,18 +56,14 @@ async def test_alcohol_units_present_when_nonzero(async_db: AsyncSession) -> Non
 
 async def test_alcohol_units_zero(async_db: AsyncSession) -> None:
     await _add_entry(async_db, _DATE, alcohol_units=0)
-    rows, columns = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, columns = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["alcohol_units"] == 0
 
 
 async def test_alcohol_units_none(async_db: AsyncSession) -> None:
     await _add_entry(async_db, _DATE, alcohol_units=None)
-    rows, columns = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, columns = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert rows[0]["alcohol_units"] is None
 
@@ -122,9 +116,7 @@ async def test_caffeine_servings_present_when_nonzero(
     async_db: AsyncSession,
 ) -> None:
     await _add_entry(async_db, _DATE, caffeine_servings=2)
-    rows, columns = await build_feature_matrix(
-        async_db, start_date=_DATE, end_date=_DATE
-    )
+    rows, columns = await build_feature_matrix(async_db, start_date=_DATE, end_date=_DATE)
 
     assert "caffeine_servings" in columns
     assert rows[0]["caffeine_servings"] == 2

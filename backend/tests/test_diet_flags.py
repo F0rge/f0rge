@@ -93,9 +93,7 @@ async def _make_ingredient(
     return ing
 
 
-async def _build(
-    db: AsyncSession, status: str = "confirmed"
-) -> tuple[PhotoAnalysis, int]:
+async def _build(db: AsyncSession, status: str = "confirmed") -> tuple[PhotoAnalysis, int]:
     """Convenience: entry -> photo -> analysis. Returns (analysis, entry_id)."""
     entry = await _make_entry(db)
     photo = await _make_photo(db, entry)
@@ -187,9 +185,7 @@ async def test_histamine_load_sum_without_flag(async_db: AsyncSession) -> None:
     "col",
     ["fodmap_oligos", "fodmap_fructose", "fodmap_polyols", "fodmap_lactose"],
 )
-async def test_fodmap_high_subcategory_triggers_flag(
-    async_db: AsyncSession, col: str
-) -> None:
+async def test_fodmap_high_subcategory_triggers_flag(async_db: AsyncSession, col: str) -> None:
     analysis, entry_id = await _build(async_db)
     await _make_ingredient(async_db, analysis, name="ing", **{col: "high"})
     await async_db.commit()
@@ -204,9 +200,7 @@ async def test_fodmap_high_subcategory_triggers_flag(
     "col",
     ["fodmap_oligos", "fodmap_fructose", "fodmap_polyols", "fodmap_lactose"],
 )
-async def test_fodmap_moderate_does_not_trigger_flag(
-    async_db: AsyncSession, col: str
-) -> None:
+async def test_fodmap_moderate_does_not_trigger_flag(async_db: AsyncSession, col: str) -> None:
     analysis, entry_id = await _build(async_db)
     await _make_ingredient(async_db, analysis, name="ing", **{col: "moderate"})
     await async_db.commit()
@@ -221,9 +215,7 @@ async def test_fodmap_moderate_does_not_trigger_flag(
     "col",
     ["fodmap_oligos", "fodmap_fructose", "fodmap_polyols", "fodmap_lactose"],
 )
-async def test_fodmap_none_does_not_trigger_flag(
-    async_db: AsyncSession, col: str
-) -> None:
+async def test_fodmap_none_does_not_trigger_flag(async_db: AsyncSession, col: str) -> None:
     analysis, entry_id = await _build(async_db)
     await _make_ingredient(async_db, analysis, name="ing")
     await async_db.commit()

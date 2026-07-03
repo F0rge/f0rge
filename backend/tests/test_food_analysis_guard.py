@@ -36,9 +36,7 @@ async def db_with_photo(
     """
     # Use a fresh session-maker bound to the real engine so commits persist
     # past the SAVEPOINT rollback. This keeps the row visible to the trigger.
-    real_maker = async_sessionmaker(
-        async_engine, expire_on_commit=False, class_=AsyncSession
-    )
+    real_maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
 
     async with real_maker() as setup_session:
         entry = Entry(
@@ -80,9 +78,7 @@ async def db_with_photo(
         # Clean up rows we COMMITted so they don't leak between tests.
         async with real_maker() as cleanup:
             await cleanup.execute(
-                PhotoAnalysis.__table__.delete().where(
-                    PhotoAnalysis.photo_id == photo_id
-                )
+                PhotoAnalysis.__table__.delete().where(PhotoAnalysis.photo_id == photo_id)
             )
             await cleanup.execute(Photo.__table__.delete().where(Photo.id == photo_id))
             await cleanup.execute(Entry.__table__.delete().where(Entry.id == entry_id))
@@ -108,9 +104,7 @@ async def test_trigger_with_empty_api_key_marks_failed(
 
     # An analysis row exists with status=failed and a clear error message
     analysis = (
-        await session.execute(
-            select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id)
-        )
+        await session.execute(select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id))
     ).scalar_one_or_none()
     # The trigger committed onto the real engine, but our async_db is bound to
     # a SAVEPOINT on a different connection — open a separate session.
@@ -118,9 +112,7 @@ async def test_trigger_with_empty_api_key_marks_failed(
 
     async with fa.async_session_maker() as verify:
         analysis = (
-            await verify.execute(
-                select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id)
-            )
+            await verify.execute(select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id))
         ).scalar_one_or_none()
     assert analysis is not None
     assert analysis.status == "failed"
@@ -155,9 +147,7 @@ async def test_trigger_with_empty_key_updates_existing_pending(
 
     async with fa.async_session_maker() as verify:
         analysis = (
-            await verify.execute(
-                select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id)
-            )
+            await verify.execute(select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id))
         ).scalar_one_or_none()
     assert analysis is not None
     assert analysis.status == "failed"

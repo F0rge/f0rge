@@ -85,9 +85,7 @@ async def import_lab_text(
     body: LabImportRequest,
     import_service: LabImportService = Depends(get_lab_import_service),
 ):
-    return await import_service.import_from_text(
-        body.document_text, body.source_path, body.force
-    )
+    return await import_service.import_from_text(body.document_text, body.source_path, body.force)
 
 
 @router.post(

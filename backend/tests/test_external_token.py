@@ -28,8 +28,7 @@ async def test_regenerate_returns_43_char_urlsafe_token(async_db: AsyncSession) 
     # secrets.token_urlsafe(32) always produces 43 URL-safe chars.
     assert len(resp.token) == 43
     assert all(
-        c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-        for c in resp.token
+        c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" for c in resp.token
     )
 
 

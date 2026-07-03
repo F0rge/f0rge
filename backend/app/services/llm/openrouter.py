@@ -22,9 +22,7 @@ async def _post(
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(url, headers=headers, json=payload)
     if resp.status_code >= 400:
-        raise ExternalServiceError(
-            f"Upstream LLM error: {resp.status_code} {resp.text[:200]}"
-        )
+        raise ExternalServiceError(f"Upstream LLM error: {resp.status_code} {resp.text[:200]}")
     return resp.json()
 
 
@@ -52,9 +50,7 @@ class OpenRouterClient(LLMClient):
         }
         if response_format is not None:
             payload["response_format"] = response_format
-        data = await _post(
-            _COMPLETIONS_URL, api_key=self._api_key, payload=payload, timeout=90.0
-        )
+        data = await _post(_COMPLETIONS_URL, api_key=self._api_key, payload=payload, timeout=90.0)
         return data["choices"][0]["message"]["content"]
 
     async def complete_with_image(
@@ -69,9 +65,7 @@ class OpenRouterClient(LLMClient):
             "model": model or self._default_model,
             "messages": messages,
         }
-        data = await _post(
-            _COMPLETIONS_URL, api_key=self._api_key, payload=payload, timeout=60.0
-        )
+        data = await _post(_COMPLETIONS_URL, api_key=self._api_key, payload=payload, timeout=60.0)
         return data["choices"][0]["message"]["content"]
 
 
@@ -88,9 +82,7 @@ class OpenRouterEmbeddingClient(EmbeddingClient):
             "input": text,
             "dimensions": _EMBEDDING_DIM,
         }
-        data = await _post(
-            _EMBEDDINGS_URL, api_key=self._api_key, payload=payload, timeout=30.0
-        )
+        data = await _post(_EMBEDDINGS_URL, api_key=self._api_key, payload=payload, timeout=30.0)
         # OpenRouter adds extra top-level fields (provider, id) vs vanilla OpenAI.
         # Access data[0].embedding explicitly — do not assert on key count.
         return data["data"][0]["embedding"]
@@ -103,9 +95,7 @@ class OpenRouterEmbeddingClient(EmbeddingClient):
             "input": texts,
             "dimensions": _EMBEDDING_DIM,
         }
-        data = await _post(
-            _EMBEDDINGS_URL, api_key=self._api_key, payload=payload, timeout=60.0
-        )
+        data = await _post(_EMBEDDINGS_URL, api_key=self._api_key, payload=payload, timeout=60.0)
         # data is ordered by index field, but sort defensively.
         rows = sorted(data["data"], key=lambda d: d["index"])
         return [row["embedding"] for row in rows]

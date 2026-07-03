@@ -87,9 +87,7 @@ async def _run(dry_run: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Backfill embedding queue for all unembedded rows"
-    )
+    parser = argparse.ArgumentParser(description="Backfill embedding queue for all unembedded rows")
     parser.add_argument(
         "--dry-run",
         action="store_true",

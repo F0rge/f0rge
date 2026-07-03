@@ -218,9 +218,7 @@ def _format_symptoms(
 ) -> str:
     if not filtered_symptoms:
         return "None today"
-    parts = [
-        f"{active_sym_labels[k]} {v}/10" for k, v in sorted(filtered_symptoms.items())
-    ]
+    parts = [f"{active_sym_labels[k]} {v}/10" for k, v in sorted(filtered_symptoms.items())]
     return ", ".join(parts)
 
 
@@ -414,19 +412,13 @@ def _render_markdown(
         for photo in photos:
             # Render meal_time as HH:MM (24-hour, local) inline with the embed.
             meal_time = getattr(photo, "meal_time", None)
-            time_suffix = (
-                f" ({meal_time.strftime('%H:%M')})" if meal_time is not None else ""
-            )
+            time_suffix = f" ({meal_time.strftime('%H:%M')})" if meal_time is not None else ""
             lines.append(f"![[attachments/{photo.filename}]]{time_suffix}")
             if photo.label:
                 lines.append(f"*{photo.label}*")
             analysis = analyses.get(photo.id)
             if analysis:
-                conf_pct = (
-                    round(analysis.dish_confidence * 100)
-                    if analysis.dish_confidence
-                    else 0
-                )
+                conf_pct = round(analysis.dish_confidence * 100) if analysis.dish_confidence else 0
                 lines.append(f"**{analysis.dish_name}** ({conf_pct}%)")
                 # Only render ingredients the user saw in the UI (visible=true).
                 visible_ings = [i for i in analysis.ingredients if i.visible]
@@ -451,14 +443,10 @@ def _render_markdown(
         if health.sleep_hours is not None:
             lines.append(f"| Sleep | {health.sleep_hours} hours |")
         if health.sleep_deep_min is not None:
-            deep_pct = (
-                health.sleep_deep_pct if health.sleep_deep_pct is not None else "N/A"
-            )
+            deep_pct = health.sleep_deep_pct if health.sleep_deep_pct is not None else "N/A"
             lines.append(f"| Deep sleep | {health.sleep_deep_min} min ({deep_pct}%) |")
         if health.sleep_rem_min is not None:
-            rem_pct = (
-                health.sleep_rem_pct if health.sleep_rem_pct is not None else "N/A"
-            )
+            rem_pct = health.sleep_rem_pct if health.sleep_rem_pct is not None else "N/A"
             lines.append(f"| REM sleep | {health.sleep_rem_min} min ({rem_pct}%) |")
         if health.sleep_core_min is not None:
             lines.append(f"| Core sleep | {health.sleep_core_min} min |")

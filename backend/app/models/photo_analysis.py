@@ -33,9 +33,7 @@ class PhotoAnalysis(Base):
         onupdate=datetime.datetime.utcnow,
     )
 
-    photo: Mapped[Photo] = relationship(
-        "Photo", back_populates="analysis", lazy="selectin"
-    )
+    photo: Mapped[Photo] = relationship("Photo", back_populates="analysis", lazy="selectin")
     ingredients: Mapped[list[PhotoIngredient]] = relationship(
         "PhotoIngredient",
         back_populates="analysis",

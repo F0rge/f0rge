@@ -134,9 +134,7 @@ async def test_get_entry_returns_dict_when_exists(async_db: AsyncSession) -> Non
         server = FastMCP("test")
         t_mod.register_tools(server)
 
-        tool_fn = next(
-            t for t in server._tool_manager.list_tools() if t.name == "get_entry"
-        ).fn
+        tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "get_entry").fn
         result = await tool_fn(date="2025-01-15")
 
     assert result is not None
@@ -160,9 +158,7 @@ async def test_list_entries_range(async_db: AsyncSession) -> None:
         server = FastMCP("test")
         t_mod.register_tools(server)
 
-        tool_fn = next(
-            t for t in server._tool_manager.list_tools() if t.name == "list_entries"
-        ).fn
+        tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "list_entries").fn
         result = await tool_fn(start_date="2025-02-01", end_date="2025-02-28")
 
     assert len(result["entries"]) == 2
@@ -253,9 +249,7 @@ async def test_list_labs_range(async_db: AsyncSession) -> None:
         server = FastMCP("test")
         t_mod.register_tools(server)
 
-        tool_fn = next(
-            t for t in server._tool_manager.list_tools() if t.name == "list_labs"
-        ).fn
+        tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "list_labs").fn
         result = await tool_fn(start_date="2025-01-01", end_date="2025-12-31")
 
     assert len(result["labs"]) == 1
@@ -277,9 +271,7 @@ async def test_read_sql_select_returns_rows(async_db: AsyncSession) -> None:
         server = FastMCP("test")
         t_mod.register_tools(server)
 
-        tool_fn = next(
-            t for t in server._tool_manager.list_tools() if t.name == "read_sql"
-        ).fn
+        tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "read_sql").fn
         result = await tool_fn(query="SELECT id, overall FROM entries LIMIT 5")
 
     assert "columns" in result
@@ -301,9 +293,7 @@ async def test_read_sql_dml_returns_error_structure(async_db: AsyncSession) -> N
         server = FastMCP("test")
         t_mod.register_tools(server)
 
-        tool_fn = next(
-            t for t in server._tool_manager.list_tools() if t.name == "read_sql"
-        ).fn
+        tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "read_sql").fn
         # In tests we use the main engine (same user), so DELETE succeeds — but we test
         # the error wrapper for invalid SQL.
         result = await tool_fn(query="SELECT * FROM nonexistent_table_xyz_123")
@@ -343,9 +333,7 @@ async def test_search_health_data_empty_table(
             t_mod.register_tools(server)
 
             tool_fn = next(
-                t
-                for t in server._tool_manager.list_tools()
-                if t.name == "search_health_data"
+                t for t in server._tool_manager.list_tools() if t.name == "search_health_data"
             ).fn
             result = await tool_fn(query="test query")
 

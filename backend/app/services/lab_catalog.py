@@ -77,21 +77,15 @@ class LabMarkerCatalogService:
             for row in rows
         ]
 
-    async def create_catalog_item(
-        self, data: LabMarkerCatalogCreate
-    ) -> LabMarkerCatalog:
+    async def create_catalog_item(self, data: LabMarkerCatalogCreate) -> LabMarkerCatalog:
         canonical = _normalize_canonical(data.canonical_name)
         existing = (
             await self.db.execute(
-                select(LabMarkerCatalog).where(
-                    LabMarkerCatalog.canonical_name == canonical
-                )
+                select(LabMarkerCatalog).where(LabMarkerCatalog.canonical_name == canonical)
             )
         ).scalar_one_or_none()
         if existing is not None:
-            raise ConflictError(
-                f"Catalog item with canonical_name={canonical!r} already exists."
-            )
+            raise ConflictError(f"Catalog item with canonical_name={canonical!r} already exists.")
         item = LabMarkerCatalog(
             canonical_name=canonical,
             display_name=data.display_name,
@@ -107,23 +101,18 @@ class LabMarkerCatalogService:
         self, catalog_id: int, alias: str, language: Optional[str]
     ) -> LabMarkerAlias:
         catalog = (
-            await self.db.execute(
-                select(LabMarkerCatalog).where(LabMarkerCatalog.id == catalog_id)
-            )
+            await self.db.execute(select(LabMarkerCatalog).where(LabMarkerCatalog.id == catalog_id))
         ).scalar_one_or_none()
         if catalog is None:
             raise NotFoundError(f"Catalog item {catalog_id} not found.")
 
         normalized = alias.strip().lower()
         existing = (
-            await self.db.execute(
-                select(LabMarkerAlias).where(LabMarkerAlias.alias == normalized)
-            )
+            await self.db.execute(select(LabMarkerAlias).where(LabMarkerAlias.alias == normalized))
         ).scalar_one_or_none()
         if existing is not None:
             raise ConflictError(
-                f"Alias {normalized!r} is already mapped to catalog item "
-                f"{existing.catalog_id}."
+                f"Alias {normalized!r} is already mapped to catalog item {existing.catalog_id}."
             )
         alias_obj = LabMarkerAlias(
             catalog_id=catalog_id,
@@ -147,9 +136,7 @@ class LabMarkerCatalogService:
         # 1. Exact canonical
         item = (
             await self.db.execute(
-                select(LabMarkerCatalog).where(
-                    LabMarkerCatalog.canonical_name == canonical
-                )
+                select(LabMarkerCatalog).where(LabMarkerCatalog.canonical_name == canonical)
             )
         ).scalar_one_or_none()
         if item is not None:
@@ -168,9 +155,7 @@ class LabMarkerCatalogService:
         # 3. ilike canonical
         item = (
             await self.db.execute(
-                select(LabMarkerCatalog).where(
-                    LabMarkerCatalog.canonical_name.ilike(canonical)
-                )
+                select(LabMarkerCatalog).where(LabMarkerCatalog.canonical_name.ilike(canonical))
             )
         ).scalar_one_or_none()
         if item is not None:

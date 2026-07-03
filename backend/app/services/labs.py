@@ -197,9 +197,7 @@ class LabsService:
         """Compute the clinical flag for a marker reading."""
         if value is None:
             if ref_text and value_text:
-                if _ABNORMAL_REF_RE.search(ref_text) or _ABNORMAL_REF_RE.search(
-                    value_text
-                ):
+                if _ABNORMAL_REF_RE.search(ref_text) or _ABNORMAL_REF_RE.search(value_text):
                     return "abnormal"
             return "unknown"
 

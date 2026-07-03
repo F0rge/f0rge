@@ -48,8 +48,8 @@ jobs:
       - name: ruff check
         run: uv tool run ruff check .
 
-      # See ci-develop.yml — `ruff format --check` is OFF until the codebase
-      # has been run through `ruff format` once.
+      - name: ruff format --check
+        run: uv tool run ruff format --check .
 
       - name: pytest (full suite)
         run: uv run pytest -ra

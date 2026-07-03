@@ -21,9 +21,7 @@ def normalize_key(raw: str) -> str:
     return key
 
 
-async def list_items(
-    db: AsyncSession, include_archived: bool = False
-) -> list[DietTagCatalogItem]:
+async def list_items(db: AsyncSession, include_archived: bool = False) -> list[DietTagCatalogItem]:
     stmt = select(DietTagCatalogItem)
     if not include_archived:
         stmt = stmt.where(DietTagCatalogItem.archived.is_(False))
@@ -40,9 +38,7 @@ async def create_item(db: AsyncSession, key: str, label: str) -> DietTagCatalogI
         raise ValidationError("Invalid key; must contain a-z, 0-9, or hyphen.")
 
     existing = (
-        await db.execute(
-            select(DietTagCatalogItem).where(DietTagCatalogItem.key == normalized)
-        )
+        await db.execute(select(DietTagCatalogItem).where(DietTagCatalogItem.key == normalized))
     ).scalar_one_or_none()
 
     if existing:
@@ -57,9 +53,7 @@ async def create_item(db: AsyncSession, key: str, label: str) -> DietTagCatalogI
     max_item = (
         (
             await db.execute(
-                select(DietTagCatalogItem).order_by(
-                    DietTagCatalogItem.sort_order.desc()
-                )
+                select(DietTagCatalogItem).order_by(DietTagCatalogItem.sort_order.desc())
             )
         )
         .scalars()
@@ -76,9 +70,7 @@ async def create_item(db: AsyncSession, key: str, label: str) -> DietTagCatalogI
 
 async def update_item(db: AsyncSession, key: str, data: dict) -> DietTagCatalogItem:
     item = (
-        await db.execute(
-            select(DietTagCatalogItem).where(DietTagCatalogItem.key == key)
-        )
+        await db.execute(select(DietTagCatalogItem).where(DietTagCatalogItem.key == key))
     ).scalar_one_or_none()
     if not item:
         raise NotFoundError(f"Catalog item '{key}' not found.")
