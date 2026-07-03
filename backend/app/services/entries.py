@@ -60,6 +60,50 @@ def _derive_stool_normal(stool_status: Optional[str], current: Optional[bool]) -
     return None
 
 
+async def get_or_create_entry(db: AsyncSession, target_date: datetime.date) -> Entry:
+    """Return the entry for ``target_date``, creating a neutral skeleton if absent.
+
+    Used by meal-clone (and any future photo-first flow) to legally satisfy
+    Entry's NOT NULL columns without a caller-supplied check-in. The skeleton
+    matches the values the frontend already POSTs when a photo is added to an
+    untouched day (the check-in form's defaults: mid-scale overall/sleep = 2,
+    stress = 1, everything else neutral), so a clone-created day is
+    indistinguishable from a photo-first day and the board's pre-fill effect
+    reads back valid on-scale values (the wellbeing scales are 1-3, so a 0
+    would render as no selection). Flushes only (never commits) and skips every
+    create_entry side-effect (catalog touch, tracker sync, vault render): the
+    caller owns the transaction and renders the vault once its rows are added.
+    """
+    existing = (
+        await db.execute(select(Entry).where(Entry.date == target_date))
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing
+
+    now = datetime.datetime.utcnow()
+    entry = Entry(
+        date=target_date,
+        schema_version=2,
+        entry_time=now,
+        period_of_day=_period_of_day(now),
+        overall=2,
+        bloating=0,
+        stool_normal=True,
+        joint_pain=0,
+        neuro=0,
+        sleep_quality=2,
+        stress=1,
+        diet_risk="",
+        supplements="",
+        sick=False,
+        hot_shower=False,
+        symptoms_json={},
+    )
+    db.add(entry)
+    await db.flush()
+    return entry
+
+
 async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
     existing = (await db.execute(select(Entry).where(Entry.date == body.date))).scalar_one_or_none()
     if existing:
