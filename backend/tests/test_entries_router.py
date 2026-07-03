@@ -8,11 +8,14 @@ not stubbed out, per feedback_no_mocks_at_seam_under_test.md.
 
 from __future__ import annotations
 
+import datetime
+
 import bcrypt
 import pytest
 from httpx import AsyncClient
 
 from app.config import settings
+from app.services.entries import _period_of_day
 
 TEST_PIN = "1234"
 
@@ -240,15 +243,10 @@ async def test_update_entry_accepts_tz_aware_entry_time_without_500(
 ) -> None:
     """PUT with a tz-aware entry_time does not 500 (asyncpg would reject an
     offset-aware datetime bound to the tz-naive column -- see
-    project_datetime_tz_convention.md).
-
-    NOTE: app.services.entries.update_entry unconditionally re-stamps
-    entry.entry_time = datetime.utcnow() after applying update_data, so a
-    caller-supplied entry_time is accepted by the schema/validator but never
-    actually persisted -- pre-existing behavior (introduced 5c7c97b,
-    2026-05-16), not touched here. This test only proves the tz-strip
-    validator doesn't blow up the request; it deliberately does not assert
-    the (currently unreachable) value would be stored.
+    project_datetime_tz_convention.md). The tz-strip validator on EntryUpdate
+    runs uniformly with EntryCreate's even though the value is discarded
+    afterward (see test_update_entry_always_restamps_entry_time_to_now below)
+    -- this test only proves that discard path doesn't blow up the request.
     """
     await authed_client.post("/api/v1/entries", json=_VALID_PAYLOAD)
 
@@ -257,9 +255,38 @@ async def test_update_entry_accepts_tz_aware_entry_time_without_500(
         json={"entry_time": "2026-02-01T23:00:00+01:00"},  # == 22:00 UTC
     )
     assert resp.status_code == 200
-    # entry_time is naive (no offset suffix) either way -- proves no tz-aware
-    # datetime reached asyncpg, regardless of which naive value won.
+    # entry_time is naive (no offset suffix) -- proves no tz-aware datetime
+    # reached asyncpg.
     assert "+" not in resp.json()["entry_time"]
+
+
+async def test_update_entry_always_restamps_entry_time_to_now(
+    authed_client: AsyncClient,
+) -> None:
+    """entry_time/period_of_day are server-owned "last edited" metadata, not a
+    caller-settable field, despite EntryUpdate declaring them (see the
+    comment on EntryUpdate.entry_time). Every consumer -- the history page's
+    "Last logged at" label, the Obsidian vault's "Logged at" row, insights'
+    correlation-feature exclusion list -- treats the field as edit-time
+    metadata. A caller-supplied entry_time on PUT must be silently ignored
+    and replaced with the server's current time, matching create_entry's
+    period_of_day derivation for whatever entry_time actually lands.
+    """
+    await authed_client.post("/api/v1/entries", json=_VALID_PAYLOAD)
+
+    before = datetime.datetime.utcnow()
+    resp = await authed_client.put(
+        "/api/v1/entries/2026-02-01",
+        # Caller-chosen value, deliberately far from "now" so any leak is unmistakable.
+        json={"entry_time": "2020-01-01T00:00:00"},
+    )
+    after = datetime.datetime.utcnow()
+
+    assert resp.status_code == 200
+    body = resp.json()
+    stamped = datetime.datetime.fromisoformat(body["entry_time"])
+    assert before <= stamped <= after
+    assert body["period_of_day"] == _period_of_day(stamped)
 
 
 # ---------------------------------------------------------------------------
