@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -197,6 +198,13 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
           <DialogTitle>
             {isEdit ? 'Edit Lab' : prefill ? 'Confirm Extracted Lab' : 'Add Lab'}
           </DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? 'Update lab details and markers.'
+              : prefill
+                ? 'Review the extracted markers before saving.'
+                : 'Enter lab details and markers manually.'}
+          </DialogDescription>
         </DialogHeader>
 
         {extractionMeta && (

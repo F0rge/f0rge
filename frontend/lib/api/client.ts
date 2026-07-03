@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+
 const BASE = '/api/v1'
 
 class ApiError extends Error {
@@ -108,3 +110,20 @@ export async function apiPostForm(path: string, formData: FormData) {
 }
 
 export { ApiError }
+
+/**
+ * Show a toast for a caught mutation error, preferring the server's
+ * `detail` message (FastAPI's HTTPException body) over a generic fallback.
+ */
+export function handleMutationError(err: unknown, fallback: string) {
+  let message = fallback
+  if (err instanceof ApiError) {
+    try {
+      const parsed = JSON.parse(err.message) as { detail?: string }
+      if (typeof parsed.detail === 'string') message = parsed.detail
+    } catch {
+      // err.message wasn't JSON — keep the fallback
+    }
+  }
+  toast.error(message)
+}

@@ -14,7 +14,7 @@ import {
   useRegenerateExternalToken,
   useRevokeExternalToken,
 } from '@/lib/api/hooks'
-import { apiGetRaw, apiPostForm } from '@/lib/api/client'
+import { apiGetRaw, apiPostForm, handleMutationError } from '@/lib/api/client'
 
 const LLM_MODELS = [
   { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
@@ -64,8 +64,8 @@ export default function SettingsPage() {
       const result = await regenerate.mutateAsync()
       setPlaintextToken(result.token)
       toast.success('Token regenerated — copy it now; it will not be shown again')
-    } catch {
-      toast.error('Failed to regenerate token')
+    } catch (err) {
+      handleMutationError(err, 'Failed to regenerate token')
     }
   }
 
@@ -74,8 +74,8 @@ export default function SettingsPage() {
       await revoke.mutateAsync()
       setPlaintextToken(null)
       toast.success('Token revoked')
-    } catch {
-      toast.error('Failed to revoke token')
+    } catch (err) {
+      handleMutationError(err, 'Failed to revoke token')
     }
   }
 
@@ -83,8 +83,8 @@ export default function SettingsPage() {
     try {
       await navigator.clipboard.writeText(text)
       toast.success('Copied to clipboard')
-    } catch {
-      toast.error('Copy failed — select and copy manually')
+    } catch (err) {
+      handleMutationError(err, 'Copy failed — select and copy manually')
     }
   }
 
@@ -97,8 +97,8 @@ export default function SettingsPage() {
       await updateLLM.mutateAsync(payload)
       setLlmApiKey('')
       toast.success('AI settings saved')
-    } catch {
-      toast.error('Failed to save AI settings')
+    } catch (err) {
+      handleMutationError(err, 'Failed to save AI settings')
     }
   }
 
@@ -110,8 +110,8 @@ export default function SettingsPage() {
       } else {
         toast.error(`AI connection failed: ${result.detail ?? 'unknown error'}`)
       }
-    } catch {
-      toast.error('AI connection test failed')
+    } catch (err) {
+      handleMutationError(err, 'AI connection test failed')
     }
   }
 
@@ -122,8 +122,8 @@ export default function SettingsPage() {
     try {
       await updateEmbedding.mutateAsync(payload)
       toast.success('Embedding settings saved')
-    } catch {
-      toast.error('Failed to save embedding settings')
+    } catch (err) {
+      handleMutationError(err, 'Failed to save embedding settings')
     }
   }
 
@@ -135,8 +135,8 @@ export default function SettingsPage() {
       } else {
         toast.error(`Embedding connection failed: ${result.detail ?? 'unknown error'}`)
       }
-    } catch {
-      toast.error('Embedding connection test failed')
+    } catch (err) {
+      handleMutationError(err, 'Embedding connection test failed')
     }
   }
 
@@ -144,8 +144,8 @@ export default function SettingsPage() {
     try {
       await weatherFetch.mutateAsync()
       toast.success('Weather data fetched')
-    } catch {
-      toast.error('Weather fetch failed — check API key')
+    } catch (err) {
+      handleMutationError(err, 'Weather fetch failed — check API key')
     }
   }
 
@@ -181,8 +181,8 @@ export default function SettingsPage() {
       formData.append('file', file)
       await apiPostForm('/health-metrics/import', formData)
       toast.success('Health data imported')
-    } catch {
-      toast.error('Import failed')
+    } catch (err) {
+      handleMutationError(err, 'Import failed')
     } finally {
       setUploading(false)
       e.target.value = ''

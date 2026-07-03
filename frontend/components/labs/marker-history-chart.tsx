@@ -67,11 +67,15 @@ function computeRefBand(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function FlagDot(props: any) {
-  const { cx, cy, payload } = props
+interface FlagDotProps {
+  cx?: number
+  cy?: number
+  payload?: { flag?: MarkerFlag }
+}
+
+function FlagDot({ cx, cy, payload }: FlagDotProps) {
   if (cx === undefined || cy === undefined) return null
-  const color = FLAG_COLORS[(payload.flag as MarkerFlag) ?? 'unknown'] ?? FLAG_COLORS.unknown
+  const color = FLAG_COLORS[payload?.flag ?? 'unknown'] ?? FLAG_COLORS.unknown
   return <Dot cx={cx} cy={cy} r={4} fill={color} stroke="white" strokeWidth={1} />
 }
 

@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useExtractLabUpload, useImportLabUpload } from '@/lib/api/hooks'
@@ -90,6 +91,9 @@ export function LabUploadDialog({ open, onOpenChange }: LabUploadDialogProps) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Upload Lab Document</DialogTitle>
+            <DialogDescription>
+              Upload a PDF or image and AI will extract the markers for you.
+            </DialogDescription>
           </DialogHeader>
 
           {phase === 'pick' && (
