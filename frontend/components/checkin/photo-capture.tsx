@@ -4,6 +4,7 @@ import { useRef, useState, useCallback } from 'react'
 import { Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
 import { MealTimeChips } from './meal-time-chips'
 import { useUploadPhoto } from '@/lib/api/hooks'
+import { getErrorDetail } from '@/lib/api/client'
 
 interface StagedPhoto {
   id: string
@@ -73,7 +74,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
 
       setPhotos((prev) => prev.filter((p) => p.id !== id))
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Upload failed'
+      const msg = getErrorDetail(err, 'Upload failed')
       setPhotos((prev) =>
         prev.map((p) =>
           p.id === id
@@ -105,7 +106,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
 
       setPhotos((prev) => prev.filter((p) => p.id !== id))
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Upload failed'
+      const msg = getErrorDetail(err, 'Upload failed')
       setPhotos((prev) =>
         prev.map((p) =>
           p.id === id
@@ -196,13 +197,20 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                   />
                   <p className="mt-1 text-xs text-muted-foreground truncate">{photo.file.name}</p>
                   {photo.status === 'error' && (
-                    <button
-                      type="button"
-                      onClick={() => void retryUpload(photo.id)}
-                      className="mt-1 text-xs text-amber-600 underline underline-offset-2 dark:text-amber-400"
-                    >
-                      Retry upload
-                    </button>
+                    <>
+                      {photo.errorMessage && (
+                        <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                          {photo.errorMessage}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void retryUpload(photo.id)}
+                        className="mt-1 text-xs text-amber-600 underline underline-offset-2 dark:text-amber-400"
+                      >
+                        Retry upload
+                      </button>
+                    </>
                   )}
                 </div>
                 <button

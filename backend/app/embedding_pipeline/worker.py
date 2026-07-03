@@ -179,7 +179,7 @@ async def _process_pending() -> None:
                     await savepoint.commit()
 
 
-async def _build_client_or_none(db: AsyncSession) -> EmbeddingClient | None:
+async def _build_client_or_none(db: AsyncSession) -> Optional[EmbeddingClient]:
     try:
         return await build_embedding_client(db)
     except Exception as exc:
@@ -192,7 +192,7 @@ async def _build_client_or_none(db: AsyncSession) -> EmbeddingClient | None:
         return None
 
 
-async def _credentials_for_model() -> tuple[str | None, str]:
+async def _credentials_for_model() -> tuple[Optional[str], str]:
     async with async_session_maker() as db:
         return await resolve_embedding_credentials(db)
 

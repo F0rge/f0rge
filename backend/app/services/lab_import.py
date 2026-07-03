@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from typing import Optional
 
@@ -95,7 +96,9 @@ class LabImportService:
             return existing
         hints = await _build_catalog_hints(self.catalog_service)
         result = await self.extraction_service.extract_pdf(pdf_bytes, hints, filename=filename)
-        attachment_path = self.attachment_storage.save(pdf_bytes, filename, "application/pdf")
+        attachment_path = await asyncio.to_thread(
+            self.attachment_storage.save, pdf_bytes, filename, "application/pdf"
+        )
         return await self._persist(
             result=result,
             source_kind="pdf",
@@ -121,7 +124,9 @@ class LabImportService:
         result = await self.extraction_service.extract_image(
             image_bytes, mime_type, hints, filename=filename
         )
-        attachment_path = self.attachment_storage.save(image_bytes, filename, mime_type)
+        attachment_path = await asyncio.to_thread(
+            self.attachment_storage.save, image_bytes, filename, mime_type
+        )
         return await self._persist(
             result=result,
             source_kind="image",

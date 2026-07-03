@@ -1,6 +1,7 @@
 'use client'
 
 import type { Treatment } from '@/lib/api/types'
+import { formatDisplayDate } from '@/lib/utils'
 
 interface TreatmentCardProps {
   treatment: Treatment
@@ -17,14 +18,9 @@ const TYPE_BADGE_CLASSES: Record<string, string> = {
 }
 
 function formatDateRange(treatment: Treatment): string {
-  const start = new Date(treatment.start_date + 'T00:00:00')
-  const startStr = start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-
+  const startStr = formatDisplayDate(treatment.start_date)
   if (!treatment.end_date) return `${startStr} - ongoing`
-
-  const end = new Date(treatment.end_date + 'T00:00:00')
-  const endStr = end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-  return `${startStr} - ${endStr}`
+  return `${startStr} - ${formatDisplayDate(treatment.end_date)}`
 }
 
 function dayCount(treatment: Treatment): string | null {

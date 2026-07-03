@@ -68,6 +68,10 @@ class EntryCreate(BaseModel):
 
 class EntryUpdate(BaseModel):
     schema_version: Optional[int] = None
+    # entry_time/period_of_day are accepted here for shape-parity with EntryCreate (and to
+    # keep the tz-strip validator below applying uniformly), but the service always
+    # re-stamps both to "now" on every update -- they are server-owned last-edited
+    # metadata, not a caller-settable field. See EntriesService.update_entry.
     entry_time: Optional[datetime.datetime] = None
     period_of_day: Optional[str] = None
     overall: Optional[int] = None

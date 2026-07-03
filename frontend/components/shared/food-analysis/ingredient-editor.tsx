@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useAddIngredient } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 
 interface IngredientEditorProps {
   photoId: number
@@ -22,8 +23,8 @@ export function IngredientEditor({ photoId, onAdded }: IngredientEditorProps) {
       setName('')
       setAdding(false)
       onAdded()
-    } catch {
-      // Error handled by React Query
+    } catch (err) {
+      handleMutationError(err, 'Failed to add ingredient')
     }
   }
 

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import json
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 from pydantic import ValidationError as PydanticValidationError
 
@@ -179,7 +180,8 @@ async def _extract(
             attempts=attempt,
             retried_due_to=retried_due_to,
         )
-        _audit_log(
+        await asyncio.to_thread(
+            _audit_log,
             model=model,
             attempts=attempt,
             confidence=payload.confidence,
@@ -189,7 +191,8 @@ async def _extract(
         return result
 
     # All attempts exhausted.
-    _audit_log(
+    await asyncio.to_thread(
+        _audit_log,
         model=model,
         attempts=_MAX_ATTEMPTS,
         confidence=0.0,
@@ -206,7 +209,7 @@ class LabExtractionService:
         self,
         document_text: str,
         catalog_hints: List[CatalogHint],
-        filename: str | None = None,
+        filename: Optional[str] = None,
     ) -> ExtractionResult:
         schema_json = ExtractedLabPayload.model_json_schema().__str__()
         messages = build_text_messages(document_text, catalog_hints, schema_json, filename=filename)
@@ -216,7 +219,7 @@ class LabExtractionService:
         self,
         pdf_bytes: bytes,
         catalog_hints: List[CatalogHint],
-        filename: str | None = None,
+        filename: Optional[str] = None,
     ) -> ExtractionResult:
         model = settings.openrouter_model
         caps = MODEL_CAPABILITIES.get(model, set())
@@ -233,7 +236,7 @@ class LabExtractionService:
         image_bytes: bytes,
         mime_type: str,
         catalog_hints: List[CatalogHint],
-        filename: str | None = None,
+        filename: Optional[str] = None,
     ) -> ExtractionResult:
         model = settings.openrouter_model
         caps = MODEL_CAPABILITIES.get(model, set())

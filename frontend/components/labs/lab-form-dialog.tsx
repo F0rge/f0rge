@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateLab, useUpdateLab } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import { MarkerPicker } from './marker-picker'
 import { cn, formatLocalDate } from '@/lib/utils'
 import type { Lab, LabType, LabMarkerCreate, ExtractedLabPayload } from '@/lib/api/types'
@@ -183,8 +185,8 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
         toast.success('Lab added')
       }
       onOpenChange(false)
-    } catch {
-      toast.error(isEdit ? 'Failed to update lab' : 'Failed to add lab')
+    } catch (err) {
+      handleMutationError(err, isEdit ? 'Failed to update lab' : 'Failed to add lab')
     }
   }
 
@@ -197,6 +199,13 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
           <DialogTitle>
             {isEdit ? 'Edit Lab' : prefill ? 'Confirm Extracted Lab' : 'Add Lab'}
           </DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? 'Update lab details and markers.'
+              : prefill
+                ? 'Review the extracted markers before saving.'
+                : 'Enter lab details and markers manually.'}
+          </DialogDescription>
         </DialogHeader>
 
         {extractionMeta && (

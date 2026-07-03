@@ -9,6 +9,7 @@ import {
   useDeleteIngredient,
   useUpdateIngredient,
 } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import { IngredientEditor } from './ingredient-editor'
 import type { PhotoIngredient } from '@/lib/api/types'
 
@@ -125,8 +126,9 @@ function IngredientRow({
         data: { name: trimmed },
       })
       setEditing(false)
-    } catch {
-      // Error handled by React Query; keep input open so user can retry
+    } catch (err) {
+      // Keep the input open on failure so the user can retry or cancel.
+      handleMutationError(err, 'Failed to update ingredient')
     }
   }
 

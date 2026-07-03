@@ -5,6 +5,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.utils.dates import local_today
+
 
 class LabMarkerCatalogCreate(BaseModel):
     canonical_name: str = Field(min_length=1, max_length=200)
@@ -108,7 +110,7 @@ class ExtractedLab(BaseModel):
             v = datetime.date.fromisoformat(v)
         if not isinstance(v, datetime.date):
             raise ValueError(f"lab_date must be a date, got {type(v)}")
-        today = datetime.date.today()
+        today = local_today()
         if v > today + datetime.timedelta(days=1) or v.year < 1900:
             raise ValueError(f"lab_date out of range: {v}")
         return v

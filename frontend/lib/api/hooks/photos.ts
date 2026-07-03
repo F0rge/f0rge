@@ -1,0 +1,123 @@
+'use client'
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, ApiError } from '../client'
+import type { PhotoAnalysis } from '../types'
+
+export function useUploadPhoto() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      date,
+      file,
+      label,
+      mealTime,
+    }: {
+      date: string
+      file: File
+      label?: string
+      mealTime?: Date | null
+    }) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      if (label) formData.append('label', label)
+      if (mealTime) formData.append('meal_time', mealTime.toISOString())
+      return apiPostForm(`/entries/${date}/photos`, formData)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+    },
+  })
+}
+
+export function useDeletePhoto() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => apiDelete(`/photos/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+    },
+  })
+}
+
+export function usePhotoAnalysis(photoId: number | null) {
+  return useQuery<PhotoAnalysis | null>({
+    queryKey: ['photo-analysis', photoId],
+    queryFn: async () => {
+      try {
+        return await apiGet(`/photos/${photoId}/analysis`)
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          return null
+        }
+        throw err
+      }
+    },
+    enabled: photoId !== null,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      if (status === 'pending' || status === 'analyzing') {
+        return 2000
+      }
+      return false
+    },
+  })
+}
+
+export function useConfirmAnalysis() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (photoId: number) => apiPut(`/photos/${photoId}/analysis/confirm`, {}),
+    onSuccess: (_data, photoId) => {
+      queryClient.invalidateQueries({ queryKey: ['photo-analysis', photoId] })
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+    },
+  })
+}
+
+export function useRetryAnalysis() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (photoId: number) => apiPut(`/photos/${photoId}/analysis/retry`, {}),
+    onSuccess: (_data, photoId) => {
+      queryClient.invalidateQueries({ queryKey: ['photo-analysis', photoId] })
+    },
+  })
+}
+
+export function useUpdateIngredient() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ingredientId, data }: { ingredientId: number; data: Record<string, unknown> }) =>
+      apiPut(`/ingredients/${ingredientId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+    },
+  })
+}
+
+export function useAddIngredient() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ photoId, name }: { photoId: number; name: string }) =>
+      apiPost(`/photos/${photoId}/analysis/ingredients`, { name }),
+    onSuccess: (_data, { photoId }) => {
+      queryClient.invalidateQueries({ queryKey: ['photo-analysis', photoId] })
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+    },
+  })
+}
+
+export function useDeleteIngredient() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (ingredientId: number) => apiDelete(`/ingredients/${ingredientId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+    },
+  })
+}

@@ -8,9 +8,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useExtractLabUpload, useImportLabUpload } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import { LabFormDialog } from './lab-form-dialog'
 import type { ExtractionResult } from '@/lib/api/types'
 
@@ -53,9 +55,8 @@ export function LabUploadDialog({ open, onOpenChange }: LabUploadDialogProps) {
       setResult(res)
       setPhase('review')
       setConfirmOpen(true)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Extraction failed'
-      toast.error(msg)
+    } catch (err) {
+      handleMutationError(err, 'Extraction failed')
       setPhase('pick')
       setSelectedFile(null)
     }
@@ -79,8 +80,8 @@ export function LabUploadDialog({ open, onOpenChange }: LabUploadDialogProps) {
       await importUpload.mutateAsync({ file: selectedFile })
       toast.success('Lab imported')
       handleClose(false)
-    } catch {
-      toast.error('Import failed')
+    } catch (err) {
+      handleMutationError(err, 'Import failed')
     }
   }
 
@@ -90,6 +91,9 @@ export function LabUploadDialog({ open, onOpenChange }: LabUploadDialogProps) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Upload Lab Document</DialogTitle>
+            <DialogDescription>
+              Upload a PDF or image and AI will extract the markers for you.
+            </DialogDescription>
           </DialogHeader>
 
           {phase === 'pick' && (

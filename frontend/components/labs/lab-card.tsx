@@ -1,6 +1,7 @@
 'use client'
 
 import type { Lab, LabType } from '@/lib/api/types'
+import { formatDisplayDate } from '@/lib/utils'
 
 interface LabCardProps {
   lab: Lab
@@ -17,11 +18,6 @@ const TYPE_CLASSES: Record<LabType, string> = {
   other: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
 export function LabCard({ lab, onClick }: LabCardProps) {
   const abnormalCount = lab.markers.filter(
     (m) => m.flag === 'low' || m.flag === 'high' || m.flag === 'abnormal',
@@ -35,7 +31,7 @@ export function LabCard({ lab, onClick }: LabCardProps) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="shrink-0">
-          <p className="text-xs text-muted-foreground">{formatDate(lab.lab_date)}</p>
+          <p className="text-xs text-muted-foreground">{formatDisplayDate(lab.lab_date)}</p>
         </div>
 
         <div className="min-w-0 flex-1">

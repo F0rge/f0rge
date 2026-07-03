@@ -120,6 +120,14 @@ async def update_entry(db: AsyncSession, date: datetime.date, body: EntryUpdate)
         raise NotFoundError(f"No entry for {date}")
 
     update_data = body.model_dump(exclude_unset=True)
+    # entry_time/period_of_day are server-owned "last edited" stamps, not caller-settable
+    # fields, despite EntryUpdate declaring them — every consumer (history page's "Last
+    # logged at", the Obsidian vault's "Logged at" row, insights' correlation-feature
+    # exclusion list) treats them as edit-time metadata, never a caller-chosen value. Drop
+    # anything the client sent for these before the setattr loop so intent is explicit here
+    # rather than a value silently winning then getting clobbered below.
+    update_data.pop("entry_time", None)
+    update_data.pop("period_of_day", None)
     for field, value in update_data.items():
         setattr(entry, field, value)
 
