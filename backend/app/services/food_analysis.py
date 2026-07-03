@@ -56,6 +56,11 @@ class FoodAnalysisService:
         await self._rerender_vault(analysis.photo_id)
         return analysis
 
+    async def confirm_analysis_by_photo_id(self, photo_id: int) -> PhotoAnalysis:
+        """Resolve the analysis for a photo and confirm it; raises NotFoundError if absent."""
+        analysis = await self.get_analysis_or_404(photo_id)
+        return await self.confirm_analysis(analysis.id)
+
     async def update_ingredient(
         self, ingredient_id: int, updates: IngredientUpdate
     ) -> PhotoIngredient:
@@ -266,11 +271,11 @@ async def trigger_analysis_background(photo_id: int) -> None:
                 await db.execute(select(Photo).where(Photo.id == photo_id))
             ).scalar_one_or_none()
             if not photo:
-                raise ValueError(f"Photo {photo_id} not found in database")
+                raise NotFoundError(f"Photo {photo_id} not found in database")
 
             photo_path = os.path.join(settings.photo_dir, photo.filename)
             if not os.path.exists(photo_path):
-                raise FileNotFoundError(f"Photo file not found: {photo_path}")
+                raise NotFoundError(f"Photo file not found: {photo_path}")
 
             image_bytes = await asyncio.to_thread(Path(photo_path).read_bytes)
 

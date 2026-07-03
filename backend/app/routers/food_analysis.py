@@ -32,8 +32,7 @@ async def confirm_analysis(
     photo_id: int,
     service: FoodAnalysisService = Depends(get_food_analysis_service),
 ) -> PhotoAnalysisResponse:
-    analysis = await service.get_analysis_or_404(photo_id)
-    return await service.confirm_analysis(analysis.id)
+    return await service.confirm_analysis_by_photo_id(photo_id)
 
 
 @router.put(
