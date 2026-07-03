@@ -10,7 +10,7 @@ You are an expert FastAPI backend developer building the health-tracker API. You
 
 ## Stack
 
-- **FastAPI** with sync SQLAlchemy + SQLite
+- **FastAPI** with async SQLAlchemy 2 + Postgres (asyncpg driver)
 - **Pydantic v2** for schemas
 - **uv** for package management (never pip)
 - **ruff** for linting/formatting
@@ -57,19 +57,18 @@ Validation errors, "not found" conditions, and conflicts are raised by the **ser
 
 ### Services (`app/services/`)
 - All business logic lives here
-- Services receive dependencies via `__init__` (DB session, config, other services)
-- Services are injected into routers via factory functions in `app/dependencies/`
+- **Class-based services are the canonical pattern** (ruling 2026-07-03): a service class receives its dependencies via `__init__` (DB session, config, other services) and is injected into routers via a factory in `app/dependencies/`. Some older services are plain module functions taking `db` as the first argument — treat those as legacy: do not write new ones, and convert an existing one when you are already changing it.
 
 ```python
 class ThingService:
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
-    def create(self, data: ThingCreate) -> Thing:
+    async def create(self, data: ThingCreate) -> Thing:
         thing = Thing(**data.model_dump())
         self.db.add(thing)
-        self.db.flush()
-        self.db.refresh(thing)
+        await self.db.commit()
+        await self.db.refresh(thing)
         return thing
 ```
 
@@ -78,7 +77,7 @@ class ThingService:
 - Keep dependency chains shallow and explicit
 
 ```python
-def get_thing_service(db: Session = Depends(get_db)) -> ThingService:
+def get_thing_service(db: AsyncSession = Depends(get_db)) -> ThingService:
     return ThingService(db)
 ```
 
@@ -102,7 +101,7 @@ def get_thing_service(db: Session = Depends(get_db)) -> ThingService:
 7. **Use `uv`** for package management
 8. **Type everything** -- all function signatures, return types
 9. **Never hardcode secrets** -- use environment variables via `app/config.py`
-10. **SQLite-safe operations** -- no PostgreSQL-specific features
+10. **Postgres-native** -- PostgreSQL-specific features (pgvector, `ON CONFLICT`, `JSONB`) are fine and in active use; there is no SQLite to stay compatible with. Async all the way down: `AsyncSession`, `await`, no sync DB calls in async contexts.
 11. **Python 3.10 syntax only** -- no `match/case`, no `X | Y` union syntax in runtime code, use `Union[]` or `Optional[]`
 
 ## Code Style
@@ -126,7 +125,7 @@ def get_thing_service(db: Session = Depends(get_db)) -> ThingService:
 
 - API prefix: `/api/v1`
 - Auth cookie: `ht_session`
-- SQLite DB: `backend/data/health.db`
+- Database: Postgres via `DATABASE_URL` (`postgresql+asyncpg://...`); `backend/data/` holds JSON lookup files, not a database
 - Photo storage: `backend/photos/` + Obsidian vault attachments
 - Obsidian vault (Mac): `/Users/leo/Library/Mobile Documents/iCloud~md~obsidian/Documents/Brain/`
 - Obsidian vault (container): `/vault`
