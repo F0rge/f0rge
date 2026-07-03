@@ -97,6 +97,7 @@ export default function CheckinPage() {
         </div>
       ) : (
         <CheckinBoard
+          key={today}
           date={today}
           existingEntry={entry ?? null}
           onAutosaveStateChange={handleAutosaveStateChange}
