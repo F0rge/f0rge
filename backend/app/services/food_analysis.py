@@ -91,14 +91,10 @@ class FoodAnalysisService:
         await self.db.refresh(ingredient)
         return ingredient
 
-    async def add_ingredient(
-        self, analysis_id: int, data: IngredientCreate
-    ) -> PhotoIngredient:
+    async def add_ingredient(self, analysis_id: int, data: IngredientCreate) -> PhotoIngredient:
         """Add a manually-entered ingredient to an analysis."""
         analysis = (
-            await self.db.execute(
-                select(PhotoAnalysis).where(PhotoAnalysis.id == analysis_id)
-            )
+            await self.db.execute(select(PhotoAnalysis).where(PhotoAnalysis.id == analysis_id))
         ).scalar_one_or_none()
         if not analysis:
             raise NotFoundError("Analysis not found")
@@ -129,9 +125,7 @@ class FoodAnalysisService:
     async def delete_analysis(self, analysis_id: int) -> None:
         """Delete an analysis and its ingredients (cascade)."""
         analysis = (
-            await self.db.execute(
-                select(PhotoAnalysis).where(PhotoAnalysis.id == analysis_id)
-            )
+            await self.db.execute(select(PhotoAnalysis).where(PhotoAnalysis.id == analysis_id))
         ).scalar_one_or_none()
         if analysis:
             await self.db.delete(analysis)
@@ -241,9 +235,7 @@ async def trigger_analysis_background(photo_id: int) -> None:
 
             # Reuse a pending record or skip if already running/finished.
             existing = (
-                await db.execute(
-                    select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id)
-                )
+                await db.execute(select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id))
             ).scalar_one_or_none()
 
             if existing and existing.status not in ("pending", "failed"):
@@ -356,6 +348,4 @@ async def trigger_analysis_background(photo_id: int) -> None:
                         fresh.error_message = f"{type(e).__name__}: {str(e)[:200]}"
                         await db.commit()
             except Exception:
-                logger.exception(
-                    "Failed to update analysis status for photo %d", photo_id
-                )
+                logger.exception("Failed to update analysis status for photo %d", photo_id)

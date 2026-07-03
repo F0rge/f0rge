@@ -29,9 +29,7 @@ async def serialize_entry(db: AsyncSession, source_id: int) -> Optional[str]:
     parts.append(f"Neuro: {row.neuro}/10")
     parts.append(f"Sleep quality: {row.sleep_quality}/10")
     parts.append(f"Stress: {row.stress}/10")
-    _effective = sorted(
-        compute_photo_signal(row).flags | parse_diet_risk_csv(row.diet_risk)
-    )
+    _effective = sorted(compute_photo_signal(row).flags | parse_diet_risk_csv(row.diet_risk))
     parts.append(f"Diet risk: {', '.join(_effective) if _effective else 'normal'}")
     parts.append(f"Sick: {row.sick}")
     if row.stool_status:
@@ -81,9 +79,7 @@ async def serialize_treatment(db: AsyncSession, source_id: int) -> Optional[str]
 
 async def serialize_photo_analysis(db: AsyncSession, source_id: int) -> Optional[str]:
     """Return the canonical text for a photo_analysis row (joins photo_ingredients)."""
-    result = await db.execute(
-        select(PhotoAnalysis).where(PhotoAnalysis.id == source_id)
-    )
+    result = await db.execute(select(PhotoAnalysis).where(PhotoAnalysis.id == source_id))
     row = result.scalar_one_or_none()
     if row is None:
         return None

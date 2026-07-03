@@ -50,11 +50,7 @@ async def _add_catalog_item(
 
 async def _active_labels(db: AsyncSession) -> dict[str, str]:
     rows = (
-        (
-            await db.execute(
-                select(SymptomCatalogItem).where(SymptomCatalogItem.archived.is_(False))
-            )
-        )
+        (await db.execute(select(SymptomCatalogItem).where(SymptomCatalogItem.archived.is_(False))))
         .scalars()
         .all()
     )

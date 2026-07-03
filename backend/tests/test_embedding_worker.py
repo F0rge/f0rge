@@ -36,9 +36,7 @@ async def _insert_entry(db: AsyncSession, notes: str = "Feeling fine") -> Entry:
 class _FakeEmbeddingClient:
     """Stand-in for OpenRouterEmbeddingClient.embed_batch with deterministic 1024-d vecs."""
 
-    async def embed_batch(
-        self, texts: list[str], *, model: str | None = None
-    ) -> list[list[float]]:
+    async def embed_batch(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
         return [[0.1] * 1024 for _ in texts]
 
     async def embed(self, text: str, *, model: str | None = None) -> list[float]:

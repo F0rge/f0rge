@@ -58,9 +58,7 @@ async def _fetch_obsidian_deps(
     sym_result = await db.execute(
         select(SymptomCatalogItem).where(SymptomCatalogItem.archived.is_(False))
     )
-    active_sym_labels: dict[str, str] = {
-        s.key: s.label for s in sym_result.scalars().all()
-    }
+    active_sym_labels: dict[str, str] = {s.key: s.label for s in sym_result.scalars().all()}
 
     # --- active treatments ---
     tx_result = await db.execute(
@@ -74,9 +72,7 @@ async def _fetch_obsidian_deps(
     active_treatments: list[Treatment] = list(tx_result.scalars().all())
 
     # --- health metric ---
-    hm_result = await db.execute(
-        select(HealthMetric).where(HealthMetric.date == entry.date)
-    )
+    hm_result = await db.execute(select(HealthMetric).where(HealthMetric.date == entry.date))
     health = hm_result.scalar_one_or_none()
 
     # --- weather summary ---

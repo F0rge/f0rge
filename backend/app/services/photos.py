@@ -22,9 +22,7 @@ class PhotoService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def update_meal_time(
-        self, photo_id: int, meal_time: datetime.datetime
-    ) -> Photo:
+    async def update_meal_time(self, photo_id: int, meal_time: datetime.datetime) -> Photo:
         photo = (
             await self.db.execute(select(Photo).where(Photo.id == photo_id))
         ).scalar_one_or_none()
@@ -59,14 +57,10 @@ class PhotoService:
 
         # Source 1: DB rows for this entry.
         rows = (
-            await self.db.execute(
-                select(Photo.filename).where(Photo.entry_id == entry.id)
-            )
+            await self.db.execute(select(Photo.filename).where(Photo.entry_id == entry.id))
         ).all()
         for (existing_filename,) in rows:
-            if existing_filename.startswith(prefix) and existing_filename.endswith(
-                suffix
-            ):
+            if existing_filename.startswith(prefix) and existing_filename.endswith(suffix):
                 try:
                     used_numbers.add(int(existing_filename[len(prefix) : -len(suffix)]))
                 except ValueError:
@@ -109,9 +103,7 @@ class PhotoService:
         normalized_meal_time = meal_time
         if normalized_meal_time is not None and normalized_meal_time.tzinfo is not None:
             utc_offset = normalized_meal_time.utcoffset()
-            normalized_meal_time = (normalized_meal_time - utc_offset).replace(
-                tzinfo=None
-            )
+            normalized_meal_time = (normalized_meal_time - utc_offset).replace(tzinfo=None)
 
         photo = Photo(
             entry_id=entry.id,

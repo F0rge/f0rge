@@ -109,9 +109,7 @@ async def test_ongoing_treatment_active_through_end_of_range(
     async_db: AsyncSession,
 ) -> None:
     """Ongoing treatment (end_date=None) is active on every day in the range."""
-    await _add_treatment(
-        async_db, "Allicin", "allicin", datetime.date(2026, 5, 1), end_date=None
-    )
+    await _add_treatment(async_db, "Allicin", "allicin", datetime.date(2026, 5, 1), end_date=None)
 
     rows, columns = await build_feature_matrix(
         async_db,

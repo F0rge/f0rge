@@ -178,9 +178,7 @@ async def test_render_markdown_multiple_treatments(
     entry = await _make_entry(async_db, entry_date)
     # Both are active on entry_date
     await _make_treatment(async_db, "Allicin", "allicin", datetime.date(2026, 5, 8))
-    await _make_treatment(
-        async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 13)
-    )
+    await _make_treatment(async_db, "Rifaximin", "rifaximin", datetime.date(2026, 5, 13))
 
     content = _render(entry, await _active_treatments(async_db, entry_date))
 

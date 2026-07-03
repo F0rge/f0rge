@@ -8,9 +8,7 @@ from app.database import Base
 
 class LabMarker(Base):
     __tablename__ = "lab_markers"
-    __table_args__ = (
-        Index("ix_lab_markers_canonical_lab", "canonical_name", "lab_id"),
-    )
+    __table_args__ = (Index("ix_lab_markers_canonical_lab", "canonical_name", "lab_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     lab_id: Mapped[int] = mapped_column(
@@ -33,6 +31,4 @@ class LabMarker(Base):
     flag: Mapped[str] = mapped_column(String, nullable=False)
 
     lab: Mapped[Lab] = relationship("Lab", back_populates="markers", lazy="selectin")
-    catalog: Mapped[LabMarkerCatalog] = relationship(
-        "LabMarkerCatalog", lazy="selectin"
-    )
+    catalog: Mapped[LabMarkerCatalog] = relationship("LabMarkerCatalog", lazy="selectin")

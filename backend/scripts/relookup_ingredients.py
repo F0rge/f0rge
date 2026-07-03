@@ -30,9 +30,7 @@ def main() -> None:
 
     db: Session = SessionLocal()
 
-    unmatched = (
-        db.query(PhotoIngredient).filter(PhotoIngredient.canonical_name.is_(None)).all()
-    )
+    unmatched = db.query(PhotoIngredient).filter(PhotoIngredient.canonical_name.is_(None)).all()
 
     if not unmatched:
         print("All ingredients already matched. Nothing to do.")
@@ -50,9 +48,7 @@ def main() -> None:
         match = lookup.lookup(ing.name)
         if match:
             if args.dry_run:
-                print(
-                    f"  {ing.name} -> {match.canonical_name} (H:{match.histamine_score})"
-                )
+                print(f"  {ing.name} -> {match.canonical_name} (H:{match.histamine_score})")
             else:
                 ing.canonical_name = match.canonical_name
                 ing.histamine_score = match.histamine_score
@@ -63,27 +59,21 @@ def main() -> None:
                 ing.contains_gluten = match.contains_gluten
                 ing.contains_dairy = match.contains_dairy
                 affected_analysis_ids.add(ing.analysis_id)
-                print(
-                    f"  {ing.name} -> {match.canonical_name} (H:{match.histamine_score})"
-                )
+                print(f"  {ing.name} -> {match.canonical_name} (H:{match.histamine_score})")
             resolved += 1
         else:
             print(f"  {ing.name} -> ? (still no match)")
             still_missing += 1
 
     if args.dry_run:
-        print(
-            f"\n--dry-run: {resolved} would be resolved, {still_missing} still missing."
-        )
+        print(f"\n--dry-run: {resolved} would be resolved, {still_missing} still missing.")
         db.close()
         return
 
     db.commit()
 
     affected_analyses = (
-        db.query(PhotoAnalysis)
-        .filter(PhotoAnalysis.id.in_(list(affected_analysis_ids)))
-        .all()
+        db.query(PhotoAnalysis).filter(PhotoAnalysis.id.in_(list(affected_analysis_ids))).all()
     )
     photo_ids = [a.photo_id for a in affected_analyses]
     photos = db.query(Photo).filter(Photo.id.in_(photo_ids)).all()

@@ -34,9 +34,7 @@ def load() -> None:
             polyols = item.get("polyols", "low")
             lactose = item.get("lactose", "low")
 
-            existing = (
-                session.query(DietaryIngredient).filter_by(canonical_name=name).first()
-            )
+            existing = session.query(DietaryIngredient).filter_by(canonical_name=name).first()
 
             if existing:
                 existing.fodmap_oligos = oligos

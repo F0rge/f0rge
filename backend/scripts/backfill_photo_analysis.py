@@ -29,11 +29,7 @@ def find_unprocessed_photos(db: Session) -> list[tuple[int, str, str | None]]:
         .outerjoin(PhotoAnalysis, Photo.id == PhotoAnalysis.photo_id)
         .all()
     )
-    return [
-        (pid, fname, status)
-        for pid, fname, status in photos
-        if status not in SKIP_STATUSES
-    ]
+    return [(pid, fname, status) for pid, fname, status in photos if status not in SKIP_STATUSES]
 
 
 def main() -> None:
@@ -77,13 +73,9 @@ def main() -> None:
 
         db2 = SessionLocal()
         try:
-            analysis = (
-                db2.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == pid).first()
-            )
+            analysis = db2.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == pid).first()
             if analysis and analysis.status == "complete":
-                print(
-                    f"  -> {analysis.dish_name} ({len(analysis.ingredients)} ingredients)"
-                )
+                print(f"  -> {analysis.dish_name} ({len(analysis.ingredients)} ingredients)")
             elif analysis and analysis.status == "failed":
                 print(
                     f"  -> FAILED: {analysis.error_message[:120] if analysis.error_message else 'unknown'}"

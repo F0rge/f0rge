@@ -68,9 +68,9 @@ def register_tools(server: FastMCP) -> None:
                     Embedding.source_table,
                     Embedding.source_id,
                     Embedding.chunk_text,
-                    (
-                        Embedding.embedding.op("<=>", return_type=Float())(query_vec)
-                    ).label("distance"),
+                    (Embedding.embedding.op("<=>", return_type=Float())(query_vec)).label(
+                        "distance"
+                    ),
                 )
                 .where(Embedding.embedding_model == model)
                 .order_by(text("distance"))

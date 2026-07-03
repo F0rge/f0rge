@@ -24,9 +24,7 @@ async def list_catalog(
     include_archived: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
-    return await diet_tag_catalog_service.list_items(
-        db, include_archived=include_archived
-    )
+    return await diet_tag_catalog_service.list_items(db, include_archived=include_archived)
 
 
 @router.post(
@@ -47,6 +45,4 @@ async def update_catalog_item(
     body: DietTagCatalogItemUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    return await diet_tag_catalog_service.update_item(
-        db, key, body.model_dump(exclude_unset=True)
-    )
+    return await diet_tag_catalog_service.update_item(db, key, body.model_dump(exclude_unset=True))

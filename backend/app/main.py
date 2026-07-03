@@ -91,16 +91,12 @@ async def _seed_supplement_catalog() -> None:
 
     async with async_session_maker() as session:
         existing_count = (
-            await session.execute(
-                select(func.count()).select_from(SupplementCatalogItem)
-            )
+            await session.execute(select(func.count()).select_from(SupplementCatalogItem))
         ).scalar_one()
         if existing_count > 0:
             return
         for sort_order, (key, label) in enumerate(DEFAULT_SUPPLEMENTS):
-            session.add(
-                SupplementCatalogItem(key=key, label=label, sort_order=sort_order)
-            )
+            session.add(SupplementCatalogItem(key=key, label=label, sort_order=sort_order))
         await session.commit()
 
 
@@ -149,8 +145,7 @@ async def _seed_dietary_db_if_empty() -> None:
         return
 
     logger.warning(
-        "Dietary tables empty — seeding from bundled JSON. "
-        "This runs once on a fresh data volume."
+        "Dietary tables empty — seeding from bundled JSON. This runs once on a fresh data volume."
     )
     try:
         from scripts.seed_dietary_db import main as seed_main
@@ -158,9 +153,7 @@ async def _seed_dietary_db_if_empty() -> None:
         await asyncio.to_thread(seed_main)
         async with async_session_maker() as session:
             count = (
-                await session.execute(
-                    select(func.count()).select_from(DietaryIngredient)
-                )
+                await session.execute(select(func.count()).select_from(DietaryIngredient))
             ).scalar_one()
         logger.info("Dietary seed complete: %d ingredients loaded", count)
     except Exception:
@@ -197,39 +190,27 @@ app.add_middleware(
 
 @app.exception_handler(NotFoundError)
 async def _handle_not_found(_: Request, exc: NotFoundError) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND, content={"detail": exc.detail}
-    )
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": exc.detail})
 
 
 @app.exception_handler(ValidationError)
 async def _handle_validation(_: Request, exc: ValidationError) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST, content={"detail": exc.detail}
-    )
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": exc.detail})
 
 
 @app.exception_handler(ConflictError)
 async def _handle_conflict(_: Request, exc: ConflictError) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_409_CONFLICT, content={"detail": exc.detail}
-    )
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": exc.detail})
 
 
 @app.exception_handler(UnauthorizedError)
 async def _handle_unauthorized(_: Request, exc: UnauthorizedError) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": exc.detail}
-    )
+    return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": exc.detail})
 
 
 @app.exception_handler(ExternalServiceError)
-async def _handle_external_service(
-    _: Request, exc: ExternalServiceError
-) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_502_BAD_GATEWAY, content={"detail": exc.detail}
-    )
+async def _handle_external_service(_: Request, exc: ExternalServiceError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_502_BAD_GATEWAY, content={"detail": exc.detail})
 
 
 app.include_router(auth.router)

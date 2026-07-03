@@ -43,9 +43,7 @@ async def test_valid_token_passes_verification(async_db: AsyncSession) -> None:
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalar_one_or_none=lambda: row)
-        )
+        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -71,9 +69,7 @@ async def test_wrong_token_returns_none(async_db: AsyncSession) -> None:
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalar_one_or_none=lambda: row)
-        )
+        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -96,9 +92,7 @@ async def test_revoked_token_returns_none(async_db: AsyncSession) -> None:
     verifier = BearerTokenVerifier()
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalar_one_or_none=lambda: row)
-        )
+        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -112,9 +106,7 @@ async def test_no_settings_row_returns_none() -> None:
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalar_one_or_none=lambda: None)
-        )
+        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -132,9 +124,7 @@ async def test_corrupt_ciphertext_returns_none() -> None:
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalar_one_or_none=lambda: mock_row)
-        )
+        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_row))
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 

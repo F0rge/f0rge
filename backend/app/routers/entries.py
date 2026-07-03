@@ -37,9 +37,7 @@ async def get_entry(date: datetime.date, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{date}", response_model=EntryResponse)
-async def update_entry(
-    date: datetime.date, body: EntryUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_entry(date: datetime.date, body: EntryUpdate, db: AsyncSession = Depends(get_db)):
     return await entries_service.update_entry(db, date, body)
 
 

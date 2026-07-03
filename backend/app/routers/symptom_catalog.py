@@ -25,9 +25,7 @@ async def list_catalog(
     include_archived: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
-    return await symptom_catalog_service.list_items(
-        db, include_archived=include_archived
-    )
+    return await symptom_catalog_service.list_items(db, include_archived=include_archived)
 
 
 @router.post(
@@ -56,6 +54,4 @@ async def update_catalog_item(
     body: SymptomCatalogItemUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    return await symptom_catalog_service.update_item(
-        db, key, body.model_dump(exclude_unset=True)
-    )
+    return await symptom_catalog_service.update_item(db, key, body.model_dump(exclude_unset=True))

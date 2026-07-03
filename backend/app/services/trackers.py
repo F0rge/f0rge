@@ -42,9 +42,7 @@ async def create_tracker(db: AsyncSession, body: TrackerCreate) -> Tracker:
     # collide with seed positions 0..3 and interleave on the daily card.
     next_position = (
         await db.execute(
-            select(func.coalesce(func.max(Tracker.position), -1)).where(
-                Tracker.archived.is_(False)
-            )
+            select(func.coalesce(func.max(Tracker.position), -1)).where(Tracker.archived.is_(False))
         )
     ).scalar() or -1
 
@@ -94,7 +92,9 @@ async def reorder_trackers(db: AsyncSession, order: list[int]) -> list[Tracker]:
                     Tracker.is_seed.is_(False),
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     if set(order) != eligible_ids:
         raise ValidationError(
@@ -106,7 +106,9 @@ async def reorder_trackers(db: AsyncSession, order: list[int]) -> list[Tracker]:
     # Count only active seeds — an archived seed no longer occupies a visible slot.
     seed_count = (
         await db.execute(
-            select(func.count()).select_from(Tracker).where(
+            select(func.count())
+            .select_from(Tracker)
+            .where(
                 Tracker.is_seed.is_(True),
                 Tracker.archived.is_(False),
             )

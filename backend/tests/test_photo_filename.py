@@ -39,9 +39,7 @@ from app.services.photos import PhotoService
 
 
 @pytest_asyncio.fixture
-async def isolated_storage(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> AsyncIterator[None]:
+async def isolated_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     """Point photo_dir + vault_path at tmp_path so tests never touch
     backend/photos/ or the real Obsidian vault."""
     photo_dir = tmp_path / "photos"
@@ -58,9 +56,7 @@ async def isolated_storage(
     async def _noop(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(
-        "app.services.photos.render_and_write_daily_file", _noop, raising=False
-    )
+    monkeypatch.setattr("app.services.photos.render_and_write_daily_file", _noop, raising=False)
     monkeypatch.setattr("app.services.photos.write_daily_file", _noop, raising=False)
     yield
 
@@ -120,9 +116,7 @@ async def _delete(db: AsyncSession, photo_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_first_upload_gets_photo_1(
-    async_db: AsyncSession, isolated_storage: None
-) -> None:
+async def test_first_upload_gets_photo_1(async_db: AsyncSession, isolated_storage: None) -> None:
     day = datetime.date(2026, 5, 15)
     await _make_entry(async_db, day)
 
@@ -131,9 +125,7 @@ async def test_first_upload_gets_photo_1(
     assert photo.filename == "2026-05-15_photo-1.jpg"
 
 
-async def test_second_upload_gets_photo_2(
-    async_db: AsyncSession, isolated_storage: None
-) -> None:
+async def test_second_upload_gets_photo_2(async_db: AsyncSession, isolated_storage: None) -> None:
     day = datetime.date(2026, 5, 15)
     await _make_entry(async_db, day)
 
@@ -211,9 +203,7 @@ async def test_gaps_in_numbering_are_preserved(
     assert eighth.filename == "2026-05-15_photo-8.jpg"
 
 
-async def test_numbering_is_per_date(
-    async_db: AsyncSession, isolated_storage: None
-) -> None:
+async def test_numbering_is_per_date(async_db: AsyncSession, isolated_storage: None) -> None:
     """Sanity check: each date has its own independent numbering sequence."""
     day_a = datetime.date(2026, 5, 15)
     day_b = datetime.date(2026, 5, 16)
@@ -232,9 +222,7 @@ async def test_numbering_is_per_date(
 # ---------------------------------------------------------------------------
 
 
-def test_save_photo_raises_if_target_exists(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_save_photo_raises_if_target_exists(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     """If a future bug ever passes a colliding filename to save_photo, we
     want a loud failure rather than silent data loss."""
     photo_dir = tmp_path / "photos"

@@ -38,9 +38,7 @@ from app.services.photos import PhotoService
 
 
 @pytest_asyncio.fixture
-async def isolated_storage(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> AsyncIterator[None]:
+async def isolated_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     """Redirect photo + vault storage to a temp dir.
 
     NOTE: this fixture previously monkeypatched ``render_and_write_daily_file``
@@ -152,9 +150,7 @@ async def test_upload_with_explicit_meal_time_persists_it(
 # ---------------------------------------------------------------------------
 
 
-async def test_patch_updates_meal_time(
-    async_db: AsyncSession, isolated_storage: None
-) -> None:
+async def test_patch_updates_meal_time(async_db: AsyncSession, isolated_storage: None) -> None:
     day = datetime.date(2026, 5, 15)
     await _make_entry(async_db, day)
     photo = await _upload(async_db, day)

@@ -88,9 +88,7 @@ async def _upload(
 
 
 @pytest_asyncio.fixture
-async def real_storage(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> AsyncIterator[None]:
+async def real_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     """Redirect ``photo_dir`` and ``vault_path`` to tmp directories.
 
     Critically, this fixture does NOT monkeypatch ``render_and_write_daily_file``,
@@ -134,9 +132,7 @@ async def test_sequential_uploads_write_files_db_rows_and_vault(
 
     # Each row exists in the photos table.
     rows = (
-        await async_db.execute(
-            select(Photo.filename).where(Photo.entry_id == photos[0].entry_id)
-        )
+        await async_db.execute(select(Photo.filename).where(Photo.entry_id == photos[0].entry_id))
     ).all()
     db_filenames = sorted(r[0] for r in rows)
     assert db_filenames == sorted(expected)
@@ -144,15 +140,11 @@ async def test_sequential_uploads_write_files_db_rows_and_vault(
     # Vault file includes the three embeds. The vault is the real rendering,
     # not a no-op stub, so this assertion guards both photos.py and the
     # obsidian renderer.
-    vault_file = os.path.join(
-        settings.vault_path, "Daily", "Health-Logs", f"{day.isoformat()}.md"
-    )
+    vault_file = os.path.join(settings.vault_path, "Daily", "Health-Logs", f"{day.isoformat()}.md")
     assert os.path.exists(vault_file)
     content = open(vault_file, encoding="utf-8").read()
     for name in expected:
-        assert f"![[attachments/{name}]]" in content, (
-            f"Vault file missing embed for {name}"
-        )
+        assert f"![[attachments/{name}]]" in content, f"Vault file missing embed for {name}"
 
 
 # ---------------------------------------------------------------------------
@@ -282,9 +274,7 @@ async def test_analysis_fallback_error_message_is_short_no_traceback(
 
     # Use a session-maker bound to the same container engine the test uses,
     # because the trigger calls async_session_maker() internally.
-    real_maker = async_sessionmaker(
-        async_engine, expire_on_commit=False, class_=AsyncSession
-    )
+    real_maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.services.food_analysis.async_session_maker", real_maker)
 
     day = datetime.date(2026, 5, 16)
@@ -389,9 +379,7 @@ async def test_analysis_fallback_error_message_is_short_no_traceback(
         # Clean up the rows we COMMITted onto the real engine.
         async with real_maker() as cleanup:
             await cleanup.execute(
-                PhotoAnalysis.__table__.delete().where(
-                    PhotoAnalysis.photo_id == photo_id
-                )
+                PhotoAnalysis.__table__.delete().where(PhotoAnalysis.photo_id == photo_id)
             )
             await cleanup.execute(Photo.__table__.delete().where(Photo.id == photo_id))
             await cleanup.execute(Entry.__table__.delete().where(Entry.id == entry_id))

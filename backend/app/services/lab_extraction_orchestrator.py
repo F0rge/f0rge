@@ -28,9 +28,7 @@ class LabExtractionOrchestrator:
         ]
 
     async def preview_text(self, document_text: str) -> ExtractionResult:
-        return await self.extraction_service.extract_text(
-            document_text, await self._hints()
-        )
+        return await self.extraction_service.extract_text(document_text, await self._hints())
 
     async def preview_upload(self, file: UploadFile) -> ExtractionResult:
         file_bytes = await file.read()

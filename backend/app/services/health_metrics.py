@@ -59,9 +59,7 @@ async def import_health_data(db: AsyncSession, body: dict) -> dict:
 
     for date_key, metric_create in parsed.items():
         existing = (
-            await db.execute(
-                select(HealthMetric).where(HealthMetric.date == metric_create.date)
-            )
+            await db.execute(select(HealthMetric).where(HealthMetric.date == metric_create.date))
         ).scalar_one_or_none()
         if existing:
             update_data = metric_create.model_dump(exclude={"date"}, exclude_none=True)
