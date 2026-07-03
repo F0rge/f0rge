@@ -21,9 +21,7 @@ def _sliding_window(text: str, max_tokens: int, overlap_tokens: int) -> list[str
     return chunks
 
 
-def chunk_text(
-    text: str, *, max_tokens: int = 800, overlap_tokens: int = 100
-) -> list[str]:
+def chunk_text(text: str, *, max_tokens: int = 800, overlap_tokens: int = 100) -> list[str]:
     """Markdown-aware H2 split, with token estimate = len(s) // 4.
 
     First splits on ``\\n## `` boundaries. If any resulting section exceeds

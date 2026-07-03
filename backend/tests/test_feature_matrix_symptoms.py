@@ -114,9 +114,7 @@ async def test_other_dates_get_none_for_symptom(async_db: AsyncSession) -> None:
 async def test_archived_symptom_excluded_from_columns(
     async_db: AsyncSession,
 ) -> None:
-    await _add_sym_item(
-        async_db, "vss", "Visual Snow", archived=True, first_used_at=_NOW
-    )
+    await _add_sym_item(async_db, "vss", "Visual Snow", archived=True, first_used_at=_NOW)
     await _add_entry(async_db, _DATE, {"vss": 7})
 
     rows, columns = await build_feature_matrix(async_db, _DATE, _DATE)

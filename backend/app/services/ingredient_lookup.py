@@ -65,9 +65,7 @@ class IngredientLookupService:
         # 1. Exact match on canonical_name
         result = (
             await self.db.execute(
-                select(DietaryIngredient).where(
-                    DietaryIngredient.canonical_name == normalised
-                )
+                select(DietaryIngredient).where(DietaryIngredient.canonical_name == normalised)
             )
         ).scalar_one_or_none()
         if result:
@@ -110,9 +108,7 @@ class IngredientLookupService:
                     return result
                 alias = (
                     await self.db.execute(
-                        select(IngredientAlias).where(
-                            IngredientAlias.alias == last_word
-                        )
+                        select(IngredientAlias).where(IngredientAlias.alias == last_word)
                     )
                 ).scalar_one_or_none()
                 if alias:
@@ -141,18 +137,14 @@ class IngredientLookupService:
             .first()
         )
 
-    async def lookup_batch(
-        self, names: list[str]
-    ) -> dict[str, Optional[DietaryIngredient]]:
+    async def lookup_batch(self, names: list[str]) -> dict[str, Optional[DietaryIngredient]]:
         """Batch lookup for multiple ingredient names."""
         result = {}
         for name in names:
             result[name] = await self.lookup(name)
         return result
 
-    async def suggest_canonical(
-        self, name: str, limit: int = 5
-    ) -> list[DietaryIngredient]:
+    async def suggest_canonical(self, name: str, limit: int = 5) -> list[DietaryIngredient]:
         """Return top matching dietary ingredients for autocomplete."""
         normalised = name.lower().strip()
         return list(

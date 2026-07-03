@@ -30,10 +30,7 @@ def _build_response(entry: Entry) -> EntryResponse:
     return EntryResponse.model_validate(
         {
             **{c.name: getattr(entry, c.name) for c in entry.__table__.columns},
-            "photos": [
-                PhotoResponse.model_validate(p, from_attributes=True)
-                for p in entry.photos
-            ],
+            "photos": [PhotoResponse.model_validate(p, from_attributes=True) for p in entry.photos],
             "photo_signal": signal,
             "photo_derived_flags": sorted(signal.flags),
             "user_added_flags": sorted(user_added),
@@ -53,9 +50,7 @@ def _period_of_day(ts: datetime.datetime) -> str:
     return "night"
 
 
-def _derive_stool_normal(
-    stool_status: Optional[str], current: Optional[bool]
-) -> Optional[bool]:
+def _derive_stool_normal(stool_status: Optional[str], current: Optional[bool]) -> Optional[bool]:
     if current is not None:
         return current
     if stool_status == "normal":
@@ -66,9 +61,7 @@ def _derive_stool_normal(
 
 
 async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
-    existing = (
-        await db.execute(select(Entry).where(Entry.date == body.date))
-    ).scalar_one_or_none()
+    existing = (await db.execute(select(Entry).where(Entry.date == body.date))).scalar_one_or_none()
     if existing:
         raise ConflictError(f"Entry for {body.date} already exists")
 
@@ -79,17 +72,13 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
         data["period_of_day"] = _period_of_day(data["entry_time"])
     if data.get("schema_version") is None:
         data["schema_version"] = 3
-    data["stool_normal"] = _derive_stool_normal(
-        data.get("stool_status"), data.get("stool_normal")
-    )
+    data["stool_normal"] = _derive_stool_normal(data.get("stool_status"), data.get("stool_normal"))
     data["symptoms_json"] = data.get("symptoms_json") or {}
 
     entry = Entry(**data)
     db.add(entry)
 
-    supplement_keys = [
-        s.strip() for s in (entry.supplements or "").split(",") if s.strip()
-    ]
+    supplement_keys = [s.strip() for s in (entry.supplements or "").split(",") if s.strip()]
     await supplement_catalog_service.touch(db, supplement_keys)
     await symptom_catalog_service.touch(db, list((entry.symptoms_json or {}).keys()))
 
@@ -103,9 +92,7 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
     return _build_response(entry)
 
 
-async def list_entries(
-    db: AsyncSession, month: Optional[str] = None
-) -> list[EntryResponse]:
+async def list_entries(db: AsyncSession, month: Optional[str] = None) -> list[EntryResponse]:
     stmt = select(Entry)
     if month:
         year, mon = month.split("-")
@@ -121,20 +108,14 @@ async def list_entries(
 
 
 async def get_entry(db: AsyncSession, date: datetime.date) -> EntryResponse:
-    entry = (
-        await db.execute(select(Entry).where(Entry.date == date))
-    ).scalar_one_or_none()
+    entry = (await db.execute(select(Entry).where(Entry.date == date))).scalar_one_or_none()
     if not entry:
         raise NotFoundError(f"No entry for {date}")
     return _build_response(entry)
 
 
-async def update_entry(
-    db: AsyncSession, date: datetime.date, body: EntryUpdate
-) -> EntryResponse:
-    entry = (
-        await db.execute(select(Entry).where(Entry.date == date))
-    ).scalar_one_or_none()
+async def update_entry(db: AsyncSession, date: datetime.date, body: EntryUpdate) -> EntryResponse:
+    entry = (await db.execute(select(Entry).where(Entry.date == date))).scalar_one_or_none()
     if not entry:
         raise NotFoundError(f"No entry for {date}")
 
@@ -148,9 +129,7 @@ async def update_entry(
     entry.entry_time = now
     entry.period_of_day = _period_of_day(now)
 
-    supplement_keys = [
-        s.strip() for s in (entry.supplements or "").split(",") if s.strip()
-    ]
+    supplement_keys = [s.strip() for s in (entry.supplements or "").split(",") if s.strip()]
     await supplement_catalog_service.touch(db, supplement_keys)
     await symptom_catalog_service.touch(db, list((entry.symptoms_json or {}).keys()))
 

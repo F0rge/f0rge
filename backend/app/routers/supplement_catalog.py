@@ -24,9 +24,7 @@ async def list_catalog(
     include_archived: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
-    return await supplement_catalog_service.list_items(
-        db, include_archived=include_archived
-    )
+    return await supplement_catalog_service.list_items(db, include_archived=include_archived)
 
 
 @router.post(

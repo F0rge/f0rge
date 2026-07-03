@@ -54,9 +54,7 @@ async def fetch_and_store_weather() -> Optional[WeatherReading]:
             ).scalar_one_or_none()
 
             if existing:
-                logger.debug(
-                    "Weather reading for %s already exists, skipping", truncated
-                )
+                logger.debug("Weather reading for %s already exists, skipping", truncated)
                 return existing
 
             weather_main = None
@@ -82,9 +80,7 @@ async def fetch_and_store_weather() -> Optional[WeatherReading]:
         return None
 
 
-async def get_daily_summary(
-    db: AsyncSession, date: datetime.date
-) -> Optional[WeatherDailySummary]:
+async def get_daily_summary(db: AsyncSession, date: datetime.date) -> Optional[WeatherDailySummary]:
     """Compute daily weather aggregates for a given date."""
     readings = (
         (await db.execute(select(WeatherReading).where(WeatherReading.date == date)))
@@ -106,11 +102,7 @@ async def get_daily_summary(
     # Compute pressure delta vs yesterday
     yesterday = date - datetime.timedelta(days=1)
     yesterday_readings = (
-        (
-            await db.execute(
-                select(WeatherReading).where(WeatherReading.date == yesterday)
-            )
-        )
+        (await db.execute(select(WeatherReading).where(WeatherReading.date == yesterday)))
         .scalars()
         .all()
     )
@@ -143,9 +135,7 @@ async def trigger_weather_fetch() -> WeatherReading:
     return reading
 
 
-async def get_daily_summary_or_404(
-    db: AsyncSession, date: datetime.date
-) -> WeatherDailySummary:
+async def get_daily_summary_or_404(db: AsyncSession, date: datetime.date) -> WeatherDailySummary:
     """Return daily summary or raise NotFoundError."""
     summary = await get_daily_summary(db, date)
     if summary is None:

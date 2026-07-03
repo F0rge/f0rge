@@ -11,12 +11,8 @@ from app.schemas.enriched import EnrichedDayResponse
 from app.services.weather import get_daily_summary
 
 
-async def get_enriched_day(
-    db: AsyncSession, date: datetime.date
-) -> EnrichedDayResponse:
-    entry = (
-        await db.execute(select(Entry).where(Entry.date == date))
-    ).scalar_one_or_none()
+async def get_enriched_day(db: AsyncSession, date: datetime.date) -> EnrichedDayResponse:
+    entry = (await db.execute(select(Entry).where(Entry.date == date))).scalar_one_or_none()
     weather = await get_daily_summary(db, date)
     health = (
         await db.execute(select(HealthMetric).where(HealthMetric.date == date))

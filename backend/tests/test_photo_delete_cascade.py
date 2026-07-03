@@ -92,9 +92,7 @@ async def test_delete_photo_with_analysis_cascades(async_db: AsyncSession) -> No
     # Expire then re-fetch the photo so the ORM hydrates `analysis` and
     # knows to issue the dependent DELETE before the FK check fires.
     async_db.expire_all()
-    photo = (
-        await async_db.execute(select(Photo).where(Photo.id == photo_id))
-    ).scalar_one()
+    photo = (await async_db.execute(select(Photo).where(Photo.id == photo_id))).scalar_one()
     _ = photo.analysis  # ensure the relationship is materialised
 
     # Sanity: analysis + ingredients exist before delete
@@ -186,9 +184,7 @@ async def test_delete_entry_cascades_to_photo_and_analysis(
     # analysis rows (the SQLite tests passed because SQLite didn't enforce
     # FK constraints; Postgres does).
     async_db.expire_all()
-    entry = (
-        await async_db.execute(select(Entry).where(Entry.id == entry_id))
-    ).scalar_one()
+    entry = (await async_db.execute(select(Entry).where(Entry.id == entry_id))).scalar_one()
     for photo in entry.photos:
         _ = photo.analysis
 
@@ -198,9 +194,7 @@ async def test_delete_entry_cascades_to_photo_and_analysis(
     assert (
         await async_db.execute(select(Entry).where(Entry.id == entry_id))
     ).scalar_one_or_none() is None
-    assert (
-        await async_db.execute(select(func.count()).select_from(Photo))
-    ).scalar_one() == 0
+    assert (await async_db.execute(select(func.count()).select_from(Photo))).scalar_one() == 0
     assert (
         await async_db.execute(select(func.count()).select_from(PhotoAnalysis))
     ).scalar_one() == 0

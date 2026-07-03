@@ -22,9 +22,7 @@ class PhotoMealTimeUpdate(BaseModel):
 
     @field_validator("meal_time", mode="after")
     @classmethod
-    def strip_meal_time_tz(
-        cls, v: Optional[datetime.datetime]
-    ) -> Optional[datetime.datetime]:
+    def strip_meal_time_tz(cls, v: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
         # Postgres column is TIMESTAMP WITHOUT TIME ZONE; asyncpg refuses to
         # bind an offset-aware datetime to it. Convert to UTC then drop tzinfo.
         if v is None or v.tzinfo is None:

@@ -142,9 +142,7 @@ def test_schema_omitted_symptoms_json_defaults_to_none() -> None:
 async def test_entry_stores_and_retrieves_symptoms_json(async_db: AsyncSession) -> None:
     await _make_entry(async_db, _DATE, {"vss": 7, "tinnitus": 6})
     # Re-fetch from DB to verify persistence
-    fetched = (
-        await async_db.execute(select(Entry).where(Entry.date == _DATE))
-    ).scalar_one()
+    fetched = (await async_db.execute(select(Entry).where(Entry.date == _DATE))).scalar_one()
     assert fetched.symptoms_json == {"vss": 7, "tinnitus": 6}
 
 
@@ -171,9 +169,7 @@ async def test_touch_sets_catalog_timestamps_after_create(
     await async_db.commit()
 
     item = (
-        await async_db.execute(
-            select(SymptomCatalogItem).where(SymptomCatalogItem.key == "vss")
-        )
+        await async_db.execute(select(SymptomCatalogItem).where(SymptomCatalogItem.key == "vss"))
     ).scalar_one()
     assert item.first_used_at is not None
     assert item.last_used_at is not None

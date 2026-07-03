@@ -42,9 +42,7 @@ class EntryCreate(BaseModel):
 
     @field_validator("entry_time", mode="after")
     @classmethod
-    def strip_entry_time_tz(
-        cls, v: Optional[datetime.datetime]
-    ) -> Optional[datetime.datetime]:
+    def strip_entry_time_tz(cls, v: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
         # Postgres column is TIMESTAMP WITHOUT TIME ZONE; asyncpg refuses to
         # bind an offset-aware datetime to it. Convert to UTC then drop tzinfo.
         if v is None or v.tzinfo is None:
@@ -93,9 +91,7 @@ class EntryUpdate(BaseModel):
 
     @field_validator("entry_time", mode="after")
     @classmethod
-    def strip_entry_time_tz(
-        cls, v: Optional[datetime.datetime]
-    ) -> Optional[datetime.datetime]:
+    def strip_entry_time_tz(cls, v: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
         # Same fix as EntryCreate — strip tz so asyncpg can bind to
         # TIMESTAMP WITHOUT TIME ZONE.
         if v is None or v.tzinfo is None:

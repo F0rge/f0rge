@@ -517,9 +517,7 @@ def load() -> None:
 
             # Only insert if the canonical exists in dietary_ingredients.
             exists = (
-                session.query(DietaryIngredient)
-                .filter_by(canonical_name=canonical_lower)
-                .first()
+                session.query(DietaryIngredient).filter_by(canonical_name=canonical_lower).first()
             )
             if not exists:
                 log.debug(

@@ -78,13 +78,9 @@ class ExtractedMarker(BaseModel):
     @model_validator(mode="after")
     def _exactly_one_canonical(self) -> "ExtractedMarker":
         both_none = self.canonical_match is None and self.proposed_canonical is None
-        both_set = (
-            self.canonical_match is not None and self.proposed_canonical is not None
-        )
+        both_set = self.canonical_match is not None and self.proposed_canonical is not None
         if both_none or both_set:
-            raise ValueError(
-                "exactly one of canonical_match or proposed_canonical must be set"
-            )
+            raise ValueError("exactly one of canonical_match or proposed_canonical must be set")
         if self.value is None and self.value_text is None:
             raise ValueError("at least one of value or value_text must be set")
         return self

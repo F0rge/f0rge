@@ -197,9 +197,7 @@ def build_pdf_messages(
         },
         {
             "type": "text",
-            "text": _hints_and_schema_text(
-                catalog_hints, schema_json, filename=filename
-            ),
+            "text": _hints_and_schema_text(catalog_hints, schema_json, filename=filename),
         },
     ]
     return [
@@ -225,9 +223,7 @@ def build_image_messages(
         },
         {
             "type": "text",
-            "text": _hints_and_schema_text(
-                catalog_hints, schema_json, filename=filename
-            ),
+            "text": _hints_and_schema_text(catalog_hints, schema_json, filename=filename),
         },
     ]
     return [

@@ -308,9 +308,7 @@ async def test_yellow_bell_pepper_resolves_to_bell_pepper(
         "capsicum",
     ],
 )
-async def test_bell_pepper_variants(
-    db_with_expanded_aliases: AsyncSession, variant: str
-) -> None:
+async def test_bell_pepper_variants(db_with_expanded_aliases: AsyncSession, variant: str) -> None:
     svc = IngredientLookupService(db_with_expanded_aliases)
     result = await svc.lookup(variant)
     assert result is not None, f"{variant!r} did not resolve"

@@ -141,9 +141,7 @@ async def compute_trends(
         if key not in columns:
             continue
 
-        raw_values: list[Optional[float]] = [
-            _coerce_numeric(row.get(key)) for row in rows
-        ]
+        raw_values: list[Optional[float]] = [_coerce_numeric(row.get(key)) for row in rows]
         dates: list[str] = [row["date"] for row in rows]
 
         points: list[TrendPoint] = []
@@ -219,9 +217,7 @@ async def compute_correlates(
 
         for lag in range(3):
             if lag == 0:
-                x_aligned: list[Optional[float]] = [
-                    _coerce_numeric(row.get(col)) for row in rows
-                ]
+                x_aligned: list[Optional[float]] = [_coerce_numeric(row.get(col)) for row in rows]
                 y_aligned = y
             else:
                 # feature at t-lag aligned with outcome at t
@@ -254,12 +250,12 @@ async def compute_correlates(
             )
         )
 
-    positive = sorted(
-        [r for r in results if r.rho > 0], key=lambda r: abs(r.rho), reverse=True
-    )[:15]
-    negative = sorted(
-        [r for r in results if r.rho < 0], key=lambda r: abs(r.rho), reverse=True
-    )[:15]
+    positive = sorted([r for r in results if r.rho > 0], key=lambda r: abs(r.rho), reverse=True)[
+        :15
+    ]
+    negative = sorted([r for r in results if r.rho < 0], key=lambda r: abs(r.rho), reverse=True)[
+        :15
+    ]
 
     return CorrelatesResponse(outcome=outcome, positive=positive, negative=negative)
 
@@ -310,9 +306,7 @@ async def compute_treatment_response(
 
         # Fetch during window
         during_rows, _ = await build_feature_matrix(db, during_start, during_end)
-        during_vals: list[Optional[float]] = [
-            _coerce_numeric(r.get(outcome)) for r in during_rows
-        ]
+        during_vals: list[Optional[float]] = [_coerce_numeric(r.get(outcome)) for r in during_rows]
         during_n = sum(1 for v in during_vals if v is not None)
 
         # Fetch after window (only if treatment has ended)
@@ -369,8 +363,7 @@ async def compute_sleep_next_day(
 
     if metric not in _VALID_SLEEP_METRICS:
         raise ValidationError(
-            f"unknown sleep metric: {metric!r}. "
-            f"Choose from: {sorted(_VALID_SLEEP_METRICS)}"
+            f"unknown sleep metric: {metric!r}. Choose from: {sorted(_VALID_SLEEP_METRICS)}"
         )
 
     n = len(rows)

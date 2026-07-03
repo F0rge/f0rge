@@ -41,9 +41,7 @@ async def get_correlates(
     min_n: int = Query(default=10, ge=3, le=365),
     db: AsyncSession = Depends(get_db),
 ) -> CorrelatesResponse:
-    return await insights_service.compute_correlates(
-        db, start, end, outcome, category, min_n
-    )
+    return await insights_service.compute_correlates(db, start, end, outcome, category, min_n)
 
 
 @router.get("/treatment-response", response_model=TreatmentResponseList)
@@ -62,6 +60,4 @@ async def get_sleep_next_day(
     end: Optional[datetime.date] = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> SleepNextDayResponse:
-    return await insights_service.compute_sleep_next_day(
-        db, start, end, outcome, metric
-    )
+    return await insights_service.compute_sleep_next_day(db, start, end, outcome, metric)

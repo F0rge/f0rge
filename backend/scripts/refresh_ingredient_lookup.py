@@ -75,9 +75,7 @@ _PLANT_QUALIFIERS = frozenset(
         "cocoa",
     }
 )
-_DAIRY_HEAD_NOUNS = frozenset(
-    {"milk", "cream", "butter", "cheese", "yogurt", "yoghurt", "kefir"}
-)
+_DAIRY_HEAD_NOUNS = frozenset({"milk", "cream", "butter", "cheese", "yogurt", "yoghurt", "kefir"})
 
 _DIETARY_FIELDS = (
     "canonical_name",
@@ -126,9 +124,7 @@ def _lookup_sync(session: Session, name: str) -> Optional[DietaryIngredient]:
         qualifiers = set(words[:-1])
         if not (last_word in _DAIRY_HEAD_NOUNS and qualifiers & _PLANT_QUALIFIERS):
             row = session.execute(
-                select(DietaryIngredient).where(
-                    DietaryIngredient.canonical_name == last_word
-                )
+                select(DietaryIngredient).where(DietaryIngredient.canonical_name == last_word)
             ).scalar_one_or_none()
             if row:
                 return row
@@ -192,9 +188,7 @@ def step_prune_orphans(dry_run: bool) -> None:
             .where(IngredientAlias.canonical_name.in_(orphan_names))
         ).scalar_one()
         if alias_count:
-            print(
-                f"  ({alias_count} alias row(s) point to these — will be deleted first.)"
-            )
+            print(f"  ({alias_count} alias row(s) point to these — will be deleted first.)")
 
         if dry_run:
             print("--dry-run: no rows deleted.")
@@ -203,17 +197,12 @@ def step_prune_orphans(dry_run: bool) -> None:
         # Cascade aliases first; FK constraint blocks parent deletion otherwise.
         if alias_count:
             session.execute(
-                delete(IngredientAlias).where(
-                    IngredientAlias.canonical_name.in_(orphan_names)
-                )
+                delete(IngredientAlias).where(IngredientAlias.canonical_name.in_(orphan_names))
             )
         for r in orphans:
             session.delete(r)
         session.commit()
-        print(
-            f"Deleted {len(orphans)} orphan row(s) "
-            f"(+ {alias_count} dependent alias row(s))."
-        )
+        print(f"Deleted {len(orphans)} orphan row(s) (+ {alias_count} dependent alias row(s)).")
 
 
 def step_rescore_photos(dry_run: bool) -> None:
@@ -235,9 +224,7 @@ def step_rescore_photos(dry_run: bool) -> None:
             print("No eligible rows.")
             return
 
-        print(
-            f"Scanning {len(rows)} PhotoIngredient row(s) (user_edited rows skipped)."
-        )
+        print(f"Scanning {len(rows)} PhotoIngredient row(s) (user_edited rows skipped).")
 
         changed = unchanged = unmatched = 0
         for ing in rows:
@@ -272,9 +259,7 @@ def step_rescore_photos(dry_run: bool) -> None:
             return
 
         session.commit()
-        print(
-            f"Updated {changed} row(s); {unchanged} unchanged; {unmatched} unmatched."
-        )
+        print(f"Updated {changed} row(s); {unchanged} unchanged; {unmatched} unmatched.")
         print(
             "Note: vault markdown files were NOT re-rendered. Past entries' "
             "photo_signal will update on next API read; vault files stay stale."
@@ -298,9 +283,7 @@ def main() -> None:
         action="store_true",
         help="Refresh dietary flags on existing PhotoIngredient rows",
     )
-    parser.add_argument(
-        "--all", action="store_true", help="Run all three steps in order"
-    )
+    parser.add_argument("--all", action="store_true", help="Run all three steps in order")
     parser.add_argument("--dry-run", action="store_true", help="Preview only")
     args = parser.parse_args()
 

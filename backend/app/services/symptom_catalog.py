@@ -20,9 +20,7 @@ def normalize_key(raw: str) -> str:
     return key
 
 
-async def list_items(
-    db: AsyncSession, include_archived: bool = False
-) -> list[SymptomCatalogItem]:
+async def list_items(db: AsyncSession, include_archived: bool = False) -> list[SymptomCatalogItem]:
     stmt = select(SymptomCatalogItem)
     if not include_archived:
         stmt = stmt.where(SymptomCatalogItem.archived.is_(False))
@@ -41,9 +39,7 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SymptomCatalogI
         raise ValidationError(f"'{normalized}' is a reserved key name.")
 
     existing = (
-        await db.execute(
-            select(SymptomCatalogItem).where(SymptomCatalogItem.key == normalized)
-        )
+        await db.execute(select(SymptomCatalogItem).where(SymptomCatalogItem.key == normalized))
     ).scalar_one_or_none()
 
     if existing:
@@ -58,9 +54,7 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SymptomCatalogI
     max_item = (
         (
             await db.execute(
-                select(SymptomCatalogItem).order_by(
-                    SymptomCatalogItem.sort_order.desc()
-                )
+                select(SymptomCatalogItem).order_by(SymptomCatalogItem.sort_order.desc())
             )
         )
         .scalars()
@@ -77,9 +71,7 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SymptomCatalogI
 
 async def update_item(db: AsyncSession, key: str, data: dict) -> SymptomCatalogItem:
     item = (
-        await db.execute(
-            select(SymptomCatalogItem).where(SymptomCatalogItem.key == key)
-        )
+        await db.execute(select(SymptomCatalogItem).where(SymptomCatalogItem.key == key))
     ).scalar_one_or_none()
     if not item:
         raise NotFoundError(f"Catalog item '{key}' not found.")
@@ -91,9 +83,7 @@ async def update_item(db: AsyncSession, key: str, data: dict) -> SymptomCatalogI
     return item
 
 
-async def reorder_items(
-    db: AsyncSession, order: list[str]
-) -> list[SymptomCatalogItem]:
+async def reorder_items(db: AsyncSession, order: list[str]) -> list[SymptomCatalogItem]:
     eligible_keys = set(
         (
             await db.execute(
@@ -110,9 +100,7 @@ async def reorder_items(
         )
     for idx, key in enumerate(order):
         await db.execute(
-            update(SymptomCatalogItem)
-            .where(SymptomCatalogItem.key == key)
-            .values(sort_order=idx)
+            update(SymptomCatalogItem).where(SymptomCatalogItem.key == key).values(sort_order=idx)
         )
     await db.commit()
     return await list_items(db, include_archived=False)
@@ -127,9 +115,7 @@ async def touch(db: AsyncSession, keys: Iterable[str]) -> None:
     existing = {
         item.key: item
         for item in (
-            await db.execute(
-                select(SymptomCatalogItem).where(SymptomCatalogItem.key.in_(key_list))
-            )
+            await db.execute(select(SymptomCatalogItem).where(SymptomCatalogItem.key.in_(key_list)))
         )
         .scalars()
         .all()

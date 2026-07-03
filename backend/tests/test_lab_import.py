@@ -109,18 +109,12 @@ async def test_import_from_text_first_run_inserts(
 ) -> None:
     _patch_extraction(
         monkeypatch,
-        [
-            json.dumps(
-                _payload_for(canonical_match=None, proposed_canonical="hemoglobin")
-            )
-        ],
+        [json.dumps(_payload_for(canonical_match=None, proposed_canonical="hemoglobin"))],
     )
 
     fixture = Path(__file__).parent / "fixtures" / "lab_blood.md"
     document = fixture.read_text()
-    lab = await import_service.import_from_text(
-        document, source_path="vault/lab_blood.md"
-    )
+    lab = await import_service.import_from_text(document, source_path="vault/lab_blood.md")
 
     assert lab.id is not None
     assert lab.source_kind == "vault_markdown" or lab.source_kind == "text"
@@ -138,9 +132,7 @@ async def test_import_from_text_second_run_is_noop(
     # vault import don't burn extraction credits on rows that already exist.
     # Only ONE response is queued; if a second call sneaks through, the patched
     # _call_openrouter will raise AssertionError and the test fails.
-    raw = json.dumps(
-        _payload_for(canonical_match=None, proposed_canonical="hemoglobin")
-    )
+    raw = json.dumps(_payload_for(canonical_match=None, proposed_canonical="hemoglobin"))
     _patch_extraction(monkeypatch, [raw])
 
     fixture = Path(__file__).parent / "fixtures" / "lab_blood.md"
@@ -150,9 +142,7 @@ async def test_import_from_text_second_run_is_noop(
     lab2 = await import_service.import_from_text(document, source_path="vault/x.md")
 
     assert lab1.id == lab2.id
-    assert (
-        await async_db.execute(select(func.count()).select_from(Lab))
-    ).scalar_one() == 1
+    assert (await async_db.execute(select(func.count()).select_from(Lab))).scalar_one() == 1
 
 
 async def test_import_from_text_force_replaces(
@@ -167,15 +157,11 @@ async def test_import_from_text_force_replaces(
     document = "any document"
     lab1 = await import_service.import_from_text(document, source_path="vault/x.md")
     assert lab1.name == "Original"
-    lab2 = await import_service.import_from_text(
-        document, source_path="vault/x.md", force=True
-    )
+    lab2 = await import_service.import_from_text(document, source_path="vault/x.md", force=True)
 
     # force=True deletes the old row and inserts a new one with replacement data.
     assert lab2.name == "Replacement"
-    assert (
-        await async_db.execute(select(func.count()).select_from(Lab))
-    ).scalar_one() == 1
+    assert (await async_db.execute(select(func.count()).select_from(Lab))).scalar_one() == 1
     remaining = (await async_db.execute(select(Lab))).scalars().first()
     assert remaining.name == "Replacement"
 
@@ -220,9 +206,7 @@ async def test_import_from_pdf_sha256_dedup(
     lab2 = await import_service.import_from_pdf(pdf_bytes, "second-name.pdf")
 
     assert lab1.id == lab2.id
-    assert (
-        await async_db.execute(select(func.count()).select_from(Lab))
-    ).scalar_one() == 1
+    assert (await async_db.execute(select(func.count()).select_from(Lab))).scalar_one() == 1
 
 
 async def test_import_from_pdf_with_source_path_skips_extract_on_redo(
@@ -242,14 +226,10 @@ async def test_import_from_pdf_with_source_path_skips_extract_on_redo(
     lab1 = await import_service.import_from_pdf(pdf_bytes, "x.pdf", source_path=src)
     # Different bytes but same explicit source_path → still a duplicate.
     different_bytes = b"%PDF-1.4\nDIFFERENT-bytes\n%EOF"
-    lab2 = await import_service.import_from_pdf(
-        different_bytes, "x.pdf", source_path=src
-    )
+    lab2 = await import_service.import_from_pdf(different_bytes, "x.pdf", source_path=src)
 
     assert lab1.id == lab2.id
-    assert (
-        await async_db.execute(select(func.count()).select_from(Lab))
-    ).scalar_one() == 1
+    assert (await async_db.execute(select(func.count()).select_from(Lab))).scalar_one() == 1
 
 
 async def test_import_from_pdf_low_confidence_sets_needs_review(
@@ -322,9 +302,7 @@ async def test_import_imaging_no_markers(
 
     fixture = Path(__file__).parent / "fixtures" / "lab_imaging.md"
     document = fixture.read_text()
-    lab = await import_service.import_from_text(
-        document, source_path="vault/lab_imaging.md"
-    )
+    lab = await import_service.import_from_text(document, source_path="vault/lab_imaging.md")
 
     assert lab.type == "imaging"
     assert lab.markers == []

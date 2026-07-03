@@ -32,9 +32,7 @@ def load() -> None:
             category = item.get("category", "").strip().lower() or None
             score = item["score"]
 
-            existing = (
-                session.query(DietaryIngredient).filter_by(canonical_name=name).first()
-            )
+            existing = session.query(DietaryIngredient).filter_by(canonical_name=name).first()
 
             if existing:
                 if category is not None:

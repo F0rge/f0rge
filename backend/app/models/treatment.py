@@ -19,9 +19,7 @@ class Treatment(Base):
     end_date: Mapped[datetime.date | None] = mapped_column(Date, nullable=True)
     dose: Mapped[str | None] = mapped_column(String, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        default=datetime.datetime.utcnow
-    )
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
     updated_at: Mapped[datetime.datetime] = mapped_column(
         default=datetime.datetime.utcnow,
         onupdate=datetime.datetime.utcnow,

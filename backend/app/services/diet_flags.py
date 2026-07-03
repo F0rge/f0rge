@@ -10,9 +10,7 @@ from app.models.photo_ingredient import PhotoIngredient
 
 DietFlag = Literal["high-histamine", "high-fodmap", "gluten", "dairy"]
 
-FLAG_VOCAB: frozenset[str] = frozenset(
-    {"high-histamine", "high-fodmap", "gluten", "dairy"}
-)
+FLAG_VOCAB: frozenset[str] = frozenset({"high-histamine", "high-fodmap", "gluten", "dairy"})
 
 # Score at or above this level is considered a high-histamine trigger; score 1 is
 # "compatible with minor restrictions" on the SIGHI scale and does not warrant a flag.

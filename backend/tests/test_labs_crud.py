@@ -21,9 +21,7 @@ async def service(async_db: AsyncSession) -> LabsService:
     return LabsService(async_db)
 
 
-async def _make_catalog(
-    db: AsyncSession, canonical: str = "hemoglobin"
-) -> LabMarkerCatalog:
+async def _make_catalog(db: AsyncSession, canonical: str = "hemoglobin") -> LabMarkerCatalog:
     item = LabMarkerCatalog(
         canonical_name=canonical,
         display_name=canonical.replace("_", " ").title(),
@@ -164,9 +162,7 @@ def test_compute_flag_parses_unidirectional_ref_text(
         ref_high=None,
         ref_text=ref_text,
     )
-    assert flag == expected, (
-        f"value={value} ref_text={ref_text!r} → {flag}, expected {expected}"
-    )
+    assert flag == expected, f"value={value} ref_text={ref_text!r} → {flag}, expected {expected}"
 
 
 def test_compute_flag_numeric_refs_take_precedence_over_ref_text() -> None:
@@ -185,9 +181,7 @@ def test_compute_flag_numeric_refs_take_precedence_over_ref_text() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_create_lab_happy_path(
-    async_db: AsyncSession, service: LabsService
-) -> None:
+async def test_create_lab_happy_path(async_db: AsyncSession, service: LabsService) -> None:
     catalog = await _make_catalog(async_db)
     body = LabCreate(
         lab_date=datetime.date(2026, 5, 1),
@@ -275,9 +269,7 @@ async def test_list_labs_no_filters_returns_all_desc(
     assert [lab.name for lab in labs] == ["Lab D", "Lab C", "Lab B", "Lab A"]
 
 
-async def test_list_labs_date_range(
-    async_db: AsyncSession, service: LabsService
-) -> None:
+async def test_list_labs_date_range(async_db: AsyncSession, service: LabsService) -> None:
     await _seed_labs(async_db, service)
     labs = await service.list_labs(
         start_date=datetime.date(2026, 2, 1),
@@ -286,9 +278,7 @@ async def test_list_labs_date_range(
     assert {lab.name for lab in labs} == {"Lab B", "Lab C"}
 
 
-async def test_list_labs_filter_by_type(
-    async_db: AsyncSession, service: LabsService
-) -> None:
+async def test_list_labs_filter_by_type(async_db: AsyncSession, service: LabsService) -> None:
     await _seed_labs(async_db, service)
     labs = await service.list_labs(lab_type="blood")
     assert {lab.name for lab in labs} == {"Lab A", "Lab B"}
@@ -356,9 +346,7 @@ async def test_update_lab_replaces_markers_wholesale(
     assert len(original_marker_ids) == 2
 
     new_markers = [_marker_create(catalog.id, value=14.0)]
-    updated = await service.update_lab(
-        lab.id, LabUpdate(name="After", markers=new_markers)
-    )
+    updated = await service.update_lab(lab.id, LabUpdate(name="After", markers=new_markers))
 
     assert updated.name == "After"
     assert len(updated.markers) == 1
@@ -400,9 +388,7 @@ async def test_update_lab_nonexistent_raises_not_found(service: LabsService) -> 
 # ---------------------------------------------------------------------------
 
 
-async def test_delete_lab_cascades_to_markers(
-    async_db: AsyncSession, service: LabsService
-) -> None:
+async def test_delete_lab_cascades_to_markers(async_db: AsyncSession, service: LabsService) -> None:
     catalog = await _make_catalog(async_db)
     body = LabCreate(
         lab_date=datetime.date(2026, 5, 1),

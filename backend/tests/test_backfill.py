@@ -61,9 +61,7 @@ async def _cleanup(sm: async_sessionmaker, entry_ids: list[int]) -> None:
                     {"id": eid},
                 )
                 await db.execute(
-                    text(
-                        "DELETE FROM embedding WHERE source_table='entries' AND source_id=:id"
-                    ),
+                    text("DELETE FROM embedding WHERE source_table='entries' AND source_id=:id"),
                     {"id": eid},
                 )
                 await db.execute(text("DELETE FROM entries WHERE id=:id"), {"id": eid})

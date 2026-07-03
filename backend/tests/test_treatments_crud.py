@@ -163,9 +163,7 @@ async def test_list_empty(service: TreatmentService) -> None:
     assert await service.list() == []
 
 
-async def test_list_ongoing_first(
-    async_db: AsyncSession, service: TreatmentService
-) -> None:
+async def test_list_ongoing_first(async_db: AsyncSession, service: TreatmentService) -> None:
     """Ongoing treatments (end_date=None) sort before finished ones."""
     await _add_treatment(
         async_db, "Finished", datetime.date(2026, 1, 1), datetime.date(2026, 1, 31)
@@ -221,12 +219,8 @@ async def test_list_active_on_excludes_not_yet_started(
     assert results == []
 
 
-async def test_list_active_on_mixed(
-    async_db: AsyncSession, service: TreatmentService
-) -> None:
-    await _add_treatment(
-        async_db, "Active", datetime.date(2026, 1, 1), datetime.date(2026, 6, 30)
-    )
+async def test_list_active_on_mixed(async_db: AsyncSession, service: TreatmentService) -> None:
+    await _add_treatment(async_db, "Active", datetime.date(2026, 1, 1), datetime.date(2026, 6, 30))
     await _add_treatment(
         async_db, "Expired", datetime.date(2025, 1, 1), datetime.date(2025, 12, 31)
     )
@@ -266,9 +260,7 @@ async def test_get_nonexistent_raises_not_found(service: TreatmentService) -> No
 # ---------------------------------------------------------------------------
 
 
-async def test_update_partial_name_only(
-    async_db: AsyncSession, service: TreatmentService
-) -> None:
+async def test_update_partial_name_only(async_db: AsyncSession, service: TreatmentService) -> None:
     t = await _add_treatment(async_db, "Old Name", datetime.date(2026, 1, 1))
     body = TreatmentUpdate(name="New Name")
     result = await service.update(t.id, body)
@@ -329,9 +321,7 @@ async def test_update_unset_fields_are_not_touched(
 # ---------------------------------------------------------------------------
 
 
-async def test_delete_returns_none(
-    async_db: AsyncSession, service: TreatmentService
-) -> None:
+async def test_delete_returns_none(async_db: AsyncSession, service: TreatmentService) -> None:
     t = await _add_treatment(async_db, "Allicin", datetime.date(2026, 1, 1))
     assert await service.delete(t.id) is None
 
@@ -343,9 +333,7 @@ async def test_delete_nonexistent_raises_not_found(
         await service.delete(999)
 
 
-async def test_delete_removes_from_db(
-    async_db: AsyncSession, service: TreatmentService
-) -> None:
+async def test_delete_removes_from_db(async_db: AsyncSession, service: TreatmentService) -> None:
     t = await _add_treatment(async_db, "Allicin", datetime.date(2026, 1, 1))
     tid = t.id
     await service.delete(tid)

@@ -145,9 +145,7 @@ async def test_photo_embed_no_time_when_meal_time_none(
 
 
 async def test_alcohol_zero_omits_frontmatter_keys(async_db: AsyncSession) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 20), alcohol_units=0
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 20), alcohol_units=0)
     md = _render(entry, [])
 
     assert "alcohol-units" not in md
@@ -155,9 +153,7 @@ async def test_alcohol_zero_omits_frontmatter_keys(async_db: AsyncSession) -> No
 
 
 async def test_alcohol_none_omits_frontmatter_keys(async_db: AsyncSession) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 21), alcohol_units=None
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 21), alcohol_units=None)
     md = _render(entry, [])
 
     assert "alcohol-units" not in md
@@ -167,9 +163,7 @@ async def test_alcohol_none_omits_frontmatter_keys(async_db: AsyncSession) -> No
 async def test_alcohol_nonzero_emits_frontmatter_keys(
     async_db: AsyncSession,
 ) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 22), alcohol_units=3
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 22), alcohol_units=3)
     md = _render(entry, [])
 
     assert "alcohol-units: 3" in md
@@ -177,9 +171,7 @@ async def test_alcohol_nonzero_emits_frontmatter_keys(
 
 
 async def test_alcohol_zero_omits_summary_table_row(async_db: AsyncSession) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 23), alcohol_units=0
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 23), alcohol_units=0)
     md = _render(entry, [])
 
     assert "| Alcohol |" not in md
@@ -188,9 +180,7 @@ async def test_alcohol_zero_omits_summary_table_row(async_db: AsyncSession) -> N
 async def test_alcohol_nonzero_emits_summary_table_row(
     async_db: AsyncSession,
 ) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 24), alcohol_units=2
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 24), alcohol_units=2)
     md = _render(entry, [])
 
     assert "| Alcohol | 2 unit(s) |" in md
@@ -202,9 +192,7 @@ async def test_alcohol_nonzero_emits_summary_table_row(
 
 
 async def test_caffeine_zero_omits_frontmatter_keys(async_db: AsyncSession) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 25), caffeine_servings=0
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 25), caffeine_servings=0)
     md = _render(entry, [])
 
     assert "caffeine-servings" not in md
@@ -212,9 +200,7 @@ async def test_caffeine_zero_omits_frontmatter_keys(async_db: AsyncSession) -> N
 
 
 async def test_caffeine_none_omits_frontmatter_keys(async_db: AsyncSession) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 26), caffeine_servings=None
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 26), caffeine_servings=None)
     md = _render(entry, [])
 
     assert "caffeine-servings" not in md
@@ -224,9 +210,7 @@ async def test_caffeine_none_omits_frontmatter_keys(async_db: AsyncSession) -> N
 async def test_caffeine_nonzero_emits_frontmatter_keys(
     async_db: AsyncSession,
 ) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 27), caffeine_servings=4
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 27), caffeine_servings=4)
     md = _render(entry, [])
 
     assert "caffeine-servings: 4" in md
@@ -236,9 +220,7 @@ async def test_caffeine_nonzero_emits_frontmatter_keys(
 async def test_caffeine_zero_omits_summary_table_row(
     async_db: AsyncSession,
 ) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 28), caffeine_servings=0
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 28), caffeine_servings=0)
     md = _render(entry, [])
 
     assert "| Caffeine |" not in md
@@ -247,9 +229,7 @@ async def test_caffeine_zero_omits_summary_table_row(
 async def test_caffeine_nonzero_emits_summary_table_row(
     async_db: AsyncSession,
 ) -> None:
-    entry = await _make_entry(
-        async_db, date=datetime.date(2026, 5, 29), caffeine_servings=2
-    )
+    entry = await _make_entry(async_db, date=datetime.date(2026, 5, 29), caffeine_servings=2)
     md = _render(entry, [])
 
     assert "| Caffeine | 2 serving(s) |" in md

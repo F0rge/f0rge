@@ -22,13 +22,9 @@ class Lab(Base):
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     extraction_model: Mapped[str | None] = mapped_column(String, nullable=True)
     extraction_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-    review_status: Mapped[str] = mapped_column(
-        String, nullable=False, default="confirmed"
-    )
+    review_status: Mapped[str] = mapped_column(String, nullable=False, default="confirmed")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        default=datetime.datetime.utcnow
-    )
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
     updated_at: Mapped[datetime.datetime] = mapped_column(
         default=datetime.datetime.utcnow,
         onupdate=datetime.datetime.utcnow,
