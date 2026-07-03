@@ -35,7 +35,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans">
         <Providers>
-          <div className="flex-1 pb-16">{children}</div>
+          <div className="flex-1 pb-[calc(84px+env(safe-area-inset-bottom))]">{children}</div>
           <BottomNav />
           <Toaster position="top-center" richColors />
         </Providers>
