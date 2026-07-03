@@ -18,6 +18,55 @@ from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.photo_storage import delete_photo, resize_image, save_photo
 
 
+async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg") -> str:
+    """Pick the next collision-free ``{date}_photo-N{ext}`` filename for ``entry``.
+
+    Uses max(existing)+1, not count()+1, so a deleted photo never causes a
+    number to be reused. Unions three sources of "used" numbers — DB rows,
+    the local photo dir, and the vault attachments dir — so an orphan file
+    (written to disk but never committed, or committed but not yet cleaned
+    up from one of these locations) never collides with the next pick.
+    """
+    prefix = f"{entry.date.isoformat()}_photo-"
+    suffix = ext
+    used_numbers: set[int] = set()
+
+    # Source 1: DB rows for this entry.
+    rows = (await db.execute(select(Photo.filename).where(Photo.entry_id == entry.id))).all()
+    for (existing_filename,) in rows:
+        if existing_filename.startswith(prefix) and existing_filename.endswith(suffix):
+            try:
+                used_numbers.add(int(existing_filename[len(prefix) : -len(suffix)]))
+            except ValueError:
+                pass
+
+    # Source 2: files in the local photos directory (catches orphans where
+    # the file was written but the DB commit failed).
+    photo_dir_abs = os.path.abspath(settings.photo_dir)
+    if os.path.isdir(photo_dir_abs):
+        for name in os.listdir(photo_dir_abs):
+            if name.startswith(prefix) and name.endswith(suffix):
+                try:
+                    used_numbers.add(int(name[len(prefix) : -len(suffix)]))
+                except ValueError:
+                    pass
+
+    # Source 3: vault attachments directory (catches vault-side orphans).
+    vault_path = settings.vault_path
+    if vault_path:
+        vault_attachments = os.path.join(vault_path, "attachments")
+        if os.path.isdir(vault_attachments):
+            for name in os.listdir(vault_attachments):
+                if name.startswith(prefix) and name.endswith(suffix):
+                    try:
+                        used_numbers.add(int(name[len(prefix) : -len(suffix)]))
+                    except ValueError:
+                        pass
+
+    photo_number = max(used_numbers, default=0) + 1
+    return f"{prefix}{photo_number}{suffix}"
+
+
 class PhotoService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -47,50 +96,8 @@ class PhotoService:
         if entry is None:
             raise NotFoundError(f"No entry for {entry_date}")
 
-        # Determine next photo number via max(existing)+1 to avoid collision
-        # after deletions. COUNT()+1 is wrong once any row is deleted.
-        # We union three sources so that orphan files (file on disk with no DB
-        # row) never cause a FileExistsError on the next upload.
-        prefix = f"{entry_date.isoformat()}_photo-"
-        suffix = ".jpg"
-        used_numbers: set[int] = set()
-
-        # Source 1: DB rows for this entry.
-        rows = (
-            await self.db.execute(select(Photo.filename).where(Photo.entry_id == entry.id))
-        ).all()
-        for (existing_filename,) in rows:
-            if existing_filename.startswith(prefix) and existing_filename.endswith(suffix):
-                try:
-                    used_numbers.add(int(existing_filename[len(prefix) : -len(suffix)]))
-                except ValueError:
-                    pass
-
-        # Source 2: files in the local photos directory (catches orphans where
-        # the file was written but the DB commit failed).
-        photo_dir_abs = os.path.abspath(settings.photo_dir)
-        if os.path.isdir(photo_dir_abs):
-            for name in os.listdir(photo_dir_abs):
-                if name.startswith(prefix) and name.endswith(suffix):
-                    try:
-                        used_numbers.add(int(name[len(prefix) : -len(suffix)]))
-                    except ValueError:
-                        pass
-
-        # Source 3: vault attachments directory (catches vault-side orphans).
+        filename = await next_photo_filename(self.db, entry)
         vault_path = settings.vault_path
-        if vault_path:
-            vault_attachments = os.path.join(vault_path, "attachments")
-            if os.path.isdir(vault_attachments):
-                for name in os.listdir(vault_attachments):
-                    if name.startswith(prefix) and name.endswith(suffix):
-                        try:
-                            used_numbers.add(int(name[len(prefix) : -len(suffix)]))
-                        except ValueError:
-                            pass
-
-        photo_number = max(used_numbers, default=0) + 1
-        filename = f"{prefix}{photo_number}{suffix}"
 
         raw_bytes = await file.read()
         processed_bytes = await asyncio.to_thread(resize_image, raw_bytes)
