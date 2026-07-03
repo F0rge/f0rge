@@ -3,6 +3,7 @@
 import { Camera, Maximize2, X } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { PhotoCapture } from '@/components/checkin/photo-capture'
+import { RecentMealsStrip } from '@/components/checkin/recent-meals-strip'
 import { PhotoAnalysis } from '@/components/shared/food-analysis'
 import type { Entry, PhotoSignal, DietTagCatalogItem } from '@/lib/api/types'
 import { useDeletePhoto, useDietTagCatalog } from '@/lib/api/hooks'
@@ -322,6 +323,8 @@ export function FoodCard({
             </div>
           </div>
         )}
+
+        <RecentMealsStrip date={date} />
 
         <PhotoCapture
           date={date}
