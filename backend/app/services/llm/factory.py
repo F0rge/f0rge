@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,21 +17,21 @@ from app.services.llm.openrouter import OpenRouterClient, OpenRouterEmbeddingCli
 DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 
-async def load_user_settings_singleton(db: AsyncSession) -> UserSettings | None:
+async def load_user_settings_singleton(db: AsyncSession) -> Optional[UserSettings]:
     result = await db.execute(select(UserSettings).where(UserSettings.id == 1))
     return result.scalar_one_or_none()
 
 
 def _resolve(
-    row: UserSettings | None,
+    row: Optional[UserSettings],
     *,
     key_attr: str,
     model_attr: str,
     default_model: str,
-) -> tuple[str | None, str]:
+) -> tuple[Optional[str], str]:
     """Resolution order: DB-stored encrypted key → env-var OPENROUTER_API_KEY → None.
     Custom model from DB overrides the default."""
-    api_key: str | None = None
+    api_key: Optional[str] = None
     model = default_model
     if row is not None:
         encrypted = getattr(row, key_attr)
@@ -43,7 +45,7 @@ def _resolve(
     return (api_key, model)
 
 
-async def resolve_llm_credentials(db: AsyncSession) -> tuple[str | None, str]:
+async def resolve_llm_credentials(db: AsyncSession) -> tuple[Optional[str], str]:
     """Return (api_key, model) for the LLM provider. Callers handle missing key."""
     row = await load_user_settings_singleton(db)
     return _resolve(
@@ -54,7 +56,7 @@ async def resolve_llm_credentials(db: AsyncSession) -> tuple[str | None, str]:
     )
 
 
-async def resolve_embedding_credentials(db: AsyncSession) -> tuple[str | None, str]:
+async def resolve_embedding_credentials(db: AsyncSession) -> tuple[Optional[str], str]:
     """Return (api_key, model) for the embedding provider. Callers handle missing key.
 
     Key resolution shares llm_api_key_encrypted with resolve_llm_credentials — there is

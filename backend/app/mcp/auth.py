@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+from typing import Optional
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
@@ -15,7 +16,7 @@ class BearerTokenVerifier(TokenVerifier):
     Uses secrets.compare_digest to prevent timing attacks. Never logs the token or key.
     """
 
-    async def verify_token(self, token: str) -> AccessToken | None:
+    async def verify_token(self, token: str) -> Optional[AccessToken]:
         async with make_main_session() as db:
             row = await load_user_settings_singleton(db)
 

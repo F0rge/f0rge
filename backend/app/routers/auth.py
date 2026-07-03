@@ -12,12 +12,12 @@ from app.services import auth as auth_service
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-@router.post("/login")
+@router.post("/login", response_model=AuthStatus)
 async def login(body: PinLogin, response: Response, db: AsyncSession = Depends(get_db)):
     return await auth_service.login(db, body.pin, response)
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=AuthStatus)
 async def logout(
     response: Response,
     session: AuthSession = Depends(get_current_session),

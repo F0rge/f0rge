@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -9,20 +11,26 @@ from sqlalchemy.ext.asyncio import (
 
 from app.config import settings
 
-_ro_engine: AsyncEngine | None = None
-_main_engine: AsyncEngine | None = None
+_ro_engine: Optional[AsyncEngine] = None
+_main_engine: Optional[AsyncEngine] = None
 
 
 def get_ro_engine() -> AsyncEngine:
     """Lazily create the read-only engine pointing at the healthtracker_ro role.
 
     Uses mcp_readonly_database_url from config; falls back to the main database_url
-    when not set (e.g. in tests where the ro role may not exist).
+    when not set (e.g. in tests where the ro role may not exist). A statement_timeout
+    is set on every connection because read_sql accepts arbitrary client-supplied
+    SELECT text — the timeout keeps a pathological query from pinning a connection.
     """
     global _ro_engine
     if _ro_engine is None:
         url = settings.mcp_readonly_database_url or settings.database_url
-        _ro_engine = create_async_engine(url, pool_pre_ping=True)
+        _ro_engine = create_async_engine(
+            url,
+            pool_pre_ping=True,
+            connect_args={"server_settings": {"statement_timeout": "10000"}},
+        )
     return _ro_engine
 
 

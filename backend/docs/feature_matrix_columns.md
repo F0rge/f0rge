@@ -1,6 +1,6 @@
 # Feature Matrix Column Dictionary
 
-Schema version: **1** (`X-Feature-Schema-Version: 1`)
+Schema version: **4** (`X-Feature-Schema-Version: 4`)
 
 One row per calendar date in the requested range. A date with no entry still produces
 a row — entry-sourced and dietary columns are `null` (not zero) for missing days.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import re
-from typing import List
+from typing import List, Optional
 
 from app.schemas.lab_marker import CatalogHint, ExtractedLabPayload
 
@@ -145,7 +145,7 @@ sections degrade downstream analysis far more than over-extracting.\
 def _hints_and_schema_text(
     catalog_hints: List[CatalogHint],
     schema_json: str,
-    filename: str | None = None,
+    filename: Optional[str] = None,
 ) -> str:
     hints_str = json.dumps([h.model_dump() for h in catalog_hints], ensure_ascii=False)
     filename_block = (
@@ -165,7 +165,7 @@ def build_text_messages(
     document_text: str,
     catalog_hints: List[CatalogHint],
     schema_json: str,
-    filename: str | None = None,
+    filename: Optional[str] = None,
 ) -> List[dict]:
     """Build chat messages for plain-text lab document extraction."""
     user_text = (
@@ -182,7 +182,7 @@ def build_pdf_messages(
     pdf_bytes: bytes,
     catalog_hints: List[CatalogHint],
     schema_json: str,
-    filename: str | None = None,
+    filename: Optional[str] = None,
 ) -> List[dict]:
     """Build chat messages for a PDF lab document using OpenRouter file part."""
     b64 = base64.b64encode(pdf_bytes).decode("ascii")
@@ -211,7 +211,7 @@ def build_image_messages(
     mime_type: str,
     catalog_hints: List[CatalogHint],
     schema_json: str,
-    filename: str | None = None,
+    filename: Optional[str] = None,
 ) -> List[dict]:
     """Build chat messages for an image lab document."""
     b64 = base64.b64encode(image_bytes).decode("ascii")
