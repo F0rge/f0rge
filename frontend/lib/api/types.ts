@@ -474,10 +474,9 @@ export interface TrackerUpdate {
 export interface UserSettings {
   llm_provider: string
   llm_model: string | null
-  has_llm_api_key: boolean
   embedding_provider: string
   embedding_model: string | null
-  has_embedding_api_key: boolean
+  has_api_key: boolean
   has_external_api_token: boolean
 }
 
@@ -489,7 +488,6 @@ export interface LLMSettingsUpdate {
 
 export interface EmbeddingSettingsUpdate {
   embedding_provider?: string
-  embedding_api_key?: string
   embedding_model?: string
 }
 
