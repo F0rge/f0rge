@@ -1,17 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-)
+from sqlalchemy.ext.asyncio import AsyncSession
 
-import app.main as main_module
 from app.exceptions import ConflictError, NotFoundError, ValidationError
-from app.main import DEFAULT_SYMPTOMS, _seed_symptom_catalog
-from app.models.symptom_catalog import SymptomCatalogItem
 from app.services import symptom_catalog as symptom_catalog_service
 
 
@@ -104,48 +96,3 @@ async def test_list_include_archived(async_db: AsyncSession) -> None:
     keys = [i.key for i in all_items]
     assert "vss" in keys
     assert "tinnitus" in keys
-
-
-# ---------------------------------------------------------------------------
-# seed
-# ---------------------------------------------------------------------------
-
-
-async def test_seed_idempotent(
-    async_engine: AsyncEngine,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Calling the seed function twice must produce exactly len(DEFAULT_SYMPTOMS) rows.
-
-    The seed uses ``async_session_maker`` from ``app.database`` (re-exported into
-    ``app.main``). Patch it to point at the test container so the seed touches
-    the same Postgres as the rest of the suite. Use a dedicated transaction
-    here (the seed function commits, which would conflict with the SAVEPOINT
-    fixture).
-    """
-    test_session_maker = async_sessionmaker(
-        async_engine, expire_on_commit=False, class_=AsyncSession
-    )
-    monkeypatch.setattr(main_module, "async_session_maker", test_session_maker)
-
-    # Ensure a clean catalog before seeding (other tests may have left rows
-    # committed outside the savepoint — they wouldn't, but be defensive).
-    async with test_session_maker() as session:
-        await session.execute(SymptomCatalogItem.__table__.delete())
-        await session.commit()
-
-    try:
-        await _seed_symptom_catalog()
-        await _seed_symptom_catalog()
-
-        async with test_session_maker() as session:
-            count = (
-                await session.execute(select(func.count()).select_from(SymptomCatalogItem))
-            ).scalar_one()
-        assert count == len(DEFAULT_SYMPTOMS)
-        assert count == 7
-    finally:
-        # Clean up so subsequent tests don't see the seeded rows.
-        async with test_session_maker() as session:
-            await session.execute(SymptomCatalogItem.__table__.delete())
-            await session.commit()

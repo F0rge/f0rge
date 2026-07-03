@@ -43,28 +43,6 @@ logger = logging.getLogger(__name__)
 
 _weather_task = None
 
-DEFAULT_SUPPLEMENTS = [
-    ("nac", "NAC"),
-    ("fish_oil", "Fish Oil"),
-    ("magnesium", "Magnesium"),
-    ("beef_organs", "Beef Organs"),
-    ("allicin", "Allicin"),
-    ("oregano", "Oregano Oil"),
-    ("vitamin_d_k2", "D3 + K2"),
-    ("dao", "DAO"),
-    ("creatine", "Creatine"),
-]
-
-DEFAULT_SYMPTOMS = [
-    ("vss", "Visual Snow"),
-    ("tinnitus", "Tinnitus"),
-    ("fasciculations", "Fasciculations"),
-    ("photophobia", "Photophobia"),
-    ("fight_flight", "Fight-or-Flight"),
-    ("brain_fog", "Brain Fog"),
-    ("pem", "Post-Exertional Malaise"),
-]
-
 
 def _warn_misconfigured_features() -> None:
     """Log a loud warning when a feature flag is on but its required
@@ -81,40 +59,6 @@ def _warn_misconfigured_features() -> None:
             "WEATHER_FETCH_ENABLED=true but OPENWEATHERMAP_API_KEY is empty. "
             "Weather background loop will not start."
         )
-
-
-async def _seed_supplement_catalog() -> None:
-    """Seed the supplement_catalog table with the default list on first boot."""
-    from sqlalchemy import func, select
-
-    from app.models.supplement_catalog import SupplementCatalogItem
-
-    async with async_session_maker() as session:
-        existing_count = (
-            await session.execute(select(func.count()).select_from(SupplementCatalogItem))
-        ).scalar_one()
-        if existing_count > 0:
-            return
-        for sort_order, (key, label) in enumerate(DEFAULT_SUPPLEMENTS):
-            session.add(SupplementCatalogItem(key=key, label=label, sort_order=sort_order))
-        await session.commit()
-
-
-async def _seed_symptom_catalog() -> None:
-    """Seed the symptom_catalog table with the default list on first boot."""
-    from sqlalchemy import func, select
-
-    from app.models.symptom_catalog import SymptomCatalogItem
-
-    async with async_session_maker() as session:
-        existing_count = (
-            await session.execute(select(func.count()).select_from(SymptomCatalogItem))
-        ).scalar_one()
-        if existing_count > 0:
-            return
-        for sort_order, (key, label) in enumerate(DEFAULT_SYMPTOMS):
-            session.add(SymptomCatalogItem(key=key, label=label, sort_order=sort_order))
-        await session.commit()
 
 
 async def _seed_dietary_db_if_empty() -> None:
@@ -166,8 +110,6 @@ async def _seed_dietary_db_if_empty() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _weather_task
-    await _seed_supplement_catalog()
-    await _seed_symptom_catalog()
     await _seed_dietary_db_if_empty()
     _warn_misconfigured_features()
     if settings.weather_fetch_enabled and settings.openweathermap_api_key:
