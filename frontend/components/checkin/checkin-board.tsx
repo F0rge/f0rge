@@ -18,14 +18,12 @@ import {
   Activity,
   Zap,
 } from 'lucide-react'
-import { useSupplementCatalog, useTreatments, useEntries } from '@/lib/api/hooks'
+import { useSupplementCatalog, useTreatments } from '@/lib/api/hooks'
 import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
-import { computeHeroStats } from '@/lib/checkin/hero-stats'
 import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, type CardId } from '@/lib/checkin/card-order'
 import {
-  HeroStats,
   TreatmentBanner,
   FoodCard,
   WellbeingCard,
@@ -85,9 +83,6 @@ export function CheckinBoard({
 }: CheckinBoardProps) {
   const { data: catalog } = useSupplementCatalog(false)
   const { data: activeTreatments } = useTreatments(date)
-
-  const currentMonth = date.slice(0, 7)
-  const { data: monthEntries } = useEntries(currentMonth)
 
   const defaultSupplements = (catalog ?? [])
     .filter((c) => !c.archived)
@@ -306,48 +301,6 @@ export function CheckinBoard({
 
   const handleBlur = useCallback(() => { autosave.flush() }, [autosave])
 
-  // ── Insights data ─────────────────────────────────────────────────────────
-  const todayForStats = useMemo<Entry | null>(() => {
-    if (!existingEntry && !isDirty) return null
-    const base: Entry = existingEntry ?? {
-      id: -1, date, schema_version: 2, entry_time: null, period_of_day: null,
-      overall: 2, bloating: 0, stool_status: 'normal', stool_normal: null, stool_type: null,
-      bristol_type: null, joint_pain: 0, neuro: 0, sleep_quality: 2, stress: 1,
-      diet_risk: '', supplements: '', sick: false, notes: null,
-      alcohol_units: null, caffeine_servings: null,
-      effective_flags: [], photo_derived_flags: [], user_added_flags: [],
-      photo_signal: { flags: [], scores: { histamine_load: 0, fodmap_count: 0, gluten_count: 0, dairy_count: 0 }, sources: {} },
-      symptoms_json: null, hot_shower: false,
-      photos: [], created_at: '', updated_at: '',
-    }
-    return {
-      ...base,
-      overall, bloating, stool_status: stoolStatus, joint_pain: jointPain,
-      neuro, sleep_quality: sleepQuality, stress, sick, hot_shower: hotShower,
-      notes, alcohol_units: alcoholUnits, caffeine_servings: caffeineServings,
-      supplements, symptoms_json: symptomsJson,
-      photos: existingPhotos,
-      photo_signal: existingEntry?.photo_signal ?? base.photo_signal,
-    }
-  }, [
-    existingEntry, isDirty, date, overall, bloating, stoolStatus, jointPain,
-    neuro, sleepQuality, stress, sick, hotShower, notes, alcoholUnits,
-    caffeineServings, supplements, symptomsJson, existingPhotos,
-  ])
-
-  const last7 = useMemo(() => {
-    if (!monthEntries) return []
-    return monthEntries
-      .filter((e) => e.date < date)
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 7)
-  }, [monthEntries, date])
-
-  const heroStats = useMemo(
-    () => computeHeroStats(todayForStats, last7, activeTreatments ?? [], date),
-    [todayForStats, last7, activeTreatments, date],
-  )
-
   // ── Card renderers ────────────────────────────────────────────────────────
   const cardRenderers: Record<CardId, () => React.ReactNode> = {
     food: () => (
@@ -425,8 +378,6 @@ export function CheckinBoard({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 pb-8">
-      <HeroStats data={heroStats} />
-
       <div className="grid grid-cols-12 gap-4 auto-rows-min">
         <TreatmentBanner
           treatments={activeTreatments ?? []}
