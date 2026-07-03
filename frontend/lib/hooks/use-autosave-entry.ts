@@ -195,6 +195,25 @@ export function useAutosaveEntry({
     const serialized = JSON.stringify(payload)
     if (serialized === lastSerializedRef.current) return
 
+    // Not dirty yet (no real user edit this session) on an entry that already
+    // exists server-side: this payload change is hydration settling into its
+    // final shape (checkin-board.tsx's existingEntry effect runs across two
+    // renders — defaults, then hydrated — before the caller flips `enabled`).
+    // Track it in lastSerializedRef instead of staging it as pending, so
+    // flush()/flushBeacon() (which both compare against lastSerializedRef)
+    // see nothing to send. Without this, opening a past-date editor and
+    // merely blurring a field or backgrounding the tab fired a no-op PUT that
+    // only re-stamped entry_time. Once `enabled` flips true (a real edit),
+    // this branch is skipped and staging resumes normally with the payload
+    // that reflects the edit.
+    //
+    // A brand-new date (hasExistingEntry: false) must still stage even while
+    // not dirty, so forceFlush can create the row (photo-first upload).
+    if (!enabled && hasExistingEntry) {
+      lastSerializedRef.current = serialized
+      return
+    }
+
     // Stage the payload regardless of enabled so forceFlush always has something
     // to send (e.g. photo-first on a new date before the form is dirty).
     pendingPayloadRef.current = payload
@@ -210,7 +229,7 @@ export function useAutosaveEntry({
         void fireRef.current()
       }
     }, DEBOUNCE_MS)
-  }, [payload, enabled, clearDebounce])
+  }, [payload, enabled, clearDebounce, hasExistingEntry])
 
   // Cleanup on unmount.
   useEffect(() => {
