@@ -21,6 +21,7 @@ from app.schemas.insights import (
 )
 from app.services.feature_matrix import build_feature_matrix
 from app.services.stats import categorize_feature, spearmanr
+from app.utils.dates import local_today
 
 # ── private helpers ────────────────────────────────────────────────────────────
 
@@ -269,7 +270,7 @@ async def compute_treatment_response(
     if outcome not in allowed:
         raise ValidationError(f"unknown outcome: {outcome!r}")
 
-    today = datetime.date.today()
+    today = local_today()
     treatments = (
         (
             await db.execute(

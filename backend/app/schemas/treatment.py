@@ -5,6 +5,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.utils.dates import local_today
+
 TREATMENT_TYPES = Literal[
     "antibiotic",
     "antimicrobial",
@@ -48,6 +50,6 @@ class TreatmentResponse(BaseModel):
     @computed_field
     @property
     def is_active(self) -> bool:
-        return self.end_date is None or self.end_date >= datetime.date.today()
+        return self.end_date is None or self.end_date >= local_today()
 
     model_config = ConfigDict(from_attributes=True)

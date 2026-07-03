@@ -13,6 +13,7 @@ from app.models.entry import Entry
 from app.models.treatment import Treatment
 from app.schemas.treatment import TreatmentCreate, TreatmentUpdate
 from app.services.obsidian_prefetch import render_and_write_daily_file
+from app.utils.dates import local_today
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -119,7 +120,7 @@ class TreatmentService:
         start_date: datetime.date,
         end_date: Optional[datetime.date],
     ) -> None:
-        upper = end_date if end_date is not None else datetime.date.today()
+        upper = end_date if end_date is not None else local_today()
         entries = (
             (
                 await self.db.execute(
