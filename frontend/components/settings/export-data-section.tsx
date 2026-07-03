@@ -1,9 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { toast } from 'sonner'
 import { Download } from 'lucide-react'
-import { apiGetRaw } from '@/lib/api/client'
+import { apiGetRaw, handleMutationError } from '@/lib/api/client'
 import { SettingsCard } from './settings-card'
 
 export function ExportDataSection() {
@@ -26,7 +25,7 @@ export function ExportDataSection() {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('CSV export failed:', err)
-      toast.error('Export failed')
+      handleMutationError(err, 'Export failed')
     } finally {
       setExporting(false)
     }

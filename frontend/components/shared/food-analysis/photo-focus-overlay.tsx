@@ -24,6 +24,8 @@ function formatMealTime(iso: string | null): string {
     const d = new Date(iso)
     return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   } catch {
+    // Intentional swallow: date formatting, not an API call — an unparsable
+    // meal_time just hides the timestamp instead of erroring the overlay.
     return ''
   }
 }

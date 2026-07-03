@@ -36,6 +36,8 @@ function getPinned(): string[] {
     const raw = localStorage.getItem(PINNED_KEY)
     return raw ? (JSON.parse(raw) as string[]) : []
   } catch {
+    // Intentional swallow: corrupt localStorage value just means "no pins
+    // yet" — not a mutation the user triggered, nothing to toast.
     return []
   }
 }
@@ -44,7 +46,9 @@ function setPinned(list: string[]) {
   try {
     localStorage.setItem(PINNED_KEY, JSON.stringify(list))
   } catch {
-    // ignore storage errors
+    // Intentional swallow: storage full/disabled (e.g. private browsing).
+    // Pin state is a nice-to-have preference, not worth interrupting the
+    // user with a toast over.
   }
 }
 

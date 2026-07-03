@@ -126,7 +126,11 @@ function IngredientRow({
       })
       setEditing(false)
     } catch {
-      // Error handled by React Query; keep input open so user can retry
+      // Intentional swallow, but flagged as suspect: no onError/toast exists
+      // anywhere downstream, so a failed edit currently fails with zero user
+      // feedback (input just stays open). Left as-is here (adding a
+      // first-ever toast is a UX call, not an error-detail enrichment) —
+      // see issue filed for a real fix.
     }
   }
 

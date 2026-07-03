@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAddSymptomCatalogItem, useUpdateSymptomCatalogItem } from '@/lib/api/hooks'
-import { ApiError } from '@/lib/api/client'
+import { ApiError, handleMutationError } from '@/lib/api/client'
 import type { SymptomCatalogItem } from '@/lib/api/types'
 
 function normalizeKey(label: string): string {
@@ -78,8 +78,7 @@ export function SymptomFormModal({ open, onClose, symptom }: SymptomFormModalPro
       if (err instanceof ApiError && err.status === 409) {
         toast.error('A symptom with this key already exists')
       } else {
-        console.error(err)
-        toast.error('Failed to save symptom. Please try again.')
+        handleMutationError(err, 'Failed to save symptom. Please try again.')
       }
     }
   }

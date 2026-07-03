@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useDeleteLab } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import { MarkerSparkline } from './marker-sparkline'
 import { LabFormDialog } from './lab-form-dialog'
 import type { Lab, MarkerFlag, LabType } from '@/lib/api/types'
@@ -64,8 +65,8 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
       await deleteLab.mutateAsync(lab!.id)
       toast.success('Lab deleted')
       onOpenChange(false)
-    } catch {
-      toast.error('Failed to delete lab')
+    } catch (err) {
+      handleMutationError(err, 'Failed to delete lab')
     }
   }
 

@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useExtractLabUpload, useImportLabUpload } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import { LabFormDialog } from './lab-form-dialog'
 import type { ExtractionResult } from '@/lib/api/types'
 
@@ -54,9 +55,8 @@ export function LabUploadDialog({ open, onOpenChange }: LabUploadDialogProps) {
       setResult(res)
       setPhase('review')
       setConfirmOpen(true)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Extraction failed'
-      toast.error(msg)
+    } catch (err) {
+      handleMutationError(err, 'Extraction failed')
       setPhase('pick')
       setSelectedFile(null)
     }
@@ -80,8 +80,8 @@ export function LabUploadDialog({ open, onOpenChange }: LabUploadDialogProps) {
       await importUpload.mutateAsync({ file: selectedFile })
       toast.success('Lab imported')
       handleClose(false)
-    } catch {
-      toast.error('Import failed')
+    } catch (err) {
+      handleMutationError(err, 'Import failed')
     }
   }
 

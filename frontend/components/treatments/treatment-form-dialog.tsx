@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCreateTreatment, useUpdateTreatment, useDeleteTreatment } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import type { Treatment, TreatmentType } from '@/lib/api/types'
 import { cn, formatLocalDate } from '@/lib/utils'
 
@@ -81,8 +82,8 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
         toast.success('Treatment added')
       }
       onOpenChange(false)
-    } catch {
-      toast.error(isEdit ? 'Failed to update treatment' : 'Failed to add treatment')
+    } catch (err) {
+      handleMutationError(err, isEdit ? 'Failed to update treatment' : 'Failed to add treatment')
     }
   }
 
@@ -96,8 +97,8 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
       await deleteMutation.mutateAsync(treatment.id)
       toast.success('Treatment deleted')
       onOpenChange(false)
-    } catch {
-      toast.error('Failed to delete treatment')
+    } catch (err) {
+      handleMutationError(err, 'Failed to delete treatment')
     }
   }
 
