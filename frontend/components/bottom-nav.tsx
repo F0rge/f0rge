@@ -91,6 +91,16 @@ export function BottomNav() {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     if (reduced || direction === 0) {
+      // No-op if the ink is already at (or animating toward) these targets.
+      // A redundant direction-0 re-place would otherwise reset the transition
+      // and cancel an in-flight stretch a sibling call just armed — the exact
+      // class of bug behind the fonts.ready cancellation (see effect below).
+      if (
+        Math.abs(parseFloat(ink.style.left || '0') - left) < 0.5 &&
+        Math.abs(parseFloat(ink.style.right || '0') - right) < 0.5
+      ) {
+        return
+      }
       ink.style.transition = 'none'
       ink.style.left = `${left}px`
       ink.style.right = `${right}px`
@@ -129,8 +139,11 @@ export function BottomNav() {
     if (inkRef.current) inkRef.current.style.transition = INK_BASE_TRANSITION
   }, [])
 
+  const activeIndexRef = useRef(activeIndex)
+
   useLayoutEffect(() => {
     if (activeIndex < 0) return
+    activeIndexRef.current = activeIndex
     const prev = prevIndexRef.current
     const direction = prev === null ? 0 : Math.sign(activeIndex - prev)
     place(activeIndex, direction)
@@ -138,14 +151,20 @@ export function BottomNav() {
   }, [activeIndex, place])
 
   useLayoutEffect(() => {
-    const onResize = () => place(activeIndex, 0)
+    // Registered ONCE (stable deps): re-registering per navigation made
+    // `document.fonts.ready.then` refire as an immediate microtask on every
+    // route change — its direction-0 re-place reset the ink transition ~0.3ms
+    // after the animated place() armed it, cancelling the stretch entirely.
+    // The current index is read through a ref so this closure never staleness-
+    // requires re-registration.
+    const onResize = () => place(activeIndexRef.current, 0)
     window.addEventListener('resize', onResize)
     // Label scrollWidth depends on rendered glyph metrics — re-place once
     // the real font has swapped in, since the mount-time read may have
     // measured a fallback font's (different) width.
     document.fonts?.ready.then(onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [activeIndex, place])
+  }, [place])
 
   if (pathname.startsWith('/login')) return null
 
