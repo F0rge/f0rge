@@ -56,6 +56,10 @@ export function loadCardOrder(): CardId[] {
 
     return filtered
   } catch {
+    // Intentional swallow: corrupt/foreign localStorage value falls back to
+    // the default order silently. A toast here would fire on every page load
+    // for any user with a stale/malformed save — not a mutation the user
+    // triggered, so there's nothing actionable to surface.
     return [...DEFAULT_CARD_ORDER]
   }
 }
@@ -98,6 +102,7 @@ export function loadHiddenCards(): CardId[] {
       (id): id is CardId => typeof id === 'string' && KNOWN_IDS.has(id),
     )
   } catch {
+    // Intentional swallow — same reasoning as loadCardOrder above.
     return []
   }
 }
@@ -121,6 +126,7 @@ export function hasHiddenCards(): boolean {
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) && parsed.length > 0
   } catch {
+    // Intentional swallow — same reasoning as loadCardOrder above.
     return false
   }
 }

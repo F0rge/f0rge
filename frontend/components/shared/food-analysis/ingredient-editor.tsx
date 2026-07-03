@@ -23,7 +23,10 @@ export function IngredientEditor({ photoId, onAdded }: IngredientEditorProps) {
       setAdding(false)
       onAdded()
     } catch {
-      // Error handled by React Query
+      // Intentional swallow, but flagged as suspect: no onError/toast exists
+      // anywhere downstream, so a failed add currently fails with zero user
+      // feedback. Left as-is here (adding a first-ever toast is a UX call,
+      // not an error-detail enrichment) — see issue filed for a real fix.
     }
   }
 

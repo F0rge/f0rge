@@ -6,6 +6,7 @@ import { PhotoCapture } from '@/components/checkin/photo-capture'
 import { PhotoAnalysis } from '@/components/shared/food-analysis'
 import type { Entry, PhotoSignal, DietTagCatalogItem } from '@/lib/api/types'
 import { useDeletePhoto, useDietTagCatalog } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useState } from 'react'
@@ -235,8 +236,8 @@ export function FoodCard({
       onPhotosChange(existingPhotos.filter((p) => p.id !== photoId))
       queryClient.invalidateQueries({ queryKey: ['entry', date] })
       toast.success('Photo deleted')
-    } catch {
-      toast.error('Failed to delete photo')
+    } catch (err) {
+      handleMutationError(err, 'Failed to delete photo')
     } finally {
       setDeletingId(null)
     }

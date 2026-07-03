@@ -14,6 +14,8 @@ function readPinned(): string[] {
     const raw = localStorage.getItem(PINNED_KEY)
     return raw ? (JSON.parse(raw) as string[]) : []
   } catch {
+    // Intentional swallow — same reasoning as marker-history-chart.tsx's
+    // getPinned(), which owns writes to this same PINNED_KEY.
     return []
   }
 }

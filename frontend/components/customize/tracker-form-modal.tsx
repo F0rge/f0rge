@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCreateTracker, useUpdateTracker } from '@/lib/api/hooks'
-import { ApiError } from '@/lib/api/client'
+import { ApiError, handleMutationError } from '@/lib/api/client'
 import type { Tracker, TrackerKind } from '@/lib/api/types'
 import { IconPicker } from '@/components/checkin/cards/components/IconPicker'
 
@@ -89,8 +89,7 @@ export function TrackerFormModal({
       if (err instanceof ApiError && err.status === 409) {
         toast.error('A tracker with this name already exists')
       } else {
-        console.error(err)
-        toast.error('Failed to save tracker. Please try again.')
+        handleMutationError(err, 'Failed to save tracker. Please try again.')
       }
     }
   }

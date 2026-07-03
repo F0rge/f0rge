@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Loader2, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMarkerCatalog, useCreateMarker } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import type { LabMarkerCatalog } from '@/lib/api/types'
 
 interface MarkerPickerProps {
@@ -59,9 +60,8 @@ export function MarkerPicker({ value, onSelect }: MarkerPickerProps) {
       setQuery(created.display_name)
       setAdding(false)
       onSelect(created.canonical_name, created.id)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to create marker'
-      toast.error(msg)
+    } catch (err) {
+      handleMutationError(err, 'Failed to create marker')
     }
   }
 
