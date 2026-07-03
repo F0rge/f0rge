@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useAddIngredient } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 
 interface IngredientEditorProps {
   photoId: number
@@ -22,11 +23,8 @@ export function IngredientEditor({ photoId, onAdded }: IngredientEditorProps) {
       setName('')
       setAdding(false)
       onAdded()
-    } catch {
-      // Intentional swallow, but flagged as suspect: no onError/toast exists
-      // anywhere downstream, so a failed add currently fails with zero user
-      // feedback. Left as-is here (adding a first-ever toast is a UX call,
-      // not an error-detail enrichment) — see issue filed for a real fix.
+    } catch (err) {
+      handleMutationError(err, 'Failed to add ingredient')
     }
   }
 
