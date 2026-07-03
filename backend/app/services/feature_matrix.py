@@ -18,6 +18,7 @@ from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
+from app.utils.dates import local_today
 
 FEATURE_SCHEMA_VERSION = 4
 
@@ -177,7 +178,7 @@ async def build_feature_matrix(
     Dates with no entry still produce a row with all entry/dietary fields as None.
     """
     if end_date is None:
-        end_date = datetime.date.today()
+        end_date = local_today()
     if start_date is None:
         earliest = (await db.execute(select(func.min(Entry.date)))).scalar()
         start_date = earliest if earliest is not None else end_date
