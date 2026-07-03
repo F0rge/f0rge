@@ -8,26 +8,19 @@ from app.config import settings
 from app.mcp.auth import BearerTokenVerifier
 
 
-def create_server(*, transport: str = "stdio") -> FastMCP:
-    """Build the FastMCP server instance.
+def create_server() -> FastMCP:
+    """Build the FastMCP server instance for the streamable-http transport.
 
-    For stdio transport, no Bearer-token verifier is attached — the trust boundary
-    is the shell session itself (SSH or docker exec).
-    For streamable-http, the BearerTokenVerifier gates every request.
+    The BearerTokenVerifier gates every request.
     """
-    kwargs: dict = {
-        "name": "health-tracker",
-        "host": settings.mcp_server_host,
-        "port": settings.mcp_server_port,
-        "streamable_http_path": "/mcp",
-    }
-    if transport == "streamable-http":
-        # FastMCP refuses token_verifier without auth settings. We don't run an
-        # OAuth flow — these URLs are metadata only, never resolved.
-        base = AnyHttpUrl(
-            f"http://{settings.mcp_server_host}:{settings.mcp_server_port}"
-        )
-        kwargs["token_verifier"] = BearerTokenVerifier()
-        kwargs["auth"] = AuthSettings(issuer_url=base, resource_server_url=base)
-
-    return FastMCP(**kwargs)
+    # FastMCP refuses token_verifier without auth settings. We don't run an
+    # OAuth flow — these URLs are metadata only, never resolved.
+    base = AnyHttpUrl(f"http://{settings.mcp_server_host}:{settings.mcp_server_port}")
+    return FastMCP(
+        name="health-tracker",
+        host=settings.mcp_server_host,
+        port=settings.mcp_server_port,
+        streamable_http_path="/mcp",
+        token_verifier=BearerTokenVerifier(),
+        auth=AuthSettings(issuer_url=base, resource_server_url=base),
+    )

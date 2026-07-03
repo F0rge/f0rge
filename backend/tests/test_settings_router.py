@@ -45,8 +45,7 @@ async def test_get_settings_initial_shape(async_client: AsyncClient) -> None:
     resp = await async_client.get("/api/v1/settings")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["has_llm_api_key"] is False
-    assert body["has_embedding_api_key"] is False
+    assert body["has_api_key"] is False
     assert body["has_external_api_token"] is False
     assert "llm_provider" in body
     assert "embedding_provider" in body
@@ -59,7 +58,7 @@ async def test_put_llm_returns_has_key_true(async_client: AsyncClient) -> None:
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["has_llm_api_key"] is True
+    assert body["has_api_key"] is True
 
 
 async def test_put_llm_does_not_echo_plaintext(async_client: AsyncClient) -> None:
@@ -82,9 +81,7 @@ async def test_put_does_not_include_encrypted_field(async_client: AsyncClient) -
     assert "llm_api_key_encrypted" not in resp.json()
 
 
-async def test_llm_test_ok(
-    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_llm_test_ok(async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """test endpoint returns ok=true when client succeeds."""
     from app.main import app
 
@@ -102,9 +99,7 @@ async def test_llm_test_ok(
         app.dependency_overrides.pop(get_llm_client, None)
 
 
-async def test_llm_test_fail(
-    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_llm_test_fail(async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """test endpoint returns ok=false when client raises ExternalServiceError."""
     from app.main import app
 
@@ -122,6 +117,19 @@ async def test_llm_test_fail(
         assert "upstream down" in body["detail"]
     finally:
         app.dependency_overrides.pop(get_llm_client, None)
+
+
+async def test_put_embedding_ignores_stray_key_field(async_client: AsyncClient) -> None:
+    """embedding_api_key is not a field on EmbeddingSettingsUpdate anymore. Pydantic v2
+    default (extra="ignore") drops unknown fields silently — no 422, key untouched."""
+    resp = await async_client.put(
+        "/api/v1/settings/embedding",
+        json={"embedding_model": "m/embed", "embedding_api_key": "should-be-ignored"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["embedding_model"] == "m/embed"
+    assert body["has_api_key"] is False
 
 
 async def test_embedding_test_ok(
