@@ -29,6 +29,7 @@ from app.routers import (
     insights,
     lab_markers,
     labs,
+    meals,
     photos,
     settings as settings_router,
     supplement_catalog,
@@ -158,6 +159,7 @@ async def _handle_external_service(_: Request, exc: ExternalServiceError) -> JSO
 app.include_router(auth.router)
 app.include_router(entries.router)
 app.include_router(photos.router)
+app.include_router(meals.router)
 app.include_router(weather.router)
 app.include_router(health_metrics.router)
 app.include_router(enriched.router)
