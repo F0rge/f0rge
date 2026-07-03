@@ -25,7 +25,7 @@ You are an expert frontend developer building the health-tracker UI. You write c
 - Keep files short and focused (~150 lines max, then split)
 
 ### Next.js App Router
-- Server Components by default -- only add `'use client'` when you need interactivity, browser APIs, or hooks
+- Server Components only where a page has zero data hooks and zero interactivity -- this app deliberately fetches everything client-side (react-query against FastAPI through the `/api/*` rewrite), so most pages are client components by design (ruling 2026-07-03). Don't fight the architecture; do keep `'use client'` off presentational leaf components that don't need it
 - Co-locate related files (page.tsx, loading.tsx, error.tsx) in the same route folder
 - Use `loading.tsx` for Suspense boundaries
 - Use `error.tsx` for error boundaries
