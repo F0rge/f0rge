@@ -121,6 +121,15 @@ export function BottomNav() {
   }, [])
 
   useLayoutEffect(() => {
+    // Own the ink's transition imperatively from mount onward. place() sets
+    // this same property on every call (direction change, reset, cool-down);
+    // declaring it once here — and never in JSX — means a re-render can
+    // never clobber a mid-flight edge transition by re-applying a stale JSX
+    // style. See INK_BASE_TRANSITION clobber note below.
+    if (inkRef.current) inkRef.current.style.transition = INK_BASE_TRANSITION
+  }, [])
+
+  useLayoutEffect(() => {
     if (activeIndex < 0) return
     const prev = prevIndexRef.current
     const direction = prev === null ? 0 : Math.sign(activeIndex - prev)
@@ -154,7 +163,6 @@ export function BottomNav() {
       <div
         ref={inkRef}
         className="absolute bottom-[5px] left-0 right-full h-[2.5px] rounded-full bg-muted-foreground"
-        style={{ transition: INK_BASE_TRANSITION }}
       />
       {NAV_ITEMS.map((item, index) => {
         const active = index === activeIndex
