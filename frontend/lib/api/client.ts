@@ -112,18 +112,26 @@ export async function apiPostForm(path: string, formData: FormData) {
 export { ApiError }
 
 /**
- * Show a toast for a caught mutation error, preferring the server's
- * `detail` message (FastAPI's HTTPException body) over a generic fallback.
+ * Extract a user-facing message from a caught error, preferring the
+ * server's `detail` message (FastAPI's HTTPException body) over a generic
+ * fallback. `ApiError.message` is the raw response body text, so a FastAPI
+ * error is `{"detail": "..."}` as a JSON string that needs parsing.
  */
-export function handleMutationError(err: unknown, fallback: string) {
-  let message = fallback
+export function getErrorDetail(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
     try {
       const parsed = JSON.parse(err.message) as { detail?: string }
-      if (typeof parsed.detail === 'string') message = parsed.detail
+      if (typeof parsed.detail === 'string') return parsed.detail
     } catch {
       // err.message wasn't JSON — keep the fallback
     }
   }
-  toast.error(message)
+  return fallback
+}
+
+/**
+ * Show a toast for a caught mutation error. See `getErrorDetail`.
+ */
+export function handleMutationError(err: unknown, fallback: string) {
+  toast.error(getErrorDetail(err, fallback))
 }

@@ -9,6 +9,7 @@ import {
   useDeleteIngredient,
   useUpdateIngredient,
 } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import { IngredientEditor } from './ingredient-editor'
 import type { PhotoIngredient } from '@/lib/api/types'
 
@@ -125,12 +126,9 @@ function IngredientRow({
         data: { name: trimmed },
       })
       setEditing(false)
-    } catch {
-      // Intentional swallow, but flagged as suspect: no onError/toast exists
-      // anywhere downstream, so a failed edit currently fails with zero user
-      // feedback (input just stays open). Left as-is here (adding a
-      // first-ever toast is a UX call, not an error-detail enrichment) —
-      // see issue filed for a real fix.
+    } catch (err) {
+      // Keep the input open on failure so the user can retry or cancel.
+      handleMutationError(err, 'Failed to update ingredient')
     }
   }
 
