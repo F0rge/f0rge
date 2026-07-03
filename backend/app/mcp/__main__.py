@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# python -m app.mcp --transport stdio
 # python -m app.mcp --transport streamable-http --host 0.0.0.0 --port 8005
 
 import argparse
@@ -13,9 +12,9 @@ from app.mcp.tools import register_tools
 
 
 def _configure_logging() -> None:
-    # MCP stdio transport uses stdout exclusively for JSON-RPC messages — any
-    # log line landing there breaks the framing for strict clients (Claude
-    # Desktop). Always log to stderr so both transports work cleanly.
+    # Log to stderr, keeping stdout free — still correct practice for an MCP
+    # server even with a single HTTP transport, since nothing should ever mix
+    # log lines into a JSON-RPC or SSE stream.
     logging.basicConfig(
         format='{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "msg": "%(message)s"}',
         level=logging.INFO,
@@ -23,13 +22,10 @@ def _configure_logging() -> None:
     )
 
 
-async def _run(transport: str) -> None:
-    server = create_server(transport=transport)
+async def _run() -> None:
+    server = create_server()
     register_tools(server)
-    if transport == "stdio":
-        await server.run_stdio_async()
-    else:
-        await server.run_streamable_http_async()
+    await server.run_streamable_http_async()
 
 
 def main() -> None:
@@ -37,9 +33,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Health Tracker MCP server")
     parser.add_argument(
         "--transport",
-        choices=["stdio", "streamable-http"],
-        default="stdio",
-        help="Transport to use (default: stdio)",
+        choices=["streamable-http"],
+        default="streamable-http",
+        help="Transport to use (default and only supported: streamable-http)",
     )
     # --host and --port are accepted but ignored — bind address comes from
     # MCP_SERVER_HOST / MCP_SERVER_PORT env vars (read by app.config.settings).
@@ -47,8 +43,8 @@ def main() -> None:
     # and so CLI invocations don't have to set env vars.
     parser.add_argument("--host", help="(ignored; use MCP_SERVER_HOST)")
     parser.add_argument("--port", type=int, help="(ignored; use MCP_SERVER_PORT)")
-    args = parser.parse_args()
-    asyncio.run(_run(args.transport))
+    parser.parse_args()
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

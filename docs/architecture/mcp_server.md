@@ -10,34 +10,32 @@ Claude Code and Claude Desktop both need a way to query my health data conversat
 2. **Application auth** — a Bearer token, generated in `/settings`, stored Fernet-encrypted at rest in `user_settings.mcp_bearer_token_encrypted`, must be presented on every `/mcp/*` HTTP call. Token rotation is one click in the UI; the old hash is immediately invalidated.
 3. **Database privilege** — the MCP server connects as the `healthtracker_ro` role created in migration `004`. That role has `CONNECT` on `health`, `USAGE` on `public`, and `SELECT` on every existing/future table in `public`. No `INSERT`, `UPDATE`, `DELETE`, or `DDL`. Any attempt to mutate fails at the Postgres permission layer regardless of bugs in app code.
 
-Layers 2 and 3 apply to both transports (stdio and streamable-http). Layer 1 only applies to remote use over HTTPS — local `docker exec` over stdio bypasses Cloudflare because it never touches the public internet.
+Layers 2 and 3 apply to every client, local or remote — the server only speaks one transport (streamable-http). Layer 1 only applies to remote use over HTTPS; local access still goes through the same HTTP transport, just addressed at `localhost`/the Pi's LAN address instead of through the tunnel.
 
 ## Architecture
 
 ```
-Claude Code (Mac)                                      Claude Desktop (remote)
-        |                                                       |
-        | ssh leo@rpi                                           | https://health-mcp.leo-figueiredo.com
-        v                                                       v
-   docker exec -i                                       Cloudflare Access (JWT)
-   mcp-server-<coolify-id>                                     |
-   (stdio transport)                                           v
-        |                                              cloudflared tunnel
-        |                                              (homelab-services)
-        |                                                      |
-        |                                                      v
-        |                                              localhost:8007 (host)
-        |                                                  -> :8005 (container)
-        |                                                      |
-        |                                                      v
-        |                                              streamable-http transport
-        |                                              + Bearer token check
-        |                                                      |
-        +--------------------> mcp-server (app.mcp) <----------+
-                                       |
-                                       | asyncpg as healthtracker_ro (SELECT only)
-                                       v
-                               health-tracker-postgres
+Claude Code / Claude Desktop (any client)
+        |
+        | https://health-mcp.leo-figueiredo.com (remote)  or  http://<pi-host>:8007/mcp (local)
+        v
+Cloudflare Access (JWT, remote only)
+        |
+        v
+cloudflared tunnel (homelab-services)   [remote path only; local skips straight to the port]
+        |
+        v
+localhost:8007 (host) -> :8005 (container)
+        |
+        v
+streamable-http transport + Bearer token check
+        |
+        v
+mcp-server (app.mcp)
+        |
+        | asyncpg as healthtracker_ro (SELECT only)
+        v
+health-tracker-postgres
 ```
 
 ## Deployment runbook
@@ -105,18 +103,13 @@ Claude Code (Mac)                                      Claude Desktop (remote)
    ```
    The first call from a fresh browser should redirect to the Cloudflare Access login. Subsequent calls with a valid `CF_Authorization` cookie should reach the container.
 
-## Local stdio wrapper for Claude Code
+## Local access from Claude Code
 
-For local use on the Mac, Claude Code talks to the container over stdio via `ssh + docker exec` — no network exposure required.
-
-Template lives at `scripts/mcp-stdio-wrapper.sh.template`. Install:
+The server only speaks streamable-http — there is no stdio transport. For local use on the Mac, point Claude Code at the same HTTP endpoint remote clients use, with the Bearer token from `/settings`:
 
 ```bash
-cp scripts/mcp-stdio-wrapper.sh.template ~/.local/bin/mcp-stdio-wrapper.sh
-chmod +x ~/.local/bin/mcp-stdio-wrapper.sh
-# Edit the SSH host inside the script if your alias is not `leo@rpi`.
-
-claude mcp add health-tracker --transport stdio -- ~/.local/bin/mcp-stdio-wrapper.sh
+claude mcp add --transport http health-tracker https://health-mcp.leo-figueiredo.com/mcp \
+  --header "Authorization: Bearer <token from /settings>"
 ```
 
 Verify with `claude mcp list` (the new server should appear) and then within a `claude` session by invoking one of its tools.
@@ -136,4 +129,3 @@ Verify with `claude mcp list` (the new server should appear) and then within a `
 - **`permission denied for table X`** — expected behaviour for any DML statement issued via the read-only role. The fix is not to grant DML; the fix is to wire the operation through the regular backend API which uses the read-write role.
 - **`role "healthtracker_ro" does not exist`** — migration `004` was not applied. Run `alembic upgrade head` inside `health-tracker-backend`.
 - **`connection refused` from cloudflared logs** — `mcp-server` container isn't up, or it's bound to a different port than the ingress rule expects. Check `docker compose ps` and the `ports:` line in `docker-compose.prod.yml`.
-- **stdio wrapper exits immediately** — usually means the SSH alias is wrong, no `mcp-server-*` container is running on the Pi (check with `ssh leo@rpi 'docker ps --filter name=^mcp-server- --format "{{.Names}}"'`), or `docker exec` can't allocate a TTY because `-i` was dropped. The template uses `-i` only — no `-t`. The template resolves the container name at runtime via `docker ps | grep ^mcp-server-` because Coolify renames containers on every redeploy (the `container_name:` directive in the compose file is silently ignored — verified in production 2026-05-17).

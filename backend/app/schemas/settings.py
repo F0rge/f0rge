@@ -10,15 +10,17 @@ class SettingsResponse(BaseModel):
 
     llm_provider: str
     llm_model: Optional[str]
-    has_llm_api_key: bool
     embedding_provider: str
     embedding_model: Optional[str]
-    has_embedding_api_key: bool
+    has_api_key: bool
     has_external_api_token: bool
 
 
 class LLMSettingsUpdate(BaseModel):
-    """Incoming update for LLM settings. api_key is plaintext in, never out."""
+    """Incoming update for LLM settings. api_key is plaintext in, never out.
+
+    llm_api_key is the single stored BYOK key — it is also used by the embedding
+    client (see app/services/llm/factory.py resolve_embedding_credentials)."""
 
     llm_provider: Optional[str] = None
     llm_api_key: Optional[str] = None
@@ -26,10 +28,10 @@ class LLMSettingsUpdate(BaseModel):
 
 
 class EmbeddingSettingsUpdate(BaseModel):
-    """Incoming update for embedding settings. api_key is plaintext in, never out."""
+    """Incoming update for embedding settings. Key is set via the LLM endpoint —
+    there is only one stored BYOK key, shared by both clients."""
 
     embedding_provider: Optional[str] = None
-    embedding_api_key: Optional[str] = None
     embedding_model: Optional[str] = None
 
 

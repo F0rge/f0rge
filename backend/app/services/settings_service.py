@@ -36,10 +36,9 @@ class SettingsService:
         return SettingsResponse(
             llm_provider=row.llm_provider,
             llm_model=row.llm_model,
-            has_llm_api_key=row.llm_api_key_encrypted is not None,
             embedding_provider=row.embedding_provider,
             embedding_model=row.embedding_model,
-            has_embedding_api_key=row.embedding_api_key_encrypted is not None,
+            has_api_key=row.llm_api_key_encrypted is not None,
             has_external_api_token=row.external_api_token_encrypted is not None,
         )
 
@@ -51,10 +50,9 @@ class SettingsService:
             return SettingsResponse(
                 llm_provider="openrouter",
                 llm_model=None,
-                has_llm_api_key=False,
                 embedding_provider="openrouter",
                 embedding_model=None,
-                has_embedding_api_key=False,
+                has_api_key=False,
                 has_external_api_token=False,
             )
         return self._to_response(row)
@@ -75,8 +73,6 @@ class SettingsService:
         row = await self._get_or_create_row()
         if data.embedding_provider is not None:
             row.embedding_provider = data.embedding_provider
-        if data.embedding_api_key is not None:
-            row.embedding_api_key_encrypted = encrypt(data.embedding_api_key)
         if data.embedding_model is not None:
             row.embedding_model = data.embedding_model
         await self.db.commit()

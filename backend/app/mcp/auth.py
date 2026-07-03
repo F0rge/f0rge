@@ -13,7 +13,6 @@ class BearerTokenVerifier(TokenVerifier):
     """Verifies incoming Bearer tokens against the encrypted token stored in user_settings.
 
     Uses secrets.compare_digest to prevent timing attacks. Never logs the token or key.
-    For stdio transport this verifier is never instantiated — auth is implicit via SSH/exec.
     """
 
     async def verify_token(self, token: str) -> AccessToken | None:
