@@ -29,7 +29,7 @@ function IngredientTeaser({ photoId }: { photoId: number }) {
 function SummaryContent({ photoId, photoLabel }: { photoId: number; photoLabel?: string | null }) {
   const { data: analysis } = usePhotoAnalysis(photoId)
 
-  const dishName = analysis?.dish_name ?? photoLabel ?? `Photo ${photoId}`
+  const dishName = photoLabel?.trim() || analysis?.dish_name || `Photo ${photoId}`
   const confidence =
     analysis?.dish_confidence !== null && analysis?.dish_confidence !== undefined
       ? Math.round(analysis.dish_confidence * 100)

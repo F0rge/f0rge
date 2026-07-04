@@ -66,3 +66,17 @@ export function useUpdatePhotoMealTime() {
     },
   })
 }
+
+export function useUpdatePhotoLabel() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    // Empty string clears the label — server stores NULL.
+    mutationFn: ({ photoId, label }: { photoId: number; label: string }) =>
+      apiPatch(`/photos/${photoId}`, { label }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
+    },
+  })
+}

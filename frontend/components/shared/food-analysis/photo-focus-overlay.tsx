@@ -1,7 +1,10 @@
 'use client'
 
+import { useState } from 'react'
+import { Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { usePhotoAnalysis } from '@/lib/api/hooks'
+import { usePhotoAnalysis, useUpdatePhotoLabel } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import { PhotoAnalysis } from './photo-analysis'
 import type { Photo } from '@/lib/api/types'
 
@@ -30,8 +33,92 @@ function formatMealTime(iso: string | null): string {
   }
 }
 
+interface TitleEditorProps {
+  photoId: number
+  label: string | null
+  dishName: string | null
+}
+
 /**
- * Full-screen-friendly overlay for editing a single photo's ingredients with
+ * Editable header title. Click the title or the pencil icon to reveal an
+ * inline text input; Enter or blur commits via PATCH /photos/{id}. Clearing
+ * the input (empty string) falls back to the AI dish_name. When the label is
+ * empty and a dish_name exists, a small "AI: {dish_name} — Use" affordance
+ * fills the input from the AI guess.
+ */
+function TitleEditor({ photoId, label, dishName }: TitleEditorProps) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(label ?? '')
+  const updateLabel = useUpdatePhotoLabel()
+
+  const title = label?.trim() || dishName || 'Photo'
+
+  const commit = async (value: string) => {
+    const trimmed = value.trim()
+    if (trimmed === (label ?? '').trim()) {
+      setEditing(false)
+      return
+    }
+    try {
+      await updateLabel.mutateAsync({ photoId, label: trimmed })
+      setEditing(false)
+    } catch (err) {
+      handleMutationError(err, 'Failed to update meal name')
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            commit(draft)
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            setDraft(label ?? '')
+            setEditing(false)
+          }
+        }}
+        onBlur={() => commit(draft)}
+        disabled={updateLabel.isPending}
+        autoFocus
+        placeholder="Name this meal"
+        aria-label="Edit meal name"
+        className="w-full rounded border border-border bg-background px-1.5 py-0.5 text-sm font-semibold leading-tight focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+      />
+    )
+  }
+
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        aria-label="Edit meal name"
+        className="flex min-w-0 items-center gap-1 truncate text-sm font-semibold leading-tight hover:underline"
+      >
+        <span className="truncate">{title}</span>
+        <Pencil className="size-3 shrink-0 text-muted-foreground" />
+      </button>
+      {!label?.trim() && dishName && (
+        <button
+          type="button"
+          onClick={() => commit(dishName)}
+          className="shrink-0 truncate text-xs text-muted-foreground hover:text-foreground hover:underline"
+        >
+          AI: {dishName} — Use
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Bottom-sheet-style overlay for editing a single photo's ingredients with
  * comfortable spacing and large tap targets. Wraps the existing
  * `<PhotoAnalysis>` component without modifying it — just gives it room to
  * breathe. See issue #76 / mockups/v2-cards.html for the visual target.
@@ -64,14 +151,24 @@ export function PhotoFocusOverlay({
     >
       <DialogContent
         showCloseButton={false}
-        className="grid grid-cols-1 min-w-0 max-h-[92vh] w-full max-w-[calc(100%-1rem)] grid-rows-[auto_auto_1fr] gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        className="fixed inset-x-0 bottom-0 top-auto m-0 translate-none grid max-h-[92vh] w-full max-w-full min-w-0 grid-cols-1 grid-rows-[auto_auto_auto_1fr] gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 duration-200 data-open:slide-in-from-bottom data-closed:slide-out-to-bottom sm:inset-0 sm:top-0 sm:bottom-0 sm:m-auto sm:h-fit sm:max-w-2xl sm:rounded-2xl sm:data-open:slide-in-from-bottom-0 sm:data-open:zoom-in-95 sm:data-closed:slide-out-to-bottom-0 sm:data-closed:zoom-out-95"
       >
+        {/* Drag handle — bottom-sheet affordance on mobile only */}
+        <div className="flex justify-center pb-1 pt-2 sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-border" />
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold leading-tight">
-              {dishName || 'Photo'}
-            </div>
+          <div className="min-w-0 flex-1">
+            {photoId !== null && (
+              <TitleEditor
+                key={photoId}
+                photoId={photoId}
+                label={currentPhoto?.label ?? null}
+                dishName={dishName}
+              />
+            )}
             <div className="mt-0.5 truncate text-xs text-muted-foreground">
               {[mealTime, confidence != null ? `${confidence}% confident` : null]
                 .filter(Boolean)
@@ -135,6 +232,7 @@ export function PhotoFocusOverlay({
               photoId={photoId}
               mode={mode}
               hideConfirmButton={false}
+              hideTitle
             />
           )}
         </div>

@@ -11,6 +11,7 @@ import {
 } from '@/lib/api/hooks'
 import { handleMutationError } from '@/lib/api/client'
 import { IngredientEditor } from './ingredient-editor'
+import { DietaryBadges } from './dietary-badges'
 import type { PhotoIngredient } from '@/lib/api/types'
 
 type PhotoAnalysisMode = 'view' | 'edit'
@@ -19,76 +20,9 @@ interface PhotoAnalysisProps {
   photoId: number
   mode?: PhotoAnalysisMode
   hideConfirmButton?: boolean
-}
-
-function DietaryBadges({ ingredient }: { ingredient: PhotoIngredient }) {
-  const badges: { label: string; className: string }[] = []
-
-  if (ingredient.histamine_score !== null) {
-    const hColors: Record<number, string> = {
-      0: 'bg-green-100 text-green-800',
-      1: 'bg-yellow-100 text-yellow-800',
-      2: 'bg-orange-100 text-orange-800',
-      3: 'bg-red-100 text-red-800',
-    }
-    badges.push({
-      label: `H:${ingredient.histamine_score}`,
-      className: hColors[ingredient.histamine_score] ?? 'bg-gray-100 text-gray-600',
-    })
-  }
-
-  if (ingredient.contains_gluten) {
-    badges.push({ label: 'Gluten', className: 'bg-red-100 text-red-800' })
-  }
-
-  if (ingredient.contains_dairy) {
-    badges.push({ label: 'Dairy', className: 'bg-blue-100 text-blue-800' })
-  }
-
-  // FODMAP flags. For each category, `high` takes precedence over
-  // `moderate`. High = orange badge; moderate = softer amber badge with a
-  // `?` suffix so high vs moderate is also distinguishable in screenshots
-  // and copied text. See issue #14.
-  const FODMAP_HIGH = 'bg-orange-100 text-orange-800'
-  const FODMAP_MOD = 'bg-amber-100 text-amber-800'
-  const fodmapCategories: Array<{
-    value: string | null
-    abbrev: string
-  }> = [
-    { value: ingredient.fodmap_oligos, abbrev: 'F:O' },
-    { value: ingredient.fodmap_fructose, abbrev: 'F:Fr' },
-    { value: ingredient.fodmap_polyols, abbrev: 'F:P' },
-    { value: ingredient.fodmap_lactose, abbrev: 'F:L' },
-  ]
-  for (const { value, abbrev } of fodmapCategories) {
-    if (value === 'high') {
-      badges.push({ label: abbrev, className: FODMAP_HIGH })
-    } else if (value === 'moderate') {
-      badges.push({ label: `${abbrev}?`, className: FODMAP_MOD })
-    }
-  }
-
-  if (
-    badges.length === 0 &&
-    ingredient.histamine_score === null &&
-    ingredient.contains_gluten === null &&
-    ingredient.contains_dairy === null
-  ) {
-    badges.push({ label: '?', className: 'bg-gray-100 text-gray-500' })
-  }
-
-  return (
-    <span className="inline-flex flex-wrap gap-0.5">
-      {badges.map((b, i) => (
-        <span
-          key={i}
-          className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${b.className}`}
-        >
-          {b.label}
-        </span>
-      ))}
-    </span>
-  )
+  /** Hide the dish-name/confidence header row — used by PhotoFocusOverlay,
+   * which already shows the title in its own header. */
+  hideTitle?: boolean
 }
 
 function IngredientRow({
@@ -194,6 +128,7 @@ export function PhotoAnalysis({
   photoId,
   mode = 'edit',
   hideConfirmButton = false,
+  hideTitle = false,
 }: PhotoAnalysisProps) {
   const { data: analysis, isLoading } = usePhotoAnalysis(photoId)
   const confirmAnalysis = useConfirmAnalysis()
@@ -255,7 +190,7 @@ export function PhotoAnalysis({
 
   return (
     <div className="mt-2 rounded-lg border border-border p-2.5">
-      {analysis.dish_name && (
+      {!hideTitle && analysis.dish_name && (
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold text-foreground">{analysis.dish_name}</span>
           {analysis.dish_confidence !== null && (

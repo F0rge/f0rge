@@ -1,12 +1,12 @@
 'use client'
 
-import { Camera, Maximize2, X } from 'lucide-react'
+import { Camera, Maximize2, X, Loader2, ChevronRight } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { PhotoCapture } from '@/components/checkin/photo-capture'
 import { RecentMealsStrip } from '@/components/checkin/recent-meals-strip'
-import { PhotoAnalysis } from '@/components/shared/food-analysis'
-import type { Entry, PhotoSignal, DietTagCatalogItem } from '@/lib/api/types'
-import { useDeletePhoto, useDietTagCatalog } from '@/lib/api/hooks'
+import { buildAggregateBadges } from '@/components/shared/food-analysis/dietary-badges'
+import type { Entry, PhotoSignal, DietTagCatalogItem, Photo } from '@/lib/api/types'
+import { useDeletePhoto, useDietTagCatalog, usePhotoAnalysis } from '@/lib/api/hooks'
 import { handleMutationError } from '@/lib/api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -199,6 +199,69 @@ function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle, ca
 }
 
 // ---------------------------------------------------------------------------
+// MealSummary — compact per-photo row that opens PhotoFocusOverlay for the
+// full ingredient list. Replaces the inline <PhotoAnalysis> that used to
+// render every ingredient forever under each photo.
+// ---------------------------------------------------------------------------
+
+interface MealSummaryProps {
+  photo: Photo
+  onOpen: (photoId: number) => void
+}
+
+function MealSummary({ photo, onOpen }: MealSummaryProps) {
+  const { data: analysis, isLoading } = usePhotoAnalysis(photo.id)
+
+  const isAnalyzing = isLoading || analysis?.status === 'pending' || analysis?.status === 'analyzing'
+
+  if (isAnalyzing) {
+    return (
+      <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-border p-2.5 text-xs text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" />
+        Analyzing...
+      </div>
+    )
+  }
+
+  const title = photo.label?.trim() || analysis?.dish_name || 'Untitled meal'
+  const confidence =
+    analysis?.dish_confidence != null ? Math.round(analysis.dish_confidence * 100) : null
+  const badges = analysis ? buildAggregateBadges(analysis.ingredients) : []
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(photo.id)}
+      aria-label={`Review and edit ${title}`}
+      className="mt-2 flex w-full items-center gap-2 rounded-lg border border-border p-2.5 text-left transition-colors hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-semibold text-foreground">{title}</span>
+          {confidence !== null && (
+            <span className="shrink-0 text-xs text-muted-foreground">({confidence}%)</span>
+          )}
+        </div>
+        {badges.length > 0 && (
+          <span className="mt-1 inline-flex flex-wrap gap-0.5">
+            {badges.map((b, i) => (
+              <span
+                key={i}
+                className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${b.className}`}
+              >
+                {b.label}
+              </span>
+            ))}
+          </span>
+        )}
+        <div className="mt-1 text-[11px] text-muted-foreground">Tap to review &amp; edit</div>
+      </div>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // FoodCard
 // ---------------------------------------------------------------------------
 
@@ -317,7 +380,7 @@ export function FoodCard({
                       <X className="size-4" />
                     </button>
                   </div>
-                  <PhotoAnalysis photoId={photo.id} />
+                  {onOpenPhotoFocus && <MealSummary photo={photo} onOpen={onOpenPhotoFocus} />}
                 </div>
               ))}
             </div>
