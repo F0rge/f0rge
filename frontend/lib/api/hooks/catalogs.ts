@@ -2,7 +2,12 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPatch } from '../client'
-import type { SupplementCatalogItem, DietTagCatalogItem, SymptomCatalogItem } from '../types'
+import type {
+  SupplementCatalogItem,
+  MedicationCatalogItem,
+  DietTagCatalogItem,
+  SymptomCatalogItem,
+} from '../types'
 
 export function useSupplementCatalog(includeArchived = false) {
   const params = includeArchived ? '?include_archived=true' : ''
@@ -35,6 +40,30 @@ export function useUpdateSupplementCatalogItem() {
     }) => apiPatch(`/supplements/catalog/${key}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supplement-catalog'] })
+    },
+  })
+}
+
+export function useMedicationCatalog(includeArchived = false) {
+  const params = includeArchived ? '?include_archived=true' : ''
+  return useQuery<MedicationCatalogItem[]>({
+    queryKey: ['medication-catalog', includeArchived],
+    queryFn: () => apiGet(`/medications/catalog${params}`),
+  })
+}
+
+export function useUpdateMedicationCatalogItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      key,
+      data,
+    }: {
+      key: string
+      data: { label?: string; archived?: boolean; sort_order?: number }
+    }) => apiPatch(`/medications/catalog/${key}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['medication-catalog'] })
     },
   })
 }
