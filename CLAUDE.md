@@ -7,7 +7,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 ## Stack
 
 - Backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.10
-- Frontend: Next.js 15 + React 19 + Tailwind 4 + shadcn/ui
+- Frontend: Next.js 16 + React 19 + Tailwind 4 + shadcn/ui
 - Auth: PIN-based session cookies (bcrypt)
 
 ## Environments
