@@ -1,6 +1,6 @@
 'use client'
 
-import { Camera, Maximize2, X, Loader2, ChevronRight } from 'lucide-react'
+import { Camera, X, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { PhotoCapture } from '@/components/checkin/photo-capture'
 import { RecentMealsStrip } from '@/components/checkin/recent-meals-strip'
@@ -199,65 +199,92 @@ function DietRiskSection({ existingEntry, existingPhotos, dietRisk, onToggle, ca
 }
 
 // ---------------------------------------------------------------------------
-// MealSummary — compact per-photo row that opens PhotoFocusOverlay for the
-// full ingredient list. Replaces the inline <PhotoAnalysis> that used to
-// render every ingredient forever under each photo.
+// MealCard — one media card per meal: photo + title/confidence/badges in a
+// single bordered container. Whole card opens PhotoFocusOverlay; the delete
+// button is a sibling so it can stop propagation instead of nesting inside
+// the tap target (nested <button>s are invalid HTML).
 // ---------------------------------------------------------------------------
 
-interface MealSummaryProps {
+interface MealCardProps {
   photo: Photo
   onOpen: (photoId: number) => void
+  onDelete: (photoId: number) => void
+  deleting: boolean
 }
 
-function MealSummary({ photo, onOpen }: MealSummaryProps) {
+function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
   const { data: analysis, isLoading } = usePhotoAnalysis(photo.id)
 
   const isAnalyzing = isLoading || analysis?.status === 'pending' || analysis?.status === 'analyzing'
-
-  if (isAnalyzing) {
-    return (
-      <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-border p-2.5 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" />
-        Analyzing...
-      </div>
-    )
-  }
-
   const title = photo.label?.trim() || analysis?.dish_name || 'Untitled meal'
   const confidence =
     analysis?.dish_confidence != null ? Math.round(analysis.dish_confidence * 100) : null
   const badges = analysis ? buildAggregateBadges(analysis.ingredients) : []
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(photo.id)}
-      aria-label={`Review and edit ${title}`}
-      className="mt-2 flex w-full items-center gap-2 rounded-lg border border-border p-2.5 text-left transition-colors hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-semibold text-foreground">{title}</span>
-          {confidence !== null && (
-            <span className="shrink-0 text-xs text-muted-foreground">({confidence}%)</span>
+    <div className="group relative overflow-hidden rounded-xl border border-border">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onOpen(photo.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onOpen(photo.id)
+          }
+        }}
+        aria-label={`Review and edit ${title}`}
+        className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/api/v1/photos/${photo.id}/file`}
+          alt={title}
+          className="aspect-square w-full object-cover"
+        />
+        <div className="p-2.5">
+          {isAnalyzing ? (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              Analyzing...
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-sm font-semibold text-foreground">{title}</span>
+                {confidence !== null && (
+                  <span className="shrink-0 text-xs text-muted-foreground">({confidence}%)</span>
+                )}
+              </div>
+              {badges.length > 0 && (
+                <span className="mt-1 inline-flex flex-wrap gap-0.5">
+                  {badges.map((b, i) => (
+                    <span
+                      key={i}
+                      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${b.className}`}
+                    >
+                      {b.label}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </>
           )}
         </div>
-        {badges.length > 0 && (
-          <span className="mt-1 inline-flex flex-wrap gap-0.5">
-            {badges.map((b, i) => (
-              <span
-                key={i}
-                className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${b.className}`}
-              >
-                {b.label}
-              </span>
-            ))}
-          </span>
-        )}
-        <div className="mt-1 text-[11px] text-muted-foreground">Tap to review &amp; edit</div>
       </div>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-    </button>
+      <button
+        type="button"
+        disabled={deleting}
+        onClick={(e) => {
+          e.stopPropagation()
+          onDelete(photo.id)
+        }}
+        className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+        aria-label="Delete photo"
+      >
+        <X className="size-4" />
+      </button>
+    </div>
   )
 }
 
@@ -274,7 +301,7 @@ interface FoodCardProps {
   onPhotosChange: (photos: Entry['photos']) => void
   ensureEntryExists: () => Promise<void>
   onEntryEnsured: () => void
-  onOpenPhotoFocus?: (photoId: number) => void
+  onOpenPhotoFocus: (photoId: number) => void
 }
 
 export function FoodCard({
@@ -331,57 +358,13 @@ export function FoodCard({
             <label className="text-sm font-semibold">Uploaded photos</label>
             <div className="grid grid-cols-2 gap-3">
               {existingPhotos.map((photo) => (
-                <div key={photo.id}>
-                  <div className="group relative rounded-xl border border-border overflow-hidden">
-                    {onOpenPhotoFocus ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenPhotoFocus(photo.id)}
-                        className="block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={`Open focus editor for ${photo.label || 'photo'}`}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`/api/v1/photos/${photo.id}/file`}
-                          alt={photo.label || 'Photo'}
-                          className="aspect-square w-full object-cover"
-                        />
-                      </button>
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={`/api/v1/photos/${photo.id}/file`}
-                        alt={photo.label || 'Photo'}
-                        className="aspect-square w-full object-cover"
-                      />
-                    )}
-                    {photo.label && (
-                      <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
-                        {photo.label}
-                      </div>
-                    )}
-                    {onOpenPhotoFocus && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenPhotoFocus(photo.id)}
-                        className="absolute left-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={`Open focus editor for ${photo.label || 'photo'}`}
-                      >
-                        <Maximize2 className="size-3.5" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={deletingId === photo.id}
-                      onClick={() => handleDeletePhoto(photo.id)}
-                      className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
-                      aria-label="Delete photo"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                  {onOpenPhotoFocus && <MealSummary photo={photo} onOpen={onOpenPhotoFocus} />}
-                </div>
+                <MealCard
+                  key={photo.id}
+                  photo={photo}
+                  onOpen={onOpenPhotoFocus}
+                  onDelete={handleDeletePhoto}
+                  deleting={deletingId === photo.id}
+                />
               ))}
             </div>
           </div>
