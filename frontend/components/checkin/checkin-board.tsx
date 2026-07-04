@@ -47,7 +47,7 @@ interface CheckinBoardProps {
   existingEntry?: Entry | null
   onAutosaveStateChange?: (state: AutosaveState) => void
   onAutosaveFnsReady?: (fns: AutosaveFns) => void
-  onOpenPhotoFocus?: (photoId: number) => void
+  onOpenPhotoFocus: (photoId: number) => void
 }
 
 // col-span classes per card — live here so each card carries the right grid width.
