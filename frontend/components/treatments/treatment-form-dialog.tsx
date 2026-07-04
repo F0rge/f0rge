@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useCreateTreatment, useUpdateTreatment, useDeleteTreatment } from '@/lib/api/hooks'
+import { useTreatments, useCreateTreatment, useUpdateTreatment, useDeleteTreatment } from '@/lib/api/hooks'
 import { handleMutationError } from '@/lib/api/client'
 import type { Treatment, TreatmentType } from '@/lib/api/types'
 import { cn, formatLocalDate } from '@/lib/utils'
@@ -38,12 +38,23 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
   const isEdit = !!treatment
   const [name, setName] = useState(treatment?.name ?? '')
   const [type, setType] = useState<TreatmentType>(treatment?.type ?? 'other')
+  const [group, setGroup] = useState(treatment?.group_name ?? '')
   const [startDate, setStartDate] = useState(treatment?.start_date ?? formatLocalDate(new Date()))
   const [endDate, setEndDate] = useState(treatment?.end_date ?? '')
   const [ongoing, setOngoing] = useState(!treatment?.end_date)
   const [dose, setDose] = useState(treatment?.dose ?? '')
   const [notes, setNotes] = useState(treatment?.notes ?? '')
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const { data: existingTreatments } = useTreatments()
+  const groupOptions = Array.from(
+    new Map(
+      (existingTreatments ?? [])
+        .map((t) => t.group_name)
+        .filter((g): g is string => !!g)
+        .map((g) => [g.toLowerCase(), g]),
+    ).values(),
+  ).sort((a, b) => a.localeCompare(b))
 
   const createMutation = useCreateTreatment()
   const updateMutation = useUpdateTreatment()
@@ -67,6 +78,7 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
     const payload = {
       name: name.trim(),
       type,
+      group_name: group.trim() || null,
       start_date: startDate,
       end_date: finalEnd,
       dose: dose.trim() || null,
@@ -144,6 +156,23 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="tx-group">Group</Label>
+            <Input
+              id="tx-group"
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              placeholder="e.g. SIBO Treatment"
+              maxLength={100}
+              list="tx-group-options"
+            />
+            <datalist id="tx-group-options">
+              {groupOptions.map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
