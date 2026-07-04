@@ -13,6 +13,7 @@ from app.config import settings
 from app.exceptions import NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
+from app.schemas.photo import PhotoUpdate
 from app.services.food_analysis import trigger_analysis_background
 from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.photo_storage import delete_photo, resize_image, save_photo
@@ -71,15 +72,34 @@ class PhotoService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def update_meal_time(self, photo_id: int, meal_time: datetime.datetime) -> Photo:
+    async def update_photo(self, photo_id: int, data: PhotoUpdate) -> Photo:
         photo = (
             await self.db.execute(select(Photo).where(Photo.id == photo_id))
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
-        photo.meal_time = meal_time
+
+        fields = data.model_fields_set
+        label_changed = "label" in fields
+        if label_changed:
+            # ""/whitespace clears the label so the UI falls back to the AI dish_name.
+            stripped = data.label.strip() if data.label is not None else None
+            photo.label = stripped or None
+        if "meal_time" in fields:
+            photo.meal_time = data.meal_time
+
         await self.db.commit()
         await self.db.refresh(photo)
+
+        # label appears in the vault daily file, meal_time doesn't — only
+        # re-render when label actually changed (matches upload()/delete()).
+        if label_changed:
+            entry = (
+                await self.db.execute(select(Entry).where(Entry.id == photo.entry_id))
+            ).scalar_one()
+            await self.db.refresh(entry)
+            await render_and_write_daily_file(self.db, entry, entry.photos)
+
         return photo
 
     async def upload(

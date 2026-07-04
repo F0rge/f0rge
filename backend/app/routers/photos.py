@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse
 from app.dependencies.photos import get_photo_service
 from app.middleware.auth import get_current_session
 from app.models.photo import Photo
-from app.schemas.photo import PhotoMealTimeUpdate, PhotoResponse
+from app.schemas.photo import PhotoResponse, PhotoUpdate
 from app.services.photos import PhotoService
 
 router = APIRouter(
@@ -62,7 +62,7 @@ async def remove_photo(
 @router.patch("/photos/{photo_id}", response_model=PhotoResponse)
 async def update_photo(
     photo_id: int,
-    data: PhotoMealTimeUpdate,
+    data: PhotoUpdate,
     service: PhotoService = Depends(get_photo_service),
 ) -> Photo:
-    return await service.update_meal_time(photo_id, data.meal_time)
+    return await service.update_photo(photo_id, data)

@@ -29,6 +29,7 @@ from app.config import settings
 from app.exceptions import NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
+from app.schemas.photo import PhotoUpdate
 from app.services.photos import PhotoService
 
 
@@ -157,7 +158,7 @@ async def test_patch_updates_meal_time(async_db: AsyncSession, isolated_storage:
 
     new_time = datetime.datetime(2026, 5, 15, 12, 0, 0)
     service = PhotoService(async_db)
-    updated = await service.update_meal_time(photo.id, new_time)
+    updated = await service.update_photo(photo.id, PhotoUpdate(meal_time=new_time))
 
     assert updated.id == photo.id
     assert updated.meal_time == new_time
@@ -168,7 +169,7 @@ async def test_patch_missing_photo_raises_not_found(
 ) -> None:
     service = PhotoService(async_db)
     with pytest.raises(NotFoundError):
-        await service.update_meal_time(99999, datetime.datetime.utcnow())
+        await service.update_photo(99999, PhotoUpdate(meal_time=datetime.datetime.utcnow()))
 
 
 # ---------------------------------------------------------------------------
