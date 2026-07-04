@@ -12,6 +12,7 @@ export type CardId =
   | 'wellbeing'
   | 'gut'
   | 'supplements'
+  | 'medications'
   | 'symptoms'
   | 'trackers'
   | 'notes'
@@ -21,6 +22,7 @@ export const DEFAULT_CARD_ORDER: readonly CardId[] = [
   'wellbeing',
   'gut',
   'supplements',
+  'medications',
   'symptoms',
   'trackers',
   'notes',

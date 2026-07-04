@@ -12,6 +12,13 @@ from app.services.diet_flags import PhotoSignal
 _SYMPTOM_KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
 
+class MedicationIntake(BaseModel):
+    key: str = Field(min_length=1, max_length=64)
+    dose: Optional[str] = None
+    reason: Optional[str] = None
+    time: Optional[str] = None  # wall-clock "HH:MM" display string, no tz logic
+
+
 class EntryCreate(BaseModel):
     date: datetime.date
     schema_version: Optional[int] = 3
@@ -39,6 +46,7 @@ class EntryCreate(BaseModel):
     caffeine_servings: Optional[int] = Field(default=None, ge=0, le=10)
     notes: Optional[str] = None
     symptoms_json: Optional[dict] = None
+    medications: list[MedicationIntake] = Field(default_factory=list)
 
     @field_validator("entry_time", mode="after")
     @classmethod
@@ -92,6 +100,7 @@ class EntryUpdate(BaseModel):
     caffeine_servings: Optional[int] = Field(default=None, ge=0, le=10)
     notes: Optional[str] = None
     symptoms_json: Optional[dict] = None
+    medications: Optional[list[MedicationIntake]] = None
 
     @field_validator("entry_time", mode="after")
     @classmethod
@@ -143,6 +152,7 @@ class EntryResponse(BaseModel):
     caffeine_servings: Optional[int] = None
     notes: Optional[str] = None
     symptoms_json: dict = Field(default_factory=dict)
+    medications: list[MedicationIntake] = Field(default_factory=list)
     photos: list[PhotoResponse] = []
     created_at: datetime.datetime
     updated_at: datetime.datetime

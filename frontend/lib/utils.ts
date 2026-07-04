@@ -21,3 +21,9 @@ export function formatDisplayDate(dateStr: string): string {
   const date = new Date(dateStr + "T00:00:00")
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
 }
+
+// Current local wall-clock time as "HH:MM" (zero-padded, no tz logic).
+export function nowHHMM(): string {
+  const now = new Date()
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
+}

@@ -4,7 +4,7 @@ import datetime
 
 from sqlalchemy import Boolean, Date, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -38,6 +38,14 @@ class Entry(Base):
     caffeine_servings: Mapped[int | None] = mapped_column(Integer, nullable=True)
     symptoms_json: Mapped[dict] = mapped_column(
         MutableDict.as_mutable(JSONB), nullable=False, default=dict, server_default="{}"
+    )
+    # List of medication-intake events for the day, e.g.
+    # [{"key": "ibuprofen", "dose": "400mg", "reason": "headache", "time": "15:20"}].
+    # `key` is a medication_catalog key but is NOT FK-constrained -- historical
+    # entries keep their keys even after the catalog item is archived (same
+    # leniency as `supplements`/diet tags).
+    medications_json: Mapped[list] = mapped_column(
+        MutableList.as_mutable(JSONB), nullable=False, default=list, server_default="[]"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(

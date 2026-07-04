@@ -8,6 +8,8 @@ import { CatalogSection } from '@/components/customize/catalog-section'
 import {
   useSupplementCatalog,
   useUpdateSupplementCatalogItem,
+  useMedicationCatalog,
+  useUpdateMedicationCatalogItem,
   useDietTagCatalog,
   useUpdateDietTagCatalogItem,
 } from '@/lib/api/hooks'
@@ -19,21 +21,34 @@ export default function CatalogsClient() {
     isError: supplementsError,
   } = useSupplementCatalog(true)
   const {
+    data: medications = [],
+    isLoading: medicationsLoading,
+    isError: medicationsError,
+  } = useMedicationCatalog(true)
+  const {
     data: dietTags = [],
     isLoading: dietTagsLoading,
     isError: dietTagsError,
   } = useDietTagCatalog(true)
 
   const updateSupplement = useUpdateSupplementCatalogItem()
+  const updateMedication = useUpdateMedicationCatalogItem()
   const updateDietTag = useUpdateDietTagCatalogItem()
 
-  const isLoading = supplementsLoading || dietTagsLoading
-  const hasError = supplementsError || dietTagsError
+  const isLoading = supplementsLoading || medicationsLoading || dietTagsLoading
+  const hasError = supplementsError || medicationsError || dietTagsError
 
   function handleToggleSupplement(key: string, currentArchived: boolean) {
     updateSupplement.mutate(
       { key, data: { archived: !currentArchived } },
       { onError: () => toast.error('Failed to update supplement') },
+    )
+  }
+
+  function handleToggleMedication(key: string, currentArchived: boolean) {
+    updateMedication.mutate(
+      { key, data: { archived: !currentArchived } },
+      { onError: () => toast.error('Failed to update medication') },
     )
   }
 
@@ -45,6 +60,7 @@ export default function CatalogsClient() {
   }
 
   const activeSupplements = supplements.filter((s) => !s.archived).length
+  const activeMedications = medications.filter((m) => !m.archived).length
   const activeDietTags = dietTags.filter((d) => !d.archived).length
 
   return (
@@ -62,9 +78,9 @@ export default function CatalogsClient() {
       </div>
 
       <TierBanner tier="catalog">
-        Pick which supplements and diet tags appear on your daily check-in. Items
-        can be archived (hidden from the picker) but not deleted — your historical
-        entries keep their tags.
+        Pick which supplements, medications, and diet tags appear on your daily
+        check-in. Items can be archived (hidden from the picker) but not deleted —
+        your historical entries keep their tags.
       </TierBanner>
 
       {hasError ? (
@@ -86,6 +102,14 @@ export default function CatalogsClient() {
             onToggleArchive={handleToggleSupplement}
             selectedCount={activeSupplements}
             totalCount={supplements.length}
+          />
+
+          <CatalogSection
+            title="Medications"
+            items={medications}
+            onToggleArchive={handleToggleMedication}
+            selectedCount={activeMedications}
+            totalCount={medications.length}
           />
 
           <CatalogSection
