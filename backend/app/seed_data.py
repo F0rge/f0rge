@@ -27,3 +27,14 @@ DEFAULT_SYMPTOMS: list[tuple[str, str]] = [
     ("brain_fog", "Brain Fog"),
     ("pem", "Post-Exertional Malaise"),
 ]
+
+# Seeded by migration 010 (create_medication_catalog), same convention as
+# DEFAULT_SUPPLEMENTS/DEFAULT_SYMPTOMS above.
+DEFAULT_MEDICATIONS: list[tuple[str, str]] = [
+    ("ibuprofen", "Ibuprofen"),
+    ("paracetamol", "Paracetamol"),
+    ("aspirin", "Aspirin"),
+    ("antihistamine", "Antihistamine"),
+    ("antacid", "Antacid"),
+    ("imodium", "Imodium"),
+]

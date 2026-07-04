@@ -14,6 +14,7 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
 from app.schemas.photo import PhotoResponse
+from app.services import medication_catalog as medication_catalog_service
 from app.services import supplement_catalog as supplement_catalog_service
 from app.services import symptom_catalog as symptom_catalog_service
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
@@ -30,6 +31,7 @@ def _build_response(entry: Entry) -> EntryResponse:
     return EntryResponse.model_validate(
         {
             **{c.name: getattr(entry, c.name) for c in entry.__table__.columns},
+            "medications": entry.medications_json or [],
             "photos": [PhotoResponse.model_validate(p, from_attributes=True) for p in entry.photos],
             "photo_signal": signal,
             "photo_derived_flags": sorted(signal.flags),
@@ -118,6 +120,7 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
         data["schema_version"] = 3
     data["stool_normal"] = _derive_stool_normal(data.get("stool_status"), data.get("stool_normal"))
     data["symptoms_json"] = data.get("symptoms_json") or {}
+    data["medications_json"] = data.pop("medications", None) or []
 
     entry = Entry(**data)
     db.add(entry)
@@ -125,6 +128,9 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
     supplement_keys = [s.strip() for s in (entry.supplements or "").split(",") if s.strip()]
     await supplement_catalog_service.touch(db, supplement_keys)
     await symptom_catalog_service.touch(db, list((entry.symptoms_json or {}).keys()))
+    await medication_catalog_service.touch(
+        db, [m["key"] for m in entry.medications_json if m.get("key")]
+    )
 
     await db.commit()
     await db.refresh(entry)
@@ -172,6 +178,8 @@ async def update_entry(db: AsyncSession, date: datetime.date, body: EntryUpdate)
     # rather than a value silently winning then getting clobbered below.
     update_data.pop("entry_time", None)
     update_data.pop("period_of_day", None)
+    if "medications" in update_data:
+        update_data["medications_json"] = update_data.pop("medications")
     for field, value in update_data.items():
         setattr(entry, field, value)
 
@@ -184,6 +192,9 @@ async def update_entry(db: AsyncSession, date: datetime.date, body: EntryUpdate)
     supplement_keys = [s.strip() for s in (entry.supplements or "").split(",") if s.strip()]
     await supplement_catalog_service.touch(db, supplement_keys)
     await symptom_catalog_service.touch(db, list((entry.symptoms_json or {}).keys()))
+    await medication_catalog_service.touch(
+        db, [m["key"] for m in entry.medications_json if m.get("key")]
+    )
 
     await db.commit()
     await db.refresh(entry)

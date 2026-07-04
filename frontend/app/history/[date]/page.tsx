@@ -2,8 +2,8 @@
 
 import { use, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, Loader2 } from 'lucide-react'
-import { useEntry, useUpdatePhotoMealTime } from '@/lib/api/hooks'
+import { ArrowLeft, Pencil, Loader2, Pill } from 'lucide-react'
+import { useEntry, useUpdatePhotoMealTime, useMedicationCatalog } from '@/lib/api/hooks'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-disclosure'
 import type { Entry, Photo } from '@/lib/api/types'
@@ -123,6 +123,44 @@ function PhotoWithMealTime({ photo }: { photo: Photo }) {
   )
 }
 
+// Read-only — history is a review surface, not an editor. Historical entries
+// can reference archived (or since-renamed) catalog keys, so we fetch with
+// includeArchived and fall back to the raw key if no catalog match is found.
+function MedicationsSection({ medications }: { medications: Entry['medications'] }) {
+  const { data: catalog = [] } = useMedicationCatalog(true)
+  const labelFor = (key: string) => catalog.find((m) => m.key === key)?.label ?? key
+
+  if (medications.length === 0) return null
+
+  return (
+    <div className="border-t border-border px-4 py-3">
+      <p className="mb-2 text-xs font-medium text-muted-foreground">Medications</p>
+      <div className="space-y-2">
+        {medications.map((intake, index) => (
+          <div
+            key={`${intake.key}-${index}`}
+            className="flex items-center gap-2.5 rounded-lg border border-border bg-background p-2.5"
+          >
+            <span className="flex size-7 flex-none items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+              <Pill className="size-3.5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold">{labelFor(intake.key)}</div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                {intake.dose && <span>{intake.dose}</span>}
+                {intake.dose && (intake.reason || intake.time) && <span aria-hidden>·</span>}
+                {intake.reason && <span>{intake.reason}</span>}
+                {intake.reason && intake.time && <span aria-hidden>·</span>}
+                {intake.time && <span>{intake.time}</span>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-3 py-2">
@@ -175,6 +213,8 @@ function EntryDetail({ entry }: { entry: Entry }) {
           <p className="text-sm">{entry.notes}</p>
         </div>
       )}
+
+      <MedicationsSection medications={entry.medications} />
 
       {entry.photos && entry.photos.length > 0 && (
         <div className="border-t border-border px-4 py-3">

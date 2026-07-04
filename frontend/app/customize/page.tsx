@@ -45,7 +45,7 @@ export default function CustomizePage() {
           href="/customize/catalogs"
           icon={<Pill className="size-4" />}
           title="Catalogs"
-          description="Pick supplements and diet tags to track from curated lists."
+          description="Pick supplements, medications, and diet tags to track from curated lists."
           tier="catalog"
         />
         <HubRow

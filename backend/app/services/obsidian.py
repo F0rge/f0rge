@@ -212,6 +212,25 @@ def _format_supplements(supplements_str: str) -> str:
     return ", ".join(labels) if labels else "None"
 
 
+def _format_medications(medications: list[dict], med_labels: dict[str, str]) -> str:
+    """Summary-table cell for logged medications.
+
+    ``med_labels`` covers every catalog row (active and archived) so a
+    historical entry referencing an archived medication still renders its
+    label instead of falling back to the raw key.
+    """
+    if not medications:
+        return "None"
+    parts = []
+    for med in medications:
+        label = med_labels.get(med.get("key", ""), med.get("key", "?"))
+        detail = med.get("dose") or ""
+        if med.get("reason"):
+            detail = f"{detail} for {med['reason']}" if detail else f"for {med['reason']}"
+        parts.append(f"{label} ({detail})" if detail else label)
+    return ", ".join(parts)
+
+
 def _format_symptoms(
     filtered_symptoms: dict,
     active_sym_labels: dict,
@@ -277,6 +296,7 @@ def _render_markdown(
     active_treatments: list[Treatment],
     health: Optional[HealthMetric],
     weather: Optional[WeatherDailySummary],
+    med_labels: Optional[dict[str, str]] = None,
 ) -> str:
     """Render the Obsidian markdown file for one daily entry.
 
@@ -306,6 +326,11 @@ def _render_markdown(
     # Symptoms: filter to active catalog keys only
     symptoms = getattr(entry, "symptoms_json", {}) or {}
     filtered_symptoms = {k: v for k, v in symptoms.items() if k in active_sym_labels}
+
+    # Medications: NOT filtered to active catalog keys -- an archived medication
+    # must still render correctly on historical entries that logged it.
+    medications = getattr(entry, "medications_json", []) or []
+    _med_labels = med_labels or {}
 
     tag_lines = [
         "tags:",
@@ -384,6 +409,7 @@ def _render_markdown(
             f"| Stress | {STRESS_LABELS.get(entry.stress, str(entry.stress))} |",
             f"| Diet risk | {_effective_str} |",
             f"| Supplements | {_format_supplements(entry.supplements)} |",
+            f"| Medications | {_format_medications(medications, _med_labels)} |",
             f"| Symptoms | {_format_symptoms(filtered_symptoms, active_sym_labels)} |",
             f"| Sick | {sick_str} |",
             f"| Hot shower (full body) | {hot_shower_str} |",
@@ -405,6 +431,21 @@ def _render_markdown(
             "",
         ]
     )
+
+    if medications:
+        lines.append("## Medications")
+        lines.append("")
+        for med in medications:
+            label = _med_labels.get(med.get("key", ""), med.get("key", "?"))
+            detail_parts = []
+            if med.get("dose"):
+                detail_parts.append(med["dose"])
+            if med.get("reason"):
+                detail_parts.append(f"for {med['reason']}")
+            detail = f" ({', '.join(detail_parts)})" if detail_parts else ""
+            time_suffix = f" — {med['time']}" if med.get("time") else ""
+            lines.append(f"- {label}{detail}{time_suffix}")
+        lines.append("")
 
     if photos:
         lines.append("## Photos")
@@ -504,6 +545,7 @@ def write_daily_file(
     active_treatments: list[Treatment],
     health: Optional[HealthMetric],
     weather: Optional[WeatherDailySummary],
+    med_labels: Optional[dict[str, str]] = None,
 ) -> None:
     """Write/replace the Obsidian daily check-in file for the given entry.
 
@@ -524,7 +566,14 @@ def write_daily_file(
         return
 
     content = _render_markdown(
-        entry, photos, analyses, active_sym_labels, active_treatments, health, weather
+        entry,
+        photos,
+        analyses,
+        active_sym_labels,
+        active_treatments,
+        health,
+        weather,
+        med_labels=med_labels,
     )
     target_path = os.path.join(logs_dir, f"{entry.date.isoformat()}.md")
 

@@ -53,6 +53,7 @@ const CARD_META: Record<CardId, CardMeta & { meta: string }> = {
   wellbeing:   { id: 'wellbeing',   icon: <Moon className="size-4" />,     label: 'Wellbeing',       meta: '4 scales' },
   gut:         { id: 'gut',         icon: <Activity className="size-4" />, label: 'Gut',             meta: '3 scales + Bristol' },
   supplements: { id: 'supplements', icon: <Pill className="size-4" />,     label: 'Supplements',     meta: 'Catalog' },
+  medications: { id: 'medications', icon: <Pill className="size-4" />,     label: 'Medications',     meta: 'Catalog' },
   symptoms:    { id: 'symptoms',    icon: <Zap className="size-4" />,      label: 'Symptoms',        meta: 'Custom' },
   trackers:    { id: 'trackers',    icon: <Heart className="size-4" />,    label: 'Daily trackers',  meta: 'Custom' },
   notes:       { id: 'notes',       icon: <BookOpen className="size-4" />, label: 'Notes',           meta: 'Free text' },

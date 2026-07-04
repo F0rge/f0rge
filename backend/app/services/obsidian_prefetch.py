@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
+from app.models.medication_catalog import MedicationCatalogItem
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.symptom_catalog import SymptomCatalogItem
@@ -36,6 +37,7 @@ async def _fetch_obsidian_deps(
     list[Treatment],
     Optional[object],  # HealthMetric
     Optional[object],  # WeatherDailySummary
+    dict[str, str],  # med_labels
 ]:
     """Fetch all data needed by write_daily_file in parallel where possible."""
     photo_ids = [p.id for p in photos]
@@ -60,6 +62,12 @@ async def _fetch_obsidian_deps(
     )
     active_sym_labels: dict[str, str] = {s.key: s.label for s in sym_result.scalars().all()}
 
+    # --- medication labels (active AND archived) ---
+    # Unlike symptoms, this is not filtered to active-only: a historical entry
+    # that logged an archived medication must still render its label.
+    med_result = await db.execute(select(MedicationCatalogItem))
+    med_labels: dict[str, str] = {m.key: m.label for m in med_result.scalars().all()}
+
     # --- active treatments ---
     tx_result = await db.execute(
         select(Treatment)
@@ -82,7 +90,7 @@ async def _fetch_obsidian_deps(
         logger.exception("Failed to fetch weather summary for %s", entry.date)
         weather = None
 
-    return analyses, active_sym_labels, active_treatments, health, weather
+    return analyses, active_sym_labels, active_treatments, health, weather, med_labels
 
 
 async def render_and_write_daily_file(
@@ -99,6 +107,7 @@ async def render_and_write_daily_file(
         active_treatments,
         health,
         weather,
+        med_labels,
     ) = await _fetch_obsidian_deps(db, entry, photos)
     await asyncio.to_thread(
         write_daily_file,
@@ -109,4 +118,5 @@ async def render_and_write_daily_file(
         active_treatments,
         health,
         weather,
+        med_labels,
     )

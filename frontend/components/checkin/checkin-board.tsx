@@ -21,7 +21,7 @@ import {
 import { useSupplementCatalog, useTreatments } from '@/lib/api/hooks'
 import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
-import type { Entry, EntryCreate, StoolStatus } from '@/lib/api/types'
+import type { Entry, EntryCreate, MedicationIntake, StoolStatus } from '@/lib/api/types'
 import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, type CardId } from '@/lib/checkin/card-order'
 import {
   TreatmentBanner,
@@ -29,6 +29,7 @@ import {
   WellbeingCard,
   GutCard,
   SupplementsCard,
+  MedicationsCard,
   SymptomsCard,
   TrackersCard,
   NotesCard,
@@ -55,6 +56,7 @@ const CARD_COL_SPAN: Record<CardId, string> = {
   wellbeing:   'col-span-12 lg:col-span-4',
   gut:         'col-span-12 lg:col-span-4',
   supplements: 'col-span-12 lg:col-span-4',
+  medications: 'col-span-12 lg:col-span-6',
   symptoms:    'col-span-12 lg:col-span-6',
   trackers:    'col-span-12 lg:col-span-6',
   notes:       'col-span-12 lg:col-span-6',
@@ -66,6 +68,7 @@ const CARD_ICONS: Record<CardId, React.ReactNode> = {
   wellbeing:   <Moon className="size-4" />,
   gut:         <Activity className="size-4" />,
   supplements: <Pill className="size-4" />,
+  medications: <Pill className="size-4" />,
   symptoms:    <Zap className="size-4" />,
   trackers:    <Heart className="size-4" />,
   notes:       <BookOpen className="size-4" />,
@@ -140,6 +143,7 @@ export function CheckinBoard({
   const [dietRisk, setDietRisk] = useState<string>('')
   const [supplements, setSupplements] = useState<string>('')
   const [supplementsTouched, setSupplementsTouched] = useState(false)
+  const [medications, setMedications] = useState<MedicationIntake[]>([])
   const [symptomsJson, setSymptomsJson] = useState<Record<string, number>>({})
   const [sick, setSick] = useState(false)
   const [hotShower, setHotShower] = useState(false)
@@ -170,6 +174,7 @@ export function CheckinBoard({
   const setSickDirty           = useCallback((v: boolean)     => { markDirty(); setSick(v) },           [markDirty])
   const setHotShowerDirty      = useCallback((v: boolean)     => { markDirty(); setHotShower(v) },      [markDirty])
   const setSymptomsJsonDirty   = useCallback((v: Record<string, number>) => { markDirty(); setSymptomsJson(v) }, [markDirty])
+  const setMedicationsDirty    = useCallback((v: MedicationIntake[])    => { markDirty(); setMedications(v) }, [markDirty])
   const setAlcoholUnitsDirty   = useCallback((v: number)      => { markDirty(); setAlcoholUnits(v) },   [markDirty])
   const setCaffeineServingsDirty = useCallback((v: number)    => { markDirty(); setCaffeineServings(v) }, [markDirty])
 
@@ -226,6 +231,7 @@ export function CheckinBoard({
       )
       setSupplements(existingEntry.supplements)
       setSupplementsTouched(true)
+      setMedications(existingEntry.medications ?? [])
       setSymptomsJson(existingEntry.symptoms_json ?? {})
       setSick(existingEntry.sick)
       setHotShower(existingEntry.hot_shower ?? false)
@@ -264,10 +270,11 @@ export function CheckinBoard({
     alcohol_units: alcoholUnits,
     caffeine_servings: caffeineServings,
     symptoms_json: symptomsJson,
+    medications,
   }), [
     date, overall, bloating, stoolStatus, bristolType, jointPain, neuro,
     sleepQuality, stress, dietRisk, supplements, sick, hotShower, notes,
-    alcoholUnits, caffeineServings, symptomsJson,
+    alcoholUnits, caffeineServings, symptomsJson, medications,
   ])
 
   // ── Autosave ──────────────────────────────────────────────────────────────
@@ -345,6 +352,12 @@ export function CheckinBoard({
         value={supplements}
         onChange={handleSupplementChange}
         onTouched={handleSupplementTouched}
+      />
+    ),
+    medications: () => (
+      <MedicationsCard
+        value={medications}
+        onChange={setMedicationsDirty}
       />
     ),
     symptoms: () => (

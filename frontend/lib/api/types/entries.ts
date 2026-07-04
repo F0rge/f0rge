@@ -22,6 +22,13 @@ export interface PhotoSignal {
 
 export type StoolStatus = 'normal' | 'abnormal' | 'none'
 
+export interface MedicationIntake {
+  key: string
+  dose?: string
+  reason?: string
+  time?: string // wall-clock "HH:MM", stamped client-side at log time
+}
+
 export interface Entry {
   id: number
   date: string // YYYY-MM-DD
@@ -48,6 +55,7 @@ export interface Entry {
   alcohol_units: number | null
   caffeine_servings: number | null
   symptoms_json: Record<string, number> | null
+  medications: MedicationIntake[]
   photos: Photo[]
   effective_flags: string[]
   photo_derived_flags: string[]
@@ -78,6 +86,7 @@ export interface EntryCreate {
   alcohol_units?: number | null
   caffeine_servings?: number | null
   symptoms_json?: Record<string, number>
+  medications?: MedicationIntake[]
 }
 
 export interface PhotoIngredient {
