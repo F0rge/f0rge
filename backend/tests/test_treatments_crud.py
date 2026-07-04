@@ -136,6 +136,58 @@ async def test_create_with_end_date_equal_to_start_date_ok(
 
 
 # ---------------------------------------------------------------------------
+# group_name
+# ---------------------------------------------------------------------------
+
+
+async def test_create_group_name_stripped(service: TreatmentService) -> None:
+    body = TreatmentCreate(
+        name="Rifaximin",
+        type="antibiotic",
+        start_date=datetime.date(2026, 1, 1),
+        group_name=" SIBO Treatment ",
+    )
+    result = await service.create(body)
+    assert result.group_name == "SIBO Treatment"
+
+
+async def test_create_group_name_empty_string_becomes_none(
+    service: TreatmentService,
+) -> None:
+    body = TreatmentCreate(
+        name="Allicin",
+        type="antimicrobial",
+        start_date=datetime.date(2026, 1, 1),
+        group_name="",
+    )
+    result = await service.create(body)
+    assert result.group_name is None
+
+
+async def test_create_without_group_name_is_none(service: TreatmentService) -> None:
+    body = TreatmentCreate(
+        name="Berberine",
+        type="other",
+        start_date=datetime.date(2026, 1, 1),
+    )
+    result = await service.create(body)
+    assert result.group_name is None
+
+
+async def test_update_sets_group_name_on_ungrouped_treatment(
+    async_db: AsyncSession, service: TreatmentService
+) -> None:
+    t = await _add_treatment(async_db, "Allicin", datetime.date(2026, 1, 1))
+    assert t.group_name is None
+
+    result = await service.update(t.id, TreatmentUpdate(group_name="SIBO Treatment"))
+    assert result.group_name == "SIBO Treatment"
+
+    cleared = await service.update(t.id, TreatmentUpdate(group_name=None))
+    assert cleared.group_name is None
+
+
+# ---------------------------------------------------------------------------
 # list
 # ---------------------------------------------------------------------------
 

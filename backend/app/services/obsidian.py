@@ -83,7 +83,8 @@ def _format_active_treatments(
     parts = []
     for t in treatments:
         day_num = (as_of - t.start_date).days + 1
-        parts.append(f"{t.name} (day {day_num})")
+        suffix = f"day {day_num}, {t.group_name}" if t.group_name else f"day {day_num}"
+        parts.append(f"{t.name} ({suffix})")
     return ", ".join(parts)
 
 
