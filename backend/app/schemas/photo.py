@@ -17,8 +17,9 @@ class PhotoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PhotoMealTimeUpdate(BaseModel):
-    meal_time: datetime.datetime
+class PhotoUpdate(BaseModel):
+    label: Optional[str] = None
+    meal_time: Optional[datetime.datetime] = None
 
     @field_validator("meal_time", mode="after")
     @classmethod
