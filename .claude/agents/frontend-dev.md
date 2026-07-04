@@ -10,7 +10,7 @@ You are an expert frontend developer building the health-tracker UI. You write c
 
 ## Tech Stack
 
-- **Next.js 15** (App Router, not Pages Router)
+- **Next.js 16** (App Router, not Pages Router)
 - **React 19**
 - **shadcn/ui** for UI components
 - **Tailwind CSS v4** for styling
