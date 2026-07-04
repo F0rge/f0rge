@@ -94,7 +94,7 @@ export function HeaderControls({
                 type="date"
                 value={draftStart}
                 onChange={(e) => setDraftStart(e.target.value)}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
             <div className="space-y-1">
@@ -103,7 +103,7 @@ export function HeaderControls({
                 type="date"
                 value={draftEnd}
                 onChange={(e) => setDraftEnd(e.target.value)}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
             <Button className="w-full" size="sm" onClick={applyDates}>

@@ -17,10 +17,12 @@ async def _make_treatment(
     normalized_name: str,
     start_date: datetime.date,
     end_date: Optional[datetime.date] = None,
+    group_name: Optional[str] = None,
 ) -> Treatment:
     t = Treatment(
         name=name,
         normalized_name=normalized_name,
+        group_name=group_name,
         type="antimicrobial",
         start_date=start_date,
         end_date=end_date,
@@ -115,6 +117,19 @@ def test_format_day_count_start_is_day_1() -> None:
     as_of = datetime.date(2026, 5, 15)
     result = _format_active_treatments([t], as_of)
     assert result == "Rifaximin (day 15)"
+
+
+def test_format_grouped_treatment_shows_group_name() -> None:
+    t = Treatment(
+        name="Rifaximin",
+        normalized_name="rifaximin",
+        group_name="SIBO Treatment",
+        type="antibiotic",
+        start_date=datetime.date(2026, 5, 1),
+    )
+    as_of = datetime.date(2026, 5, 15)
+    result = _format_active_treatments([t], as_of)
+    assert result == "Rifaximin (day 15, SIBO Treatment)"
 
 
 def test_format_multiple_treatments() -> None:

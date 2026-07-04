@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Treatment } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
+import { groupTreatments } from '@/components/treatments/group-treatments'
 
 interface TreatmentTimelineProps {
   treatments: Treatment[]
@@ -35,6 +36,36 @@ function toDate(str: string): Date {
 
 function formatMonthLabel(date: Date): string {
   return date.toLocaleDateString('en-GB', { month: 'short' })
+}
+
+interface GridlineOverlayProps {
+  weekMarkers: { offset: number; label: string; isMonthStart: boolean }[]
+  rangeDays: number
+  todayOffset: number
+  todayClassName: string
+}
+
+/** Week/month gridlines + today-line, shared by the header row, every
+ * treatment bar row, and the group label lanes so the grid reads
+ * continuously regardless of what's drawn on top of it. */
+function GridlineOverlay({ weekMarkers, rangeDays, todayOffset, todayClassName }: GridlineOverlayProps) {
+  return (
+    <>
+      {weekMarkers.map((m, i) => (
+        <div
+          key={i}
+          className="absolute top-0 bottom-0 border-l border-border/20"
+          style={{ left: `${(m.offset / rangeDays) * 100}%` }}
+        />
+      ))}
+      {todayOffset >= 0 && todayOffset < rangeDays && (
+        <div
+          className={cn('absolute top-0 bottom-0 z-10 w-0.5', todayClassName)}
+          style={{ left: `${(todayOffset / rangeDays) * 100}%` }}
+        />
+      )}
+    </>
+  )
 }
 
 export function TreatmentTimeline({ treatments, onTreatmentClick }: TreatmentTimelineProps) {
@@ -134,60 +165,77 @@ export function TreatmentTimeline({ treatments, onTreatmentClick }: TreatmentTim
               )}
             </div>
 
-            {visibleTreatments.map((t) => {
-              const isOngoing = !t.end_date
-              const start = toDate(t.start_date)
-              const end = isOngoing ? rangeEnd : toDate(t.end_date as string)
-              const barStart = Math.max(0, daysBetween(rangeStart, start))
-              const barEnd = Math.min(rangeDays - 1, daysBetween(rangeStart, end))
-              const leftPct = (barStart / rangeDays) * 100
-              const widthPct = ((barEnd - barStart + 1) / rangeDays) * 100
-              const barClass = TYPE_BAR_CLASSES[t.type] ?? TYPE_BAR_CLASSES.other
-              const clippedLeft = start < rangeStart
-              const clippedRight = !isOngoing && end > rangeEnd
+            {groupTreatments(visibleTreatments).map((section, sectionIndex, sections) => (
+              <div key={section.label ?? '__ungrouped__'}>
+                {section.label && (
+                  <div className="relative flex h-6 items-center border-b border-border/50 bg-muted/30">
+                    <GridlineOverlay
+                      weekMarkers={weekMarkers}
+                      rangeDays={rangeDays}
+                      todayOffset={todayOffset}
+                      todayClassName="bg-primary/30"
+                    />
+                    <span className="relative z-20 pl-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {section.label}
+                    </span>
+                  </div>
+                )}
 
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => onTreatmentClick(t)}
-                  className="relative flex h-10 w-full items-center border-b border-border/50 last:border-b-0 hover:bg-muted/30"
-                >
-                  {weekMarkers.map((m, i) => (
-                    <div
-                      key={i}
-                      className="absolute top-0 bottom-0 border-l border-border/20"
-                      style={{ left: `${(m.offset / rangeDays) * 100}%` }}
-                    />
-                  ))}
-                  {todayOffset >= 0 && todayOffset < rangeDays && (
-                    <div
-                      className="absolute top-0 bottom-0 z-10 w-0.5 bg-primary/30"
-                      style={{ left: `${(todayOffset / rangeDays) * 100}%` }}
-                    />
-                  )}
-                  <div
-                    className={cn(
-                      'absolute top-2 bottom-2 rounded-full',
-                      barClass,
-                      clippedLeft && 'rounded-l-none',
-                      (clippedRight || isOngoing) && 'rounded-r-none',
-                      isOngoing && '[mask-image:linear-gradient(to_right,black_70%,transparent_98%)]',
-                    )}
-                    style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: '4px' }}
-                  />
-                  <span
-                    className="absolute top-1/2 z-20 -translate-y-1/2 truncate px-1 text-[10px] font-medium text-white drop-shadow-sm"
-                    style={{
-                      left: `${leftPct}%`,
-                      maxWidth: `${widthPct}%`,
-                    }}
-                  >
-                    {t.name}
-                  </span>
-                </button>
-              )
-            })}
+                {section.treatments.map((t, treatmentIndex) => {
+                  const isOngoing = !t.end_date
+                  const start = toDate(t.start_date)
+                  const end = isOngoing ? rangeEnd : toDate(t.end_date as string)
+                  const barStart = Math.max(0, daysBetween(rangeStart, start))
+                  const barEnd = Math.min(rangeDays - 1, daysBetween(rangeStart, end))
+                  const leftPct = (barStart / rangeDays) * 100
+                  const widthPct = ((barEnd - barStart + 1) / rangeDays) * 100
+                  const barClass = TYPE_BAR_CLASSES[t.type] ?? TYPE_BAR_CLASSES.other
+                  const clippedLeft = start < rangeStart
+                  const clippedRight = !isOngoing && end > rangeEnd
+                  const isLastRow =
+                    sectionIndex === sections.length - 1 &&
+                    treatmentIndex === section.treatments.length - 1
+
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => onTreatmentClick(t)}
+                      className={cn(
+                        'relative flex h-10 w-full items-center border-b border-border/50 hover:bg-muted/30',
+                        isLastRow && 'border-b-0',
+                      )}
+                    >
+                      <GridlineOverlay
+                        weekMarkers={weekMarkers}
+                        rangeDays={rangeDays}
+                        todayOffset={todayOffset}
+                        todayClassName="bg-primary/30"
+                      />
+                      <div
+                        className={cn(
+                          'absolute top-2 bottom-2 rounded-full',
+                          barClass,
+                          clippedLeft && 'rounded-l-none',
+                          (clippedRight || isOngoing) && 'rounded-r-none',
+                          isOngoing && '[mask-image:linear-gradient(to_right,black_70%,transparent_98%)]',
+                        )}
+                        style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: '4px' }}
+                      />
+                      <span
+                        className="absolute top-1/2 z-20 -translate-y-1/2 truncate px-1 text-[10px] font-medium text-white drop-shadow-sm"
+                        style={{
+                          left: `${leftPct}%`,
+                          maxWidth: `${widthPct}%`,
+                        }}
+                      >
+                        {t.name}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
           </div>
         </div>
       )}

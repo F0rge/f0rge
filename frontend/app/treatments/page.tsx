@@ -8,6 +8,7 @@ import { TreatmentFormDialog } from '@/components/treatments/treatment-form-dial
 import { TreatmentTimeline } from '@/components/treatments/treatment-timeline'
 import type { Treatment } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
+import { groupTreatments } from '@/components/treatments/group-treatments'
 
 export default function TreatmentsPage() {
   const { data: treatments, isLoading } = useTreatments()
@@ -92,9 +93,23 @@ export default function TreatmentsPage() {
           </button>
         </div>
       ) : view === 'list' ? (
-        <div className="space-y-2">
-          {treatments.map((t) => (
-            <TreatmentCard key={t.id} treatment={t} onClick={() => openEdit(t)} />
+        <div className="space-y-5">
+          {groupTreatments(treatments).map((section) => (
+            <div key={section.label ?? '__ungrouped__'} className="space-y-2">
+              {section.label && (
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {section.label}
+                  </span>
+                  <span className="text-xs text-muted-foreground/60">
+                    {section.treatments.length}
+                  </span>
+                </div>
+              )}
+              {section.treatments.map((t) => (
+                <TreatmentCard key={t.id} treatment={t} onClick={() => openEdit(t)} />
+              ))}
+            </div>
           ))}
         </div>
       ) : (

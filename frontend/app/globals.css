@@ -140,3 +140,14 @@
 .animate-shake {
   animation: shake 0.4s ease-in-out;
 }
+
+/* iOS Safari renders date inputs as a menulist-button with intrinsic width,
+   ignoring w-full/min-w-0 from the shared Input primitive and overflowing
+   any narrow container (e.g. dialog grid-cols-2 rows). */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}

@@ -67,6 +67,8 @@ async def serialize_treatment(db: AsyncSession, source_id: int) -> Optional[str]
         return None
 
     parts = [f"Treatment: {row.name} (type: {row.type})"]
+    if row.group_name:
+        parts.append(f"Group: {row.group_name}")
     parts.append(f"Started: {row.start_date}")
     if row.end_date:
         parts.append(f"Ended: {row.end_date}")

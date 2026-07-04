@@ -199,6 +199,7 @@ def register_tools(server: FastMCP) -> None:
                 {
                     "id": r.id,
                     "name": r.name,
+                    "group_name": r.group_name,
                     "type": r.type,
                     "start_date": str(r.start_date),
                     "end_date": str(r.end_date) if r.end_date else None,

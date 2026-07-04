@@ -49,6 +49,7 @@ class TreatmentService:
         treatment = Treatment(
             name=data.name,
             normalized_name=self._normalize_name(data.name),
+            group_name=data.group_name,
             type=data.type,
             start_date=data.start_date,
             end_date=data.end_date,

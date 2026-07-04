@@ -11,6 +11,7 @@ export interface Treatment {
   name: string
   normalized_name: string
   type: TreatmentType
+  group_name: string | null
   start_date: string
   end_date: string | null
   dose: string | null
@@ -23,6 +24,7 @@ export interface Treatment {
 export interface TreatmentCreate {
   name: string
   type: TreatmentType
+  group_name?: string | null
   start_date: string
   end_date?: string | null
   dose?: string | null
@@ -32,6 +34,7 @@ export interface TreatmentCreate {
 export interface TreatmentUpdate {
   name?: string
   type?: TreatmentType
+  group_name?: string | null
   start_date?: string
   end_date?: string | null
   dose?: string | null
