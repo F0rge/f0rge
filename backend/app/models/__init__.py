@@ -13,6 +13,7 @@ from app.models.medication_catalog import MedicationCatalogItem
 from app.models.supplement_catalog import SupplementCatalogItem
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
+from app.models.treatment_log import TreatmentLog
 from app.models.weather import WeatherReading
 from app.models.lab import Lab
 from app.models.lab_marker_catalog import LabMarkerCatalog
@@ -39,6 +40,7 @@ __all__ = [
     "SupplementCatalogItem",
     "SymptomCatalogItem",
     "Treatment",
+    "TreatmentLog",
     "Lab",
     "LabMarkerCatalog",
     "LabMarkerAlias",
