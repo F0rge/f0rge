@@ -54,6 +54,7 @@ class TreatmentService:
             start_date=data.start_date,
             end_date=data.end_date,
             dose=data.dose,
+            doses_per_day=data.doses_per_day,
             notes=data.notes,
         )
         self.db.add(treatment)

@@ -15,7 +15,7 @@ class Entry(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[datetime.date] = mapped_column(Date, unique=True, nullable=False)
-    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
     entry_time: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
     period_of_day: Mapped[str | None] = mapped_column(String, nullable=True)
     overall: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -26,6 +26,8 @@ class Entry(Base):
     # v2 stool fields. stool_status: 'normal' | 'abnormal' | 'none'.
     stool_status: Mapped[str | None] = mapped_column(String, nullable=True)
     bristol_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # v4: 'complete' | 'incomplete' | None (unrecorded).
+    stool_completeness: Mapped[str | None] = mapped_column(String, nullable=True)
     joint_pain: Mapped[int] = mapped_column(Integer, nullable=False)
     neuro: Mapped[int] = mapped_column(Integer, nullable=False)
     sleep_quality: Mapped[int] = mapped_column(Integer, nullable=False)
