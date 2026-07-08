@@ -43,6 +43,8 @@ export interface Entry {
   // v2
   stool_status: StoolStatus | null
   bristol_type: number | null // 1-7
+  // v4
+  stool_completeness: 'complete' | 'incomplete' | null
   joint_pain: number // 0-3
   neuro: number // -1, 0, 1
   sleep_quality: number // 1-3
@@ -74,6 +76,7 @@ export interface EntryCreate {
   bloating: number
   stool_status?: StoolStatus
   bristol_type?: number
+  stool_completeness?: 'complete' | 'incomplete' | null
   joint_pain: number
   neuro: number
   sleep_quality: number

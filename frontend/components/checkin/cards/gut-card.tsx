@@ -16,6 +16,8 @@ interface GutCardProps {
   onBristolTypeChange: (v: number | null) => void
   jointPain: number
   onJointPainChange: (v: number) => void
+  stoolCompleteness: 'complete' | 'incomplete' | null
+  onStoolCompletenessChange: (v: 'complete' | 'incomplete') => void
 }
 
 export function GutCard({
@@ -23,6 +25,7 @@ export function GutCard({
   stoolStatus, onStoolStatusChange,
   bristolType, onBristolTypeChange,
   jointPain, onJointPainChange,
+  stoolCompleteness, onStoolCompletenessChange,
 }: GutCardProps) {
   return (
     <Card className="h-full">
@@ -58,6 +61,17 @@ export function GutCard({
           />
           {stoolStatus === 'abnormal' && (
             <BristolInput value={bristolType} onChange={onBristolTypeChange} />
+          )}
+          {stoolStatus !== 'none' && (
+            <ScaleInput
+              label="Completeness"
+              value={stoolCompleteness ?? ''}
+              onChange={(v) => onStoolCompletenessChange(v as 'complete' | 'incomplete')}
+              options={[
+                { value: 'complete', label: 'Complete' },
+                { value: 'incomplete', label: 'Incomplete' },
+              ]}
+            />
           )}
         </div>
         <ScaleInput
