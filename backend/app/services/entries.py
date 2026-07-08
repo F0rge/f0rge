@@ -117,11 +117,14 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
     if data.get("period_of_day") is None:
         data["period_of_day"] = _period_of_day(data["entry_time"])
     if data.get("schema_version") is None:
-        data["schema_version"] = 3
+        data["schema_version"] = 4
     data["stool_normal"] = _derive_stool_normal(data.get("stool_status"), data.get("stool_normal"))
     data["symptoms_json"] = data.get("symptoms_json") or {}
     data["medications_json"] = data.pop("medications", None) or []
 
+    # stool_completeness (and every other plain EntryCreate field) flows through here
+    # via **data -- Entry(**data) is generic over the schema's fields, unlike
+    # TreatmentService.create()'s explicit kwarg list, so no per-field wiring is needed.
     entry = Entry(**data)
     db.add(entry)
 

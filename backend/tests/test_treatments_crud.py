@@ -135,6 +135,32 @@ async def test_create_with_end_date_equal_to_start_date_ok(
     assert result.start_date == result.end_date
 
 
+async def test_create_persists_doses_per_day(service: TreatmentService) -> None:
+    """Regression guard: create() previously omitted doses_per_day from the
+    Treatment(...) constructor, so a dose-tracked POST silently lost the field
+    (only update()/PUT set it). See fastapi-backend/protocol_adherence_streak_pattern.md.
+    """
+    body = TreatmentCreate(
+        name="Rifaximin",
+        type="antibiotic",
+        start_date=datetime.date(2026, 1, 1),
+        doses_per_day=3,
+    )
+    result = await service.create(body)
+    assert result.doses_per_day == 3
+
+
+async def test_create_without_doses_per_day_is_none(service: TreatmentService) -> None:
+    """doses_per_day stays optional/nullable when omitted."""
+    body = TreatmentCreate(
+        name="Low FODMAP diet",
+        type="protocol",
+        start_date=datetime.date(2026, 1, 1),
+    )
+    result = await service.create(body)
+    assert result.doses_per_day is None
+
+
 # ---------------------------------------------------------------------------
 # group_name
 # ---------------------------------------------------------------------------

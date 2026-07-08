@@ -10,6 +10,13 @@ from app.schemas.photo import PhotoResponse
 from app.services.diet_flags import PhotoSignal
 
 _SYMPTOM_KEY_RE = re.compile(r"^[a-z0-9_]+$")
+_STOOL_COMPLETENESS_VALUES = {"complete", "incomplete"}
+
+
+def _validate_stool_completeness(value: Optional[str]) -> Optional[str]:
+    if value is not None and value not in _STOOL_COMPLETENESS_VALUES:
+        raise ValueError("stool_completeness must be 'complete', 'incomplete', or null")
+    return value
 
 
 class MedicationIntake(BaseModel):
@@ -21,7 +28,10 @@ class MedicationIntake(BaseModel):
 
 class EntryCreate(BaseModel):
     date: datetime.date
-    schema_version: Optional[int] = 3
+    # v4 = 5-point core scales (overall/sleep_quality/stress/neuro) + stool_completeness.
+    # Existing rows keep whatever schema_version they were written with -- this default
+    # only affects newly-created entries.
+    schema_version: Optional[int] = 4
     entry_time: Optional[datetime.datetime] = None
     period_of_day: Optional[str] = None
     overall: int
@@ -34,6 +44,10 @@ class EntryCreate(BaseModel):
         description="v2: 'normal' | 'abnormal' | 'none'",
     )
     bristol_type: Optional[int] = Field(default=None, ge=1, le=7)
+    stool_completeness: Optional[str] = Field(
+        default=None,
+        description="v4: 'complete' | 'incomplete'",
+    )
     joint_pain: int
     neuro: int
     sleep_quality: int
@@ -47,6 +61,10 @@ class EntryCreate(BaseModel):
     notes: Optional[str] = None
     symptoms_json: Optional[dict] = None
     medications: list[MedicationIntake] = Field(default_factory=list)
+
+    _validate_stool_completeness = field_validator("stool_completeness")(
+        _validate_stool_completeness
+    )
 
     @field_validator("entry_time", mode="after")
     @classmethod
@@ -88,6 +106,7 @@ class EntryUpdate(BaseModel):
     stool_type: Optional[str] = None
     stool_status: Optional[str] = None
     bristol_type: Optional[int] = Field(default=None, ge=1, le=7)
+    stool_completeness: Optional[str] = None
     joint_pain: Optional[int] = None
     neuro: Optional[int] = None
     sleep_quality: Optional[int] = None
@@ -101,6 +120,10 @@ class EntryUpdate(BaseModel):
     notes: Optional[str] = None
     symptoms_json: Optional[dict] = None
     medications: Optional[list[MedicationIntake]] = None
+
+    _validate_stool_completeness = field_validator("stool_completeness")(
+        _validate_stool_completeness
+    )
 
     @field_validator("entry_time", mode="after")
     @classmethod
@@ -140,6 +163,7 @@ class EntryResponse(BaseModel):
     stool_type: Optional[str] = None
     stool_status: Optional[str] = None
     bristol_type: Optional[int] = None
+    stool_completeness: Optional[str] = None
     joint_pain: int
     neuro: int
     sleep_quality: int
