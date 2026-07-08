@@ -3,11 +3,13 @@ from __future__ import annotations
 # Single source of truth for core wellbeing scale polarity + on-disk domain.
 # Stored values mix directions (overall/sleep_quality/neuro: higher = better;
 # bloating/stress/joint_pain: higher = worse) and mix domains across
-# schema_version (v<=3: 1-3, neuro -1/0/1; v>=4: 1-5 for every scale,
-# including neuro -- see EntryCreate.schema_version's v4 comment). This module
-# does not rewire any consumer (insights, etc.) -- it's the documented,
-# tested mapping for future callers to use instead of re-deriving direction
-# ad hoc per field.
+# schema_version -- but only for the four scales the 5-point feature actually
+# touched: overall/sleep_quality/stress (v<=3: 1-3, v>=4: 1-5) and neuro
+# (v<=3: -1/0/1, v>=4: 1-5). bloating/joint_pain never widened -- they're 0-3
+# in every schema version (see EntryCreate.schema_version's v4 comment). This
+# module does not rewire any consumer (insights, etc.) -- it's the
+# documented, tested mapping for future callers to use instead of
+# re-deriving direction/domain ad hoc per field.
 
 SCALE_DIRECTION: dict[str, str] = {
     "overall": "higher_better",
@@ -22,7 +24,10 @@ SCALE_DIRECTION: dict[str, str] = {
 def normalize_scale(field: str, value: int, schema_version: int) -> float:
     """Map a stored scale value to 0..1, where 1.0 always means "best"."""
     direction = SCALE_DIRECTION[field]
-    if schema_version >= 4:
+    if field in ("bloating", "joint_pain"):
+        # Never widened to 5-point -- always 0..3, regardless of schema_version.
+        lo, hi = 0, 3
+    elif schema_version >= 4:
         lo, hi = 1, 5
     elif field == "neuro":
         lo, hi = -1, 1

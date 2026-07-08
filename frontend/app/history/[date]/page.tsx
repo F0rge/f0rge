@@ -7,6 +7,7 @@ import { useEntry, useUpdatePhotoMealTime, useMedicationCatalog } from '@/lib/ap
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-disclosure'
 import type { Entry, Photo } from '@/lib/api/types'
+import { getOverallTier, getScaleLabel, type ScaleTier } from '@/lib/checkin/scale-labels'
 
 function formatDisplayDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00')
@@ -18,41 +19,19 @@ function formatDisplayDate(dateStr: string): string {
   })
 }
 
-function getOverallLabel(overall: number): string {
-  switch (overall) {
-    case 1: return 'Very Poor'
-    case 2: return 'Standard'
-    case 3: return 'Very Good'
-    default: return 'Unknown'
-  }
+const OVERALL_BADGE_CLASS: Record<ScaleTier, string> = {
+  good: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  neutral: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  poor: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
 }
 
-function getOverallBadgeClass(overall: number): string {
-  if (overall === 3) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-  if (overall === 2) return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-  return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-}
-
+// bloating / joint_pain are 0-3 in every schema version — unaffected by v4.
 function getBloatingLabel(v: number): string {
   return ['None', 'Mild', 'Moderate', 'Severe'][v] ?? 'Unknown'
 }
 
 function getJointPainLabel(v: number): string {
   return ['None', 'Mild', 'Moderate', 'Severe'][v] ?? 'Unknown'
-}
-
-function getNeuroLabel(v: number): string {
-  if (v === -1) return 'Worse'
-  if (v === 1) return 'Better'
-  return 'Baseline'
-}
-
-function getSleepLabel(v: number): string {
-  return ['', 'Poor', 'OK', 'Good'][v] ?? 'Unknown'
-}
-
-function getStressLabel(v: number): string {
-  return ['', 'Low', 'Medium', 'High'][v] ?? 'Unknown'
 }
 
 
@@ -176,8 +155,8 @@ function EntryDetail({ entry }: { entry: Entry }) {
       <div className="border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Overall</span>
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getOverallBadgeClass(entry.overall)}`}>
-            {getOverallLabel(entry.overall)}
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${OVERALL_BADGE_CLASS[getOverallTier(entry.overall, entry.schema_version)]}`}>
+            {getScaleLabel('overall', entry.overall, entry.schema_version)}
           </span>
         </div>
       </div>
@@ -185,9 +164,9 @@ function EntryDetail({ entry }: { entry: Entry }) {
         <DetailRow label="Bloating" value={getBloatingLabel(entry.bloating)} />
         <DetailRow label="Stool" value={getStoolLabel(entry)} />
         <DetailRow label="Joint pain" value={getJointPainLabel(entry.joint_pain)} />
-        <DetailRow label="Neuro" value={getNeuroLabel(entry.neuro)} />
-        <DetailRow label="Sleep" value={getSleepLabel(entry.sleep_quality)} />
-        <DetailRow label="Stress" value={getStressLabel(entry.stress)} />
+        <DetailRow label="Neuro" value={getScaleLabel('neuro', entry.neuro, entry.schema_version)} />
+        <DetailRow label="Sleep" value={getScaleLabel('sleep_quality', entry.sleep_quality, entry.schema_version)} />
+        <DetailRow label="Stress" value={getScaleLabel('stress', entry.stress, entry.schema_version)} />
         <DetailRow
           label="Diet risk"
           value={
