@@ -15,6 +15,7 @@ export interface Treatment {
   start_date: string
   end_date: string | null
   dose: string | null
+  doses_per_day: number | null
   notes: string | null
   is_active: boolean
   created_at: string
@@ -28,6 +29,7 @@ export interface TreatmentCreate {
   start_date: string
   end_date?: string | null
   dose?: string | null
+  doses_per_day?: number | null
   notes?: string | null
 }
 
@@ -38,6 +40,7 @@ export interface TreatmentUpdate {
   start_date?: string
   end_date?: string | null
   dose?: string | null
+  doses_per_day?: number | null
   notes?: string | null
 }
 

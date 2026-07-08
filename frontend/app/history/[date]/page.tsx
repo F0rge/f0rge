@@ -163,6 +163,12 @@ function EntryDetail({ entry }: { entry: Entry }) {
       <div className="divide-y divide-border px-4">
         <DetailRow label="Bloating" value={getBloatingLabel(entry.bloating)} />
         <DetailRow label="Stool" value={getStoolLabel(entry)} />
+        {entry.stool_completeness && (
+          <DetailRow
+            label="Stool completeness"
+            value={entry.stool_completeness === 'complete' ? 'Complete' : 'Incomplete'}
+          />
+        )}
         <DetailRow label="Joint pain" value={getJointPainLabel(entry.joint_pain)} />
         <DetailRow label="Neuro" value={getScaleLabel('neuro', entry.neuro, entry.schema_version)} />
         <DetailRow label="Sleep" value={getScaleLabel('sleep_quality', entry.sleep_quality, entry.schema_version)} />
