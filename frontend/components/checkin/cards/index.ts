@@ -1,4 +1,4 @@
-export { TreatmentBanner } from './treatment-banner'
+export { ProtocolCard } from './protocol-card'
 export { FoodCard } from './food-card'
 export { WellbeingCard } from './wellbeing-card'
 export { GutCard } from './gut-card'

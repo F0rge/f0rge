@@ -18,13 +18,13 @@ import {
   Activity,
   Zap,
 } from 'lucide-react'
-import { useSupplementCatalog, useTreatments } from '@/lib/api/hooks'
+import { useSupplementCatalog } from '@/lib/api/hooks'
 import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, MedicationIntake, StoolStatus } from '@/lib/api/types'
 import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, type CardId } from '@/lib/checkin/card-order'
 import {
-  TreatmentBanner,
+  ProtocolCard,
   FoodCard,
   WellbeingCard,
   GutCard,
@@ -85,7 +85,6 @@ export function CheckinBoard({
   onOpenPhotoFocus,
 }: CheckinBoardProps) {
   const { data: catalog } = useSupplementCatalog(false)
-  const { data: activeTreatments } = useTreatments(date)
 
   const defaultSupplements = (catalog ?? [])
     .filter((c) => !c.archived)
@@ -136,6 +135,7 @@ export function CheckinBoard({
   const [bloating, setBloating] = useState(0)
   const [stoolStatus, setStoolStatus] = useState<StoolStatus>('normal')
   const [bristolType, setBristolType] = useState<number | null>(null)
+  const [stoolCompleteness, setStoolCompleteness] = useState<'complete' | 'incomplete' | null>(null)
   const [jointPain, setJointPain] = useState(0)
   const [neuro, setNeuro] = useState(0)
   const [sleepQuality, setSleepQuality] = useState(2)
@@ -166,6 +166,7 @@ export function CheckinBoard({
   const setBloatingDirty       = useCallback((v: number)      => { markDirty(); setBloating(v) },       [markDirty])
   const setStoolStatusDirty    = useCallback((v: StoolStatus) => { markDirty(); setStoolStatus(v) },    [markDirty])
   const setBristolTypeDirty    = useCallback((v: number|null) => { markDirty(); setBristolType(v) },    [markDirty])
+  const setStoolCompletenessDirty = useCallback((v: 'complete'|'incomplete') => { markDirty(); setStoolCompleteness(v) }, [markDirty])
   const setJointPainDirty      = useCallback((v: number)      => { markDirty(); setJointPain(v) },      [markDirty])
   const setNeuroDirty          = useCallback((v: number)      => { markDirty(); setNeuro(v) },          [markDirty])
   const setSleepQualityDirty   = useCallback((v: number)      => { markDirty(); setSleepQuality(v) },   [markDirty])
@@ -220,6 +221,7 @@ export function CheckinBoard({
       const resolvedBristol = existingEntry.bristol_type
         ?? (resolvedStool === 'abnormal' ? 4 : null)
       setBristolType(resolvedBristol)
+      setStoolCompleteness(existingEntry.stool_completeness ?? null)
       setJointPain(existingEntry.joint_pain)
       setNeuro(existingEntry.neuro)
       setSleepQuality(existingEntry.sleep_quality)
@@ -242,6 +244,11 @@ export function CheckinBoard({
     }
   }, [existingEntry])
 
+  // A brand-new day has no entry yet -> defaults to the current schema (4) -> 5-point
+  // scales. Editing a legacy entry keeps its original 3-point scales so old stored
+  // values (1-3, or -1/0/1 for neuro) keep meaning what they meant when saved.
+  const fivePoint = (existingEntry?.schema_version ?? 4) >= 4
+
   useEffect(() => {
     if (stoolStatus !== 'abnormal') {
       setBristolType(null)
@@ -253,11 +260,15 @@ export function CheckinBoard({
   // ── Payload memo ──────────────────────────────────────────────────────────
   const payload = useMemo<EntryCreate>(() => ({
     date,
-    schema_version: 2,
+    // schema_version is intentionally omitted: the backend defaults new entries to
+    // the current version (4), and sending a hardcoded value here would overwrite
+    // an existing entry's schema_version on every autosave PUT, silently flipping
+    // a v4 entry's stored scale meaning back to legacy on the next load.
     overall,
     bloating,
     stool_status: stoolStatus,
     bristol_type: stoolStatus === 'abnormal' && bristolType !== null ? bristolType : undefined,
+    stool_completeness: stoolCompleteness ?? undefined,
     joint_pain: jointPain,
     neuro,
     sleep_quality: sleepQuality,
@@ -272,7 +283,7 @@ export function CheckinBoard({
     symptoms_json: symptomsJson,
     medications,
   }), [
-    date, overall, bloating, stoolStatus, bristolType, jointPain, neuro,
+    date, overall, bloating, stoolStatus, bristolType, stoolCompleteness, jointPain, neuro,
     sleepQuality, stress, dietRisk, supplements, sick, hotShower, notes,
     alcoholUnits, caffeineServings, symptomsJson, medications,
   ])
@@ -333,6 +344,7 @@ export function CheckinBoard({
         onStressChange={setStressDirty}
         neuro={neuro}
         onNeuroChange={setNeuroDirty}
+        fivePoint={fivePoint}
       />
     ),
     gut: () => (
@@ -343,6 +355,8 @@ export function CheckinBoard({
         onStoolStatusChange={setStoolStatusDirty}
         bristolType={bristolType}
         onBristolTypeChange={setBristolTypeDirty}
+        stoolCompleteness={stoolCompleteness}
+        onStoolCompletenessChange={setStoolCompletenessDirty}
         jointPain={jointPain}
         onJointPainChange={setJointPainDirty}
       />
@@ -392,10 +406,7 @@ export function CheckinBoard({
   return (
     <div className="space-y-4 pb-8">
       <div className="grid grid-cols-12 gap-4 auto-rows-min">
-        <TreatmentBanner
-          treatments={activeTreatments ?? []}
-          checkinDate={date}
-        />
+        <ProtocolCard date={date} />
 
         {cardOrder
           .filter((id) => !hiddenCards.includes(id))

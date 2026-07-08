@@ -1,6 +1,7 @@
 'use client'
 
 import { formatLocalDate } from '@/lib/utils'
+import { getOverallTier, type ScaleTier } from '@/lib/checkin/scale-labels'
 import type { Entry } from '@/lib/api/types'
 
 interface CalendarViewProps {
@@ -19,10 +20,10 @@ function getFirstDayOfWeek(year: number, month: number): number {
   return day === 0 ? 6 : day - 1
 }
 
-function getOverallColor(overall: number): string {
-  if (overall === 3) return 'bg-green-500'
-  if (overall === 2) return 'bg-amber-500'
-  return 'bg-red-500'
+const OVERALL_DOT_CLASS: Record<ScaleTier, string> = {
+  good: 'bg-green-500',
+  neutral: 'bg-amber-500',
+  poor: 'bg-red-500',
 }
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -76,7 +77,7 @@ export function CalendarView({ month, entries, onDayClick }: CalendarViewProps) 
             >
               <span className="text-sm">{day}</span>
               {entry && (
-                <span className={`size-2 rounded-full ${getOverallColor(entry.overall)}`} />
+                <span className={`size-2 rounded-full ${OVERALL_DOT_CLASS[getOverallTier(entry.overall, entry.schema_version)]}`} />
               )}
             </button>
           )

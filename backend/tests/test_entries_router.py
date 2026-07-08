@@ -127,7 +127,7 @@ async def test_create_entry_201_shape(authed_client: AsyncClient) -> None:
     body = resp.json()
     assert body["date"] == "2026-02-01"
     assert body["overall"] == 3
-    assert body["schema_version"] == 3
+    assert body["schema_version"] == 4
     assert body["photos"] == []
     assert body["effective_flags"] == []
     assert body["photo_derived_flags"] == []
@@ -167,6 +167,34 @@ async def test_create_entry_strips_tz_aware_entry_time(authed_client: AsyncClien
     assert resp.status_code == 201
     body = resp.json()
     assert body["entry_time"] == "2026-02-01T08:30:00"
+
+
+async def test_create_entry_stool_completeness_round_trips(authed_client: AsyncClient) -> None:
+    """stool_completeness must actually persist, not just validate -- same class
+    of silent-drop bug as TreatmentService.create() dropping doses_per_day.
+    """
+    payload = dict(_VALID_PAYLOAD)
+    payload["stool_completeness"] = "incomplete"
+
+    resp = await authed_client.post("/api/v1/entries", json=payload)
+    assert resp.status_code == 201
+    assert resp.json()["stool_completeness"] == "incomplete"
+
+    get_resp = await authed_client.get("/api/v1/entries/2026-02-01")
+    assert get_resp.json()["stool_completeness"] == "incomplete"
+
+
+async def test_create_entry_stool_completeness_optional(authed_client: AsyncClient) -> None:
+    resp = await authed_client.post("/api/v1/entries", json=_VALID_PAYLOAD)
+    assert resp.status_code == 201
+    assert resp.json()["stool_completeness"] is None
+
+
+async def test_create_entry_invalid_stool_completeness_422(authed_client: AsyncClient) -> None:
+    payload = dict(_VALID_PAYLOAD)
+    payload["stool_completeness"] = "partial"
+    resp = await authed_client.post("/api/v1/entries", json=payload)
+    assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +315,25 @@ async def test_update_entry_always_restamps_entry_time_to_now(
     stamped = datetime.datetime.fromisoformat(body["entry_time"])
     assert before <= stamped <= after
     assert body["period_of_day"] == _period_of_day(stamped)
+
+
+async def test_update_entry_stool_completeness_persists(authed_client: AsyncClient) -> None:
+    await authed_client.post("/api/v1/entries", json=_VALID_PAYLOAD)
+
+    resp = await authed_client.put(
+        "/api/v1/entries/2026-02-01", json={"stool_completeness": "complete"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["stool_completeness"] == "complete"
+
+
+async def test_update_entry_invalid_stool_completeness_422(authed_client: AsyncClient) -> None:
+    await authed_client.post("/api/v1/entries", json=_VALID_PAYLOAD)
+
+    resp = await authed_client.put(
+        "/api/v1/entries/2026-02-01", json={"stool_completeness": "partial"}
+    )
+    assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------

@@ -30,6 +30,7 @@ class TreatmentCreate(BaseModel):
     start_date: datetime.date
     end_date: Optional[datetime.date] = None
     dose: Optional[str] = Field(default=None, max_length=500)
+    doses_per_day: Optional[int] = Field(default=None, ge=1, le=12)
     notes: Optional[str] = None
     group_name: Optional[str] = Field(default=None, max_length=100)
 
@@ -42,6 +43,7 @@ class TreatmentUpdate(BaseModel):
     start_date: Optional[datetime.date] = None
     end_date: Optional[datetime.date] = None
     dose: Optional[str] = Field(default=None, max_length=500)
+    doses_per_day: Optional[int] = Field(default=None, ge=1, le=12)
     notes: Optional[str] = None
     group_name: Optional[str] = Field(default=None, max_length=100)
 
@@ -56,6 +58,7 @@ class TreatmentResponse(BaseModel):
     start_date: datetime.date
     end_date: Optional[datetime.date] = None
     dose: Optional[str] = None
+    doses_per_day: Optional[int] = None
     notes: Optional[str] = None
     group_name: Optional[str] = None
     created_at: datetime.datetime

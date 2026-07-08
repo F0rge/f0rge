@@ -43,6 +43,9 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
   const [endDate, setEndDate] = useState(treatment?.end_date ?? '')
   const [ongoing, setOngoing] = useState(!treatment?.end_date)
   const [dose, setDose] = useState(treatment?.dose ?? '')
+  const [dosesPerDay, setDosesPerDay] = useState(
+    treatment?.doses_per_day != null ? String(treatment.doses_per_day) : '',
+  )
   const [notes, setNotes] = useState(treatment?.notes ?? '')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -75,6 +78,16 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
       return
     }
 
+    let finalDosesPerDay: number | null = null
+    if (dosesPerDay.trim()) {
+      const parsed = Number(dosesPerDay)
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) {
+        toast.error('Doses per day must be a whole number between 1 and 12')
+        return
+      }
+      finalDosesPerDay = parsed
+    }
+
     const payload = {
       name: name.trim(),
       type,
@@ -82,6 +95,7 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
       start_date: startDate,
       end_date: finalEnd,
       dose: dose.trim() || null,
+      doses_per_day: finalDosesPerDay,
       notes: notes.trim() || null,
     }
 
@@ -217,6 +231,25 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
               onChange={(e) => setDose(e.target.value)}
               placeholder="e.g. 550mg 3x daily"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="tx-doses-per-day">Doses per day</Label>
+            <Input
+              id="tx-doses-per-day"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={12}
+              step={1}
+              value={dosesPerDay}
+              onChange={(e) => setDosesPerDay(e.target.value)}
+              placeholder="e.g. 3"
+              className="max-w-24"
+            />
+            <p className="text-xs text-muted-foreground">
+              How many times a day you take this. Leave blank for non-dose treatments (e.g. a diet).
+            </p>
           </div>
 
           <div className="space-y-1.5">
