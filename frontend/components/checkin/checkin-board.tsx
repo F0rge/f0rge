@@ -18,13 +18,13 @@ import {
   Activity,
   Zap,
 } from 'lucide-react'
-import { useSupplementCatalog, useTreatments } from '@/lib/api/hooks'
+import { useSupplementCatalog } from '@/lib/api/hooks'
 import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, MedicationIntake, StoolStatus } from '@/lib/api/types'
 import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, type CardId } from '@/lib/checkin/card-order'
 import {
-  TreatmentBanner,
+  ProtocolCard,
   FoodCard,
   WellbeingCard,
   GutCard,
@@ -85,7 +85,6 @@ export function CheckinBoard({
   onOpenPhotoFocus,
 }: CheckinBoardProps) {
   const { data: catalog } = useSupplementCatalog(false)
-  const { data: activeTreatments } = useTreatments(date)
 
   const defaultSupplements = (catalog ?? [])
     .filter((c) => !c.archived)
@@ -392,10 +391,7 @@ export function CheckinBoard({
   return (
     <div className="space-y-4 pb-8">
       <div className="grid grid-cols-12 gap-4 auto-rows-min">
-        <TreatmentBanner
-          treatments={activeTreatments ?? []}
-          checkinDate={date}
-        />
+        <ProtocolCard date={date} />
 
         {cardOrder
           .filter((id) => !hiddenCards.includes(id))

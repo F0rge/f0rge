@@ -40,3 +40,32 @@ export interface TreatmentUpdate {
   dose?: string | null
   notes?: string | null
 }
+
+export interface TreatmentLogResponse {
+  treatment_id: number
+  date: string
+  doses_taken: number
+  updated_at: string
+}
+
+export interface ProtocolItem {
+  id: number
+  name: string
+  dose: string | null
+  doses_per_day: number | null
+  doses_taken: number
+  day_num: number
+}
+
+export interface ProtocolToday {
+  doses_taken: number
+  doses_planned: number
+  pct: number
+}
+
+export interface ProtocolResponse {
+  items: ProtocolItem[]
+  today: ProtocolToday
+  streak: number
+  best_streak: number
+}
