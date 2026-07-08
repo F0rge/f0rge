@@ -1,25 +1,17 @@
 'use client'
 
 import type { Entry } from '@/lib/api/types'
+import { getNeuroDirection, getOverallTier, getScaleLabel, type ScaleTier } from '@/lib/checkin/scale-labels'
 
 interface EntryCardProps {
   entry: Entry
   onClick: () => void
 }
 
-function getOverallLabel(overall: number): string {
-  switch (overall) {
-    case 1: return 'Very Poor'
-    case 2: return 'Standard'
-    case 3: return 'Very Good'
-    default: return 'Unknown'
-  }
-}
-
-function getOverallBadgeClass(overall: number): string {
-  if (overall === 3) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-  if (overall === 2) return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-  return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+const OVERALL_BADGE_CLASS: Record<ScaleTier, string> = {
+  good: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  neutral: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  poor: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
 }
 
 function formatDate(dateStr: string): string {
@@ -47,8 +39,9 @@ function getSummary(entry: Entry): string {
     const level = entry.joint_pain === 1 ? 'mild' : entry.joint_pain === 2 ? 'moderate' : 'severe'
     parts.push(`${level} joint pain`)
   }
-  if (entry.neuro === -1) parts.push('neuro worse')
-  if (entry.neuro === 1) parts.push('neuro better')
+  const neuroDirection = getNeuroDirection(entry.neuro, entry.schema_version)
+  if (neuroDirection === 'worse') parts.push('neuro worse')
+  if (neuroDirection === 'better') parts.push('neuro better')
   if (entry.sick) parts.push('sick')
   if (entry.hot_shower) parts.push('hot shower')
   if (parts.length === 0) return 'Baseline day'
@@ -64,8 +57,8 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
     >
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">{formatDate(entry.date)}</span>
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getOverallBadgeClass(entry.overall)}`}>
-          {getOverallLabel(entry.overall)}
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${OVERALL_BADGE_CLASS[getOverallTier(entry.overall, entry.schema_version)]}`}>
+          {getScaleLabel('overall', entry.overall, entry.schema_version)}
         </span>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">{getSummary(entry)}</p>
