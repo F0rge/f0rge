@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils'
 // typical card widths (~340–420px) — use a different component instead.
 export const MAX_SCALE_LABEL_LENGTH = 12
 
-// Segmented controls cap at 4 options. Five columns at ~70px each produce
-// sub-readable text and sub-44px touch targets on most phones.
-export const MAX_SCALE_OPTIONS = 4
+// Segmented controls cap at 5 options (raised from 4 for v4's 5-point core
+// scales). Keep labels short — five columns at ~70px each on a 390px phone
+// only work with short labels; six+ columns would not.
+export const MAX_SCALE_OPTIONS = 5
 
 interface ScaleOption {
   value: number | string
