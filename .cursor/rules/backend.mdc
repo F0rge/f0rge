@@ -1,0 +1,143 @@
+---
+description: FastAPI backend conventions — Router → Service → Dependency pattern, Pydantic v2, async SQLAlchemy, domain exceptions. Use proactively when writing or reviewing Python API code, routers, services, schemas, migrations, or backend tests.
+globs: backend/**/*.py, backend/migrations/**
+alwaysApply: false
+---
+
+# FastAPI Backend Standards
+
+Target **Python 3.10** (no 3.11+ syntax). Package manager: **`uv`** (never pip). Lint/format: **`ruff`**.
+
+## Architecture: Router → Service → Dependency
+
+### Routers (`app/routers/`) — strictly thin
+
+Each endpoint is **1–3 lines**: signature, optional one-line delegation, `return`.
+
+**Banned in router functions:** `if`/`else`, `try`/`except`, `raise`, loops, ORM queries, `db.add`/`commit`/`refresh`, helper functions, inline business logic.
+
+**Allowed:** `Depends()` injection, single service call, `return`.
+
+Validation and "not found" conditions are raised by **services** as domain exceptions (`NotFoundError`, `ValidationError`, `ConflictError` from `app/exceptions.py`). Global handlers in `app/main.py` map them to HTTP. Routers never use `HTTPException`.
+
+```python
+@router.post("/", response_model=ThingOut, status_code=status.HTTP_201_CREATED)
+def create_thing(data: ThingCreate, service: ThingService = Depends(get_thing_service)):
+    return service.create(data)
+```
+
+### Services (`app/services/`)
+
+- All business logic lives here
+- **Class-based services** are canonical: dependencies via `__init__`, injected via factory in `app/dependencies/`
+- Legacy module-level functions taking `db` as first arg — don't write new ones; convert when already touching the file
+
+### Dependencies (`app/dependencies/`)
+
+Shallow, explicit `Depends()` factories:
+
+```python
+def get_thing_service(db: AsyncSession = Depends(get_db)) -> ThingService:
+    return ThingService(db)
+```
+
+### Schemas (`app/schemas/`)
+
+`ThingCreate` / `ThingUpdate` / `ThingResponse` naming. Use `model_config = ConfigDict(from_attributes=True)` for ORM compatibility.
+
+### Models (`app/models/`)
+
+SQLAlchemy 2.0 style. Always include `id`, `created_at`. Use `__table_args__` with named indexes.
+
+## Critical Rules
+
+1. `from __future__ import annotations` in every Python file
+2. Routers are strictly thin — non-negotiable
+3. All logic in services; domain exceptions, not `HTTPException`
+4. Inject services via `Depends()` — never instantiate in routers
+5. Pre-existing violations are not an excuse — refactor or open follow-up
+6. Type everything — all signatures and return types
+7. Never hardcode secrets — use `app/config.py` + env vars
+8. Postgres-native, async all the way: `AsyncSession`, `await`
+9. Python 3.10 only — no `match/case`, use `Union[]`/`Optional[]` not `X | Y`
+
+## New Code Order
+
+1. Schema → 2. Model (if new table) → 3. Service → 4. Dependency factory → 5. Router → 6. Register in `main.py`
+
+## Self-Verification Checklist
+
+- [ ] Router endpoints 1–3 lines — no `if`, `try/except`, `raise`, helpers, ORM
+- [ ] `grep -E "if |raise |try:|HTTPException|db\.query|db\.add|db\.commit" app/routers/<file>.py` returns nothing
+- [ ] Services injected via `Depends()`
+- [ ] Domain exceptions in `app/exceptions.py`, mapped in `main.py`
+- [ ] Schemas follow Create/Update/Response convention
+- [ ] `ruff check` and `ruff format` pass
+
+## Code Quality Checklist
+
+Self-review before every PR:
+
+1. Is this needed?
+2. Is this the right place?
+3. Do we already have a pattern for this?
+
+**Rules:**
+
+1. **No fake defaults** — if all callers pass a param, make it required
+2. **Magic numbers/strings → named constants** (except 0, 1, 2)
+3. **One class per file** for CRUD/Service/Model layers
+4. **Split large functions/classes** — extract when you need comments to explain sections
+5. **Let exceptions propagate** — don't catch just to re-raise
+6. **Use `session.begin()`** / `conditional_transaction` for DB ops — auto-commit/rollback
+7. **Consistent index strategy** — `__table_args__` with named indexes
+8. **Auto-format Alembic migrations**
+9. **Orchestrators coordinate services** — never mix services and CRUDs in one class
+
+### Error handling
+
+- Raise in CRUD layer, not return `None` and check in service
+- Use custom exceptions inheriting from `CustomException` — never raw `ValueError`/`HTTPException`
+- Don't try/except every function; handlers log at the boundary
+
+```python
+# BAD — catch just to re-raise
+try:
+    result = await self.crud.get(id)
+except Exception as e:
+    logger.error(f"Error: {e}")
+    raise
+
+# GOOD
+result = await self.crud.get(id)
+```
+
+## Security
+
+- Never commit secrets; mirror new config vars in `.env.example`
+- Never log or persist raw blob URLs with SAS tokens — strip query params
+- Sanitize error messages before persisting — redact URLs, truncate
+
+## Commands
+
+```bash
+cd backend
+uv run ruff check . && uv run ruff format .
+uv run uvicorn app.main:app --port 8000 --reload
+uv run pytest tests/ -v --tb=short
+```
+
+For deep backend work, delegate to the `fastapi-backend` sub-agent in `~/.cursor/agents/`.
+
+## Health Tracker specifics
+
+- **Domain exceptions:** `NotFoundError`, `ValidationError`, `ConflictError` from `app/exceptions.py` — mapped by global handlers in `app/main.py`. Never `HTTPException` in routers or services.
+- **API prefix:** `/api/v1`
+- **Auth cookie:** `ht_session` (PIN-based session)
+- **Database:** Postgres via asyncpg — `DATABASE_URL` must use `postgresql+asyncpg://...` driver
+- **Key paths:**
+  - Photo storage: `backend/photos/`
+  - Obsidian vault (Mac): `/Users/leo/Library/Mobile Documents/iCloud~md~obsidian/Documents/Brain/`
+  - Obsidian vault (container): `/vault` (bind mount on Pi)
+  - Vault daily files: `{vault}/Daily/Health-Logs/YYYY-MM-DD.md`
+  - Vault photo attachments: `{vault}/attachments/`
