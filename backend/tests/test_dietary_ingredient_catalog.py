@@ -183,7 +183,6 @@ async def test_remove_alias_not_found_raises(async_db: AsyncSession) -> None:
         await service.remove_alias(999999)
 
 
-
 async def test_delete_alias_endpoint_returns_204(
     async_db: AsyncSession, authed_client: AsyncClient
 ) -> None:
@@ -240,9 +239,7 @@ async def test_list_items_search_filters(async_db: AsyncSession) -> None:
 
 async def test_list_items_search_matches_alias(async_db: AsyncSession) -> None:
     service = DietaryIngredientCatalogService(async_db)
-    parmigiano = await service.create_item(
-        DietaryIngredientCreate(canonical_name="parmigiano")
-    )
+    parmigiano = await service.create_item(DietaryIngredientCreate(canonical_name="parmigiano"))
     await service.add_alias(parmigiano.id, AliasCreate(alias="parmesan"))
     await service.create_item(DietaryIngredientCreate(canonical_name="banana"))
 
