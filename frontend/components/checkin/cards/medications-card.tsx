@@ -24,9 +24,10 @@ interface MedicationsCardProps {
 export function MedicationsCard({ value, onChange }: MedicationsCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [presetKey, setPresetKey] = useState<string | null>(null)
-  const { data: catalog = [], isLoading } = useMedicationCatalog(true)
+  const { data: activeCatalog = [], isLoading } = useMedicationCatalog(false)
+  const { data: fullCatalog = [] } = useMedicationCatalog(true)
 
-  const labelFor = (key: string) => catalog.find((m) => m.key === key)?.label ?? key
+  const labelFor = (key: string) => fullCatalog.find((m) => m.key === key)?.label ?? key
 
   function handleAdd(intake: MedicationIntake) {
     onChange([...value, intake])
@@ -94,13 +95,13 @@ export function MedicationsCard({ value, onChange }: MedicationsCardProps) {
           <div className="flex items-center justify-center py-3 text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
           </div>
-        ) : catalog.length === 0 ? (
+        ) : activeCatalog.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No medications in your catalog — pick them in Customize → Catalogs.
           </p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            {catalog.map((med) => (
+            {activeCatalog.map((med) => (
               <button
                 key={med.key}
                 type="button"
