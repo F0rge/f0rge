@@ -1,7 +1,9 @@
 'use client'
 
+import { useQueries } from '@tanstack/react-query'
 import { Camera } from 'lucide-react'
-import type { Entry, PhotoSignal, DietTagCatalogItem } from '@/lib/api/types'
+import { apiGet, ApiError } from '@/lib/api/client'
+import type { Entry, PhotoSignal, DietTagCatalogItem, PhotoAnalysis } from '@/lib/api/types'
 
 function getFlagScore(flag: string, signal: PhotoSignal): number {
   switch (flag) {
@@ -122,6 +124,36 @@ export function DietRiskSection({
   catalogLoading,
 }: DietRiskSectionProps) {
   const hasPhotos = existingPhotos.length > 0
+  const analysisQueries = useQueries({
+    queries: existingPhotos.map((photo) => ({
+      queryKey: ['photo-analysis', photo.id],
+      queryFn: async (): Promise<PhotoAnalysis | null> => {
+        try {
+          return await apiGet(`/photos/${photo.id}/analysis`)
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 404) {
+            return null
+          }
+          throw err
+        }
+      },
+      refetchInterval: (query: { state: { data?: PhotoAnalysis | null } }) => {
+        const status = query.state.data?.status
+        if (status === 'pending' || status === 'analyzing') {
+          return 2000
+        }
+        return false
+      },
+    })),
+  })
+  const analyses = analysisQueries.map((query) => query.data)
+  const analysesLoading = analysisQueries.some((query) => query.isLoading)
+  const anyStillAnalyzing =
+    analysesLoading ||
+    analyses.some((analysis) => analysis?.status === 'pending' || analysis?.status === 'analyzing')
+  const anyAwaitingConfirm = analyses.some(
+    (analysis) => analysis?.status === 'needs_review' || analysis?.status === 'complete',
+  )
   const signal: PhotoSignal = existingEntry?.photo_signal ?? {
     flags: [],
     scores: { histamine_load: 0, fodmap_count: 0, gluten_count: 0, dairy_count: 0 },
@@ -141,7 +173,13 @@ export function DietRiskSection({
           <div className="rounded-xl border border-dashed border-border bg-background p-3">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Camera className="size-3.5" />
-              <span className="text-xs">Photos still analyzing — flags will update once confirmed.</span>
+              <span className="text-xs">
+                {anyStillAnalyzing
+                  ? 'Photos still analyzing — flags will update once confirmed.'
+                  : anyAwaitingConfirm
+                    ? 'Review photo ingredients above — diet flags will update once confirmed.'
+                    : 'Photos still analyzing — flags will update once confirmed.'}
+              </span>
             </div>
           </div>
         )
