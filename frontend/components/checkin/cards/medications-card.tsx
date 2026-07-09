@@ -1,21 +1,19 @@
 'use client'
 
 /**
- * MedicationsCard — add-driven "as needed" medication log.
+ * MedicationsCard — catalog pill picker + per-intake log list.
  *
- * Unlike SupplementsCard (a daily on/off chip grid), this card logs each
- * medication as an event the user adds: label, optional dose/reason, and the
- * time it was logged. Value flows through CheckinBoard props via the same
- * autosave path as supplements — no separate fetch/mutation for the per-day
- * log (see MedicationQuickAddDialog for the add flow).
+ * Tap a catalog pill to open the log dialog (dose/reason/time). No dashed
+ * "+ Add" CTA — matches the Customize-Hub daily-card visual contract.
  */
 
 import { useState } from 'react'
-import { Pill, X } from 'lucide-react'
+import { Loader2, Pill, X } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { TierPill } from '@/components/customize/tier-pill'
 import { MedicationQuickAddDialog } from '@/components/checkin/medication-quick-add-dialog'
 import { useMedicationCatalog } from '@/lib/api/hooks'
+import { cn } from '@/lib/utils'
 import type { MedicationIntake } from '@/lib/api/types'
 
 interface MedicationsCardProps {
@@ -25,7 +23,8 @@ interface MedicationsCardProps {
 
 export function MedicationsCard({ value, onChange }: MedicationsCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
-  const { data: catalog = [] } = useMedicationCatalog(true)
+  const [presetKey, setPresetKey] = useState<string | null>(null)
+  const { data: catalog = [], isLoading } = useMedicationCatalog(true)
 
   const labelFor = (key: string) => catalog.find((m) => m.key === key)?.label ?? key
 
@@ -35,6 +34,16 @@ export function MedicationsCard({ value, onChange }: MedicationsCardProps) {
 
   function handleRemove(index: number) {
     onChange(value.filter((_, i) => i !== index))
+  }
+
+  function openDialogFor(key: string) {
+    setPresetKey(key)
+    setDialogOpen(true)
+  }
+
+  function handleDialogOpenChange(open: boolean) {
+    if (!open) setPresetKey(null)
+    setDialogOpen(open)
   }
 
   return (
@@ -82,19 +91,38 @@ export function MedicationsCard({ value, onChange }: MedicationsCardProps) {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-        >
-          + Add medication
-        </button>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-3 text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+          </div>
+        ) : catalog.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No medications in your catalog — pick them in Customize → Catalogs.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {catalog.map((med) => (
+              <button
+                key={med.key}
+                type="button"
+                onClick={() => openDialogFor(med.key)}
+                className={cn(
+                  'rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted',
+                )}
+              >
+                {med.label}
+              </button>
+            ))}
+          </div>
+        )}
       </CardContent>
 
       <MedicationQuickAddDialog
+        key={presetKey ?? 'med-dialog'}
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogOpenChange}
         onAdd={handleAdd}
+        initialKey={presetKey}
       />
     </Card>
   )
