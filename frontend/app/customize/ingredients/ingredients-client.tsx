@@ -105,6 +105,13 @@ export default function IngredientsClient() {
 
   const editing = editingId != null ? (ingredients.find((i) => i.id === editingId) ?? null) : null
 
+  useEffect(() => {
+    if (editingId != null && !isLoading && !isError && editing == null) {
+      const id = setTimeout(() => setEditingId(null), 0)
+      return () => clearTimeout(id)
+    }
+  }, [editingId, editing, isLoading, isError])
+
   const hasSearch = search.trim().length > 0
   const shown = hasSearch ? ingredients : ingredients.slice(0, RENDER_CAP)
   const hiddenCount = ingredients.length - shown.length
