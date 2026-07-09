@@ -10,14 +10,21 @@ import type {
 
 const INGREDIENTS_KEY = ['dietary-ingredients'] as const
 
-export function useIngredientCatalog(search: string, includeArchived: boolean) {
+export function useIngredientCatalog(
+  search: string,
+  includeArchived: boolean,
+  options?: { limit?: number; enabled?: boolean },
+) {
   const params = new URLSearchParams()
   if (search.trim()) params.set('search', search.trim())
   if (includeArchived) params.set('include_archived', 'true')
+  if (options?.limit != null) params.set('limit', String(options.limit))
   const qs = params.toString()
+  const enabled = options?.enabled ?? true
   return useQuery<DietaryIngredient[]>({
-    queryKey: ['dietary-ingredients', search.trim(), includeArchived],
+    queryKey: ['dietary-ingredients', search.trim(), includeArchived, options?.limit],
     queryFn: () => apiGet(`/dietary-ingredients${qs ? `?${qs}` : ''}`),
+    enabled,
   })
 }
 

@@ -26,9 +26,10 @@ router = APIRouter(
 async def list_ingredients(
     search: Optional[str] = Query(None),
     include_archived: bool = Query(False),
+    limit: Optional[int] = Query(None, ge=1, le=200),
     service: DietaryIngredientCatalogService = Depends(get_dietary_ingredient_catalog_service),
 ):
-    return await service.list_items(search=search, include_archived=include_archived)
+    return await service.list_items(search=search, include_archived=include_archived, limit=limit)
 
 
 @router.post("", response_model=DietaryIngredientResponse, status_code=status.HTTP_201_CREATED)
