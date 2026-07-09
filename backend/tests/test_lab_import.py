@@ -127,11 +127,11 @@ async def test_import_from_text_first_run_inserts(
 
     fixture = Path(__file__).parent / "fixtures" / "lab_blood.md"
     document = fixture.read_text()
-    lab = await import_service.import_from_text(document, source_path="vault/lab_blood.md")
+    lab = await import_service.import_from_text(document, source_path="labs/lab_blood.md")
 
     assert lab.id is not None
-    assert lab.source_kind == "vault_markdown" or lab.source_kind == "text"
-    assert lab.source_path == "vault/lab_blood.md"
+    assert lab.source_kind == "text"
+    assert lab.source_path == "labs/lab_blood.md"
     assert len(lab.markers) == 1
     assert lab.markers[0].canonical_name == "hemoglobin"
 
@@ -141,8 +141,8 @@ async def test_import_from_text_second_run_is_noop(
     async_db: AsyncSession,
     import_service: LabImportService,
 ) -> None:
-    # Idempotency must short-circuit BEFORE the LLM call so re-runs of the
-    # vault import don't burn extraction credits on rows that already exist.
+    # Idempotency must short-circuit BEFORE the LLM call so re-runs don't burn
+    # extraction credits on rows that already exist.
     # Only ONE response is queued; if a second call sneaks through, the patched
     # _call_openrouter will raise AssertionError and the test fails.
     raw = json.dumps(_payload_for(canonical_match=None, proposed_canonical="hemoglobin"))
@@ -151,8 +151,8 @@ async def test_import_from_text_second_run_is_noop(
     fixture = Path(__file__).parent / "fixtures" / "lab_blood.md"
     document = fixture.read_text()
 
-    lab1 = await import_service.import_from_text(document, source_path="vault/x.md")
-    lab2 = await import_service.import_from_text(document, source_path="vault/x.md")
+    lab1 = await import_service.import_from_text(document, source_path="labs/x.md")
+    lab2 = await import_service.import_from_text(document, source_path="labs/x.md")
 
     assert lab1.id == lab2.id
     assert (await async_db.execute(select(func.count()).select_from(Lab))).scalar_one() == 1
@@ -168,9 +168,9 @@ async def test_import_from_text_force_replaces(
     _patch_extraction(monkeypatch, [first, second])
 
     document = "any document"
-    lab1 = await import_service.import_from_text(document, source_path="vault/x.md")
+    lab1 = await import_service.import_from_text(document, source_path="labs/x.md")
     assert lab1.name == "Original"
-    lab2 = await import_service.import_from_text(document, source_path="vault/x.md", force=True)
+    lab2 = await import_service.import_from_text(document, source_path="labs/x.md", force=True)
 
     # force=True deletes the old row and inserts a new one with replacement data.
     assert lab2.name == "Replacement"
@@ -227,7 +227,7 @@ async def test_import_from_pdf_with_source_path_skips_extract_on_redo(
     async_db: AsyncSession,
     import_service: LabImportService,
 ) -> None:
-    # CLI re-run scenario: same vault-derived source_path on retry should NOT
+    # CLI re-run scenario: same source_path on retry should NOT
     # re-hit the LLM. This is the regression that caused PR #43 + import #2 to
     # burn three failed-401 attempts on labs we'd already imported.
     raw = json.dumps(_payload_for())
@@ -315,7 +315,7 @@ async def test_import_imaging_no_markers(
 
     fixture = Path(__file__).parent / "fixtures" / "lab_imaging.md"
     document = fixture.read_text()
-    lab = await import_service.import_from_text(document, source_path="vault/lab_imaging.md")
+    lab = await import_service.import_from_text(document, source_path="labs/lab_imaging.md")
 
     assert lab.type == "imaging"
     assert lab.markers == []

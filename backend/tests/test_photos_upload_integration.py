@@ -1,14 +1,13 @@
 """Integration tests for ``PhotoService.upload`` exercising the real seams.
 
-These tests intentionally do **not** monkeypatch ``save_photo``,
-``delete_photo``, or ``render_and_write_daily_file``. The whole point of
-this file is to exercise the full filesystem + DB + vault rendering path
-end-to-end against a real temporary photo dir and vault dir, because a
+These tests intentionally do **not** monkeypatch ``save_photo`` or
+``delete_photo``. The whole point of this file is to exercise the full
+filesystem + DB path end-to-end against a real temporary photo dir, because a
 prior mock-heavy suite ("test_photos_meal_time.py") was unable to catch
 the 2026-05-16 ``FileExistsError`` regression on a stale orphan file.
 
 Coverage map:
-- A: happy path, sequential uploads write distinct files + DB rows + vault.
+- A: happy path, sequential uploads write distinct files + DB rows.
 - B: orphan file on disk (no DB row) does NOT collide with the next upload.
 - C: commit failure cleans up the just-written file (no orphan left behind).
 - D: background-analysis failure writes a short ``error_message`` (no traceback).
@@ -90,19 +89,15 @@ async def _upload(
 
 @pytest_asyncio.fixture
 async def real_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
-    """Redirect ``photo_dir`` and ``vault_path`` to tmp directories.
+    """Redirect ``photo_dir`` to a tmp directory.
 
-    Critically, this fixture does NOT monkeypatch ``render_and_write_daily_file``,
-    ``save_photo``, ``delete_photo``, or ``write_daily_file``. Those are the
-    seams under test — mocking them is the bug this test file exists to
-    prevent (see ``feedback_no_mocks_at_seam_under_test.md``).
+    Critically, this fixture does NOT monkeypatch ``save_photo`` or
+    ``delete_photo``. Those are the seams under test — mocking them is the bug
+    this test file exists to prevent (see ``feedback_no_mocks_at_seam_under_test.md``).
     """
     photo_dir = tmp_path / "photos"
-    vault_dir = tmp_path / "vault"
     photo_dir.mkdir()
-    vault_dir.mkdir()
     monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
-    monkeypatch.setattr(settings, "vault_path", str(vault_dir))
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     yield
@@ -113,7 +108,7 @@ async def real_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
 # ---------------------------------------------------------------------------
 
 
-async def test_sequential_uploads_write_files_db_rows_and_vault(
+async def test_sequential_uploads_write_files_and_db_rows(
     async_db: AsyncSession, real_storage: None
 ) -> None:
     day = datetime.date(2026, 5, 16)
@@ -137,15 +132,6 @@ async def test_sequential_uploads_write_files_db_rows_and_vault(
     ).all()
     db_filenames = sorted(r[0] for r in rows)
     assert db_filenames == sorted(expected)
-
-    # Vault file includes the three embeds. The vault is the real rendering,
-    # not a no-op stub, so this assertion guards both photos.py and the
-    # obsidian renderer.
-    vault_file = os.path.join(settings.vault_path, "Daily", "Health-Logs", f"{day.isoformat()}.md")
-    assert os.path.exists(vault_file)
-    content = open(vault_file, encoding="utf-8").read()
-    for name in expected:
-        assert f"![[attachments/{name}]]" in content, f"Vault file missing embed for {name}"
 
 
 # ---------------------------------------------------------------------------
@@ -266,11 +252,8 @@ async def test_analysis_fallback_error_message_is_short_no_traceback(
     real on-disk image) and clean up at the end.
     """
     photo_dir = tmp_path / "photos"
-    vault_dir = tmp_path / "vault"
     photo_dir.mkdir()
-    vault_dir.mkdir()
     monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
-    monkeypatch.setattr(settings, "vault_path", str(vault_dir))
     monkeypatch.setattr(settings, "food_analysis_enabled", True)
 
     # Use a session-maker bound to the same container engine the test uses,

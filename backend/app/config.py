@@ -5,7 +5,6 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     pin_hash: str = ""
-    vault_path: str = "/vault"
     database_url: str = "postgresql+asyncpg://health:health@localhost:5432/health"
     app_timezone: str = "Europe/Luxembourg"
     settings_encryption_key: str = ""
@@ -25,7 +24,7 @@ class Settings(BaseSettings):
     embedding_worker_batch_size: int = 10
     embedding_worker_max_attempts: int = 5
 
-    model_config = {"env_file": ".env"}
+    model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()

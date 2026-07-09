@@ -1,8 +1,7 @@
 """HTTP-level tests for PUT /photos/{id}/analysis/dietary-confirm.
 
-No app-code mocks: the route runs through the real service, commits to the real
-(container) DB session, and calls the real vault re-render, which no-ops safely
-when settings.vault_path is unset — per feedback_no_mocks_at_seam_under_test.md.
+No app-code mocks: the route runs through the real service and commits to the
+real (container) DB session.
 """
 
 from __future__ import annotations

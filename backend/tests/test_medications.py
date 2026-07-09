@@ -1,14 +1,10 @@
 """HTTP-level tests for the Medications feature: catalog router + the
 `medications` field on entries.
 
-No mocks of app code -- create_entry/update_entry call through to the real
-obsidian vault writer, which no-ops safely when settings.vault_path is
-unwritable/unset, per feedback_no_mocks_at_seam_under_test.md.
+No mocks of app code.
 """
 
 from __future__ import annotations
-
-import datetime
 
 import bcrypt
 import pytest
@@ -16,7 +12,6 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.entry import Entry
 from app.services import medication_catalog as medication_catalog_service
 
 TEST_PIN = "1234"
@@ -182,50 +177,3 @@ async def test_archived_catalog_key_preserved_on_historical_entry(
     assert get_resp.json()["medications"] == [
         {"key": "imodium", "dose": None, "reason": "upset stomach", "time": None}
     ]
-
-
-# ---------------------------------------------------------------------------
-# Vault render -- archived key still resolves to its label, not the raw key
-# ---------------------------------------------------------------------------
-
-
-async def test_render_markdown_resolves_archived_medication_label(
-    async_db: AsyncSession,
-) -> None:
-    from app.services.obsidian import _render_markdown
-
-    item = await medication_catalog_service.create_item(async_db, "imodium", "Imodium")
-    await medication_catalog_service.update_item(async_db, "imodium", {"archived": True})
-
-    entry = Entry(
-        date=datetime.date(2026, 5, 15),
-        schema_version=3,
-        overall=2,
-        bloating=0,
-        stool_status="normal",
-        joint_pain=0,
-        neuro=0,
-        sleep_quality=2,
-        stress=1,
-        diet_risk="normal",
-        supplements="",
-        sick=False,
-        hot_shower=False,
-        medications_json=[{"key": "imodium", "reason": "upset stomach"}],
-    )
-    async_db.add(entry)
-    await async_db.commit()
-    await async_db.refresh(entry)
-
-    content = _render_markdown(
-        entry=entry,
-        photos=[],
-        analyses={},
-        active_sym_labels={},
-        active_treatments=[],
-        health=None,
-        weather=None,
-        med_labels={item.key: item.label},
-    )
-    assert "Imodium (for upset stomach)" in content
-    assert "## Medications" in content

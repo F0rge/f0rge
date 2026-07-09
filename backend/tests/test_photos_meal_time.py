@@ -40,22 +40,10 @@ from app.services.photos import PhotoService
 
 @pytest_asyncio.fixture
 async def isolated_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
-    """Redirect photo + vault storage to a temp dir.
-
-    NOTE: this fixture previously monkeypatched ``render_and_write_daily_file``
-    and ``write_daily_file`` to no-ops "to keep the tests fast". That made
-    the upload path partially fake — it hid the 2026-05-16 production
-    ``FileExistsError`` regression on a stale orphan file. The mocks have
-    been removed: tests in this file now exercise the real vault rendering
-    against the temp ``vault_dir``. See
-    ``feedback_no_mocks_at_seam_under_test.md``.
-    """
+    """Redirect photo storage to a temp dir."""
     photo_dir = tmp_path / "photos"
-    vault_dir = tmp_path / "vault"
     photo_dir.mkdir()
-    vault_dir.mkdir()
     monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
-    monkeypatch.setattr(settings, "vault_path", str(vault_dir))
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     yield

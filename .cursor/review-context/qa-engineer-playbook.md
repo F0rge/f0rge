@@ -135,7 +135,6 @@ Real things in the repo that are *intentionally* in their current state — do n
 
 - **`ruff format --check` is intentionally OFF in `.github/workflows/ci-develop.yml` and `ci-main.yml`.** ~89 files would reformat. A one-shot formatting PR will land first, then it gets re-enabled. Do not flag unformatted code as a CI gap. Only flag a new file that introduces *new* format issues a touched file already passed.
 - **`ruff check` rule set is narrow (E/F/W minus E501/F821) by design.** The comment in `ci-develop.yml` says "Follow-up: enable I + UP + B + SIM + RUF." Do not flag unused-imports / sort-order issues as block-level — they're a pending widen pass.
-- **Vault-write `logger.warning(...)` in dev backend logs.** `VAULT_PATH` is unmounted in dev by design; the `obsidian.write_daily_file()` early-returns and the makedirs OSError is logged-then-swallowed. Do not flag in dev gate logs. See `qa-engineer/dev_env_findings.md`.
 - **`/icons/icon-192.png` 404 on every page.** PWA icon not deployed yet. Known harmless. Do not flag.
 - **`/api/v1/auth/me` 401 on first page load.** Happens before login completes. Disappears after PIN entry.
 - **`/api/v1/entries/{date}` 404 before today's entry exists.** Expected; editor falls back to defaults.

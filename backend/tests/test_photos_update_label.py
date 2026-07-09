@@ -1,9 +1,8 @@
 """Tests for PATCH /api/v1/photos/{photo_id} label support.
 
-Exercises the real seams: a temporary on-disk photo dir + vault, the real
-``PhotoService.upload``/vault-render collaborators, and a real PIN-login
-round-trip for the HTTP endpoint. Nothing under test is mocked
-(per feedback_no_mocks_at_seam_under_test.md).
+Exercises the real seams: a temporary on-disk photo dir, the real
+``PhotoService.upload`` collaborators, and a real PIN-login round-trip for the
+HTTP endpoint. Nothing under test is mocked (per feedback_no_mocks_at_seam_under_test.md).
 
 Covers:
 - label-only PATCH sets label, preserves meal_time
@@ -54,11 +53,8 @@ async def authed_client(async_client: AsyncClient) -> AsyncClient:
 @pytest_asyncio.fixture
 async def isolated_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     photo_dir = tmp_path / "photos"
-    vault_dir = tmp_path / "vault"
     photo_dir.mkdir()
-    vault_dir.mkdir()
     monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
-    monkeypatch.setattr(settings, "vault_path", str(vault_dir))
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
     monkeypatch.setattr(settings, "openrouter_api_key", "")
 

@@ -19,7 +19,6 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, IngredientUpdate
 from app.services.ingredient_lookup import IngredientLookupService
-from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.vision_prompt import VisionResult, build_messages, parse_vision_response
 
 logger = logging.getLogger(__name__)
@@ -54,7 +53,7 @@ class FoodAnalysisService:
         ).scalar_one_or_none()
 
     async def confirm_analysis(self, analysis_id: int) -> PhotoAnalysis:
-        """Set analysis status to confirmed and re-render vault."""
+        """Set analysis status to confirmed."""
         analysis = (
             await self.db.execute(
                 select(PhotoAnalysis)
@@ -67,7 +66,6 @@ class FoodAnalysisService:
         analysis.status = "confirmed"
         await self.db.commit()
         await self.db.refresh(analysis)
-        await self._rerender_vault(analysis.photo_id)
         return analysis
 
     async def confirm_analysis_by_photo_id(self, photo_id: int) -> PhotoAnalysis:
@@ -78,7 +76,7 @@ class FoodAnalysisService:
     async def set_dietary_confirmations(
         self, photo_id: int, updates: DietaryConfirmUpdate
     ) -> PhotoAnalysis:
-        """Set per-meal gluten-free / lactose-free overrides and re-render the vault.
+        """Set per-meal gluten-free / lactose-free overrides.
 
         Only the fields explicitly provided (non-None) are written, so a request
         toggling one flag never clobbers the other. Mirrors ``confirm_analysis``.
@@ -88,7 +86,6 @@ class FoodAnalysisService:
             setattr(analysis, key, value)
         await self.db.commit()
         await self.db.refresh(analysis)
-        await self._rerender_vault(analysis.photo_id)
         return analysis
 
     async def update_ingredient(
@@ -216,16 +213,6 @@ class FoodAnalysisService:
             raise NotFoundError("No analysis found for this photo")
         return await self.add_ingredient(analysis.id, data)
 
-    async def _rerender_vault(self, photo_id: int) -> None:
-        """Re-render the Obsidian vault file for the entry owning this photo."""
-        photo = (
-            await self.db.execute(select(Photo).where(Photo.id == photo_id))
-        ).scalar_one_or_none()
-        if photo and photo.entry:
-            entry = photo.entry
-            await self.db.refresh(entry)
-            await render_and_write_daily_file(self.db, entry, entry.photos)
-
 
 # ---------------------------------------------------------------------------
 # Background trigger (runs outside request lifecycle)
@@ -349,15 +336,6 @@ async def trigger_analysis_background(photo_id: int) -> None:
 
             analysis.status = "needs_review" if analysis_needs_review(vision_result) else "complete"
             await db.commit()
-
-            # Re-render Obsidian vault file
-            photo = (
-                await db.execute(select(Photo).where(Photo.id == photo_id))
-            ).scalar_one_or_none()
-            if photo and photo.entry:
-                entry = photo.entry
-                await db.refresh(entry)
-                await render_and_write_daily_file(db, entry, entry.photos)
 
             logger.info(
                 "Analysis complete for photo %d: %s (%d ingredients)",

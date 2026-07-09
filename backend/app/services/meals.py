@@ -18,7 +18,6 @@ from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.meal import RecentMealResponse
 from app.services.diet_flags import compute_signal_from_analyses
 from app.services.entries import get_or_create_entry
-from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.photo_storage import delete_photo, save_photo
 from app.services.photos import next_photo_filename
 
@@ -28,9 +27,8 @@ class MealService:
 
     A "meal" is one Photo + its confirmed PhotoAnalysis + that analysis's
     PhotoIngredient rows. ``clone`` copies those onto a target day as brand-new
-    rows (decoupled from the source — the snapshot integrity the vault needs),
-    with the analysis pre-``confirmed`` so it counts toward the diet signal
-    immediately. The vision AI is never invoked.
+    rows (decoupled from the source), with the analysis pre-``confirmed`` so it
+    counts toward the diet signal immediately. The vision AI is never invoked.
     """
 
     def __init__(self, db: AsyncSession) -> None:
@@ -113,7 +111,6 @@ class MealService:
         entry = await get_or_create_entry(self.db, target_date)
         new_filename = await next_photo_filename(self.db, entry)
         now = datetime.datetime.utcnow()
-        vault_path = settings.vault_path
 
         # 3. Stage all rows; a single commit below keeps photo + analysis +
         #    ingredients atomic.
@@ -163,19 +160,14 @@ class MealService:
         #    file on disk implies a committed row. No resize: the source on disk is
         #    already a processed JPEG.
         src_bytes = await asyncio.to_thread(Path(src_path).read_bytes)
-        await asyncio.to_thread(save_photo, src_bytes, new_filename, vault_path)
+        await asyncio.to_thread(save_photo, src_bytes, new_filename)
 
         # 5. Commit; on failure remove the just-copied file so the next filename
         #    scan doesn't collide with an orphan (mirrors upload's cleanup).
         try:
             await self.db.commit()
         except Exception:
-            await asyncio.to_thread(delete_photo, new_filename, vault_path)
+            await asyncio.to_thread(delete_photo, new_filename)
             raise
         await self.db.refresh(new_photo)
-
-        # 6. Re-render the vault daily file to include the cloned meal (soft no-op
-        #    when the vault is disabled).
-        await self.db.refresh(entry)
-        await render_and_write_daily_file(self.db, entry, entry.photos)
         return new_photo

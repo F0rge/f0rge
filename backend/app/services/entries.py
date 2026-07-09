@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.exceptions import ConflictError, NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
@@ -18,8 +17,6 @@ from app.services import medication_catalog as medication_catalog_service
 from app.services import supplement_catalog as supplement_catalog_service
 from app.services import symptom_catalog as symptom_catalog_service
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
-from app.services.obsidian import delete_daily_file
-from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.photo_storage import delete_photo
 from app.services.trackers import sync_seed_tracker_log_from_entry
 
@@ -73,8 +70,8 @@ async def get_or_create_entry(db: AsyncSession, target_date: datetime.date) -> E
     indistinguishable from a photo-first day and the board's pre-fill effect
     reads back valid on-scale values (the wellbeing scales are 1-3, so a 0
     would render as no selection). Flushes only (never commits) and skips every
-    create_entry side-effect (catalog touch, tracker sync, vault render): the
-    caller owns the transaction and renders the vault once its rows are added.
+    create_entry side-effect (catalog touch, tracker sync): the caller owns
+    the transaction.
     """
     existing = (
         await db.execute(select(Entry).where(Entry.date == target_date))
@@ -140,8 +137,6 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
 
     await sync_seed_tracker_log_from_entry(db, entry)
 
-    await render_and_write_daily_file(db, entry, entry.photos)
-
     return _build_response(entry)
 
 
@@ -175,10 +170,10 @@ async def update_entry(db: AsyncSession, date: datetime.date, body: EntryUpdate)
     update_data = body.model_dump(exclude_unset=True)
     # entry_time/period_of_day are server-owned "last edited" stamps, not caller-settable
     # fields, despite EntryUpdate declaring them — every consumer (history page's "Last
-    # logged at", the Obsidian vault's "Logged at" row, insights' correlation-feature
-    # exclusion list) treats them as edit-time metadata, never a caller-chosen value. Drop
-    # anything the client sent for these before the setattr loop so intent is explicit here
-    # rather than a value silently winning then getting clobbered below.
+    # logged at", insights' correlation-feature exclusion list) treats them as edit-time
+    # metadata, never a caller-chosen value. Drop anything the client sent for these
+    # before the setattr loop so intent is explicit here rather than a value silently
+    # winning then getting clobbered below.
     update_data.pop("entry_time", None)
     update_data.pop("period_of_day", None)
     if "medications" in update_data:
@@ -204,8 +199,6 @@ async def update_entry(db: AsyncSession, date: datetime.date, body: EntryUpdate)
 
     await sync_seed_tracker_log_from_entry(db, entry)
 
-    await render_and_write_daily_file(db, entry, entry.photos)
-
     return _build_response(entry)
 
 
@@ -219,14 +212,12 @@ async def delete_entry(db: AsyncSession, date: datetime.date) -> None:
         raise NotFoundError(f"No entry for {date}")
 
     photos: list[Photo] = list(entry.photos)
-    date_str = entry.date.isoformat()
 
     await db.delete(entry)
     await db.commit()
 
     for photo in photos:
-        await asyncio.to_thread(delete_photo, photo.filename, settings.vault_path)
-    await asyncio.to_thread(delete_daily_file, date_str)
+        await asyncio.to_thread(delete_photo, photo.filename)
 
 
 class EntryService:

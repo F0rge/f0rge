@@ -25,10 +25,7 @@ Usage:
     cd backend && uv run python -m scripts.refresh_ingredient_lookup --load --prune-orphans
     cd backend && uv run python -m scripts.refresh_ingredient_lookup --rescore-photos
 
-Vault markdown files are NOT re-rendered by this script — past entries'
-photo_signal updates on next entry read; vault files stay stale until a
-re-render is triggered separately. (Acceptable: vault re-renders only fire
-on photo confirm events, not on entry reads.)
+Past entries' photo_signal updates on next API read after --rescore-photos.
 """
 
 from __future__ import annotations
@@ -261,8 +258,7 @@ def step_rescore_photos(dry_run: bool) -> None:
         session.commit()
         print(f"Updated {changed} row(s); {unchanged} unchanged; {unmatched} unmatched.")
         print(
-            "Note: vault markdown files were NOT re-rendered. Past entries' "
-            "photo_signal will update on next API read; vault files stay stale."
+            "Note: past entries' photo_signal will update on next API read."
         )
 
 

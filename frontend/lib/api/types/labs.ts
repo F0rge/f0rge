@@ -9,7 +9,8 @@ export type LabType =
 
 export type MarkerFlag = 'low' | 'normal' | 'high' | 'abnormal' | 'unknown'
 
-export type SourceKind = 'text' | 'pdf' | 'image' | 'vault_markdown'
+// Legacy DB rows may still carry source_kind='vault_markdown'; UI treats them as text.
+export type SourceKind = 'text' | 'pdf' | 'image'
 
 export type ReviewStatus = 'confirmed' | 'needs_review'
 
