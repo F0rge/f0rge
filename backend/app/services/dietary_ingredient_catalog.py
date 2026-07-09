@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ConflictError, NotFoundError, ValidationError
@@ -20,14 +20,31 @@ class DietaryIngredientCatalogService:
         self.db = db
 
     async def list_items(
-        self, search: Optional[str] = None, include_archived: bool = False
+        self,
+        search: Optional[str] = None,
+        include_archived: bool = False,
+        limit: Optional[int] = None,
     ) -> list[DietaryIngredient]:
         stmt = select(DietaryIngredient)
         if not include_archived:
             stmt = stmt.where(DietaryIngredient.archived.is_(False))
         if search:
-            stmt = stmt.where(DietaryIngredient.canonical_name.ilike(f"%{search.strip().lower()}%"))
+            term = search.strip().lower()
+            stmt = stmt.outerjoin(
+                IngredientAlias,
+                DietaryIngredient.canonical_name == IngredientAlias.canonical_name,
+            ).where(
+                or_(
+                    DietaryIngredient.canonical_name.ilike(f"%{term}%"),
+                    IngredientAlias.alias.ilike(f"%{term}%"),
+                )
+            )
+            stmt = stmt.distinct()
+            if limit is None:
+                limit = 50
         stmt = stmt.order_by(DietaryIngredient.canonical_name.asc())
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def get(self, ingredient_id: int) -> DietaryIngredient:
@@ -110,8 +127,11 @@ class DietaryIngredientCatalogService:
         ).scalar_one_or_none()
         if alias is None:
             raise NotFoundError(f"Alias {alias_id} not found.")
-        # Remove through the relationship (cascade="all, delete-orphan" on
-        # DietaryIngredient.aliases deletes the orphaned row on flush) so the
-        # parent's in-memory collection stays consistent, same reasoning as add_alias.
-        alias.ingredient.aliases.remove(alias)
+        # Delete the already-fetched row directly. Going through the parent
+        # relationship (alias.ingredient.aliases.remove(alias)) would touch
+        # alias.ingredient.aliases, which is unloaded when the alias is fetched
+        # cold by id -- accessing it lazy-loads in the async session and raises
+        # MissingGreenlet. The parent's in-memory collection consistency is
+        # irrelevant here: the row is deleted and the endpoint returns 204.
+        await self.db.delete(alias)
         await self.db.commit()

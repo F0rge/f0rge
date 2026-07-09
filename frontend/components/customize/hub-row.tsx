@@ -21,6 +21,8 @@ interface HubRowProps {
   tier?: Tier
   /** When true, renders as a muted non-interactive row with "Coming soon" label. */
   comingSoon?: boolean
+  /** Tile variant for desktop grid cards (no list dividers). */
+  variant?: 'list' | 'tile'
 }
 
 export function HubRow({
@@ -30,12 +32,14 @@ export function HubRow({
   description,
   tier,
   comingSoon = false,
+  variant = 'list',
 }: HubRowProps) {
   const inner = (
     <div
       className={cn(
         'flex items-center gap-3 px-4 py-3.5',
-        'border-t border-muted first:border-t-0',
+        variant === 'list' && 'border-t border-muted first:border-t-0',
+        variant === 'tile' && 'h-full',
         comingSoon ? 'opacity-50' : 'hover:bg-muted/50 active:bg-muted transition-colors',
       )}
     >

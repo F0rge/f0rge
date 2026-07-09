@@ -8,23 +8,13 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { IngredientFormDialog } from '@/components/customize/ingredient-form-dialog'
+import { PageShell } from '@/components/layout/page-shell'
 import { useIngredientCatalog, useArchiveDietaryIngredient } from '@/lib/api/hooks'
 import { handleMutationError } from '@/lib/api/client'
 import type { DietaryIngredient } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 import { categoryLabel, highFodmapAxes } from '@/lib/ingredients'
-
-// Debounce the search box so we don't fire a query per keystroke.
-// setState runs inside setTimeout (deferred), so this does not trip
-// react-hooks/set-state-in-effect.
-function useDebouncedValue<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(id)
-  }, [value, delay])
-  return debounced
-}
+import { useDebouncedValue } from '@/lib/hooks/use-debounced-value'
 
 // The catalogue holds a few hundred rows; with no search filter we cap what we
 // render so an unfiltered view never paints hundreds of DOM nodes.
@@ -124,7 +114,7 @@ export default function IngredientsClient() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       {/* Header */}
       <div className="mb-6">
         <Link
@@ -191,7 +181,7 @@ export default function IngredientsClient() {
               ingredient.
             </p>
           )}
-          <div className="mt-3 flex flex-col gap-2">
+          <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
             {shown.map((ing) => (
               <IngredientRow
                 key={ing.id}
@@ -224,6 +214,6 @@ export default function IngredientsClient() {
           }}
         />
       )}
-    </div>
+    </PageShell>
   )
 }
