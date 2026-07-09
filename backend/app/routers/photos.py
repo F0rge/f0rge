@@ -12,7 +12,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from app.dependencies.photos import get_photo_service
 from app.middleware.auth import get_current_session
@@ -47,8 +47,11 @@ async def upload_photo(
 async def serve_photo(
     photo_id: int,
     service: PhotoService = Depends(get_photo_service),
-) -> FileResponse:
-    return FileResponse(await service.get_file_path(photo_id), media_type="image/jpeg")
+) -> FileResponse | RedirectResponse:
+    target = await service.get_file_path(photo_id)
+    if target.startswith("http://") or target.startswith("https://"):
+        return RedirectResponse(target)
+    return FileResponse(target, media_type="image/jpeg")
 
 
 @router.delete("/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)

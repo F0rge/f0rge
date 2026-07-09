@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import os
-from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.exceptions import NotFoundError, ValidationError
 from app.models.entry import Entry
 from app.models.photo import Photo
@@ -18,7 +15,7 @@ from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.meal import RecentMealResponse
 from app.services.diet_flags import compute_signal_from_analyses
 from app.services.entries import get_or_create_entry
-from app.services.photo_storage import delete_photo, save_photo
+from app.services.photo_storage import delete_photo, photo_exists, read_photo, save_photo
 from app.services.photos import next_photo_filename
 
 
@@ -103,9 +100,10 @@ class MealService:
         if src.status != "confirmed":
             raise ValidationError("Source meal is not confirmed")
         src_photo = src.photo
-        src_path = os.path.join(os.path.abspath(settings.photo_dir), src_photo.filename)
-        if not os.path.exists(src_path):
+        if not photo_exists(src_photo.filename):
             raise NotFoundError("Source photo file is missing on disk")
+
+        src_bytes = await asyncio.to_thread(read_photo, src_photo.filename)
 
         # 2. Target entry (get-or-create, flush-only) + a fresh filename.
         entry = await get_or_create_entry(self.db, target_date)
@@ -159,7 +157,6 @@ class MealService:
         # 4. Copy the image file BEFORE commit — mirrors upload's invariant that a
         #    file on disk implies a committed row. No resize: the source on disk is
         #    already a processed JPEG.
-        src_bytes = await asyncio.to_thread(Path(src_path).read_bytes)
         await asyncio.to_thread(save_photo, src_bytes, new_filename)
 
         # 5. Commit; on failure remove the just-copied file so the next filename

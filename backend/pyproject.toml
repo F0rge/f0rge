@@ -19,6 +19,7 @@ dependencies = [
     "greenlet>=3.3.2",
     "pgvector>=0.3",
     "mcp>=1.10",
+    "boto3>=1.35",
 ]
 
 [dependency-groups]

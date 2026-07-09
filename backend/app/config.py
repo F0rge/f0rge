@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     settings_encryption_key: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]
     photo_dir: str = "photos"
+    bucket_name: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_endpoint_url_s3: str = ""
+    aws_region: str = "auto"
+    default_storage_user_id: str = "00000000-0000-0000-0000-000000000001"
     openweathermap_api_key: str = ""
     openweathermap_city: str = "Luxembourg"
     weather_fetch_enabled: bool = True

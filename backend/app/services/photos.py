@@ -16,6 +16,7 @@ from app.models.photo import Photo
 from app.schemas.photo import PhotoUpdate
 from app.services.food_analysis import trigger_analysis_background
 from app.services.photo_storage import delete_photo, resize_image, save_photo
+from app.services import object_storage
 
 
 async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg") -> str:
@@ -38,16 +39,13 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
             except ValueError:
                 pass
 
-    # Source 2: files in the local photos directory (catches orphans where
-    # the file was written but the DB commit failed).
-    photo_dir_abs = os.path.abspath(settings.photo_dir)
-    if os.path.isdir(photo_dir_abs):
-        for name in os.listdir(photo_dir_abs):
-            if name.startswith(prefix) and name.endswith(suffix):
-                try:
-                    used_numbers.add(int(name[len(prefix) : -len(suffix)]))
-                except ValueError:
-                    pass
+    # Source 2: files on disk or in object storage (catches orphans).
+    for name in object_storage.list_photo_filenames(prefix):
+        if name.startswith(prefix) and name.endswith(suffix):
+            try:
+                used_numbers.add(int(name[len(prefix) : -len(suffix)]))
+            except ValueError:
+                pass
 
     photo_number = max(used_numbers, default=0) + 1
     return f"{prefix}{photo_number}{suffix}"
@@ -144,10 +142,12 @@ class PhotoService:
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError("Photo not found")
-        file_path = os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
-        if not os.path.exists(file_path):
+        if not object_storage.exists_relative(photo.filename):
             raise NotFoundError("Photo file not found")
-        return file_path
+        presigned = object_storage.presigned_url_for_relative(photo.filename)
+        if presigned:
+            return presigned
+        return os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
 
     async def delete(self, photo_id: int) -> None:
         photo = (

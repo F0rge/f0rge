@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-from pathlib import Path
 from typing import Optional
 
 from fastapi import BackgroundTasks
@@ -293,11 +291,12 @@ async def trigger_analysis_background(photo_id: int) -> None:
             if not photo:
                 raise NotFoundError(f"Photo {photo_id} not found in database")
 
-            photo_path = os.path.join(settings.photo_dir, photo.filename)
-            if not os.path.exists(photo_path):
-                raise NotFoundError(f"Photo file not found: {photo_path}")
+            from app.services.photo_storage import photo_exists, read_photo
 
-            image_bytes = await asyncio.to_thread(Path(photo_path).read_bytes)
+            if not photo_exists(photo.filename):
+                raise NotFoundError(f"Photo file not found: {photo.filename}")
+
+            image_bytes = await asyncio.to_thread(read_photo, photo.filename)
 
             messages = build_messages(image_bytes)
 
