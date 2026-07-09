@@ -14,18 +14,7 @@ import { handleMutationError } from '@/lib/api/client'
 import type { DietaryIngredient } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 import { categoryLabel, highFodmapAxes } from '@/lib/ingredients'
-
-// Debounce the search box so we don't fire a query per keystroke.
-// setState runs inside setTimeout (deferred), so this does not trip
-// react-hooks/set-state-in-effect.
-function useDebouncedValue<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(id)
-  }, [value, delay])
-  return debounced
-}
+import { useDebouncedValue } from '@/lib/hooks/use-debounced-value'
 
 // The catalogue holds a few hundred rows; with no search filter we cap what we
 // render so an unfiltered view never paints hundreds of DOM nodes.

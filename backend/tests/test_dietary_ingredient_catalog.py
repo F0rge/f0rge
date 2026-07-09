@@ -236,3 +236,35 @@ async def test_list_items_search_filters(async_db: AsyncSession) -> None:
     results = await service.list_items(search="kim")
     names = [i.canonical_name for i in results]
     assert names == ["kimchi"]
+
+
+async def test_list_items_search_matches_alias(async_db: AsyncSession) -> None:
+    service = DietaryIngredientCatalogService(async_db)
+    parmigiano = await service.create_item(
+        DietaryIngredientCreate(canonical_name="parmigiano")
+    )
+    await service.add_alias(parmigiano.id, AliasCreate(alias="parmesan"))
+    await service.create_item(DietaryIngredientCreate(canonical_name="banana"))
+
+    results = await service.list_items(search="parmesan")
+    names = [i.canonical_name for i in results]
+    assert names == ["parmigiano"]
+
+
+async def test_list_items_search_respects_limit(async_db: AsyncSession) -> None:
+    service = DietaryIngredientCatalogService(async_db)
+    for name in ("apple", "apricot", "avocado", "banana"):
+        await service.create_item(DietaryIngredientCreate(canonical_name=name))
+
+    results = await service.list_items(search="a", limit=2)
+    assert len(results) == 2
+    assert [i.canonical_name for i in results] == ["apple", "apricot"]
+
+
+async def test_list_items_search_default_limit(async_db: AsyncSession) -> None:
+    service = DietaryIngredientCatalogService(async_db)
+    for i in range(55):
+        await service.create_item(DietaryIngredientCreate(canonical_name=f"item{i:02d}"))
+
+    results = await service.list_items(search="item")
+    assert len(results) == 50

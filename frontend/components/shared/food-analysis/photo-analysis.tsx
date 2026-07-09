@@ -91,10 +91,10 @@ function IngredientRow({
           disabled={updateIngredient.isPending}
           autoFocus
           aria-label="Edit ingredient name"
-          className="h-6 flex-1 rounded border border-border bg-background px-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+          className="min-h-[44px] flex-1 rounded border border-border bg-background px-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
         />
         {updateIngredient.isPending && (
-          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
         )}
       </div>
     )
@@ -106,13 +106,13 @@ function IngredientRow({
         <button
           type="button"
           onClick={startEdit}
-          className="text-left text-xs text-foreground hover:underline"
+          className="min-h-[44px] flex-1 text-left text-sm text-foreground hover:underline"
           aria-label={`Edit ingredient ${ingredient.name}`}
         >
           {ingredient.name}
         </button>
       ) : (
-        <span className="text-xs text-foreground">{ingredient.name}</span>
+        <span className="text-sm text-foreground">{ingredient.name}</span>
       )}
       <DietaryBadges
         ingredient={ingredient}
@@ -123,10 +123,10 @@ function IngredientRow({
         <button
           type="button"
           onClick={() => deleteIngredient.mutate(ingredient.id)}
-          className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+          className="ml-auto flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
           aria-label={`Remove ingredient ${ingredient.name}`}
         >
-          <X className="size-3" />
+          <X className="size-4" />
         </button>
       )}
     </div>
@@ -292,16 +292,20 @@ export function PhotoAnalysis({
 
       {showEditAffordances && (
         <div className="mt-2 space-y-2">
-          <IngredientEditor photoId={photoId} onAdded={() => {}} />
+          <IngredientEditor
+            photoId={photoId}
+            existingNames={analysis.ingredients.map((ing) => ing.name)}
+            onAdded={() => {}}
+          />
           {!hideConfirmButton && !isConfirmed && (
             <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => confirmAnalysis.mutate(photoId)}
                 disabled={confirmAnalysis.isPending}
-                className="flex items-center gap-1 rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+                className="flex min-h-[44px] items-center gap-1.5 rounded-md bg-green-600 px-4 text-sm font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50"
               >
-                <Check className="size-3" />
+                <Check className="size-4" />
                 Confirm
               </button>
             </div>
