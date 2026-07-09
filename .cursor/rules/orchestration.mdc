@@ -1,0 +1,58 @@
+---
+description: Orchestration and planning — every plan must delegate work chunks to the correct user/repo-level sub-agent before implementation. Use when planning, scoping, or coordinating multi-file features.
+alwaysApply: true
+---
+
+# Orchestration — Plan, Delegate, Ship
+
+Extends `~/.cursor/rules/leo-system-wide.mdc` § Sub-Agent Delegation. Project-specific routing below.
+
+## Planning is delegation-first
+
+When producing an implementation plan (Plan mode, issue spec, or ad-hoc scope), **do not implement in the same step**. The plan MUST include:
+
+1. **Sub-agent map** — one row per work chunk: `Chunk | Owner (sub-agent) | Deliverable | Depends on`
+2. **Owner = a named sub-agent** from `~/.cursor/agents/` or the built-in `Explore` / `Plan` agents — not "main agent" or "me"
+3. **Right-sized delegation** — match scope to agent count (see table)
+4. **Verification plan** — ends with live-server E2E when UI/API changes; dev-env smoke when shipping via `ship-feature` skill
+5. **Explicit sign-off** — unresolved decisions listed before execution
+
+Solo plans where the orchestrator implements every chunk are **not acceptable**. Exception: trivial single-file edits (typo, dep bump, one-line config).
+
+| Scope | Delegation |
+| --- | --- |
+| 1 file, < 50 lines | 1 specialist sub-agent |
+| 2–5 files, one layer | 1–2 sub-agents |
+| Backend + frontend + tests | Specialist per layer; parallel when independent |
+| New subsystem, 5+ files | data, services, routers, frontend, qa separately |
+
+## Sub-agent routing (health-tracker)
+
+| Touch area | Sub-agent |
+| --- | --- |
+| `backend/app/**`, migrations, API tests | `fastapi-backend` |
+| `frontend/**` | `frontend-dev` |
+| `backend/scripts/**`, `backend/data/**`, ETL | `data-engineer` |
+| ML prompts, classification, vision analysis | `data-scientist` |
+| Docker, compose, `.github/`, Pi/Coolify deploy | `devops` |
+| QA gate, test matrix, e2e evidence | `qa-engineer` |
+| Read-only codebase recon | `Explore` |
+| Architecture / plan-only pass | `Plan` |
+
+**Model policy:** every sub-agent runs on `composer-2.5` only.
+
+## Sub-agent brief (every dispatch)
+
+Each brief MUST include:
+
+1. Read `~/.cursor/agent-memory/<agent-name>/MEMORY.md` first
+2. Read project `CLAUDE.md`, `AGENTS.md`, and relevant `.cursor/rules/*.mdc`
+3. House rules: think / simplify / surgical / goal-driven (Karpathy four)
+4. Scope: plan slice with file paths and acceptance criteria
+5. Write back gotchas to memory when done
+
+Template: `.cursor/skills/ship-feature/references/sub-agent-brief-template.md`
+
+## End-to-end shipping
+
+For idea or GitHub issue implementation through develop → dev smoke → main PR, use the **`ship-feature`** skill (`.cursor/skills/ship-feature/SKILL.md`).

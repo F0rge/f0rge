@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import os
-import shutil
 
 from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
@@ -36,8 +35,7 @@ def resize_image(file_bytes: bytes, max_dim: int = 2048, quality: int = 85) -> b
     return buf.getvalue()
 
 
-def save_photo(file_bytes: bytes, filename: str, vault_path: str) -> None:
-    # Save to backend photos dir
+def save_photo(file_bytes: bytes, filename: str) -> None:
     photo_dir = os.path.abspath(settings.photo_dir)
     os.makedirs(photo_dir, exist_ok=True)
     local_path = os.path.join(photo_dir, filename)
@@ -52,22 +50,8 @@ def save_photo(file_bytes: bytes, filename: str, vault_path: str) -> None:
     with open(local_path, "wb") as f:
         f.write(file_bytes)
 
-    # Copy to vault attachments (skip if vault disabled)
-    if vault_path:
-        attachments_dir = os.path.join(vault_path, "attachments")
-        os.makedirs(attachments_dir, exist_ok=True)
-        vault_path_file = os.path.join(attachments_dir, filename)
-        shutil.copy2(local_path, vault_path_file)
 
-
-def delete_photo(filename: str, vault_path: str) -> None:
-    # Remove from backend photos dir
+def delete_photo(filename: str) -> None:
     local_path = os.path.join(os.path.abspath(settings.photo_dir), filename)
     if os.path.exists(local_path):
         os.unlink(local_path)
-
-    # Remove from vault attachments (skip if vault disabled)
-    if vault_path:
-        vault_file = os.path.join(vault_path, "attachments", filename)
-        if os.path.exists(vault_file):
-            os.unlink(vault_file)

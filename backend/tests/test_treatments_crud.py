@@ -20,20 +20,6 @@ async def service(async_db: AsyncSession) -> TreatmentService:
     return TreatmentService(async_db)
 
 
-@pytest.fixture(autouse=True)
-def no_vault_writes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Suppress vault re-rendering so tests don't need a vault on disk."""
-
-    async def _noop(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(
-        "app.services.treatments.render_and_write_daily_file",
-        _noop,
-        raising=False,
-    )
-
-
 # ---------------------------------------------------------------------------
 # _normalize_name (private helper on the service)
 # ---------------------------------------------------------------------------

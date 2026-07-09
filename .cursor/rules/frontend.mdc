@@ -1,0 +1,103 @@
+---
+description: React/Next.js App Router, shadcn/ui, and Tailwind conventions. Use proactively when building or reviewing UI components, pages, hooks, styles, forms, or frontend API integration.
+globs: frontend/**/*.tsx, frontend/**/*.ts
+alwaysApply: false
+---
+
+# Frontend Standards (Next.js + shadcn/ui)
+
+## Stack
+
+- **Next.js 16** (App Router, not Pages Router)
+- **React 19**, **TypeScript** strict mode
+- **shadcn/ui** + **Tailwind CSS v4**
+- Backend API at `http://localhost:8000/api/v1` via `/api/*` rewrite
+- Auth: `ht_session` cookie (PIN-based)
+
+## Core Principles
+
+- **Simplicity first** — readable over clever; duplicate beats wrong abstraction
+- **~150 lines max per file** — split when longer
+- Most pages are **client components** by design (react-query → FastAPI); keep `'use client'` off presentational leaves that don't need it
+- Co-locate `page.tsx`, `loading.tsx`, `error.tsx` in route folders
+
+## Component Architecture
+
+- Single responsibility; explicit TypeScript prop interfaces
+- Composition over configuration
+- Use shadcn/ui — don't rebuild what exists
+- Descriptive names: `IngredientTagEditor` not `Editor1`
+
+## State & Data
+
+- **URL state first** (searchParams for filters/pagination)
+- API hooks in `frontend/lib/api/hooks.ts`
+- Local state (`useState`) only for UI (dropdowns, modals, inputs)
+- Always handle loading, error, and empty states
+- Export shared types from `types/`
+
+## TypeScript & Styling
+
+- Strict mode, **no `any`**
+- Tailwind utilities directly; `cn()` for conditional classes
+- Responsive, mobile-first (this is a mobile-first app)
+- Semantic HTML; keyboard accessible; `aria-label` where needed
+
+## Forms
+
+Controlled components, inline validation errors, disable submit during submission, clear success/error feedback.
+
+## Customize-Hub UX Contract (health-tracker)
+
+Daily check-in (`/checkin/[date]`) is **data-entry only**. Structural changes live in `/customize`.
+
+### Governance tiers
+
+| Tier | Examples | User can | Where |
+|------|----------|----------|-------|
+| **Core** | Wellbeing, Gut, Bristol, Food | Show/hide sections only | `/customize/reorder`, `/customize/core-scales` |
+| **Catalog** | Supplements, Diet tags | Pick from DB list | `/customize/catalogs` |
+| **Custom** | Trackers, Symptoms | Full CRUD | `/customize/trackers`, `/customize/symptoms` |
+
+### Input primitives (approved set only)
+
+Segmented scale, 7-cell grid (Bristol), binary segmented, stepper, pill multi-select, severity row (0–10), free text (Notes).
+
+### Daily-page visual contract
+
+- No `+`, `…`, `Manage`, `Add`, `Edit`, or `Archive` on daily cards
+- Card header: `LABEL` + `TierPill` only
+- Cards render in `cardOrder`, skipping `hiddenCards`
+- Notes exempt (free text, can be hidden)
+
+### Row anatomy (customize screens)
+
+`[drag-handle 16px] [icon 32px] [name + meta flex-1] [actions ≤2]` — single `RowItem` at `components/customize/row-item.tsx`.
+
+### Contract violations — stop and consult
+
+Inline `+` on daily card, `…` overflow on card header, separate archived-items page, fourth tier, editable Core labels.
+
+## Quality Gate (before completing)
+
+1. `npm run build` — must succeed
+2. `npm run lint` — must pass
+3. Verify render + edge cases (empty, loading, errors)
+4. Test mobile viewport
+
+## Decision Framework
+
+1. Will a junior dev understand this in 6 months?
+2. Am I solving a problem I don't have yet?
+3. Can shadcn/ui do this instead?
+4. Should this state be in the URL?
+
+## Commands
+
+```bash
+cd frontend
+npm run dev    # :3000
+npm run build && npm run lint
+```
+
+For deep frontend work, delegate to the `frontend-dev` sub-agent in `~/.cursor/agents/`.

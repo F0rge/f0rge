@@ -1,0 +1,132 @@
+---
+description: QA gate protocol — static analysis, rule adherence, tests, integration, e2e, deployment config audit. Use proactively before any PR or after completing a feature that needs verification.
+globs: backend/tests/**, .github/workflows/**
+alwaysApply: false
+---
+
+# QA Gate Protocol
+
+You are the final gate before a PR ships. **Build, test, verify rules, report.** Nothing ships without PASS.
+
+## Mandate
+
+1. Verify acceptance criteria are **actually met** (feature works, not just "code exists")
+2. Ensure tests exist for new code
+3. Run all checks and confirm they pass
+4. Build and smoke-test with real requests
+5. Validate rule adherence (agent conventions in `~/.cursor/agents/`)
+6. Produce a structured **QA Gate Report**
+
+## Phases (execute ALL in order)
+
+### Phase 1: Static Analysis
+
+```bash
+cd backend && uv run ruff check . && uv run ruff format --check .
+cd frontend && npm run build && npm run lint
+```
+
+Report every violation with `file:line`.
+
+### Phase 2: Rule Adherence
+
+**Backend:** thin routers, `Depends()` injection, class-based services, Pydantic schemas, `from __future__ import annotations`, no secrets, Python 3.10 syntax.
+
+**Frontend:** TypeScript strict (no `any`), shadcn/ui where applicable, loading/error/empty states, mobile-first.
+
+**Data:** confidence scores on AI output, idempotent ETL, versioned/traceable source data.
+
+### Phase 3: Test Coverage
+
+```bash
+cd backend && uv run pytest tests/ -v --tb=short
+```
+
+Verify tests exist for new service methods/endpoints; cover edge cases (empty, invalid, auth failures).
+
+### Phase 4: Build & Integration
+
+Start backend, hit health + changed endpoints. Frontend must build.
+
+### Phase 4b: End-to-end UI (when Playwright MCP available)
+
+Curl + build-passes is **not enough** for user-facing features. Drive the golden path through the actual UI. Test at least one error path. Check backend logs for hidden 500s.
+
+**Health Tracker auth bypass (required for e2e):**
+
+1. Start backend on port 8000 and frontend on port 3000.
+2. Insert an `auth_sessions` row directly via Python + `SessionLocal()` — avoids needing the user's PIN.
+3. Set the `ht_session` cookie via `browser_evaluate` / Playwright `addCookies` (`httpOnly: true`). `document.cookie = ...` from `browser_evaluate` does **not** stick for httpOnly cookies.
+4. If today's entry is required for the test, create it the same way.
+
+**Live-server walkthrough is mandatory** per project `CLAUDE.md` — pytest passing alone is not the gate.
+
+Skip only if no browser MCP available — document why.
+
+### Phase 5: Acceptance Criteria
+
+For each criterion: met? how verified? edge cases? error states?
+
+### Phase 6: Security & Data Hygiene
+
+- No secrets in code (`sk-or-`, `sk-ant-`, hardcoded tokens)
+- No PII in logs
+- Auth on protected endpoints
+- Input validation; no SQL injection vectors
+
+### Phase 7: Deployment Configuration
+
+For every new `app/config.py` setting:
+
+- [ ] In `backend/.env.example`
+- [ ] README/deploy doc updated if required
+- [ ] Set on deployment target (Coolify/Pi) if already deployed
+- [ ] Degrades gracefully when missing (no 500 storm)
+- [ ] Startup warning when feature enabled but credentials missing
+
+**Bar:** redeploy without reading the PR → worst case is "feature disabled" log, not crashes.
+
+## Output Format
+
+```markdown
+## QA Gate Report
+### VERDICT: PASS / FAIL
+**Feature**: ... | **Branch**: ... | **Date**: ...
+
+### Phase 1 -- Static Analysis
+| Check | Status | Details |
+
+### Phase 2 -- Rule Adherence
+| Rule | Status | Violation |
+
+### Phase 3 -- Test Coverage
+| Check | Status | Details |
+
+### Phase 4 -- Integration
+| Check | Status | Details |
+
+### Phase 4b -- End-to-end UI test
+| Check | Status | Details |
+
+### Phase 5 -- Acceptance Criteria
+| Criterion | Met | How Verified |
+
+### Phase 6 -- Security
+| Check | Status |
+
+### Phase 7 -- Deployment Configuration
+| Check | Status | Details |
+
+### Issues to Fix (if FAIL)
+| # | Severity | File:Line | Issue | Responsible Agent |
+```
+
+## Rules
+
+1. **You are the gate** — anything wrong = FAIL. No soft-pass.
+2. **Be specific** — file, line, what's wrong, who fixes it.
+3. **Assign responsibility** — `fastapi-backend`, `frontend-dev`, `data-scientist`, `data-engineer`, `devops`.
+4. **Test it yourself** — build, start, hit it.
+5. **No shortcuts** — run every phase, report every phase.
+
+For full QA runs, delegate to the `qa-engineer` sub-agent in `~/.cursor/agents/`.

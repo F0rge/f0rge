@@ -19,7 +19,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).
-- Dev stack has NO vault mount (VAULT_PATH=""), NO backup sidecar, and a disposable Postgres. PIN must be seeded manually after first deploy.
+- Dev stack has NO backup sidecar and a disposable Postgres. PIN must be seeded manually after first deploy.
 - Dev host ports on the Pi: backend 8104, MCP 8107, frontend 3104. Do not collide.
 - Compose files: `docker-compose.prod.yml` (main) and `docker-compose.dev.yml` (develop). Both are deployed by Coolify's dockercompose build-pack — Coolify does NOT run a full repo checkout, only paths referenced as bind-mount sources are materialized on the Pi (see `~/.claude/agent-memory/devops/project_health_tracker_backup_strategy_2026-05-17.md`).
 
@@ -37,10 +37,6 @@ cd frontend && npm run dev   # Frontend only
 - Frontend: http://localhost:3000
 - Database: Postgres on the Pi (deployed via Coolify); `DATABASE_URL` env var must use the asyncpg driver, e.g. `postgresql+asyncpg://health:...@host:5432/health`. Tests spin up a disposable Postgres via `testcontainers` (see `backend/tests/conftest.py`).
 - Photo storage: backend/photos/
-- Obsidian vault (Mac): /Users/leo/Library/Mobile Documents/iCloud~md~obsidian/Documents/Brain/
-- Obsidian vault (container): /vault (bind mount of /mnt/nvme/home/leo/vaults/brain on Pi)
-- Vault daily files: {vault}/Daily/Health-Logs/YYYY-MM-DD.md
-- Vault photo attachments: {vault}/attachments/
 
 ## Conventions
 
@@ -49,7 +45,6 @@ cd frontend && npm run dev   # Frontend only
 - Frontend: TypeScript strict, Tailwind for styling, shadcn/ui components
 - API prefix: /api/v1
 - Auth cookie name: ht_session
-- No emojis in Obsidian output files
 
 ## Writing issues for sub-agents
 

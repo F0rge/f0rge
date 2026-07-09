@@ -79,11 +79,6 @@ kill %1
 cd frontend && npm run build
 ```
 
-**Obsidian vault output** (if vault rendering changed):
-- Verify markdown files are well-formed
-- Check frontmatter is valid YAML
-- Verify photo embeds use correct `![[attachments/...]]` syntax
-
 ### Phase 4b: End-to-end UI test (REQUIRED when tools available)
 
 If the environment provides **Playwright MCP** (`mcp__plugin_playwright_playwright__*`) or **computer-use MCP** (`mcp__computer-use__*`), you MUST drive the full stack end-to-end through the actual UI. Curl + build-passes is not enough — it catches API contract issues but misses things like wrong status-derived columns, frontend state bugs, race conditions in async flows, and CORS/cookie issues. Only skip this phase if neither MCP is available; document why in the report.
@@ -99,7 +94,7 @@ Test plan:
 - Drive the golden path: load the page, perform the new flow as a real user would, verify the expected UI state appears.
 - Drive at least one error path: invalid input, unauthenticated request, missing dependency. Verify the UI fails gracefully (clear error, no broken state).
 - For async/background features (polling, websockets, queued jobs), wait the expected duration plus a small buffer, then verify the final state in both the UI and the database.
-- For features that write to external systems (Obsidian vault, S3, etc.), check that the side effect actually happened.
+- For features that write to external systems (S3, etc.), check that the side effect actually happened.
 
 Use real test data:
 - Food photos, document uploads, etc. should be actual files — download from a public source if needed.

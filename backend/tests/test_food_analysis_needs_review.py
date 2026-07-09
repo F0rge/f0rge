@@ -116,7 +116,6 @@ async def _run_trigger_with_response(
     monkeypatch.setattr(cfg_mod.settings, "openrouter_api_key", "test-key")
     monkeypatch.setattr(cfg_mod.settings, "food_analysis_enabled", True)
     monkeypatch.setattr(cfg_mod.settings, "photo_dir", "/tmp")
-    monkeypatch.setattr(cfg_mod.settings, "vault_path", "")
 
     class _FakeClient:
         def __init__(self, api_key: str, default_model: str) -> None:

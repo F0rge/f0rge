@@ -131,7 +131,6 @@ async def test_trigger_with_byok_only_calls_openrouter(
     monkeypatch.setattr(cfg_mod.settings, "openrouter_api_key", "")
     monkeypatch.setattr(cfg_mod.settings, "food_analysis_enabled", True)
     monkeypatch.setattr(cfg_mod.settings, "photo_dir", "/tmp")
-    monkeypatch.setattr(cfg_mod.settings, "vault_path", "")
 
     from app.services import food_analysis as fa
 

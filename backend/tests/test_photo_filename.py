@@ -40,17 +40,14 @@ from app.services.photos import PhotoService
 
 @pytest_asyncio.fixture
 async def real_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
-    """Point photo_dir + vault_path at tmp_path; exercise real PhotoService seams.
+    """Point photo_dir at tmp_path; exercise real PhotoService seams.
 
-    Does not monkeypatch ``render_and_write_daily_file``, ``save_photo``, or
-    ``delete_photo`` — same contract as ``test_photos_upload_integration.py``.
+    Does not monkeypatch ``save_photo`` or ``delete_photo`` — same contract as
+    ``test_photos_upload_integration.py``.
     """
     photo_dir = tmp_path / "photos"
-    vault_dir = tmp_path / "vault"
     photo_dir.mkdir()
-    vault_dir.mkdir()
     monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
-    monkeypatch.setattr(settings, "vault_path", str(vault_dir))
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     yield
@@ -228,7 +225,7 @@ def test_save_photo_raises_if_target_exists(tmp_path, monkeypatch: pytest.Monkey
     target.write_bytes(b"original-content")
 
     with pytest.raises(FileExistsError):
-        save_photo(b"new-content", filename, vault_path="")
+        save_photo(b"new-content", filename)
 
     # Original file is untouched -- proves no overwrite happened.
     assert target.read_bytes() == b"original-content"
@@ -242,6 +239,6 @@ def test_save_photo_writes_when_target_does_not_exist(
     photo_dir.mkdir()
     monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
 
-    save_photo(b"hello", "fresh.jpg", vault_path="")
+    save_photo(b"hello", "fresh.jpg")
 
     assert (photo_dir / "fresh.jpg").read_bytes() == b"hello"

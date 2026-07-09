@@ -1,9 +1,6 @@
 """HTTP-level tests for the entries router (CRUD + auth gating).
 
-No mocks of app code. create_entry/update_entry call through to the real
-obsidian vault writer (app.services.obsidian.write_daily_file), which no-ops
-safely when settings.vault_path is unwritable/unset -- exercised for real,
-not stubbed out, per feedback_no_mocks_at_seam_under_test.md.
+No mocks of app code.
 """
 
 from __future__ import annotations
@@ -294,9 +291,8 @@ async def test_update_entry_always_restamps_entry_time_to_now(
     """entry_time/period_of_day are server-owned "last edited" metadata, not a
     caller-settable field, despite EntryUpdate declaring them (see the
     comment on EntryUpdate.entry_time). Every consumer -- the history page's
-    "Last logged at" label, the Obsidian vault's "Logged at" row, insights'
-    correlation-feature exclusion list -- treats the field as edit-time
-    metadata. A caller-supplied entry_time on PUT must be silently ignored
+    "Last logged at" label, insights' correlation-feature exclusion list --
+    treats the field as edit-time metadata. A caller-supplied entry_time on PUT must be silently ignored
     and replaced with the server's current time, matching create_entry's
     period_of_day derivation for whatever entry_time actually lands.
     """

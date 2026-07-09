@@ -7,9 +7,6 @@
 #    collide with prod on the same Docker daemon.
 #  - Host ports shifted into the 81xx / 31xx range (8104 backend, 8107 mcp).
 #    Prod uses 8004 / 8007.
-#  - No vault bind-mount. VAULT_PATH is set to "" so photo + obsidian writers
-#    are no-ops (see backend/app/services/photo_storage.py and obsidian.py:
-#    `if vault_path:` already guards every vault write).
 #  - No postgres-backup sidecar. Dev DB is disposable.
 #  - CORS_ORIGINS scoped to the dev subdomains.
 #
@@ -62,9 +59,6 @@ services:
     env_file:
       - .env
     environment:
-      # Empty VAULT_PATH disables every vault write path in the backend
-      # (photo_storage.py + obsidian.py both guard on `if vault_path:`).
-      - VAULT_PATH=
       - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
       - CORS_ORIGINS=["https://health-dev.leo-figueiredo.com","https://health-dev-api.leo-figueiredo.com","http://localhost:3104"]
