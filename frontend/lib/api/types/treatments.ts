@@ -14,6 +14,8 @@ export interface Treatment {
   group_name: string | null
   start_date: string
   end_date: string | null
+  end_reason: string | null
+  end_note: string | null
   dose: string | null
   doses_per_day: number | null
   notes: string | null
@@ -28,6 +30,8 @@ export interface TreatmentCreate {
   group_name?: string | null
   start_date: string
   end_date?: string | null
+  end_reason?: string | null
+  end_note?: string | null
   dose?: string | null
   doses_per_day?: number | null
   notes?: string | null
@@ -39,6 +43,8 @@ export interface TreatmentUpdate {
   group_name?: string | null
   start_date?: string
   end_date?: string | null
+  end_reason?: string | null
+  end_note?: string | null
   dose?: string | null
   doses_per_day?: number | null
   notes?: string | null
