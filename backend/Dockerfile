@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Match host user `leo` (uid 1000) so vault writes land owned correctly
+# Match host user `leo` (uid 1000) so bind-mounted volumes land owned correctly
 RUN groupadd --gid 1000 app && useradd --uid 1000 --gid 1000 --create-home app
 
 WORKDIR /app

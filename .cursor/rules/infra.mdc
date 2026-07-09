@@ -24,7 +24,6 @@ Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
 
 | Aspect | Production (`main`) | Develop (`develop`) |
 |---|---|---|
-| Vault mount | Yes (`/vault` on Pi) | **No** — `VAULT_PATH=""` |
 | Backup sidecar | Yes | **No** |
 | Postgres | Persistent | Disposable |
 | PIN | Seeded in prod | **Must seed manually** after first deploy |

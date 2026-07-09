@@ -72,7 +72,7 @@ def main() -> None:
 
     print(
         f"\nDone. Resolved {resolved}, still missing {still_missing}."
-        "\nNote: vault markdown files are NOT re-rendered. Files update on next API read."
+        "\nNote: entry photo_signal updates on next API read."
     )
 
 

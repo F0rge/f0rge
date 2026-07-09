@@ -7,7 +7,6 @@ export function DataSourcesSection() {
         <li>Weather: auto-fetches hourly (background)</li>
         <li>Apple Health: auto-syncs via Health Auto Export app</li>
         <li>Check-in: manual daily entry</li>
-        <li>Vault sync: every 15 minutes to Obsidian</li>
       </ul>
     </div>
   )

@@ -137,7 +137,3 @@ For deep backend work, delegate to the `fastapi-backend` sub-agent in `~/.cursor
 - **Database:** Postgres via asyncpg — `DATABASE_URL` must use `postgresql+asyncpg://...` driver
 - **Key paths:**
   - Photo storage: `backend/photos/`
-  - Obsidian vault (Mac): `/Users/leo/Library/Mobile Documents/iCloud~md~obsidian/Documents/Brain/`
-  - Obsidian vault (container): `/vault` (bind mount on Pi)
-  - Vault daily files: `{vault}/Daily/Health-Logs/YYYY-MM-DD.md`
-  - Vault photo attachments: `{vault}/attachments/`

@@ -1,11 +1,10 @@
 """Tests for the "Log Again" meal-clone feature (MealService + meals router).
 
-Exercises the real seams end-to-end: a temporary on-disk photo dir + vault, the
-real ``save_photo``/``delete_photo``/``render_and_write_daily_file`` collaborators,
-and a real PIN-login round-trip for the HTTP endpoints. Nothing under test is
-mocked — the only monkeypatch at a trust boundary is the OpenRouter vision client,
-and only to *prove it is never constructed* during a clone
-(per feedback_no_mocks_at_seam_under_test.md).
+Exercises the real seams end-to-end: a temporary on-disk photo dir, the real
+``save_photo``/``delete_photo`` collaborators, and a real PIN-login round-trip
+for the HTTP endpoints. Nothing under test is mocked — the only monkeypatch at a
+trust boundary is the OpenRouter vision client, and only to *prove it is never
+constructed* during a clone (per feedback_no_mocks_at_seam_under_test.md).
 """
 
 from __future__ import annotations
@@ -57,13 +56,10 @@ async def authed_client(async_client: AsyncClient) -> AsyncClient:
 
 @pytest_asyncio.fixture
 async def storage(tmp_path, monkeypatch: pytest.MonkeyPatch):
-    """Redirect photo_dir + vault_path to tmp dirs. Does NOT mock storage seams."""
+    """Redirect photo_dir to tmp dir. Does NOT mock storage seams."""
     photo_dir = tmp_path / "photos"
-    vault_dir = tmp_path / "vault"
     photo_dir.mkdir()
-    vault_dir.mkdir()
     monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
-    monkeypatch.setattr(settings, "vault_path", str(vault_dir))
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     return tmp_path
@@ -121,7 +117,7 @@ async def _add_meal(
 ) -> Photo:
     """Create a Photo + PhotoAnalysis + one PhotoIngredient, writing the file to disk."""
     if write_file:
-        save_photo(_jpg_bytes(color), filename, settings.vault_path)
+        save_photo(_jpg_bytes(color), filename)
     photo = Photo(
         entry_id=entry.id,
         filename=filename,
@@ -306,7 +302,7 @@ async def test_deleting_clone_file_leaves_source(async_db: AsyncSession, storage
     clone_path = os.path.join(str(storage / "photos"), cloned.filename)
 
     # Deleting the clone's file (distinct filename) must not touch the source's.
-    delete_photo(cloned.filename, settings.vault_path)
+    delete_photo(cloned.filename)
     assert not os.path.exists(clone_path)
     assert os.path.exists(src_path)
 

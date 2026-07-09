@@ -15,7 +15,6 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.schemas.photo import PhotoUpdate
 from app.services.food_analysis import trigger_analysis_background
-from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.photo_storage import delete_photo, resize_image, save_photo
 
 
@@ -23,10 +22,8 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
     """Pick the next collision-free ``{date}_photo-N{ext}`` filename for ``entry``.
 
     Uses max(existing)+1, not count()+1, so a deleted photo never causes a
-    number to be reused. Unions three sources of "used" numbers — DB rows,
-    the local photo dir, and the vault attachments dir — so an orphan file
-    (written to disk but never committed, or committed but not yet cleaned
-    up from one of these locations) never collides with the next pick.
+    number to be reused. Unions DB rows and the local photo dir so an orphan
+    file (written to disk but never committed) never collides with the next pick.
     """
     prefix = f"{entry.date.isoformat()}_photo-"
     suffix = ext
@@ -52,18 +49,6 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
                 except ValueError:
                     pass
 
-    # Source 3: vault attachments directory (catches vault-side orphans).
-    vault_path = settings.vault_path
-    if vault_path:
-        vault_attachments = os.path.join(vault_path, "attachments")
-        if os.path.isdir(vault_attachments):
-            for name in os.listdir(vault_attachments):
-                if name.startswith(prefix) and name.endswith(suffix):
-                    try:
-                        used_numbers.add(int(name[len(prefix) : -len(suffix)]))
-                    except ValueError:
-                        pass
-
     photo_number = max(used_numbers, default=0) + 1
     return f"{prefix}{photo_number}{suffix}"
 
@@ -80,8 +65,7 @@ class PhotoService:
             raise NotFoundError(f"Photo {photo_id} not found")
 
         fields = data.model_fields_set
-        label_changed = "label" in fields
-        if label_changed:
+        if "label" in fields:
             # ""/whitespace clears the label so the UI falls back to the AI dish_name.
             stripped = data.label.strip() if data.label is not None else None
             photo.label = stripped or None
@@ -90,16 +74,6 @@ class PhotoService:
 
         await self.db.commit()
         await self.db.refresh(photo)
-
-        # label appears in the vault daily file, meal_time doesn't — only
-        # re-render when label actually changed (matches upload()/delete()).
-        if label_changed:
-            entry = (
-                await self.db.execute(select(Entry).where(Entry.id == photo.entry_id))
-            ).scalar_one()
-            await self.db.refresh(entry)
-            await render_and_write_daily_file(self.db, entry, entry.photos)
-
         return photo
 
     async def upload(
@@ -117,11 +91,10 @@ class PhotoService:
             raise NotFoundError(f"No entry for {entry_date}")
 
         filename = await next_photo_filename(self.db, entry)
-        vault_path = settings.vault_path
 
         raw_bytes = await file.read()
         processed_bytes = await asyncio.to_thread(resize_image, raw_bytes)
-        await asyncio.to_thread(save_photo, processed_bytes, filename, vault_path)
+        await asyncio.to_thread(save_photo, processed_bytes, filename)
 
         now = datetime.datetime.utcnow()
 
@@ -147,13 +120,9 @@ class PhotoService:
         try:
             await self.db.commit()
         except Exception:
-            await asyncio.to_thread(delete_photo, filename, vault_path)
+            await asyncio.to_thread(delete_photo, filename)
             raise
         await self.db.refresh(photo)
-
-        # Re-render vault to include the new photo embed.
-        await self.db.refresh(entry)
-        await render_and_write_daily_file(self.db, entry, entry.photos)
 
         # Queue analysis when enabled and credentials resolve (env or BYOK).
         # Credential resolution must not fail the upload — the photo is already persisted.
@@ -186,9 +155,7 @@ class PhotoService:
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError("Photo not found")
-        entry = photo.entry
         filename = photo.filename
-        vault_path = settings.vault_path
 
         # Commit DB delete before touching the filesystem. If the commit fails,
         # no files are removed and the DB row remains — consistent state.
@@ -196,8 +163,4 @@ class PhotoService:
         await self.db.commit()
 
         # File cleanup happens after the successful commit.
-        await asyncio.to_thread(delete_photo, filename, vault_path)
-
-        # Re-render vault without the deleted photo.
-        await self.db.refresh(entry)
-        await render_and_write_daily_file(self.db, entry, entry.photos)
+        await asyncio.to_thread(delete_photo, filename)

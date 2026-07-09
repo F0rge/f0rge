@@ -115,7 +115,6 @@ services:
     env_file:
       - .env
     environment:
-      - VAULT_PATH=/vault
       - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
       - CORS_ORIGINS=["https://health.leo-figueiredo.com","http://localhost:3004"]
@@ -130,7 +129,6 @@ services:
     volumes:
       - health-photos:/app/photos
       - health-lab-attachments:/app/lab_attachments
-      - /mnt/nvme/home/leo/vaults/brain:/vault:rw
     mem_limit: 512m
     restart: unless-stopped
     networks:

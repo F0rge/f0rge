@@ -126,9 +126,7 @@ def get_thing_service(db: AsyncSession = Depends(get_db)) -> ThingService:
 - API prefix: `/api/v1`
 - Auth cookie: `ht_session`
 - Database: Postgres via `DATABASE_URL` (`postgresql+asyncpg://...`); `backend/data/` holds JSON lookup files, not a database
-- Photo storage: `backend/photos/` + Obsidian vault attachments
-- Obsidian vault (Mac): `/Users/leo/Library/Mobile Documents/iCloud~md~obsidian/Documents/Brain/`
-- Obsidian vault (container): `/vault`
+- Photo storage: `backend/photos/`
 
 ## Commands
 

@@ -1,9 +1,9 @@
-"""CLI tool to import lab results from the Obsidian vault into the health-tracker DB.
+"""CLI tool to bulk-import lab results from PDF files into the health-tracker DB.
 
 Usage::
 
     cd backend
-    uv run python -m scripts.import_labs --source-dir /path/to/vault/Labs/Exames/raw
+    uv run python -m scripts.import_labs --source-dir /path/to/lab/pdfs
     uv run python -m scripts.import_labs --source-dir ... --dry-run
     uv run python -m scripts.import_labs --source-dir ... --force --limit 5
     uv run python -m scripts.import_labs --source-dir ... --only "*Blood*"
@@ -93,29 +93,18 @@ def _log_entry(
 
 def _collect_files(
     source_dir: Path,
-    input_mode: str,
     limit: Optional[int],
     only: Optional[str],
 ) -> list[Path]:
-    """Return ordered list of files to process.
+    """Return ordered list of PDF files to process.
 
-    PDFs come before markdown when mode is 'both'.
     Applies --only glob filter and --limit cap.
     """
-    extensions: list[str]
-    if input_mode == "pdf":
-        extensions = [".pdf"]
-    elif input_mode == "markdown":
-        extensions = [".md"]
-    else:  # both
-        extensions = [".pdf", ".md"]
-
     collected: list[Path] = []
-    for ext in extensions:
-        for path in sorted(source_dir.rglob(f"*{ext}")):
-            if only and not fnmatch.fnmatch(path.name, only):
-                continue
-            collected.append(path)
+    for path in sorted(source_dir.rglob("*.pdf")):
+        if only and not fnmatch.fnmatch(path.name, only):
+            continue
+        collected.append(path)
 
     if limit is not None:
         collected = collected[:limit]
@@ -126,17 +115,6 @@ def _collect_files(
 def _relative_source_path(file_path: Path, source_dir: Path) -> str:
     """Return path relative to source_dir, using forward slashes."""
     return file_path.relative_to(source_dir).as_posix()
-
-
-def _strip_frontmatter(text: str) -> str:
-    """Remove YAML frontmatter block delimited by '---' lines."""
-    if not text.startswith("---"):
-        return text
-    parts = text.split("---\n", maxsplit=2)
-    # parts[0] == "" (before first ---), parts[1] == frontmatter, parts[2] == body
-    if len(parts) >= 3:
-        return parts[2]
-    return text
 
 
 # ---------------------------------------------------------------------------
@@ -166,47 +144,38 @@ async def _process_file(
     *,
     file_path: Path,
     source_dir: Path,
-    input_mode: str,
     dry_run: bool,
     force: bool,
     import_svc: LabImportService,
     extraction_svc: LabExtractionService,
     catalog_svc: LabMarkerCatalogService,
 ) -> str:
-    """Process one file. Returns the action string: inserted / skipped-duplicate /
+    """Process one PDF file. Returns the action string: inserted / skipped-duplicate /
     forced-replaced / failed / dry-run / skipped-too-large."""
     relative = _relative_source_path(file_path, source_dir)
-    suffix = file_path.suffix.lower()
+    source_kind = "pdf"
 
-    source_kind = "pdf" if suffix == ".pdf" else "vault_markdown"
-
-    # Size guard for PDFs — OpenRouter inline-file uploads cap around 25 MB.
-    if suffix == ".pdf":
-        size = file_path.stat().st_size
-        if size > _MAX_PDF_BYTES:
-            _log_entry(
-                action="skipped-too-large",
-                source_path=relative,
-                source_kind=source_kind,
-                attempts=0,
-                confidence=0.0,
-                markers_total=0,
-                matched_existing=0,
-                created_canonical=0,
-                error=f"file size {size} > {_MAX_PDF_BYTES} bytes",
-            )
-            return "skipped-too-large"
+    # Size guard — OpenRouter inline-file uploads cap around 25 MB.
+    size = file_path.stat().st_size
+    if size > _MAX_PDF_BYTES:
+        _log_entry(
+            action="skipped-too-large",
+            source_path=relative,
+            source_kind=source_kind,
+            attempts=0,
+            confidence=0.0,
+            markers_total=0,
+            matched_existing=0,
+            created_canonical=0,
+            error=f"file size {size} > {_MAX_PDF_BYTES} bytes",
+        )
+        return "skipped-too-large"
 
     try:
         if dry_run:
             hints = _build_catalog_hints(catalog_svc)
-            if suffix == ".pdf":
-                pdf_bytes = file_path.read_bytes()
-                result = await extraction_svc.extract_pdf(pdf_bytes, hints)
-            else:
-                raw_text = file_path.read_text(encoding="utf-8")
-                text = _strip_frontmatter(raw_text)
-                result = await extraction_svc.extract_text(text, hints)
+            pdf_bytes = file_path.read_bytes()
+            result = await extraction_svc.extract_pdf(pdf_bytes, hints)
 
             total, matched, created = _count_markers(result.payload)
             log.info("--- DRY-RUN PREVIEW: %s ---", relative)
@@ -223,49 +192,21 @@ async def _process_file(
             )
             return "dry-run"
 
-        # Live import
-        if suffix == ".pdf":
-            pdf_bytes = file_path.read_bytes()
-            lab = await import_svc.import_from_pdf(
-                pdf_bytes,
-                filename=file_path.name,
-                source_path=relative,
-                force=force,
-            )
-            # Determine action by checking whether the lab already existed.
-            # import_from_pdf returns the existing lab unchanged when skipped,
-            # so we can't distinguish directly — we check the labs_service query.
-            # The _persist helper in LabImportService returns existing on skip-dup.
-            # We infer action via the source_path match and force flag.
-            from app.models.lab import Lab as LabModel  # local import
+        pdf_bytes = file_path.read_bytes()
+        lab = await import_svc.import_from_pdf(
+            pdf_bytes,
+            filename=file_path.name,
+            source_path=relative,
+            force=force,
+        )
+        from app.models.lab import Lab as LabModel  # local import
 
-            existing_count = (
-                await import_svc.db.execute(
-                    select(func.count())
-                    .select_from(LabModel)
-                    .where(LabModel.source_path == relative)
-                )
-            ).scalar_one()
-            action = _infer_action(force=force, existing_count=existing_count)
-        else:
-            raw_text = file_path.read_text(encoding="utf-8")
-            text = _strip_frontmatter(raw_text)
-            lab = await import_svc.import_from_text(
-                text,
-                source_path=relative,
-                force=force,
-                filename=file_path.name,
+        existing_count = (
+            await import_svc.db.execute(
+                select(func.count()).select_from(LabModel).where(LabModel.source_path == relative)
             )
-            from app.models.lab import Lab as LabModel  # local import
-
-            existing_count = (
-                await import_svc.db.execute(
-                    select(func.count())
-                    .select_from(LabModel)
-                    .where(LabModel.source_path == relative)
-                )
-            ).scalar_one()
-            action = _infer_action(force=force, existing_count=existing_count)
+        ).scalar_one()
+        action = _infer_action(force=force, existing_count=existing_count)
 
         # Best-effort extraction telemetry (not stored on Lab for skip case).
         total = len(lab.markers) if lab.markers else 0
@@ -305,14 +246,7 @@ def _infer_action(*, force: bool, existing_count: int) -> str:
     there). We can't tell 'inserted' from 'skipped' from just the lab object, so
     we check what force implies:
     - force=True  -> we deleted and re-inserted -> forced-replaced
-    - force=False -> we called _persist; if existing_count >= 1 the row existed
-                     before the call. But since _persist does nothing when it
-                     already exists (returns early), we treat it as
-                     skipped-duplicate when force is False and the row exists.
-    Because the row is always present after the call, existing_count >= 1 always.
-    The distinction:
-      force=True  -> forced-replaced (we deleted then re-inserted)
-      force=False -> could be newly inserted or skipped; we can't tell post-hoc
+    - force=False -> could be newly inserted or skipped; we can't tell post-hoc
                      without a pre-call check. Default to 'inserted' here since
                      the import service already logs via its own logic.
     """
@@ -334,20 +268,18 @@ async def main(args: argparse.Namespace) -> None:
 
     files = _collect_files(
         source_dir=source_dir,
-        input_mode=args.input_mode,
         limit=args.limit,
         only=args.only,
     )
 
     if not files:
-        log.info("No files found to process in %s (mode=%s).", source_dir, args.input_mode)
+        log.info("No PDF files found to process in %s.", source_dir)
         print("Processed 0 files: 0 inserted, 0 skipped, 0 replaced, 0 failed")
         return
 
     log.info(
-        "Found %d file(s) to process (mode=%s, dry_run=%s, force=%s).",
+        "Found %d PDF file(s) to process (dry_run=%s, force=%s).",
         len(files),
-        args.input_mode,
         args.dry_run,
         args.force,
     )
@@ -378,7 +310,6 @@ async def main(args: argparse.Namespace) -> None:
             action = await _process_file(
                 file_path=file_path,
                 source_dir=source_dir,
-                input_mode=args.input_mode,
                 dry_run=args.dry_run,
                 force=args.force,
                 import_svc=import_svc,
@@ -407,19 +338,13 @@ async def main(args: argparse.Namespace) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="import_labs",
-        description="Import lab result files from the Obsidian vault into the health-tracker DB.",
+        description="Bulk-import lab result PDFs into the health-tracker DB.",
     )
     parser.add_argument(
         "--source-dir",
         required=True,
         metavar="PATH",
-        help="Vault directory to scan for lab files.",
-    )
-    parser.add_argument(
-        "--input-mode",
-        choices=["markdown", "pdf", "both"],
-        default="pdf",
-        help="Which file types to process (default: pdf).",
+        help="Directory to scan recursively for PDF lab files.",
     )
     parser.add_argument(
         "--dry-run",

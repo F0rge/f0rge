@@ -46,7 +46,7 @@ Verify tests exist for new service methods/endpoints; cover edge cases (empty, i
 
 ### Phase 4: Build & Integration
 
-Start backend, hit health + changed endpoints. Frontend must build. If vault rendering changed: valid YAML frontmatter, correct `![[attachments/...]]` embeds.
+Start backend, hit health + changed endpoints. Frontend must build.
 
 ### Phase 4b: End-to-end UI (when Playwright MCP available)
 

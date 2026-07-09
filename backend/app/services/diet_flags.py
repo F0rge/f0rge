@@ -72,8 +72,8 @@ def _aggregate(
     user marked gluten-free / lactose-free. For those meals we suppress the gluten
     flag entirely and drop the lactose axis from the high-fodmap check (dairy still
     counts). Only ``ing.analysis_id`` (a plain column) is read to decide this — never
-    ``ing.analysis``, which would lazy-load and raise MissingGreenlet in the vault
-    ``asyncio.to_thread`` path.
+    ``ing.analysis``, which would lazy-load and raise MissingGreenlet in async
+    contexts that hold a detached session.
     """
     flags: set[str] = set()
     histamine_load = 0
@@ -157,9 +157,9 @@ def compute_signal_from_analyses(
 ) -> PhotoSignal:
     """Alternate entry point for callers that already hold confirmed PhotoAnalysis rows.
 
-    The vault writer uses this because its ``analyses`` come from a separate prefetch
-    query (not from ``entry.photos[*].analysis``, which would trigger MissingGreenlet
-    inside ``asyncio.to_thread``). Caller is responsible for status filtering.
+    Use when analyses come from a separate prefetch query (not from
+    ``entry.photos[*].analysis``, which can trigger MissingGreenlet). Caller is
+    responsible for status filtering.
     """
     ingredients: list[PhotoIngredient] = []
     gluten_free_ids: set[int] = set()
