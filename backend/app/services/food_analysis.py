@@ -17,7 +17,7 @@ from app.exceptions import NotFoundError
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
-from app.schemas.food_analysis import IngredientCreate, IngredientUpdate
+from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, IngredientUpdate
 from app.services.ingredient_lookup import IngredientLookupService
 from app.services.obsidian_prefetch import render_and_write_daily_file
 from app.services.vision_prompt import build_messages, parse_vision_response
@@ -60,6 +60,22 @@ class FoodAnalysisService:
         """Resolve the analysis for a photo and confirm it; raises NotFoundError if absent."""
         analysis = await self.get_analysis_or_404(photo_id)
         return await self.confirm_analysis(analysis.id)
+
+    async def set_dietary_confirmations(
+        self, photo_id: int, updates: DietaryConfirmUpdate
+    ) -> PhotoAnalysis:
+        """Set per-meal gluten-free / lactose-free overrides and re-render the vault.
+
+        Only the fields explicitly provided (non-None) are written, so a request
+        toggling one flag never clobbers the other. Mirrors ``confirm_analysis``.
+        """
+        analysis = await self.get_analysis_or_404(photo_id)
+        for key, value in updates.model_dump(exclude_none=True).items():
+            setattr(analysis, key, value)
+        await self.db.commit()
+        await self.db.refresh(analysis)
+        await self._rerender_vault(analysis.photo_id)
+        return analysis
 
     async def update_ingredient(
         self, ingredient_id: int, updates: IngredientUpdate

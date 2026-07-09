@@ -33,10 +33,17 @@ class PhotoAnalysisResponse(BaseModel):
     dish_confidence: Optional[float] = None
     ingredients: list[IngredientResponse] = []
     error_message: Optional[str] = None
+    gluten_free_confirmed: bool = False
+    lactose_free_confirmed: bool = False
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DietaryConfirmUpdate(BaseModel):
+    gluten_free_confirmed: Optional[bool] = None
+    lactose_free_confirmed: Optional[bool] = None
 
 
 class IngredientCreate(BaseModel):

@@ -8,6 +8,7 @@ import {
   useRetryAnalysis,
   useDeleteIngredient,
   useUpdateIngredient,
+  useUpdateDietaryConfirm,
 } from '@/lib/api/hooks'
 import { handleMutationError } from '@/lib/api/client'
 import { IngredientEditor } from './ingredient-editor'
@@ -28,9 +29,13 @@ interface PhotoAnalysisProps {
 function IngredientRow({
   ingredient,
   canEdit,
+  glutenFreeConfirmed,
+  lactoseFreeConfirmed,
 }: {
   ingredient: PhotoIngredient
   canEdit: boolean
+  glutenFreeConfirmed: boolean
+  lactoseFreeConfirmed: boolean
 }) {
   const deleteIngredient = useDeleteIngredient()
   const updateIngredient = useUpdateIngredient()
@@ -109,7 +114,11 @@ function IngredientRow({
       ) : (
         <span className="text-xs text-foreground">{ingredient.name}</span>
       )}
-      <DietaryBadges ingredient={ingredient} />
+      <DietaryBadges
+        ingredient={ingredient}
+        glutenFreeConfirmed={glutenFreeConfirmed}
+        lactoseFreeConfirmed={lactoseFreeConfirmed}
+      />
       {canEdit && (
         <button
           type="button"
@@ -133,6 +142,7 @@ export function PhotoAnalysis({
   const { data: analysis, isLoading } = usePhotoAnalysis(photoId)
   const confirmAnalysis = useConfirmAnalysis()
   const retryAnalysis = useRetryAnalysis()
+  const updateDietaryConfirm = useUpdateDietaryConfirm()
 
   const canEdit = mode === 'edit'
 
@@ -204,10 +214,59 @@ export function PhotoAnalysis({
         </div>
       )}
 
+      {showEditAffordances && (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              updateDietaryConfirm.mutate({
+                photoId,
+                gluten_free_confirmed: !analysis.gluten_free_confirmed,
+              })
+            }
+            disabled={updateDietaryConfirm.isPending}
+            aria-pressed={analysis.gluten_free_confirmed}
+            className={[
+              'min-h-[48px] rounded-xl border px-2 py-2.5 text-sm font-medium transition-all disabled:opacity-50',
+              analysis.gluten_free_confirmed
+                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                : 'border-border bg-background text-muted-foreground',
+            ].join(' ')}
+          >
+            Gluten-free
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              updateDietaryConfirm.mutate({
+                photoId,
+                lactose_free_confirmed: !analysis.lactose_free_confirmed,
+              })
+            }
+            disabled={updateDietaryConfirm.isPending}
+            aria-pressed={analysis.lactose_free_confirmed}
+            className={[
+              'min-h-[48px] rounded-xl border px-2 py-2.5 text-sm font-medium transition-all disabled:opacity-50',
+              analysis.lactose_free_confirmed
+                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                : 'border-border bg-background text-muted-foreground',
+            ].join(' ')}
+          >
+            Lactose-free
+          </button>
+        </div>
+      )}
+
       {visibleIngredients.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
           {visibleIngredients.map((ing) => (
-            <IngredientRow key={ing.id} ingredient={ing} canEdit={showEditAffordances} />
+            <IngredientRow
+              key={ing.id}
+              ingredient={ing}
+              canEdit={showEditAffordances}
+              glutenFreeConfirmed={analysis.gluten_free_confirmed}
+              lactoseFreeConfirmed={analysis.lactose_free_confirmed}
+            />
           ))}
         </div>
       )}
@@ -219,7 +278,13 @@ export function PhotoAnalysis({
           </div>
           <div className="space-y-0.5 opacity-70">
             {inferredIngredients.map((ing) => (
-              <IngredientRow key={ing.id} ingredient={ing} canEdit={showEditAffordances} />
+              <IngredientRow
+                key={ing.id}
+                ingredient={ing}
+                canEdit={showEditAffordances}
+                glutenFreeConfirmed={analysis.gluten_free_confirmed}
+                lactoseFreeConfirmed={analysis.lactose_free_confirmed}
+              />
             ))}
           </div>
         </div>

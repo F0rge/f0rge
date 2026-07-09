@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowLeft, Activity, BookOpen, Layers, Pill, Settings2, Zap } from 'lucide-react'
+import { ArrowLeft, Activity, BookOpen, Carrot, Layers, Pill, Settings2, Zap } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { HubRow } from '@/components/customize/hub-row'
 
@@ -46,6 +46,13 @@ export default function CustomizePage() {
           icon={<Pill className="size-4" />}
           title="Catalogs"
           description="Pick supplements, medications, and diet tags to track from curated lists."
+          tier="catalog"
+        />
+        <HubRow
+          href="/customize/ingredients"
+          icon={<Carrot className="size-4" />}
+          title="Dietary ingredients"
+          description="Edit FODMAP / histamine / gluten / dairy classifications and aliases."
           tier="catalog"
         />
         <HubRow

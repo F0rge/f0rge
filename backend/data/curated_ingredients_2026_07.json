@@ -1,0 +1,284 @@
+{
+  "source": "user-research-2026-07",
+  "source_version": "2026-07",
+  "ingredients": [
+    {
+      "canonical_name": "reblochon cheese",
+      "category": "dairy",
+      "histamine_score": 3,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": true,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "pesto",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "macaroni",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "penne pasta",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "white bread",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "brioche",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "moderate",
+      "contains_gluten": true,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "curry powder",
+      "category": "spices",
+      "histamine_score": 2,
+      "fodmap_oligos": "moderate",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "curry sauce",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "moderate",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "moderate",
+      "contains_gluten": false,
+      "contains_dairy": true,
+      "confidence": "low"
+    },
+    {
+      "canonical_name": "cream sauce",
+      "category": "condiments",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "high",
+      "contains_gluten": true,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "cheese sauce",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "high",
+      "contains_gluten": true,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "ketchup",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "moderate",
+      "fodmap_fructose": "moderate",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "lychee",
+      "category": "fruit",
+      "histamine_score": 2,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "moderate",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "popcorn",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "vanilla extract",
+      "category": "spices",
+      "histamine_score": 1,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "gravy",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "salad dressing",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "moderate",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "pancake",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "moderate",
+      "contains_gluten": true,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "dried herbs",
+      "category": "spices",
+      "histamine_score": 0,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    }
+  ],
+  "aliases": [
+    {
+      "alias": "basil pesto",
+      "canonical_name": "pesto"
+    },
+    {
+      "alias": "pesto sauce",
+      "canonical_name": "pesto"
+    },
+    {
+      "alias": "elbow macaroni",
+      "canonical_name": "macaroni"
+    },
+    {
+      "alias": "macaroni pasta",
+      "canonical_name": "macaroni"
+    },
+    {
+      "alias": "dried herb",
+      "canonical_name": "dried herbs"
+    },
+    {
+      "alias": "mixed herbs",
+      "canonical_name": "dried herbs"
+    },
+    {
+      "alias": "penne",
+      "canonical_name": "penne pasta"
+    },
+    {
+      "alias": "reblochon",
+      "canonical_name": "reblochon cheese"
+    },
+    {
+      "alias": "vanilla essence",
+      "canonical_name": "vanilla extract"
+    },
+    {
+      "alias": "pancakes",
+      "canonical_name": "pancake"
+    },
+    {
+      "alias": "lychees",
+      "canonical_name": "lychee"
+    },
+    {
+      "alias": "white sauce",
+      "canonical_name": "cream sauce"
+    },
+    {
+      "alias": "bechamel",
+      "canonical_name": "cream sauce"
+    },
+    {
+      "alias": "brioche bun",
+      "canonical_name": "brioche"
+    },
+    {
+      "alias": "brown gravy",
+      "canonical_name": "gravy"
+    }
+  ]
+}

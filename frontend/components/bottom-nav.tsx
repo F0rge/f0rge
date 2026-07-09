@@ -39,6 +39,7 @@ export function BottomNav() {
   const inkRef = useRef<HTMLDivElement>(null)
   const labelRefs = useRef<(HTMLSpanElement | null)[]>([])
   const prevIndexRef = useRef<number | null>(null)
+  const lastActiveIndexRef = useRef<number | null>(null)
   const coolTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const activeIndex = NAV_ITEMS.findIndex((item) => pathname.startsWith(item.href))
@@ -130,6 +131,59 @@ export function BottomNav() {
     }, COOL_DELAY_MS)
   }, [])
 
+  // Collapse the ink to zero width at its current center when entering a
+  // non-tab route (e.g. /customize/**). Mirrors place()'s imperative ink
+  // control so the underline never ghosts under a tab without a matching
+  // active icon/label.
+  const collapseInk = useCallback((direction: number) => {
+    const bar = barRef.current
+    const ink = inkRef.current
+    if (!bar || !ink) return
+
+    clearTimeout(coolTimeoutRef.current)
+
+    const left = parseFloat(ink.style.left || '0')
+    const right = parseFloat(ink.style.right || '0')
+    const lineW = bar.clientWidth - left - right
+    const center = left + lineW / 2
+    const collapsedLeft = center
+    const collapsedRight = bar.clientWidth - center
+
+    setActiveGrow(1)
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (reduced || direction === 0) {
+      const alreadyCollapsed =
+        Math.abs(parseFloat(ink.style.left || '0') - collapsedLeft) < 0.5 &&
+        Math.abs(parseFloat(ink.style.right || '0') - collapsedRight) < 0.5
+      const alreadyMuted = ink.classList.contains('bg-muted-foreground')
+
+      if (alreadyCollapsed && alreadyMuted) {
+        return
+      }
+
+      ink.style.transition = 'none'
+      ink.classList.remove('bg-foreground')
+      ink.classList.add('bg-muted-foreground')
+      if (!alreadyCollapsed) {
+        ink.style.left = `${collapsedLeft}px`
+        ink.style.right = `${collapsedRight}px`
+        void ink.offsetWidth
+      }
+      ink.style.transition = INK_BASE_TRANSITION
+      return
+    }
+
+    ink.style.transition = `left ${FAST_EDGE}, right ${FAST_EDGE}, background-color .18s`
+    void ink.offsetWidth
+    ink.classList.remove('bg-foreground')
+    ink.classList.add('bg-muted-foreground')
+    ink.style.left = `${collapsedLeft}px`
+    ink.style.right = `${collapsedRight}px`
+    ink.style.transition = INK_BASE_TRANSITION
+  }, [])
+
   useLayoutEffect(() => {
     // Own the ink's transition imperatively from mount onward. place() sets
     // this same property on every call (direction change, reset, cool-down);
@@ -142,13 +196,24 @@ export function BottomNav() {
   const activeIndexRef = useRef(activeIndex)
 
   useLayoutEffect(() => {
-    if (activeIndex < 0) return
+    if (activeIndex < 0) {
+      const prev = prevIndexRef.current
+      if (prev !== null) {
+        collapseInk(Math.sign(0 - prev))
+        lastActiveIndexRef.current = prev
+      }
+      prevIndexRef.current = null
+      activeIndexRef.current = -1
+      return
+    }
+
     activeIndexRef.current = activeIndex
-    const prev = prevIndexRef.current
+    const prev = prevIndexRef.current ?? lastActiveIndexRef.current
     const direction = prev === null ? 0 : Math.sign(activeIndex - prev)
     place(activeIndex, direction)
     prevIndexRef.current = activeIndex
-  }, [activeIndex, place])
+    lastActiveIndexRef.current = activeIndex
+  }, [activeIndex, place, collapseInk])
 
   useLayoutEffect(() => {
     // Registered ONCE (stable deps): re-registering per navigation made
@@ -157,7 +222,10 @@ export function BottomNav() {
     // after the animated place() armed it, cancelling the stretch entirely.
     // The current index is read through a ref so this closure never staleness-
     // requires re-registration.
-    const onResize = () => place(activeIndexRef.current, 0)
+    const onResize = () => {
+      if (activeIndexRef.current < 0) return
+      place(activeIndexRef.current, 0)
+    }
     window.addEventListener('resize', onResize)
     // Label scrollWidth depends on rendered glyph metrics — re-place once
     // the real font has swapped in, since the mount-time read may have
