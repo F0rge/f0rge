@@ -45,7 +45,7 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
                 pass
 
     # Source 2: files on disk or in object storage (catches orphans).
-    for name in object_storage.list_photo_filenames(prefix):
+    for name in object_storage.list_photo_filenames(prefix, user_id=str(entry.user_id)):
         if name.startswith(prefix) and name.endswith(suffix):
             try:
                 used_numbers.add(int(name[len(prefix) : -len(suffix)]))
@@ -101,7 +101,7 @@ class PhotoService:
 
         raw_bytes = await file.read()
         processed_bytes = await asyncio.to_thread(resize_image, raw_bytes)
-        await asyncio.to_thread(save_photo, processed_bytes, filename)
+        await asyncio.to_thread(save_photo, processed_bytes, filename, user_id=str(current_user_id()))
 
         now = datetime.datetime.utcnow()
 
@@ -128,7 +128,7 @@ class PhotoService:
         try:
             await self.db.commit()
         except Exception:
-            await asyncio.to_thread(delete_photo, filename)
+            await asyncio.to_thread(delete_photo, filename, user_id=str(current_user_id()))
             raise
         await self.db.refresh(photo)
 
@@ -142,7 +142,7 @@ class PhotoService:
             except Exception:
                 api_key = None
             if api_key:
-                background_tasks.add_task(trigger_analysis_background, photo.id)
+                background_tasks.add_task(trigger_analysis_background, photo.id, photo.user_id)
 
         return photo
 
@@ -154,9 +154,11 @@ class PhotoService:
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError("Photo not found")
-        if not object_storage.exists_relative(photo.filename):
+        if not object_storage.exists_relative(photo.filename, user_id=str(photo.user_id)):
             raise NotFoundError("Photo file not found")
-        presigned = object_storage.presigned_url_for_relative(photo.filename)
+        presigned = object_storage.presigned_url_for_relative(
+            photo.filename, user_id=str(photo.user_id)
+        )
         if presigned:
             return presigned
         return os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
@@ -177,4 +179,4 @@ class PhotoService:
         await self.db.commit()
 
         # File cleanup happens after the successful commit.
-        await asyncio.to_thread(delete_photo, filename)
+        await asyncio.to_thread(delete_photo, filename, user_id=str(photo.user_id))

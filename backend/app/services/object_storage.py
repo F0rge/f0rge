@@ -66,10 +66,14 @@ def exists_relative(relative_path: str, *, user_id: Optional[str] = None) -> boo
     return object_exists(build_object_key(relative_path, user_id=user_id))
 
 
-def presigned_url_for_relative(relative_path: str, *, expires_in: int = 300) -> Optional[str]:
+def presigned_url_for_relative(
+    relative_path: str, *, expires_in: int = 300, user_id: Optional[str] = None
+) -> Optional[str]:
     if not object_storage_enabled():
         return None
-    return presigned_get_url(build_object_key(relative_path), expires_in=expires_in)
+    return presigned_get_url(
+        build_object_key(relative_path, user_id=user_id), expires_in=expires_in
+    )
 
 
 def save_bytes(relative_path: str, data: bytes, *, user_id: Optional[str] = None) -> str:
@@ -123,7 +127,7 @@ def object_exists(storage_ref: str) -> bool:
     return os.path.exists(storage_ref)
 
 
-def list_photo_filenames(prefix: str) -> set[str]:
+def list_photo_filenames(prefix: str, *, user_id: Optional[str] = None) -> set[str]:
     """Return bare filenames matching ``{date}_photo-*`` for collision detection."""
     if not object_storage_enabled():
         photo_dir = os.path.abspath(settings.photo_dir)
@@ -131,7 +135,7 @@ def list_photo_filenames(prefix: str) -> set[str]:
             return set()
         return {name for name in os.listdir(photo_dir) if name.startswith(prefix)}
 
-    user_prefix = default_object_user_prefix()
+    user_prefix = user_id or default_object_user_prefix()
     s3_prefix = f"{user_prefix}/"
     names: set[str] = set()
     client = _s3_client()

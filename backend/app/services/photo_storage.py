@@ -22,17 +22,17 @@ def resize_image(file_bytes: bytes, max_dim: int = 2048, quality: int = 85) -> b
     return buf.getvalue()
 
 
-def save_photo(file_bytes: bytes, filename: str) -> str:
-    return object_storage.save_bytes(filename, file_bytes)
+def save_photo(file_bytes: bytes, filename: str, *, user_id: str | None = None) -> str:
+    return object_storage.save_bytes(filename, file_bytes, user_id=user_id)
 
 
-def delete_photo(filename: str) -> None:
-    object_storage.delete_relative(filename)
+def delete_photo(filename: str, *, user_id: str | None = None) -> None:
+    object_storage.delete_relative(filename, user_id=user_id)
 
 
-def read_photo(filename: str) -> bytes:
-    return object_storage.read_relative(filename)
+def read_photo(filename: str, *, user_id: str | None = None) -> bytes:
+    return object_storage.read_relative(filename, user_id=user_id)
 
 
-def photo_exists(filename: str) -> bool:
-    return object_storage.exists_relative(filename)
+def photo_exists(filename: str, *, user_id: str | None = None) -> bool:
+    return object_storage.exists_relative(filename, user_id=user_id)

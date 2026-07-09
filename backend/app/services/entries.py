@@ -229,7 +229,7 @@ async def delete_entry(db: AsyncSession, date: datetime.date) -> None:
     await db.commit()
 
     for photo in photos:
-        await asyncio.to_thread(delete_photo, photo.filename)
+        await asyncio.to_thread(delete_photo, photo.filename, user_id=str(photo.user_id))
 
 
 class EntryService:
