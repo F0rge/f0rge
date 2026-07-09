@@ -210,10 +210,11 @@ ALIASES: list[tuple[str, str, str]] = [
     ("jasmine rice", "rice", "en"),
     ("spaghetti", "pasta", "en"),
     ("spaghetti noodle", "pasta", "en"),
-    ("penne", "pasta", "en"),
+    # "penne" -> "penne pasta" and "macaroni" (a canonical now) are seeded by
+    # load_curated; both previously pointed at "pasta", which is not a
+    # canonical, so those rows were always skipped here.
     ("fusilli", "pasta", "en"),
     ("linguine", "pasta", "en"),
-    ("macaroni", "pasta", "en"),
     ("fettuccine", "pasta", "en"),
     ("tagliatelle", "pasta", "en"),
     ("rigatoni", "pasta", "en"),
