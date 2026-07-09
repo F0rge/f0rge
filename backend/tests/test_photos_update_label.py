@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime
 import io
+import uuid
 
 import pytest
 import pytest_asyncio
@@ -23,9 +24,17 @@ from httpx import AsyncClient
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth_context import user_id_ctx
 from app.config import settings
 from app.models.entry import Entry
 from app.services.photos import PhotoService
+
+
+@pytest_asyncio.fixture
+async def authed_user_id(authed_client: AsyncClient) -> uuid.UUID:
+    resp = await authed_client.get("/api/v1/auth/me")
+    assert resp.status_code == 200
+    return uuid.UUID(resp.json()["user_id"])
 
 
 # ---------------------------------------------------------------------------
@@ -54,8 +63,9 @@ def _jpg_bytes() -> bytes:
     return buf.getvalue()
 
 
-async def _make_entry(db: AsyncSession, day: datetime.date) -> Entry:
+async def _make_entry(db: AsyncSession, day: datetime.date, user_id: uuid.UUID) -> Entry:
     entry = Entry(
+        user_id=user_id,
         date=day,
         overall=2,
         bloating=0,
@@ -75,16 +85,22 @@ async def _make_entry(db: AsyncSession, day: datetime.date) -> Entry:
     return entry
 
 
-async def _upload(db: AsyncSession, day: datetime.date, label: str | None = None):
-    upload = UploadFile(filename="meal.jpg", file=io.BytesIO(_jpg_bytes()))
-    service = PhotoService(db)
-    return await service.upload(
-        entry_date=day,
-        file=upload,
-        label=label,
-        meal_time=None,
-        background_tasks=BackgroundTasks(),
-    )
+async def _upload(
+    db: AsyncSession, day: datetime.date, user_id: uuid.UUID, label: str | None = None
+):
+    token = user_id_ctx.set(user_id)
+    try:
+        upload = UploadFile(filename="meal.jpg", file=io.BytesIO(_jpg_bytes()))
+        service = PhotoService(db)
+        return await service.upload(
+            entry_date=day,
+            file=upload,
+            label=label,
+            meal_time=None,
+            background_tasks=BackgroundTasks(),
+        )
+    finally:
+        user_id_ctx.reset(token)
 
 
 # ---------------------------------------------------------------------------
@@ -93,11 +109,14 @@ async def _upload(db: AsyncSession, day: datetime.date, label: str | None = None
 
 
 async def test_patch_label_only_sets_label_preserves_meal_time(
-    authed_client: AsyncClient, async_db: AsyncSession, isolated_storage: None
+    authed_client: AsyncClient,
+    async_db: AsyncSession,
+    isolated_storage: None,
+    authed_user_id: uuid.UUID,
 ) -> None:
     day = datetime.date(2026, 6, 1)
-    await _make_entry(async_db, day)
-    photo = await _upload(async_db, day)
+    await _make_entry(async_db, day, authed_user_id)
+    photo = await _upload(async_db, day, authed_user_id)
     original_meal_time = photo.meal_time
 
     resp = await authed_client.patch(f"/api/v1/photos/{photo.id}", json={"label": "Leftover pasta"})
@@ -114,10 +133,11 @@ async def test_patch_blank_label_clears_to_null(
     async_db: AsyncSession,
     isolated_storage: None,
     blank_label: str,
+    authed_user_id: uuid.UUID,
 ) -> None:
     day = datetime.date(2026, 6, 2)
-    await _make_entry(async_db, day)
-    photo = await _upload(async_db, day, label="Original label")
+    await _make_entry(async_db, day, authed_user_id)
+    photo = await _upload(async_db, day, authed_user_id, label="Original label")
 
     resp = await authed_client.patch(f"/api/v1/photos/{photo.id}", json={"label": blank_label})
 
@@ -126,11 +146,14 @@ async def test_patch_blank_label_clears_to_null(
 
 
 async def test_patch_meal_time_only_preserves_label(
-    authed_client: AsyncClient, async_db: AsyncSession, isolated_storage: None
+    authed_client: AsyncClient,
+    async_db: AsyncSession,
+    isolated_storage: None,
+    authed_user_id: uuid.UUID,
 ) -> None:
     day = datetime.date(2026, 6, 3)
-    await _make_entry(async_db, day)
-    photo = await _upload(async_db, day, label="Kept label")
+    await _make_entry(async_db, day, authed_user_id)
+    photo = await _upload(async_db, day, authed_user_id, label="Kept label")
 
     new_time = datetime.datetime(2026, 6, 3, 13, 24, 0)
     resp = await authed_client.patch(

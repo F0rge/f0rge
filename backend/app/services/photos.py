@@ -17,6 +17,7 @@ from app.schemas.photo import PhotoUpdate
 from app.services.food_analysis import trigger_analysis_background
 from app.services.photo_storage import delete_photo, resize_image, save_photo
 from app.services import object_storage
+from app.tenant import current_user_id, owned_by_user
 
 
 async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg") -> str:
@@ -31,7 +32,11 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
     used_numbers: set[int] = set()
 
     # Source 1: DB rows for this entry.
-    rows = (await db.execute(select(Photo.filename).where(Photo.entry_id == entry.id))).all()
+    rows = (
+        await db.execute(
+            select(Photo.filename).where(owned_by_user(Photo.user_id), Photo.entry_id == entry.id)
+        )
+    ).all()
     for (existing_filename,) in rows:
         if existing_filename.startswith(prefix) and existing_filename.endswith(suffix):
             try:
@@ -57,7 +62,9 @@ class PhotoService:
 
     async def update_photo(self, photo_id: int, data: PhotoUpdate) -> Photo:
         photo = (
-            await self.db.execute(select(Photo).where(Photo.id == photo_id))
+            await self.db.execute(
+                select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
+            )
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
@@ -83,7 +90,9 @@ class PhotoService:
         background_tasks: BackgroundTasks,
     ) -> Photo:
         entry = (
-            await self.db.execute(select(Entry).where(Entry.date == entry_date))
+            await self.db.execute(
+                select(Entry).where(owned_by_user(Entry.user_id), Entry.date == entry_date)
+            )
         ).scalar_one_or_none()
         if entry is None:
             raise NotFoundError(f"No entry for {entry_date}")
@@ -104,6 +113,7 @@ class PhotoService:
             normalized_meal_time = (normalized_meal_time - utc_offset).replace(tzinfo=None)
 
         photo = Photo(
+            user_id=current_user_id(),
             entry_id=entry.id,
             filename=filename,
             label=label,
@@ -138,7 +148,9 @@ class PhotoService:
 
     async def get_file_path(self, photo_id: int) -> str:
         photo = (
-            await self.db.execute(select(Photo).where(Photo.id == photo_id))
+            await self.db.execute(
+                select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
+            )
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError("Photo not found")
@@ -151,7 +163,9 @@ class PhotoService:
 
     async def delete(self, photo_id: int) -> None:
         photo = (
-            await self.db.execute(select(Photo).where(Photo.id == photo_id))
+            await self.db.execute(
+                select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
+            )
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError("Photo not found")

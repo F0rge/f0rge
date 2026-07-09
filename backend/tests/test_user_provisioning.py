@@ -36,6 +36,7 @@ async def _set_session_user_id(async_db: AsyncSession, user_id: uuid.UUID) -> No
         {"user_id": str(user_id)},
     )
 
+
 TEST_EMAIL = "provision-test@example.com"
 TEST_PASSWORD = "test-password-12"
 

@@ -11,6 +11,7 @@ from app.exceptions import NotFoundError
 from app.models.treatment import Treatment
 from app.models.treatment_log import TreatmentLog
 from app.schemas.treatment_log import ProtocolItem, ProtocolResponse, ProtocolToday
+from app.tenant import current_user_id, owned_by_user
 from app.utils.dates import local_today
 from app.utils.streak import compute_streak
 
@@ -23,7 +24,12 @@ class TreatmentLogService:
         self, treatment_id: int, date: datetime.date, doses_taken: int
     ) -> TreatmentLog:
         treatment = (
-            await self.db.execute(select(Treatment).where(Treatment.id == treatment_id))
+            await self.db.execute(
+                select(Treatment).where(
+                    owned_by_user(Treatment.user_id),
+                    Treatment.id == treatment_id,
+                )
+            )
         ).scalar_one_or_none()
         if treatment is None:
             raise NotFoundError(f"Treatment {treatment_id} not found.")
@@ -33,6 +39,7 @@ class TreatmentLogService:
         existing = (
             await self.db.execute(
                 select(TreatmentLog).where(
+                    owned_by_user(TreatmentLog.user_id),
                     TreatmentLog.treatment_id == treatment_id,
                     TreatmentLog.date == date,
                 )
@@ -48,7 +55,11 @@ class TreatmentLogService:
             return existing
 
         log = TreatmentLog(
-            treatment_id=treatment_id, date=date, doses_taken=clamped, updated_at=now
+            user_id=current_user_id(),
+            treatment_id=treatment_id,
+            date=date,
+            doses_taken=clamped,
+            updated_at=now,
         )
         self.db.add(log)
         await self.db.commit()
@@ -95,6 +106,7 @@ class TreatmentLogService:
         stmt = (
             select(Treatment)
             .where(
+                owned_by_user(Treatment.user_id),
                 Treatment.start_date <= on_date,
                 (Treatment.end_date.is_(None)) | (Treatment.end_date >= on_date),
             )
@@ -108,6 +120,7 @@ class TreatmentLogService:
         if not treatment_ids:
             return {}
         stmt = select(TreatmentLog).where(
+            owned_by_user(TreatmentLog.user_id),
             TreatmentLog.date == on_date,
             TreatmentLog.treatment_id.in_(treatment_ids),
         )
@@ -119,6 +132,7 @@ class TreatmentLogService:
             (
                 await self.db.execute(
                     select(Treatment).where(
+                        owned_by_user(Treatment.user_id),
                         Treatment.doses_per_day.is_not(None),
                         Treatment.start_date <= on_date,
                     )
@@ -136,6 +150,7 @@ class TreatmentLogService:
             (
                 await self.db.execute(
                     select(TreatmentLog).where(
+                        owned_by_user(TreatmentLog.user_id),
                         TreatmentLog.treatment_id.in_(treatment_ids),
                         TreatmentLog.date >= earliest,
                         TreatmentLog.date <= on_date,

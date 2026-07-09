@@ -22,6 +22,7 @@ from app.services.llm.factory import (
     build_embedding_client,
     resolve_embedding_credentials,
 )
+from app.tenant import apply_service_role, apply_session_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +69,11 @@ async def _process_row(
     model: str,
 ) -> None:
     """Process a single queue row. Raises on error — caller's savepoint rolls back."""
+    await apply_session_user_id(db, row.user_id)
     if row.action == "DELETE":
         await db.execute(
             delete(Embedding).where(
+                Embedding.user_id == row.user_id,
                 Embedding.source_table == row.source_table,
                 Embedding.source_id == row.source_id,
             )
@@ -125,6 +128,7 @@ async def _process_row(
 async def _mark_failed(row_id: int, error: str) -> None:
     """In a separate transaction, increment attempts and store last_error."""
     async with async_session_maker() as db:
+        await apply_service_role(db, "worker")
         await db.execute(
             text(
                 """
@@ -147,6 +151,7 @@ async def _mark_failed(row_id: int, error: str) -> None:
 async def _process_pending() -> None:
     """Claim and process one batch of pending queue rows."""
     async with async_session_maker() as db:
+        await apply_service_role(db, "worker")
         client = await _build_client_or_none(db)
 
     if client is None:
@@ -155,6 +160,7 @@ async def _process_pending() -> None:
     _, model = await _credentials_for_model()
 
     async with async_session_maker() as db:
+        await apply_service_role(db, "worker")
         async with db.begin():
             rows = await _claim_batch(db)
             if not rows:

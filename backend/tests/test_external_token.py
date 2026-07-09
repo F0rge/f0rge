@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import pytest
 from cryptography.fernet import Fernet
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
+from app.models.user_settings import UserSettings
 from app.schemas.settings import ExternalTokenResponse, SettingsResponse
+from app.services.llm.encryption import decrypt
 from app.services.settings_service import SettingsService
 
 
@@ -44,16 +48,14 @@ async def test_regenerate_second_call_produces_different_token(
 
 async def test_regenerate_invalidates_previous_token(async_db: AsyncSession) -> None:
     """After regeneration, only the newest token should decrypt correctly."""
-    from app.models.user_settings import UserSettings
-    from sqlalchemy import select
-    from app.services.llm.encryption import decrypt
-
     svc = SettingsService(async_db)
     r1 = await svc.regenerate_external_token()
     r2 = await svc.regenerate_external_token()
 
     # Read the stored ciphertext.
-    result = await async_db.execute(select(UserSettings).where(UserSettings.id == 1))
+    result = await async_db.execute(
+        select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
+    )
     row = result.scalar_one()
     stored_plaintext = decrypt(row.external_api_token_encrypted)
 
@@ -72,9 +74,6 @@ async def test_settings_response_shows_token_present_after_regenerate(
 
 
 async def test_revoke_clears_token_column(async_db: AsyncSession) -> None:
-    from app.models.user_settings import UserSettings
-    from sqlalchemy import select
-
     svc = SettingsService(async_db)
     await svc.regenerate_external_token()
     revoked = await svc.revoke_external_token()
@@ -82,7 +81,9 @@ async def test_revoke_clears_token_column(async_db: AsyncSession) -> None:
     assert isinstance(revoked, SettingsResponse)
     assert revoked.has_external_api_token is False
 
-    result = await async_db.execute(select(UserSettings).where(UserSettings.id == 1))
+    result = await async_db.execute(
+        select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
+    )
     row = result.scalar_one()
     assert row.external_api_token_encrypted is None
 
@@ -95,13 +96,12 @@ async def test_revoke_without_prior_token_is_safe(async_db: AsyncSession) -> Non
 
 
 async def test_plaintext_not_stored_in_db(async_db: AsyncSession) -> None:
-    from app.models.user_settings import UserSettings
-    from sqlalchemy import select
-
     svc = SettingsService(async_db)
     resp = await svc.regenerate_external_token()
 
-    result = await async_db.execute(select(UserSettings).where(UserSettings.id == 1))
+    result = await async_db.execute(
+        select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
+    )
     row = result.scalar_one()
 
     # The ciphertext bytes must not equal the plaintext token bytes.

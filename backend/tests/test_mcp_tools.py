@@ -98,7 +98,7 @@ async def _seed_lab(db: AsyncSession) -> tuple[Lab, LabMarkerCatalog, LabMarker]
 async def test_get_entry_returns_none_when_missing(async_db: AsyncSession) -> None:
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.make_ro_session") as mock_ro:
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
         mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -125,7 +125,7 @@ async def test_get_entry_returns_dict_when_exists(async_db: AsyncSession) -> Non
 
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.make_ro_session") as mock_ro:
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
         mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -149,7 +149,7 @@ async def test_list_entries_range(async_db: AsyncSession) -> None:
 
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.make_ro_session") as mock_ro:
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
         mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -170,7 +170,7 @@ async def test_list_treatments_active_only(async_db: AsyncSession) -> None:
 
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.make_ro_session") as mock_ro:
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
         mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -194,7 +194,7 @@ async def test_list_treatments_all(async_db: AsyncSession) -> None:
 
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.make_ro_session") as mock_ro:
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
         mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -216,7 +216,7 @@ async def test_get_lab_history(async_db: AsyncSession) -> None:
 
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.make_ro_session") as mock_ro:
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
         mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -240,7 +240,7 @@ async def test_list_labs_range(async_db: AsyncSession) -> None:
 
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.make_ro_session") as mock_ro:
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
         mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -262,7 +262,7 @@ async def test_read_sql_select_returns_rows(async_db: AsyncSession) -> None:
 
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.make_ro_session") as mock_ro:
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
         mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -284,7 +284,7 @@ async def test_read_sql_dml_returns_error_structure(async_db: AsyncSession) -> N
     """DML against the test DB (not ro role, but will still error or rollback) returns error dict."""
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.make_ro_session") as mock_ro:
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
         mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -315,8 +315,8 @@ async def test_search_health_data_empty_table(
     monkeypatch.setattr(settings, "openrouter_api_key", "test-key-not-real")
 
     with (
-        patch("app.mcp.tools.make_main_session") as mock_main,
-        patch("app.mcp.tools.make_ro_session") as mock_ro,
+        patch("app.mcp.tools.scoped_main_session") as mock_main,
+        patch("app.mcp.tools.scoped_ro_session") as mock_ro,
     ):
         mock_main.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_main.return_value.__aexit__ = AsyncMock(return_value=False)

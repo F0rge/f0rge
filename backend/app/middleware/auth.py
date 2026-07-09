@@ -41,7 +41,9 @@ async def get_current_user_id(
         )
 
     try:
-        return decode_access_token(ht_session)
+        user_id = decode_access_token(ht_session)
+        user_id_ctx.set(user_id)
+        return user_id
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

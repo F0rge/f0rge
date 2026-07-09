@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
+import uuid
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Optional
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -11,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
 
 from app.config import settings
 from app.db_url import asyncpg_connect_args, resolve_database_url
+from app.tenant import apply_session_user_id
 
 _ro_engine: Optional[AsyncEngine] = None
 _main_engine: Optional[AsyncEngine] = None
@@ -68,3 +71,25 @@ def make_ro_session() -> AsyncSession:
 def make_main_session() -> AsyncSession:
     maker = async_sessionmaker(get_main_engine(), expire_on_commit=False)
     return maker()
+
+
+@asynccontextmanager
+async def scoped_ro_session(user_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
+    """Read-only session with ``app.user_id`` set for RLS."""
+    session = make_ro_session()
+    try:
+        await apply_session_user_id(session, user_id)
+        yield session
+    finally:
+        await session.close()
+
+
+@asynccontextmanager
+async def scoped_main_session(user_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
+    """Main DB session with ``app.user_id`` set for RLS."""
+    session = make_main_session()
+    try:
+        await apply_session_user_id(session, user_id)
+        yield session
+    finally:
+        await session.close()

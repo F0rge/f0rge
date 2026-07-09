@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.mcp.database import make_main_session
 from app.models.user_settings import UserSettings
 from app.services.llm.encryption import decrypt
+from app.tenant import apply_service_role
 
 
 class BearerTokenVerifier(TokenVerifier):
@@ -16,6 +17,7 @@ class BearerTokenVerifier(TokenVerifier):
 
     async def verify_token(self, token: str) -> Optional[AccessToken]:
         async with make_main_session() as db:
+            await apply_service_role(db, "mcp_auth")
             rows = (await db.execute(select(UserSettings))).scalars().all()
 
         for row in rows:

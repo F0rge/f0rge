@@ -5,9 +5,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from cryptography.fernet import Fernet
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.mcp.auth import BearerTokenVerifier
+from app.models.user_settings import UserSettings
 from app.services.settings_service import SettingsService
 
 
@@ -21,7 +24,6 @@ def fernet_key(monkeypatch: pytest.MonkeyPatch) -> str:
     import app.services.llm.encryption as enc_mod
 
     importlib.reload(enc_mod)
-    # Also patch the encryption module used inside mcp.auth.
     import app.mcp.auth as auth_mod
 
     importlib.reload(auth_mod)
@@ -33,22 +35,15 @@ async def test_valid_token_passes_verification(async_db: AsyncSession) -> None:
     svc = SettingsService(async_db)
     resp = await svc.regenerate_external_token()
 
-    verifier = BearerTokenVerifier()
-    # Mock the DB session used inside the verifier to return our test row.
-    from app.models.user_settings import UserSettings
-    from sqlalchemy import select
-
-    result = await async_db.execute(select(UserSettings).where(UserSettings.id == 1))
+    result = await async_db.execute(
+        select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
+    )
     row = result.scalar_one()
 
+    verifier = BearerTokenVerifier()
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
-        mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [row]))
-        )
-        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
-
         access_token = await verifier.verify_token(resp.token)
 
     assert access_token is not None
@@ -60,23 +55,12 @@ async def test_wrong_token_returns_none(async_db: AsyncSession) -> None:
     svc = SettingsService(async_db)
     await svc.regenerate_external_token()
 
-    from app.models.user_settings import UserSettings
-    from sqlalchemy import select
-
-    result = await async_db.execute(select(UserSettings).where(UserSettings.id == 1))
-    row = result.scalar_one()
-
     verifier = BearerTokenVerifier()
     wrong_token = secrets.token_urlsafe(32)
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
-        mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [row]))
-        )
-        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
-
         access_token = await verifier.verify_token(wrong_token)
 
     assert access_token is None
@@ -87,21 +71,10 @@ async def test_revoked_token_returns_none(async_db: AsyncSession) -> None:
     resp = await svc.regenerate_external_token()
     await svc.revoke_external_token()
 
-    from app.models.user_settings import UserSettings
-    from sqlalchemy import select
-
-    result = await async_db.execute(select(UserSettings).where(UserSettings.id == 1))
-    row = result.scalar_one()
-
     verifier = BearerTokenVerifier()
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
-        mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [row]))
-        )
-        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
-
         access_token = await verifier.verify_token(resp.token)
 
     assert access_token is None

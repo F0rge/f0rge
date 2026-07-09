@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ExternalServiceError
-from app.models.user import default_user_id
 from app.models.user_settings import UserSettings
 from app.schemas.settings import (
     EmbeddingSettingsUpdate,
@@ -17,6 +16,7 @@ from app.schemas.settings import (
 )
 from app.services.llm.base import EmbeddingClient, LLMClient
 from app.services.llm.encryption import encrypt
+from app.tenant import current_user_id, owned_by_user
 
 
 class SettingsService:
@@ -24,10 +24,12 @@ class SettingsService:
         self.db = db
 
     async def _get_or_create_row(self) -> UserSettings:
-        result = await self.db.execute(select(UserSettings).where(UserSettings.id == 1))
+        result = await self.db.execute(
+            select(UserSettings).where(owned_by_user(UserSettings.user_id))
+        )
         row = result.scalar_one_or_none()
         if row is None:
-            row = UserSettings(id=1, user_id=default_user_id())
+            row = UserSettings(user_id=current_user_id())
             self.db.add(row)
             await self.db.flush()
         return row
@@ -44,10 +46,11 @@ class SettingsService:
         )
 
     async def get(self) -> SettingsResponse:
-        result = await self.db.execute(select(UserSettings).where(UserSettings.id == 1))
+        result = await self.db.execute(
+            select(UserSettings).where(owned_by_user(UserSettings.user_id))
+        )
         row = result.scalar_one_or_none()
         if row is None:
-            # Return defaults when the singleton has never been written.
             return SettingsResponse(
                 llm_provider="openrouter",
                 llm_model=None,
@@ -81,11 +84,7 @@ class SettingsService:
         return self._to_response(row)
 
     async def regenerate_external_token(self) -> ExternalTokenResponse:
-        """Generate a new external API token, encrypt and store it, return the plaintext once.
-
-        The plaintext is never stored — only the Fernet-encrypted ciphertext lives in the DB.
-        Calling this again invalidates the previous token (new ciphertext produced each call).
-        """
+        """Generate a new external API token, encrypt and store it, return the plaintext once."""
         row = await self._get_or_create_row()
         plaintext = secrets.token_urlsafe(32)
         row.external_api_token_encrypted = encrypt(plaintext)
@@ -102,7 +101,6 @@ class SettingsService:
         return self._to_response(row)
 
     async def test_llm(self, llm: LLMClient) -> TestConnectionResponse:
-        """Call the LLM with a minimal prompt. Catch ExternalServiceError to report failure."""
         try:
             await llm.complete([{"role": "user", "content": "hi"}], max_tokens=1)
             return TestConnectionResponse(ok=True)
@@ -110,7 +108,6 @@ class SettingsService:
             return TestConnectionResponse(ok=False, detail=exc.detail)
 
     async def test_embedding(self, emb: EmbeddingClient) -> TestConnectionResponse:
-        """Embed a single token. Catch ExternalServiceError to report failure."""
         try:
             await emb.embed("hi")
             return TestConnectionResponse(ok=True)

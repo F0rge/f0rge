@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import AsyncIterator
 
-import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -14,6 +13,7 @@ from sqlalchemy.orm import DeclarativeBase
 from app.auth_context import user_id_ctx
 from app.config import settings
 from app.db_url import asyncpg_connect_args, resolve_database_url
+from app.tenant import apply_session_user_id
 
 _db_url = resolve_database_url(
     settings.database_url,
@@ -41,8 +41,5 @@ async def get_db() -> AsyncIterator[AsyncSession]:
     async with async_session_maker() as session:
         user_id = user_id_ctx.get()
         if user_id is not None:
-            await session.execute(
-                sa.text("SELECT set_config('app.user_id', :user_id, true)"),
-                {"user_id": str(user_id)},
-            )
+            await apply_session_user_id(session, user_id)
         yield session

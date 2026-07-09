@@ -13,13 +13,18 @@ from app.models.user_settings import UserSettings
 from app.services.llm.base import EmbeddingClient, LLMClient
 from app.services.llm.encryption import decrypt
 from app.services.llm.openrouter import OpenRouterClient, OpenRouterEmbeddingClient
+from app.tenant import owned_by_user
 
 DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 
-async def load_user_settings_singleton(db: AsyncSession) -> Optional[UserSettings]:
-    result = await db.execute(select(UserSettings).where(UserSettings.id == 1))
+async def load_user_settings(db: AsyncSession) -> Optional[UserSettings]:
+    result = await db.execute(select(UserSettings).where(owned_by_user(UserSettings.user_id)))
     return result.scalar_one_or_none()
+
+
+async def load_user_settings_singleton(db: AsyncSession) -> Optional[UserSettings]:
+    return await load_user_settings(db)
 
 
 def _resolve(

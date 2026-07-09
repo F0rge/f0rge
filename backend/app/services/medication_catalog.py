@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.medication_catalog import MedicationCatalogItem
+from app.tenant import current_user_id, owned_by_user
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
@@ -22,7 +23,7 @@ def normalize_key(raw: str) -> str:
 async def list_items(
     db: AsyncSession, include_archived: bool = False
 ) -> list[MedicationCatalogItem]:
-    stmt = select(MedicationCatalogItem)
+    stmt = select(MedicationCatalogItem).where(owned_by_user(MedicationCatalogItem.user_id))
     if not include_archived:
         stmt = stmt.where(MedicationCatalogItem.archived.is_(False))
     stmt = stmt.order_by(
@@ -39,7 +40,10 @@ async def create_item(db: AsyncSession, key: str, label: str) -> MedicationCatal
 
     existing = (
         await db.execute(
-            select(MedicationCatalogItem).where(MedicationCatalogItem.key == normalized)
+            select(MedicationCatalogItem).where(
+                owned_by_user(MedicationCatalogItem.user_id),
+                MedicationCatalogItem.key == normalized,
+            )
         )
     ).scalar_one_or_none()
 
@@ -55,7 +59,9 @@ async def create_item(db: AsyncSession, key: str, label: str) -> MedicationCatal
     max_item = (
         (
             await db.execute(
-                select(MedicationCatalogItem).order_by(MedicationCatalogItem.sort_order.desc())
+                select(MedicationCatalogItem)
+                .where(owned_by_user(MedicationCatalogItem.user_id))
+                .order_by(MedicationCatalogItem.sort_order.desc())
             )
         )
         .scalars()
@@ -63,7 +69,9 @@ async def create_item(db: AsyncSession, key: str, label: str) -> MedicationCatal
     )
     next_sort = (max_item.sort_order + 1) if max_item else 0
 
-    item = MedicationCatalogItem(key=normalized, label=label, sort_order=next_sort)
+    item = MedicationCatalogItem(
+        user_id=current_user_id(), key=normalized, label=label, sort_order=next_sort
+    )
     db.add(item)
     await db.commit()
     await db.refresh(item)
@@ -72,7 +80,12 @@ async def create_item(db: AsyncSession, key: str, label: str) -> MedicationCatal
 
 async def update_item(db: AsyncSession, key: str, data: dict) -> MedicationCatalogItem:
     item = (
-        await db.execute(select(MedicationCatalogItem).where(MedicationCatalogItem.key == key))
+        await db.execute(
+            select(MedicationCatalogItem).where(
+                owned_by_user(MedicationCatalogItem.user_id),
+                MedicationCatalogItem.key == key,
+            )
+        )
     ).scalar_one_or_none()
     if not item:
         raise NotFoundError(f"Catalog item '{key}' not found.")
@@ -94,7 +107,10 @@ async def touch(db: AsyncSession, keys: Iterable[str]) -> None:
         item.key: item
         for item in (
             await db.execute(
-                select(MedicationCatalogItem).where(MedicationCatalogItem.key.in_(key_list))
+                select(MedicationCatalogItem).where(
+                    owned_by_user(MedicationCatalogItem.user_id),
+                    MedicationCatalogItem.key.in_(key_list),
+                )
             )
         )
         .scalars()
