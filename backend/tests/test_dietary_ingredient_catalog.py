@@ -42,6 +42,34 @@ async def test_create_duplicate_canonical_name_raises_conflict(async_db: AsyncSe
         await service.create_item(DietaryIngredientCreate(canonical_name="Kimchi"))
 
 
+async def test_create_archived_canonical_name_restores_and_updates(
+    async_db: AsyncSession,
+) -> None:
+    service = DietaryIngredientCatalogService(async_db)
+    created = await service.create_item(
+        DietaryIngredientCreate(canonical_name="kimchi", category="fermented", histamine_score=3)
+    )
+    await service.set_archived(created.id, True)
+
+    restored = await service.create_item(
+        DietaryIngredientCreate(
+            canonical_name=" Kimchi ",
+            category="vegetables",
+            histamine_score=1,
+            contains_gluten=True,
+            source_version="v2",
+        )
+    )
+
+    assert restored.id == created.id
+    assert restored.archived is False
+    assert restored.canonical_name == "kimchi"
+    assert restored.category == "vegetables"
+    assert restored.histamine_score == 1
+    assert restored.contains_gluten is True
+    assert restored.source_version == "v2"
+
+
 async def test_get_not_found_raises(async_db: AsyncSession) -> None:
     service = DietaryIngredientCatalogService(async_db)
     with pytest.raises(NotFoundError):

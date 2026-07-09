@@ -44,6 +44,8 @@ class DietaryIngredientCatalogService:
         normalized = data.canonical_name.strip().lower()
         if not normalized:
             raise ValidationError("canonical_name must not be blank.")
+        payload = data.model_dump()
+        payload["canonical_name"] = normalized
 
         existing = (
             await self.db.execute(
@@ -51,10 +53,15 @@ class DietaryIngredientCatalogService:
             )
         ).scalar_one_or_none()
         if existing is not None:
+            if existing.archived:
+                for field, value in payload.items():
+                    setattr(existing, field, value)
+                existing.archived = False
+                await self.db.commit()
+                await self.db.refresh(existing)
+                return existing
             raise ConflictError(f"Dietary ingredient '{normalized}' already exists.")
 
-        payload = data.model_dump()
-        payload["canonical_name"] = normalized
         item = DietaryIngredient(**payload)
         self.db.add(item)
         await self.db.commit()
