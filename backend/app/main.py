@@ -21,6 +21,7 @@ from app.exceptions import (
 from app.routers import (
     auth,
     diet_tag_catalog,
+    dietary_ingredient_catalog,
     enriched,
     entries,
     export,
@@ -166,6 +167,7 @@ app.include_router(health_metrics.router)
 app.include_router(enriched.router)
 app.include_router(supplement_catalog.router)
 app.include_router(diet_tag_catalog.router)
+app.include_router(dietary_ingredient_catalog.router)
 app.include_router(medication_catalog.router)
 app.include_router(symptom_catalog.router)
 app.include_router(food_analysis.router)
