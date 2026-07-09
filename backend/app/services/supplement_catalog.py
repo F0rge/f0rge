@@ -107,3 +107,17 @@ async def touch(db: AsyncSession, keys: Iterable[str]) -> None:
         if item.first_used_at is None:
             item.first_used_at = now
         item.last_used_at = now
+
+
+class SupplementCatalogService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def list_items(self, include_archived: bool = False) -> list[SupplementCatalogItem]:
+        return await list_items(self.db, include_archived=include_archived)
+
+    async def create_item(self, key: str, label: str) -> SupplementCatalogItem:
+        return await create_item(self.db, key, label)
+
+    async def update_item(self, key: str, data: dict) -> SupplementCatalogItem:
+        return await update_item(self.db, key, data)

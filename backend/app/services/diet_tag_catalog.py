@@ -80,3 +80,17 @@ async def update_item(db: AsyncSession, key: str, data: dict) -> DietTagCatalogI
     await db.commit()
     await db.refresh(item)
     return item
+
+
+class DietTagCatalogService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def list_items(self, include_archived: bool = False) -> list[DietTagCatalogItem]:
+        return await list_items(self.db, include_archived=include_archived)
+
+    async def create_item(self, key: str, label: str) -> DietTagCatalogItem:
+        return await create_item(self.db, key, label)
+
+    async def update_item(self, key: str, data: dict) -> DietTagCatalogItem:
+        return await update_item(self.db, key, data)

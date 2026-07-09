@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.dependencies.supplement_catalog import get_supplement_catalog_service
 from app.middleware.auth import get_current_session
 from app.schemas.supplement_catalog import (
     SupplementCatalogItemCreate,
     SupplementCatalogItemResponse,
     SupplementCatalogItemUpdate,
 )
-from app.services import supplement_catalog as supplement_catalog_service
+from app.services.supplement_catalog import SupplementCatalogService
 
 router = APIRouter(
     prefix="/api/v1/supplements/catalog",
@@ -22,9 +21,9 @@ router = APIRouter(
 @router.get("", response_model=list[SupplementCatalogItemResponse])
 async def list_catalog(
     include_archived: bool = Query(False),
-    db: AsyncSession = Depends(get_db),
+    service: SupplementCatalogService = Depends(get_supplement_catalog_service),
 ):
-    return await supplement_catalog_service.list_items(db, include_archived=include_archived)
+    return await service.list_items(include_archived=include_archived)
 
 
 @router.post(
@@ -34,17 +33,15 @@ async def list_catalog(
 )
 async def create_catalog_item(
     body: SupplementCatalogItemCreate,
-    db: AsyncSession = Depends(get_db),
+    service: SupplementCatalogService = Depends(get_supplement_catalog_service),
 ):
-    return await supplement_catalog_service.create_item(db, body.key, body.label)
+    return await service.create_item(body.key, body.label)
 
 
 @router.patch("/{key}", response_model=SupplementCatalogItemResponse)
 async def update_catalog_item(
     key: str,
     body: SupplementCatalogItemUpdate,
-    db: AsyncSession = Depends(get_db),
+    service: SupplementCatalogService = Depends(get_supplement_catalog_service),
 ):
-    return await supplement_catalog_service.update_item(
-        db, key, body.model_dump(exclude_unset=True)
-    )
+    return await service.update_item(key, body.model_dump(exclude_unset=True))

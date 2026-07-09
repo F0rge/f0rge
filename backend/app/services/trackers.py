@@ -261,3 +261,28 @@ async def sync_seed_tracker_log_from_entry(
             )
 
     await db.commit()
+
+
+class TrackerService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def list_trackers(self, include_archived: bool = False) -> list[Tracker]:
+        return await list_trackers(self.db, include_archived=include_archived)
+
+    async def create_tracker(self, body: TrackerCreate) -> Tracker:
+        return await create_tracker(self.db, body)
+
+    async def reorder_trackers(self, order: list[int]) -> list[Tracker]:
+        return await reorder_trackers(self.db, order)
+
+    async def update_tracker(self, tracker_id: int, body: TrackerUpdate) -> Tracker:
+        return await update_tracker(self.db, tracker_id, body)
+
+    async def list_tracker_values(self, date: datetime.date) -> list[TrackerLog]:
+        return await list_tracker_values(self.db, date)
+
+    async def upsert_tracker_value(
+        self, date: datetime.date, tracker_id: int, value: int
+    ) -> TrackerLog:
+        return await upsert_tracker_value(self.db, date, tracker_id, value)

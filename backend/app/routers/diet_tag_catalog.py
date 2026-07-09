@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.dependencies.diet_tag_catalog import get_diet_tag_catalog_service
 from app.middleware.auth import get_current_session
 from app.schemas.diet_tag_catalog import (
     DietTagCatalogItemCreate,
     DietTagCatalogItemResponse,
     DietTagCatalogItemUpdate,
 )
-from app.services import diet_tag_catalog as diet_tag_catalog_service
+from app.services.diet_tag_catalog import DietTagCatalogService
 
 router = APIRouter(
     prefix="/api/v1/diet-tags/catalog",
@@ -22,9 +21,9 @@ router = APIRouter(
 @router.get("", response_model=list[DietTagCatalogItemResponse])
 async def list_catalog(
     include_archived: bool = Query(False),
-    db: AsyncSession = Depends(get_db),
+    service: DietTagCatalogService = Depends(get_diet_tag_catalog_service),
 ):
-    return await diet_tag_catalog_service.list_items(db, include_archived=include_archived)
+    return await service.list_items(include_archived=include_archived)
 
 
 @router.post(
@@ -34,15 +33,15 @@ async def list_catalog(
 )
 async def create_catalog_item(
     body: DietTagCatalogItemCreate,
-    db: AsyncSession = Depends(get_db),
+    service: DietTagCatalogService = Depends(get_diet_tag_catalog_service),
 ):
-    return await diet_tag_catalog_service.create_item(db, body.key, body.label)
+    return await service.create_item(body.key, body.label)
 
 
 @router.patch("/{key}", response_model=DietTagCatalogItemResponse)
 async def update_catalog_item(
     key: str,
     body: DietTagCatalogItemUpdate,
-    db: AsyncSession = Depends(get_db),
+    service: DietTagCatalogService = Depends(get_diet_tag_catalog_service),
 ):
-    return await diet_tag_catalog_service.update_item(db, key, body.model_dump(exclude_unset=True))
+    return await service.update_item(key, body.model_dump(exclude_unset=True))
