@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { TierPill } from '@/components/customize/tier-pill'
+import { PageShell } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Core scales' }
 
@@ -39,8 +40,7 @@ function ScaleRow({ label, values }: ScaleRowProps) {
 
 export default function CoreScalesPage() {
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
-      {/* Header */}
+    <PageShell>
       <div className="mb-6 flex items-center justify-between">
         <Link
           href="/customize"
@@ -60,35 +60,34 @@ export default function CoreScalesPage() {
         whole sections via Reorder &amp; visibility, but labels and levels are fixed.
       </TierBanner>
 
-      {/* Wellbeing section */}
-      <div className="mb-2">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-          Wellbeing
-        </p>
-        <Card>
-          <CardContent className="py-1 px-4">
-            {WELLBEING_SCALES.map((s) => (
-              <ScaleRow key={s.label} label={s.label} values={s.values} />
-            ))}
-          </CardContent>
-        </Card>
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+            Wellbeing
+          </p>
+          <Card>
+            <CardContent className="py-1 px-4">
+              {WELLBEING_SCALES.map((s) => (
+                <ScaleRow key={s.label} label={s.label} values={s.values} />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+            Gut
+          </p>
+          <Card>
+            <CardContent className="py-1 px-4">
+              {GUT_SCALES.map((s) => (
+                <ScaleRow key={s.label} label={s.label} values={s.values} />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Gut section */}
-      <div className="mt-5">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-          Gut
-        </p>
-        <Card>
-          <CardContent className="py-1 px-4">
-            {GUT_SCALES.map((s) => (
-              <ScaleRow key={s.label} label={s.label} values={s.values} />
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Footnote */}
       <p className="mt-4 text-xs text-muted-foreground">
         To change which sections are visible on your daily check-in, use{' '}
         <Link href="/customize/reorder" className="underline hover:text-foreground">
@@ -96,6 +95,6 @@ export default function CoreScalesPage() {
         </Link>
         .
       </p>
-    </div>
+    </PageShell>
   )
 }

@@ -97,14 +97,14 @@ export function TrendGrid({ start, end }: Props) {
       {pinnedMarkers.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">Pinned lab markers</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
             {pinnedMarkers.map((canonical) => (
               <PinnedMarkerCard key={canonical} canonicalName={canonical} />
             ))}
           </div>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
         {data.series.map((s) => (
           <TrendCard key={s.key} series={s} />
         ))}

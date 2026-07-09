@@ -30,6 +30,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { TrackerFormModal } from '@/components/customize/tracker-form-modal'
+import { PageShell } from '@/components/layout/page-shell'
 import {
   SortableTrackerRow,
   GhostRow,
@@ -121,7 +122,7 @@ export default function TrackersClient() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <Link
@@ -209,6 +210,6 @@ export default function TrackersClient() {
         tracker={editingTracker}
         trackerCount={active.length}
       />
-    </div>
+    </PageShell>
   )
 }

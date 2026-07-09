@@ -30,6 +30,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { SymptomFormModal } from '@/components/customize/symptom-form-modal'
+import { PageShell } from '@/components/layout/page-shell'
 import {
   SortableSymptomRow,
   GhostRow,
@@ -122,7 +123,7 @@ export default function SymptomsClient() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <Link
@@ -208,6 +209,6 @@ export default function SymptomsClient() {
         onClose={() => setModalOpen(false)}
         symptom={editingSymptom}
       />
-    </div>
+    </PageShell>
   )
 }

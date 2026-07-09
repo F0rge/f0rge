@@ -1,11 +1,12 @@
 'use client'
 
 import type { Lab, LabType } from '@/lib/api/types'
-import { formatDisplayDate } from '@/lib/utils'
+import { cn, formatDisplayDate } from '@/lib/utils'
 
 interface LabCardProps {
   lab: Lab
   onClick: () => void
+  selected?: boolean
 }
 
 const TYPE_CLASSES: Record<LabType, string> = {
@@ -18,7 +19,7 @@ const TYPE_CLASSES: Record<LabType, string> = {
   other: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
 }
 
-export function LabCard({ lab, onClick }: LabCardProps) {
+export function LabCard({ lab, onClick, selected = false }: LabCardProps) {
   const abnormalCount = lab.markers.filter(
     (m) => m.flag === 'low' || m.flag === 'high' || m.flag === 'abnormal',
   ).length
@@ -27,7 +28,10 @@ export function LabCard({ lab, onClick }: LabCardProps) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
+      className={cn(
+        'w-full rounded-xl border bg-card p-4 text-left transition-colors hover:bg-muted/50',
+        selected ? 'border-primary ring-1 ring-primary/30' : 'border-border',
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="shrink-0">

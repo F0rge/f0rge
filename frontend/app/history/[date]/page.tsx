@@ -6,6 +6,7 @@ import { ArrowLeft, Pencil, Loader2, Pill } from 'lucide-react'
 import { useEntry, useUpdatePhotoMealTime, useMedicationCatalog } from '@/lib/api/hooks'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-disclosure'
+import { PageShell } from '@/components/layout/page-shell'
 import type { Entry, Photo } from '@/lib/api/types'
 import { getOverallTier, getScaleLabel, type ScaleTier } from '@/lib/checkin/scale-labels'
 
@@ -142,7 +143,7 @@ function MedicationsSection({ medications }: { medications: Entry['medications']
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2">
+    <div className="flex items-start justify-between gap-3 border-b border-border py-2 last:border-b-0">
       <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
       <span className="min-w-0 break-words text-right text-sm font-medium">{value}</span>
     </div>
@@ -160,7 +161,7 @@ function EntryDetail({ entry }: { entry: Entry }) {
           </span>
         </div>
       </div>
-      <div className="divide-y divide-border px-4">
+      <div className="grid grid-cols-1 px-4 lg:grid-cols-2 lg:gap-x-6">
         <DetailRow label="Bloating" value={getBloatingLabel(entry.bloating)} />
         <DetailRow label="Stool" value={getStoolLabel(entry)} />
         {entry.stool_completeness && (
@@ -204,7 +205,7 @@ function EntryDetail({ entry }: { entry: Entry }) {
       {entry.photos && entry.photos.length > 0 && (
         <div className="border-t border-border px-4 py-3">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Photos</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
             {entry.photos.map((photo) => (
               <PhotoWithMealTime key={photo.id} photo={photo} />
             ))}
@@ -220,7 +221,7 @@ export default function HistoryDatePage({ params }: { params: Promise<{ date: st
   const { data: entry, isLoading, isError } = useEntry(date)
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <Link
@@ -260,6 +261,6 @@ export default function HistoryDatePage({ params }: { params: Promise<{ date: st
       ) : (
         <EntryDetail entry={entry} />
       )}
-    </div>
+    </PageShell>
   )
 }

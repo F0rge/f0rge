@@ -2,6 +2,7 @@
 
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { PageShell } from '@/components/layout/page-shell'
 import { WeatherSection } from '@/components/settings/weather-section'
 import { AiProviderSection } from '@/components/settings/ai-provider-section'
 import { EmbeddingProviderSection } from '@/components/settings/embedding-provider-section'
@@ -12,7 +13,7 @@ import { DataSourcesSection } from '@/components/settings/data-sources-section'
 
 export default function SettingsPage() {
   return (
-    <div className="mx-auto max-w-md px-4 py-6">
+    <PageShell className="py-2">
       <div className="mb-6 flex items-center gap-3">
         <Link href="/checkin" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-5" />
@@ -20,15 +21,29 @@ export default function SettingsPage() {
         <h1 className="text-xl font-bold">Settings</h1>
       </div>
 
-      <div className="space-y-6">
-        <WeatherSection />
-        <AiProviderSection />
-        <EmbeddingProviderSection />
-        <ExternalTokenSection />
-        <AppleHealthSection />
-        <ExportDataSection />
-        <DataSourcesSection />
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 lg:col-span-6">
+          <WeatherSection />
+        </div>
+        <div className="col-span-12 lg:col-span-6">
+          <AiProviderSection />
+        </div>
+        <div className="col-span-12 lg:col-span-6">
+          <EmbeddingProviderSection />
+        </div>
+        <div className="col-span-12 lg:col-span-6">
+          <ExternalTokenSection />
+        </div>
+        <div className="col-span-12 lg:col-span-6">
+          <AppleHealthSection />
+        </div>
+        <div className="col-span-12 lg:col-span-6">
+          <ExportDataSection />
+        </div>
+        <div className="col-span-12">
+          <DataSourcesSection />
+        </div>
       </div>
-    </div>
+    </PageShell>
   )
 }
