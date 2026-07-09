@@ -257,9 +257,7 @@ def step_rescore_photos(dry_run: bool) -> None:
 
         session.commit()
         print(f"Updated {changed} row(s); {unchanged} unchanged; {unmatched} unmatched.")
-        print(
-            "Note: past entries' photo_signal will update on next API read."
-        )
+        print("Note: past entries' photo_signal will update on next API read.")
 
 
 def main() -> None:
