@@ -227,12 +227,14 @@ async def trigger_analysis_background(photo_id: int) -> None:
     analysis: Optional[PhotoAnalysis] = None
     try:
         async with async_session_maker() as db:
-            # Guard: without an API key we cannot call OpenRouter.
-            if not settings.openrouter_api_key:
+            from app.services.llm.factory import resolve_llm_credentials
+
+            api_key, model = await resolve_llm_credentials(db)
+            if not api_key:
                 logger.warning(
-                    "Food analysis skipped for photo %d: OPENROUTER_API_KEY not "
-                    "configured. Set the env var or disable the feature with "
-                    "FOOD_ANALYSIS_ENABLED=false.",
+                    "Food analysis skipped for photo %d: no LLM API key configured. "
+                    "Set OPENROUTER_API_KEY or add a key in Settings, or disable the "
+                    "feature with FOOD_ANALYSIS_ENABLED=false.",
                     photo_id,
                 )
                 existing = (
@@ -244,13 +246,14 @@ async def trigger_analysis_background(photo_id: int) -> None:
                     analysis = PhotoAnalysis(
                         photo_id=photo_id,
                         status="failed",
-                        model_id=settings.openrouter_model,
-                        error_message="OPENROUTER_API_KEY not configured",
+                        model_id=model,
+                        error_message="LLM API key not configured",
                     )
                     db.add(analysis)
                 else:
                     existing.status = "failed"
-                    existing.error_message = "OPENROUTER_API_KEY not configured"
+                    existing.error_message = "LLM API key not configured"
+                    existing.model_id = model
                 await db.commit()
                 return
 
@@ -271,12 +274,12 @@ async def trigger_analysis_background(photo_id: int) -> None:
                 analysis = existing
                 analysis.status = "analyzing"
                 analysis.error_message = None
-                analysis.model_id = settings.openrouter_model
+                analysis.model_id = model
             else:
                 analysis = PhotoAnalysis(
                     photo_id=photo_id,
                     status="analyzing",
-                    model_id=settings.openrouter_model,
+                    model_id=model,
                 )
                 db.add(analysis)
             await db.commit()
@@ -297,11 +300,9 @@ async def trigger_analysis_background(photo_id: int) -> None:
 
             messages = build_messages(image_bytes)
 
-            from app.services.llm.factory import resolve_llm_credentials
             from app.services.llm.openrouter import OpenRouterClient
 
-            api_key, model = await resolve_llm_credentials(db)
-            llm_client = OpenRouterClient(api_key=api_key or "", default_model=model)
+            llm_client = OpenRouterClient(api_key=api_key, default_model=model)
 
             raw_content = await llm_client.complete_with_image(messages)
             analysis.raw_response = raw_content

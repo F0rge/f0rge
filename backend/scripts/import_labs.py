@@ -364,7 +364,7 @@ async def main(args: argparse.Namespace) -> None:
     async with async_session_maker() as db:
         labs_svc = LabsService(db)
         catalog_svc = LabMarkerCatalogService(db)
-        extraction_svc = LabExtractionService()
+        extraction_svc = LabExtractionService(db)
         attachment_storage = LabAttachmentStorage()
         import_svc = LabImportService(
             db=db,
