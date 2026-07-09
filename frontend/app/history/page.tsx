@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { CalendarView } from '@/components/history/calendar-view'
 import { EntryCard } from '@/components/history/entry-card'
 import { PageShell } from '@/components/layout/page-shell'
+import { FetchError } from '@/components/shared/fetch-error'
 import { useEntries } from '@/lib/api/hooks'
 
 function getCurrentMonth(): string {
@@ -33,10 +34,17 @@ function formatMonthLabel(month: string): string {
   return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 }
 
-export default function HistoryPage() {
+function HistoryContent() {
   const router = useRouter()
-  const [month, setMonth] = useState(getCurrentMonth)
-  const { data: entries, isLoading } = useEntries(month)
+  const searchParams = useSearchParams()
+  const month = searchParams.get('month') ?? getCurrentMonth()
+  const { data: entries, isLoading, isError, refetch } = useEntries(month)
+
+  function setMonth(next: string) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('month', next)
+    router.replace(`/history?${params.toString()}`)
+  }
 
   const sortedEntries = entries
     ? [...entries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7)
@@ -51,7 +59,7 @@ export default function HistoryPage() {
       <div className="mb-4 flex items-center justify-between">
         <button
           type="button"
-          onClick={() => setMonth((prev) => shiftMonth(prev, -1))}
+          onClick={() => setMonth(shiftMonth(month, -1))}
           className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted"
         >
           <ChevronLeft className="size-5" />
@@ -59,14 +67,16 @@ export default function HistoryPage() {
         <span className="text-sm font-medium">{formatMonthLabel(month)}</span>
         <button
           type="button"
-          onClick={() => setMonth((prev) => shiftMonth(prev, 1))}
+          onClick={() => setMonth(shiftMonth(month, 1))}
           className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted"
         >
           <ChevronRight className="size-5" />
         </button>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <FetchError message="Failed to load history." onRetry={() => refetch()} />
+      ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
@@ -97,5 +107,13 @@ export default function HistoryPage() {
         </div>
       )}
     </PageShell>
+  )
+}
+
+export default function HistoryPage() {
+  return (
+    <Suspense>
+      <HistoryContent />
+    </Suspense>
   )
 }

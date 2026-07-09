@@ -127,3 +127,20 @@ async def touch(db: AsyncSession, keys: Iterable[str]) -> None:
         if item.first_used_at is None:
             item.first_used_at = now
         item.last_used_at = now
+
+
+class SymptomCatalogService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def list_items(self, include_archived: bool = False) -> list[SymptomCatalogItem]:
+        return await list_items(self.db, include_archived=include_archived)
+
+    async def create_item(self, key: str, label: str) -> SymptomCatalogItem:
+        return await create_item(self.db, key, label)
+
+    async def update_item(self, key: str, data: dict) -> SymptomCatalogItem:
+        return await update_item(self.db, key, data)
+
+    async def reorder_items(self, order: list[str]) -> list[SymptomCatalogItem]:
+        return await reorder_items(self.db, order)

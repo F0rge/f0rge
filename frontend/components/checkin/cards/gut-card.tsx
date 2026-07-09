@@ -1,6 +1,5 @@
 'use client'
 
-import { Activity } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { ScaleInput } from '@/components/checkin/scale-input'
 import { BristolInput } from '@/components/checkin/bristol-input'
@@ -31,7 +30,6 @@ export function GutCard({
     <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          <Activity className="size-4" />
           Gut
           <TierPill tier="core" />
         </CardTitle>

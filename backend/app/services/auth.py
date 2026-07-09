@@ -64,3 +64,14 @@ async def logout(
     await db.commit()
     response.delete_cookie(key="ht_session")
     return {"authenticated": False}
+
+
+class AuthService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def login(self, pin: str, response: Response) -> dict[str, bool]:
+        return await login(self.db, pin, response)
+
+    async def logout(self, session: AuthSession, response: Response) -> dict[str, bool]:
+        return await logout(self.db, session, response)

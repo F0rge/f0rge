@@ -18,3 +18,11 @@ async def get_enriched_day(db: AsyncSession, date: datetime.date) -> EnrichedDay
         await db.execute(select(HealthMetric).where(HealthMetric.date == date))
     ).scalar_one_or_none()
     return EnrichedDayResponse(entry=entry, weather=weather, health_metrics=health)
+
+
+class EnrichedService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def get_enriched_day(self, date: datetime.date) -> EnrichedDayResponse:
+        return await get_enriched_day(self.db, date)

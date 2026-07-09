@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Any, List
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.exceptions import ValidationError
 from app.schemas.lab_marker import CatalogHint
 from app.services import lab_extraction as extraction_module
@@ -68,6 +70,22 @@ def hints() -> List[CatalogHint]:
     ]
 
 
+@pytest.fixture(autouse=True)
+def lab_extraction_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake_resolve(db: AsyncSession) -> tuple[str, str]:
+        return ("test-api-key", settings.openrouter_model)
+
+    monkeypatch.setattr(
+        "app.services.llm.factory.resolve_llm_credentials",
+        _fake_resolve,
+    )
+
+
+@pytest.fixture
+def extraction_service(async_db: AsyncSession) -> LabExtractionService:
+    return LabExtractionService(async_db)
+
+
 @pytest.fixture
 def audit_log_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Redirect the audit log to tmp_path so we don't pollute the real file."""
@@ -88,7 +106,7 @@ def _patch_call(
     """
     queue = list(responses) if isinstance(responses, list) else [responses]
 
-    async def fake(messages: List[dict], model: str) -> str:
+    async def fake(messages: List[dict], model: str, api_key: str) -> str:
         if capture is not None:
             capture.append(messages)
         if not queue:
@@ -110,11 +128,12 @@ async def test_extract_text_known_marker_keeps_canonical_match(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = json.dumps(_valid_payload(canonical_match="hemoglobin"))
     _patch_call(monkeypatch, [raw])
 
-    result = await LabExtractionService().extract_text("doc", hints)
+    result = await extraction_service.extract_text("doc", hints)
 
     assert result.attempts == 1
     assert result.retried_due_to == []
@@ -134,11 +153,12 @@ async def test_extract_unknown_marker_preserves_proposed_canonical(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = json.dumps(_valid_payload(canonical_match=None, proposed_canonical="brand_new_marker"))
     _patch_call(monkeypatch, [raw])
 
-    result = await LabExtractionService().extract_text("doc", hints)
+    result = await extraction_service.extract_text("doc", hints)
     m = result.payload.markers[0]
     assert m.canonical_match is None
     assert m.proposed_canonical == "brand_new_marker"
@@ -153,10 +173,11 @@ async def test_extract_non_numeric_value_preserved(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = json.dumps(_valid_payload(value=None, value_text="POSITIVE"))
     _patch_call(monkeypatch, [raw])
-    result = await LabExtractionService().extract_text("doc", hints)
+    result = await extraction_service.extract_text("doc", hints)
     m = result.payload.markers[0]
     assert m.value is None
     assert m.value_text == "POSITIVE"
@@ -171,10 +192,11 @@ async def test_defensive_parsing_raw_json(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = json.dumps(_valid_payload())
     _patch_call(monkeypatch, [raw])
-    result = await LabExtractionService().extract_text("doc", hints)
+    result = await extraction_service.extract_text("doc", hints)
     assert result.attempts == 1
 
 
@@ -182,10 +204,11 @@ async def test_defensive_parsing_fenced_json(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = "```json\n" + json.dumps(_valid_payload()) + "\n```"
     _patch_call(monkeypatch, [raw])
-    result = await LabExtractionService().extract_text("doc", hints)
+    result = await extraction_service.extract_text("doc", hints)
     assert result.attempts == 1
     assert result.payload.markers[0].canonical_match == "hemoglobin"
 
@@ -194,10 +217,11 @@ async def test_defensive_parsing_first_brace_match(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = "Here is your data: " + json.dumps(_valid_payload()) + " hope it helps!"
     _patch_call(monkeypatch, [raw])
-    result = await LabExtractionService().extract_text("doc", hints)
+    result = await extraction_service.extract_text("doc", hints)
     assert result.attempts == 1
 
 
@@ -210,13 +234,14 @@ async def test_schema_rejection_then_retry_success(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     # First response: confidence out of range (>1.0) → Pydantic rejects.
     bad = json.dumps(_valid_payload(confidence=1.7))
     good = json.dumps(_valid_payload(confidence=0.9))
     _patch_call(monkeypatch, [bad, good])
 
-    result = await LabExtractionService().extract_text("doc", hints)
+    result = await extraction_service.extract_text("doc", hints)
     assert result.attempts == 2
     assert len(result.retried_due_to) >= 1
     assert result.payload.confidence == 0.9
@@ -231,12 +256,13 @@ async def test_three_strike_failure_raises_validation_error(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     bad = "not valid json at all"
     _patch_call(monkeypatch, [bad, bad, bad])
 
     with pytest.raises(ValidationError) as exc_info:
-        await LabExtractionService().extract_text("doc", hints)
+        await extraction_service.extract_text("doc", hints)
     assert "Lab extraction failed after 3 attempts" in str(exc_info.value.detail)
 
 
@@ -249,12 +275,13 @@ async def test_canonical_hallucination_demoted_to_proposed(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     # LLM returns canonical_match that's not in the supplied hints.
     raw = json.dumps(_valid_payload(canonical_match="hallucinated_canonical"))
     _patch_call(monkeypatch, [raw])
 
-    result = await LabExtractionService().extract_text("doc", hints)
+    result = await extraction_service.extract_text("doc", hints)
     # NOT a retry — single call, single attempt.
     assert result.attempts == 1
     # But the demotion is logged.
@@ -273,13 +300,14 @@ async def test_extract_pdf_message_shape(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = json.dumps(_valid_payload())
     capture: List[List[dict]] = []
     _patch_call(monkeypatch, [raw], capture=capture)
 
     pdf_bytes = b"%PDF-1.4\nfake\n%EOF"
-    await LabExtractionService().extract_pdf(pdf_bytes, hints)
+    await extraction_service.extract_pdf(pdf_bytes, hints)
 
     assert len(capture) == 1
     user_msg = next(m for m in capture[0] if m["role"] == "user")
@@ -300,12 +328,13 @@ async def test_extract_image_message_shape_jpeg(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = json.dumps(_valid_payload())
     capture: List[List[dict]] = []
     _patch_call(monkeypatch, [raw], capture=capture)
 
-    await LabExtractionService().extract_image(b"fake-jpeg-bytes", "image/jpeg", hints)
+    await extraction_service.extract_image(b"fake-jpeg-bytes", "image/jpeg", hints)
 
     user_msg = next(m for m in capture[0] if m["role"] == "user")
     parts = user_msg["content"]
@@ -319,12 +348,13 @@ async def test_extract_image_message_shape_png(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = json.dumps(_valid_payload())
     capture: List[List[dict]] = []
     _patch_call(monkeypatch, [raw], capture=capture)
 
-    await LabExtractionService().extract_image(b"fake-png-bytes", "image/png", hints)
+    await extraction_service.extract_image(b"fake-png-bytes", "image/png", hints)
 
     user_msg = next(m for m in capture[0] if m["role"] == "user")
     parts = user_msg["content"]
@@ -341,11 +371,12 @@ async def test_audit_log_writes_one_line_per_call(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     raw = json.dumps(_valid_payload())
     _patch_call(monkeypatch, [raw])
 
-    await LabExtractionService().extract_text("doc", hints)
+    await extraction_service.extract_text("doc", hints)
 
     assert audit_log_path.exists()
     lines = audit_log_path.read_text().strip().split("\n")
@@ -362,11 +393,12 @@ async def test_audit_log_records_failed_extraction(
     monkeypatch: pytest.MonkeyPatch,
     hints: List[CatalogHint],
     audit_log_path: Path,
+    extraction_service: LabExtractionService,
 ) -> None:
     _patch_call(monkeypatch, ["garbage", "still garbage", "no really"])
 
     with pytest.raises(ValidationError):
-        await LabExtractionService().extract_text("doc", hints)
+        await extraction_service.extract_text("doc", hints)
 
     assert audit_log_path.exists()
     lines = audit_log_path.read_text().strip().split("\n")

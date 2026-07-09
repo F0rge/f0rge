@@ -70,6 +70,10 @@ services:
       - CORS_ORIGINS=["https://health-dev.leo-figueiredo.com","https://health-dev-api.leo-figueiredo.com","http://localhost:3104"]
       - PHOTO_DIR=/app/photos
       - PIN_HASH=${PIN_HASH}
+      # Consumed by migration 004 (runs in this container via RUN_MIGRATIONS)
+      # to set the healthtracker_ro role password. The MCP app reads the same
+      # value to build MCP_READONLY_DATABASE_URL.
+      - HEALTHTRACKER_RO_PASSWORD=${HEALTHTRACKER_RO_PASSWORD}
       # Backend owns Alembic. mcp-server and embedding-worker share the image
       # but must NOT run migrations (avoids 3-way DDL race on every deploy).
       - RUN_MIGRATIONS=1

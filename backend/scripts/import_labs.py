@@ -22,6 +22,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from sqlalchemy import func, select
+
 # ---------------------------------------------------------------------------
 # Ensure the backend package root is on sys.path when invoked directly.
 # ---------------------------------------------------------------------------
@@ -29,7 +31,7 @@ _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from app.database import SessionLocal  # noqa: E402  (after sys.path fixup)
+from app.database import async_session_maker  # noqa: E402  (after sys.path fixup)
 from app.services.lab_attachment_storage import LabAttachmentStorage  # noqa: E402
 from app.services.lab_catalog import LabMarkerCatalogService  # noqa: E402
 from app.services.lab_extraction import LabExtractionService  # noqa: E402
@@ -238,8 +240,12 @@ async def _process_file(
             from app.models.lab import Lab as LabModel  # local import
 
             existing_count = (
-                import_svc.db.query(LabModel).filter(LabModel.source_path == relative).count()
-            )
+                await import_svc.db.execute(
+                    select(func.count())
+                    .select_from(LabModel)
+                    .where(LabModel.source_path == relative)
+                )
+            ).scalar_one()
             action = _infer_action(force=force, existing_count=existing_count)
         else:
             raw_text = file_path.read_text(encoding="utf-8")
@@ -253,8 +259,12 @@ async def _process_file(
             from app.models.lab import Lab as LabModel  # local import
 
             existing_count = (
-                import_svc.db.query(LabModel).filter(LabModel.source_path == relative).count()
-            )
+                await import_svc.db.execute(
+                    select(func.count())
+                    .select_from(LabModel)
+                    .where(LabModel.source_path == relative)
+                )
+            ).scalar_one()
             action = _infer_action(force=force, existing_count=existing_count)
 
         # Best-effort extraction telemetry (not stored on Lab for skip case).
@@ -351,10 +361,10 @@ async def main(args: argparse.Namespace) -> None:
         "dry-run": 0,
     }
 
-    with SessionLocal() as db:
+    async with async_session_maker() as db:
         labs_svc = LabsService(db)
         catalog_svc = LabMarkerCatalogService(db)
-        extraction_svc = LabExtractionService()
+        extraction_svc = LabExtractionService(db)
         attachment_storage = LabAttachmentStorage()
         import_svc = LabImportService(
             db=db,

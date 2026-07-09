@@ -8,8 +8,8 @@ import os
 from typing import List, Optional
 
 from pydantic import ValidationError as PydanticValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.exceptions import ValidationError
 from app.schemas.lab_marker import (
     CatalogHint,
@@ -95,14 +95,14 @@ def _cross_check_and_fix(
     return payload.model_copy(update={"markers": fixed_markers})
 
 
-async def _call_openrouter(messages: List[dict], model: str) -> str:
+async def _call_openrouter(messages: List[dict], model: str, api_key: str) -> str:
     """Make a single call to OpenRouter and return the raw content string."""
     from app.services.llm.openrouter import OpenRouterClient
     from app.exceptions import ExternalServiceError
 
     response_format = get_response_format(model)
     llm_client = OpenRouterClient(
-        api_key=settings.openrouter_api_key,
+        api_key=api_key,
         default_model=model,
     )
     try:
@@ -122,16 +122,17 @@ async def _call_openrouter(messages: List[dict], model: str) -> str:
 async def _extract(
     initial_messages: List[dict],
     catalog_hints: List[CatalogHint],
+    api_key: str,
+    model: str,
 ) -> ExtractionResult:
     """Core retry loop shared by all three public extract methods."""
-    model = settings.openrouter_model
     messages = list(initial_messages)
     retried_due_to: List[str] = []
     last_error = ""
     last_raw = ""
 
     for attempt in range(1, _MAX_ATTEMPTS + 1):
-        raw = await _call_openrouter(messages, model)
+        raw = await _call_openrouter(messages, model, api_key)
         last_raw = raw
 
         try:
@@ -203,7 +204,20 @@ async def _extract(
 
 
 class LabExtractionService:
-    """DB-free, multimodal lab extraction service backed by OpenRouter."""
+    """Multimodal lab extraction service backed by OpenRouter."""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def _resolve_credentials(self) -> tuple[str, str]:
+        from app.services.llm.factory import resolve_llm_credentials
+
+        api_key, model = await resolve_llm_credentials(self.db)
+        if not api_key:
+            raise ValidationError(
+                "LLM not configured. Set an API key in Settings or OPENROUTER_API_KEY."
+            )
+        return api_key, model
 
     async def extract_text(
         self,
@@ -211,9 +225,10 @@ class LabExtractionService:
         catalog_hints: List[CatalogHint],
         filename: Optional[str] = None,
     ) -> ExtractionResult:
+        api_key, model = await self._resolve_credentials()
         schema_json = ExtractedLabPayload.model_json_schema().__str__()
         messages = build_text_messages(document_text, catalog_hints, schema_json, filename=filename)
-        return await _extract(messages, catalog_hints)
+        return await _extract(messages, catalog_hints, api_key, model)
 
     async def extract_pdf(
         self,
@@ -221,7 +236,7 @@ class LabExtractionService:
         catalog_hints: List[CatalogHint],
         filename: Optional[str] = None,
     ) -> ExtractionResult:
-        model = settings.openrouter_model
+        api_key, model = await self._resolve_credentials()
         caps = MODEL_CAPABILITIES.get(model, set())
         if "pdf" not in caps:
             raise ValidationError(
@@ -229,7 +244,7 @@ class LabExtractionService:
             )
         schema_json = ExtractedLabPayload.model_json_schema().__str__()
         messages = build_pdf_messages(pdf_bytes, catalog_hints, schema_json, filename=filename)
-        return await _extract(messages, catalog_hints)
+        return await _extract(messages, catalog_hints, api_key, model)
 
     async def extract_image(
         self,
@@ -238,7 +253,7 @@ class LabExtractionService:
         catalog_hints: List[CatalogHint],
         filename: Optional[str] = None,
     ) -> ExtractionResult:
-        model = settings.openrouter_model
+        api_key, model = await self._resolve_credentials()
         caps = MODEL_CAPABILITIES.get(model, set())
         if "image" not in caps:
             raise ValidationError(f"Current model {model!r} does not support image input.")
@@ -246,7 +261,7 @@ class LabExtractionService:
         messages = build_image_messages(
             image_bytes, mime_type, catalog_hints, schema_json, filename=filename
         )
-        return await _extract(messages, catalog_hints)
+        return await _extract(messages, catalog_hints, api_key, model)
 
     async def preview_upload(
         self,

@@ -22,8 +22,8 @@ def get_lab_catalog_service(
     return LabMarkerCatalogService(db)
 
 
-def get_lab_extraction_service() -> LabExtractionService:
-    return LabExtractionService()
+def get_lab_extraction_service(db: AsyncSession = Depends(get_db)) -> LabExtractionService:
+    return LabExtractionService(db)
 
 
 def get_lab_attachment_storage() -> LabAttachmentStorage:

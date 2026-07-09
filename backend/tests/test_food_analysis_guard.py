@@ -9,7 +9,6 @@ causing every photo upload to crash with:
 from __future__ import annotations
 
 import datetime
-from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -87,20 +86,24 @@ async def db_with_photo(
 
 async def test_trigger_with_empty_api_key_marks_failed(
     db_with_photo: tuple[AsyncSession, int],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Production regression: with FOOD_ANALYSIS_ENABLED but no API key,
     the trigger must NOT call httpx (which would crash on Bearer ''),
     and must mark the analysis as failed with a clear error."""
     session, photo_id = db_with_photo
 
-    with patch("app.services.food_analysis.settings") as mock_settings:
-        mock_settings.openrouter_api_key = ""
-        mock_settings.openrouter_model = "google/gemini-3-flash-preview"
-        mock_settings.food_analysis_enabled = True
+    async def _no_key(db: AsyncSession) -> tuple[None, str]:
+        return (None, "google/gemini-3-flash-preview")
 
-        from app.services import food_analysis
+    monkeypatch.setattr(
+        "app.services.llm.factory.resolve_llm_credentials",
+        _no_key,
+    )
 
-        await food_analysis.trigger_analysis_background(photo_id)
+    from app.services import food_analysis
+
+    await food_analysis.trigger_analysis_background(photo_id)
 
     # An analysis row exists with status=failed and a clear error message
     analysis = (
@@ -117,15 +120,24 @@ async def test_trigger_with_empty_api_key_marks_failed(
     assert analysis is not None
     assert analysis.status == "failed"
     assert analysis.error_message is not None
-    assert "OPENROUTER_API_KEY" in analysis.error_message
+    assert "LLM API key not configured" in analysis.error_message
 
 
 async def test_trigger_with_empty_key_updates_existing_pending(
     db_with_photo: tuple[AsyncSession, int],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """If a pending record already exists (e.g. created by the retry
     endpoint), the guard should flip it to failed rather than skipping."""
     session, photo_id = db_with_photo
+
+    async def _no_key(db: AsyncSession) -> tuple[None, str]:
+        return (None, "google/gemini-3-flash-preview")
+
+    monkeypatch.setattr(
+        "app.services.llm.factory.resolve_llm_credentials",
+        _no_key,
+    )
 
     # Pre-seed a pending record via a separate session bound to the real engine.
     from app.services import food_analysis as fa
@@ -140,10 +152,7 @@ async def test_trigger_with_empty_key_updates_existing_pending(
         )
         await seed.commit()
 
-    with patch("app.services.food_analysis.settings") as mock_settings:
-        mock_settings.openrouter_api_key = ""
-        mock_settings.openrouter_model = "google/gemini-3-flash-preview"
-        await fa.trigger_analysis_background(photo_id)
+    await fa.trigger_analysis_background(photo_id)
 
     async with fa.async_session_maker() as verify:
         analysis = (
@@ -151,4 +160,4 @@ async def test_trigger_with_empty_key_updates_existing_pending(
         ).scalar_one_or_none()
     assert analysis is not None
     assert analysis.status == "failed"
-    assert "OPENROUTER_API_KEY" in (analysis.error_message or "")
+    assert "LLM API key not configured" in (analysis.error_message or "")

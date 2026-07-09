@@ -3,9 +3,8 @@ from __future__ import annotations
 import datetime
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.dependencies.trackers import get_tracker_service
 from app.middleware.auth import get_current_session
 from app.schemas.tracker import (
     OrderRequest,
@@ -15,7 +14,7 @@ from app.schemas.tracker import (
     TrackerValueResponse,
     TrackerValueUpsert,
 )
-from app.services import trackers as trackers_service
+from app.services.trackers import TrackerService
 
 router = APIRouter(
     prefix="/api/v1",
@@ -27,42 +26,42 @@ router = APIRouter(
 @router.get("/trackers", response_model=list[TrackerResponse])
 async def list_trackers(
     include_archived: bool = Query(False),
-    db: AsyncSession = Depends(get_db),
+    service: TrackerService = Depends(get_tracker_service),
 ):
-    return await trackers_service.list_trackers(db, include_archived=include_archived)
+    return await service.list_trackers(include_archived=include_archived)
 
 
 @router.post("/trackers", response_model=TrackerResponse, status_code=status.HTTP_201_CREATED)
 async def create_tracker(
     body: TrackerCreate,
-    db: AsyncSession = Depends(get_db),
+    service: TrackerService = Depends(get_tracker_service),
 ):
-    return await trackers_service.create_tracker(db, body)
+    return await service.create_tracker(body)
 
 
 @router.patch("/trackers/reorder", response_model=list[TrackerResponse])
 async def reorder_trackers(
     body: OrderRequest,
-    db: AsyncSession = Depends(get_db),
+    service: TrackerService = Depends(get_tracker_service),
 ):
-    return await trackers_service.reorder_trackers(db, body.order)
+    return await service.reorder_trackers(body.order)
 
 
 @router.patch("/trackers/{tracker_id}", response_model=TrackerResponse)
 async def update_tracker(
     tracker_id: int,
     body: TrackerUpdate,
-    db: AsyncSession = Depends(get_db),
+    service: TrackerService = Depends(get_tracker_service),
 ):
-    return await trackers_service.update_tracker(db, tracker_id, body)
+    return await service.update_tracker(tracker_id, body)
 
 
 @router.get("/entries/{date}/tracker_values", response_model=list[TrackerValueResponse])
 async def list_tracker_values(
     date: datetime.date,
-    db: AsyncSession = Depends(get_db),
+    service: TrackerService = Depends(get_tracker_service),
 ):
-    return await trackers_service.list_tracker_values(db, date)
+    return await service.list_tracker_values(date)
 
 
 @router.put(
@@ -73,6 +72,6 @@ async def upsert_tracker_value(
     date: datetime.date,
     tracker_id: int,
     body: TrackerValueUpsert,
-    db: AsyncSession = Depends(get_db),
+    service: TrackerService = Depends(get_tracker_service),
 ):
-    return await trackers_service.upsert_tracker_value(db, date, tracker_id, body.value)
+    return await service.upsert_tracker_value(date, tracker_id, body.value)

@@ -155,9 +155,17 @@ class PhotoService:
         await self.db.refresh(entry)
         await render_and_write_daily_file(self.db, entry, entry.photos)
 
-        # Queue analysis only when both the flag and the key are present.
-        if settings.food_analysis_enabled and settings.openrouter_api_key:
-            background_tasks.add_task(trigger_analysis_background, photo.id)
+        # Queue analysis when enabled and credentials resolve (env or BYOK).
+        # Credential resolution must not fail the upload — the photo is already persisted.
+        if settings.food_analysis_enabled:
+            from app.services.llm.factory import resolve_llm_credentials
+
+            try:
+                api_key, _ = await resolve_llm_credentials(self.db)
+            except Exception:
+                api_key = None
+            if api_key:
+                background_tasks.add_task(trigger_analysis_background, photo.id)
 
         return photo
 

@@ -1,0 +1,27 @@
+# Dependencies and build output — rebuilt inside the image (see Dockerfile)
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Git metadata
+.git/
+.gitignore
+
+# Env files — never bake secrets into the build context
+.env
+.env.local
+.env.*.local
+
+# Editor and OS noise
+.vscode/
+.idea/
+.DS_Store
+
+# Logs and caches
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+coverage/

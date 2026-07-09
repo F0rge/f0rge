@@ -5,31 +5,35 @@ Usage:
 
 Finds every photo without a completed analysis and calls the same
 trigger_analysis_background() used by the normal upload flow.
+trigger_analysis_background is async and opens its own DB session;
+this script drives it via asyncio.run().
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import time
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.services.food_analysis import trigger_analysis_background
+from scripts._db import SyncSession
 
-SKIP_STATUSES = {"complete", "confirmed", "analyzing"}
+SKIP_STATUSES = {"complete", "confirmed", "analyzing", "needs_review"}
 
 
-def find_unprocessed_photos(db: Session) -> list[tuple[int, str, str | None]]:
+def find_unprocessed_photos(session: Session) -> list[tuple[int, str, str | None]]:
     """Return (photo_id, filename, current_status) for photos needing analysis."""
-    photos = (
-        db.query(Photo.id, Photo.filename, PhotoAnalysis.status)
-        .outerjoin(PhotoAnalysis, Photo.id == PhotoAnalysis.photo_id)
-        .all()
-    )
-    return [(pid, fname, status) for pid, fname, status in photos if status not in SKIP_STATUSES]
+    rows = session.execute(
+        select(Photo.id, Photo.filename, PhotoAnalysis.status).outerjoin(
+            PhotoAnalysis, Photo.id == PhotoAnalysis.photo_id
+        )
+    ).all()
+    return [(pid, fname, status) for pid, fname, status in rows if status not in SKIP_STATUSES]
 
 
 def main() -> None:
@@ -47,11 +51,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    db = SessionLocal()
-    try:
-        unprocessed = find_unprocessed_photos(db)
-    finally:
-        db.close()
+    with SyncSession() as session:
+        unprocessed = find_unprocessed_photos(session)
 
     if not unprocessed:
         print("All photos already have a completed analysis. Nothing to do.")
@@ -69,22 +70,21 @@ def main() -> None:
     print()
     for i, (pid, fname, _) in enumerate(unprocessed, 1):
         print(f"[{i}/{len(unprocessed)}] Analyzing photo {pid} ({fname})...")
-        trigger_analysis_background(pid)
+        asyncio.run(trigger_analysis_background(pid))
 
-        db2 = SessionLocal()
-        try:
-            analysis = db2.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == pid).first()
+        with SyncSession() as session:
+            analysis = session.execute(
+                select(PhotoAnalysis).where(PhotoAnalysis.photo_id == pid)
+            ).scalar_one_or_none()
             if analysis and analysis.status == "complete":
-                print(f"  -> {analysis.dish_name} ({len(analysis.ingredients)} ingredients)")
+                count = len(analysis.ingredients) if analysis.ingredients else 0
+                print(f"  -> {analysis.dish_name} ({count} ingredients)")
             elif analysis and analysis.status == "failed":
-                print(
-                    f"  -> FAILED: {analysis.error_message[:120] if analysis.error_message else 'unknown'}"
-                )
+                msg = analysis.error_message[:120] if analysis.error_message else "unknown"
+                print(f"  -> FAILED: {msg}")
             else:
-                status = analysis.status if analysis else "no record"
-                print(f"  -> status: {status}")
-        finally:
-            db2.close()
+                status_val = analysis.status if analysis else "no record"
+                print(f"  -> status: {status_val}")
 
         if i < len(unprocessed):
             time.sleep(args.delay)
