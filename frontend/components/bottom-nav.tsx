@@ -154,16 +154,23 @@ export function BottomNav() {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     if (reduced || direction === 0) {
-      if (
+      const alreadyCollapsed =
         Math.abs(parseFloat(ink.style.left || '0') - collapsedLeft) < 0.5 &&
         Math.abs(parseFloat(ink.style.right || '0') - collapsedRight) < 0.5
-      ) {
+      const alreadyMuted = ink.classList.contains('bg-muted-foreground')
+
+      if (alreadyCollapsed && alreadyMuted) {
         return
       }
+
       ink.style.transition = 'none'
-      ink.style.left = `${collapsedLeft}px`
-      ink.style.right = `${collapsedRight}px`
-      void ink.offsetWidth
+      ink.classList.remove('bg-foreground')
+      ink.classList.add('bg-muted-foreground')
+      if (!alreadyCollapsed) {
+        ink.style.left = `${collapsedLeft}px`
+        ink.style.right = `${collapsedRight}px`
+        void ink.offsetWidth
+      }
       ink.style.transition = INK_BASE_TRANSITION
       return
     }
