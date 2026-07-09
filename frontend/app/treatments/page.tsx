@@ -5,6 +5,7 @@ import { Loader2, Plus, Pill, List, BarChart3 } from 'lucide-react'
 import { useTreatments } from '@/lib/api/hooks'
 import { TreatmentCard } from '@/components/treatments/treatment-card'
 import { TreatmentFormDialog } from '@/components/treatments/treatment-form-dialog'
+import { DiscontinueDialog } from '@/components/treatments/discontinue-dialog'
 import { TreatmentTimeline } from '@/components/treatments/treatment-timeline'
 import type { Treatment } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
@@ -16,6 +17,9 @@ export default function TreatmentsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTreatment, setEditTreatment] = useState<Treatment | null>(null)
   const [dialogKey, setDialogKey] = useState(0)
+  const [discontinueTarget, setDiscontinueTarget] = useState<Treatment | null>(null)
+  const [discontinueOpen, setDiscontinueOpen] = useState(false)
+  const [discontinueKey, setDiscontinueKey] = useState(0)
 
   function openAdd() {
     setEditTreatment(null)
@@ -27,6 +31,12 @@ export default function TreatmentsPage() {
     setEditTreatment(t)
     setDialogKey((k) => k + 1)
     setDialogOpen(true)
+  }
+
+  function openDiscontinue(t: Treatment) {
+    setDiscontinueTarget(t)
+    setDiscontinueKey((k) => k + 1)
+    setDiscontinueOpen(true)
   }
 
   return (
@@ -107,7 +117,12 @@ export default function TreatmentsPage() {
                 </div>
               )}
               {section.treatments.map((t) => (
-                <TreatmentCard key={t.id} treatment={t} onClick={() => openEdit(t)} />
+                <TreatmentCard
+                  key={t.id}
+                  treatment={t}
+                  onClick={() => openEdit(t)}
+                  onDiscontinue={() => openDiscontinue(t)}
+                />
               ))}
             </div>
           ))}
@@ -122,6 +137,15 @@ export default function TreatmentsPage() {
         onOpenChange={setDialogOpen}
         treatment={editTreatment}
       />
+
+      {discontinueTarget && (
+        <DiscontinueDialog
+          key={discontinueKey}
+          open={discontinueOpen}
+          onOpenChange={setDiscontinueOpen}
+          treatment={discontinueTarget}
+        />
+      )}
     </div>
   )
 }

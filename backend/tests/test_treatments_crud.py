@@ -5,6 +5,7 @@ from typing import Optional
 
 import pytest
 import pytest_asyncio
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -159,6 +160,86 @@ async def test_create_without_doses_per_day_is_none(service: TreatmentService) -
     )
     result = await service.create(body)
     assert result.doses_per_day is None
+
+
+# ---------------------------------------------------------------------------
+# end_reason / end_note
+# ---------------------------------------------------------------------------
+
+
+async def test_create_persists_end_reason_and_note(service: TreatmentService) -> None:
+    """Same class of bug as doses_per_day: a field-by-field constructor drops
+    anything not explicitly passed. Guard create() the same way.
+    """
+    body = TreatmentCreate(
+        name="Rifaximin",
+        type="antibiotic",
+        start_date=datetime.date(2026, 1, 1),
+        end_date=datetime.date(2026, 1, 14),
+        end_reason="side_effects",
+        end_note="Nausea after day 10",
+    )
+    result = await service.create(body)
+    assert result.end_reason == "side_effects"
+    assert result.end_note == "Nausea after day 10"
+
+
+async def test_create_without_end_reason_is_none(service: TreatmentService) -> None:
+    body = TreatmentCreate(
+        name="Allicin",
+        type="antimicrobial",
+        start_date=datetime.date(2026, 1, 1),
+    )
+    result = await service.create(body)
+    assert result.end_reason is None
+    assert result.end_note is None
+
+
+def test_invalid_end_reason_raises_on_create() -> None:
+    with pytest.raises(PydanticValidationError):
+        TreatmentCreate(
+            name="Allicin",
+            type="antimicrobial",
+            start_date=datetime.date(2026, 1, 1),
+            end_reason="not_a_real_reason",
+        )
+
+
+def test_invalid_end_reason_raises_on_update() -> None:
+    with pytest.raises(PydanticValidationError):
+        TreatmentUpdate(end_reason="not_a_real_reason")
+
+
+async def test_update_sets_end_reason_and_note_and_round_trips(
+    async_db: AsyncSession, service: TreatmentService
+) -> None:
+    t = await _add_treatment(async_db, "Allicin", datetime.date(2026, 1, 1))
+    assert t.end_reason is None
+
+    updated = await service.update(
+        t.id,
+        TreatmentUpdate(
+            end_date=datetime.date(2026, 1, 20),
+            end_reason="ineffective",
+            end_note="No improvement after 3 weeks",
+        ),
+    )
+    assert updated.end_reason == "ineffective"
+    assert updated.end_note == "No improvement after 3 weeks"
+
+    fetched = await service.get(t.id)
+    assert fetched.end_reason == "ineffective"
+    assert fetched.end_note == "No improvement after 3 weeks"
+
+
+async def test_update_end_reason_null_still_valid(
+    async_db: AsyncSession, service: TreatmentService
+) -> None:
+    """A legacy end_date-only discontinuation (end_reason left null) is fine."""
+    t = await _add_treatment(async_db, "Allicin", datetime.date(2026, 1, 1))
+    updated = await service.update(t.id, TreatmentUpdate(end_date=datetime.date(2026, 1, 20)))
+    assert updated.end_date == datetime.date(2026, 1, 20)
+    assert updated.end_reason is None
 
 
 # ---------------------------------------------------------------------------

@@ -16,6 +16,15 @@ TREATMENT_TYPES = Literal[
     "other",
 ]
 
+TREATMENT_END_REASONS = {
+    "completed",
+    "side_effects",
+    "ineffective",
+    "doctor_advised",
+    "switched",
+    "other",
+}
+
 
 def _clean_group_name(value: Optional[str]) -> Optional[str]:
     if value is None:
@@ -24,17 +33,26 @@ def _clean_group_name(value: Optional[str]) -> Optional[str]:
     return stripped or None
 
 
+def _validate_end_reason(value: Optional[str]) -> Optional[str]:
+    if value is not None and value not in TREATMENT_END_REASONS:
+        raise ValueError(f"end_reason must be one of {sorted(TREATMENT_END_REASONS)} or null")
+    return value
+
+
 class TreatmentCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     type: TREATMENT_TYPES
     start_date: datetime.date
     end_date: Optional[datetime.date] = None
+    end_reason: Optional[str] = None
+    end_note: Optional[str] = Field(default=None, max_length=1000)
     dose: Optional[str] = Field(default=None, max_length=500)
     doses_per_day: Optional[int] = Field(default=None, ge=1, le=12)
     notes: Optional[str] = None
     group_name: Optional[str] = Field(default=None, max_length=100)
 
     _clean_group_name = field_validator("group_name")(_clean_group_name)
+    _validate_end_reason = field_validator("end_reason")(_validate_end_reason)
 
 
 class TreatmentUpdate(BaseModel):
@@ -42,12 +60,15 @@ class TreatmentUpdate(BaseModel):
     type: Optional[TREATMENT_TYPES] = None
     start_date: Optional[datetime.date] = None
     end_date: Optional[datetime.date] = None
+    end_reason: Optional[str] = None
+    end_note: Optional[str] = Field(default=None, max_length=1000)
     dose: Optional[str] = Field(default=None, max_length=500)
     doses_per_day: Optional[int] = Field(default=None, ge=1, le=12)
     notes: Optional[str] = None
     group_name: Optional[str] = Field(default=None, max_length=100)
 
     _clean_group_name = field_validator("group_name")(_clean_group_name)
+    _validate_end_reason = field_validator("end_reason")(_validate_end_reason)
 
 
 class TreatmentResponse(BaseModel):
@@ -57,6 +78,8 @@ class TreatmentResponse(BaseModel):
     type: TREATMENT_TYPES
     start_date: datetime.date
     end_date: Optional[datetime.date] = None
+    end_reason: Optional[str] = None
+    end_note: Optional[str] = None
     dose: Optional[str] = None
     doses_per_day: Optional[int] = None
     notes: Optional[str] = None

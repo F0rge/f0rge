@@ -2,10 +2,12 @@
 
 import type { Treatment } from '@/lib/api/types'
 import { formatDisplayDate } from '@/lib/utils'
+import { getEndReasonLabel } from './end-reason'
 
 interface TreatmentCardProps {
   treatment: Treatment
   onClick: () => void
+  onDiscontinue: () => void
 }
 
 const TYPE_BADGE_CLASSES: Record<string, string> = {
@@ -32,40 +34,85 @@ function dayCount(treatment: Treatment): string | null {
   return `Day ${days}`
 }
 
-export function TreatmentCard({ treatment, onClick }: TreatmentCardProps) {
+export function TreatmentCard({ treatment, onClick, onDiscontinue }: TreatmentCardProps) {
   const badgeClass = TYPE_BADGE_CLASSES[treatment.type] ?? TYPE_BADGE_CLASSES.other
   const day = dayCount(treatment)
+  // "Active" for the Discontinue action means no end_date at all — distinct
+  // from the backend's `is_active` computed field, which stays true through
+  // the end_date itself (so a just-discontinued treatment would otherwise
+  // still show the action alongside its own "ended" badge).
+  const notEnded = !treatment.end_date
+  const ended = !!treatment.end_date && !!treatment.end_reason
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{treatment.name}</span>
-            {treatment.is_active && (
-              <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                Active
-              </span>
+    <div className="w-full rounded-xl border border-border bg-card transition-colors hover:bg-muted/50">
+      <button type="button" onClick={onClick} className="w-full p-4 text-left">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-medium">{treatment.name}</span>
+              {treatment.is_active && (
+                <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                  Active
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">{formatDateRange(treatment)}</p>
+            {treatment.dose && (
+              <p className="mt-0.5 text-xs text-muted-foreground">{treatment.dose}</p>
             )}
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">{formatDateRange(treatment)}</p>
-          {treatment.dose && (
-            <p className="mt-0.5 text-xs text-muted-foreground">{treatment.dose}</p>
-          )}
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badgeClass}`}>
+              {treatment.type}
+            </span>
+            {day && (
+              <span className="text-xs font-medium text-primary">{day}</span>
+            )}
+          </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badgeClass}`}>
-            {treatment.type}
+      </button>
+
+      {notEnded && (
+        <div className="border-t border-border/50 px-4 py-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDiscontinue()
+            }}
+            className="text-xs font-medium text-muted-foreground hover:text-destructive"
+          >
+            Discontinue
+          </button>
+        </div>
+      )}
+
+      {ended && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDiscontinue()
+          }}
+          className="block w-full border-t border-border/50 px-4 py-2 text-left"
+        >
+          <span
+            className={
+              treatment.end_reason === 'completed'
+                ? 'rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                : 'rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+            }
+          >
+            {treatment.end_reason === 'completed'
+              ? 'Completed'
+              : `Discontinued · ${getEndReasonLabel(treatment.end_reason as string)}`}
           </span>
-          {day && (
-            <span className="text-xs font-medium text-primary">{day}</span>
+          {treatment.end_note && (
+            <p className="mt-1 text-xs text-muted-foreground">{treatment.end_note}</p>
           )}
-        </div>
-      </div>
-    </button>
+        </button>
+      )}
+    </div>
   )
 }
