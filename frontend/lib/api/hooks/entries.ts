@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../client'
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, handleMutationError } from '../client'
 import type { Entry, EntryCreate } from '../types'
 
 export function useEntries(month?: string) {
@@ -78,5 +78,29 @@ export function useUpdatePhotoLabel() {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
     },
+  })
+}
+
+export function useUpdateDietaryConfirm() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      photoId,
+      ...body
+    }: {
+      photoId: number
+      gluten_free_confirmed?: boolean
+      lactose_free_confirmed?: boolean
+    }) => apiPut(`/photos/${photoId}/analysis/dietary-confirm`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
+      // The recent-meals "Log again" strip carries backend-computed diet_flags
+      // that also honour the confirmation gate — refresh it so it doesn't show
+      // a stale Gluten/lactose flag next to the freshly confirmed-free meal.
+      queryClient.invalidateQueries({ queryKey: ['meals', 'recent'] })
+    },
+    onError: (err) => handleMutationError(err, 'Failed to update dietary confirmation'),
   })
 }

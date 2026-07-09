@@ -219,7 +219,12 @@ function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
   const title = photo.label?.trim() || analysis?.dish_name || 'Untitled meal'
   const confidence =
     analysis?.dish_confidence != null ? Math.round(analysis.dish_confidence * 100) : null
-  const badges = analysis ? buildAggregateBadges(analysis.ingredients) : []
+  const badges = analysis
+    ? buildAggregateBadges(analysis.ingredients, {
+        glutenFreeConfirmed: analysis.gluten_free_confirmed,
+        lactoseFreeConfirmed: analysis.lactose_free_confirmed,
+      })
+    : []
 
   return (
     <div className="group relative overflow-hidden rounded-xl border border-border">
