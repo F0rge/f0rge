@@ -11,8 +11,18 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
+from app.db_url import asyncpg_connect_args, resolve_database_url
 
-engine: AsyncEngine = create_async_engine(settings.database_url, echo=False)
+_db_url = resolve_database_url(
+    settings.database_url,
+    direct_url=settings.direct_database_url,
+)
+_engine_kwargs = {"echo": False}
+_connect_args = asyncpg_connect_args(settings.database_url)
+if _connect_args:
+    _engine_kwargs["connect_args"] = _connect_args
+
+engine: AsyncEngine = create_async_engine(_db_url, **_engine_kwargs)
 
 async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
     engine,

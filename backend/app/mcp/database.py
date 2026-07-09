@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import settings
+from app.db_url import asyncpg_connect_args, resolve_database_url
 
 _ro_engine: Optional[AsyncEngine] = None
 _main_engine: Optional[AsyncEngine] = None
@@ -25,12 +26,21 @@ def get_ro_engine() -> AsyncEngine:
     """
     global _ro_engine
     if _ro_engine is None:
-        url = settings.mcp_readonly_database_url or settings.database_url
-        _ro_engine = create_async_engine(
-            url,
-            pool_pre_ping=True,
-            connect_args={"server_settings": {"statement_timeout": "10000"}},
+        url = resolve_database_url(
+            settings.mcp_readonly_database_url or settings.database_url,
+            direct_url=settings.direct_database_url,
         )
+        connect_args = asyncpg_connect_args(
+            settings.mcp_readonly_database_url or settings.database_url
+        )
+        kwargs: dict = {
+            "pool_pre_ping": True,
+            "connect_args": {
+                "server_settings": {"statement_timeout": "10000"},
+                **connect_args,
+            },
+        }
+        _ro_engine = create_async_engine(url, **kwargs)
     return _ro_engine
 
 
@@ -38,7 +48,15 @@ def get_main_engine() -> AsyncEngine:
     """Lazily create the main engine for reading user_settings (token validation, etc.)."""
     global _main_engine
     if _main_engine is None:
-        _main_engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+        url = resolve_database_url(
+            settings.database_url,
+            direct_url=settings.direct_database_url,
+        )
+        kwargs: dict = {"pool_pre_ping": True}
+        connect_args = asyncpg_connect_args(settings.database_url)
+        if connect_args:
+            kwargs["connect_args"] = connect_args
+        _main_engine = create_async_engine(url, **kwargs)
     return _main_engine
 
 

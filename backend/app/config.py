@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     pin_hash: str = ""
     database_url: str = "postgresql+asyncpg://health:health@localhost:5432/health"
+    direct_database_url: str = ""
     app_timezone: str = "Europe/Luxembourg"
     settings_encryption_key: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]

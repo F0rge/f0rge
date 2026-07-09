@@ -2,7 +2,7 @@
 # Deploy: fly deploy --config fly.toml (from frontend/)
 
 app = "health-tracker-web-dev"
-primary_region = "cdg"
+primary_region = "fra"
 
 [build]
   dockerfile = "Dockerfile"
