@@ -1,39 +1,53 @@
 from __future__ import annotations
 
-import datetime
+import uuid
 
-from fastapi import Cookie, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Cookie, HTTPException, Request, status
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import Response
 
-from app.database import get_db
-from app.models.session import AuthSession
-from app.services.auth import get_session_by_token
+from app.auth_context import user_id_ctx
+from app.services.auth import JWT_COOKIE_NAME, decode_access_token
 
 
-async def get_current_session(
-    ht_session: str = Cookie(default=None),
-    db: AsyncSession = Depends(get_db),
-) -> AuthSession:
+class AuthContextMiddleware(BaseHTTPMiddleware):
+    """Decode a valid JWT cookie into the per-request user_id context."""
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        token = request.cookies.get(JWT_COOKIE_NAME)
+        token_ctx = user_id_ctx.set(None)
+        try:
+            if token:
+                try:
+                    user_id_ctx.set(decode_access_token(token))
+                except Exception:
+                    user_id_ctx.set(None)
+            return await call_next(request)
+        finally:
+            user_id_ctx.reset(token_ctx)
+
+
+async def get_current_user_id(
+    ht_session: str | None = Cookie(default=None),
+) -> uuid.UUID:
     if not ht_session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
 
-    session = await get_session_by_token(db, ht_session)
-
-    if session is None:
+    try:
+        return decode_access_token(ht_session)
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid session",
         )
 
-    if session.expires_at < datetime.datetime.utcnow():
-        await db.delete(session)
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session expired",
-        )
 
-    return session
+# Backward-compatible alias while routers migrate off session rows.
+get_current_session = get_current_user_id

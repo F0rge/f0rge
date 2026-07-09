@@ -29,7 +29,7 @@ def fernet_key(monkeypatch: pytest.MonkeyPatch) -> str:
 
 
 async def test_valid_token_passes_verification(async_db: AsyncSession) -> None:
-    """A matching token returns an AccessToken with client_id='external'."""
+    """A matching token returns an AccessToken bound to the owning user_id."""
     svc = SettingsService(async_db)
     resp = await svc.regenerate_external_token()
 
@@ -43,14 +43,16 @@ async def test_valid_token_passes_verification(async_db: AsyncSession) -> None:
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
+        mock_db.execute = AsyncMock(
+            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [row]))
+        )
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
         access_token = await verifier.verify_token(resp.token)
 
     assert access_token is not None
-    assert access_token.client_id == "external"
+    assert access_token.client_id == str(row.user_id)
     assert access_token.token == resp.token
 
 
@@ -69,7 +71,9 @@ async def test_wrong_token_returns_none(async_db: AsyncSession) -> None:
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
+        mock_db.execute = AsyncMock(
+            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [row]))
+        )
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -92,7 +96,9 @@ async def test_revoked_token_returns_none(async_db: AsyncSession) -> None:
     verifier = BearerTokenVerifier()
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
+        mock_db.execute = AsyncMock(
+            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [row]))
+        )
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -106,7 +112,9 @@ async def test_no_settings_row_returns_none() -> None:
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+        mock_db.execute = AsyncMock(
+            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: []))
+        )
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -124,7 +132,9 @@ async def test_corrupt_ciphertext_returns_none() -> None:
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_row))
+        mock_db.execute = AsyncMock(
+            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [mock_row]))
+        )
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 

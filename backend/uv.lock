@@ -836,6 +836,7 @@ dependencies = [
     { name = "pillow-heif" },
     { name = "psycopg2-binary" },
     { name = "pydantic-settings" },
+    { name = "pyjwt" },
     { name = "python-multipart" },
     { name = "sqlalchemy" },
 ]
@@ -863,6 +864,7 @@ requires-dist = [
     { name = "pillow-heif", specifier = ">=0.18" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "pyjwt", specifier = ">=2.8" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "sqlalchemy", specifier = ">=2.0" },
 ]

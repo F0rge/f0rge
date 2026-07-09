@@ -52,6 +52,10 @@ from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH  # noqa: E402
 
+TEST_JWT_SECRET = "test-jwt-secret-for-pytest-only-32b"
+TEST_EMAIL = "test@example.com"
+TEST_PASSWORD = "test-password-12"
+
 
 # ---------------------------------------------------------------------------
 # Session-scoped containers + engine
@@ -162,3 +166,19 @@ async def async_client(async_db: AsyncSession) -> AsyncIterator[httpx.AsyncClien
             yield client
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture(autouse=True)
+def jwt_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "jwt_secret", TEST_JWT_SECRET)
+
+
+@pytest.fixture
+async def authed_client(async_client: AsyncClient) -> AsyncClient:
+    """Log in via a real signup round-trip (rolled back with the test savepoint)."""
+    resp = await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert resp.status_code == 200
+    return async_client

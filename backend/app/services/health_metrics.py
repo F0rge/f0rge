@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.exceptions import NotFoundError, UnauthorizedError
 from app.models.health_metrics import HealthMetric
-from app.services.auth import get_session_by_token
+from app.services.auth import decode_access_token
 from app.services.health_import import parse_health_auto_export
 
 _logger = logging.getLogger("health_import_debug")
@@ -20,7 +20,7 @@ _logger = logging.getLogger("health_import_debug")
 async def validate_health_import_auth(
     authorization: Optional[str],
     ht_session: Optional[str],
-    db: AsyncSession,
+    _db: AsyncSession,
 ) -> None:
     """Validate bearer token or session cookie for the health import endpoint.
 
@@ -32,10 +32,13 @@ async def validate_health_import_auth(
         if settings.health_import_token and token == settings.health_import_token:
             return
 
-    # Try session cookie
-    session = await get_session_by_token(db, ht_session)
-    if session and session.expires_at >= datetime.datetime.utcnow():
-        return
+    # Try session cookie (JWT)
+    if ht_session:
+        try:
+            decode_access_token(ht_session)
+            return
+        except UnauthorizedError:
+            pass
 
     raise UnauthorizedError("Not authenticated")
 

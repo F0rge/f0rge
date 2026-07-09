@@ -16,7 +16,6 @@ from __future__ import annotations
 import datetime
 import io
 
-import bcrypt
 import pytest
 import pytest_asyncio
 from fastapi import BackgroundTasks, UploadFile
@@ -28,26 +27,10 @@ from app.config import settings
 from app.models.entry import Entry
 from app.services.photos import PhotoService
 
-TEST_PIN = "1234"
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture(autouse=True)
-def known_pin(monkeypatch: pytest.MonkeyPatch) -> str:
-    hashed = bcrypt.hashpw(TEST_PIN.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    monkeypatch.setattr(settings, "pin_hash", hashed)
-    return TEST_PIN
-
-
-@pytest.fixture
-async def authed_client(async_client: AsyncClient) -> AsyncClient:
-    resp = await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
-    assert resp.status_code == 200
-    return async_client
 
 
 @pytest_asyncio.fixture

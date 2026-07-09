@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    pin_hash: str = ""
+    jwt_secret: str = ""
     database_url: str = "postgresql+asyncpg://health:health@localhost:5432/health"
     direct_database_url: str = ""
     app_timezone: str = "Europe/Luxembourg"

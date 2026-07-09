@@ -8,32 +8,14 @@ from __future__ import annotations
 
 import datetime
 
-import bcrypt
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 
-TEST_PIN = "1234"
 _DATE = datetime.date(2026, 4, 1)
-
-
-@pytest.fixture(autouse=True)
-def known_pin(monkeypatch: pytest.MonkeyPatch) -> str:
-    hashed = bcrypt.hashpw(TEST_PIN.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    monkeypatch.setattr(settings, "pin_hash", hashed)
-    return TEST_PIN
-
-
-@pytest.fixture
-async def authed_client(async_client: AsyncClient) -> AsyncClient:
-    resp = await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
-    assert resp.status_code == 200
-    return async_client
 
 
 async def _make_photo_with_analysis(db: AsyncSession) -> int:
@@ -95,7 +77,6 @@ async def test_dietary_confirm_sets_and_returns_flags(
     assert body["gluten_free_confirmed"] is True
     assert body["lactose_free_confirmed"] is True
 
-    # Persisted: a follow-up GET reflects the new state.
     got = await authed_client.get(f"/api/v1/photos/{photo_id}/analysis")
     assert got.status_code == 200
     assert got.json()["gluten_free_confirmed"] is True
@@ -107,12 +88,10 @@ async def test_dietary_confirm_partial_update_does_not_clobber_other_flag(
 ) -> None:
     photo_id = await _make_photo_with_analysis(async_db)
 
-    # Set lactose-free first.
     await authed_client.put(
         f"/api/v1/photos/{photo_id}/analysis/dietary-confirm",
         json={"lactose_free_confirmed": True},
     )
-    # Now set gluten-free only; lactose-free must remain True (not reset by omission).
     resp = await authed_client.put(
         f"/api/v1/photos/{photo_id}/analysis/dietary-confirm",
         json={"gluten_free_confirmed": True},

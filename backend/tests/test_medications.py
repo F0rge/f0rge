@@ -6,15 +6,10 @@ No mocks of app code.
 
 from __future__ import annotations
 
-import bcrypt
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.services import medication_catalog as medication_catalog_service
-
-TEST_PIN = "1234"
 
 _VALID_PAYLOAD = {
     "date": "2026-02-01",
@@ -29,20 +24,6 @@ _VALID_PAYLOAD = {
     "supplements": "",
     "sick": False,
 }
-
-
-@pytest.fixture(autouse=True)
-def known_pin(monkeypatch: pytest.MonkeyPatch) -> str:
-    hashed = bcrypt.hashpw(TEST_PIN.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    monkeypatch.setattr(settings, "pin_hash", hashed)
-    return TEST_PIN
-
-
-@pytest.fixture
-async def authed_client(async_client: AsyncClient) -> AsyncClient:
-    resp = await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
-    assert resp.status_code == 200
-    return async_client
 
 
 # ---------------------------------------------------------------------------

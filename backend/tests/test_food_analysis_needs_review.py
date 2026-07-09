@@ -4,21 +4,18 @@ from __future__ import annotations
 
 import datetime
 
-import bcrypt
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.config import settings
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.services.food_analysis import analysis_needs_review
 from app.services.vision_prompt import VisionIngredient, VisionResult
 
-TEST_PIN = "1234"
 _DATE = datetime.date(2026, 4, 1)
 
 
@@ -167,20 +164,6 @@ async def test_trigger_high_confidence_sets_complete(
         '"ingredients":[{"name":"rice","visible":true,"confidence":0.9}]}',
     )
     assert analysis.status == "complete"
-
-
-@pytest.fixture(autouse=True)
-def known_pin(monkeypatch: pytest.MonkeyPatch) -> str:
-    hashed = bcrypt.hashpw(TEST_PIN.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    monkeypatch.setattr(settings, "pin_hash", hashed)
-    return TEST_PIN
-
-
-@pytest.fixture
-async def authed_client(async_client: AsyncClient) -> AsyncClient:
-    resp = await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
-    assert resp.status_code == 200
-    return async_client
 
 
 async def test_confirm_needs_review_transitions_to_confirmed(
