@@ -111,7 +111,7 @@ export interface PhotoIngredient {
 export interface PhotoAnalysis {
   id: number
   photo_id: number
-  status: 'pending' | 'analyzing' | 'complete' | 'failed' | 'confirmed'
+  status: 'pending' | 'analyzing' | 'complete' | 'needs_review' | 'failed' | 'confirmed'
   dish_name: string | null
   cuisine: string | null
   dish_confidence: number | null

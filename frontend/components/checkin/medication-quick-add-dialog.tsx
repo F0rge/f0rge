@@ -29,11 +29,17 @@ interface MedicationQuickAddDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onAdd: (intake: MedicationIntake) => void
+  initialKey?: string | null
 }
 
-export function MedicationQuickAddDialog({ open, onOpenChange, onAdd }: MedicationQuickAddDialogProps) {
+export function MedicationQuickAddDialog({
+  open,
+  onOpenChange,
+  onAdd,
+  initialKey = null,
+}: MedicationQuickAddDialogProps) {
   const { data: catalog = [], isLoading } = useMedicationCatalog(false)
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [selectedKey, setSelectedKey] = useState<string | null>(initialKey)
   const [dose, setDose] = useState('')
   const [reason, setReason] = useState('')
 

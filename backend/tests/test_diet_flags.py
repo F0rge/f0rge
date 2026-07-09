@@ -380,6 +380,26 @@ async def test_unconfirmed_analysis_is_ignored(async_db: AsyncSession) -> None:
     assert signal.scores.dairy_count == 0
 
 
+async def test_needs_review_analysis_is_ignored(async_db: AsyncSession) -> None:
+    analysis, entry_id = await _build(async_db, status="needs_review")
+    await _make_ingredient(
+        async_db,
+        analysis,
+        name="aged cheese",
+        histamine_score=3,
+        fodmap_oligos="high",
+        contains_gluten=True,
+        contains_dairy=True,
+    )
+    await async_db.commit()
+
+    entry = await _load_entry(async_db, entry_id)
+    signal = compute_photo_signal(entry)
+
+    assert signal.flags == set()
+    assert signal.scores.histamine_load == 0
+
+
 # ---------------------------------------------------------------------------
 # 7. Empty entry
 # ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@
  */
 
 import Link from 'next/link'
-import { Check, Flame, Pill } from 'lucide-react'
+import { Check, Flame } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { useProtocol, useLogDose } from '@/lib/api/hooks'
 import type { ProtocolItem } from '@/lib/api/types'
@@ -42,18 +42,8 @@ export function ProtocolCard({ date }: ProtocolCardProps) {
   return (
     <Card className="col-span-12 h-full">
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            <Pill className="size-4" />
-            Today&apos;s Protocol
-          </span>
-          <Link
-            href="/treatments"
-            aria-label="View all treatments"
-            className="text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <Pill className="size-4" />
-          </Link>
+        <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Today&apos;s Protocol
         </CardTitle>
       </CardHeader>
 
@@ -112,6 +102,14 @@ export function ProtocolCard({ date }: ProtocolCardProps) {
             ),
           )}
         </ul>
+        <div className="border-t border-border px-4 py-2.5">
+          <Link
+            href="/treatments"
+            className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            View all treatments
+          </Link>
+        </div>
       </CardContent>
     </Card>
   )

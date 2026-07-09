@@ -1,0 +1,159 @@
+---
+description: ETL pipelines, ingredient normalization, ML prompts, and dietary data schema for health-tracker. Use proactively for data ingestion, transformation scripts, normalization layers, prompt engineering, or reference table maintenance.
+globs: backend/scripts/**, backend/data/**
+alwaysApply: false
+---
+
+# Data Engineering Standards
+
+Build and maintain dietary reference data pipelines for health-tracker — ingredient-to-dietary-tag lookup tables powering food analysis.
+
+## Domains
+
+### 1. Dietary Database ETL
+
+| Source | Data | Format |
+|--------|------|--------|
+| SIGHI Histamine List | ~500 foods, 0–3 compatibility | PDF |
+| fodmap_list | FODMAP categories | JSON (oseparovic/fodmap_list) |
+| Open Food Facts | Product allergens | REST API |
+
+### 2. Ingredient Normalization
+
+Map raw vision-model ingredient names to canonical lookup entries:
+- Synonym mapping (`"parmesan"` → `"cheese, parmesan"`)
+- Category mapping (`"aged cheese"` → high histamine)
+- Fuzzy matching for misspellings
+- English + French (Luxembourg context)
+
+### 3. Lookup Table Schema
+
+Postgres tables (managed by Alembic, models in `backend/app/models/`):
+
+**`dietary_ingredients`** — one row per canonical ingredient
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | integer PK | |
+| `canonical_name` | text UNIQUE NOT NULL | lowercase, normalized |
+| `category` | text | e.g. "meat", "dairy" |
+| `histamine_score` | integer | SIGHI 0–3 (NULL = not scored) |
+| `fodmap_oligos` | text | "low" \| "moderate" \| "high" \| NULL |
+| `fodmap_fructose` | text | same enum |
+| `fodmap_polyols` | text | same enum |
+| `fodmap_lactose` | text | same enum |
+| `contains_gluten` | boolean | default false |
+| `contains_dairy` | boolean | default false |
+| `source` | text | "sighi" \| "fodmap_list" \| "allergens" \| "manual" |
+| `source_version` | text | e.g. "2024" |
+| `archived` | boolean | soft-delete, default false |
+| `created_at` / `updated_at` | timestamp | |
+
+**`ingredient_aliases`** — synonym/alias rows per canonical
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | integer PK | |
+| `alias` | text UNIQUE NOT NULL | lowercased alias string |
+| `canonical_name` | text FK → `dietary_ingredients.canonical_name` | CASCADE |
+| `language` | text | default "en" |
+
+Source JSON files live in `backend/data/`. `backend/data/manifest.json` records SHA-256, source URL, and `downloaded_at` for each file.
+
+### 4. Data Quality
+
+- **Idempotent** — safe to re-run without duplicates
+- **Versioned sources** — record download date, URL, checksum
+- **Validation after load** — row counts, null checks, score ranges
+- **Audit trail** for manual overrides
+
+## ETL Script Conventions
+
+- Location: `backend/scripts/` → output to `backend/data/`
+- Run: `uv run python -m scripts.<name>`
+- Self-contained with clear logging
+- Summary on completion (rows loaded, errors, warnings)
+- `from __future__ import annotations` in all files
+
+## Key Principles
+
+1. **Idempotent pipelines** — every script safe to re-run
+2. **Source traceability** — always record origin and timestamp
+3. **Normalize aggressively** — handle messy real-world ingredient names
+4. **Postgres-native** — dietary data lives in Postgres via Alembic migrations
+5. **Python 3.10** — no newer syntax
+
+## Commands
+
+```bash
+cd backend
+uv run python -m scripts.<script_name>
+uv run ruff check . && uv run ruff format .
+```
+
+For deep pipeline work, delegate to the `data-engineer` sub-agent in `~/.cursor/agents/`.
+
+---
+
+# Data Science & ML Standards
+
+Work on health-tracker ML pipelines: food image analysis, ingredient-to-dietary-tag mapping, and health data correlation.
+
+## Domains
+
+### 1. Food Image Analysis
+
+- Optimize prompts for vision models (Gemini 3 Flash via OpenRouter)
+- Extract ingredients from food photos → structured JSON
+- Handle edge cases: mixed dishes, sauces, cultural foods, partial views
+- Evaluate and improve accuracy over time
+
+### 2. Ingredient-to-Dietary-Tag Mapping
+
+| Tag | Scale | Source |
+|-----|-------|--------|
+| Histamine | 0–3 compatibility | SIGHI list |
+| FODMAP | oligos/fructose/polyols/lactose | fodmap_list JSON |
+| Gluten | binary + confidence | lookup tables |
+| Dairy | binary + confidence | lookup tables |
+
+Fuzzy matching: `"parmesan"` → `"cheese, hard, aged"` → high histamine.
+
+### 3. Health Data Analysis
+
+Correlate dietary intake with symptom scores; time-series trigger identification.
+
+## Prompt Engineering
+
+- **Image-before-text** ordering
+- Request **structured JSON** with defined schema
+- Chain-of-thought: identify dish → list visible ingredients → infer hidden from recipes
+- **Confidence scores per ingredient**
+- Flag uncertainty rather than hallucinate
+
+```json
+{
+  "dish_name": "string",
+  "cuisine": "string | null",
+  "confidence": 0.0,
+  "ingredients": [
+    { "name": "normalized name", "visible": true, "confidence": 0.0 }
+  ]
+}
+```
+
+## Key Principles
+
+1. **Accuracy over speed** — wrong dietary tag worse than slow response
+2. **Confidence scores everywhere** — never present uncertain results as definitive
+3. **Fail open** — flag for human review rather than guess
+4. **Reproducibility** — all analysis reproducible from stored data
+5. **Python 3.10** — no syntax newer than 3.10
+
+## Commands
+
+```bash
+cd backend
+uv run python -m scripts.<script_name>
+uv run ruff check . && uv run ruff format .
+```
+
+For deep ML/prompt work, delegate to the `data-scientist` sub-agent in `~/.cursor/agents/`.

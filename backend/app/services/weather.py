@@ -151,3 +151,11 @@ async def weather_background_loop() -> None:
         except Exception:
             logger.exception("Error in weather background loop")
         await asyncio.sleep(3600)
+
+
+class WeatherService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def get_daily_summary_or_404(self, date: datetime.date) -> WeatherDailySummary:
+        return await get_daily_summary_or_404(self.db, date)

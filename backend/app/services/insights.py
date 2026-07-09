@@ -394,3 +394,37 @@ async def compute_sleep_next_day(
         rho=rho,
         n=pair_n,
     )
+
+
+class InsightsService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def compute_trends(
+        self,
+        start: Optional[datetime.date] = None,
+        end: Optional[datetime.date] = None,
+    ) -> TrendsResponse:
+        return await compute_trends(self.db, start, end)
+
+    async def compute_correlates(
+        self,
+        start: Optional[datetime.date],
+        end: Optional[datetime.date],
+        outcome: str,
+        category: Optional[str],
+        min_n: int,
+    ) -> CorrelatesResponse:
+        return await compute_correlates(self.db, start, end, outcome, category, min_n)
+
+    async def compute_treatment_response(self, outcome: str) -> TreatmentResponseList:
+        return await compute_treatment_response(self.db, outcome)
+
+    async def compute_sleep_next_day(
+        self,
+        start: Optional[datetime.date],
+        end: Optional[datetime.date],
+        outcome: str,
+        metric: str,
+    ) -> SleepNextDayResponse:
+        return await compute_sleep_next_day(self.db, start, end, outcome, metric)

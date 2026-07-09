@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.dependencies.symptom_catalog import get_symptom_catalog_service
 from app.middleware.auth import get_current_session
 from app.schemas.symptom_catalog import (
     SymptomCatalogItemCreate,
@@ -11,7 +10,7 @@ from app.schemas.symptom_catalog import (
     SymptomCatalogItemUpdate,
     SymptomOrderRequest,
 )
-from app.services import symptom_catalog as symptom_catalog_service
+from app.services.symptom_catalog import SymptomCatalogService
 
 router = APIRouter(
     prefix="/api/v1/symptoms/catalog",
@@ -23,9 +22,9 @@ router = APIRouter(
 @router.get("", response_model=list[SymptomCatalogItemResponse])
 async def list_catalog(
     include_archived: bool = Query(False),
-    db: AsyncSession = Depends(get_db),
+    service: SymptomCatalogService = Depends(get_symptom_catalog_service),
 ):
-    return await symptom_catalog_service.list_items(db, include_archived=include_archived)
+    return await service.list_items(include_archived=include_archived)
 
 
 @router.post(
@@ -35,23 +34,23 @@ async def list_catalog(
 )
 async def create_catalog_item(
     body: SymptomCatalogItemCreate,
-    db: AsyncSession = Depends(get_db),
+    service: SymptomCatalogService = Depends(get_symptom_catalog_service),
 ):
-    return await symptom_catalog_service.create_item(db, body.key, body.label)
+    return await service.create_item(body.key, body.label)
 
 
 @router.patch("/reorder", response_model=list[SymptomCatalogItemResponse])
 async def reorder_catalog(
     body: SymptomOrderRequest,
-    db: AsyncSession = Depends(get_db),
+    service: SymptomCatalogService = Depends(get_symptom_catalog_service),
 ):
-    return await symptom_catalog_service.reorder_items(db, body.order)
+    return await service.reorder_items(body.order)
 
 
 @router.patch("/{key}", response_model=SymptomCatalogItemResponse)
 async def update_catalog_item(
     key: str,
     body: SymptomCatalogItemUpdate,
-    db: AsyncSession = Depends(get_db),
+    service: SymptomCatalogService = Depends(get_symptom_catalog_service),
 ):
-    return await symptom_catalog_service.update_item(db, key, body.model_dump(exclude_unset=True))
+    return await service.update_item(key, body.model_dump(exclude_unset=True))

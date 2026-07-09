@@ -24,6 +24,19 @@ from app.services.labs import LabsService
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def lab_import_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+
+    async def _fake_resolve(db: AsyncSession) -> tuple[str, str]:
+        return ("test-api-key", settings.openrouter_model)
+
+    monkeypatch.setattr(
+        "app.services.llm.factory.resolve_llm_credentials",
+        _fake_resolve,
+    )
+
+
 @pytest.fixture
 def import_service(
     async_db: AsyncSession,
@@ -41,7 +54,7 @@ def import_service(
 
     labs = LabsService(async_db)
     catalog = LabMarkerCatalogService(async_db)
-    extraction = LabExtractionService()
+    extraction = LabExtractionService(async_db)
     storage = LabAttachmentStorage()
     return LabImportService(async_db, labs, catalog, extraction, storage)
 
@@ -90,7 +103,7 @@ def _patch_extraction(
     """Patch the OpenRouter call so each invocation returns a canned response."""
     queue = list(responses)
 
-    async def fake(messages: List[dict], model: str) -> str:
+    async def fake(messages: List[dict], model: str, api_key: str) -> str:
         if not queue:
             raise AssertionError("_call_openrouter called more times than expected")
         return queue.pop(0)

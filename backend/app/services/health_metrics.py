@@ -81,3 +81,14 @@ async def get_health_metric(db: AsyncSession, date: datetime.date) -> HealthMetr
     if not metric:
         raise NotFoundError(f"No health metrics for {date}")
     return metric
+
+
+class HealthMetricsService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def import_health_data(self, body: dict) -> dict:
+        return await import_health_data(self.db, body)
+
+    async def get_health_metric(self, date: datetime.date) -> HealthMetric:
+        return await get_health_metric(self.db, date)

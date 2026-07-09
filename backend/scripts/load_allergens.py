@@ -37,6 +37,8 @@ def load() -> None:
             if existing:
                 existing.contains_gluten = gluten
                 existing.contains_dairy = dairy
+                existing.source = existing.source or "allergens"
+                existing.source_version = existing.source_version or "2024"
                 updated += 1
             else:
                 session.add(
@@ -44,6 +46,8 @@ def load() -> None:
                         canonical_name=name,
                         contains_gluten=gluten,
                         contains_dairy=dairy,
+                        source="allergens",
+                        source_version="2024",
                     )
                 )
                 inserted += 1

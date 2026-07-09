@@ -39,25 +39,20 @@ from app.services.photos import PhotoService
 
 
 @pytest_asyncio.fixture
-async def isolated_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
-    """Point photo_dir + vault_path at tmp_path so tests never touch
-    backend/photos/ or the real Obsidian vault."""
+async def real_storage(tmp_path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
+    """Point photo_dir + vault_path at tmp_path; exercise real PhotoService seams.
+
+    Does not monkeypatch ``render_and_write_daily_file``, ``save_photo``, or
+    ``delete_photo`` — same contract as ``test_photos_upload_integration.py``.
+    """
     photo_dir = tmp_path / "photos"
     vault_dir = tmp_path / "vault"
     photo_dir.mkdir()
     vault_dir.mkdir()
     monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
     monkeypatch.setattr(settings, "vault_path", str(vault_dir))
-    # Disable food analysis side effect (the background task hits OpenRouter).
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
     monkeypatch.setattr(settings, "openrouter_api_key", "")
-    # Stub out the daily-file writer so tests don't depend on its schema.
-
-    async def _noop(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr("app.services.photos.render_and_write_daily_file", _noop, raising=False)
-    monkeypatch.setattr("app.services.photos.write_daily_file", _noop, raising=False)
     yield
 
 
@@ -116,7 +111,7 @@ async def _delete(db: AsyncSession, photo_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_first_upload_gets_photo_1(async_db: AsyncSession, isolated_storage: None) -> None:
+async def test_first_upload_gets_photo_1(async_db: AsyncSession, real_storage: None) -> None:
     day = datetime.date(2026, 5, 15)
     await _make_entry(async_db, day)
 
@@ -125,7 +120,7 @@ async def test_first_upload_gets_photo_1(async_db: AsyncSession, isolated_storag
     assert photo.filename == "2026-05-15_photo-1.jpg"
 
 
-async def test_second_upload_gets_photo_2(async_db: AsyncSession, isolated_storage: None) -> None:
+async def test_second_upload_gets_photo_2(async_db: AsyncSession, real_storage: None) -> None:
     day = datetime.date(2026, 5, 15)
     await _make_entry(async_db, day)
 
@@ -136,7 +131,7 @@ async def test_second_upload_gets_photo_2(async_db: AsyncSession, isolated_stora
 
 
 async def test_delete_photo_1_then_upload_gets_photo_3(
-    async_db: AsyncSession, isolated_storage: None
+    async_db: AsyncSession, real_storage: None
 ) -> None:
     """The regression case from issue #9: deleting photo-1 must NOT cause
     the next upload to be numbered 2 (which would collide with the existing
@@ -159,7 +154,7 @@ async def test_delete_photo_1_then_upload_gets_photo_3(
 
 
 async def test_delete_photo_2_then_upload_gets_photo_4(
-    async_db: AsyncSession, isolated_storage: None
+    async_db: AsyncSession, real_storage: None
 ) -> None:
     """Same principle, deleting from the middle of the sequence."""
     day = datetime.date(2026, 5, 15)
@@ -176,9 +171,7 @@ async def test_delete_photo_2_then_upload_gets_photo_4(
     assert fourth.filename == "2026-05-15_photo-4.jpg"
 
 
-async def test_gaps_in_numbering_are_preserved(
-    async_db: AsyncSession, isolated_storage: None
-) -> None:
+async def test_gaps_in_numbering_are_preserved(async_db: AsyncSession, real_storage: None) -> None:
     """Deleted numbers must stay retired forever -- the next upload always
     picks max(existing)+1, never fills holes."""
     day = datetime.date(2026, 5, 15)
@@ -203,7 +196,7 @@ async def test_gaps_in_numbering_are_preserved(
     assert eighth.filename == "2026-05-15_photo-8.jpg"
 
 
-async def test_numbering_is_per_date(async_db: AsyncSession, isolated_storage: None) -> None:
+async def test_numbering_is_per_date(async_db: AsyncSession, real_storage: None) -> None:
     """Sanity check: each date has its own independent numbering sequence."""
     day_a = datetime.date(2026, 5, 15)
     day_b = datetime.date(2026, 5, 16)

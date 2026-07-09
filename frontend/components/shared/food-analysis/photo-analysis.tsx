@@ -190,6 +190,7 @@ export function PhotoAnalysis({
   }
 
   const isConfirmed = analysis.status === 'confirmed'
+  const needsReview = analysis.status === 'needs_review'
   const visibleIngredients = analysis.ingredients.filter((ing) => ing.visible)
   const inferredIngredients = analysis.ingredients.filter((ing) => !ing.visible)
 
@@ -200,6 +201,12 @@ export function PhotoAnalysis({
 
   return (
     <div className="mt-2 rounded-lg border border-border p-2.5">
+      {needsReview && (
+        <p className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+          Low confidence — review ingredients before confirming.
+        </p>
+      )}
+
       {!hideTitle && analysis.dish_name && (
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold text-foreground">{analysis.dish_name}</span>

@@ -227,3 +227,23 @@ async def delete_entry(db: AsyncSession, date: datetime.date) -> None:
     for photo in photos:
         await asyncio.to_thread(delete_photo, photo.filename, settings.vault_path)
     await asyncio.to_thread(delete_daily_file, date_str)
+
+
+class EntryService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def create_entry(self, body: EntryCreate) -> EntryResponse:
+        return await create_entry(self.db, body)
+
+    async def list_entries(self, month: Optional[str] = None) -> list[EntryResponse]:
+        return await list_entries(self.db, month)
+
+    async def get_entry(self, date: datetime.date) -> EntryResponse:
+        return await get_entry(self.db, date)
+
+    async def update_entry(self, date: datetime.date, body: EntryUpdate) -> EntryResponse:
+        return await update_entry(self.db, date, body)
+
+    async def delete_entry(self, date: datetime.date) -> None:
+        return await delete_entry(self.db, date)

@@ -1,0 +1,11 @@
+from __future__ import annotations
+
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.services.supplement_catalog import SupplementCatalogService
+
+
+def get_supplement_catalog_service(db: AsyncSession = Depends(get_db)) -> SupplementCatalogService:
+    return SupplementCatalogService(db)

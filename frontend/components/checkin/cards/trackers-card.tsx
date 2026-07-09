@@ -1,6 +1,5 @@
 'use client'
 
-import { BarChart2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import {
   useTrackers,
@@ -68,11 +67,8 @@ export function TrackersCard({
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            <BarChart2 className="size-4" />
-            Daily trackers
-          </span>
+        <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Daily trackers
           <TierPill tier="custom" />
         </CardTitle>
       </CardHeader>

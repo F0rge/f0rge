@@ -1,6 +1,5 @@
 'use client'
 
-import { Pill } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { SupplementPicker } from '@/components/checkin/supplement-picker'
 import { TierPill } from '@/components/customize/tier-pill'
@@ -16,7 +15,6 @@ export function SupplementsCard({ value, onChange, onTouched }: SupplementsCardP
     <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          <Pill className="size-4" />
           Supplements
           <TierPill tier="catalog" />
         </CardTitle>
