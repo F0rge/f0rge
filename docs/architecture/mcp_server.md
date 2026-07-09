@@ -51,7 +51,7 @@ health-tracker-postgres
    docker exec health-tracker-backend uv run alembic upgrade head
    ```
 
-3. **Deploy via Coolify** — the existing webhook on the GitHub repo redeploys the stack. The new `mcp-server` and `embedding-worker` services come up alongside `backend` and `postgres`.
+3. **Deploy via Coolify** — the existing webhook on the GitHub repo redeploys the backend stack (`postgres`, `backend`, `embedding-worker`). The `mcp-server` is a separate Coolify app built from `docker-compose.mcp.prod.yml`; it attaches to the backend stack's external network to reach `postgres` and redeploys independently.
 
 4. **Verify locally on the Pi**:
    ```bash
@@ -78,7 +78,7 @@ health-tracker-postgres
    - hostname: health-mcp.leo-figueiredo.com
      service: http://localhost:8007
    ```
-   The port is **8007**, not 8005, because 8005 is already in use on the Pi by another project (Entre Nos backend). The `docker-compose.prod.yml` for health-tracker maps host `8007 -> container 8005`.
+   The port is **8007**, not 8005, because 8005 is already in use on the Pi by another project (Entre Nos backend). `docker-compose.mcp.prod.yml` for health-tracker maps host `8007 -> container 8005`. (The MCP server was split out of `docker-compose.prod.yml` into its own single-service Coolify app so a backend-stack redeploy no longer flaps host port 8007 — see the header comment in that file.)
 
 2. **Route DNS to the tunnel:**
    ```bash
@@ -128,4 +128,4 @@ Verify with `claude mcp list` (the new server should appear) and then within a `
 - **HTML challenge page or redirect to `cloudflareaccess.com`** — the Cloudflare Access cookie has expired or is missing. Open `https://health-mcp.leo-figueiredo.com/` in a browser, authenticate, then re-issue the call (the browser sets `CF_Authorization`).
 - **`permission denied for table X`** — expected behaviour for any DML statement issued via the read-only role. The fix is not to grant DML; the fix is to wire the operation through the regular backend API which uses the read-write role.
 - **`role "healthtracker_ro" does not exist`** — migration `004` was not applied. Run `alembic upgrade head` inside `health-tracker-backend`.
-- **`connection refused` from cloudflared logs** — `mcp-server` container isn't up, or it's bound to a different port than the ingress rule expects. Check `docker compose ps` and the `ports:` line in `docker-compose.prod.yml`.
+- **`connection refused` from cloudflared logs** — `mcp-server` container isn't up, or it's bound to a different port than the ingress rule expects. Check `docker compose ps` and the `ports:` line in `docker-compose.mcp.prod.yml`.
