@@ -12,7 +12,6 @@ from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
-from app.models.photo_ingredient import PhotoIngredient
 from app.models.supplement_catalog import SupplementCatalogItem
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
@@ -91,28 +90,36 @@ _FODMAP_LEVEL: dict[Optional[str], int] = {"high": 2, "moderate": 1, None: 0}
 def _compute_dietary_loads(photos: list[Photo]) -> dict:
     # Counts both visible and inferred ingredients — matches diet_flags._aggregate
     # so stats and the photo_signal converge on the same numbers.
-    ingredients: list[PhotoIngredient] = []
-    confirmed_photo_count = 0
-
-    for photo in photos:
-        if photo.analysis and photo.analysis.status == "confirmed":
-            confirmed_photo_count += 1
-            ingredients.extend(photo.analysis.ingredients)
-
+    #
+    # Per-meal overrides mirror diet_flags exactly: a gluten-free-confirmed meal
+    # drops its gluten exposure; a lactose-free-confirmed meal contributes 0 to the
+    # lactose sum (dairy_exposure and every other axis are untouched). Accumulation
+    # happens inside the per-photo loop so the flag is applied per analysis.
     hist_sum = hist_max = oligos = fructose = polyols = lactose = 0
     gluten = dairy = False
-    for i in ingredients:
-        h = i.histamine_score or 0
-        hist_sum += h
-        if h > hist_max:
-            hist_max = h
-        oligos += _FODMAP_LEVEL.get(i.fodmap_oligos, 0)
-        fructose += _FODMAP_LEVEL.get(i.fodmap_fructose, 0)
-        polyols += _FODMAP_LEVEL.get(i.fodmap_polyols, 0)
-        lactose += _FODMAP_LEVEL.get(i.fodmap_lactose, 0)
-        # bool() guards against None on these nullable columns
-        gluten = gluten or bool(i.contains_gluten)
-        dairy = dairy or bool(i.contains_dairy)
+    confirmed_photo_count = 0
+    ingredient_count = 0
+
+    for photo in photos:
+        a = photo.analysis
+        if not (a and a.status == "confirmed"):
+            continue
+        confirmed_photo_count += 1
+        gsup = bool(a.gluten_free_confirmed)
+        lsup = bool(a.lactose_free_confirmed)
+        for i in a.ingredients:
+            ingredient_count += 1
+            h = i.histamine_score or 0
+            hist_sum += h
+            if h > hist_max:
+                hist_max = h
+            oligos += _FODMAP_LEVEL.get(i.fodmap_oligos, 0)
+            fructose += _FODMAP_LEVEL.get(i.fodmap_fructose, 0)
+            polyols += _FODMAP_LEVEL.get(i.fodmap_polyols, 0)
+            lactose += 0 if lsup else _FODMAP_LEVEL.get(i.fodmap_lactose, 0)
+            # bool() guards against None on these nullable columns
+            gluten = gluten or (bool(i.contains_gluten) and not gsup)
+            dairy = dairy or bool(i.contains_dairy)
 
     return {
         "histamine_load_sum": hist_sum,
@@ -124,7 +131,7 @@ def _compute_dietary_loads(photos: list[Photo]) -> dict:
         "gluten_exposure": gluten,
         "dairy_exposure": dairy,
         "photo_count": confirmed_photo_count,
-        "ingredient_count": len(ingredients),
+        "ingredient_count": ingredient_count,
     }
 
 

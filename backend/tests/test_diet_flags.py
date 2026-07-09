@@ -9,7 +9,11 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
-from app.services.diet_flags import compute_effective_counts, compute_photo_signal
+from app.services.diet_flags import (
+    compute_effective_counts,
+    compute_photo_signal,
+    compute_signal_from_analyses,
+)
 
 _DATE = datetime.date(2026, 1, 1)
 
@@ -52,11 +56,18 @@ async def _make_photo(db: AsyncSession, entry: Entry) -> Photo:
 
 
 async def _make_analysis(
-    db: AsyncSession, photo: Photo, status: str = "confirmed"
+    db: AsyncSession,
+    photo: Photo,
+    status: str = "confirmed",
+    *,
+    gluten_free_confirmed: bool = False,
+    lactose_free_confirmed: bool = False,
 ) -> PhotoAnalysis:
     analysis = PhotoAnalysis(
         photo_id=photo.id,
         status=status,
+        gluten_free_confirmed=gluten_free_confirmed,
+        lactose_free_confirmed=lactose_free_confirmed,
     )
     db.add(analysis)
     await db.flush()
@@ -93,12 +104,30 @@ async def _make_ingredient(
     return ing
 
 
-async def _build(db: AsyncSession, status: str = "confirmed") -> tuple[PhotoAnalysis, int]:
+async def _build(
+    db: AsyncSession,
+    status: str = "confirmed",
+    *,
+    gluten_free_confirmed: bool = False,
+    lactose_free_confirmed: bool = False,
+) -> tuple[PhotoAnalysis, int]:
     """Convenience: entry -> photo -> analysis. Returns (analysis, entry_id)."""
     entry = await _make_entry(db)
     photo = await _make_photo(db, entry)
-    analysis = await _make_analysis(db, photo, status=status)
+    analysis = await _make_analysis(
+        db,
+        photo,
+        status=status,
+        gluten_free_confirmed=gluten_free_confirmed,
+        lactose_free_confirmed=lactose_free_confirmed,
+    )
     return analysis, entry.id
+
+
+async def _load_analyses(db: AsyncSession, entry_id: int) -> list[PhotoAnalysis]:
+    """Confirmed-or-not analyses for an entry, eager-loaded (safe for aggregation)."""
+    entry = await _load_entry(db, entry_id)
+    return [p.analysis for p in entry.photos if p.analysis is not None]
 
 
 async def _load_entry(db: AsyncSession, entry_id: int) -> Entry:
@@ -438,3 +467,112 @@ async def test_effective_counts_manual_histamine_does_not_bump_load(
     counts = compute_effective_counts(compute_photo_signal(entry), ["high-histamine"])
 
     assert counts["histamine_load"] == 7
+
+
+# ---------------------------------------------------------------------------
+# 10. Per-meal gluten-free / lactose-free confirmation (the scoring gate)
+# ---------------------------------------------------------------------------
+
+
+async def test_gluten_free_confirmed_suppresses_gluten_keeps_dairy(
+    async_db: AsyncSession,
+) -> None:
+    analysis, entry_id = await _build(async_db, gluten_free_confirmed=True)
+    await _make_ingredient(
+        async_db, analysis, name="bread", contains_gluten=True, contains_dairy=True
+    )
+    await async_db.commit()
+
+    entry = await _load_entry(async_db, entry_id)
+    signal = compute_photo_signal(entry)
+
+    assert "gluten" not in signal.flags
+    assert signal.scores.gluten_count == 0
+    # Lactose-free is NOT set, and dairy is deliberately kept regardless.
+    assert "dairy" in signal.flags
+    assert signal.scores.dairy_count == 1
+
+
+async def test_gluten_free_confirmed_via_analyses_entry_point(
+    async_db: AsyncSession,
+) -> None:
+    analysis, entry_id = await _build(async_db, gluten_free_confirmed=True)
+    await _make_ingredient(
+        async_db, analysis, name="bread", contains_gluten=True, contains_dairy=True
+    )
+    await async_db.commit()
+
+    analyses = await _load_analyses(async_db, entry_id)
+    signal = compute_signal_from_analyses(analyses)
+
+    assert "gluten" not in signal.flags
+    assert signal.scores.gluten_count == 0
+    assert "dairy" in signal.flags
+
+
+async def test_lactose_free_confirmed_drops_fodmap_when_lactose_only(
+    async_db: AsyncSession,
+) -> None:
+    analysis, entry_id = await _build(async_db, lactose_free_confirmed=True)
+    await _make_ingredient(
+        async_db, analysis, name="milk", fodmap_lactose="high", contains_dairy=True
+    )
+    await async_db.commit()
+
+    entry = await _load_entry(async_db, entry_id)
+    signal = compute_photo_signal(entry)
+
+    # Lactose was the ONLY high FODMAP axis -> high-fodmap drops.
+    assert "high-fodmap" not in signal.flags
+    assert signal.scores.fodmap_count == 0
+    # Dairy flag is unaffected by the lactose override.
+    assert "dairy" in signal.flags
+    assert signal.scores.dairy_count == 1
+
+
+async def test_lactose_free_confirmed_keeps_fodmap_when_other_axis_high(
+    async_db: AsyncSession,
+) -> None:
+    analysis, entry_id = await _build(async_db, lactose_free_confirmed=True)
+    await _make_ingredient(
+        async_db, analysis, name="onion_milk", fodmap_lactose="high", fodmap_oligos="high"
+    )
+    await async_db.commit()
+
+    entry = await _load_entry(async_db, entry_id)
+    signal = compute_photo_signal(entry)
+
+    # Oligos is still high -> high-fodmap stays even though lactose is suppressed.
+    assert "high-fodmap" in signal.flags
+    assert signal.scores.fodmap_count == 1
+
+
+async def test_lactose_free_confirmed_via_analyses_entry_point(
+    async_db: AsyncSession,
+) -> None:
+    analysis, entry_id = await _build(async_db, lactose_free_confirmed=True)
+    await _make_ingredient(async_db, analysis, name="milk", fodmap_lactose="high")
+    await async_db.commit()
+
+    analyses = await _load_analyses(async_db, entry_id)
+    signal = compute_signal_from_analyses(analyses)
+
+    assert "high-fodmap" not in signal.flags
+    assert signal.scores.fodmap_count == 0
+
+
+async def test_no_override_baseline_unchanged(async_db: AsyncSession) -> None:
+    # Control: neither toggle set -> gluten flag present, high-fodmap present.
+    analysis, entry_id = await _build(async_db)
+    await _make_ingredient(
+        async_db, analysis, name="bread", contains_gluten=True, fodmap_lactose="high"
+    )
+    await async_db.commit()
+
+    entry = await _load_entry(async_db, entry_id)
+    signal = compute_photo_signal(entry)
+
+    assert "gluten" in signal.flags
+    assert signal.scores.gluten_count == 1
+    assert "high-fodmap" in signal.flags
+    assert signal.scores.fodmap_count == 1

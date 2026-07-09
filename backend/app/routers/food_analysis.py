@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, status
 from app.dependencies.food_analysis import get_food_analysis_service
 from app.middleware.auth import get_current_session
 from app.schemas.food_analysis import (
+    DietaryConfirmUpdate,
     IngredientCreate,
     IngredientResponse,
     IngredientUpdate,
@@ -33,6 +34,15 @@ async def confirm_analysis(
     service: FoodAnalysisService = Depends(get_food_analysis_service),
 ) -> PhotoAnalysisResponse:
     return await service.confirm_analysis_by_photo_id(photo_id)
+
+
+@router.put("/photos/{photo_id}/analysis/dietary-confirm", response_model=PhotoAnalysisResponse)
+async def set_dietary_confirmations(
+    photo_id: int,
+    body: DietaryConfirmUpdate,
+    service: FoodAnalysisService = Depends(get_food_analysis_service),
+) -> PhotoAnalysisResponse:
+    return await service.set_dietary_confirmations(photo_id, body)
 
 
 @router.put(
