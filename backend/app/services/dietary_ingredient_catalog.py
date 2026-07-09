@@ -110,8 +110,11 @@ class DietaryIngredientCatalogService:
         ).scalar_one_or_none()
         if alias is None:
             raise NotFoundError(f"Alias {alias_id} not found.")
-        # Remove through the relationship (cascade="all, delete-orphan" on
-        # DietaryIngredient.aliases deletes the orphaned row on flush) so the
-        # parent's in-memory collection stays consistent, same reasoning as add_alias.
-        alias.ingredient.aliases.remove(alias)
+        # Delete the already-fetched row directly. Going through the parent
+        # relationship (alias.ingredient.aliases.remove(alias)) would touch
+        # alias.ingredient.aliases, which is unloaded when the alias is fetched
+        # cold by id -- accessing it lazy-loads in the async session and raises
+        # MissingGreenlet. The parent's in-memory collection consistency is
+        # irrelevant here: the row is deleted and the endpoint returns 204.
+        await self.db.delete(alias)
         await self.db.commit()
