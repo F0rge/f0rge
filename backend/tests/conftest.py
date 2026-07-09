@@ -29,6 +29,7 @@ os.environ.setdefault(
     "postgresql+asyncpg://postgres:postgres@localhost:5432/test",
 )
 
+import uuid
 from typing import AsyncIterator, Iterator  # noqa: E402
 
 import httpx  # noqa: E402
@@ -48,9 +49,13 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 import app.models  # noqa: F401, E402
 
 from app.config import settings
+from app.auth_context import user_id_ctx
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH  # noqa: E402
+from app.rls import enable_row_level_security
+from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL
+from app.tenant import apply_session_user_id
 
 TEST_JWT_SECRET = "test-jwt-secret-for-pytest-only-32b"
 TEST_EMAIL = "test@example.com"
@@ -95,6 +100,8 @@ async def async_engine(
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS citext"))
         await conn.run_sync(Base.metadata.create_all)
+        await enable_row_level_security(conn)
+        await conn.execute(sa.text(COPY_USER_CATALOG_FROM_REFERENCE_SQL))
         await conn.execute(
             sa.text(
                 """
@@ -138,9 +145,12 @@ async def async_db(async_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
             join_transaction_mode="create_savepoint",
         )
         session = session_maker()
+        user_token = user_id_ctx.set(uuid.UUID(settings.default_storage_user_id))
         try:
+            await apply_session_user_id(session, uuid.UUID(settings.default_storage_user_id))
             yield session
         finally:
+            user_id_ctx.reset(user_token)
             await session.close()
             if outer.is_active:
                 await outer.rollback()
@@ -156,6 +166,9 @@ async def async_client(async_db: AsyncSession) -> AsyncIterator[httpx.AsyncClien
     """An ``httpx.AsyncClient`` wired to the FastAPI app with ``get_db`` overridden."""
 
     async def _override_get_db() -> AsyncIterator[AsyncSession]:
+        user_id = user_id_ctx.get()
+        if user_id is not None:
+            await apply_session_user_id(async_db, user_id)
         yield async_db
 
     app.dependency_overrides[get_db] = _override_get_db

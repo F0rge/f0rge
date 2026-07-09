@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.exceptions import ConflictError, UnauthorizedError, ValidationError
 from app.models.user import User
+from app.services.user_provisioning import provision_user_catalogs
 
 JWT_ALGORITHM = "HS256"
 JWT_COOKIE_NAME = "ht_session"
@@ -80,15 +81,11 @@ def _validate_password(password: str) -> None:
 
 
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> Optional[User]:
-    return (
-        await db.execute(select(User).where(User.id == user_id))
-    ).scalar_one_or_none()
+    return (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
-    return (
-        await db.execute(select(User).where(User.email == email))
-    ).scalar_one_or_none()
+    return (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
 
 
 async def signup(
@@ -105,6 +102,8 @@ async def signup(
 
     user = User(email=email, password_hash=_hash_password(password))
     db.add(user)
+    await db.flush()
+    await provision_user_catalogs(db, user.id)
     await db.commit()
     await db.refresh(user)
 
