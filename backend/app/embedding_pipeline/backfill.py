@@ -47,8 +47,8 @@ async def _enqueue_missing(table_name: str, model: str, dry_run: bool) -> int:
     )
     insert_sql = text(
         f"""
-        INSERT INTO embedding_queue (source_table, source_id, action)
-        SELECT '{table_name}', src.id, 'INSERT'
+        INSERT INTO embedding_queue (user_id, source_table, source_id, action)
+        SELECT src.user_id, '{table_name}', src.id, 'INSERT'
         FROM {table_name} src
         LEFT JOIN embedding emb
           ON emb.source_table = '{table_name}'

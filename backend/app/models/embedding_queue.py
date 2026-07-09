@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Integer,
     String,
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.user import default_user_id
 
 
 class EmbeddingQueue(Base):
@@ -36,6 +40,13 @@ class EmbeddingQueue(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        default=default_user_id,
+    )
     source_table: Mapped[str] = mapped_column(String, nullable=False)
     source_id: Mapped[int] = mapped_column(Integer, nullable=False)
     action: Mapped[str] = mapped_column(String, nullable=False)

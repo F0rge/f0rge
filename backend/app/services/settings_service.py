@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ExternalServiceError
+from app.models.user import default_user_id
 from app.models.user_settings import UserSettings
 from app.schemas.settings import (
     EmbeddingSettingsUpdate,
@@ -26,7 +27,7 @@ class SettingsService:
         result = await self.db.execute(select(UserSettings).where(UserSettings.id == 1))
         row = result.scalar_one_or_none()
         if row is None:
-            row = UserSettings(id=1)
+            row = UserSettings(id=1, user_id=default_user_id())
             self.db.add(row)
             await self.db.flush()
         return row

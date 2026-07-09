@@ -43,7 +43,7 @@ async def upload_photo(
     return await service.upload(date, file, label, meal_time, background_tasks)
 
 
-@router.get("/photos/{photo_id}/file")
+@router.get("/photos/{photo_id}/file", response_model=None)
 async def serve_photo(
     photo_id: int,
     service: PhotoService = Depends(get_photo_service),

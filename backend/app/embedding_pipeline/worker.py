@@ -35,7 +35,7 @@ async def _claim_batch(db: AsyncSession) -> list[Any]:
     """
     stmt = text(
         """
-        SELECT id, source_table, source_id, action
+        SELECT id, user_id, source_table, source_id, action
         FROM embedding_queue
         WHERE attempts < :max_attempts
           AND (
@@ -99,6 +99,7 @@ async def _process_row(
 
     for chunk_index, (chunk, vector) in enumerate(zip(chunks, vectors)):
         stmt = pg_insert(Embedding).values(
+            user_id=row.user_id,
             source_table=row.source_table,
             source_id=row.source_id,
             chunk_index=chunk_index,
@@ -108,7 +109,7 @@ async def _process_row(
             embedding_dim=len(vector),
         )
         stmt = stmt.on_conflict_do_update(
-            constraint="uq_embedding_source_chunk_model",
+            constraint="uq_embedding_user_source_chunk_model",
             set_={
                 "chunk_text": stmt.excluded.chunk_text,
                 "embedding": stmt.excluded.embedding,

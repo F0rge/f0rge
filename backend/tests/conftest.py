@@ -47,8 +47,10 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 # Import models so Base.metadata knows every table before create_all runs.
 import app.models  # noqa: F401, E402
 
+from app.config import settings
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +89,22 @@ async def async_engine(
     async with engine.begin() as conn:
         # pgvector extension must be installed before any VECTOR column can be created.
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
+        await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS citext"))
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(
+            sa.text(
+                """
+                INSERT INTO users (id, email, password_hash, created_at)
+                VALUES (:id, :email, :password_hash, now())
+                ON CONFLICT (id) DO NOTHING
+                """
+            ),
+            {
+                "id": settings.default_storage_user_id,
+                "email": "leo@health-tracker.local",
+                "password_hash": LEO_PLACEHOLDER_PASSWORD_HASH,
+            },
+        )
     try:
         yield engine
     finally:
