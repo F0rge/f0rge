@@ -155,7 +155,9 @@ def _dietary_flags_line(analysis: PhotoAnalysis) -> str:
         flags.append(f"Histamine {max_h}")
     if any(i.contains_dairy for i in visible):
         flags.append("Dairy")
-    if any(i.contains_gluten for i in visible):
+    # Per-meal overrides: gluten-free suppresses the Gluten flag; lactose-free omits
+    # the FODMAP-Lactose entry. Dairy is intentionally kept in both cases.
+    if not analysis.gluten_free_confirmed and any(i.contains_gluten for i in visible):
         flags.append("Gluten")
     for field, label in (
         ("oligos", "FODMAP-Oligos"),
@@ -163,6 +165,8 @@ def _dietary_flags_line(analysis: PhotoAnalysis) -> str:
         ("polyols", "FODMAP-Polyols"),
         ("lactose", "FODMAP-Lactose"),
     ):
+        if field == "lactose" and analysis.lactose_free_confirmed:
+            continue
         attr = f"fodmap_{field}"
         if any(getattr(i, attr, None) == "high" for i in visible):
             flags.append(label)
@@ -193,6 +197,11 @@ def _compute_dietary_tags(
 
     all_ingredients = [i for a in confirmed for i in a.ingredients if i.visible]
 
+    # Per-meal overrides suppress the corresponding tags for that analysis only
+    # (keyed by analysis_id, a plain column — never touches ing.analysis).
+    gluten_free_ids = {a.id for a in confirmed if a.gluten_free_confirmed}
+    lactose_free_ids = {a.id for a in confirmed if a.lactose_free_confirmed}
+
     max_h = max(
         (i.histamine_score for i in all_ingredients if i.histamine_score is not None),
         default=None,
@@ -210,15 +219,25 @@ def _compute_dietary_tags(
         ("lactose", "fodmap-high-lactose", "fodmap-moderate-lactose"),
     ):
         attr = f"fodmap_{field}"
-        if any(getattr(i, attr, None) == "high" for i in all_ingredients):
+        if field == "lactose":
+            candidates = [i for i in all_ingredients if i.analysis_id not in lactose_free_ids]
+        else:
+            candidates = all_ingredients
+        if any(getattr(i, attr, None) == "high" for i in candidates):
             tags.append(high_tag)
-        elif any(getattr(i, attr, None) == "moderate" for i in all_ingredients):
+        elif any(getattr(i, attr, None) == "moderate" for i in candidates):
             tags.append(mod_tag)
 
-    if any(i.contains_gluten for i in all_ingredients):
+    if any(i.contains_gluten for i in all_ingredients if i.analysis_id not in gluten_free_ids):
         tags.append("contains-gluten")
     if any(i.contains_dairy for i in all_ingredients):
         tags.append("contains-dairy")
+
+    # Meal-level provenance tags: surface that an override was applied.
+    if gluten_free_ids:
+        tags.append("gluten-free-confirmed")
+    if lactose_free_ids:
+        tags.append("lactose-free-confirmed")
 
     return fm, tags
 

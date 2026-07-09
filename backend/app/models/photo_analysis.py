@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -25,6 +25,14 @@ class PhotoAnalysis(Base):
     raw_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Per-meal user overrides: "this dish was actually gluten-free / lactose-free",
+    # suppressing the corresponding scoring contribution (gluten flag / lactose FODMAP).
+    gluten_free_confirmed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
+    lactose_free_confirmed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         default=datetime.datetime.utcnow,
     )

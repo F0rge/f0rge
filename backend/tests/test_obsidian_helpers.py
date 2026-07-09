@@ -33,6 +33,7 @@ def _ing(
     name: str,
     *,
     visible: bool = True,
+    analysis_id: int = 0,
     histamine_score: int | None = None,
     contains_dairy: bool | None = None,
     contains_gluten: bool | None = None,
@@ -45,6 +46,7 @@ def _ing(
     return SimpleNamespace(
         name=name,
         visible=visible,
+        analysis_id=analysis_id,
         histamine_score=histamine_score,
         contains_dairy=contains_dairy,
         contains_gluten=contains_gluten,
@@ -59,11 +61,17 @@ def _analysis(
     *,
     ingredients: list[SimpleNamespace],
     dish_name: str = "carbonara",
+    id: int = 0,
+    gluten_free_confirmed: bool = False,
+    lactose_free_confirmed: bool = False,
 ) -> SimpleNamespace:
     return SimpleNamespace(
+        id=id,
         dish_name=dish_name,
         dish_confidence=0.9,
         ingredients=ingredients,
+        gluten_free_confirmed=gluten_free_confirmed,
+        lactose_free_confirmed=lactose_free_confirmed,
     )
 
 
@@ -664,3 +672,63 @@ async def test_render_markdown_keeps_photo_embed_and_dish_when_all_invisible(
     assert "**mystery soup**" in md
     # No 'Ingredients:' line because nothing visible to show.
     assert not any(ln.startswith("Ingredients:") for ln in md.splitlines())
+
+
+# --- Per-meal gluten-free / lactose-free overrides (vault display) ----------
+
+
+def test_dietary_flags_line_gluten_free_omits_gluten_keeps_dairy() -> None:
+    analysis = _analysis(
+        gluten_free_confirmed=True,
+        ingredients=[_ing("bread", contains_gluten=True, contains_dairy=True)],
+    )
+    line = _dietary_flags_line(analysis)
+    assert "Gluten" not in line
+    assert "Dairy" in line
+
+
+def test_dietary_flags_line_lactose_free_omits_fodmap_lactose() -> None:
+    analysis = _analysis(
+        lactose_free_confirmed=True,
+        ingredients=[_ing("milk", fodmap_lactose="high", contains_dairy=True)],
+    )
+    line = _dietary_flags_line(analysis)
+    assert "FODMAP-Lactose" not in line
+    # Dairy is deliberately kept.
+    assert "Dairy" in line
+
+
+def test_compute_dietary_tags_gluten_free_suppresses_gluten_tag_adds_meal_tag() -> None:
+    analysis = _analysis(
+        id=7,
+        gluten_free_confirmed=True,
+        ingredients=[_ing("bread", analysis_id=7, contains_gluten=True)],
+    )
+    _, tags = _compute_dietary_tags([analysis])
+    assert "contains-gluten" not in tags
+    assert "gluten-free-confirmed" in tags
+
+
+def test_compute_dietary_tags_lactose_free_suppresses_lactose_tag_adds_meal_tag() -> None:
+    analysis = _analysis(
+        id=9,
+        lactose_free_confirmed=True,
+        ingredients=[_ing("milk", analysis_id=9, fodmap_lactose="high")],
+    )
+    _, tags = _compute_dietary_tags([analysis])
+    assert "fodmap-high-lactose" not in tags
+    assert "lactose-free-confirmed" in tags
+
+
+def test_compute_dietary_tags_lactose_free_keeps_other_fodmap_axis() -> None:
+    analysis = _analysis(
+        id=3,
+        lactose_free_confirmed=True,
+        ingredients=[
+            _ing("onion_milk", analysis_id=3, fodmap_lactose="high", fodmap_oligos="high")
+        ],
+    )
+    _, tags = _compute_dietary_tags([analysis])
+    assert "fodmap-high-lactose" not in tags
+    # Oligos axis is untouched by the lactose override.
+    assert "fodmap-high-oligos" in tags

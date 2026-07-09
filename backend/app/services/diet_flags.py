@@ -23,6 +23,14 @@ _FODMAP_COLUMNS = (
     "fodmap_lactose",
 )
 
+# Used when a meal is marked lactose-free: keep every FODMAP axis except lactose,
+# so a lactose-only "high" ingredient no longer drives the high-fodmap flag.
+_FODMAP_COLUMNS_NO_LACTOSE = (
+    "fodmap_oligos",
+    "fodmap_fructose",
+    "fodmap_polyols",
+)
+
 
 class PhotoScores(BaseModel):
     histamine_load: int  # sum of histamine_score across confirmed ingredients
@@ -49,11 +57,23 @@ def parse_diet_risk_csv(raw: Optional[str]) -> set[str]:
     return tokens & FLAG_VOCAB
 
 
-def _aggregate(ingredients: Iterable[PhotoIngredient]) -> PhotoSignal:
+def _aggregate(
+    ingredients: Iterable[PhotoIngredient],
+    *,
+    gluten_free_ids: frozenset[int] = frozenset(),
+    lactose_free_ids: frozenset[int] = frozenset(),
+) -> PhotoSignal:
     """Walk a flat ingredient iterable and compute flags + scores + sources.
 
     Single source of truth for the flag/scoring rules; callers pass already-loaded
     ingredients (never triggers ORM lazy loads).
+
+    ``gluten_free_ids`` / ``lactose_free_ids`` hold the ``analysis_id`` of meals the
+    user marked gluten-free / lactose-free. For those meals we suppress the gluten
+    flag entirely and drop the lactose axis from the high-fodmap check (dairy still
+    counts). Only ``ing.analysis_id`` (a plain column) is read to decide this — never
+    ``ing.analysis``, which would lazy-load and raise MissingGreenlet in the vault
+    ``asyncio.to_thread`` path.
     """
     flags: set[str] = set()
     histamine_load = 0
@@ -77,12 +97,15 @@ def _aggregate(ingredients: Iterable[PhotoIngredient]) -> PhotoSignal:
             flags.add("high-histamine")
             _add_source("high-histamine", ing.name)
 
-        if any(getattr(ing, col) == "high" for col in _FODMAP_COLUMNS):
+        cols = (
+            _FODMAP_COLUMNS_NO_LACTOSE if ing.analysis_id in lactose_free_ids else _FODMAP_COLUMNS
+        )
+        if any(getattr(ing, col) == "high" for col in cols):
             flags.add("high-fodmap")
             fodmap_ingredient_ids.add(ing.id)
             _add_source("high-fodmap", ing.name)
 
-        if ing.contains_gluten:
+        if ing.contains_gluten and ing.analysis_id not in gluten_free_ids:
             flags.add("gluten")
             gluten_count += 1
             _add_source("gluten", ing.name)
@@ -111,12 +134,22 @@ def compute_photo_signal(entry: Entry) -> PhotoSignal:
     Does NOT re-query. If you find yourself adding a Session parameter, stop.
     """
     ingredients: list[PhotoIngredient] = []
+    gluten_free_ids: set[int] = set()
+    lactose_free_ids: set[int] = set()
     for photo in entry.photos:
         analysis = photo.analysis
         if analysis is None or analysis.status != "confirmed":
             continue
+        if analysis.gluten_free_confirmed:
+            gluten_free_ids.add(analysis.id)
+        if analysis.lactose_free_confirmed:
+            lactose_free_ids.add(analysis.id)
         ingredients.extend(analysis.ingredients)
-    return _aggregate(ingredients)
+    return _aggregate(
+        ingredients,
+        gluten_free_ids=frozenset(gluten_free_ids),
+        lactose_free_ids=frozenset(lactose_free_ids),
+    )
 
 
 def compute_signal_from_analyses(
@@ -129,9 +162,19 @@ def compute_signal_from_analyses(
     inside ``asyncio.to_thread``). Caller is responsible for status filtering.
     """
     ingredients: list[PhotoIngredient] = []
+    gluten_free_ids: set[int] = set()
+    lactose_free_ids: set[int] = set()
     for analysis in analyses:
+        if analysis.gluten_free_confirmed:
+            gluten_free_ids.add(analysis.id)
+        if analysis.lactose_free_confirmed:
+            lactose_free_ids.add(analysis.id)
         ingredients.extend(analysis.ingredients)
-    return _aggregate(ingredients)
+    return _aggregate(
+        ingredients,
+        gluten_free_ids=frozenset(gluten_free_ids),
+        lactose_free_ids=frozenset(lactose_free_ids),
+    )
 
 
 def compute_effective_counts(
