@@ -42,9 +42,7 @@ def verify_manifest() -> None:
             continue
         actual = hashlib.sha256(path.read_bytes()).hexdigest()
         if actual != expected:
-            errors.append(
-                f"Checksum mismatch for {filename}: expected {expected}, got {actual}"
-            )
+            errors.append(f"Checksum mismatch for {filename}: expected {expected}, got {actual}")
 
     if errors:
         for err in errors:

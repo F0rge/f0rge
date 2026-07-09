@@ -35,8 +35,7 @@ def analysis_needs_review(vision_result: VisionResult) -> bool:
     if vision_result.confidence < DISH_CONFIDENCE_REVIEW_THRESHOLD:
         return True
     return any(
-        ing.confidence < INGREDIENT_CONFIDENCE_REVIEW_THRESHOLD
-        for ing in vision_result.ingredients
+        ing.confidence < INGREDIENT_CONFIDENCE_REVIEW_THRESHOLD for ing in vision_result.ingredients
     )
 
 

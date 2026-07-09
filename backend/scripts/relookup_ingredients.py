@@ -30,9 +30,7 @@ def main() -> None:
 
     with SyncSession() as session:
         unmatched = (
-            session.execute(
-                select(PhotoIngredient).where(PhotoIngredient.canonical_name.is_(None))
-            )
+            session.execute(select(PhotoIngredient).where(PhotoIngredient.canonical_name.is_(None)))
             .scalars()
             .all()
         )

@@ -171,9 +171,7 @@ async def test_delete_photo_2_then_upload_gets_photo_4(
     assert fourth.filename == "2026-05-15_photo-4.jpg"
 
 
-async def test_gaps_in_numbering_are_preserved(
-    async_db: AsyncSession, real_storage: None
-) -> None:
+async def test_gaps_in_numbering_are_preserved(async_db: AsyncSession, real_storage: None) -> None:
     """Deleted numbers must stay retired forever -- the next upload always
     picks max(existing)+1, never fills holes."""
     day = datetime.date(2026, 5, 15)
