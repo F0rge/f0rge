@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import bcrypt
 import pytest
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.exceptions import ConflictError, NotFoundError
 from app.schemas.dietary_ingredient import (
     AliasCreate,
@@ -10,6 +13,23 @@ from app.schemas.dietary_ingredient import (
     DietaryIngredientUpdate,
 )
 from app.services.dietary_ingredient_catalog import DietaryIngredientCatalogService
+
+TEST_PIN = "1234"
+
+
+@pytest.fixture
+def known_pin(monkeypatch: pytest.MonkeyPatch) -> str:
+    hashed = bcrypt.hashpw(TEST_PIN.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    monkeypatch.setattr(settings, "pin_hash", hashed)
+    return TEST_PIN
+
+
+@pytest.fixture
+async def authed_client(known_pin: str, async_client: AsyncClient) -> AsyncClient:
+    """The house async_client, logged in via a real PIN login round-trip."""
+    resp = await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
+    assert resp.status_code == 200
+    return async_client
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +170,9 @@ async def test_remove_alias(async_db: AsyncSession) -> None:
 
     await service.remove_alias(alias.id)
 
+    # remove_alias deletes the row directly and no longer mutates the parent's
+    # warm in-memory collection, so drop the identity map to assert the DB truth.
+    async_db.expunge_all()
     refreshed = await service.get(kimchi.id)
     assert refreshed.aliases == []
 
@@ -158,6 +181,45 @@ async def test_remove_alias_not_found_raises(async_db: AsyncSession) -> None:
     service = DietaryIngredientCatalogService(async_db)
     with pytest.raises(NotFoundError):
         await service.remove_alias(999999)
+
+
+async def test_delete_alias_endpoint_returns_204(
+    async_db: AsyncSession, authed_client: AsyncClient
+) -> None:
+    """DELETE /aliases/{id} against the real DB must be 204, not a 500.
+
+    Regression for the MissingGreenlet: remove_alias used to reach through
+    alias.ingredient.aliases, which lazy-loads in the async session when the
+    alias is fetched cold by id. expunge_all() drops the warm identity map so
+    the DELETE handler fetches the alias cold -- exactly like a real request,
+    where the DELETE runs on its own fresh session. Without expunge the shared
+    test session would keep the parent's aliases pre-loaded and hide the bug.
+    """
+    created = await authed_client.post(
+        "/api/v1/dietary-ingredients", json={"canonical_name": "kimchi"}
+    )
+    assert created.status_code == 201
+    ingredient_id = created.json()["id"]
+
+    added = await authed_client.post(
+        f"/api/v1/dietary-ingredients/{ingredient_id}/aliases",
+        json={"alias": "fermented cabbage"},
+    )
+    assert added.status_code == 201
+    alias_id = added.json()["id"]
+
+    # Force the DELETE handler to fetch the alias cold, reproducing the
+    # fresh-session flow that raised MissingGreenlet in production.
+    async_db.expunge_all()
+
+    deleted = await authed_client.delete(f"/api/v1/dietary-ingredients/aliases/{alias_id}")
+    assert deleted.status_code == 204
+
+    # No GET-by-id route exists; read the ingredient back off the list endpoint.
+    listed = await authed_client.get("/api/v1/dietary-ingredients", params={"search": "kimchi"})
+    assert listed.status_code == 200
+    ingredient = next(i for i in listed.json() if i["id"] == ingredient_id)
+    assert ingredient["aliases"] == []
 
 
 # ---------------------------------------------------------------------------
