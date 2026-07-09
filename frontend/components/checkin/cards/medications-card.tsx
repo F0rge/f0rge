@@ -50,7 +50,6 @@ export function MedicationsCard({ value, onChange }: MedicationsCardProps) {
     <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          <Pill className="size-4" />
           Medications
           <TierPill tier="catalog" />
         </CardTitle>

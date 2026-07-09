@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, Settings2 } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
+import { FetchError } from '@/components/shared/fetch-error'
 import { useEntry } from '@/lib/api/hooks'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 
@@ -21,7 +22,7 @@ function formatDisplayDate(dateStr: string) {
 
 export default function CheckinDatePage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = use(params)
-  const { data: entry, isLoading } = useEntry(date)
+  const { data: entry, isLoading, isError, refetch } = useEntry(date)
   const headerRef = useRef<HTMLDivElement | null>(null)
 
   const [autosaveState, setAutosaveState] = useState<AutosaveState>({
@@ -100,7 +101,12 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
         <p className="text-sm text-muted-foreground">{formatDisplayDate(date)}</p>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <FetchError
+          message="Failed to load this check-in."
+          onRetry={() => refetch()}
+        />
+      ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>

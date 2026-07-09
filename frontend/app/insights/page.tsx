@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { HeaderControls } from '@/components/insights/header-controls'
 import { TrendGrid } from '@/components/insights/trend-grid'
 import { CorrelatesTable } from '@/components/insights/correlates-table'
@@ -16,11 +17,21 @@ function getDefaultDates(): { start: string; end: string } {
   return { start: fmt(start), end: fmt(end) }
 }
 
-export default function InsightsPage() {
+function InsightsContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const defaults = getDefaultDates()
-  const [start, setStart] = useState(defaults.start)
-  const [end, setEnd] = useState(defaults.end)
-  const [outcome, setOutcome] = useState('overall')
+  const start = searchParams.get('start') ?? defaults.start
+  const end = searchParams.get('end') ?? defaults.end
+  const outcome = searchParams.get('outcome') ?? 'overall'
+
+  function updateFilters(next: { start?: string; end?: string; outcome?: string }) {
+    const params = new URLSearchParams(searchParams.toString())
+    if (next.start !== undefined) params.set('start', next.start)
+    if (next.end !== undefined) params.set('end', next.end)
+    if (next.outcome !== undefined) params.set('outcome', next.outcome)
+    router.replace(`/insights?${params.toString()}`)
+  }
 
   return (
     <PageShell>
@@ -34,9 +45,9 @@ export default function InsightsPage() {
           start={start}
           end={end}
           outcome={outcome}
-          onStartChange={setStart}
-          onEndChange={setEnd}
-          onOutcomeChange={setOutcome}
+          onStartChange={(v) => updateFilters({ start: v })}
+          onEndChange={(v) => updateFilters({ end: v })}
+          onOutcomeChange={(v) => updateFilters({ outcome: v })}
         />
       </section>
 
@@ -70,5 +81,13 @@ export default function InsightsPage() {
         </section>
       </div>
     </PageShell>
+  )
+}
+
+export default function InsightsPage() {
+  return (
+    <Suspense>
+      <InsightsContent />
+    </Suspense>
   )
 }

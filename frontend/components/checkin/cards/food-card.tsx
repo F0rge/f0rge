@@ -343,7 +343,6 @@ export function FoodCard({
     <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          <Camera className="size-4" />
           Food &amp; drinks
           <TierPill tier="core" />
         </CardTitle>

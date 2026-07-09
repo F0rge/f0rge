@@ -8,12 +8,13 @@ import { TreatmentFormDialog } from '@/components/treatments/treatment-form-dial
 import { DiscontinueDialog } from '@/components/treatments/discontinue-dialog'
 import { TreatmentTimeline } from '@/components/treatments/treatment-timeline'
 import { PageShell } from '@/components/layout/page-shell'
+import { FetchError } from '@/components/shared/fetch-error'
 import type { Treatment } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 import { groupTreatments } from '@/components/treatments/group-treatments'
 
 export default function TreatmentsPage() {
-  const { data: treatments, isLoading } = useTreatments()
+  const { data: treatments, isLoading, isError, refetch } = useTreatments()
   const [view, setView] = useState<'list' | 'timeline'>('list')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTreatment, setEditTreatment] = useState<Treatment | null>(null)
@@ -84,7 +85,9 @@ export default function TreatmentsPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <FetchError message="Failed to load treatments." onRetry={() => refetch()} />
+      ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
