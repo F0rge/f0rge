@@ -41,6 +41,8 @@ def load() -> None:
                 existing.fodmap_fructose = fructose
                 existing.fodmap_polyols = polyols
                 existing.fodmap_lactose = lactose
+                existing.source = "fodmap_list"
+                existing.source_version = "2024"
                 updated += 1
             else:
                 session.add(
@@ -52,7 +54,7 @@ def load() -> None:
                         fodmap_lactose=lactose,
                         contains_gluten=False,
                         contains_dairy=False,
-                        source="monash",
+                        source="fodmap_list",
                         source_version="2024",
                     )
                 )

@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-07-09T15:13:15Z",
+  "files": [
+    {
+      "filename": "sighi_histamine.json",
+      "sha256": "cf046a1510ad655746b54846142a44d85050d69de8e365fc9c02c6ba5eefa833",
+      "source_url": "https://www.histaminintoleranz.ch/downloads/SIGHI-Leaflet_HistamineEliminationDiet.pdf",
+      "source_name": "sighi",
+      "downloaded_at": "2026-07-09T15:13:15Z",
+      "row_count": 287,
+      "notes": "SIGHI compatibility list — hand-encoded from PDF (July 2024 edition)"
+    },
+    {
+      "filename": "fodmap_list.json",
+      "sha256": "bd68f0b6999d32665c968370310c4029b86c6b21108582d206d15bc42b605627",
+      "source_url": "https://github.com/oseparovic/fodmap_list",
+      "source_name": "fodmap_list",
+      "downloaded_at": "2026-07-09T15:13:15Z",
+      "row_count": 191,
+      "notes": "oseparovic/fodmap_list — Monash-derived FODMAP categories (oligos/fructose/polyols/lactose)"
+    },
+    {
+      "filename": "allergens.json",
+      "sha256": "a853651b7571f38d19ae736d95d4d76027158845e9a32c8dba9c1f7c1da7ee56",
+      "source_url": "https://world.openfoodfacts.org/",
+      "source_name": "allergens",
+      "downloaded_at": "2026-07-09T15:13:15Z",
+      "row_count": 142,
+      "notes": "Gluten/dairy flags curated from Open Food Facts allergen data"
+    },
+    {
+      "filename": "curated_ingredients_2026_07.json",
+      "sha256": "5151bf9b29c72a8b901b72bbed103958441485a92946d10486295bbd70f63b78",
+      "source_url": null,
+      "source_name": "manual",
+      "downloaded_at": "2026-07-09T15:13:15Z",
+      "row_count": null,
+      "notes": "Manually curated ingredients and aliases — research-based, July 2026"
+    }
+  ]
+}
