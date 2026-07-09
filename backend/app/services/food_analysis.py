@@ -20,9 +20,24 @@ from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, IngredientUpdate
 from app.services.ingredient_lookup import IngredientLookupService
 from app.services.obsidian_prefetch import render_and_write_daily_file
-from app.services.vision_prompt import build_messages, parse_vision_response
+from app.services.vision_prompt import VisionResult, build_messages, parse_vision_response
 
 logger = logging.getLogger(__name__)
+
+DISH_CONFIDENCE_REVIEW_THRESHOLD = 0.7
+INGREDIENT_CONFIDENCE_REVIEW_THRESHOLD = 0.5
+
+
+def analysis_needs_review(vision_result: VisionResult) -> bool:
+    """Return True when the user should review ingredients before confirming."""
+    if vision_result.dish_name == "parse_error":
+        return True
+    if vision_result.confidence < DISH_CONFIDENCE_REVIEW_THRESHOLD:
+        return True
+    return any(
+        ing.confidence < INGREDIENT_CONFIDENCE_REVIEW_THRESHOLD
+        for ing in vision_result.ingredients
+    )
 
 
 class FoodAnalysisService:
@@ -333,7 +348,7 @@ async def trigger_analysis_background(photo_id: int) -> None:
                 )
                 db.add(ingredient)
 
-            analysis.status = "complete"
+            analysis.status = "needs_review" if analysis_needs_review(vision_result) else "complete"
             await db.commit()
 
             # Re-render Obsidian vault file

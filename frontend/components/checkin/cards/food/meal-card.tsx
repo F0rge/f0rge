@@ -16,6 +16,7 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
   const { data: analysis, isLoading } = usePhotoAnalysis(photo.id)
 
   const isAnalyzing = isLoading || analysis?.status === 'pending' || analysis?.status === 'analyzing'
+  const needsReview = analysis?.status === 'needs_review'
   const title = photo.label?.trim() || analysis?.dish_name || 'Untitled meal'
   const confidence =
     analysis?.dish_confidence != null ? Math.round(analysis.dish_confidence * 100) : null
@@ -59,6 +60,11 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
                 <span className="truncate text-sm font-semibold text-foreground">{title}</span>
                 {confidence !== null && (
                   <span className="shrink-0 text-xs text-muted-foreground">({confidence}%)</span>
+                )}
+                {needsReview && (
+                  <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                    Review
+                  </span>
                 )}
               </div>
               {badges.length > 0 && (
