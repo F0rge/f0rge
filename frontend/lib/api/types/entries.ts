@@ -116,6 +116,8 @@ export interface PhotoAnalysis {
   cuisine: string | null
   dish_confidence: number | null
   ingredients: PhotoIngredient[]
+  gluten_free_confirmed: boolean
+  lactose_free_confirmed: boolean
   error_message: string | null
   created_at: string
   updated_at: string
