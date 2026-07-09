@@ -73,6 +73,15 @@ FODMAP_ABBREV = {
     "lactose": "F:L",
 }
 
+END_REASON_LABELS = {
+    "completed": "Completed",
+    "side_effects": "Side effects",
+    "ineffective": "Ineffective",
+    "doctor_advised": "Doctor advised",
+    "switched": "Switched treatment",
+    "other": "Other",
+}
+
 
 def _format_active_treatments(
     treatments: list[Treatment],
@@ -83,8 +92,17 @@ def _format_active_treatments(
     parts = []
     for t in treatments:
         day_num = (as_of - t.start_date).days + 1
-        suffix = f"day {day_num}, {t.group_name}" if t.group_name else f"day {day_num}"
-        parts.append(f"{t.name} ({suffix})")
+        suffix_bits = [f"day {day_num}"]
+        if t.group_name:
+            suffix_bits.append(t.group_name)
+        # On the treatment's last active day, surface why it ended -- the row
+        # drops out of "active treatments" entirely from the next day on, so
+        # this is the only vault-rendered day that can carry the reason.
+        if t.end_date == as_of and t.end_reason:
+            suffix_bits.append(f"ended: {END_REASON_LABELS.get(t.end_reason, t.end_reason)}")
+            if t.end_note:
+                suffix_bits.append(t.end_note)
+        parts.append(f"{t.name} ({', '.join(suffix_bits)})")
     return ", ".join(parts)
 
 

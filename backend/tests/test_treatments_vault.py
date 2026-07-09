@@ -18,6 +18,8 @@ async def _make_treatment(
     start_date: datetime.date,
     end_date: Optional[datetime.date] = None,
     group_name: Optional[str] = None,
+    end_reason: Optional[str] = None,
+    end_note: Optional[str] = None,
 ) -> Treatment:
     t = Treatment(
         name=name,
@@ -26,6 +28,8 @@ async def _make_treatment(
         type="antimicrobial",
         start_date=start_date,
         end_date=end_date,
+        end_reason=end_reason,
+        end_note=end_note,
     )
     db.add(t)
     await db.commit()
@@ -130,6 +134,47 @@ def test_format_grouped_treatment_shows_group_name() -> None:
     as_of = datetime.date(2026, 5, 15)
     result = _format_active_treatments([t], as_of)
     assert result == "Rifaximin (day 15, SIBO Treatment)"
+
+
+def test_format_ended_treatment_shows_reason_on_last_day() -> None:
+    t = Treatment(
+        name="Rifaximin",
+        normalized_name="rifaximin",
+        type="antibiotic",
+        start_date=datetime.date(2026, 5, 1),
+        end_date=datetime.date(2026, 5, 15),
+        end_reason="side_effects",
+    )
+    result = _format_active_treatments([t], datetime.date(2026, 5, 15))
+    assert result == "Rifaximin (day 15, ended: Side effects)"
+
+
+def test_format_ended_treatment_includes_note() -> None:
+    t = Treatment(
+        name="Rifaximin",
+        normalized_name="rifaximin",
+        type="antibiotic",
+        start_date=datetime.date(2026, 5, 1),
+        end_date=datetime.date(2026, 5, 15),
+        end_reason="side_effects",
+        end_note="Nausea",
+    )
+    result = _format_active_treatments([t], datetime.date(2026, 5, 15))
+    assert result == "Rifaximin (day 15, ended: Side effects, Nausea)"
+
+
+def test_format_end_reason_only_shown_on_last_day() -> None:
+    """A day before the end date must not show the reason yet."""
+    t = Treatment(
+        name="Rifaximin",
+        normalized_name="rifaximin",
+        type="antibiotic",
+        start_date=datetime.date(2026, 5, 1),
+        end_date=datetime.date(2026, 5, 15),
+        end_reason="side_effects",
+    )
+    result = _format_active_treatments([t], datetime.date(2026, 5, 14))
+    assert result == "Rifaximin (day 14)"
 
 
 def test_format_multiple_treatments() -> None:

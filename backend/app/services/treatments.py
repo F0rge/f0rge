@@ -53,6 +53,8 @@ class TreatmentService:
             type=data.type,
             start_date=data.start_date,
             end_date=data.end_date,
+            end_reason=data.end_reason,
+            end_note=data.end_note,
             dose=data.dose,
             doses_per_day=data.doses_per_day,
             notes=data.notes,
