@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost } from '../client'
-import type { AuthUser } from '../types'
+import type { AuthUser, LoginCredentials, SignupCredentials } from '../types'
 
 export function useAuth() {
   return useQuery<AuthUser>({
@@ -15,8 +15,29 @@ export function useAuth() {
 export function useLogin() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (pin: string) => apiPost('/auth/login', { pin }),
+    mutationFn: (credentials: LoginCredentials) => apiPost('/auth/login', credentials),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth'] })
+    },
+  })
+}
+
+export function useSignup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (credentials: SignupCredentials) => apiPost('/auth/signup', credentials),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth'] })
+    },
+  })
+}
+
+export function useLogout() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiPost('/auth/logout', {}),
+    onSuccess: () => {
+      queryClient.setQueryData(['auth'], { authenticated: false })
       queryClient.invalidateQueries({ queryKey: ['auth'] })
     },
   })
