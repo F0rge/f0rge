@@ -45,6 +45,7 @@ import {
 } from '@/lib/checkin/card-order'
 import { ReorderTile, type CardMeta } from '@/components/checkin/cards/reorder-tile'
 import { TierBanner } from '@/components/customize/tier-banner'
+import { PageShell } from '@/components/layout/page-shell'
 
 // ── Card metadata (mirrors CARD_META in checkin-board.tsx) ───────────────────
 // Defined at module scope to satisfy react-hooks/static-components rule.
@@ -192,7 +193,7 @@ export default function ReorderClient() {
   }, [])
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <Link
@@ -262,6 +263,6 @@ export default function ReorderClient() {
           ) : null}
         </DragOverlay>
       </DndContext>
-    </div>
+    </PageShell>
   )
 }

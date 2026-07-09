@@ -5,9 +5,11 @@ import { Loader2, Microscope, List, FlaskConical, Upload, Plus } from 'lucide-re
 import { useLabs } from '@/lib/api/hooks'
 import { LabCard } from '@/components/labs/lab-card'
 import { LabDetailPanel } from '@/components/labs/lab-detail-panel'
+import { LabDetailInline } from '@/components/labs/lab-detail-inline'
 import { LabFormDialog } from '@/components/labs/lab-form-dialog'
 import { LabUploadDialog } from '@/components/labs/lab-upload-dialog'
 import { MarkerList } from '@/components/labs/marker-list'
+import { PageShell } from '@/components/layout/page-shell'
 import { cn } from '@/lib/utils'
 import type { Lab } from '@/lib/api/types'
 
@@ -21,7 +23,7 @@ export default function LabsPage() {
   const [selectedLab, setSelectedLab] = useState<Lab | null>(null)
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold tracking-tight">Labs</h1>
 
@@ -113,14 +115,30 @@ export default function LabsPage() {
           )}
 
           {!isLoading && !isError && labs && labs.length > 0 && (
-            <div className="space-y-2">
-              {labs.map((lab) => (
-                <LabCard
-                  key={lab.id}
-                  lab={lab}
-                  onClick={() => setSelectedLab(lab)}
-                />
-              ))}
+            <div className="grid grid-cols-12 gap-6">
+              <div className="col-span-12 space-y-2 lg:col-span-5">
+                {labs.map((lab) => (
+                  <LabCard
+                    key={lab.id}
+                    lab={lab}
+                    selected={selectedLab?.id === lab.id}
+                    onClick={() => setSelectedLab(lab)}
+                  />
+                ))}
+              </div>
+
+              <div className="relative hidden lg:col-span-7 lg:block">
+                {selectedLab ? (
+                  <LabDetailInline
+                    lab={selectedLab}
+                    onClose={() => setSelectedLab(null)}
+                  />
+                ) : (
+                  <div className="flex h-full min-h-[320px] items-center justify-center rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                    Select a lab to view marker details
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </>
@@ -136,11 +154,13 @@ export default function LabsPage() {
 
       <LabUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
 
-      <LabDetailPanel
-        lab={selectedLab}
-        open={!!selectedLab}
-        onOpenChange={(o) => { if (!o) setSelectedLab(null) }}
-      />
-    </div>
+      <div className="lg:hidden">
+        <LabDetailPanel
+          lab={selectedLab}
+          open={!!selectedLab}
+          onOpenChange={(o) => { if (!o) setSelectedLab(null) }}
+        />
+      </div>
+    </PageShell>
   )
 }

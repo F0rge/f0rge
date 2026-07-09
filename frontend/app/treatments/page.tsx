@@ -7,6 +7,7 @@ import { TreatmentCard } from '@/components/treatments/treatment-card'
 import { TreatmentFormDialog } from '@/components/treatments/treatment-form-dialog'
 import { DiscontinueDialog } from '@/components/treatments/discontinue-dialog'
 import { TreatmentTimeline } from '@/components/treatments/treatment-timeline'
+import { PageShell } from '@/components/layout/page-shell'
 import type { Treatment } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 import { groupTreatments } from '@/components/treatments/group-treatments'
@@ -40,7 +41,7 @@ export default function TreatmentsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold tracking-tight">Treatments</h1>
         <div className="flex items-center gap-1">
@@ -116,14 +117,17 @@ export default function TreatmentsPage() {
                   </span>
                 </div>
               )}
-              {section.treatments.map((t) => (
-                <TreatmentCard
-                  key={t.id}
-                  treatment={t}
-                  onClick={() => openEdit(t)}
-                  onDiscontinue={() => openDiscontinue(t)}
-                />
-              ))}
+              <div className="grid grid-cols-12 gap-2">
+                {section.treatments.map((t) => (
+                  <div key={t.id} className="col-span-12 lg:col-span-6">
+                    <TreatmentCard
+                      treatment={t}
+                      onClick={() => openEdit(t)}
+                      onDiscontinue={() => openDiscontinue(t)}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -146,6 +150,6 @@ export default function TreatmentsPage() {
           treatment={discontinueTarget}
         />
       )}
-    </div>
+    </PageShell>
   )
 }

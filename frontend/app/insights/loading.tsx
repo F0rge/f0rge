@@ -1,8 +1,9 @@
 import { Loader2 } from 'lucide-react'
+import { PageShell } from '@/components/layout/page-shell'
 
 export default function InsightsLoading() {
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       <div className="mb-4">
         <h1 className="text-xl font-semibold tracking-tight">Insights</h1>
         <p className="text-sm text-muted-foreground">Analytics &amp; correlations</p>
@@ -10,6 +11,6 @@ export default function InsightsLoading() {
       <div className="flex items-center justify-center py-12">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
-    </div>
+    </PageShell>
   )
 }

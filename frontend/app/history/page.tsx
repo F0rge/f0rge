@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { CalendarView } from '@/components/history/calendar-view'
 import { EntryCard } from '@/components/history/entry-card'
+import { PageShell } from '@/components/layout/page-shell'
 import { useEntries } from '@/lib/api/hooks'
 
 function getCurrentMonth(): string {
@@ -42,7 +43,7 @@ export default function HistoryPage() {
     : []
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight">History</h1>
       </div>
@@ -70,17 +71,19 @@ export default function HistoryPage() {
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <>
-          <CalendarView
-            month={month}
-            entries={entries ?? []}
-            onDayClick={(date) => router.push(`/history/${date}`)}
-          />
+        <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-12 lg:col-span-7">
+            <CalendarView
+              month={month}
+              entries={entries ?? []}
+              onDayClick={(date) => router.push(`/history/${date}`)}
+            />
+          </div>
 
           {sortedEntries.length > 0 && (
-            <div className="mt-8">
+            <div className="col-span-12 lg:col-span-5">
               <h2 className="mb-3 text-sm font-medium text-muted-foreground">Recent entries</h2>
-              <div className="space-y-2">
+              <div className="space-y-2 lg:max-h-[calc(100vh-280px)] lg:overflow-y-auto">
                 {sortedEntries.map((entry) => (
                   <EntryCard
                     key={entry.id}
@@ -91,8 +94,8 @@ export default function HistoryPage() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
-    </div>
+    </PageShell>
   )
 }

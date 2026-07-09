@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { CatalogSection } from '@/components/customize/catalog-section'
+import { PageShell } from '@/components/layout/page-shell'
 import {
   useSupplementCatalog,
   useUpdateSupplementCatalogItem,
@@ -64,7 +65,7 @@ export default function CatalogsClient() {
   const activeDietTags = dietTags.filter((d) => !d.archived).length
 
   return (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       {/* Header */}
       <div className="mb-6">
         <Link
@@ -95,7 +96,7 @@ export default function CatalogsClient() {
           <div className="h-10 w-full animate-pulse rounded bg-muted" />
         </div>
       ) : (
-        <>
+        <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <CatalogSection
             title="Supplements"
             items={supplements}
@@ -112,15 +113,17 @@ export default function CatalogsClient() {
             totalCount={medications.length}
           />
 
-          <CatalogSection
-            title="Diet tags"
-            items={dietTags}
-            onToggleArchive={handleToggleDietTag}
-            selectedCount={activeDietTags}
-            totalCount={dietTags.length}
-          />
-        </>
+          <div className="lg:col-span-2">
+            <CatalogSection
+              title="Diet tags"
+              items={dietTags}
+              onToggleArchive={handleToggleDietTag}
+              selectedCount={activeDietTags}
+              totalCount={dietTags.length}
+            />
+          </div>
+        </div>
       )}
-    </div>
+    </PageShell>
   )
 }

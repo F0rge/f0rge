@@ -14,11 +14,12 @@
  */
 
 import dynamic from 'next/dynamic'
+import { PageShell } from '@/components/layout/page-shell'
 
 const IngredientsClient = dynamic(() => import('./ingredients-client'), {
   ssr: false,
   loading: () => (
-    <div className="mx-auto w-full max-w-lg p-4">
+    <PageShell>
       <div className="h-6 w-32 animate-pulse rounded bg-muted" />
       <div className="mt-4 h-7 w-40 animate-pulse rounded bg-muted" />
       <div className="mt-3 h-16 w-full animate-pulse rounded bg-muted" />
@@ -28,7 +29,7 @@ const IngredientsClient = dynamic(() => import('./ingredients-client'), {
           <div key={i} className="h-14 w-full animate-pulse rounded bg-muted" />
         ))}
       </div>
-    </div>
+    </PageShell>
   ),
 })
 
