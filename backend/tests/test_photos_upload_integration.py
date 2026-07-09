@@ -12,6 +12,7 @@ Coverage map:
 - B: orphan file on disk (no DB row) does NOT collide with the next upload.
 - C: commit failure cleans up the just-written file (no orphan left behind).
 - D: background-analysis failure writes a short ``error_message`` (no traceback).
+- E: credential resolution failure after commit does not fail the upload.
 """
 
 from __future__ import annotations
@@ -384,3 +385,32 @@ async def test_analysis_fallback_error_message_is_short_no_traceback(
             await cleanup.execute(Photo.__table__.delete().where(Photo.id == photo_id))
             await cleanup.execute(Entry.__table__.delete().where(Entry.id == entry_id))
             await cleanup.commit()
+
+
+# ---------------------------------------------------------------------------
+# Test E — credential resolution must not fail an already-persisted upload
+# ---------------------------------------------------------------------------
+
+
+async def test_upload_succeeds_when_credential_resolution_raises(
+    async_db: AsyncSession, real_storage: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BYOK decrypt / resolve failures after commit must not surface as upload errors."""
+    monkeypatch.setattr(settings, "food_analysis_enabled", True)
+
+    async def _boom(_db: AsyncSession) -> tuple[str, str]:
+        raise ValueError("simulated credential resolution failure")
+
+    monkeypatch.setattr(
+        "app.services.llm.factory.resolve_llm_credentials",
+        _boom,
+    )
+
+    day = datetime.date(2026, 6, 1)
+    await _make_entry(async_db, day)
+    service = PhotoService(async_db)
+
+    photo = await _upload(service, day)
+
+    assert photo.id is not None
+    assert os.path.exists(os.path.join(settings.photo_dir, photo.filename))
