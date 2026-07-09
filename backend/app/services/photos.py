@@ -156,11 +156,16 @@ class PhotoService:
         await render_and_write_daily_file(self.db, entry, entry.photos)
 
         # Queue analysis when enabled and credentials resolve (env or BYOK).
-        from app.services.llm.factory import resolve_llm_credentials
+        # Credential resolution must not fail the upload — the photo is already persisted.
+        if settings.food_analysis_enabled:
+            from app.services.llm.factory import resolve_llm_credentials
 
-        api_key, _ = await resolve_llm_credentials(self.db)
-        if settings.food_analysis_enabled and api_key:
-            background_tasks.add_task(trigger_analysis_background, photo.id)
+            try:
+                api_key, _ = await resolve_llm_credentials(self.db)
+            except Exception:
+                api_key = None
+            if api_key:
+                background_tasks.add_task(trigger_analysis_background, photo.id)
 
         return photo
 

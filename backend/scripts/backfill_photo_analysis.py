@@ -23,7 +23,7 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.services.food_analysis import trigger_analysis_background
 from scripts._db import SyncSession
 
-SKIP_STATUSES = {"complete", "confirmed", "analyzing"}
+SKIP_STATUSES = {"complete", "confirmed", "analyzing", "needs_review"}
 
 
 def find_unprocessed_photos(session: Session) -> list[tuple[int, str, str | None]]:
