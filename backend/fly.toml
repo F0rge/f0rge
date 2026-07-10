@@ -9,7 +9,12 @@ primary_region = "fra"
   ignorefile = ".dockerignore"
 
 [deploy]
-  release_command = "uv run alembic upgrade head"
+  # Migrations run as an owner-capable role (htmigrate = schema_admin), NOT the
+  # least-privilege runtime role healthtracker-app which can't ALTER schema_admin's
+  # tables (fails 023's SET NOT NULL with "must be owner"). Runtime web/worker keep
+  # using DATABASE_URL (healthtracker-app) so RLS stays enforced. Falls back to
+  # DATABASE_URL if the migration secret is unset. See docs/fly-cutover-runbook.md.
+  release_command = "sh -c 'DATABASE_URL=\"${MIGRATION_DATABASE_URL:-$DATABASE_URL}\" uv run alembic upgrade head'"
 
 [env]
   PHOTO_DIR = "/app/photos"
