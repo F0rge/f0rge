@@ -33,9 +33,7 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
 def upgrade() -> None:
     bind = op.get_bind()
     for table, column in _COLUMNS:
-        bind.execute(
-            sa.text(f"UPDATE {table} SET {column} = now() WHERE {column} IS NULL")
-        )
+        bind.execute(sa.text(f"UPDATE {table} SET {column} = now() WHERE {column} IS NULL"))
         op.alter_column(table, column, nullable=False)
 
 
