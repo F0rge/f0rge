@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,6 +19,7 @@ class LabMarkerCatalog(Base):
             "canonical_name",
             name="uq_lab_marker_catalog_user_id_canonical_name",
         ),
+        Index("ix_lab_marker_catalog_user_id", "user_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -26,10 +27,12 @@ class LabMarkerCatalog(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
-    canonical_name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    # `canonical_name` uniqueness is enforced per-user by
+    # uq_lab_marker_catalog_user_id_canonical_name above; no standalone index on this
+    # column exists in the DB, so it is not redeclared here.
+    canonical_name: Mapped[str] = mapped_column(String, nullable=False)
     display_name: Mapped[str] = mapped_column(String, nullable=False)
     common_units: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

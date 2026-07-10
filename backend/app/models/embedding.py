@@ -8,6 +8,7 @@ from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -28,7 +29,6 @@ class Embedding(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     source_table: Mapped[str] = mapped_column(String, nullable=False)
@@ -52,5 +52,13 @@ class Embedding(Base):
             "chunk_index",
             "embedding_model",
             name="uq_embedding_user_source_chunk_model",
+        ),
+        Index("ix_embedding_user_id", "user_id"),
+        Index(
+            "hnsw_embedding_cosine",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
     )

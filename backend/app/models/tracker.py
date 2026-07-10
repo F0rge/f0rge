@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,14 +13,16 @@ from app.models.user import default_user_id
 
 class Tracker(Base):
     __tablename__ = "tracker"
-    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_tracker_user_id_name"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_tracker_user_id_name"),
+        Index("ix_tracker_user_id", "user_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
