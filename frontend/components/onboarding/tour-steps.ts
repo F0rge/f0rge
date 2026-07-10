@@ -97,9 +97,8 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="profile-menu"]',
     title: 'Profile menu',
     content:
-      'Open your avatar for Account settings and Customize — where you reorder cards, edit catalogs, and add custom trackers.',
+      'Your avatar at the top of the page opens Account settings and Customize — where you reorder cards, edit catalogs, and add custom trackers.',
     placement: 'bottom',
-    isFixed: true,
   },
   {
     id: 'customize',

@@ -53,7 +53,7 @@ export function ProfileMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 min-w-[10rem] rounded-xl border border-border bg-background p-1 shadow-lg"
+          className="absolute right-0 z-50 mt-2 min-w-[10rem] rounded-xl border border-border bg-background p-1 shadow-lg"
         >
           <Link
             href="/account"

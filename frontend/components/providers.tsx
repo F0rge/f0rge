@@ -25,8 +25,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <SessionGuard>
           <OnboardingProvider>
-            {children}
             <AppChrome />
+            {children}
           </OnboardingProvider>
         </SessionGuard>
       </QueryClientProvider>
