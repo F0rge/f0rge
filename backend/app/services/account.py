@@ -99,7 +99,14 @@ class AccountService:
         processed = await asyncio.to_thread(resize_avatar, raw_bytes)
         relative_path = await asyncio.to_thread(save_avatar, processed, user_id=str(user.id))
         user.avatar_custom_filename = relative_path
-        user = await self.crud.commit_refresh(user)
+        # Invariant: a file on disk implies a DB row exists.
+        # If the commit fails we clean up the file so the next upload
+        # doesn't collide with a phantom on disk.
+        try:
+            user = await self.crud.commit_refresh(user)
+        except Exception:
+            await asyncio.to_thread(delete_avatar, user_id=str(user.id))
+            raise
         return self._to_response(user)
 
     async def delete_avatar(self) -> AccountResponse:
@@ -107,9 +114,13 @@ class AccountService:
         if user.avatar_custom_filename is None:
             return self._to_response(user)
 
-        await asyncio.to_thread(delete_avatar, user_id=str(user.id))
+        # Commit DB clear before touching the filesystem. If the commit fails,
+        # no files are removed and the DB row remains — consistent state.
         user.avatar_custom_filename = None
         user = await self.crud.commit_refresh(user)
+
+        # File cleanup happens after the successful commit.
+        await asyncio.to_thread(delete_avatar, user_id=str(user.id))
         return self._to_response(user)
 
     async def get_avatar_file_target(self) -> str:

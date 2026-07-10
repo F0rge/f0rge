@@ -61,16 +61,29 @@ export function AiSettingsSection() {
       return
     }
 
+    const previous = userSettings.data
+    let embeddingUpdated = false
+
     try {
-      if (llmApiKey || analysisModel) {
-        await updateLLM.mutateAsync(llmPayload)
-      }
       if (embedModel) {
         await updateEmbedding.mutateAsync(embeddingPayload)
+        embeddingUpdated = true
+      }
+      if (llmApiKey || analysisModel) {
+        await updateLLM.mutateAsync(llmPayload)
       }
       setLlmApiKey('')
       toast.success('AI settings saved')
     } catch (err) {
+      if (embeddingUpdated && previous) {
+        try {
+          await updateEmbedding.mutateAsync({
+            embedding_model: previous.embedding_model ?? undefined,
+          })
+        } catch {
+          // Best-effort rollback; original error is still reported.
+        }
+      }
       handleMutationError(err, 'Failed to save AI settings')
     }
   }
