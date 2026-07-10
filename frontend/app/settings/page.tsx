@@ -31,7 +31,7 @@ function SettingsGroup({
 
 export default function SettingsPage() {
   return (
-    <PageShell className="space-y-8 py-2">
+    <PageShell className="space-y-8 pb-2">
       <PageHeader
         data-tour="settings-page"
         title={

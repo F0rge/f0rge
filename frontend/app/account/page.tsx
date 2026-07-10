@@ -12,7 +12,7 @@ import { DeleteAccountSection } from '@/components/account/delete-account-sectio
 
 export default function AccountPage() {
   return (
-    <PageShell className="py-2">
+    <PageShell className="pb-2">
       <PageHeader
         className="mb-6"
         title={
