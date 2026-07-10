@@ -106,9 +106,7 @@ class MealService:
         if not photo_exists(src_photo.filename, user_id=user_id_str):
             raise NotFoundError("Source photo file is missing on disk")
 
-        src_bytes = await asyncio.to_thread(
-            read_photo, src_photo.filename, user_id=user_id_str
-        )
+        src_bytes = await asyncio.to_thread(read_photo, src_photo.filename, user_id=user_id_str)
 
         # 2. Target entry (get-or-create, flush-only) + a fresh filename.
         entry = await get_or_create_entry(self.db, target_date)

@@ -101,7 +101,9 @@ class PhotoService:
 
         raw_bytes = await file.read()
         processed_bytes = await asyncio.to_thread(resize_image, raw_bytes)
-        await asyncio.to_thread(save_photo, processed_bytes, filename, user_id=str(current_user_id()))
+        await asyncio.to_thread(
+            save_photo, processed_bytes, filename, user_id=str(current_user_id())
+        )
 
         now = datetime.datetime.utcnow()
 

@@ -260,6 +260,7 @@ async def trigger_analysis_background(photo_id: int, user_id: uuid.UUID | None =
                 ).scalar_one_or_none()
                 if existing is None:
                     analysis = PhotoAnalysis(
+                        user_id=user_id,
                         photo_id=photo_id,
                         status="failed",
                         model_id=model,
@@ -293,6 +294,7 @@ async def trigger_analysis_background(photo_id: int, user_id: uuid.UUID | None =
                 analysis.model_id = model
             else:
                 analysis = PhotoAnalysis(
+                    user_id=user_id,
                     photo_id=photo_id,
                     status="analyzing",
                     model_id=model,
@@ -313,9 +315,7 @@ async def trigger_analysis_background(photo_id: int, user_id: uuid.UUID | None =
             if not photo_exists(photo.filename, user_id=user_id_str):
                 raise NotFoundError(f"Photo file not found: {photo.filename}")
 
-            image_bytes = await asyncio.to_thread(
-                read_photo, photo.filename, user_id=user_id_str
-            )
+            image_bytes = await asyncio.to_thread(read_photo, photo.filename, user_id=user_id_str)
 
             messages = build_messages(image_bytes)
 
@@ -336,6 +336,7 @@ async def trigger_analysis_background(photo_id: int, user_id: uuid.UUID | None =
             for vi in vision_result.ingredients:
                 match = await lookup.lookup(vi.name)
                 ingredient = PhotoIngredient(
+                    user_id=user_id,
                     analysis_id=analysis.id,
                     name=vi.name,
                     canonical_name=match.canonical_name if match else None,

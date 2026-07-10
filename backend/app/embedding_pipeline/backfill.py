@@ -30,9 +30,7 @@ async def _all_user_ids() -> list[uuid.UUID]:
         return [row[0] for row in result.fetchall()]
 
 
-async def _enqueue_missing(
-    table_name: str, model: str, dry_run: bool, user_id: uuid.UUID
-) -> int:
+async def _enqueue_missing(table_name: str, model: str, dry_run: bool, user_id: uuid.UUID) -> int:
     """Enqueue source rows that have no embedding for the current model.
 
     Set-based: one INSERT ... SELECT per table. The LEFT JOIN against `embedding`
