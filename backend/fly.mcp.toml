@@ -15,7 +15,7 @@ primary_region = "fra"
   FLY_MPG_SKIP_ROLE_DDL = "1"
 
 [processes]
-  mcp = "uv run python -m app.mcp --transport streamable-http --host 0.0.0.0 --port 8005"
+  mcp = "/app/.venv/bin/python -m app.mcp --transport streamable-http --host 0.0.0.0 --port 8005"
 
 [http_service]
   internal_port = 8005
@@ -24,12 +24,6 @@ primary_region = "fra"
   auto_start_machines = true
   min_machines_running = 1
   processes = ["mcp"]
-
-  [[http_service.checks]]
-    grace_period = "30s"
-    interval = "15s"
-    timeout = "2s"
-    type = "tcp"
 
 [[vm]]
   cpu_kind = "shared"
