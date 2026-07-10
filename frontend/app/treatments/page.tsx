@@ -8,6 +8,7 @@ import { TreatmentFormDialog } from '@/components/treatments/treatment-form-dial
 import { DiscontinueDialog } from '@/components/treatments/discontinue-dialog'
 import { TreatmentTimeline } from '@/components/treatments/treatment-timeline'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 import { FetchError } from '@/components/shared/fetch-error'
 import type { Treatment } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
@@ -43,47 +44,50 @@ export default function TreatmentsPage() {
 
   return (
     <PageShell>
-      <div className="mb-6 flex items-center justify-between" data-tour="treatments-page">
-        <h1 className="text-xl font-semibold tracking-tight">Treatments</h1>
-        <div className="flex items-center gap-1">
-          <div className="flex rounded-lg border border-border">
+      <PageHeader
+        data-tour="treatments-page"
+        title="Treatments"
+        actions={
+          <div className="flex items-center gap-1">
+            <div className="flex rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => setView('list')}
+                className={cn(
+                  'flex items-center gap-1 rounded-l-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  view === 'list'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <List className="size-3.5" />
+                List
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('timeline')}
+                className={cn(
+                  'flex items-center gap-1 rounded-r-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  view === 'timeline'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <BarChart3 className="size-3.5" />
+                Timeline
+              </button>
+            </div>
             <button
               type="button"
-              onClick={() => setView('list')}
-              className={cn(
-                'flex items-center gap-1 rounded-l-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                view === 'list'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
+              onClick={openAdd}
+              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
             >
-              <List className="size-3.5" />
-              List
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('timeline')}
-              className={cn(
-                'flex items-center gap-1 rounded-r-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                view === 'timeline'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <BarChart3 className="size-3.5" />
-              Timeline
+              <Plus className="size-4" />
+              Add
             </button>
           </div>
-          <button
-            type="button"
-            onClick={openAdd}
-            className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-          >
-            <Plus className="size-4" />
-            Add
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {isError ? (
         <FetchError message="Failed to load treatments." onRetry={() => refetch()} />

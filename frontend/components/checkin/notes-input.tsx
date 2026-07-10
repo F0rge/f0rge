@@ -22,7 +22,7 @@ export function NotesInput({ value, onChange, onBlur }: NotesInputProps) {
   const remaining = 500 - value.length
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <label className="text-sm font-medium leading-none">Notes (optional)</label>
       <textarea
         ref={textareaRef}

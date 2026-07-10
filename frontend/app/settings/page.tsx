@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 import { WeatherSection } from '@/components/settings/weather-section'
 import { AiSettingsSection } from '@/components/settings/ai-settings-section'
 import { ExternalTokenSection } from '@/components/settings/external-token-section'
@@ -30,13 +31,18 @@ function SettingsGroup({
 
 export default function SettingsPage() {
   return (
-    <PageShell className="space-y-8 py-2" data-tour="settings-page">
-      <div className="flex items-center gap-3">
-        <Link href="/checkin" className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="size-5" />
-        </Link>
-        <h1 className="text-xl font-bold">Settings</h1>
-      </div>
+    <PageShell className="space-y-8 pb-2">
+      <PageHeader
+        data-tour="settings-page"
+        title={
+          <div className="flex items-center gap-3">
+            <Link href="/checkin" className="text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="size-5" />
+            </Link>
+            <h1 className="text-xl font-bold">Settings</h1>
+          </div>
+        }
+      />
 
       <SettingsGroup title="Integrations">
         <div className="grid gap-6 lg:grid-cols-2">

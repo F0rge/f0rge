@@ -7,6 +7,7 @@ import { useEntry, useUpdatePhotoMealTime, useMedicationCatalog } from '@/lib/ap
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-disclosure'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 import type { Entry, Photo } from '@/lib/api/types'
 import { getOverallTier, getScaleLabel, type ScaleTier } from '@/lib/checkin/scale-labels'
 
@@ -222,27 +223,29 @@ export default function HistoryDatePage({ params }: { params: Promise<{ date: st
 
   return (
     <PageShell>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
+      <PageHeader
+        leading={
           <Link
             href="/history"
-            className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
             Back
           </Link>
-          <h1 className="text-xl font-semibold tracking-tight">{formatDisplayDate(date)}</h1>
-        </div>
-        {entry && (
-          <Link
-            href={`/checkin/${date}`}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-          >
-            <Pencil className="size-3.5" />
-            Edit
-          </Link>
-        )}
-      </div>
+        }
+        title={formatDisplayDate(date)}
+        actions={
+          entry ? (
+            <Link
+              href={`/checkin/${date}`}
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <Pencil className="size-3.5" />
+              Edit
+            </Link>
+          ) : undefined
+        }
+      />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-12">

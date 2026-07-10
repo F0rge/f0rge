@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
+import { PageHeader } from '@/components/layout/page-header'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { FetchError } from '@/components/shared/fetch-error'
 import { useEntry } from '@/lib/api/hooks'
@@ -79,18 +80,21 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
         sentinelRef={headerRef}
         hidden={isLoading}
       />
-      <div className="mx-auto w-full max-w-7xl p-4 lg:px-8">
-      <div ref={headerRef} className="mb-6">
-        <Link
-          href="/history"
-          className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Back
-        </Link>
-        <h1 className="text-xl font-semibold tracking-tight">Edit Entry</h1>
-        <p className="text-sm text-muted-foreground">{formatDisplayDate(date)}</p>
-      </div>
+      <div className="mx-auto w-full max-w-7xl px-4 pb-4 pt-[calc(16px+env(safe-area-inset-top))] lg:px-8">
+      <PageHeader
+        headerRef={headerRef}
+        leading={
+          <Link
+            href="/history"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Back
+          </Link>
+        }
+        title="Edit Entry"
+        subtitle={formatDisplayDate(date)}
+      />
 
       {isError ? (
         <FetchError
