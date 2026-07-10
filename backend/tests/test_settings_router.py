@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from cryptography.fernet import Fernet
 from httpx import AsyncClient
 
+from app.config import settings
 from app.exceptions import ExternalServiceError
 from app.services.llm.base import EmbeddingClient, LLMClient
 from app.services.llm.factory import get_embedding_client, get_llm_client
@@ -27,18 +29,23 @@ def fernet_key(monkeypatch: pytest.MonkeyPatch) -> str:
 @pytest.fixture(autouse=True)
 def auth_bypass(monkeypatch: pytest.MonkeyPatch) -> None:
     """Bypass auth middleware for settings router tests."""
-    from app.middleware.auth import get_current_session
-    from app.models.session import AuthSession
+    from app.auth_context import user_id_ctx
+    from app.middleware.auth import get_current_user_id
     from app.main import app
 
-    fake_session = MagicMock(spec=AuthSession)
+    fake_user_id = uuid.UUID(settings.default_storage_user_id)
+    token = user_id_ctx.set(fake_user_id)
 
-    async def _fake_session() -> AuthSession:
-        return fake_session
+    async def _fake_user_id() -> uuid.UUID:
+        user_id_ctx.set(fake_user_id)
+        return fake_user_id
 
-    app.dependency_overrides[get_current_session] = _fake_session
-    yield
-    app.dependency_overrides.pop(get_current_session, None)
+    app.dependency_overrides[get_current_user_id] = _fake_user_id
+    try:
+        yield
+    finally:
+        user_id_ctx.reset(token)
+        app.dependency_overrides.pop(get_current_user_id, None)
 
 
 async def test_get_settings_initial_shape(async_client: AsyncClient) -> None:

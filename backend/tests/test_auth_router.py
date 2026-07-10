@@ -1,68 +1,109 @@
-"""HTTP-level tests for the auth router (login/logout/me).
+"""HTTP-level tests for the auth router (signup/login/logout/me).
 
-No mocks of app code: PIN hashing uses real bcrypt, sessions are real DB rows
-via async_db, and auth state is proven through real login->authed-call
-round-trips rather than dependency overrides. Per
-feedback_no_mocks_at_seam_under_test.md, this is the seam under test, so it
-must not be bypassed.
+No mocks of app code: password hashing uses real bcrypt, JWTs are real signed
+tokens, and auth state is proven through real signup/login->authed-call
+round-trips rather than dependency overrides.
 """
 
 from __future__ import annotations
 
 import datetime
+import uuid
 
-import bcrypt
+import jwt
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.session import AuthSession
+from app.services.auth import JWT_ALGORITHM, JWT_COOKIE_NAME, create_access_token
 
-TEST_PIN = "1234"
-
-
-@pytest.fixture(autouse=True)
-def known_pin(monkeypatch: pytest.MonkeyPatch) -> str:
-    """Seed settings.pin_hash with a real bcrypt hash of TEST_PIN.
-
-    monkeypatch.setattr on a config *value* the service reads (settings.pin_hash)
-    is the allowed pattern -- it is not mocking the auth service or its
-    collaborators, just the config it consults.
-    """
-    hashed = bcrypt.hashpw(TEST_PIN.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    monkeypatch.setattr(settings, "pin_hash", hashed)
-    return TEST_PIN
+TEST_EMAIL = "auth-test@example.com"
+TEST_PASSWORD = "test-password-12"
+OTHER_EMAIL = "other@example.com"
 
 
-async def test_login_correct_pin_returns_200_and_sets_cookie(async_client: AsyncClient) -> None:
-    resp = await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
+async def test_signup_creates_user_and_sets_cookie(async_client: AsyncClient) -> None:
+    resp = await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
     assert resp.status_code == 200
-    assert resp.json() == {"authenticated": True}
-    assert "ht_session" in resp.cookies
-    assert resp.cookies["ht_session"]
+    body = resp.json()
+    assert body["authenticated"] is True
+    assert body["email"] == TEST_EMAIL
+    assert uuid.UUID(body["user_id"])
+    assert JWT_COOKIE_NAME in resp.cookies
+    assert resp.cookies[JWT_COOKIE_NAME]
 
 
-async def test_login_wrong_pin_returns_401_no_cookie(async_client: AsyncClient) -> None:
-    resp = await async_client.post("/api/v1/auth/login", json={"pin": "0000"})
+async def test_signup_duplicate_email_returns_409(async_client: AsyncClient) -> None:
+    await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    resp = await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert resp.status_code == 409
+
+
+async def test_signup_short_password_returns_422(async_client: AsyncClient) -> None:
+    resp = await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": "short"},
+    )
+    assert resp.status_code == 422
+
+
+async def test_login_correct_credentials_returns_200_and_sets_cookie(
+    async_client: AsyncClient,
+) -> None:
+    await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    async_client.cookies.clear()
+
+    resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["authenticated"] is True
+    assert JWT_COOKIE_NAME in resp.cookies
+
+
+async def test_login_wrong_password_returns_401_no_cookie(async_client: AsyncClient) -> None:
+    await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    async_client.cookies.clear()
+
+    resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": TEST_EMAIL, "password": "wrong-password"},
+    )
     assert resp.status_code == 401
-    assert "ht_session" not in resp.cookies
+    assert JWT_COOKIE_NAME not in resp.cookies
 
 
-async def test_login_wrong_pin_does_not_create_session_row(
-    async_client: AsyncClient, async_db: AsyncSession
+async def test_login_unconfigured_jwt_secret_returns_400(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    await async_client.post("/api/v1/auth/login", json={"pin": "0000"})
-    rows = (await async_db.execute(select(AuthSession))).scalars().all()
-    assert rows == []
+    await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    async_client.cookies.clear()
+    monkeypatch.setattr(settings, "jwt_secret", "")
 
-
-async def test_login_unconfigured_pin_returns_400(
-    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(settings, "pin_hash", "")
-    resp = await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
+    resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
     assert resp.status_code == 400
 
 
@@ -71,64 +112,63 @@ async def test_me_unauthenticated_returns_401(async_client: AsyncClient) -> None
     assert resp.status_code == 401
 
 
-async def test_me_authenticated_after_login_returns_200(async_client: AsyncClient) -> None:
-    await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
+async def test_me_authenticated_after_signup_returns_200(async_client: AsyncClient) -> None:
+    await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
     resp = await async_client.get("/api/v1/auth/me")
     assert resp.status_code == 200
-    assert resp.json() == {"authenticated": True}
+    body = resp.json()
+    assert body["authenticated"] is True
+    assert body["email"] == TEST_EMAIL
 
 
-async def test_logout_unauthenticated_returns_401(async_client: AsyncClient) -> None:
-    resp = await async_client.post("/api/v1/auth/logout")
-    assert resp.status_code == 401
-
-
-async def test_logout_clears_session_and_subsequent_call_401s(async_client: AsyncClient) -> None:
-    await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
+async def test_logout_clears_cookie_and_subsequent_call_401s(async_client: AsyncClient) -> None:
+    await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
 
     logout_resp = await async_client.post("/api/v1/auth/logout")
     assert logout_resp.status_code == 200
-    assert logout_resp.json() == {"authenticated": False}
+    assert logout_resp.json() == {"authenticated": False, "user_id": None, "email": None}
 
     me_resp = await async_client.get("/api/v1/auth/me")
     assert me_resp.status_code == 401
 
 
-async def test_logout_deletes_session_row(
-    async_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
-    await async_client.post("/api/v1/auth/logout")
+async def test_expired_jwt_returns_401(async_client: AsyncClient) -> None:
+    signup_resp = await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+    )
+    user_id = uuid.UUID(signup_resp.json()["user_id"])
 
-    rows = (await async_db.execute(select(AuthSession))).scalars().all()
-    assert rows == []
-
-
-async def test_expired_session_returns_401(
-    async_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
-
-    # Real DB write in test setup -- not a mock of app code, just moving the
-    # clock on a row so the middleware's expiry check has something to catch.
-    session = (await async_db.execute(select(AuthSession))).scalar_one()
-    session.expires_at = datetime.datetime.utcnow() - datetime.timedelta(days=1)
-    await async_db.commit()
+    expired = jwt.encode(
+        {
+            "sub": str(user_id),
+            "iat": datetime.datetime.utcnow() - datetime.timedelta(days=2),
+            "exp": datetime.datetime.utcnow() - datetime.timedelta(days=1),
+        },
+        settings.jwt_secret,
+        algorithm=JWT_ALGORITHM,
+    )
+    async_client.cookies.clear()
+    async_client.cookies.set(JWT_COOKIE_NAME, expired)
 
     resp = await async_client.get("/api/v1/auth/me")
     assert resp.status_code == 401
 
 
-async def test_expired_session_row_is_deleted_by_middleware(
-    async_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
+async def test_logout_without_session_still_returns_200(async_client: AsyncClient) -> None:
+    resp = await async_client.post("/api/v1/auth/logout")
+    assert resp.status_code == 200
+    assert resp.json()["authenticated"] is False
 
-    session = (await async_db.execute(select(AuthSession))).scalar_one()
-    session.expires_at = datetime.datetime.utcnow() - datetime.timedelta(days=1)
-    await async_db.commit()
 
-    await async_client.get("/api/v1/auth/me")
-
-    rows = (await async_db.execute(select(AuthSession))).scalars().all()
-    assert rows == []
+async def test_create_access_token_round_trips_user_id() -> None:
+    user_id = uuid.uuid4()
+    token = create_access_token(user_id)
+    payload = jwt.decode(token, settings.jwt_secret, algorithms=[JWT_ALGORITHM])
+    assert payload["sub"] == str(user_id)

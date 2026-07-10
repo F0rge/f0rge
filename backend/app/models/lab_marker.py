@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import Float, ForeignKey, Index, String
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.user import default_user_id
 
 
 class LabMarker(Base):
@@ -11,6 +15,13 @@ class LabMarker(Base):
     __table_args__ = (Index("ix_lab_markers_canonical_lab", "canonical_name", "lab_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        default=default_user_id,
+    )
     lab_id: Mapped[int] = mapped_column(
         ForeignKey("labs.id", ondelete="CASCADE"),
         nullable=False,

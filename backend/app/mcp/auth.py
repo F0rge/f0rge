@@ -4,36 +4,36 @@ import secrets
 from typing import Optional
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
+from sqlalchemy import select
 
 from app.mcp.database import make_main_session
+from app.models.user_settings import UserSettings
 from app.services.llm.encryption import decrypt
-from app.services.llm.factory import load_user_settings_singleton
+from app.tenant import apply_service_role
 
 
 class BearerTokenVerifier(TokenVerifier):
-    """Verifies incoming Bearer tokens against the encrypted token stored in user_settings.
-
-    Uses secrets.compare_digest to prevent timing attacks. Never logs the token or key.
-    """
+    """Verify MCP Bearer tokens against each user's encrypted external API token."""
 
     async def verify_token(self, token: str) -> Optional[AccessToken]:
         async with make_main_session() as db:
-            row = await load_user_settings_singleton(db)
+            await apply_service_role(db, "mcp_auth")
+            rows = (await db.execute(select(UserSettings))).scalars().all()
 
-        if row is None or row.external_api_token_encrypted is None:
-            return None
+        for row in rows:
+            if row.external_api_token_encrypted is None:
+                continue
 
-        try:
-            stored_plaintext = decrypt(row.external_api_token_encrypted)
-        except Exception:
-            # Decryption failure (wrong key, corrupt data) → deny access.
-            return None
+            try:
+                stored_plaintext = decrypt(row.external_api_token_encrypted)
+            except Exception:
+                continue
 
-        if not secrets.compare_digest(token, stored_plaintext):
-            return None
+            if secrets.compare_digest(token, stored_plaintext):
+                return AccessToken(
+                    token=token,
+                    client_id=str(row.user_id),
+                    scopes=[],
+                )
 
-        return AccessToken(
-            token=token,
-            client_id="external",
-            scopes=[],
-        )
+        return None

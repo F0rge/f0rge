@@ -93,7 +93,7 @@ async def test_trigger_with_empty_api_key_marks_failed(
     and must mark the analysis as failed with a clear error."""
     session, photo_id = db_with_photo
 
-    async def _no_key(db: AsyncSession) -> tuple[None, str]:
+    async def _no_key(db: AsyncSession, **kwargs: object) -> tuple[None, str]:
         return (None, "google/gemini-3-flash-preview")
 
     monkeypatch.setattr(
@@ -131,7 +131,7 @@ async def test_trigger_with_empty_key_updates_existing_pending(
     endpoint), the guard should flip it to failed rather than skipping."""
     session, photo_id = db_with_photo
 
-    async def _no_key(db: AsyncSession) -> tuple[None, str]:
+    async def _no_key(db: AsyncSession, **kwargs: object) -> tuple[None, str]:
         return (None, "google/gemini-3-flash-preview")
 
     monkeypatch.setattr(

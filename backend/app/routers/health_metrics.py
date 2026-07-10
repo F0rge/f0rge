@@ -18,8 +18,8 @@ router = APIRouter(
 @router.post("/import", status_code=status.HTTP_200_OK)
 async def import_health_data(
     body: dict,
-    service: HealthMetricsService = Depends(get_health_metrics_service),
     _auth: None = Depends(require_health_import_auth),
+    service: HealthMetricsService = Depends(get_health_metrics_service),
 ):
     return await service.import_health_data(body)
 

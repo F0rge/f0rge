@@ -16,6 +16,8 @@ from app.models.photo import Photo
 from app.schemas.photo import PhotoUpdate
 from app.services.food_analysis import trigger_analysis_background
 from app.services.photo_storage import delete_photo, resize_image, save_photo
+from app.services import object_storage
+from app.tenant import current_user_id, owned_by_user
 
 
 async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg") -> str:
@@ -30,7 +32,11 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
     used_numbers: set[int] = set()
 
     # Source 1: DB rows for this entry.
-    rows = (await db.execute(select(Photo.filename).where(Photo.entry_id == entry.id))).all()
+    rows = (
+        await db.execute(
+            select(Photo.filename).where(owned_by_user(Photo.user_id), Photo.entry_id == entry.id)
+        )
+    ).all()
     for (existing_filename,) in rows:
         if existing_filename.startswith(prefix) and existing_filename.endswith(suffix):
             try:
@@ -38,16 +44,13 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
             except ValueError:
                 pass
 
-    # Source 2: files in the local photos directory (catches orphans where
-    # the file was written but the DB commit failed).
-    photo_dir_abs = os.path.abspath(settings.photo_dir)
-    if os.path.isdir(photo_dir_abs):
-        for name in os.listdir(photo_dir_abs):
-            if name.startswith(prefix) and name.endswith(suffix):
-                try:
-                    used_numbers.add(int(name[len(prefix) : -len(suffix)]))
-                except ValueError:
-                    pass
+    # Source 2: files on disk or in object storage (catches orphans).
+    for name in object_storage.list_photo_filenames(prefix, user_id=str(entry.user_id)):
+        if name.startswith(prefix) and name.endswith(suffix):
+            try:
+                used_numbers.add(int(name[len(prefix) : -len(suffix)]))
+            except ValueError:
+                pass
 
     photo_number = max(used_numbers, default=0) + 1
     return f"{prefix}{photo_number}{suffix}"
@@ -59,7 +62,9 @@ class PhotoService:
 
     async def update_photo(self, photo_id: int, data: PhotoUpdate) -> Photo:
         photo = (
-            await self.db.execute(select(Photo).where(Photo.id == photo_id))
+            await self.db.execute(
+                select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
+            )
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
@@ -85,7 +90,9 @@ class PhotoService:
         background_tasks: BackgroundTasks,
     ) -> Photo:
         entry = (
-            await self.db.execute(select(Entry).where(Entry.date == entry_date))
+            await self.db.execute(
+                select(Entry).where(owned_by_user(Entry.user_id), Entry.date == entry_date)
+            )
         ).scalar_one_or_none()
         if entry is None:
             raise NotFoundError(f"No entry for {entry_date}")
@@ -94,7 +101,9 @@ class PhotoService:
 
         raw_bytes = await file.read()
         processed_bytes = await asyncio.to_thread(resize_image, raw_bytes)
-        await asyncio.to_thread(save_photo, processed_bytes, filename)
+        await asyncio.to_thread(
+            save_photo, processed_bytes, filename, user_id=str(current_user_id())
+        )
 
         now = datetime.datetime.utcnow()
 
@@ -106,6 +115,7 @@ class PhotoService:
             normalized_meal_time = (normalized_meal_time - utc_offset).replace(tzinfo=None)
 
         photo = Photo(
+            user_id=current_user_id(),
             entry_id=entry.id,
             filename=filename,
             label=label,
@@ -120,7 +130,7 @@ class PhotoService:
         try:
             await self.db.commit()
         except Exception:
-            await asyncio.to_thread(delete_photo, filename)
+            await asyncio.to_thread(delete_photo, filename, user_id=str(current_user_id()))
             raise
         await self.db.refresh(photo)
 
@@ -134,24 +144,32 @@ class PhotoService:
             except Exception:
                 api_key = None
             if api_key:
-                background_tasks.add_task(trigger_analysis_background, photo.id)
+                background_tasks.add_task(trigger_analysis_background, photo.id, photo.user_id)
 
         return photo
 
     async def get_file_path(self, photo_id: int) -> str:
         photo = (
-            await self.db.execute(select(Photo).where(Photo.id == photo_id))
+            await self.db.execute(
+                select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
+            )
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError("Photo not found")
-        file_path = os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
-        if not os.path.exists(file_path):
+        if not object_storage.exists_relative(photo.filename, user_id=str(photo.user_id)):
             raise NotFoundError("Photo file not found")
-        return file_path
+        presigned = object_storage.presigned_url_for_relative(
+            photo.filename, user_id=str(photo.user_id)
+        )
+        if presigned:
+            return presigned
+        return os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
 
     async def delete(self, photo_id: int) -> None:
         photo = (
-            await self.db.execute(select(Photo).where(Photo.id == photo_id))
+            await self.db.execute(
+                select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
+            )
         ).scalar_one_or_none()
         if photo is None:
             raise NotFoundError("Photo not found")
@@ -163,4 +181,4 @@ class PhotoService:
         await self.db.commit()
 
         # File cleanup happens after the successful commit.
-        await asyncio.to_thread(delete_photo, filename)
+        await asyncio.to_thread(delete_photo, filename, user_id=str(photo.user_id))

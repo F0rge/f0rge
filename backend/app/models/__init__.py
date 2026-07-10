@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.models.user import User
 from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
 from app.models.photo import Photo
@@ -26,6 +27,7 @@ from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
 
 __all__ = [
+    "User",
     "Entry",
     "Photo",
     "PhotoAnalysis",

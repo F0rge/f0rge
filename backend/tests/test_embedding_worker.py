@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.embedding import Embedding
 from app.models.entry import Entry
 
@@ -46,6 +48,7 @@ class _FakeEmbeddingClient:
 def _queue_row(queue_id: int, source_table: str, source_id: int, action: str) -> Any:
     return SimpleNamespace(
         id=queue_id,
+        user_id=uuid.UUID(settings.default_storage_user_id),
         source_table=source_table,
         source_id=source_id,
         action=action,
@@ -144,8 +147,8 @@ async def test_process_row_upserts_on_update(async_db: AsyncSession) -> None:
 
     await async_db.execute(
         text(
-            "INSERT INTO embedding_queue (source_table, source_id, action)"
-            " VALUES ('entries', :sid, 'UPDATE')"
+            "INSERT INTO embedding_queue (user_id, source_table, source_id, action)"
+            " SELECT user_id, 'entries', :sid, 'UPDATE' FROM entries WHERE id = :sid"
         ),
         {"sid": entry.id},
     )
@@ -187,8 +190,8 @@ async def test_claim_batch_returns_pending_rows(async_db: AsyncSession) -> None:
 
     await async_db.execute(
         text(
-            "INSERT INTO embedding_queue (source_table, source_id, action)"
-            " VALUES ('entries', :sid, 'INSERT')"
+            "INSERT INTO embedding_queue (user_id, source_table, source_id, action)"
+            " SELECT user_id, 'entries', :sid, 'INSERT' FROM entries WHERE id = :sid"
         ),
         {"sid": entry.id},
     )

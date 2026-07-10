@@ -37,6 +37,11 @@ depends_on: Union[Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    if os.environ.get("FLY_MPG_SKIP_ROLE_DDL", "").lower() in ("1", "true", "yes"):
+        # Fly MPG: provision healthtracker-ro / healthtracker-app via
+        # `fly mpg users create` and attach MCP with --username healthtracker-ro.
+        return
+
     pw = os.environ.get("HEALTHTRACKER_RO_PASSWORD")
     if not pw:
         raise RuntimeError(
@@ -116,6 +121,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if os.environ.get("FLY_MPG_SKIP_ROLE_DDL", "").lower() in ("1", "true", "yes"):
+        return
+
     bind = op.get_bind()
 
     # Revoke default-privilege auto-grants first.

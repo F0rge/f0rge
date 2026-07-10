@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.exceptions import NotFoundError, ValidationError
 from app.models.treatment import Treatment
 from app.schemas.treatment import TreatmentCreate, TreatmentUpdate
+from app.tenant import current_user_id, owned_by_user
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -20,7 +21,7 @@ class TreatmentService:
 
     async def list(self, active_on: Optional[str] = None) -> list[Treatment]:
         active_date = self._parse_active_on(active_on)
-        stmt = select(Treatment)
+        stmt = select(Treatment).where(owned_by_user(Treatment.user_id))
         if active_date is not None:
             stmt = stmt.where(
                 Treatment.start_date <= active_date,
@@ -34,7 +35,12 @@ class TreatmentService:
 
     async def get(self, treatment_id: int) -> Treatment:
         treatment = (
-            await self.db.execute(select(Treatment).where(Treatment.id == treatment_id))
+            await self.db.execute(
+                select(Treatment).where(
+                    owned_by_user(Treatment.user_id),
+                    Treatment.id == treatment_id,
+                )
+            )
         ).scalar_one_or_none()
         if treatment is None:
             raise NotFoundError("Treatment not found.")
@@ -43,6 +49,7 @@ class TreatmentService:
     async def create(self, data: TreatmentCreate) -> Treatment:
         self._validate_dates(data.start_date, data.end_date)
         treatment = Treatment(
+            user_id=current_user_id(),
             name=data.name,
             normalized_name=self._normalize_name(data.name),
             group_name=data.group_name,

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import uuid
 from typing import Optional
 
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth_context import user_id_ctx
 from app.config import settings
 from app.database import get_db
 from app.exceptions import ConflictError
@@ -17,9 +19,20 @@ from app.services.llm.openrouter import OpenRouterClient, OpenRouterEmbeddingCli
 DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 
-async def load_user_settings_singleton(db: AsyncSession) -> Optional[UserSettings]:
-    result = await db.execute(select(UserSettings).where(UserSettings.id == 1))
+async def load_user_settings(
+    db: AsyncSession, user_id: Optional[uuid.UUID] = None
+) -> Optional[UserSettings]:
+    uid = user_id if user_id is not None else user_id_ctx.get()
+    if uid is None:
+        return None
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == uid))
     return result.scalar_one_or_none()
+
+
+async def load_user_settings_singleton(
+    db: AsyncSession, user_id: Optional[uuid.UUID] = None
+) -> Optional[UserSettings]:
+    return await load_user_settings(db, user_id=user_id)
 
 
 def _resolve(
@@ -45,9 +58,11 @@ def _resolve(
     return (api_key, model)
 
 
-async def resolve_llm_credentials(db: AsyncSession) -> tuple[Optional[str], str]:
+async def resolve_llm_credentials(
+    db: AsyncSession, user_id: Optional[uuid.UUID] = None
+) -> tuple[Optional[str], str]:
     """Return (api_key, model) for the LLM provider. Callers handle missing key."""
-    row = await load_user_settings_singleton(db)
+    row = await load_user_settings_singleton(db, user_id=user_id)
     return _resolve(
         row,
         key_attr="llm_api_key_encrypted",
@@ -56,12 +71,14 @@ async def resolve_llm_credentials(db: AsyncSession) -> tuple[Optional[str], str]
     )
 
 
-async def resolve_embedding_credentials(db: AsyncSession) -> tuple[Optional[str], str]:
+async def resolve_embedding_credentials(
+    db: AsyncSession, user_id: Optional[uuid.UUID] = None
+) -> tuple[Optional[str], str]:
     """Return (api_key, model) for the embedding provider. Callers handle missing key.
 
     Key resolution shares llm_api_key_encrypted with resolve_llm_credentials — there is
     only one stored BYOK key, used by both clients. Model resolution stays independent."""
-    row = await load_user_settings_singleton(db)
+    row = await load_user_settings_singleton(db, user_id=user_id)
     return _resolve(
         row,
         key_attr="llm_api_key_encrypted",

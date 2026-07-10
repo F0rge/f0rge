@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.supplement_catalog import SupplementCatalogItem
+from app.tenant import current_user_id, owned_by_user
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
@@ -22,7 +23,7 @@ def normalize_key(raw: str) -> str:
 async def list_items(
     db: AsyncSession, include_archived: bool = False
 ) -> list[SupplementCatalogItem]:
-    stmt = select(SupplementCatalogItem)
+    stmt = select(SupplementCatalogItem).where(owned_by_user(SupplementCatalogItem.user_id))
     if not include_archived:
         stmt = stmt.where(SupplementCatalogItem.archived.is_(False))
     stmt = stmt.order_by(
@@ -39,7 +40,10 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SupplementCatal
 
     existing = (
         await db.execute(
-            select(SupplementCatalogItem).where(SupplementCatalogItem.key == normalized)
+            select(SupplementCatalogItem).where(
+                owned_by_user(SupplementCatalogItem.user_id),
+                SupplementCatalogItem.key == normalized,
+            )
         )
     ).scalar_one_or_none()
 
@@ -55,7 +59,9 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SupplementCatal
     max_item = (
         (
             await db.execute(
-                select(SupplementCatalogItem).order_by(SupplementCatalogItem.sort_order.desc())
+                select(SupplementCatalogItem)
+                .where(owned_by_user(SupplementCatalogItem.user_id))
+                .order_by(SupplementCatalogItem.sort_order.desc())
             )
         )
         .scalars()
@@ -63,7 +69,9 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SupplementCatal
     )
     next_sort = (max_item.sort_order + 1) if max_item else 0
 
-    item = SupplementCatalogItem(key=normalized, label=label, sort_order=next_sort)
+    item = SupplementCatalogItem(
+        user_id=current_user_id(), key=normalized, label=label, sort_order=next_sort
+    )
     db.add(item)
     await db.commit()
     await db.refresh(item)
@@ -72,7 +80,12 @@ async def create_item(db: AsyncSession, key: str, label: str) -> SupplementCatal
 
 async def update_item(db: AsyncSession, key: str, data: dict) -> SupplementCatalogItem:
     item = (
-        await db.execute(select(SupplementCatalogItem).where(SupplementCatalogItem.key == key))
+        await db.execute(
+            select(SupplementCatalogItem).where(
+                owned_by_user(SupplementCatalogItem.user_id),
+                SupplementCatalogItem.key == key,
+            )
+        )
     ).scalar_one_or_none()
     if not item:
         raise NotFoundError(f"Catalog item '{key}' not found.")
@@ -94,7 +107,10 @@ async def touch(db: AsyncSession, keys: Iterable[str]) -> None:
         item.key: item
         for item in (
             await db.execute(
-                select(SupplementCatalogItem).where(SupplementCatalogItem.key.in_(key_list))
+                select(SupplementCatalogItem).where(
+                    owned_by_user(SupplementCatalogItem.user_id),
+                    SupplementCatalogItem.key.in_(key_list),
+                )
             )
         )
         .scalars()

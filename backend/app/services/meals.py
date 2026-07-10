@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import os
-from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.exceptions import NotFoundError, ValidationError
 from app.models.entry import Entry
 from app.models.photo import Photo
@@ -18,8 +15,9 @@ from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.meal import RecentMealResponse
 from app.services.diet_flags import compute_signal_from_analyses
 from app.services.entries import get_or_create_entry
-from app.services.photo_storage import delete_photo, save_photo
+from app.services.photo_storage import delete_photo, photo_exists, read_photo, save_photo
 from app.services.photos import next_photo_filename
+from app.tenant import current_user_id
 
 
 class MealService:
@@ -103,9 +101,12 @@ class MealService:
         if src.status != "confirmed":
             raise ValidationError("Source meal is not confirmed")
         src_photo = src.photo
-        src_path = os.path.join(os.path.abspath(settings.photo_dir), src_photo.filename)
-        if not os.path.exists(src_path):
+        user_id = current_user_id()
+        user_id_str = str(user_id)
+        if not photo_exists(src_photo.filename, user_id=user_id_str):
             raise NotFoundError("Source photo file is missing on disk")
+
+        src_bytes = await asyncio.to_thread(read_photo, src_photo.filename, user_id=user_id_str)
 
         # 2. Target entry (get-or-create, flush-only) + a fresh filename.
         entry = await get_or_create_entry(self.db, target_date)
@@ -115,6 +116,7 @@ class MealService:
         # 3. Stage all rows; a single commit below keeps photo + analysis +
         #    ingredients atomic.
         new_photo = Photo(
+            user_id=user_id,
             entry_id=entry.id,
             filename=new_filename,
             label=src_photo.label,
@@ -126,6 +128,7 @@ class MealService:
         await self.db.flush()
 
         new_analysis = PhotoAnalysis(
+            user_id=user_id,
             photo_id=new_photo.id,
             status="confirmed",  # skip pending/analyzing — counts toward the signal now
             dish_name=src.dish_name,
@@ -140,6 +143,7 @@ class MealService:
         for si in src.ingredients:
             self.db.add(
                 PhotoIngredient(
+                    user_id=user_id,
                     analysis_id=new_analysis.id,
                     name=si.name,
                     canonical_name=si.canonical_name,
@@ -159,15 +163,14 @@ class MealService:
         # 4. Copy the image file BEFORE commit — mirrors upload's invariant that a
         #    file on disk implies a committed row. No resize: the source on disk is
         #    already a processed JPEG.
-        src_bytes = await asyncio.to_thread(Path(src_path).read_bytes)
-        await asyncio.to_thread(save_photo, src_bytes, new_filename)
+        await asyncio.to_thread(save_photo, src_bytes, new_filename, user_id=user_id_str)
 
         # 5. Commit; on failure remove the just-copied file so the next filename
         #    scan doesn't collide with an orphan (mirrors upload's cleanup).
         try:
             await self.db.commit()
         except Exception:
-            await asyncio.to_thread(delete_photo, new_filename)
+            await asyncio.to_thread(delete_photo, new_filename, user_id=user_id_str)
             raise
         await self.db.refresh(new_photo)
         return new_photo

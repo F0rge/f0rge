@@ -19,6 +19,7 @@ from app.services import symptom_catalog as symptom_catalog_service
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
 from app.services.photo_storage import delete_photo
 from app.services.trackers import sync_seed_tracker_log_from_entry
+from app.tenant import current_user_id, owned_by_user
 
 
 def _build_response(entry: Entry) -> EntryResponse:
@@ -74,13 +75,16 @@ async def get_or_create_entry(db: AsyncSession, target_date: datetime.date) -> E
     the transaction.
     """
     existing = (
-        await db.execute(select(Entry).where(Entry.date == target_date))
+        await db.execute(
+            select(Entry).where(owned_by_user(Entry.user_id), Entry.date == target_date)
+        )
     ).scalar_one_or_none()
     if existing is not None:
         return existing
 
     now = datetime.datetime.utcnow()
     entry = Entry(
+        user_id=current_user_id(),
         date=target_date,
         schema_version=2,
         entry_time=now,
@@ -104,7 +108,9 @@ async def get_or_create_entry(db: AsyncSession, target_date: datetime.date) -> E
 
 
 async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
-    existing = (await db.execute(select(Entry).where(Entry.date == body.date))).scalar_one_or_none()
+    existing = (
+        await db.execute(select(Entry).where(owned_by_user(Entry.user_id), Entry.date == body.date))
+    ).scalar_one_or_none()
     if existing:
         raise ConflictError(f"Entry for {body.date} already exists")
 
@@ -122,7 +128,7 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
     # stool_completeness (and every other plain EntryCreate field) flows through here
     # via **data -- Entry(**data) is generic over the schema's fields, unlike
     # TreatmentService.create()'s explicit kwarg list, so no per-field wiring is needed.
-    entry = Entry(**data)
+    entry = Entry(user_id=current_user_id(), **data)
     db.add(entry)
 
     supplement_keys = [s.strip() for s in (entry.supplements or "").split(",") if s.strip()]
@@ -141,7 +147,7 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
 
 
 async def list_entries(db: AsyncSession, month: Optional[str] = None) -> list[EntryResponse]:
-    stmt = select(Entry)
+    stmt = select(Entry).where(owned_by_user(Entry.user_id))
     if month:
         year, mon = month.split("-")
         start = datetime.date(int(year), int(mon), 1)
@@ -156,14 +162,18 @@ async def list_entries(db: AsyncSession, month: Optional[str] = None) -> list[En
 
 
 async def get_entry(db: AsyncSession, date: datetime.date) -> EntryResponse:
-    entry = (await db.execute(select(Entry).where(Entry.date == date))).scalar_one_or_none()
+    entry = (
+        await db.execute(select(Entry).where(owned_by_user(Entry.user_id), Entry.date == date))
+    ).scalar_one_or_none()
     if not entry:
         raise NotFoundError(f"No entry for {date}")
     return _build_response(entry)
 
 
 async def update_entry(db: AsyncSession, date: datetime.date, body: EntryUpdate) -> EntryResponse:
-    entry = (await db.execute(select(Entry).where(Entry.date == date))).scalar_one_or_none()
+    entry = (
+        await db.execute(select(Entry).where(owned_by_user(Entry.user_id), Entry.date == date))
+    ).scalar_one_or_none()
     if not entry:
         raise NotFoundError(f"No entry for {date}")
 
@@ -205,7 +215,9 @@ async def update_entry(db: AsyncSession, date: datetime.date, body: EntryUpdate)
 async def delete_entry(db: AsyncSession, date: datetime.date) -> None:
     entry = (
         await db.execute(
-            select(Entry).options(selectinload(Entry.photos)).where(Entry.date == date)
+            select(Entry)
+            .options(selectinload(Entry.photos))
+            .where(owned_by_user(Entry.user_id), Entry.date == date)
         )
     ).scalar_one_or_none()
     if not entry:
@@ -217,7 +229,7 @@ async def delete_entry(db: AsyncSession, date: datetime.date) -> None:
     await db.commit()
 
     for photo in photos:
-        await asyncio.to_thread(delete_photo, photo.filename)
+        await asyncio.to_thread(delete_photo, photo.filename, user_id=str(photo.user_id))
 
 
 class EntryService:

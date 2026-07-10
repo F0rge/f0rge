@@ -8,14 +8,29 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 - Backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.10
 - Frontend: Next.js 16 + React 19 + Tailwind 4 + shadcn/ui
-- Auth: PIN-based session cookies (bcrypt)
+- Auth: JWT in `ht_session` httpOnly cookie (email + password); Coolify stacks still use PIN until cutover
 
 ## Environments
+
+### Coolify (Pi) — current production path
 
 | Env | Branch | Frontend | Backend API | MCP | Coolify project |
 |---|---|---|---|---|---|
 | Production | `main` | https://health.leo-figueiredo.com | (internal, behind frontend rewrite) | https://health-mcp.leo-figueiredo.com | Health Tracker |
 | Develop | `develop` | https://health-dev.leo-figueiredo.com | https://health-dev-api.leo-figueiredo.com | https://health-dev-mcp.leo-figueiredo.com | Health Tracker Dev |
+
+### Fly.io (parallel dev stack — epic #207)
+
+| Component | URL |
+|---|---|
+| API + worker | https://health-tracker-api-dev.fly.dev |
+| Frontend | https://health-tracker-web-dev.fly.dev |
+| MCP | https://health-tracker-mcp-dev.fly.dev |
+| MPG | `health-tracker-db-dev` (`fra`) |
+
+Deploy: `backend/fly.toml`, `backend/fly.mcp.toml`, `frontend/fly.toml`. See [docs/fly-cutover-runbook.md](docs/fly-cutover-runbook.md).
+
+## Environments (shared notes)
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).

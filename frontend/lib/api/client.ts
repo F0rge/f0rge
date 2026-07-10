@@ -2,6 +2,13 @@ import { toast } from 'sonner'
 
 const BASE = '/api/v1'
 
+const PUBLIC_PATHS = ['/login', '/signup']
+
+function isPublicAuthPath() {
+  if (typeof window === 'undefined') return false
+  return PUBLIC_PATHS.some((path) => window.location.pathname.startsWith(path))
+}
+
 class ApiError extends Error {
   status: number
   constructor(message: string, status: number) {
@@ -14,7 +21,7 @@ class ApiError extends Error {
 async function handleResponse(res: Response) {
   if (res.status === 401) {
     // Session expired — redirect to login with return URL
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+    if (typeof window !== 'undefined' && !isPublicAuthPath()) {
       const returnTo = encodeURIComponent(window.location.pathname)
       window.location.href = `/login?redirect=${returnTo}`
     }
@@ -41,7 +48,7 @@ export async function apiGetRaw(path: string): Promise<Response> {
     credentials: 'include',
   })
   if (res.status === 401) {
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+    if (typeof window !== 'undefined' && !isPublicAuthPath()) {
       const returnTo = encodeURIComponent(window.location.pathname)
       window.location.href = `/login?redirect=${returnTo}`
     }

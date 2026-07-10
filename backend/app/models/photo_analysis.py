@@ -1,17 +1,27 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.user import default_user_id
 
 
 class PhotoAnalysis(Base):
     __tablename__ = "photo_analyses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        default=default_user_id,
+    )
     photo_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("photos.id", ondelete="CASCADE"),

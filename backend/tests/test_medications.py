@@ -6,15 +6,7 @@ No mocks of app code.
 
 from __future__ import annotations
 
-import bcrypt
-import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.config import settings
-from app.services import medication_catalog as medication_catalog_service
-
-TEST_PIN = "1234"
 
 _VALID_PAYLOAD = {
     "date": "2026-02-01",
@@ -31,20 +23,6 @@ _VALID_PAYLOAD = {
 }
 
 
-@pytest.fixture(autouse=True)
-def known_pin(monkeypatch: pytest.MonkeyPatch) -> str:
-    hashed = bcrypt.hashpw(TEST_PIN.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    monkeypatch.setattr(settings, "pin_hash", hashed)
-    return TEST_PIN
-
-
-@pytest.fixture
-async def authed_client(async_client: AsyncClient) -> AsyncClient:
-    resp = await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
-    assert resp.status_code == 200
-    return async_client
-
-
 # ---------------------------------------------------------------------------
 # GET /api/v1/medications/catalog
 # ---------------------------------------------------------------------------
@@ -55,20 +33,14 @@ async def test_get_catalog_unauthenticated_401(async_client: AsyncClient) -> Non
     assert resp.status_code == 401
 
 
-async def test_get_catalog_returns_seeded_meds(
-    authed_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """The migration seeds these rows on a real deploy; testcontainers uses
-    create_all (not the alembic chain), so seed them here to prove the
-    endpoint shape against the same rows the migration would produce."""
-    await medication_catalog_service.create_item(async_db, "ibuprofen", "Ibuprofen")
-    await medication_catalog_service.create_item(async_db, "paracetamol", "Paracetamol")
-
+async def test_get_catalog_returns_seeded_meds(authed_client: AsyncClient) -> None:
+    """Signup provisioning seeds the default medication catalog for new users."""
     resp = await authed_client.get("/api/v1/medications/catalog")
     assert resp.status_code == 200
     body = resp.json()
     keys = {item["key"] for item in body}
-    assert keys == {"ibuprofen", "paracetamol"}
+    assert "ibuprofen" in keys
+    assert "paracetamol" in keys
     item = next(i for i in body if i["key"] == "ibuprofen")
     assert item["label"] == "Ibuprofen"
     assert item["archived"] is False
@@ -76,10 +48,10 @@ async def test_get_catalog_returns_seeded_meds(
 
 async def test_post_catalog_item_creates_and_returns_201(authed_client: AsyncClient) -> None:
     resp = await authed_client.post(
-        "/api/v1/medications/catalog", json={"key": "aspirin", "label": "Aspirin"}
+        "/api/v1/medications/catalog", json={"key": "custom_med", "label": "Custom Med"}
     )
     assert resp.status_code == 201
-    assert resp.json()["key"] == "aspirin"
+    assert resp.json()["key"] == "custom_med"
 
 
 async def test_patch_catalog_item_archives(authed_client: AsyncClient) -> None:
@@ -158,19 +130,21 @@ async def test_update_entry_omitting_medications_leaves_them_unchanged(
 
 
 async def test_archived_catalog_key_preserved_on_historical_entry(
-    authed_client: AsyncClient, async_db: AsyncSession
+    authed_client: AsyncClient,
 ) -> None:
     """A medication logged on a past entry must still show up in the
     entry's `medications` list even after the catalog item is archived --
     the key is not FK-constrained and archiving must not strip history."""
-    await medication_catalog_service.create_item(async_db, "imodium", "Imodium")
-
     payload = dict(_VALID_PAYLOAD)
     payload["medications"] = [{"key": "imodium", "reason": "upset stomach"}]
     create_resp = await authed_client.post("/api/v1/entries", json=payload)
     assert create_resp.status_code == 201
 
-    await medication_catalog_service.update_item(async_db, "imodium", {"archived": True})
+    archive_resp = await authed_client.patch(
+        "/api/v1/medications/catalog/imodium",
+        json={"archived": True},
+    )
+    assert archive_resp.status_code == 200
 
     get_resp = await authed_client.get("/api/v1/entries/2026-02-01")
     assert get_resp.status_code == 200

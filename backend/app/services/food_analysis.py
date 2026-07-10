@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-from pathlib import Path
+import uuid
 from typing import Optional
 
 from fastapi import BackgroundTasks
@@ -20,6 +19,7 @@ from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, IngredientUpdate
 from app.services.ingredient_lookup import IngredientLookupService
 from app.services.vision_prompt import VisionResult, build_messages, parse_vision_response
+from app.tenant import apply_session_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +201,12 @@ class FoodAnalysisService:
         if existing:
             await self.delete_analysis(existing.id)
         new_analysis = await self.create_pending_analysis(photo_id)
-        background_tasks.add_task(trigger_analysis_background, photo_id)
+        photo = (
+            await self.db.execute(select(Photo).where(Photo.id == photo_id))
+        ).scalar_one_or_none()
+        if photo is None:
+            raise NotFoundError(f"Photo {photo_id} not found")
+        background_tasks.add_task(trigger_analysis_background, photo_id, photo.user_id)
         return new_analysis
 
     async def add_ingredient_to_photo(
@@ -219,7 +224,7 @@ class FoodAnalysisService:
 # ---------------------------------------------------------------------------
 
 
-async def trigger_analysis_background(photo_id: int) -> None:
+async def trigger_analysis_background(photo_id: int, user_id: uuid.UUID | None = None) -> None:
     """Run food photo analysis in a background task.
 
     Opens its own DB session because FastAPI BackgroundTasks execute
@@ -228,9 +233,19 @@ async def trigger_analysis_background(photo_id: int) -> None:
     analysis: Optional[PhotoAnalysis] = None
     try:
         async with async_session_maker() as db:
+            if user_id is None:
+                resolved = (
+                    await db.execute(select(Photo.user_id).where(Photo.id == photo_id))
+                ).scalar_one_or_none()
+                if resolved is None:
+                    logger.warning("Skipping analysis for missing photo %d", photo_id)
+                    return
+                user_id = resolved
+            user_id_str = str(user_id)
+            await apply_session_user_id(db, user_id)
             from app.services.llm.factory import resolve_llm_credentials
 
-            api_key, model = await resolve_llm_credentials(db)
+            api_key, model = await resolve_llm_credentials(db, user_id=user_id)
             if not api_key:
                 logger.warning(
                     "Food analysis skipped for photo %d: no LLM API key configured. "
@@ -245,6 +260,7 @@ async def trigger_analysis_background(photo_id: int) -> None:
                 ).scalar_one_or_none()
                 if existing is None:
                     analysis = PhotoAnalysis(
+                        user_id=user_id,
                         photo_id=photo_id,
                         status="failed",
                         model_id=model,
@@ -278,6 +294,7 @@ async def trigger_analysis_background(photo_id: int) -> None:
                 analysis.model_id = model
             else:
                 analysis = PhotoAnalysis(
+                    user_id=user_id,
                     photo_id=photo_id,
                     status="analyzing",
                     model_id=model,
@@ -293,11 +310,12 @@ async def trigger_analysis_background(photo_id: int) -> None:
             if not photo:
                 raise NotFoundError(f"Photo {photo_id} not found in database")
 
-            photo_path = os.path.join(settings.photo_dir, photo.filename)
-            if not os.path.exists(photo_path):
-                raise NotFoundError(f"Photo file not found: {photo_path}")
+            from app.services.photo_storage import photo_exists, read_photo
 
-            image_bytes = await asyncio.to_thread(Path(photo_path).read_bytes)
+            if not photo_exists(photo.filename, user_id=user_id_str):
+                raise NotFoundError(f"Photo file not found: {photo.filename}")
+
+            image_bytes = await asyncio.to_thread(read_photo, photo.filename, user_id=user_id_str)
 
             messages = build_messages(image_bytes)
 
@@ -318,6 +336,7 @@ async def trigger_analysis_background(photo_id: int) -> None:
             for vi in vision_result.ingredients:
                 match = await lookup.lookup(vi.name)
                 ingredient = PhotoIngredient(
+                    user_id=user_id,
                     analysis_id=analysis.id,
                     name=vi.name,
                     canonical_name=match.canonical_name if match else None,

@@ -1,20 +1,30 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 
-from sqlalchemy import Boolean, Date, DateTime, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.user import default_user_id
 
 
 class Entry(Base):
     __tablename__ = "entries"
+    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_entries_user_id_date"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    date: Mapped[datetime.date] = mapped_column(Date, unique=True, nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        default=default_user_id,
+    )
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
     entry_time: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
     period_of_day: Mapped[str | None] = mapped_column(String, nullable=True)

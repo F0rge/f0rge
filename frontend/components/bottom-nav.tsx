@@ -234,7 +234,7 @@ export function BottomNav() {
     return () => window.removeEventListener('resize', onResize)
   }, [place])
 
-  if (pathname.startsWith('/login')) return null
+  if (pathname.startsWith('/login') || pathname.startsWith('/signup')) return null
 
   return (
     <nav
