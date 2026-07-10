@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import Link from 'next/link'
-import { Loader2, Settings2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
@@ -78,18 +77,9 @@ export default function CheckinPage() {
         hidden={isLoading}
       />
       <div className="mx-auto w-full max-w-7xl p-4 lg:px-8">
-      <div ref={headerRef} className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Check-in</h1>
-          <p className="text-sm text-muted-foreground">{formatDisplayDate(today)}</p>
-        </div>
-        <Link
-          href="/customize"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Settings2 className="size-3.5" />
-          Customize
-        </Link>
+      <div ref={headerRef} className="mb-6">
+        <h1 className="text-xl font-semibold tracking-tight">Check-in</h1>
+        <p className="text-sm text-muted-foreground">{formatDisplayDate(today)}</p>
       </div>
 
       {isError ? (

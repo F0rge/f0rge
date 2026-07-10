@@ -2,7 +2,7 @@
 
 import { use, useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, Settings2 } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
@@ -81,22 +81,13 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
       />
       <div className="mx-auto w-full max-w-7xl p-4 lg:px-8">
       <div ref={headerRef} className="mb-6">
-        <div className="mb-3 flex items-center justify-between">
-          <Link
-            href="/history"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            Back
-          </Link>
-          <Link
-            href="/customize"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <Settings2 className="size-3.5" />
-            Customize
-          </Link>
-        </div>
+        <Link
+          href="/history"
+          className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back
+        </Link>
         <h1 className="text-xl font-semibold tracking-tight">Edit Entry</h1>
         <p className="text-sm text-muted-foreground">{formatDisplayDate(date)}</p>
       </div>
