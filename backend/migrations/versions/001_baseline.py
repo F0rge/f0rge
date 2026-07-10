@@ -32,9 +32,7 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_auth_sessions_token"), "auth_sessions", ["token"], unique=True
-    )
+    op.create_index(op.f("ix_auth_sessions_token"), "auth_sessions", ["token"], unique=True)
     op.create_table(
         "dietary_ingredients",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -115,17 +113,13 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_health_metrics_date"), "health_metrics", ["date"], unique=True
-    )
+    op.create_index(op.f("ix_health_metrics_date"), "health_metrics", ["date"], unique=True)
     op.create_table(
         "lab_marker_catalog",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("canonical_name", sa.String(), nullable=False),
         sa.Column("display_name", sa.String(), nullable=False),
-        sa.Column(
-            "common_units", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("common_units", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
@@ -170,9 +164,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_supplement_catalog_key"), "supplement_catalog", ["key"], unique=True
-    )
+    op.create_index(op.f("ix_supplement_catalog_key"), "supplement_catalog", ["key"], unique=True)
     op.create_table(
         "symptom_catalog",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -186,9 +178,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_symptom_catalog_key"), "symptom_catalog", ["key"], unique=True
-    )
+    op.create_index(op.f("ix_symptom_catalog_key"), "symptom_catalog", ["key"], unique=True)
     op.create_table(
         "treatments",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -221,9 +211,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_weather_readings_date"), "weather_readings", ["date"], unique=False
-    )
+    op.create_index(op.f("ix_weather_readings_date"), "weather_readings", ["date"], unique=False)
     op.create_index(
         op.f("ix_weather_readings_timestamp"),
         "weather_readings",
@@ -248,9 +236,7 @@ def upgrade() -> None:
         sa.Column("catalog_id", sa.Integer(), nullable=False),
         sa.Column("alias", sa.String(), nullable=False),
         sa.Column("language", sa.String(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["catalog_id"], ["lab_marker_catalog.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["catalog_id"], ["lab_marker_catalog.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -279,9 +265,7 @@ def upgrade() -> None:
         sa.Column("ref_high", sa.Float(), nullable=True),
         sa.Column("ref_text", sa.String(), nullable=True),
         sa.Column("flag", sa.String(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["catalog_id"], ["lab_marker_catalog.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["catalog_id"], ["lab_marker_catalog.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["lab_id"], ["labs.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -297,9 +281,7 @@ def upgrade() -> None:
         ["canonical_name"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_lab_markers_lab_id"), "lab_markers", ["lab_id"], unique=False
-    )
+    op.create_index(op.f("ix_lab_markers_lab_id"), "lab_markers", ["lab_id"], unique=False)
     op.create_table(
         "photos",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -349,9 +331,7 @@ def upgrade() -> None:
         sa.Column("contains_gluten", sa.Boolean(), nullable=True),
         sa.Column("contains_dairy", sa.Boolean(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["analysis_id"], ["photo_analyses.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["analysis_id"], ["photo_analyses.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     # ### end Alembic commands ###
@@ -367,9 +347,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_lab_markers_canonical_name"), table_name="lab_markers")
     op.drop_index("ix_lab_markers_canonical_lab", table_name="lab_markers")
     op.drop_table("lab_markers")
-    op.drop_index(
-        op.f("ix_lab_marker_aliases_catalog_id"), table_name="lab_marker_aliases"
-    )
+    op.drop_index(op.f("ix_lab_marker_aliases_catalog_id"), table_name="lab_marker_aliases")
     op.drop_index(op.f("ix_lab_marker_aliases_alias"), table_name="lab_marker_aliases")
     op.drop_table("lab_marker_aliases")
     op.drop_table("ingredient_aliases")
@@ -385,9 +363,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_labs_source_path"), table_name="labs")
     op.drop_index(op.f("ix_labs_lab_date"), table_name="labs")
     op.drop_table("labs")
-    op.drop_index(
-        op.f("ix_lab_marker_catalog_canonical_name"), table_name="lab_marker_catalog"
-    )
+    op.drop_index(op.f("ix_lab_marker_catalog_canonical_name"), table_name="lab_marker_catalog")
     op.drop_table("lab_marker_catalog")
     op.drop_index(op.f("ix_health_metrics_date"), table_name="health_metrics")
     op.drop_table("health_metrics")

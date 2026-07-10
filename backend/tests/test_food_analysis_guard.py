@@ -69,7 +69,7 @@ async def db_with_photo(
         entry_id = entry.id
 
     # Patch the trigger's session maker to point at the same engine.
-    monkeypatch.setattr("app.services.food_analysis.async_session_maker", real_maker)
+    monkeypatch.setattr("app.services.food_analysis_orchestrator.async_session_maker", real_maker)
 
     try:
         yield async_db, photo_id
@@ -101,7 +101,7 @@ async def test_trigger_with_empty_api_key_marks_failed(
         _no_key,
     )
 
-    from app.services import food_analysis
+    from app.services import food_analysis_orchestrator as food_analysis
 
     await food_analysis.trigger_analysis_background(photo_id)
 
@@ -111,7 +111,7 @@ async def test_trigger_with_empty_api_key_marks_failed(
     ).scalar_one_or_none()
     # The trigger committed onto the real engine, but our async_db is bound to
     # a SAVEPOINT on a different connection — open a separate session.
-    from app.services import food_analysis as fa
+    from app.services import food_analysis_orchestrator as fa
 
     async with fa.async_session_maker() as verify:
         analysis = (
@@ -140,7 +140,7 @@ async def test_trigger_with_empty_key_updates_existing_pending(
     )
 
     # Pre-seed a pending record via a separate session bound to the real engine.
-    from app.services import food_analysis as fa
+    from app.services import food_analysis_orchestrator as fa
 
     async with fa.async_session_maker() as seed:
         seed.add(

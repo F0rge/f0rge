@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, PrimaryKeyConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, PrimaryKeyConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,7 +18,6 @@ class TrackerLog(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     tracker_id: Mapped[int] = mapped_column(
@@ -32,7 +31,11 @@ class TrackerLog(Base):
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )
 
-    __table_args__ = (PrimaryKeyConstraint("user_id", "tracker_id", "date", name="pk_tracker_log"),)
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "tracker_id", "date", name="pk_tracker_log"),
+        Index("ix_tracker_log_user_id", "user_id"),
+        Index("ix_tracker_log_date", "date"),
+    )
 
     tracker: Mapped[Tracker] = relationship(
         "Tracker",

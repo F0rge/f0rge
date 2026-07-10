@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, PrimaryKeyConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, PrimaryKeyConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,7 +18,6 @@ class TreatmentLog(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     treatment_id: Mapped[int] = mapped_column(
@@ -34,6 +33,8 @@ class TreatmentLog(Base):
 
     __table_args__ = (
         PrimaryKeyConstraint("user_id", "treatment_id", "date", name="pk_treatment_log"),
+        Index("ix_treatment_log_user_id", "user_id"),
+        Index("ix_treatment_log_date", "date"),
     )
 
     treatment: Mapped[Treatment] = relationship(

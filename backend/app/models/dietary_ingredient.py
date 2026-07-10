@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,6 +20,7 @@ class DietaryIngredient(Base):
             "canonical_name",
             name="uq_dietary_ingredients_user_id_canonical_name",
         ),
+        Index("ix_dietary_ingredients_user_id", "user_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -27,7 +28,6 @@ class DietaryIngredient(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     canonical_name: Mapped[str] = mapped_column(String, nullable=False)

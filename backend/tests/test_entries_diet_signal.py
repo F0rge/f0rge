@@ -18,7 +18,7 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
-from app.services.entries import get_entry
+from app.services.entries import EntryService
 
 pytestmark = pytest.mark.asyncio
 
@@ -112,7 +112,7 @@ async def test_user_added_flag_only_no_photos(async_db: AsyncSession) -> None:
     effective_flags contains only the user-added flag; photo_derived_flags is empty.
     """
     await _make_entry(async_db, diet_risk="high-fodmap")
-    response = await get_entry(async_db, _BASE_DATE)
+    response = await EntryService(async_db).get_entry(_BASE_DATE)
 
     assert response.effective_flags == ["high-fodmap"]
     assert response.photo_derived_flags == []
@@ -146,7 +146,7 @@ async def test_photo_derived_flags_only_no_manual(async_db: AsyncSession) -> Non
     # Expire the cached entry so get_entry re-selects with fresh relationships.
     async_db.expire(entry)
 
-    response = await get_entry(async_db, date)
+    response = await EntryService(async_db).get_entry(date)
 
     assert response.effective_flags == ["dairy", "high-histamine"]
     assert response.photo_derived_flags == ["dairy", "high-histamine"]
@@ -180,7 +180,7 @@ async def test_photo_derived_plus_user_added(async_db: AsyncSession) -> None:
     # Expire so get_entry re-fetches with fresh relationships.
     async_db.expire(entry)
 
-    response = await get_entry(async_db, date)
+    response = await EntryService(async_db).get_entry(date)
 
     assert response.effective_flags == ["dairy", "gluten", "high-histamine"]
     assert response.user_added_flags == ["gluten"]
@@ -198,7 +198,7 @@ async def test_legacy_normal_stripped_from_user_added(async_db: AsyncSession) ->
     date = datetime.date(2026, 1, 13)
     await _make_entry(async_db, date=date, diet_risk="normal,high-fodmap")
 
-    response = await get_entry(async_db, date)
+    response = await EntryService(async_db).get_entry(date)
 
     assert "normal" not in response.user_added_flags
     assert response.user_added_flags == ["high-fodmap"]

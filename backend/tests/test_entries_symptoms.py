@@ -11,7 +11,7 @@ from app.models.entry import Entry
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.schemas.entry import EntryCreate
 from app.services import entries as entries_service
-from app.services import symptom_catalog as symptom_catalog_service
+from app.services.symptom_catalog import SymptomCatalogService
 
 
 async def _make_entry(
@@ -161,11 +161,11 @@ async def test_touch_sets_catalog_timestamps_after_create(
 ) -> None:
     """After creating an entry that references 'vss', the catalog row should
     have first_used_at and last_used_at populated."""
-    await symptom_catalog_service.create_item(async_db, "vss", "Visual Snow")
+    await SymptomCatalogService(async_db).create_item("vss", "Visual Snow")
 
     entry = await _make_entry(async_db, _DATE, {"vss": 7})
     # Simulate what the router does after add/before commit
-    await symptom_catalog_service.touch(async_db, list(entry.symptoms_json.keys()))
+    await SymptomCatalogService(async_db).touch(list(entry.symptoms_json.keys()))
     await async_db.commit()
 
     item = (
@@ -179,13 +179,13 @@ async def test_touch_on_update_sets_first_used_at_for_new_symptom(
     async_db: AsyncSession,
 ) -> None:
     """Adding a new symptom during an update should set first_used_at."""
-    await symptom_catalog_service.create_item(async_db, "tinnitus", "Tinnitus")
+    await SymptomCatalogService(async_db).create_item("tinnitus", "Tinnitus")
     entry = await _make_entry(async_db, _DATE, {})
 
     # Simulate update adding tinnitus
     entry.symptoms_json = {"tinnitus": 5}
     async_db.add(entry)
-    await symptom_catalog_service.touch(async_db, list(entry.symptoms_json.keys()))
+    await SymptomCatalogService(async_db).touch(list(entry.symptoms_json.keys()))
     await async_db.commit()
     await async_db.refresh(entry)
 
@@ -201,5 +201,5 @@ async def test_touch_silently_ignores_unknown_keys(async_db: AsyncSession) -> No
     """touch() must not raise when a key is not in the catalog."""
     entry = await _make_entry(async_db, _DATE, {"unknown_xyz": 5})
     # Should not raise
-    await symptom_catalog_service.touch(async_db, list(entry.symptoms_json.keys()))
+    await SymptomCatalogService(async_db).touch(list(entry.symptoms_json.keys()))
     await async_db.commit()

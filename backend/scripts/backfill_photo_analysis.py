@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
-from app.services.food_analysis import trigger_analysis_background
+from app.services.food_analysis_orchestrator import trigger_analysis_background
 from scripts._db import SyncSession
 
 SKIP_STATUSES = {"complete", "confirmed", "analyzing", "needs_review"}

@@ -88,7 +88,7 @@ async def db_with_photo(
         photo_id = photo.id
         entry_id = entry.id
 
-    monkeypatch.setattr("app.services.food_analysis.async_session_maker", real_maker)
+    monkeypatch.setattr("app.services.food_analysis_orchestrator.async_session_maker", real_maker)
 
     try:
         yield async_db, photo_id
@@ -129,7 +129,7 @@ async def _run_trigger_with_response(
     with open(os.path.join(cfg_mod.settings.photo_dir, "test.jpg"), "wb") as f:
         f.write(b"\xff\xd8\xff\xd9")
 
-    from app.services import food_analysis as fa
+    from app.services import food_analysis_orchestrator as fa
 
     await fa.trigger_analysis_background(photo_id)
 

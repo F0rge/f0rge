@@ -47,9 +47,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_diet_tag_catalog_key"), "diet_tag_catalog", ["key"], unique=True
-    )
+    op.create_index(op.f("ix_diet_tag_catalog_key"), "diet_tag_catalog", ["key"], unique=True)
 
     # Seed 4 default rows.
     # Using op.bulk_insert with a lightweight sa.Table definition — the canonical
