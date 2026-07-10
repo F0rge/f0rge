@@ -11,6 +11,7 @@ import { LabFormDialog } from '@/components/labs/lab-form-dialog'
 import { LabUploadDialog } from '@/components/labs/lab-upload-dialog'
 import { MarkerList } from '@/components/labs/marker-list'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 import { cn } from '@/lib/utils'
 import type { Lab } from '@/lib/api/types'
 
@@ -26,57 +27,60 @@ export default function LabsPage() {
 
   return (
     <PageShell>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-tour="labs-page">
-        <h1 className="text-xl font-semibold tracking-tight">Labs</h1>
+      <PageHeader
+        layout="responsive"
+        data-tour="labs-page"
+        title="Labs"
+        actions={
+          <div className="flex items-center gap-1">
+            <div className="flex rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => setView('by-lab')}
+                className={cn(
+                  'flex items-center gap-1 rounded-l-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  view === 'by-lab'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <List className="size-3.5" />
+                By Lab
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('by-marker')}
+                className={cn(
+                  'flex items-center gap-1 rounded-r-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  view === 'by-marker'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <FlaskConical className="size-3.5" />
+                By Marker
+              </button>
+            </div>
 
-        <div className="flex items-center gap-1">
-          <div className="flex rounded-lg border border-border">
             <button
               type="button"
-              onClick={() => setView('by-lab')}
-              className={cn(
-                'flex items-center gap-1 rounded-l-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                view === 'by-lab'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
+              onClick={() => setUploadOpen(true)}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
             >
-              <List className="size-3.5" />
-              By Lab
+              <Upload className="size-3.5" />
+              Upload
             </button>
             <button
               type="button"
-              onClick={() => setView('by-marker')}
-              className={cn(
-                'flex items-center gap-1 rounded-r-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                view === 'by-marker'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
+              onClick={() => setAddOpen(true)}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
             >
-              <FlaskConical className="size-3.5" />
-              By Marker
+              <Plus className="size-4" />
+              Add
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setUploadOpen(true)}
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-          >
-            <Upload className="size-3.5" />
-            Upload
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-          >
-            <Plus className="size-4" />
-            Add
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {view === 'by-lab' && (
         <>

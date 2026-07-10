@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { IngredientFormDialog } from '@/components/customize/ingredient-form-dialog'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 import { useIngredientCatalog, useArchiveDietaryIngredient } from '@/lib/api/hooks'
 import { handleMutationError } from '@/lib/api/client'
 import type { DietaryIngredient } from '@/lib/api/types'
@@ -115,23 +116,24 @@ export default function IngredientsClient() {
 
   return (
     <PageShell>
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          href="/customize"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Customize
-        </Link>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold tracking-tight">Dietary ingredients</h1>
+      <PageHeader
+        leading={
+          <Link
+            href="/customize"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Customize
+          </Link>
+        }
+        title="Dietary ingredients"
+        actions={
           <Button size="sm" className="min-h-[44px]" onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
             Add
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       <TierBanner tier="catalog">
         Edit the FODMAP, histamine, gluten and dairy classifications used to score your meals.

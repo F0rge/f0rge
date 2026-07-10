@@ -8,6 +8,7 @@ import { CorrelatesTable } from '@/components/insights/correlates-table'
 import { TreatmentResponse } from '@/components/insights/treatment-response'
 import { SleepNextDay } from '@/components/insights/sleep-next-day'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 import { formatLocalDate as fmt } from '@/lib/utils'
 
 function getDefaultDates(): { start: string; end: string } {
@@ -35,10 +36,12 @@ function InsightsContent() {
 
   return (
     <PageShell>
-      <div className="mb-4" data-tour="insights-header">
-        <h1 className="text-xl font-semibold tracking-tight">Insights</h1>
-        <p className="text-sm text-muted-foreground">Analytics &amp; correlations</p>
-      </div>
+      <PageHeader
+        className="mb-4"
+        data-tour="insights-header"
+        title="Insights"
+        subtitle="Analytics & correlations"
+      />
 
       <section className="mb-6">
         <HeaderControls

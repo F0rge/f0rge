@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { TierPill } from '@/components/customize/tier-pill'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 
 export const metadata = { title: 'Core scales' }
 
@@ -41,18 +42,20 @@ function ScaleRow({ label, values }: ScaleRowProps) {
 export default function CoreScalesPage() {
   return (
     <PageShell>
-      <div className="mb-6 flex items-center justify-between">
-        <Link
-          href="/customize"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Customize
-        </Link>
-        <TierPill tier="core" />
-      </div>
-
-      <h1 className="mb-4 text-xl font-semibold tracking-tight">Core scales</h1>
+      <PageHeader
+        leading={
+          <Link
+            href="/customize"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Customize
+          </Link>
+        }
+        title="Core scales"
+        className="mb-4"
+        actions={<TierPill tier="core" />}
+      />
 
       <TierBanner tier="core">
         These scales are the backbone of your data — keeping them consistent is what

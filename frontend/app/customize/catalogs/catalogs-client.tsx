@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { CatalogSection } from '@/components/customize/catalog-section'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 import {
   useSupplementCatalog,
   useUpdateSupplementCatalogItem,
@@ -66,17 +67,18 @@ export default function CatalogsClient() {
 
   return (
     <PageShell>
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          href="/customize"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Customize
-        </Link>
-        <h1 className="mt-3 text-xl font-semibold tracking-tight">Catalogs</h1>
-      </div>
+      <PageHeader
+        leading={
+          <Link
+            href="/customize"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Customize
+          </Link>
+        }
+        title="Catalogs"
+      />
 
       <TierBanner tier="catalog">
         Pick which supplements, medications, and diet tags appear on your daily
