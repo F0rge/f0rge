@@ -1,9 +1,35 @@
 from __future__ import annotations
 
+import uuid
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.services.settings_service import SettingsService
+
+
+@pytest.fixture(autouse=True)
+def auth_bypass(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bypass auth middleware for settings onboarding tests."""
+    from app.auth_context import user_id_ctx
+    from app.main import app
+    from app.middleware.auth import get_current_user_id
+
+    fake_user_id = uuid.UUID(settings.default_storage_user_id)
+    token = user_id_ctx.set(fake_user_id)
+
+    async def _fake_user_id() -> uuid.UUID:
+        user_id_ctx.set(fake_user_id)
+        return fake_user_id
+
+    app.dependency_overrides[get_current_user_id] = _fake_user_id
+    try:
+        yield
+    finally:
+        user_id_ctx.reset(token)
+        app.dependency_overrides.pop(get_current_user_id, None)
 
 
 async def test_get_settings_includes_onboarding_completed_false(

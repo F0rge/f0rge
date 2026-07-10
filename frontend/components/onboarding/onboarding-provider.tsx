@@ -135,11 +135,24 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     if (pathname.startsWith('/login') || pathname.startsWith('/signup')) return
 
     autoStartedRef.current = true
-    const timer = window.setTimeout(() => {
-      startTour()
-    }, 500)
-    return () => window.clearTimeout(timer)
-  }, [auth?.authenticated, settings?.onboarding_completed, settingsLoading, pathname, startTour])
+    let cancelled = false
+
+    const startWhenCheckinReady = async () => {
+      if (!routeMatches(pathname, '/checkin')) {
+        router.push('/checkin')
+      }
+      await waitForSelector('[data-tour="checkin-wellbeing"]', 15000)
+      if (!cancelled) {
+        startTour()
+      }
+    }
+
+    void startWhenCheckinReady()
+
+    return () => {
+      cancelled = true
+    }
+  }, [auth?.authenticated, settings?.onboarding_completed, settingsLoading, pathname, router, startTour])
 
   const value = useMemo(
     () => ({
