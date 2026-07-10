@@ -1,0 +1,49 @@
+name: Fly Deploy (main)
+
+# Deploys the Fly prod stack after CI (main) passes on a push to main.
+# Coolify/Pi deploy is unchanged — this is the parallel Fly stack only.
+
+on:
+  workflow_run:
+    workflows: ["CI (main)"]
+    types: [completed]
+    branches: [main]
+
+# One Fly deploy at a time per env — do not cancel an in-flight deploy.
+concurrency:
+  group: fly-deploy-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deploy:
+    name: deploy api → mcp → frontend
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Deploy API (alembic via release_command)
+        working-directory: backend
+        run: flyctl deploy --remote-only --config fly.prod.toml
+
+      - name: Deploy MCP
+        working-directory: backend
+        run: flyctl deploy --remote-only --config fly.mcp.prod.toml
+
+      - name: Deploy frontend
+        working-directory: frontend
+        run: flyctl deploy --remote-only --config fly.prod.toml
