@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.entry import Entry
 from app.models.photo import Photo
+from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
 from app.services.photo_storage import save_photo
 from app.services.photos import PhotoService
 
@@ -89,7 +90,7 @@ def _png_bytes() -> bytes:
 
 async def _upload(db: AsyncSession, day: datetime.date, name: str = "x.png") -> Photo:
     upload = UploadFile(filename=name, file=io.BytesIO(_png_bytes()))
-    service = PhotoService(db)
+    service = PhotoService(db, FoodAnalysisOrchestrator())
     return await service.upload(
         entry_date=day,
         file=upload,
@@ -100,7 +101,7 @@ async def _upload(db: AsyncSession, day: datetime.date, name: str = "x.png") -> 
 
 
 async def _delete(db: AsyncSession, photo_id: int) -> None:
-    await PhotoService(db).delete(photo_id)
+    await PhotoService(db, FoodAnalysisOrchestrator()).delete(photo_id)
 
 
 # ---------------------------------------------------------------------------

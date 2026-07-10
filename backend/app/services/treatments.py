@@ -4,13 +4,13 @@ import datetime
 import re
 from typing import Optional
 
-from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.treatments import TreatmentCRUD
 from app.exceptions import NotFoundError, ValidationError
 from app.models.treatment import Treatment
 from app.schemas.treatment import TreatmentCreate, TreatmentUpdate
-from app.tenant import current_user_id, owned_by_user
+from app.tenant import current_user_id
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -18,30 +18,14 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 class TreatmentService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.crud = TreatmentCRUD(db)
 
     async def list(self, active_on: Optional[str] = None) -> list[Treatment]:
         active_date = self._parse_active_on(active_on)
-        stmt = select(Treatment).where(owned_by_user(Treatment.user_id))
-        if active_date is not None:
-            stmt = stmt.where(
-                Treatment.start_date <= active_date,
-                (Treatment.end_date.is_(None)) | (Treatment.end_date >= active_date),
-            )
-        stmt = stmt.order_by(
-            case((Treatment.end_date.is_(None), 0), else_=1),
-            Treatment.start_date.desc(),
-        )
-        return list((await self.db.execute(stmt)).scalars().all())
+        return await self.crud.list(active_date)
 
     async def get(self, treatment_id: int) -> Treatment:
-        treatment = (
-            await self.db.execute(
-                select(Treatment).where(
-                    owned_by_user(Treatment.user_id),
-                    Treatment.id == treatment_id,
-                )
-            )
-        ).scalar_one_or_none()
+        treatment = await self.crud.get_by_id(treatment_id)
         if treatment is None:
             raise NotFoundError("Treatment not found.")
         return treatment
@@ -62,10 +46,8 @@ class TreatmentService:
             doses_per_day=data.doses_per_day,
             notes=data.notes,
         )
-        self.db.add(treatment)
-        await self.db.commit()
-        await self.db.refresh(treatment)
-        return treatment
+        self.crud.add(treatment)
+        return await self.crud.commit_refresh(treatment)
 
     async def update(self, treatment_id: int, data: TreatmentUpdate) -> Treatment:
         treatment = await self.get(treatment_id)
@@ -80,14 +62,11 @@ class TreatmentService:
         if "name" in patch:
             treatment.normalized_name = self._normalize_name(treatment.name)
 
-        await self.db.commit()
-        await self.db.refresh(treatment)
-        return treatment
+        return await self.crud.commit_refresh(treatment)
 
     async def delete(self, treatment_id: int) -> None:
         treatment = await self.get(treatment_id)
-        await self.db.delete(treatment)
-        await self.db.commit()
+        await self.crud.delete_and_commit(treatment)
 
     @staticmethod
     def _normalize_name(raw: str) -> str:

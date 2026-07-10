@@ -3,21 +3,24 @@ from __future__ import annotations
 import asyncio
 import datetime
 import os
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from fastapi import BackgroundTasks, UploadFile
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.crud.entries import EntryCRUD
+from app.crud.photos import PhotoCRUD
 from app.exceptions import NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.schemas.photo import PhotoUpdate
-from app.services.food_analysis import trigger_analysis_background
-from app.services.photo_storage import delete_photo, resize_image, save_photo
 from app.services import object_storage
-from app.tenant import current_user_id, owned_by_user
+from app.services.photo_storage import delete_photo, resize_image, save_photo
+from app.tenant import current_user_id
+
+if TYPE_CHECKING:
+    from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
 
 
 async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg") -> str:
@@ -32,12 +35,7 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
     used_numbers: set[int] = set()
 
     # Source 1: DB rows for this entry.
-    rows = (
-        await db.execute(
-            select(Photo.filename).where(owned_by_user(Photo.user_id), Photo.entry_id == entry.id)
-        )
-    ).all()
-    for (existing_filename,) in rows:
+    for existing_filename in await PhotoCRUD(db).list_filenames_for_entry(entry.id):
         if existing_filename.startswith(prefix) and existing_filename.endswith(suffix):
             try:
                 used_numbers.add(int(existing_filename[len(prefix) : -len(suffix)]))
@@ -57,15 +55,14 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
 
 
 class PhotoService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, orchestrator: "FoodAnalysisOrchestrator") -> None:
         self.db = db
+        self.crud = PhotoCRUD(db)
+        self.entry_crud = EntryCRUD(db)
+        self.orchestrator = orchestrator
 
     async def update_photo(self, photo_id: int, data: PhotoUpdate) -> Photo:
-        photo = (
-            await self.db.execute(
-                select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
-            )
-        ).scalar_one_or_none()
+        photo = await self.crud.get_by_id_owned(photo_id)
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
 
@@ -77,9 +74,7 @@ class PhotoService:
         if "meal_time" in fields:
             photo.meal_time = data.meal_time
 
-        await self.db.commit()
-        await self.db.refresh(photo)
-        return photo
+        return await self.crud.commit_refresh(photo)
 
     async def upload(
         self,
@@ -89,11 +84,7 @@ class PhotoService:
         meal_time: Optional[datetime.datetime],
         background_tasks: BackgroundTasks,
     ) -> Photo:
-        entry = (
-            await self.db.execute(
-                select(Entry).where(owned_by_user(Entry.user_id), Entry.date == entry_date)
-            )
-        ).scalar_one_or_none()
+        entry = await self.entry_crud.get_by_date(entry_date)
         if entry is None:
             raise NotFoundError(f"No entry for {entry_date}")
 
@@ -126,13 +117,13 @@ class PhotoService:
         # Invariant: a file on disk implies a DB row exists.
         # If the commit fails we clean up the file so the next upload
         # doesn't collide with a phantom on disk.
-        self.db.add(photo)
+        self.crud.add(photo)
         try:
-            await self.db.commit()
+            await self.crud.commit()
         except Exception:
             await asyncio.to_thread(delete_photo, filename, user_id=str(current_user_id()))
             raise
-        await self.db.refresh(photo)
+        await self.crud.refresh(photo)
 
         # Queue analysis when enabled and credentials resolve (env or BYOK).
         # Credential resolution must not fail the upload — the photo is already persisted.
@@ -144,16 +135,12 @@ class PhotoService:
             except Exception:
                 api_key = None
             if api_key:
-                background_tasks.add_task(trigger_analysis_background, photo.id, photo.user_id)
+                background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
 
         return photo
 
     async def get_file_path(self, photo_id: int) -> str:
-        photo = (
-            await self.db.execute(
-                select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
-            )
-        ).scalar_one_or_none()
+        photo = await self.crud.get_by_id_owned(photo_id)
         if photo is None:
             raise NotFoundError("Photo not found")
         if not object_storage.exists_relative(photo.filename, user_id=str(photo.user_id)):
@@ -166,19 +153,14 @@ class PhotoService:
         return os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
 
     async def delete(self, photo_id: int) -> None:
-        photo = (
-            await self.db.execute(
-                select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
-            )
-        ).scalar_one_or_none()
+        photo = await self.crud.get_by_id_owned(photo_id)
         if photo is None:
             raise NotFoundError("Photo not found")
         filename = photo.filename
 
         # Commit DB delete before touching the filesystem. If the commit fails,
         # no files are removed and the DB row remains — consistent state.
-        await self.db.delete(photo)
-        await self.db.commit()
+        await self.crud.delete_and_commit(photo)
 
         # File cleanup happens after the successful commit.
         await asyncio.to_thread(delete_photo, filename, user_id=str(photo.user_id))

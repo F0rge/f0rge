@@ -68,7 +68,7 @@ async def db_with_photo(
         photo_id = photo.id
         entry_id = entry.id
 
-    monkeypatch.setattr("app.services.food_analysis.async_session_maker", real_maker)
+    monkeypatch.setattr("app.services.food_analysis_orchestrator.async_session_maker", real_maker)
 
     try:
         yield async_db, photo_id
@@ -132,7 +132,7 @@ async def test_trigger_with_byok_only_calls_openrouter(
     monkeypatch.setattr(cfg_mod.settings, "food_analysis_enabled", True)
     monkeypatch.setattr(cfg_mod.settings, "photo_dir", "/tmp")
 
-    from app.services import food_analysis as fa
+    from app.services import food_analysis_orchestrator as fa
 
     async with fa.async_session_maker() as setup:
         setup.add(

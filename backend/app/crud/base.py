@@ -41,6 +41,9 @@ class BaseCRUD:
         await self.db.refresh(obj)
         return obj
 
+    async def delete(self, obj: object) -> None:
+        await self.db.delete(obj)
+
     async def delete_and_commit(self, obj: object) -> None:
         await self.db.delete(obj)
         await self.db.commit()

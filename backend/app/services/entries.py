@@ -13,11 +13,7 @@ from app.models.photo import Photo
 from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
 from app.schemas.photo import PhotoResponse
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
-from app.services.medication_catalog import MedicationCatalogService
 from app.services.photo_storage import delete_photo
-from app.services.supplement_catalog import SupplementCatalogService
-from app.services.symptom_catalog import SymptomCatalogService
-from app.services.trackers import sync_seed_tracker_log_from_entry
 from app.tenant import current_user_id
 
 # Bump whenever Entry's column shape changes; both entry-creation paths below
@@ -125,15 +121,13 @@ class EntryService:
         self.db = db
         self.crud = EntryCRUD(db)
 
-    async def _touch_catalogs(self, entry: Entry) -> None:
-        supplement_keys = [s.strip() for s in (entry.supplements or "").split(",") if s.strip()]
-        await SupplementCatalogService(self.db).touch(supplement_keys)
-        await SymptomCatalogService(self.db).touch(list((entry.symptoms_json or {}).keys()))
-        await MedicationCatalogService(self.db).touch(
-            [m["key"] for m in entry.medications_json if m.get("key")]
-        )
+    async def stage_create(self, body: EntryCreate) -> Entry:
+        """Validate, build, and add a new Entry to the session -- uncommitted.
 
-    async def create_entry(self, body: EntryCreate) -> EntryResponse:
+        Split out of ``create_entry`` so ``EntryOrchestrator`` can interleave the
+        catalog-touch step before the commit, landing entry insert + catalog
+        touches in the same transaction (Rule 9.2).
+        """
         existing = await self.crud.get_by_date(body.date)
         if existing:
             raise ConflictError(f"Entry for {body.date} already exists")
@@ -156,35 +150,13 @@ class EntryService:
         # TreatmentService.create()'s explicit kwarg list, so no per-field wiring is needed.
         entry = Entry(user_id=current_user_id(), **data)
         self.crud.add(entry)
+        return entry
 
-        await self._touch_catalogs(entry)
+    async def stage_update(self, date: datetime.date, body: EntryUpdate) -> Entry:
+        """Load and mutate an existing Entry in the session -- uncommitted.
 
-        entry = await self.crud.commit_refresh(entry)
-
-        await sync_seed_tracker_log_from_entry(self.db, entry)
-
-        return _build_response(entry)
-
-    async def list_entries(self, month: Optional[str] = None) -> list[EntryResponse]:
-        start: Optional[datetime.date] = None
-        end: Optional[datetime.date] = None
-        if month:
-            year, mon = month.split("-")
-            start = datetime.date(int(year), int(mon), 1)
-            if int(mon) == 12:
-                end = datetime.date(int(year) + 1, 1, 1)
-            else:
-                end = datetime.date(int(year), int(mon) + 1, 1)
-        entries = await self.crud.list(start, end)
-        return [_build_response(e) for e in entries]
-
-    async def get_entry(self, date: datetime.date) -> EntryResponse:
-        entry = await self.crud.get_by_date(date)
-        if not entry:
-            raise NotFoundError(f"No entry for {date}")
-        return _build_response(entry)
-
-    async def update_entry(self, date: datetime.date, body: EntryUpdate) -> EntryResponse:
+        See ``stage_create`` for why the commit is deferred to the orchestrator.
+        """
         entry = await self.crud.get_by_date(date)
         if not entry:
             raise NotFoundError(f"No entry for {date}")
@@ -208,13 +180,28 @@ class EntryService:
         now = datetime.datetime.utcnow()
         entry.entry_time = now
         entry.period_of_day = _period_of_day(now)
+        return entry
 
-        await self._touch_catalogs(entry)
+    async def commit_entry(self, entry: Entry) -> Entry:
+        return await self.crud.commit_refresh(entry)
 
-        entry = await self.crud.commit_refresh(entry)
+    async def list_entries(self, month: Optional[str] = None) -> list[EntryResponse]:
+        start: Optional[datetime.date] = None
+        end: Optional[datetime.date] = None
+        if month:
+            year, mon = month.split("-")
+            start = datetime.date(int(year), int(mon), 1)
+            if int(mon) == 12:
+                end = datetime.date(int(year) + 1, 1, 1)
+            else:
+                end = datetime.date(int(year), int(mon) + 1, 1)
+        entries = await self.crud.list(start, end)
+        return [_build_response(e) for e in entries]
 
-        await sync_seed_tracker_log_from_entry(self.db, entry)
-
+    async def get_entry(self, date: datetime.date) -> EntryResponse:
+        entry = await self.crud.get_by_date(date)
+        if not entry:
+            raise NotFoundError(f"No entry for {date}")
         return _build_response(entry)
 
     async def delete_entry(self, date: datetime.date) -> None:

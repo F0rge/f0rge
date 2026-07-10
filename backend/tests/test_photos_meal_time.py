@@ -30,6 +30,7 @@ from app.exceptions import NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.schemas.photo import PhotoUpdate
+from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
 from app.services.photos import PhotoService
 
 
@@ -88,7 +89,7 @@ async def _upload(
     meal_time: datetime.datetime | None = None,
 ) -> Photo:
     upload = UploadFile(filename="test.png", file=io.BytesIO(_png_bytes()))
-    service = PhotoService(db)
+    service = PhotoService(db, FoodAnalysisOrchestrator())
     return await service.upload(
         entry_date=day,
         file=upload,
@@ -145,7 +146,7 @@ async def test_patch_updates_meal_time(async_db: AsyncSession, isolated_storage:
     photo = await _upload(async_db, day)
 
     new_time = datetime.datetime(2026, 5, 15, 12, 0, 0)
-    service = PhotoService(async_db)
+    service = PhotoService(async_db, FoodAnalysisOrchestrator())
     updated = await service.update_photo(photo.id, PhotoUpdate(meal_time=new_time))
 
     assert updated.id == photo.id
@@ -155,7 +156,7 @@ async def test_patch_updates_meal_time(async_db: AsyncSession, isolated_storage:
 async def test_patch_missing_photo_raises_not_found(
     async_db: AsyncSession,
 ) -> None:
-    service = PhotoService(async_db)
+    service = PhotoService(async_db, FoodAnalysisOrchestrator())
     with pytest.raises(NotFoundError):
         await service.update_photo(99999, PhotoUpdate(meal_time=datetime.datetime.utcnow()))
 
