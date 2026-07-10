@@ -12,6 +12,24 @@ Parallel stack only until Leo signs off. **Do not run DNS cutover or stop Coolif
 | Postgres | MPG `health-tracker-db-dev` (`d1zj5omzqg9ryqkv`, `fra`) | via secrets |
 | Object storage | Tigris (when billing enabled) | via `fly storage create` |
 
+## Fly prod stack (parallel — no DNS cutover)
+
+| Component | Fly app | URL |
+|---|---|---|
+| API + worker | `health-tracker-api-prod` | https://health-tracker-api-prod.fly.dev |
+| MCP | `health-tracker-mcp-prod` | https://health-tracker-mcp-prod.fly.dev |
+| Frontend | `health-tracker-web-prod` | https://health-tracker-web-prod.fly.dev |
+| Postgres | MPG `health-tracker-db-prod` (`fra`) | via secrets |
+| Object storage | Tigris on API prod app | via `fly storage create` |
+
+Deploy configs: `backend/fly.prod.toml`, `backend/fly.mcp.prod.toml`, `frontend/fly.prod.toml`.
+
+```bash
+cd backend && fly deploy --config fly.prod.toml
+cd backend && fly deploy --config fly.mcp.prod.toml
+cd frontend && fly deploy --config fly.prod.toml
+```
+
 Coolify/Pi remains authoritative for `health*.leo-figueiredo.com` until cutover.
 
 ## Deploy from feature branch
@@ -38,8 +56,11 @@ MCP app: `MCP_READONLY_DATABASE_URL` (attach with `--username healthtracker-ro`)
 
 - Region: `fra` (MPG not available in `cdg`)
 - Enable pgvector: `fly mpg databases extensions enable vector -c <cluster> -d fly-db`
+- Enable citext (required by migration 020): `fly mpg databases extensions enable citext -c <cluster> -d fly-db`
 - MPG users: `healthtracker-ro` (reader), `healthtracker-app` (writer)
 - Set `FLY_MPG_SKIP_ROLE_DDL=1` — roles provisioned via `fly mpg users create`
+- **Pi dump restore:** run `alembic upgrade head` as `fly-user` (schema_admin), not `healthtracker-app` — writer lacks CREATE on `public` after pg_restore. Then `GRANT ALL ON ALL TABLES IN SCHEMA public TO "healthtracker-app"` (quote hyphenated role names) and switch `DATABASE_URL` back to writer.
+- **MCP app:** needs both `MCP_READONLY_DATABASE_URL` and `DATABASE_URL` (copy reader URL or attach twice).
 
 ## Data migration (dry-run)
 
