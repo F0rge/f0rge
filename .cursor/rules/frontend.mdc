@@ -66,7 +66,8 @@ Segmented scale, 7-cell grid (Bristol), binary segmented, stepper, pill multi-se
 ### Daily-page visual contract
 
 - No `+`, `…`, `Manage`, `Add`, `Edit`, or `Archive` on daily cards
-- Card header: `LABEL` + `TierPill` only
+- Card header: `LABEL` + `TierPill`; optional eye collapse toggle **mobile only** (`<lg`)
+- Desktop (`lg+`): all visible sections always expanded; reduce clutter via Customize → Reorder & visibility
 - Cards render in `cardOrder`, skipping `hiddenCards`
 - Notes exempt (free text, can be hidden)
 
