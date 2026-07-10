@@ -14,6 +14,7 @@ class SettingsResponse(BaseModel):
     embedding_model: Optional[str]
     has_api_key: bool
     has_external_api_token: bool
+    onboarding_completed: bool
 
 
 class LLMSettingsUpdate(BaseModel):

@@ -70,3 +70,13 @@ export function useRevokeExternalToken() {
     },
   })
 }
+
+export function useCompleteOnboarding() {
+  const queryClient = useQueryClient()
+  return useMutation<UserSettings, ApiError, void>({
+    mutationFn: () => apiPost('/settings/onboarding/complete', {}) as Promise<UserSettings>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+}

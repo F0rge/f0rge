@@ -43,7 +43,7 @@ export default function TreatmentsPage() {
 
   return (
     <PageShell>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between" data-tour="treatments-page">
         <h1 className="text-xl font-semibold tracking-tight">Treatments</h1>
         <div className="flex items-center gap-1">
           <div className="flex rounded-lg border border-border">

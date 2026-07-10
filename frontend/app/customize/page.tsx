@@ -53,7 +53,7 @@ const HUB_ITEMS = [
 export default function CustomizePage() {
   return (
     <PageShell>
-      <div className="mb-6">
+      <div className="mb-6" data-tour="customize-hub">
         <Link
           href="/checkin"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"

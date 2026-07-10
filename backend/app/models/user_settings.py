@@ -31,6 +31,9 @@ class UserSettings(Base):
     embedding_provider: Mapped[str] = mapped_column(String, nullable=False, default="openrouter")
     embedding_model: Mapped[str | None] = mapped_column(String, nullable=True)
     external_api_token_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    onboarding_completed_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )

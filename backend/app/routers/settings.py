@@ -78,3 +78,11 @@ async def revoke_external_token(
     _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> SettingsResponse:
     return await service.revoke_external_token()
+
+
+@router.post("/onboarding/complete", response_model=SettingsResponse)
+async def complete_onboarding(
+    service: SettingsService = Depends(get_settings_service),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
+) -> SettingsResponse:
+    return await service.complete_onboarding()

@@ -82,7 +82,7 @@ function HistoryContent() {
         </div>
       ) : (
         <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 lg:col-span-7">
+          <div className="col-span-12 lg:col-span-7" data-tour="history-calendar">
             <CalendarView
               month={month}
               entries={entries ?? []}

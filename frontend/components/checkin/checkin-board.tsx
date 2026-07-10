@@ -58,7 +58,7 @@ export function CheckinBoard({
         {state.cardOrder
           .filter((id) => !state.hiddenCards.includes(id))
           .map((id) => (
-            <div key={id} className={CARD_COL_SPAN[id]}>
+            <div key={id} className={CARD_COL_SPAN[id]} data-tour={`checkin-${id}`}>
               {cardRenderers[id]()}
             </div>
           ))}

@@ -24,7 +24,7 @@ export default function LabsPage() {
 
   return (
     <PageShell>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-tour="labs-page">
         <h1 className="text-xl font-semibold tracking-tight">Labs</h1>
 
         <div className="flex items-center gap-1">

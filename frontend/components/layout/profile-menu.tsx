@@ -36,7 +36,7 @@ export function ProfileMenu() {
   if (pathname.startsWith('/login') || pathname.startsWith('/signup')) return null
 
   return (
-    <div ref={menuRef} className="relative">
+    <div ref={menuRef} className="relative" data-tour="profile-menu">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
