@@ -27,10 +27,8 @@ End-to-end workflow (prompt or GitHub issue → develop → dev smoke → main P
 
 ## PR review context
 
-Bugbot/PR review playbooks live in `.claude/review-context/`. A synced copy is at `.cursor/review-context/` — run `./scripts/sync-review-context.sh` after editing the source.
+Bugbot/PR review playbooks live in `.cursor/review-context/`.
 
 ## Agent memory
 
 **Canonical:** `~/.cursor/agent-memory/<agent>/` (global, cross-project).
-
-The copy at `.claude/agent-memory/` (35 files) is legacy from the Claude Code migration. No CI workflow references it. Safe to delete once you've confirmed nothing else reads it — global memory already contains the merged health-tracker gotchas.

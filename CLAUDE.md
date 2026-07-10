@@ -67,7 +67,7 @@ Every implementation issue is a self-contained prompt for an agent that has no p
 
 1. **Problem (Why)** — one paragraph on what hurts now. Describe the constraint, not the solution.
 2. **Goal** — one sentence on what changes when this is done.
-3. **Sub-agent assignments** — table mapping each chunk to a sub-agent (`fastapi-backend`, `frontend-dev`, `data-engineer`, `data-scientist`, `devops`, `qa-engineer`). Each agent reads `.claude/projects/-Users-leo-development-health-tracker/memory/` before starting and writes back what's worth keeping when done.
+3. **Sub-agent assignments** — table mapping each chunk to a sub-agent (`fastapi-backend`, `frontend-dev`, `data-engineer`, `data-scientist`, `devops`, `qa-engineer`). Each agent reads `~/.cursor/agent-memory/<agent-name>/MEMORY.md` before starting and writes back what's worth keeping when done.
 4. **Proposed approach** — high-level technical approach + reasoning. Design, not implementation. Each issue gets a dedicated per-issue planning pass before code is written.
 5. **Files** — *Existing modified* (paths + line numbers where known) and *New* (paths to create). Starting points, not exhaustive.
 6. **Out of scope (non-goals)** — stated positively ("do not change X"). Agents cannot infer from omission.

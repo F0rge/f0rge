@@ -11,8 +11,8 @@ name: Claude PR Review (multi-agent)
 #        - ALWAYS              -> qa-engineer (cross-cutting + verification ticket)
 #   3. Synthesizes findings into ONE consolidated sticky comment.
 #
-# Each sub-agent reads its playbook at .claude/review-context/<name>-playbook.md
-# plus _shared/ files. See .claude/agents/<name>.md for the PR-Review Mode contract.
+# Each sub-agent reads its playbook at .cursor/review-context/<name>-playbook.md
+# plus _shared/ files. Agent contracts live in ~/.cursor/agents/.
 #
 # Auth: OAuth from Leo's Claude Code Max plan (CLAUDE_CODE_OAUTH_TOKEN secret).
 # Generate via `claude setup-token`. Free under the Max quota — no API invoice.
@@ -80,12 +80,12 @@ jobs:
                             backend/alembic.ini, frontend/Dockerfile, frontend/next.config.*
                             (only when it affects the build image), root scripts,
                             .dockerignore, .gitignore
-              - other     = everything else (.md, .claude/, mockups/, etc.)
+              - other     = everything else (.md, .cursor/, mockups/, etc.)
 
             ## Step 2 — Delegate IN PARALLEL via the Task tool
 
             Spawn the relevant sub-agents simultaneously. Each gets the same PR
-            number and is told to operate in "PR-Review Mode" per their .claude/agents/<name>.md.
+            number and is told to operate in "PR-Review Mode" per ~/.cursor/agents/<name>.md.
 
             - If backend bucket is non-empty: spawn `fastapi-backend` with the
               backend file list. Brief: "PR-Review Mode for PR #${{ github.event.pull_request.number }}.
@@ -143,7 +143,7 @@ jobs:
             others and note the failure in its section. Do not block the whole
             review.
 
-            If ALL buckets are empty (PR only touched .md or .claude/), produce
+            If ALL buckets are empty (PR only touched .md or docs/), produce
             a minimal "No reviewable files in this PR." comment.
 
             ## Tone
