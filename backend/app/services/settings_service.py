@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import secrets
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +42,7 @@ class SettingsService:
             embedding_model=row.embedding_model,
             has_api_key=row.llm_api_key_encrypted is not None,
             has_external_api_token=row.external_api_token_encrypted is not None,
+            onboarding_completed=row.onboarding_completed_at is not None,
         )
 
     async def get(self) -> SettingsResponse:
@@ -53,6 +55,7 @@ class SettingsService:
                 embedding_model=None,
                 has_api_key=False,
                 has_external_api_token=False,
+                onboarding_completed=False,
             )
         return self._to_response(row)
 
@@ -104,3 +107,10 @@ class SettingsService:
             return TestConnectionResponse(ok=True)
         except ExternalServiceError as exc:
             return TestConnectionResponse(ok=False, detail=exc.detail)
+
+    async def complete_onboarding(self) -> SettingsResponse:
+        row = await self._get_or_create_row()
+        if row.onboarding_completed_at is None:
+            row.onboarding_completed_at = datetime.datetime.utcnow()
+            row = await self.crud.commit_refresh(row)
+        return self._to_response(row)

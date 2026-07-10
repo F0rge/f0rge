@@ -5,6 +5,7 @@ export interface UserSettings {
   embedding_model: string | null
   has_api_key: boolean
   has_external_api_token: boolean
+  onboarding_completed: boolean
 }
 
 export interface LLMSettingsUpdate {

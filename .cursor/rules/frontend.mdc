@@ -78,6 +78,16 @@ Segmented scale, 7-cell grid (Bristol), binary segmented, stepper, pill multi-se
 
 Inline `+` on daily card, `…` overflow on card header, separate archived-items page, fourth tier, editable Core labels.
 
+## Onboarding tour
+
+Guided first-login tour uses **react-joyride v3** via `components/onboarding/`.
+
+- Step definitions: `components/onboarding/tour-steps.ts` (single source of truth)
+- Provider: `components/onboarding/onboarding-provider.tsx` (mounted in `providers.tsx`)
+- Replay: Settings → Help → Replay app tour
+
+**Keep in sync:** Any PR that changes bottom nav, check-in cards, customize hub, or primary empty-state pages must update tour steps and matching `data-tour` anchors.
+
 ## Quality Gate (before completing)
 
 1. `npm run build` — must succeed

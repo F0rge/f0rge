@@ -77,7 +77,7 @@ export default function CheckinPage() {
         hidden={isLoading}
       />
       <div className="mx-auto w-full max-w-7xl p-4 lg:px-8">
-      <div ref={headerRef} className="mb-6">
+      <div ref={headerRef} className="mb-6" data-tour="checkin-header">
         <h1 className="text-xl font-semibold tracking-tight">Check-in</h1>
         <p className="text-sm text-muted-foreground">{formatDisplayDate(today)}</p>
       </div>

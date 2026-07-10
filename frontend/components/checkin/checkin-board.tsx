@@ -69,7 +69,7 @@ export function CheckinBoard({
         />
 
         {visibleIds.map((id) => (
-          <div key={id} className={colSpans[id]}>
+          <div key={id} className={colSpans[id]} data-tour={`checkin-${id}`}>
             {cardRenderers[id]()}
           </div>
         ))}

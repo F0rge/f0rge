@@ -9,6 +9,7 @@ import { AiSettingsSection } from '@/components/settings/ai-settings-section'
 import { ExternalTokenSection } from '@/components/settings/external-token-section'
 import { AppleHealthSection } from '@/components/settings/apple-health-section'
 import { DataSourcesSection } from '@/components/settings/data-sources-section'
+import { OnboardingSection } from '@/components/settings/onboarding-section'
 
 function SettingsGroup({
   title,
@@ -29,7 +30,7 @@ function SettingsGroup({
 
 export default function SettingsPage() {
   return (
-    <PageShell className="space-y-8 py-2">
+    <PageShell className="space-y-8 py-2" data-tour="settings-page">
       <div className="flex items-center gap-3">
         <Link href="/checkin" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-5" />
@@ -51,6 +52,10 @@ export default function SettingsPage() {
 
       <SettingsGroup title="About">
         <DataSourcesSection />
+      </SettingsGroup>
+
+      <SettingsGroup title="Help">
+        <OnboardingSection />
       </SettingsGroup>
     </PageShell>
   )

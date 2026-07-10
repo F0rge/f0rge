@@ -35,7 +35,7 @@ function InsightsContent() {
 
   return (
     <PageShell>
-      <div className="mb-4">
+      <div className="mb-4" data-tour="insights-header">
         <h1 className="text-xl font-semibold tracking-tight">Insights</h1>
         <p className="text-sm text-muted-foreground">Analytics &amp; correlations</p>
       </div>
