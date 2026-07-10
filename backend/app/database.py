@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from typing import AsyncIterator
 
+import sqlalchemy as sa
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Session
 
 from app.auth_context import user_id_ctx
 from app.config import settings
@@ -31,6 +33,22 @@ async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(
     expire_on_commit=False,
     class_=AsyncSession,
 )
+
+
+@event.listens_for(Session, "after_begin")
+def _apply_tenant_guc_on_begin(session, transaction, connection) -> None:
+    """Re-apply ``app.user_id`` at the start of each transaction.
+
+    After ``COMMIT``, SQLAlchemy may autobegin a new transaction for
+    ``refresh()`` while the request context is still active. Re-setting the GUC
+    keeps RLS policies working even if a pooled connection was reset.
+    """
+    user_id = user_id_ctx.get()
+    if user_id is not None:
+        connection.execute(
+            sa.text("SELECT set_config('app.user_id', :user_id, false)"),
+            {"user_id": str(user_id)},
+        )
 
 
 class Base(DeclarativeBase):

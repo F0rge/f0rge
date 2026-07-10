@@ -45,6 +45,10 @@ async def apply_service_role(session: AsyncSession, role: str) -> None:
 
 
 async def clear_tenant_session(session: AsyncSession) -> None:
-    """Reset tenant GUCs before returning a pooled connection."""
-    await session.execute(sa.text("SELECT set_config('app.user_id', '', false)"))
-    await session.execute(sa.text("SELECT set_config('app.service_role', '', false)"))
+    """Reset tenant GUCs before returning a pooled connection.
+
+    Use ``RESET`` — not ``set_config(..., '')`` — so RLS policies that cast
+    ``current_setting('app.user_id', true)::uuid`` never see an empty string.
+    """
+    await session.execute(sa.text("RESET app.user_id"))
+    await session.execute(sa.text("RESET app.service_role"))
