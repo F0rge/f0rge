@@ -32,7 +32,22 @@ cd frontend && fly deploy --config fly.prod.toml
 
 Coolify/Pi remains authoritative for `health*.leo-figueiredo.com` until cutover.
 
-## Deploy from feature branch
+## CI/CD (automated)
+
+After merge to `develop` or `main`, Fly deploys run automatically once the matching CI workflow succeeds:
+
+| Branch | CI gate | Fly workflow | Apps deployed |
+|---|---|---|---|
+| `develop` | `CI (develop)` | `.github/workflows/fly-deploy-develop.yml` | `health-tracker-api-dev`, `health-tracker-mcp-dev`, `health-tracker-web-dev` |
+| `main` | `CI (main)` | `.github/workflows/fly-deploy-main.yml` | `health-tracker-api-prod`, `health-tracker-mcp-prod`, `health-tracker-web-prod` |
+
+Deploy order: **API** (runs `alembic upgrade head` via `release_command`) → **MCP** → **frontend**. Failed CI does not trigger a deploy. PR CI runs are ignored (push-only).
+
+**One-time setup:** add a repo secret `FLY_API_TOKEN` in GitHub → Settings → Secrets and variables → Actions. Create a deploy token at [fly.io/user/personal_access_tokens](https://fly.io/user/personal_access_tokens). Without it, the Fly workflows fail at the first `flyctl deploy` step.
+
+`workflow_run` workflows execute from the repo default branch — both workflow files must be on `main` before automated deploys activate.
+
+## Deploy from feature branch (manual)
 
 ```bash
 export FLY_API_TOKEN=...
