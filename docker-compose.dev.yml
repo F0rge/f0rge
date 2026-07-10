@@ -59,7 +59,9 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
+      - DATABASE_URL=postgresql+asyncpg://healthtracker_app:${HEALTHTRACKER_APP_PASSWORD}@postgres:5432/health
+      - MIGRATION_DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
+      - HEALTHTRACKER_APP_PASSWORD=${HEALTHTRACKER_APP_PASSWORD}
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
       - CORS_ORIGINS=["https://health-dev.leo-figueiredo.com","https://health-dev-api.leo-figueiredo.com","http://localhost:3104"]
       - PHOTO_DIR=/app/photos
@@ -98,7 +100,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
+      - DATABASE_URL=postgresql+asyncpg://healthtracker_app:${HEALTHTRACKER_APP_PASSWORD}@postgres:5432/health
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - EMBEDDING_WORKER_POLL_INTERVAL_SECONDS=5

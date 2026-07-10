@@ -17,7 +17,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: (credentials: LoginCredentials) => apiPost('/auth/login', credentials),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auth'] })
+      queryClient.clear()
     },
   })
 }
@@ -27,7 +27,7 @@ export function useSignup() {
   return useMutation({
     mutationFn: (credentials: SignupCredentials) => apiPost('/auth/signup', credentials),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auth'] })
+      queryClient.clear()
     },
   })
 }
@@ -37,8 +37,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => apiPost('/auth/logout', {}),
     onSuccess: () => {
-      queryClient.setQueryData(['auth'], { authenticated: false })
-      queryClient.invalidateQueries({ queryKey: ['auth'] })
+      queryClient.clear()
     },
   })
 }

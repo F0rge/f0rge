@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.base import BaseCRUD
 from app.models.dietary_ingredient import DietaryIngredient
 from app.models.ingredient_alias import IngredientAlias
+from app.tenant import owned_by_user
 
 CATALOG_SEARCH_LIMIT = 50
 
@@ -22,14 +23,15 @@ class DietaryIngredientCRUD(BaseCRUD):
         include_archived: bool = False,
         limit: Optional[int] = None,
     ) -> list[DietaryIngredient]:
-        stmt = select(DietaryIngredient)
+        stmt = select(DietaryIngredient).where(owned_by_user(DietaryIngredient.user_id))
         if not include_archived:
             stmt = stmt.where(DietaryIngredient.archived.is_(False))
         if search:
             term = search.strip().lower()
             stmt = stmt.outerjoin(
                 IngredientAlias,
-                DietaryIngredient.canonical_name == IngredientAlias.canonical_name,
+                (DietaryIngredient.canonical_name == IngredientAlias.canonical_name)
+                & (IngredientAlias.user_id == DietaryIngredient.user_id),
             ).where(
                 or_(
                     DietaryIngredient.canonical_name.ilike(f"%{term}%"),
@@ -45,13 +47,20 @@ class DietaryIngredientCRUD(BaseCRUD):
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def get_by_id(self, ingredient_id: int) -> Optional[DietaryIngredient]:
-        stmt = select(DietaryIngredient).where(DietaryIngredient.id == ingredient_id)
+        stmt = select(DietaryIngredient).where(
+            owned_by_user(DietaryIngredient.user_id), DietaryIngredient.id == ingredient_id
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_by_canonical_name(self, canonical_name: str) -> Optional[DietaryIngredient]:
-        stmt = select(DietaryIngredient).where(DietaryIngredient.canonical_name == canonical_name)
+        stmt = select(DietaryIngredient).where(
+            owned_by_user(DietaryIngredient.user_id),
+            DietaryIngredient.canonical_name == canonical_name,
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_alias_by_id(self, alias_id: int) -> Optional[IngredientAlias]:
-        stmt = select(IngredientAlias).where(IngredientAlias.id == alias_id)
+        stmt = select(IngredientAlias).where(
+            owned_by_user(IngredientAlias.user_id), IngredientAlias.id == alias_id
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()
