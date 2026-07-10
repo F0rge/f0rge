@@ -9,8 +9,8 @@ interface NotesInputProps {
   value: string
   onChange: (value: string) => void
   onEditStart?: () => void
-  onBlur?: () => void
-  registerDraftFlush?: (flush: () => void) => void
+  onBlur?: (flushedNotes: string) => void
+  registerDraftFlush?: (flush: () => string) => void
 }
 
 export function NotesInput({
@@ -41,12 +41,14 @@ export function NotesInput({
     })
   }, [])
 
-  const flushToParent = useCallback(() => {
+  const flushToParent = useCallback((): string => {
     if (debounceTimerRef.current !== null) {
       clearTimeout(debounceTimerRef.current)
       debounceTimerRef.current = null
     }
-    onChangeRef.current(draftRef.current)
+    const next = draftRef.current
+    onChangeRef.current(next)
+    return next
   }, [])
 
   const scheduleSync = useCallback((next: string) => {
@@ -74,7 +76,7 @@ export function NotesInput({
     registerDraftFlush?.(flushToParent)
     return () => {
       flushToParent()
-      registerDraftFlush?.(() => {})
+      registerDraftFlush?.(() => '')
     }
   }, [registerDraftFlush, flushToParent])
 
@@ -94,8 +96,8 @@ export function NotesInput({
   }
 
   const handleBlur = () => {
-    flushToParent()
-    onBlur?.()
+    const flushedNotes = flushToParent()
+    onBlur?.(flushedNotes)
   }
 
   const remaining = 500 - draft.length

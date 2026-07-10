@@ -245,33 +245,43 @@ export function useCheckinBoardState({
   }, [autosave.status, autosave.lastSavedAt, autosave.errorMessage, onAutosaveStateChange])
 
   const autosaveRef = useRef(autosave)
-  const notesDraftFlushRef = useRef<(() => void) | null>(null)
-  const registerNotesDraftFlush = useCallback((flush: () => void) => {
+  const notesDraftFlushRef = useRef<(() => string) | null>(null)
+  const registerNotesDraftFlush = useCallback((flush: () => string) => {
     notesDraftFlushRef.current = flush
   }, [])
+
+  const notesPayloadPatch = useCallback(
+    (flushedNotes?: string) => (flushedNotes !== undefined ? { notes: flushedNotes } : undefined),
+    [],
+  )
 
   useEffect(() => { autosaveRef.current = autosave })
   useEffect(() => {
     const flushNotesDraft = () => notesDraftFlushRef.current?.()
     onAutosaveFnsReady?.({
       flush: () => {
-        flushNotesDraft()
-        autosaveRef.current.flush()
+        const flushedNotes = flushNotesDraft()
+        autosaveRef.current.flush(notesPayloadPatch(flushedNotes))
       },
       forceFlush: async () => {
-        flushNotesDraft()
-        await autosaveRef.current.forceFlush()
+        const flushedNotes = flushNotesDraft()
+        await autosaveRef.current.forceFlush(notesPayloadPatch(flushedNotes))
       },
       retry: () => autosaveRef.current.retry(),
       flushBeacon: () => {
-        flushNotesDraft()
-        autosaveRef.current.flushBeacon()
+        const flushedNotes = flushNotesDraft()
+        autosaveRef.current.flushBeacon(notesPayloadPatch(flushedNotes))
       },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleBlur = useCallback(() => { autosave.flush() }, [autosave])
+  const handleBlur = useCallback(
+    (flushedNotes: string) => {
+      autosave.flush(notesPayloadPatch(flushedNotes))
+    },
+    [autosave, notesPayloadPatch],
+  )
 
   return {
     cardOrder,

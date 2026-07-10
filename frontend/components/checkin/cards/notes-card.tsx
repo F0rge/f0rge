@@ -7,8 +7,8 @@ interface NotesCardProps {
   value: string
   onChange: (v: string) => void
   onEditStart: () => void
-  onBlur: () => void
-  registerDraftFlush: (flush: () => void) => void
+  onBlur: (flushedNotes: string) => void
+  registerDraftFlush: (flush: () => string) => void
 }
 
 export function NotesCard({
