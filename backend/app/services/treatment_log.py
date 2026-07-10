@@ -10,7 +10,7 @@ from app.crud.treatment_log import TreatmentLogCRUD
 from app.crud.treatments import TreatmentCRUD
 from app.exceptions import NotFoundError
 from app.models.treatment_log import TreatmentLog
-from app.schemas.treatment_log import ProtocolItem, ProtocolResponse, ProtocolToday
+from app.schemas.treatment_log import ProtocolItem, ProtocolResponse, ProtocolToday, TreatmentLogResult
 from app.tenant import current_user_id
 from app.utils.dates import local_today
 from app.utils.streak import compute_streak
@@ -24,7 +24,7 @@ class TreatmentLogService:
 
     async def upsert(
         self, treatment_id: int, date: datetime.date, doses_taken: int
-    ) -> TreatmentLog:
+    ) -> TreatmentLogResult:
         treatment = await self.treatment_crud.get_by_id(treatment_id)
         if treatment is None:
             raise NotFoundError(f"Treatment {treatment_id} not found.")
@@ -37,17 +37,25 @@ class TreatmentLogService:
         if existing is not None:
             existing.doses_taken = clamped
             existing.updated_at = now
-            return await self.crud.commit_refresh(existing)
+            log = await self.crud.commit_refresh(existing)
+        else:
+            log = TreatmentLog(
+                user_id=current_user_id(),
+                treatment_id=treatment_id,
+                date=date,
+                doses_taken=clamped,
+                updated_at=now,
+            )
+            self.crud.add(log)
+            log = await self.crud.commit_refresh(log)
 
-        log = TreatmentLog(
-            user_id=current_user_id(),
-            treatment_id=treatment_id,
-            date=date,
-            doses_taken=clamped,
-            updated_at=now,
+        protocol = await self.get_protocol(date)
+        return TreatmentLogResult(
+            log=log,
+            today=protocol.today,
+            streak=protocol.streak,
+            best_streak=protocol.best_streak,
         )
-        self.crud.add(log)
-        return await self.crud.commit_refresh(log)
 
     async def get_protocol(self, on_date: Optional[datetime.date] = None) -> ProtocolResponse:
         target = on_date if on_date is not None else local_today()

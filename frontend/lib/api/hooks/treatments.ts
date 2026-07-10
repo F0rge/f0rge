@@ -7,7 +7,7 @@ import type {
   TreatmentCreate,
   TreatmentUpdate,
   ProtocolResponse,
-  TreatmentLogResponse,
+  TreatmentLogResult,
 } from '../types'
 
 export function useTreatments(activeOn?: string) {
@@ -71,7 +71,7 @@ export function useLogDose(date: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, dosesTaken }: { id: number; dosesTaken: number }) =>
-      apiPut(`/treatments/${id}/log`, { date, doses_taken: dosesTaken }) as Promise<TreatmentLogResponse>,
+      apiPut(`/treatments/${id}/log`, { date, doses_taken: dosesTaken }) as Promise<TreatmentLogResult>,
     onMutate: async ({ id, dosesTaken }) => {
       await queryClient.cancelQueries({ queryKey: ['protocol', date] })
       const prev = queryClient.getQueryData<ProtocolResponse>(['protocol', date])
@@ -97,6 +97,17 @@ export function useLogDose(date: string) {
         }
       })
       return { prev }
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<ProtocolResponse>(['protocol', date], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          today: result.today,
+          streak: result.streak,
+          best_streak: result.best_streak,
+        }
+      })
     },
     onError: (err, _vars, context) => {
       if (context?.prev !== undefined) {
