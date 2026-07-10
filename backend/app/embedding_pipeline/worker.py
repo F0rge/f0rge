@@ -128,31 +128,32 @@ async def _process_row(
 async def _mark_failed(row_id: int, error: str) -> None:
     """In a separate transaction, increment attempts and store last_error."""
     async with async_session_maker() as db:
-        await apply_service_role(db, "worker")
-        await db.execute(
-            text(
-                """
-                UPDATE embedding_queue
-                SET attempts = attempts + 1,
-                    last_attempt_at = :now,
-                    last_error = :error
-                WHERE id = :id
-                """
-            ),
-            {
-                "id": row_id,
-                "now": datetime.datetime.utcnow(),
-                "error": error[:2000],
-            },
-        )
-        await db.commit()
+        async with db.begin():
+            await apply_service_role(db, "worker")
+            await db.execute(
+                text(
+                    """
+                    UPDATE embedding_queue
+                    SET attempts = attempts + 1,
+                        last_attempt_at = :now,
+                        last_error = :error
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "id": row_id,
+                    "now": datetime.datetime.utcnow(),
+                    "error": error[:2000],
+                },
+            )
 
 
 async def _process_pending() -> None:
     """Claim and process one batch of pending queue rows."""
     async with async_session_maker() as db:
-        await apply_service_role(db, "worker")
-        client = await _build_client_or_none(db)
+        async with db.begin():
+            await apply_service_role(db, "worker")
+            client = await _build_client_or_none(db)
 
     if client is None:
         return
@@ -160,8 +161,8 @@ async def _process_pending() -> None:
     _, model = await _credentials_for_model()
 
     async with async_session_maker() as db:
-        await apply_service_role(db, "worker")
         async with db.begin():
+            await apply_service_role(db, "worker")
             rows = await _claim_batch(db)
             if not rows:
                 return
