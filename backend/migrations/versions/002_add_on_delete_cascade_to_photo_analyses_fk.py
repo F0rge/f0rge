@@ -27,9 +27,7 @@ depends_on: Union[Sequence[str], None] = None
 
 def upgrade() -> None:
     # Postgres names the unnamed FK constraint as <table>_<col>_fkey by default.
-    op.drop_constraint(
-        "photo_analyses_photo_id_fkey", "photo_analyses", type_="foreignkey"
-    )
+    op.drop_constraint("photo_analyses_photo_id_fkey", "photo_analyses", type_="foreignkey")
     op.create_foreign_key(
         "photo_analyses_photo_id_fkey",
         "photo_analyses",
@@ -41,9 +39,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "photo_analyses_photo_id_fkey", "photo_analyses", type_="foreignkey"
-    )
+    op.drop_constraint("photo_analyses_photo_id_fkey", "photo_analyses", type_="foreignkey")
     op.create_foreign_key(
         "photo_analyses_photo_id_fkey",
         "photo_analyses",

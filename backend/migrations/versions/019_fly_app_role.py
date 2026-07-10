@@ -80,9 +80,7 @@ def upgrade() -> None:
         )
     )
     bind.execute(
-        sa.text(
-            "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO healthtracker_app"
-        )
+        sa.text("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO healthtracker_app")
     )
     bind.execute(
         sa.text(
@@ -116,14 +114,10 @@ def downgrade() -> None:
         )
     )
     bind.execute(
-        sa.text(
-            "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM healthtracker_app"
-        )
+        sa.text("REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM healthtracker_app")
     )
     bind.execute(
-        sa.text(
-            "REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM healthtracker_app"
-        )
+        sa.text("REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM healthtracker_app")
     )
     bind.execute(sa.text("REVOKE USAGE ON SCHEMA public FROM healthtracker_app"))
     bind.execute(
