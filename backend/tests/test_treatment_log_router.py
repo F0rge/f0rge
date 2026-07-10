@@ -10,7 +10,6 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.treatment_log import TreatmentLog
 from app.schemas.treatment import TreatmentCreate
 from app.services.treatment_log import TreatmentLogService
 from app.services.treatments import TreatmentService
