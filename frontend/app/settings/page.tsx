@@ -22,7 +22,7 @@ function SettingsGroup({
       <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </h2>
-      <div className="grid grid-cols-12 gap-6">{children}</div>
+      {children}
     </section>
   )
 }
@@ -38,27 +38,19 @@ export default function SettingsPage() {
       </div>
 
       <SettingsGroup title="Integrations">
-        <div className="col-span-12 lg:col-span-6">
+        <div className="grid gap-6 lg:grid-cols-2">
           <WeatherSection />
-        </div>
-        <div className="col-span-12 lg:col-span-6">
-          <ExternalTokenSection />
-        </div>
-        <div className="col-span-12 lg:col-span-6">
           <AppleHealthSection />
         </div>
+        <ExternalTokenSection />
       </SettingsGroup>
 
       <SettingsGroup title="AI">
-        <div className="col-span-12">
-          <AiSettingsSection />
-        </div>
+        <AiSettingsSection />
       </SettingsGroup>
 
       <SettingsGroup title="About">
-        <div className="col-span-12">
-          <DataSourcesSection />
-        </div>
+        <DataSourcesSection />
       </SettingsGroup>
     </PageShell>
   )
