@@ -1,13 +1,26 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost } from '../client'
+import { apiGet, apiPost, ApiError } from '../client'
 import type { AuthUser, LoginCredentials, SignupCredentials } from '../types'
+
+const UNAUTHENTICATED: AuthUser = { authenticated: false }
 
 export function useAuth() {
   return useQuery<AuthUser>({
     queryKey: ['auth'],
-    queryFn: () => apiGet('/auth/me'),
+    queryFn: async () => {
+      try {
+        return await apiGet('/auth/me')
+      } catch (err) {
+        // 401 is the normal logged-out state — don't leave stale authenticated:true
+        // in cache (react-query keeps previous data on error) or SessionGuard loops.
+        if (err instanceof ApiError && err.status === 401) {
+          return UNAUTHENTICATED
+        }
+        throw err
+      }
+    },
     retry: false,
   })
 }

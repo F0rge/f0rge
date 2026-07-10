@@ -16,26 +16,27 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { data, isLoading, isError } = useAuth()
   const isPublic = isPublicRoute(pathname)
+  const isAuthenticated = Boolean(data?.authenticated) && !isError
 
   useEffect(() => {
     if (isPublic || isLoading) return
 
-    if (isError || !data?.authenticated) {
+    if (isError || !isAuthenticated) {
       const redirect = encodeURIComponent(pathname)
       router.replace(`/login?redirect=${redirect}`)
     }
-  }, [data, isError, isLoading, isPublic, pathname, router])
+  }, [isAuthenticated, isError, isLoading, isPublic, pathname, router])
 
   useEffect(() => {
     if (!isPublic || isLoading) return
 
-    if (data?.authenticated) {
+    if (isAuthenticated) {
       router.replace('/checkin')
     }
-  }, [data, isLoading, isPublic, router])
+  }, [isAuthenticated, isLoading, isPublic, router])
 
   if (isPublic) {
-    if (isLoading || data?.authenticated) {
+    if (isLoading || isAuthenticated) {
       return (
         <div className="flex flex-1 items-center justify-center">
           <Loader2 className="size-8 animate-spin text-muted-foreground" />
@@ -45,7 +46,7 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     return children
   }
 
-  if (isLoading || isError || !data?.authenticated) {
+  if (isLoading || isError || !isAuthenticated) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
