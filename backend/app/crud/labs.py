@@ -45,3 +45,9 @@ class LabCRUD(BaseCRUD):
         # which checks source_path uniqueness across the table, not per-user.
         stmt = select(Lab).where(Lab.source_path == source_path)
         return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def list_attachment_paths_for_user(self) -> list[str]:
+        stmt = select(Lab.attachment_path).where(
+            owned_by_user(Lab.user_id), Lab.attachment_path.is_not(None)
+        )
+        return [row[0] for row in (await self.db.execute(stmt)).all()]

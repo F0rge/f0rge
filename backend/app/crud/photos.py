@@ -32,3 +32,7 @@ class PhotoCRUD(BaseCRUD):
             owned_by_user(Photo.user_id), Photo.entry_id == entry_id
         )
         return [row[0] for row in (await self.db.execute(stmt)).all()]
+
+    async def list_filenames_for_user(self) -> list[str]:
+        stmt = select(Photo.filename).where(owned_by_user(Photo.user_id))
+        return [row[0] for row in (await self.db.execute(stmt)).all()]

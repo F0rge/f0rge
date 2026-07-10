@@ -21,7 +21,7 @@ export function LogoutSection() {
   }
 
   return (
-    <SettingsCard title="Account">
+    <SettingsCard title="Log out">
       <p className="text-sm text-muted-foreground">End your session on this device.</p>
       <Button
         type="button"
