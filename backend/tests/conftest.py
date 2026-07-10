@@ -105,8 +105,8 @@ async def async_engine(
         await conn.execute(
             sa.text(
                 """
-                INSERT INTO users (id, email, password_hash, created_at)
-                VALUES (:id, :email, :password_hash, now())
+                INSERT INTO users (id, email, password_hash, avatar_default_index, created_at)
+                VALUES (:id, :email, :password_hash, :avatar_default_index, now())
                 ON CONFLICT (id) DO NOTHING
                 """
             ),
@@ -114,6 +114,7 @@ async def async_engine(
                 "id": settings.default_storage_user_id,
                 "email": "leo@health-tracker.local",
                 "password_hash": LEO_PLACEHOLDER_PASSWORD_HASH,
+                "avatar_default_index": 0,
             },
         )
     try:

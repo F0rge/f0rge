@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+from fastapi.responses import FileResponse, RedirectResponse
 
 from app.dependencies.account import get_account_service
 from app.middleware.auth import get_current_session
@@ -32,6 +33,31 @@ async def update_account(
     service: AccountService = Depends(get_account_service),
 ) -> AccountResponse:
     return await service.update(data)
+
+
+@router.post("/avatar", response_model=AccountResponse)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    service: AccountService = Depends(get_account_service),
+) -> AccountResponse:
+    return await service.upload_avatar(file)
+
+
+@router.get("/avatar", response_model=None)
+async def serve_avatar(
+    service: AccountService = Depends(get_account_service),
+) -> FileResponse | RedirectResponse:
+    target = await service.get_avatar_file_target()
+    if target.startswith("http://") or target.startswith("https://"):
+        return RedirectResponse(target)
+    return FileResponse(target, media_type="image/jpeg")
+
+
+@router.delete("/avatar", response_model=AccountResponse)
+async def remove_avatar(
+    service: AccountService = Depends(get_account_service),
+) -> AccountResponse:
+    return await service.delete_avatar()
 
 
 @router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
