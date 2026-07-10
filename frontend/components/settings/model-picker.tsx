@@ -13,6 +13,7 @@ interface ModelPickerProps {
   useCustom: boolean
   onUseCustomChange: (value: boolean) => void
   customPlaceholder: string
+  label?: string
 }
 
 // Select-a-preset-or-type-a-custom-model-name control, shared verbatim by
@@ -27,10 +28,11 @@ export function ModelPicker({
   useCustom,
   onUseCustomChange,
   customPlaceholder,
+  label = 'Model',
 }: ModelPickerProps) {
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-muted-foreground">Model</label>
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
       {!useCustom && (
         <select
           value={model}

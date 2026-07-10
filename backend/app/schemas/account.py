@@ -10,6 +10,8 @@ class AccountResponse(BaseModel):
     user_id: str
     email: str
     display_name: Optional[str] = None
+    avatar_default_index: int
+    has_custom_avatar: bool
     created_at: datetime.datetime
 
 
