@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Loader2, Microscope, List, FlaskConical, Upload, Plus } from 'lucide-react'
 import { useLabs } from '@/lib/api/hooks'
+import { LG_DESKTOP_QUERY, useMediaQuery } from '@/lib/hooks/use-media-query'
 import { LabCard } from '@/components/labs/lab-card'
 import { LabDetailPanel } from '@/components/labs/lab-detail-panel'
 import { LabDetailInline } from '@/components/labs/lab-detail-inline'
@@ -17,6 +18,7 @@ type View = 'by-lab' | 'by-marker'
 
 export default function LabsPage() {
   const { data: labs, isLoading, isError } = useLabs()
+  const isDesktop = useMediaQuery(LG_DESKTOP_QUERY)
   const [view, setView] = useState<View>('by-lab')
   const [addOpen, setAddOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -154,13 +156,13 @@ export default function LabsPage() {
 
       <LabUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
 
-      <div className="lg:hidden">
+      {!isDesktop && (
         <LabDetailPanel
           lab={selectedLab}
           open={!!selectedLab}
           onOpenChange={(o) => { if (!o) setSelectedLab(null) }}
         />
-      </div>
+      )}
     </PageShell>
   )
 }
