@@ -47,6 +47,52 @@ DEFAULT_MEDICATIONS: list[tuple[str, str]] = [
     ("imodium", "Imodium"),
 ]
 
+# Seeded by migration 007 (create_diet_tag_catalog). Keys use hyphens — do NOT
+# normalise to underscores; historical entry.diet_risk CSV values depend on it.
+DEFAULT_DIET_TAGS: list[tuple[str, str]] = [
+    ("high-histamine", "High-histamine"),
+    ("high-fodmap", "High-FODMAP"),
+    ("gluten", "Gluten"),
+    ("dairy", "Dairy"),
+]
+
+# Seeded by migration 006 (add_trackers). Each tuple is
+# (name, kind, icon, unit, position).
+DEFAULT_TRACKERS: list[tuple[str, str, str, str | None, int]] = [
+    ("Alcohol units", "counter", "wine", "units", 0),
+    ("Caffeine servings", "counter", "coffee", "servings", 1),
+    ("Sick", "binary", "thermometer", None, 2),
+    ("Hot shower", "binary", "droplets", None, 3),
+]
+
+
+def supplement_seed_rows() -> list[tuple[str, str, bool, int]]:
+    """Return (key, label, archived, sort_order) matching migrations 009 + 011."""
+    rows: list[tuple[str, str, bool, int]] = []
+    for sort_order, (key, label) in enumerate(DEFAULT_SUPPLEMENTS):
+        archived = key == "vitamin_d_k2"
+        rows.append((key, label, archived, sort_order))
+    offset = len(DEFAULT_SUPPLEMENTS)
+    for index, (key, label) in enumerate(SPLIT_VITAMIN_D_K2):
+        rows.append((key, label, False, offset + index))
+    offset += len(SPLIT_VITAMIN_D_K2)
+    for index, (key, label) in enumerate(BULK_SUPPLEMENTS):
+        rows.append((key, label, True, offset + index))
+    return rows
+
+
+def medication_seed_rows() -> list[tuple[str, str, bool, int]]:
+    """Return (key, label, archived, sort_order) matching migrations 010 + 011."""
+    rows: list[tuple[str, str, bool, int]] = [
+        (key, label, False, sort_order)
+        for sort_order, (key, label) in enumerate(DEFAULT_MEDICATIONS)
+    ]
+    offset = len(DEFAULT_MEDICATIONS)
+    for index, (key, label) in enumerate(BULK_MEDICATIONS):
+        rows.append((key, label, True, offset + index))
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Migration 011 — vitamin_d_k2 split + exhaustive supplement/medication lists
 # ---------------------------------------------------------------------------

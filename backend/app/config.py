@@ -4,12 +4,19 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    pin_hash: str = ""
+    jwt_secret: str = ""
     database_url: str = "postgresql+asyncpg://health:health@localhost:5432/health"
+    direct_database_url: str = ""
     app_timezone: str = "Europe/Luxembourg"
     settings_encryption_key: str = ""
     cors_origins: list[str] = ["http://localhost:3000"]
     photo_dir: str = "photos"
+    bucket_name: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_endpoint_url_s3: str = ""
+    aws_region: str = "auto"
+    default_storage_user_id: str = "00000000-0000-0000-0000-000000000001"
     openweathermap_api_key: str = ""
     openweathermap_city: str = "Luxembourg"
     weather_fetch_enabled: bool = True

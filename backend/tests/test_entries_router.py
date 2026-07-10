@@ -7,14 +7,9 @@ from __future__ import annotations
 
 import datetime
 
-import bcrypt
-import pytest
 from httpx import AsyncClient
 
-from app.config import settings
 from app.services.entries import _period_of_day
-
-TEST_PIN = "1234"
 
 _VALID_PAYLOAD = {
     "date": "2026-02-01",
@@ -29,21 +24,6 @@ _VALID_PAYLOAD = {
     "supplements": "",
     "sick": False,
 }
-
-
-@pytest.fixture(autouse=True)
-def known_pin(monkeypatch: pytest.MonkeyPatch) -> str:
-    hashed = bcrypt.hashpw(TEST_PIN.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    monkeypatch.setattr(settings, "pin_hash", hashed)
-    return TEST_PIN
-
-
-@pytest.fixture
-async def authed_client(async_client: AsyncClient) -> AsyncClient:
-    """The house async_client, logged in via a real login round-trip."""
-    resp = await async_client.post("/api/v1/auth/login", json={"pin": TEST_PIN})
-    assert resp.status_code == 200
-    return async_client
 
 
 # ---------------------------------------------------------------------------

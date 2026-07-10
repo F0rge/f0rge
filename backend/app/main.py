@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import async_session_maker
+from app.middleware.auth import AuthContextMiddleware
 from app.exceptions import (
     ConflictError,
     ExternalServiceError,
@@ -131,6 +132,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AuthContextMiddleware)
 
 
 @app.exception_handler(NotFoundError)

@@ -1,17 +1,27 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 
-from sqlalchemy import Date, Integer, String, Text
+from sqlalchemy import Date, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.user import default_user_id
 
 
 class Treatment(Base):
     __tablename__ = "treatments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        default=default_user_id,
+    )
     name: Mapped[str] = mapped_column(String, nullable=False)
     normalized_name: Mapped[str] = mapped_column(String, nullable=False, index=True)
     group_name: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends
 
 from app.dependencies.settings import get_settings_service
-from app.middleware.auth import get_current_session
-from app.models.session import AuthSession
+from app.middleware.auth import get_current_user_id
 from app.schemas.settings import (
     EmbeddingSettingsUpdate,
     ExternalTokenResponse,
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 @router.get("", response_model=SettingsResponse)
 async def get_settings(
     service: SettingsService = Depends(get_settings_service),
-    _session: AuthSession = Depends(get_current_session),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> SettingsResponse:
     return await service.get()
 
@@ -31,7 +32,7 @@ async def get_settings(
 async def update_llm_settings(
     data: LLMSettingsUpdate,
     service: SettingsService = Depends(get_settings_service),
-    _session: AuthSession = Depends(get_current_session),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> SettingsResponse:
     return await service.update_llm(data)
 
@@ -40,7 +41,7 @@ async def update_llm_settings(
 async def update_embedding_settings(
     data: EmbeddingSettingsUpdate,
     service: SettingsService = Depends(get_settings_service),
-    _session: AuthSession = Depends(get_current_session),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> SettingsResponse:
     return await service.update_embedding(data)
 
@@ -49,7 +50,7 @@ async def update_embedding_settings(
 async def test_llm_connection(
     service: SettingsService = Depends(get_settings_service),
     llm: LLMClient = Depends(get_llm_client),
-    _session: AuthSession = Depends(get_current_session),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> TestConnectionResponse:
     return await service.test_llm(llm)
 
@@ -58,7 +59,7 @@ async def test_llm_connection(
 async def test_embedding_connection(
     service: SettingsService = Depends(get_settings_service),
     emb: EmbeddingClient = Depends(get_embedding_client),
-    _session: AuthSession = Depends(get_current_session),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> TestConnectionResponse:
     return await service.test_embedding(emb)
 
@@ -66,7 +67,7 @@ async def test_embedding_connection(
 @router.post("/external-token/regenerate", response_model=ExternalTokenResponse)
 async def regenerate_external_token(
     service: SettingsService = Depends(get_settings_service),
-    _session: AuthSession = Depends(get_current_session),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> ExternalTokenResponse:
     return await service.regenerate_external_token()
 
@@ -74,6 +75,6 @@ async def regenerate_external_token(
 @router.post("/external-token/revoke", response_model=SettingsResponse)
 async def revoke_external_token(
     service: SettingsService = Depends(get_settings_service),
-    _session: AuthSession = Depends(get_current_session),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> SettingsResponse:
     return await service.revoke_external_token()

@@ -9,6 +9,7 @@ from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
 from app.schemas.tracker import TrackerCreate, TrackerUpdate
+from app.tenant import current_user_id, owned_by_user
 
 # Maps seeded tracker names to the corresponding column on the Entry model.
 _SEED_NAME_TO_ENTRY_COL: dict[str, str] = {
@@ -23,7 +24,7 @@ _IMMUTABLE_FIELDS = {"kind", "is_seed"}
 
 
 async def list_trackers(db: AsyncSession, include_archived: bool = False) -> list[Tracker]:
-    stmt = select(Tracker)
+    stmt = select(Tracker).where(owned_by_user(Tracker.user_id))
     if not include_archived:
         stmt = stmt.where(Tracker.archived.is_(False))
     stmt = stmt.order_by(Tracker.position.asc(), Tracker.name.asc())
@@ -32,7 +33,9 @@ async def list_trackers(db: AsyncSession, include_archived: bool = False) -> lis
 
 async def create_tracker(db: AsyncSession, body: TrackerCreate) -> Tracker:
     existing = (
-        await db.execute(select(Tracker).where(Tracker.name == body.name))
+        await db.execute(
+            select(Tracker).where(owned_by_user(Tracker.user_id), Tracker.name == body.name)
+        )
     ).scalar_one_or_none()
     if existing is not None:
         raise ConflictError(f"Tracker '{body.name}' already exists.")
@@ -42,11 +45,15 @@ async def create_tracker(db: AsyncSession, body: TrackerCreate) -> Tracker:
     # collide with seed positions 0..3 and interleave on the daily card.
     next_position = (
         await db.execute(
-            select(func.coalesce(func.max(Tracker.position), -1)).where(Tracker.archived.is_(False))
+            select(func.coalesce(func.max(Tracker.position), -1)).where(
+                owned_by_user(Tracker.user_id),
+                Tracker.archived.is_(False),
+            )
         )
     ).scalar() or -1
 
     tracker = Tracker(
+        user_id=current_user_id(),
         name=body.name,
         kind=body.kind,
         icon=body.icon,
@@ -63,7 +70,9 @@ async def create_tracker(db: AsyncSession, body: TrackerCreate) -> Tracker:
 
 async def update_tracker(db: AsyncSession, tracker_id: int, body: TrackerUpdate) -> Tracker:
     tracker = (
-        await db.execute(select(Tracker).where(Tracker.id == tracker_id))
+        await db.execute(
+            select(Tracker).where(owned_by_user(Tracker.user_id), Tracker.id == tracker_id)
+        )
     ).scalar_one_or_none()
     if tracker is None:
         raise NotFoundError(f"Tracker {tracker_id} not found.")
@@ -88,6 +97,7 @@ async def reorder_trackers(db: AsyncSession, order: list[int]) -> list[Tracker]:
         (
             await db.execute(
                 select(Tracker.id).where(
+                    owned_by_user(Tracker.user_id),
                     Tracker.archived.is_(False),
                     Tracker.is_seed.is_(False),
                 )
@@ -109,6 +119,7 @@ async def reorder_trackers(db: AsyncSession, order: list[int]) -> list[Tracker]:
             select(func.count())
             .select_from(Tracker)
             .where(
+                owned_by_user(Tracker.user_id),
                 Tracker.is_seed.is_(True),
                 Tracker.archived.is_(False),
             )
@@ -124,7 +135,7 @@ async def reorder_trackers(db: AsyncSession, order: list[int]) -> list[Tracker]:
 
 
 async def list_tracker_values(db: AsyncSession, date: datetime.date) -> list[TrackerLog]:
-    stmt = select(TrackerLog).where(TrackerLog.date == date)
+    stmt = select(TrackerLog).where(owned_by_user(TrackerLog.user_id), TrackerLog.date == date)
     return list((await db.execute(stmt)).scalars().all())
 
 
@@ -132,7 +143,9 @@ async def upsert_tracker_value(
     db: AsyncSession, date: datetime.date, tracker_id: int, value: int
 ) -> TrackerLog:
     tracker = (
-        await db.execute(select(Tracker).where(Tracker.id == tracker_id))
+        await db.execute(
+            select(Tracker).where(owned_by_user(Tracker.user_id), Tracker.id == tracker_id)
+        )
     ).scalar_one_or_none()
     if tracker is None:
         raise NotFoundError(f"Tracker {tracker_id} not found.")
@@ -140,6 +153,7 @@ async def upsert_tracker_value(
     existing = (
         await db.execute(
             select(TrackerLog).where(
+                owned_by_user(TrackerLog.user_id),
                 TrackerLog.tracker_id == tracker_id,
                 TrackerLog.date == date,
             )
@@ -155,6 +169,7 @@ async def upsert_tracker_value(
         log = existing
     else:
         log = TrackerLog(
+            user_id=current_user_id(),
             tracker_id=tracker_id,
             date=date,
             value=value,
@@ -187,7 +202,9 @@ async def _mirror_value_to_entry(
     """
     from app.models.entry import Entry
 
-    entry = (await db.execute(select(Entry).where(Entry.date == date))).scalar_one_or_none()
+    entry = (
+        await db.execute(select(Entry).where(owned_by_user(Entry.user_id), Entry.date == date))
+    ).scalar_one_or_none()
     if entry is None:
         return
 
@@ -213,7 +230,13 @@ async def sync_seed_tracker_log_from_entry(
     - Binaries (sick, hot_shower): skip when value is None or False.
     """
     seed_trackers = list(
-        (await db.execute(select(Tracker).where(Tracker.is_seed.is_(True)))).scalars().all()
+        (
+            await db.execute(
+                select(Tracker).where(owned_by_user(Tracker.user_id), Tracker.is_seed.is_(True))
+            )
+        )
+        .scalars()
+        .all()
     )
 
     now = datetime.datetime.utcnow()
@@ -241,6 +264,7 @@ async def sync_seed_tracker_log_from_entry(
         existing = (
             await db.execute(
                 select(TrackerLog).where(
+                    owned_by_user(TrackerLog.user_id),
                     TrackerLog.tracker_id == tracker.id,
                     TrackerLog.date == entry_date,
                 )
@@ -253,6 +277,7 @@ async def sync_seed_tracker_log_from_entry(
         else:
             db.add(
                 TrackerLog(
+                    user_id=getattr(entry, "user_id", current_user_id()),
                     tracker_id=tracker.id,
                     date=entry_date,
                     value=int_value,

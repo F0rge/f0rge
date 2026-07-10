@@ -10,6 +10,7 @@ import { ExternalTokenSection } from '@/components/settings/external-token-secti
 import { AppleHealthSection } from '@/components/settings/apple-health-section'
 import { ExportDataSection } from '@/components/settings/export-data-section'
 import { DataSourcesSection } from '@/components/settings/data-sources-section'
+import { LogoutSection } from '@/components/settings/logout-section'
 
 export default function SettingsPage() {
   return (
@@ -42,6 +43,9 @@ export default function SettingsPage() {
         </div>
         <div className="col-span-12">
           <DataSourcesSection />
+        </div>
+        <div className="col-span-12 lg:col-span-6">
+          <LogoutSection />
         </div>
       </div>
     </PageShell>

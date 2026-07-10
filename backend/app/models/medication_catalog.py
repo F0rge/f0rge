@@ -1,18 +1,29 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.models.user import default_user_id
 
 
 class MedicationCatalogItem(Base):
     __tablename__ = "medication_catalog"
+    __table_args__ = (UniqueConstraint("user_id", "key", name="uq_medication_catalog_user_id_key"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    key: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        default=default_user_id,
+    )
+    key: Mapped[str] = mapped_column(String, nullable=False, index=True)
     label: Mapped[str] = mapped_column(String, nullable=False)
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     first_used_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)

@@ -12,6 +12,7 @@ from app.exceptions import NotFoundError, ValidationError
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.schemas.lab import LabCreate, LabUpdate, LabMarkerCreate
+from app.tenant import current_user_id, owned_by_user
 
 _ABNORMAL_REF_RE = re.compile(
     r"\b(positive|elevated|reactive|abnormal|class\s*[>=]\s*\d|high|present)\b",
@@ -66,7 +67,7 @@ class LabsService:
         end_date: Optional[datetime.date] = None,
         lab_type: Optional[str] = None,
     ) -> List[Lab]:
-        stmt = select(Lab).options(selectinload(Lab.markers))
+        stmt = select(Lab).options(selectinload(Lab.markers)).where(owned_by_user(Lab.user_id))
         if start_date is not None:
             stmt = stmt.where(Lab.lab_date >= start_date)
         if end_date is not None:
@@ -79,7 +80,9 @@ class LabsService:
     async def get_lab(self, lab_id: int) -> Lab:
         lab = (
             await self.db.execute(
-                select(Lab).options(selectinload(Lab.markers)).where(Lab.id == lab_id)
+                select(Lab)
+                .options(selectinload(Lab.markers))
+                .where(owned_by_user(Lab.user_id), Lab.id == lab_id)
             )
         ).scalar_one_or_none()
         if lab is None:
@@ -94,6 +97,7 @@ class LabsService:
     ) -> Lab:
         meta = extraction_meta or {}
         lab = Lab(
+            user_id=current_user_id(),
             lab_date=data.lab_date,
             name=data.name,
             type=data.type,
@@ -171,6 +175,7 @@ class LabsService:
             ref_text=data.ref_text,
         )
         marker = LabMarker(
+            user_id=current_user_id(),
             lab_id=lab_id,
             catalog_id=catalog_id,
             canonical_name=canonical_name,

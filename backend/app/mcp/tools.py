@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 from typing import Any, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from sqlalchemy import Float, func, select, text
 
 from app.exceptions import ConflictError
-from app.mcp.database import make_main_session, make_ro_session
+from app.mcp.database import scoped_main_session, scoped_ro_session
 from app.models.embedding import Embedding
 from app.models.entry import Entry
 from app.models.lab import Lab
@@ -18,6 +19,7 @@ from app.services.llm.factory import (
     build_embedding_client,
     resolve_embedding_credentials,
 )
+from app.tenant import current_user_id, owned_by_user
 
 _MAX_ENTRIES = 200
 _MAX_LABS = 200
@@ -32,27 +34,35 @@ def _validate_date(value: str, field: str) -> datetime.date:
         raise ValueError(f"Invalid ISO date for {field}: {value!r}") from exc
 
 
+def _mcp_user_id(ctx: Context | None) -> uuid.UUID:
+    if ctx is not None and ctx.client_id:
+        return uuid.UUID(ctx.client_id)
+    return current_user_id()
+
+
 def register_tools(server: FastMCP) -> None:
     """Register all 7 MCP tools onto the server instance."""
 
     @server.tool()
-    async def search_health_data(query: str, k: int = 8) -> dict[str, Any]:
+    async def search_health_data(query: str, k: int = 8, ctx: Context = None) -> dict[str, Any]:
         """Semantic search across all health data using vector similarity.
 
         Embeds the query and returns the closest chunks from the embedding table.
         Prefer this tool for open-ended questions. Use the typed tools for structured
         date-range or marker-specific lookups.
         """
-        async with make_main_session() as db:
+        user_id = _mcp_user_id(ctx)
+        async with scoped_main_session(user_id) as db:
             try:
                 client = await build_embedding_client(db)
             except ConflictError as exc:
                 return {"error": exc.detail}
             _, model = await resolve_embedding_credentials(db)
 
-        # Cheap probe before paying for the embedding API call.
-        async with make_ro_session() as ro_db:
-            probe = await ro_db.execute(text("SELECT 1 FROM embedding LIMIT 1"))
+        async with scoped_ro_session(user_id) as ro_db:
+            probe = await ro_db.execute(
+                select(Embedding.id).where(owned_by_user(Embedding.user_id)).limit(1)
+            )
             if probe.scalar_one_or_none() is None:
                 return {
                     "results": [],
@@ -61,8 +71,7 @@ def register_tools(server: FastMCP) -> None:
 
         query_vec = await client.embed(query, model=model)
 
-        async with make_ro_session() as ro_db:
-            # pgvector cosine distance operator <=>
+        async with scoped_ro_session(user_id) as ro_db:
             stmt = (
                 select(
                     Embedding.source_table,
@@ -72,7 +81,10 @@ def register_tools(server: FastMCP) -> None:
                         "distance"
                     ),
                 )
-                .where(Embedding.embedding_model == model)
+                .where(
+                    owned_by_user(Embedding.user_id),
+                    Embedding.embedding_model == model,
+                )
                 .order_by(text("distance"))
                 .limit(k)
             )
@@ -91,31 +103,39 @@ def register_tools(server: FastMCP) -> None:
         }
 
     @server.tool()
-    async def get_entry(date: str) -> Optional[dict[str, Any]]:
+    async def get_entry(date: str, ctx: Context = None) -> Optional[dict[str, Any]]:
         """Fetch one health log entry by ISO date (YYYY-MM-DD).
 
         Returns null if no entry exists for that date.
         """
         parsed = _validate_date(date, "date")
-        async with make_ro_session() as db:
-            result = await db.execute(select(Entry).where(Entry.date == parsed))
+        user_id = _mcp_user_id(ctx)
+        async with scoped_ro_session(user_id) as db:
+            result = await db.execute(
+                select(Entry).where(owned_by_user(Entry.user_id), Entry.date == parsed)
+            )
             row = result.scalar_one_or_none()
         if row is None:
             return None
         return _entry_to_dict(row)
 
     @server.tool()
-    async def list_entries(start_date: str, end_date: str) -> dict[str, Any]:
+    async def list_entries(start_date: str, end_date: str, ctx: Context = None) -> dict[str, Any]:
         """List health log entries in an inclusive date range (YYYY-MM-DD).
 
         Capped at 200 rows. Use a narrower range if you need more granularity.
         """
         start = _validate_date(start_date, "start_date")
         end = _validate_date(end_date, "end_date")
-        async with make_ro_session() as db:
+        user_id = _mcp_user_id(ctx)
+        async with scoped_ro_session(user_id) as db:
             stmt = (
                 select(Entry)
-                .where(Entry.date >= start, Entry.date <= end)
+                .where(
+                    owned_by_user(Entry.user_id),
+                    Entry.date >= start,
+                    Entry.date <= end,
+                )
                 .order_by(Entry.date)
                 .limit(_MAX_ENTRIES)
             )
@@ -123,12 +143,13 @@ def register_tools(server: FastMCP) -> None:
         return {"entries": [_entry_to_dict(r) for r in rows]}
 
     @server.tool()
-    async def get_lab_history(marker_canonical_name: str) -> dict[str, Any]:
+    async def get_lab_history(marker_canonical_name: str, ctx: Context = None) -> dict[str, Any]:
         """Fetch all recorded values for a lab marker by its canonical name.
 
         Results ordered newest-first. Capped at 200 rows.
         """
-        async with make_ro_session() as db:
+        user_id = _mcp_user_id(ctx)
+        async with scoped_ro_session(user_id) as db:
             stmt = (
                 select(
                     LabMarker.value,
@@ -137,7 +158,11 @@ def register_tools(server: FastMCP) -> None:
                     Lab.lab_date.label("date"),
                 )
                 .join(Lab, LabMarker.lab_id == Lab.id)
-                .where(LabMarker.canonical_name == marker_canonical_name)
+                .where(
+                    owned_by_user(LabMarker.user_id),
+                    owned_by_user(Lab.user_id),
+                    LabMarker.canonical_name == marker_canonical_name,
+                )
                 .order_by(Lab.lab_date.desc())
                 .limit(_MAX_LAB_HISTORY)
             )
@@ -156,18 +181,23 @@ def register_tools(server: FastMCP) -> None:
         }
 
     @server.tool()
-    async def list_labs(start_date: str, end_date: str) -> dict[str, Any]:
+    async def list_labs(start_date: str, end_date: str, ctx: Context = None) -> dict[str, Any]:
         """List lab uploads with marker counts in an inclusive date range.
 
         Capped at 200 rows.
         """
         start = _validate_date(start_date, "start_date")
         end = _validate_date(end_date, "end_date")
-        async with make_ro_session() as db:
+        user_id = _mcp_user_id(ctx)
+        async with scoped_ro_session(user_id) as db:
             stmt = (
                 select(Lab, func.count(LabMarker.id).label("marker_count"))
                 .outerjoin(LabMarker, LabMarker.lab_id == Lab.id)
-                .where(Lab.lab_date >= start, Lab.lab_date <= end)
+                .where(
+                    owned_by_user(Lab.user_id),
+                    Lab.lab_date >= start,
+                    Lab.lab_date <= end,
+                )
                 .group_by(Lab.id)
                 .order_by(Lab.lab_date.desc())
                 .limit(_MAX_LABS)
@@ -187,12 +217,14 @@ def register_tools(server: FastMCP) -> None:
         }
 
     @server.tool()
-    async def list_treatments(active_only: bool = True) -> dict[str, Any]:
+    async def list_treatments(active_only: bool = True, ctx: Context = None) -> dict[str, Any]:
         """List treatments. When active_only=True, only treatments with no end_date are returned."""
-        async with make_ro_session() as db:
-            stmt = select(Treatment).order_by(Treatment.start_date.desc())
+        user_id = _mcp_user_id(ctx)
+        async with scoped_ro_session(user_id) as db:
+            stmt = select(Treatment).where(owned_by_user(Treatment.user_id))
             if active_only:
                 stmt = stmt.where(Treatment.end_date.is_(None))
+            stmt = stmt.order_by(Treatment.start_date.desc())
             rows = (await db.execute(stmt)).scalars().all()
         return {
             "treatments": [
@@ -211,7 +243,7 @@ def register_tools(server: FastMCP) -> None:
         }
 
     @server.tool()
-    async def read_sql(query: str) -> dict[str, Any]:
+    async def read_sql(query: str, ctx: Context = None) -> dict[str, Any]:
         """Execute an arbitrary SELECT query via the read-only connection.
 
         Prefer the typed tools above (get_entry, list_labs, etc.) for common lookups.
@@ -220,7 +252,8 @@ def register_tools(server: FastMCP) -> None:
         because the connection uses the healthtracker_ro role which has SELECT-only access.
         Capped at 500 rows.
         """
-        async with make_ro_session() as db:
+        user_id = _mcp_user_id(ctx)
+        async with scoped_ro_session(user_id) as db:
             try:
                 result = await db.execute(text(query))
                 keys = list(result.keys())
