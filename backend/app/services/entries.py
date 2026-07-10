@@ -21,6 +21,16 @@ from app.services.photo_storage import delete_photo
 from app.services.trackers import sync_seed_tracker_log_from_entry
 from app.tenant import current_user_id, owned_by_user
 
+# Bump whenever Entry's column shape changes; both entry-creation paths below
+# (form submit and photo-first skeleton) must always stamp the same value.
+CURRENT_SCHEMA_VERSION = 4
+
+# _period_of_day hour boundaries (24h clock, half-open [start, next)).
+_MORNING_START_HOUR = 5
+_MIDDAY_START_HOUR = 12
+_EVENING_START_HOUR = 17
+_NIGHT_START_HOUR = 21
+
 
 def _build_response(entry: Entry) -> EntryResponse:
     """Construct an ``EntryResponse`` with all computed diet-signal fields."""
@@ -41,11 +51,11 @@ def _build_response(entry: Entry) -> EntryResponse:
 
 def _period_of_day(ts: datetime.datetime) -> str:
     h = ts.hour
-    if 5 <= h < 12:
+    if _MORNING_START_HOUR <= h < _MIDDAY_START_HOUR:
         return "morning"
-    if 12 <= h < 17:
+    if _MIDDAY_START_HOUR <= h < _EVENING_START_HOUR:
         return "midday"
-    if 17 <= h < 21:
+    if _EVENING_START_HOUR <= h < _NIGHT_START_HOUR:
         return "evening"
     return "night"
 
@@ -58,6 +68,25 @@ def _derive_stool_normal(stool_status: Optional[str], current: Optional[bool]) -
     if stool_status in ("abnormal", "none"):
         return False
     return None
+
+
+# Neutral scale defaults for a photo-first skeleton entry -- mirrors the
+# check-in form's own defaults (mid-scale overall/sleep = 2, stress = 1,
+# everything else neutral/off). symptoms_json is deliberately excluded: it's
+# a mutable {} and must be constructed fresh per entry, not shared from here.
+NEUTRAL_SKELETON: dict[str, object] = {
+    "overall": 2,
+    "bloating": 0,
+    "stool_normal": True,
+    "joint_pain": 0,
+    "neuro": 0,
+    "sleep_quality": 2,
+    "stress": 1,
+    "diet_risk": "",
+    "supplements": "",
+    "sick": False,
+    "hot_shower": False,
+}
 
 
 async def get_or_create_entry(db: AsyncSession, target_date: datetime.date) -> Entry:
@@ -86,21 +115,11 @@ async def get_or_create_entry(db: AsyncSession, target_date: datetime.date) -> E
     entry = Entry(
         user_id=current_user_id(),
         date=target_date,
-        schema_version=2,
+        schema_version=CURRENT_SCHEMA_VERSION,
         entry_time=now,
         period_of_day=_period_of_day(now),
-        overall=2,
-        bloating=0,
-        stool_normal=True,
-        joint_pain=0,
-        neuro=0,
-        sleep_quality=2,
-        stress=1,
-        diet_risk="",
-        supplements="",
-        sick=False,
-        hot_shower=False,
         symptoms_json={},
+        **NEUTRAL_SKELETON,
     )
     db.add(entry)
     await db.flush()
@@ -120,7 +139,7 @@ async def create_entry(db: AsyncSession, body: EntryCreate) -> EntryResponse:
     if data.get("period_of_day") is None:
         data["period_of_day"] = _period_of_day(data["entry_time"])
     if data.get("schema_version") is None:
-        data["schema_version"] = 4
+        data["schema_version"] = CURRENT_SCHEMA_VERSION
     data["stool_normal"] = _derive_stool_normal(data.get("stool_status"), data.get("stool_normal"))
     data["symptoms_json"] = data.get("symptoms_json") or {}
     data["medications_json"] = data.pop("medications", None) or []

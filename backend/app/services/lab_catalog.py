@@ -16,6 +16,8 @@ from app.schemas.lab_marker import (
     MarkerHistoryPoint,
 )
 
+CATALOG_SEARCH_LIMIT = 50
+
 
 def _normalize_canonical(name: str) -> str:
     """Convert a raw name to lowercase underscored canonical form."""
@@ -29,7 +31,9 @@ class LabMarkerCatalogService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def search(self, q: Optional[str], limit: int = 50) -> List[LabMarkerCatalog]:
+    async def search(
+        self, q: Optional[str], limit: int = CATALOG_SEARCH_LIMIT
+    ) -> List[LabMarkerCatalog]:
         """Search catalog by canonical name, display name, or alias (ilike)."""
         stmt = select(LabMarkerCatalog)
         if q:

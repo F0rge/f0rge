@@ -59,6 +59,9 @@ _VALID_SLEEP_METRICS: frozenset[str] = frozenset(
     }
 )
 
+# /trends delta_30d: how far back (in days) "current" is compared against.
+TREND_DELTA_WINDOW_DAYS = 30
+
 # Core series always included in /trends (besides sym_*)
 _TREND_SERIES_KEYS: list[str] = [
     "overall",
@@ -167,8 +170,8 @@ async def compute_trends(
 
         # delta_30d: compare last non-null with the rolling avg ~30 days ago
         delta_30d: Optional[float] = None
-        if len(points) >= 30 and current is not None:
-            ref_rolling = points[-30].rolling_avg_7
+        if len(points) >= TREND_DELTA_WINDOW_DAYS and current is not None:
+            ref_rolling = points[-TREND_DELTA_WINDOW_DAYS].rolling_avg_7
             if ref_rolling is not None:
                 delta_30d = round(current - ref_rolling, 4)
 
