@@ -57,3 +57,12 @@ def test_gap_day_with_no_planned_doses_does_not_break_streak() -> None:
     current, best = compute_streak(completions, TODAY)
     assert current == 2
     assert best == 2
+
+
+def test_undoing_todays_completion_resets_best_when_it_was_the_only_complete_day() -> None:
+    """Completing then undoing today must not leave a stale personal-best badge."""
+    completions = [(TODAY, 3, 3)]
+    assert compute_streak(completions, TODAY) == (1, 1)
+
+    undone = [(TODAY, 3, 0)]
+    assert compute_streak(undone, TODAY) == (0, 0)

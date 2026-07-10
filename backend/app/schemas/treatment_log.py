@@ -20,6 +20,15 @@ class TreatmentLogResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TreatmentLogResult(BaseModel):
+    """Dose log write plus recomputed protocol summary for the same date."""
+
+    log: TreatmentLogResponse
+    today: ProtocolToday
+    streak: int
+    best_streak: int
+
+
 class ProtocolItem(BaseModel):
     id: int
     name: str
