@@ -5,9 +5,9 @@ import hashlib
 from typing import Optional
 
 from fastapi import UploadFile
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.labs import LabCRUD
 from app.exceptions import ValidationError
 from app.models.lab import Lab
 from app.schemas.lab import LabCreate, LabMarkerCreate
@@ -51,13 +51,12 @@ class LabImportService:
         self.catalog_service = catalog_service
         self.extraction_service = extraction_service
         self.attachment_storage = attachment_storage
+        self.crud = LabCRUD(db)
 
     async def _existing_or_none(self, source_path: Optional[str], force: bool) -> Optional[Lab]:
         if force or source_path is None:
             return None
-        return (
-            await self.db.execute(select(Lab).where(Lab.source_path == source_path))
-        ).scalar_one_or_none()
+        return await self.crud.get_by_source_path(source_path)
 
     async def import_from_text(
         self,
@@ -173,14 +172,12 @@ class LabImportService:
         lab_data = payload.lab
 
         if source_path is not None:
-            existing = (
-                await self.db.execute(select(Lab).where(Lab.source_path == source_path))
-            ).scalar_one_or_none()
+            existing = await self.crud.get_by_source_path(source_path)
             if existing is not None:
                 if not force:
                     return existing
-                await self.db.delete(existing)
-                await self.db.flush()
+                await self.crud.delete(existing)
+                await self.crud.flush()
 
         review_status = (
             "needs_review" if payload.confidence < 0.7 or result.attempts > 1 else "confirmed"
