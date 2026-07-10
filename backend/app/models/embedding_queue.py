@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -37,6 +38,13 @@ class EmbeddingQueue(Base):
             "action IN ('INSERT', 'UPDATE', 'DELETE')",
             name="embedding_queue_action_check",
         ),
+        Index("ix_embedding_queue_user_id", "user_id"),
+        # Partial index: only rows that still have attempts remaining need fast lookup.
+        Index(
+            "ix_embedding_queue_enqueued",
+            "enqueued_at",
+            postgresql_where=text("attempts < 5"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True)
@@ -44,7 +52,6 @@ class EmbeddingQueue(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     source_table: Mapped[str] = mapped_column(String, nullable=False)

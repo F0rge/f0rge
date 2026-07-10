@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+from typing import Optional
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
+from app.crud.food_analysis import PhotoAnalysisCRUD, PhotoIngredientCRUD
+from app.crud.photos import PhotoCRUD
 from app.exceptions import NotFoundError, ValidationError
-from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
@@ -31,23 +31,13 @@ class MealService:
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.photo_crud = PhotoCRUD(db)
+        self.analysis_crud = PhotoAnalysisCRUD(db)
+        self.ingredient_crud = PhotoIngredientCRUD(db)
 
     async def list_recent(self, limit: int = 12) -> list[RecentMealResponse]:
         """Distinct recently-logged meals, most-recent first, deduped by dish name."""
-        stmt = (
-            select(PhotoAnalysis, Entry.date)
-            .join(Photo, PhotoAnalysis.photo_id == Photo.id)
-            .join(Entry, Photo.entry_id == Entry.id)
-            # selectinload is mandatory: compute_signal_from_analyses walks
-            # analysis.ingredients, and a lazy load here would raise MissingGreenlet.
-            .options(selectinload(PhotoAnalysis.ingredients))
-            .where(
-                PhotoAnalysis.status == "confirmed",
-                PhotoAnalysis.dish_name.isnot(None),
-            )
-            .order_by(Entry.date.desc(), PhotoAnalysis.photo_id.desc())
-        )
-        rows = (await self.db.execute(stmt)).all()
+        rows = await self.analysis_crud.list_confirmed_with_entry_dates()
 
         # times_logged counts DISTINCT dates a dish appears on, so two photos of
         # the same dish on one day count once.
@@ -82,20 +72,11 @@ class MealService:
         self,
         target_date: datetime.date,
         source_photo_id: int,
-        meal_time: datetime.datetime | None = None,
+        meal_time: Optional[datetime.datetime] = None,
     ) -> Photo:
         """Copy a confirmed source meal onto ``target_date`` as new, decoupled rows."""
         # 1. Load + validate the source before writing anything.
-        src = (
-            await self.db.execute(
-                select(PhotoAnalysis)
-                .options(
-                    selectinload(PhotoAnalysis.ingredients),
-                    selectinload(PhotoAnalysis.photo),
-                )
-                .where(PhotoAnalysis.photo_id == source_photo_id)
-            )
-        ).scalar_one_or_none()
+        src = await self.analysis_crud.get_by_photo_id_with_ingredients_and_photo(source_photo_id)
         if src is None:
             raise NotFoundError(f"No analysis for photo {source_photo_id}")
         if src.status != "confirmed":
@@ -124,8 +105,7 @@ class MealService:
             meal_time=meal_time if meal_time is not None else now,
             created_at=now,
         )
-        self.db.add(new_photo)
-        await self.db.flush()
+        await self.photo_crud.add_and_flush(new_photo)
 
         new_analysis = PhotoAnalysis(
             user_id=user_id,
@@ -137,11 +117,10 @@ class MealService:
             model_id=src.model_id,
             raw_response=src.raw_response,
         )
-        self.db.add(new_analysis)
-        await self.db.flush()
+        await self.analysis_crud.add_and_flush(new_analysis)
 
         for si in src.ingredients:
-            self.db.add(
+            self.ingredient_crud.add(
                 PhotoIngredient(
                     user_id=user_id,
                     analysis_id=new_analysis.id,
@@ -168,9 +147,8 @@ class MealService:
         # 5. Commit; on failure remove the just-copied file so the next filename
         #    scan doesn't collide with an orphan (mirrors upload's cleanup).
         try:
-            await self.db.commit()
+            await self.photo_crud.save()
         except Exception:
             await asyncio.to_thread(delete_photo, new_filename, user_id=user_id_str)
             raise
-        await self.db.refresh(new_photo)
         return new_photo

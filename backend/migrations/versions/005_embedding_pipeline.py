@@ -166,9 +166,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop triggers first (they depend on the function).
-    op.execute(
-        sa.text("DROP TRIGGER IF EXISTS trg_photo_analyses_embedding ON photo_analyses")
-    )
+    op.execute(sa.text("DROP TRIGGER IF EXISTS trg_photo_analyses_embedding ON photo_analyses"))
     op.execute(sa.text("DROP TRIGGER IF EXISTS trg_treatments_embedding ON treatments"))
     op.execute(sa.text("DROP TRIGGER IF EXISTS trg_labs_embedding ON labs"))
     op.execute(sa.text("DROP TRIGGER IF EXISTS trg_entries_embedding ON entries"))

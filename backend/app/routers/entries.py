@@ -5,10 +5,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.dependencies.entries import get_entry_service
+from app.dependencies.entries import get_entry_orchestrator, get_entry_service
 from app.middleware.auth import get_current_session
 from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
 from app.services.entries import EntryService
+from app.services.entry_orchestrator import EntryOrchestrator
 
 router = APIRouter(
     prefix="/api/v1/entries",
@@ -18,8 +19,11 @@ router = APIRouter(
 
 
 @router.post("", response_model=EntryResponse, status_code=status.HTTP_201_CREATED)
-async def create_entry(body: EntryCreate, service: EntryService = Depends(get_entry_service)):
-    return await service.create_entry(body)
+async def create_entry(
+    body: EntryCreate,
+    orchestrator: EntryOrchestrator = Depends(get_entry_orchestrator),
+):
+    return await orchestrator.create_entry(body)
 
 
 @router.get("", response_model=list[EntryResponse])
@@ -39,9 +43,9 @@ async def get_entry(date: datetime.date, service: EntryService = Depends(get_ent
 async def update_entry(
     date: datetime.date,
     body: EntryUpdate,
-    service: EntryService = Depends(get_entry_service),
+    orchestrator: EntryOrchestrator = Depends(get_entry_orchestrator),
 ):
-    return await service.update_entry(date, body)
+    return await orchestrator.update_entry(date, body)
 
 
 @router.delete("/{date}", status_code=status.HTTP_204_NO_CONTENT)

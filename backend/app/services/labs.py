@@ -4,15 +4,14 @@ import datetime
 import re
 from typing import List, Optional
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
+from app.crud.labs import LabCRUD
 from app.exceptions import NotFoundError, ValidationError
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.schemas.lab import LabCreate, LabUpdate, LabMarkerCreate
-from app.tenant import current_user_id, owned_by_user
+from app.tenant import current_user_id
 
 _ABNORMAL_REF_RE = re.compile(
     r"\b(positive|elevated|reactive|abnormal|class\s*[>=]\s*\d|high|present)\b",
@@ -60,6 +59,7 @@ def _parse_unidirectional_ref(
 class LabsService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.crud = LabCRUD(db)
 
     async def list_labs(
         self,
@@ -67,24 +67,10 @@ class LabsService:
         end_date: Optional[datetime.date] = None,
         lab_type: Optional[str] = None,
     ) -> List[Lab]:
-        stmt = select(Lab).options(selectinload(Lab.markers)).where(owned_by_user(Lab.user_id))
-        if start_date is not None:
-            stmt = stmt.where(Lab.lab_date >= start_date)
-        if end_date is not None:
-            stmt = stmt.where(Lab.lab_date <= end_date)
-        if lab_type is not None:
-            stmt = stmt.where(Lab.type == lab_type)
-        stmt = stmt.order_by(Lab.lab_date.desc())
-        return list((await self.db.execute(stmt)).scalars().all())
+        return await self.crud.list(start_date, end_date, lab_type)
 
     async def get_lab(self, lab_id: int) -> Lab:
-        lab = (
-            await self.db.execute(
-                select(Lab)
-                .options(selectinload(Lab.markers))
-                .where(owned_by_user(Lab.user_id), Lab.id == lab_id)
-            )
-        ).scalar_one_or_none()
+        lab = await self.crud.get_by_id(lab_id)
         if lab is None:
             raise NotFoundError("Lab not found.")
         return lab
@@ -111,15 +97,13 @@ class LabsService:
             review_status=meta.get("review_status", "confirmed"),
             notes=data.notes,
         )
-        self.db.add(lab)
-        await self.db.flush()
+        self.crud.add(lab)
+        await self.crud.flush()
 
         for marker_data in data.markers:
             await self._insert_marker(lab.id, marker_data)
 
-        await self.db.commit()
-        await self.db.refresh(lab)
-        return lab
+        return await self.crud.commit_refresh(lab)
 
     async def update_lab(self, lab_id: int, data: LabUpdate) -> Lab:
         lab = await self.get_lab(lab_id)
@@ -132,22 +116,19 @@ class LabsService:
         if markers_patch is not None:
             # Replace-all strategy: delete existing, re-insert.
             for existing in list(lab.markers):
-                await self.db.delete(existing)
-            await self.db.flush()
+                await self.crud.delete(existing)
+            await self.crud.flush()
             for marker_data in markers_patch:
                 if isinstance(marker_data, dict):
                     marker_data = LabMarkerCreate(**marker_data)
                 await self._insert_marker(lab.id, marker_data)
 
         lab.updated_at = datetime.datetime.utcnow()
-        await self.db.commit()
-        await self.db.refresh(lab)
-        return lab
+        return await self.crud.commit_refresh(lab)
 
     async def delete_lab(self, lab_id: int) -> None:
         lab = await self.get_lab(lab_id)
-        await self.db.delete(lab)
-        await self.db.commit()
+        await self.crud.delete_and_commit(lab)
 
     async def _insert_marker(self, lab_id: int, data: LabMarkerCreate) -> None:
         catalog_id = data.catalog_id
@@ -188,8 +169,7 @@ class LabsService:
             ref_text=data.ref_text,
             flag=flag,
         )
-        self.db.add(marker)
-        await self.db.flush()
+        await self.crud.add_and_flush(marker)
 
     @staticmethod
     def compute_flag(

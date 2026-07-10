@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, ForeignKeyConstraint, String, UniqueConstraint
+from sqlalchemy import ForeignKey, ForeignKeyConstraint, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,7 @@ class IngredientAlias(Base):
             ["user_id", "canonical_name"],
             ["dietary_ingredients.user_id", "dietary_ingredients.canonical_name"],
         ),
+        Index("ix_ingredient_aliases_user_id", "user_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -29,7 +30,6 @@ class IngredientAlias(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     alias: Mapped[str] = mapped_column(String, nullable=False)

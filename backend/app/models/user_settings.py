@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, LargeBinary, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, LargeBinary, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,14 +13,16 @@ from app.models.user import default_user_id
 
 class UserSettings(Base):
     __tablename__ = "user_settings"
-    __table_args__ = (UniqueConstraint("user_id", name="uq_user_settings_user_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_user_settings_user_id"),
+        Index("ix_user_settings_user_id", "user_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     llm_provider: Mapped[str] = mapped_column(String, nullable=False, default="openrouter")

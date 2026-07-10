@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.dietary_ingredient_catalog import DietaryIngredientCRUD
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.dietary_ingredient import DietaryIngredient
 from app.models.ingredient_alias import IngredientAlias
@@ -18,6 +18,7 @@ from app.schemas.dietary_ingredient import (
 class DietaryIngredientCatalogService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.crud = DietaryIngredientCRUD(db)
 
     async def list_items(
         self,
@@ -25,34 +26,10 @@ class DietaryIngredientCatalogService:
         include_archived: bool = False,
         limit: Optional[int] = None,
     ) -> list[DietaryIngredient]:
-        stmt = select(DietaryIngredient)
-        if not include_archived:
-            stmt = stmt.where(DietaryIngredient.archived.is_(False))
-        if search:
-            term = search.strip().lower()
-            stmt = stmt.outerjoin(
-                IngredientAlias,
-                DietaryIngredient.canonical_name == IngredientAlias.canonical_name,
-            ).where(
-                or_(
-                    DietaryIngredient.canonical_name.ilike(f"%{term}%"),
-                    IngredientAlias.alias.ilike(f"%{term}%"),
-                )
-            )
-            stmt = stmt.distinct()
-            if limit is None:
-                limit = 50
-        stmt = stmt.order_by(DietaryIngredient.canonical_name.asc())
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        return list((await self.db.execute(stmt)).scalars().all())
+        return await self.crud.list(search, include_archived, limit)
 
     async def get(self, ingredient_id: int) -> DietaryIngredient:
-        item = (
-            await self.db.execute(
-                select(DietaryIngredient).where(DietaryIngredient.id == ingredient_id)
-            )
-        ).scalar_one_or_none()
+        item = await self.crud.get_by_id(ingredient_id)
         if item is None:
             raise NotFoundError(f"Dietary ingredient {ingredient_id} not found.")
         return item
@@ -64,26 +41,18 @@ class DietaryIngredientCatalogService:
         payload = data.model_dump()
         payload["canonical_name"] = normalized
 
-        existing = (
-            await self.db.execute(
-                select(DietaryIngredient).where(DietaryIngredient.canonical_name == normalized)
-            )
-        ).scalar_one_or_none()
+        existing = await self.crud.get_by_canonical_name(normalized)
         if existing is not None:
             if existing.archived:
                 for field, value in payload.items():
                     setattr(existing, field, value)
                 existing.archived = False
-                await self.db.commit()
-                await self.db.refresh(existing)
-                return existing
+                return await self.crud.commit_refresh(existing)
             raise ConflictError(f"Dietary ingredient '{normalized}' already exists.")
 
         item = DietaryIngredient(**payload)
-        self.db.add(item)
-        await self.db.commit()
-        await self.db.refresh(item)
-        return item
+        self.crud.add(item)
+        return await self.crud.commit_refresh(item)
 
     async def update_item(
         self, ingredient_id: int, data: DietaryIngredientUpdate
@@ -91,9 +60,7 @@ class DietaryIngredientCatalogService:
         item = await self.get(ingredient_id)
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(item, field, value)
-        await self.db.commit()
-        await self.db.refresh(item)
-        return item
+        return await self.crud.commit_refresh(item)
 
     async def set_archived(self, ingredient_id: int, archived: bool) -> DietaryIngredient:
         return await self.update_item(ingredient_id, DietaryIngredientUpdate(archived=archived))
@@ -117,14 +84,10 @@ class DietaryIngredientCatalogService:
         # otherwise a second read within the same session sees a stale empty list.
         alias = IngredientAlias(alias=normalized_alias, language=data.language)
         ingredient.aliases.append(alias)
-        await self.db.commit()
-        await self.db.refresh(alias)
-        return alias
+        return await self.crud.commit_refresh(alias)
 
     async def remove_alias(self, alias_id: int) -> None:
-        alias = (
-            await self.db.execute(select(IngredientAlias).where(IngredientAlias.id == alias_id))
-        ).scalar_one_or_none()
+        alias = await self.crud.get_alias_by_id(alias_id)
         if alias is None:
             raise NotFoundError(f"Alias {alias_id} not found.")
         # Delete the already-fetched row directly. Going through the parent
@@ -133,5 +96,4 @@ class DietaryIngredientCatalogService:
         # cold by id -- accessing it lazy-loads in the async session and raises
         # MissingGreenlet. The parent's in-memory collection consistency is
         # irrelevant here: the row is deleted and the endpoint returns 204.
-        await self.db.delete(alias)
-        await self.db.commit()
+        await self.crud.delete_and_commit(alias)

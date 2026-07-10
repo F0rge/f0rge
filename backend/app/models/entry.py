@@ -3,7 +3,17 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -14,14 +24,16 @@ from app.models.user import default_user_id
 
 class Entry(Base):
     __tablename__ = "entries"
-    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_entries_user_id_date"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_entries_user_id_date"),
+        Index("ix_entries_user_id", "user_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)

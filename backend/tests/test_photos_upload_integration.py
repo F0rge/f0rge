@@ -32,6 +32,7 @@ from app.config import settings
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
+from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
 from app.services.photos import PhotoService
 
 
@@ -113,7 +114,7 @@ async def test_sequential_uploads_write_files_and_db_rows(
 ) -> None:
     day = datetime.date(2026, 5, 16)
     await _make_entry(async_db, day)
-    service = PhotoService(async_db)
+    service = PhotoService(async_db, FoodAnalysisOrchestrator())
 
     photos = [await _upload(service, day) for _ in range(3)]
 
@@ -155,7 +156,7 @@ async def test_orphan_file_on_disk_does_not_collide_with_next_upload(
     with open(orphan_path, "wb") as f:
         f.write(b"orphan-bytes-not-a-real-image")
 
-    service = PhotoService(async_db)
+    service = PhotoService(async_db, FoodAnalysisOrchestrator())
 
     # Pre-bug behaviour: this would raise FileExistsError because the
     # filename generator picked _photo-1, then a real upload for _photo-2
@@ -202,7 +203,7 @@ async def test_commit_failure_removes_file_from_disk(
 
     monkeypatch.setattr(async_db, "commit", _fail_once)
 
-    service = PhotoService(async_db)
+    service = PhotoService(async_db, FoodAnalysisOrchestrator())
 
     # Snapshot disk state before — we want to assert no NEW file was orphaned.
     files_before = set(os.listdir(settings.photo_dir))
@@ -259,7 +260,7 @@ async def test_analysis_fallback_error_message_is_short_no_traceback(
     # Use a session-maker bound to the same container engine the test uses,
     # because the trigger calls async_session_maker() internally.
     real_maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
-    monkeypatch.setattr("app.services.food_analysis.async_session_maker", real_maker)
+    monkeypatch.setattr("app.services.food_analysis_orchestrator.async_session_maker", real_maker)
 
     day = datetime.date(2026, 5, 16)
     filename = f"{day.isoformat()}_photo-1.jpg"
@@ -302,7 +303,7 @@ async def test_analysis_fallback_error_message_is_short_no_traceback(
     with open(os.path.join(str(photo_dir), filename), "wb") as f:
         f.write(_png_bytes())
 
-    from app.services import food_analysis as fa
+    from app.services import food_analysis_orchestrator as fa
 
     try:
         # ---- Branch 1: guard path (empty key) ----
@@ -391,7 +392,7 @@ async def test_upload_succeeds_when_credential_resolution_raises(
 
     day = datetime.date(2026, 6, 1)
     await _make_entry(async_db, day)
-    service = PhotoService(async_db)
+    service = PhotoService(async_db, FoodAnalysisOrchestrator())
 
     photo = await _upload(service, day)
 
