@@ -8,7 +8,7 @@ import { UserAvatar } from '@/components/account/user-avatar'
 import { cn } from '@/lib/utils'
 
 const MENU_ITEM_CLASS =
-  'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted'
+  'flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted'
 
 export function ProfileMenu() {
   const pathname = usePathname()
@@ -36,10 +36,7 @@ export function ProfileMenu() {
   if (pathname.startsWith('/login') || pathname.startsWith('/signup')) return null
 
   return (
-    <div
-      ref={menuRef}
-      className="fixed top-[calc(16px+env(safe-area-inset-top))] right-[calc(16px+env(safe-area-inset-right))] z-50"
-    >
+    <div ref={menuRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -55,7 +52,7 @@ export function ProfileMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 min-w-[188px] rounded-xl border border-border bg-background p-1 shadow-lg"
+          className="absolute right-0 mt-2 min-w-[10rem] rounded-xl border border-border bg-background p-1 shadow-lg"
         >
           <Link
             href="/account"
@@ -73,7 +70,7 @@ export function ProfileMenu() {
             onClick={() => setOpen(false)}
           >
             <SlidersHorizontal className="size-4 text-muted-foreground" />
-            Customize check-in
+            Customize
           </Link>
         </div>
       )}
