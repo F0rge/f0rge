@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { PageShell } from '@/components/layout/page-shell'
@@ -14,7 +15,7 @@ function SettingsGroup({
   children,
 }: {
   title: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <section className="space-y-4">

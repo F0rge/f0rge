@@ -16,10 +16,6 @@ export function ProfileMenu() {
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    setOpen(false)
-  }, [pathname])
-
-  useEffect(() => {
     if (!open) return
     const handleClick = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
