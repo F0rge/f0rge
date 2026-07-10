@@ -99,7 +99,7 @@ jobs:
             while (true) {
               const { repository } = await github.graphql(threadsQuery, {
                 owner,
-                name: repo,
+                repo,
                 number: pull_number,
                 after,
               });
