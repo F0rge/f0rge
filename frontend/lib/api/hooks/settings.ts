@@ -10,10 +10,12 @@ import type {
   ExternalTokenResponse,
 } from '../types'
 
-export function useUserSettings() {
+export function useUserSettings(options?: { enabled?: boolean }) {
   return useQuery<UserSettings>({
     queryKey: ['settings'],
     queryFn: () => apiGet('/settings'),
+    enabled: options?.enabled ?? true,
+    retry: false,
   })
 }
 

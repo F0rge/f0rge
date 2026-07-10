@@ -45,7 +45,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const router = useRouter()
   const pathname = usePathname()
   const { data: auth } = useAuth()
-  const { data: settings, isLoading: settingsLoading } = useUserSettings()
+  const { data: settings, isLoading: settingsLoading } = useUserSettings({
+    enabled: auth?.authenticated === true,
+  })
   const completeOnboarding = useCompleteOnboarding()
 
   const [run, setRun] = useState(false)
