@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { SessionGuard } from '@/components/auth/session-guard'
 import { AppChrome } from '@/components/layout/app-chrome'
+import { ThemeProvider } from '@/components/theme-provider'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -19,11 +20,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionGuard>
-        {children}
-        <AppChrome />
-      </SessionGuard>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <SessionGuard>
+          {children}
+          <AppChrome />
+        </SessionGuard>
+      </QueryClientProvider>
+    </ThemeProvider>
   )
 }
