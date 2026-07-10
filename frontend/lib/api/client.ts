@@ -99,10 +99,13 @@ export async function apiPatch(path: string, body: unknown) {
   return handleResponse(res)
 }
 
-export async function apiDelete(path: string) {
+export async function apiDelete(path: string, body?: unknown) {
   const res = await fetch(`${BASE}${path}`, {
     method: 'DELETE',
     credentials: 'include',
+    ...(body !== undefined
+      ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      : {}),
   })
   return handleResponse(res)
 }

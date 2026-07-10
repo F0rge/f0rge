@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Download } from 'lucide-react'
 import { apiGetRaw, handleMutationError } from '@/lib/api/client'
-import { SettingsCard } from './settings-card'
+import { SettingsCard } from '@/components/settings/settings-card'
 
 export function ExportDataSection() {
   const [exporting, setExporting] = useState(false)

@@ -26,11 +26,11 @@ def _require_jwt_secret() -> str:
     return settings.jwt_secret
 
 
-def _hash_password(password: str) -> str:
+def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
-def _verify_password(password: str, password_hash: str) -> bool:
+def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
@@ -74,7 +74,7 @@ def clear_session_cookie(response: Response) -> None:
     response.delete_cookie(key=JWT_COOKIE_NAME)
 
 
-def _validate_password(password: str) -> None:
+def validate_password(password: str) -> None:
     if len(password) < MIN_PASSWORD_LENGTH:
         raise ValidationError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
 
@@ -90,13 +90,13 @@ class AuthService:
         password: str,
         response: Response,
     ) -> dict[str, object]:
-        _validate_password(password)
+        validate_password(password)
 
         existing = await self.crud.get_by_email(email)
         if existing is not None:
             raise ConflictError("Email already registered")
 
-        user = User(email=email, password_hash=_hash_password(password))
+        user = User(email=email, password_hash=hash_password(password))
         await self.crud.add_and_flush(user)
         await provision_user_catalogs(self.db, user.id)
         await self.crud.commit_refresh(user)
@@ -112,7 +112,7 @@ class AuthService:
         response: Response,
     ) -> dict[str, object]:
         user = await self.crud.get_by_email(email)
-        if user is None or not _verify_password(password, user.password_hash):
+        if user is None or not verify_password(password, user.password_hash):
             raise UnauthorizedError("Invalid email or password")
 
         token = create_access_token(user.id)

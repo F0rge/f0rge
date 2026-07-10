@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+import datetime
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
+
+class AccountResponse(BaseModel):
+    user_id: str
+    email: str
+    display_name: Optional[str] = None
+    created_at: datetime.datetime
+
+
+class AccountUpdate(BaseModel):
+    display_name: Optional[str] = Field(default=None, max_length=100)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+
+class AccountDeleteRequest(BaseModel):
+    password: str

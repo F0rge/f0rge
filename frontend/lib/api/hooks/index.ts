@@ -1,4 +1,5 @@
 export * from './auth'
+export * from './account'
 export * from './entries'
 export * from './photos'
 export * from './health-signals'

@@ -1,6 +1,7 @@
 export * from './entries'
 export * from './catalogs'
 export * from './auth'
+export * from './account'
 export * from './health-signals'
 export * from './treatments'
 export * from './insights'
