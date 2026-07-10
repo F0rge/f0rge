@@ -19,8 +19,15 @@ import { cn } from '@/lib/utils'
 import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
-const RADIUS = 18
+const RADIUS = 20
+const STROKE = 4
+const SIZE = 48
+const CENTER = SIZE / 2
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
+
+function formatProgressPct(pct: number): string {
+  return `${Math.round(Math.min(Math.max(pct, 0), 1) * 100)}%`
+}
 
 interface ProtocolCardProps extends CheckinCardCollapseProps {
   date: string
@@ -54,46 +61,65 @@ export function ProtocolCard({ date, collapsed, onToggleCollapsed }: ProtocolCar
       <CardContent className="p-0">
         <div
           className={cn(
-            'flex items-center gap-4 border-b border-border px-4 py-3',
+            'flex items-center gap-4 border-b border-border px-4 py-3.5',
             isComplete && 'bg-emerald-50/60 dark:bg-emerald-950/30',
           )}
         >
-          <svg viewBox="0 0 40 40" className="size-10 shrink-0 -rotate-90">
-            <circle
-              cx="20" cy="20" r={RADIUS}
-              fill="none" strokeWidth="4"
-              className="stroke-muted"
-            />
-            <circle
-              cx="20" cy="20" r={RADIUS}
-              fill="none" strokeWidth="4" strokeLinecap="round"
-              strokeDasharray={CIRCUMFERENCE}
-              strokeDashoffset={offset}
-              className={cn(
-                'transition-[stroke-dashoffset] duration-500',
-                isComplete
-                  ? 'stroke-emerald-600 dark:stroke-emerald-400'
-                  : 'stroke-teal-600 dark:stroke-teal-400',
+          <div className="relative size-12 shrink-0">
+            <svg
+              viewBox={`0 0 ${SIZE} ${SIZE}`}
+              className="size-full -rotate-90"
+              aria-hidden
+            >
+              <circle
+                cx={CENTER}
+                cy={CENTER}
+                r={RADIUS}
+                fill="none"
+                strokeWidth={STROKE}
+                className="stroke-muted-foreground/15"
+              />
+              <circle
+                cx={CENTER}
+                cy={CENTER}
+                r={RADIUS}
+                fill="none"
+                strokeWidth={STROKE}
+                strokeLinecap="round"
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={offset}
+                className={cn(
+                  'transition-[stroke-dashoffset] duration-500 ease-out',
+                  isComplete
+                    ? 'stroke-emerald-600 dark:stroke-emerald-400'
+                    : 'stroke-teal-600 dark:stroke-teal-400',
+                )}
+              />
+            </svg>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              {isComplete ? (
+                <Check className="size-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+              ) : (
+                <span className="text-[11px] font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                  {formatProgressPct(today.pct)}
+                </span>
               )}
-            />
-          </svg>
+            </div>
+          </div>
 
           <div className="min-w-0 flex-1">
             {isComplete ? (
               <p
                 className={cn(
-                  'flex items-center gap-1 text-sm font-medium text-emerald-600 dark:text-emerald-400',
+                  'text-sm font-medium text-emerald-600 dark:text-emerald-400',
                   'motion-safe:animate-in motion-safe:zoom-in-90 motion-safe:duration-300',
                 )}
               >
-                <Check className="size-4" />
                 Done for today
               </p>
             ) : (
               <>
-                <p className="text-sm font-medium text-teal-700 dark:text-teal-400">
-                  {today.doses_taken}/{today.doses_planned} doses
-                </p>
+                <p className="text-sm font-medium text-foreground">Today&apos;s doses</p>
                 {isHalfway && (
                   <p className="text-xs text-muted-foreground">Halfway there</p>
                 )}

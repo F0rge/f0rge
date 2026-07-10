@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete, handleMutationError } from '../client'
 import type {
@@ -7,7 +8,7 @@ import type {
   TreatmentCreate,
   TreatmentUpdate,
   ProtocolResponse,
-  TreatmentLogResponse,
+  TreatmentLogResult,
 } from '../types'
 
 export function useTreatments(activeOn?: string) {
@@ -69,10 +70,12 @@ export function useProtocol(date: string) {
 
 export function useLogDose(date: string) {
   const queryClient = useQueryClient()
+  const latestMutationSeq = useRef(0)
   return useMutation({
     mutationFn: ({ id, dosesTaken }: { id: number; dosesTaken: number }) =>
-      apiPut(`/treatments/${id}/log`, { date, doses_taken: dosesTaken }) as Promise<TreatmentLogResponse>,
+      apiPut(`/treatments/${id}/log`, { date, doses_taken: dosesTaken }) as Promise<TreatmentLogResult>,
     onMutate: async ({ id, dosesTaken }) => {
+      const seq = ++latestMutationSeq.current
       await queryClient.cancelQueries({ queryKey: ['protocol', date] })
       const prev = queryClient.getQueryData<ProtocolResponse>(['protocol', date])
       queryClient.setQueryData<ProtocolResponse>(['protocol', date], (old) => {
@@ -96,7 +99,19 @@ export function useLogDose(date: string) {
           },
         }
       })
-      return { prev }
+      return { prev, seq }
+    },
+    onSuccess: (result, _vars, context) => {
+      if (context?.seq !== latestMutationSeq.current) return
+      queryClient.setQueryData<ProtocolResponse>(['protocol', date], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          today: result.today,
+          streak: result.streak,
+          best_streak: result.best_streak,
+        }
+      })
     },
     onError: (err, _vars, context) => {
       if (context?.prev !== undefined) {
