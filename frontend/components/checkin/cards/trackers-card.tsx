@@ -1,17 +1,18 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   useTrackers,
   useEntryTrackerValues,
   useUpsertTrackerValue,
 } from '@/lib/api/hooks'
-import { TierPill } from '@/components/customize/tier-pill'
+import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
+import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 import { TrackerRow } from './components/TrackerRow'
 
 const SEEDED_NAMES = new Set(['Alcohol units', 'Caffeine servings', 'Sick', 'Hot shower'])
 
-interface TrackersCardProps {
+interface TrackersCardProps extends CheckinCardCollapseProps {
   alcoholUnits: number
   onAlcoholUnitsChange: (v: number) => void
   caffeineServings: number
@@ -31,6 +32,8 @@ export function TrackersCard({
   sick, onSickChange,
   hotShower, onHotShowerChange,
   date,
+  collapsed,
+  onToggleCollapsed,
 }: TrackersCardProps) {
   const { data: allTrackers = [] } = useTrackers(true)
   const { data: trackerValues = [] } = useEntryTrackerValues(date)
@@ -66,13 +69,14 @@ export function TrackersCard({
 
   return (
     <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Daily trackers
-          <TierPill tier="custom" />
-        </CardTitle>
-      </CardHeader>
+      <CheckinCardHeader
+        title="Daily trackers"
+        tier="custom"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
 
+      {!collapsed && (
       <CardContent className="p-0">
         {activeTrackers.length === 0 && (
           <p className="px-4 pb-4 text-sm text-muted-foreground">No trackers yet.</p>
@@ -99,6 +103,7 @@ export function TrackersCard({
           })}
         </ul>
       </CardContent>
+      )}
     </Card>
   )
 }

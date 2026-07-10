@@ -5,7 +5,7 @@ import { useSupplementCatalog } from '@/lib/api/hooks'
 import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, MedicationIntake, StoolStatus } from '@/lib/api/types'
-import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, type CardId } from '@/lib/checkin/card-order'
+import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, loadCollapsedCards, saveCollapsedCards, toggleCollapsedCard, type CardId, type CollapseId } from '@/lib/checkin/card-order'
 
 interface AutosaveFns {
   flush: () => void
@@ -50,6 +50,27 @@ export function useCheckinBoardState({
     )
   }, [])
 
+  const [collapsedCards, setCollapsedCards] = useState<CollapseId[]>([])
+  useEffect(() => {
+    const saved = loadCollapsedCards()
+    setCollapsedCards((prev) =>
+      prev.length === saved.length && prev.every((id, i) => id === saved[i]) ? prev : saved,
+    )
+  }, [])
+
+  const handleToggleCollapsed = useCallback((id: CollapseId) => {
+    setCollapsedCards((prev) => {
+      const next = toggleCollapsedCard(prev, id)
+      saveCollapsedCards(next)
+      return next
+    })
+  }, [])
+
+  const isCardCollapsed = useCallback(
+    (id: CollapseId) => collapsedCards.includes(id),
+    [collapsedCards],
+  )
+
   useEffect(() => {
     const handleFocus = () => {
       const savedOrder = loadCardOrder()
@@ -63,6 +84,12 @@ export function useCheckinBoardState({
         prev.length === savedHidden.length && prev.every((id, i) => id === savedHidden[i])
           ? prev
           : savedHidden,
+      )
+      const savedCollapsed = loadCollapsedCards()
+      setCollapsedCards((prev) =>
+        prev.length === savedCollapsed.length && prev.every((id, i) => id === savedCollapsed[i])
+          ? prev
+          : savedCollapsed,
       )
     }
     window.addEventListener('focus', handleFocus)
@@ -261,6 +288,9 @@ export function useCheckinBoardState({
   return {
     cardOrder,
     hiddenCards,
+    collapsedCards,
+    isCardCollapsed,
+    toggleCardCollapsed: handleToggleCollapsed,
     fivePoint,
     existingPhotos,
     setExistingPhotos,

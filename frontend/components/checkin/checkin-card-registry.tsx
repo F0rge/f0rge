@@ -15,17 +15,6 @@ import {
   NotesCard,
 } from './cards'
 
-export const CARD_COL_SPAN: Record<CardId, string> = {
-  food: 'col-span-12',
-  wellbeing: 'col-span-12 lg:col-span-4',
-  gut: 'col-span-12 lg:col-span-4',
-  supplements: 'col-span-12 lg:col-span-4',
-  medications: 'col-span-12 lg:col-span-6',
-  symptoms: 'col-span-12 lg:col-span-6',
-  trackers: 'col-span-12 lg:col-span-6',
-  notes: 'col-span-12 lg:col-span-6',
-}
-
 interface BuildCheckinCardRenderersOptions {
   date: string
   existingEntry?: Entry | null
@@ -39,6 +28,11 @@ export function buildCheckinCardRenderers({
   state,
   onOpenPhotoFocus,
 }: BuildCheckinCardRenderersOptions): Record<CardId, () => ReactNode> {
+  const collapseProps = (id: CardId) => ({
+    collapsed: state.isCardCollapsed(id),
+    onToggleCollapsed: () => state.toggleCardCollapsed(id),
+  })
+
   return {
     food: () => (
       <FoodCard
@@ -51,6 +45,7 @@ export function buildCheckinCardRenderers({
         ensureEntryExists={state.autosave.forceFlush}
         onEntryEnsured={state.markDirty}
         onOpenPhotoFocus={onOpenPhotoFocus}
+        {...collapseProps('food')}
       />
     ),
     wellbeing: () => (
@@ -64,6 +59,7 @@ export function buildCheckinCardRenderers({
         neuro={state.neuro}
         onNeuroChange={state.setNeuroDirty}
         fivePoint={state.fivePoint}
+        {...collapseProps('wellbeing')}
       />
     ),
     gut: () => (
@@ -78,6 +74,7 @@ export function buildCheckinCardRenderers({
         onStoolCompletenessChange={state.setStoolCompletenessDirty}
         jointPain={state.jointPain}
         onJointPainChange={state.setJointPainDirty}
+        {...collapseProps('gut')}
       />
     ),
     supplements: () => (
@@ -85,18 +82,21 @@ export function buildCheckinCardRenderers({
         value={state.supplements}
         onChange={state.handleSupplementChange}
         onTouched={state.handleSupplementTouched}
+        {...collapseProps('supplements')}
       />
     ),
     medications: () => (
       <MedicationsCard
         value={state.medications}
         onChange={state.setMedicationsDirty}
+        {...collapseProps('medications')}
       />
     ),
     symptoms: () => (
       <SymptomsCard
         value={state.symptomsJson}
         onChange={state.setSymptomsJsonDirty}
+        {...collapseProps('symptoms')}
       />
     ),
     trackers: () => (
@@ -110,6 +110,7 @@ export function buildCheckinCardRenderers({
         hotShower={state.hotShower}
         onHotShowerChange={state.setHotShowerDirty}
         date={date}
+        {...collapseProps('trackers')}
       />
     ),
     notes: () => (
@@ -117,6 +118,7 @@ export function buildCheckinCardRenderers({
         value={state.notes}
         onChange={state.setNotesDirty}
         onBlur={state.handleBlur}
+        {...collapseProps('notes')}
       />
     ),
   }
