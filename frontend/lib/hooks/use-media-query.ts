@@ -6,10 +6,8 @@ import { useEffect, useState } from 'react'
 export const LG_DESKTOP_QUERY = '(min-width: 1024px)'
 
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.matchMedia(query).matches
-  })
+  // Always false until mount so SSR and the first client render agree.
+  const [matches, setMatches] = useState(false)
 
   useEffect(() => {
     const mq = window.matchMedia(query)
