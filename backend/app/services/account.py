@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Callable
 from functools import partial
 
-from fastapi import Response
+from fastapi import Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crud.auth import UserCRUD
 from app.crud.labs import LabCRUD
 from app.crud.photos import PhotoCRUD
-from app.exceptions import UnauthorizedError, ValidationError
+from app.exceptions import NotFoundError, UnauthorizedError, ValidationError
 from app.models.user import User
 from app.schemas.account import (
     AccountDeleteRequest,
@@ -27,10 +28,27 @@ from app.services.auth import (
     validate_password,
     verify_password,
 )
+from app.services.avatar_storage import (
+    avatar_exists,
+    delete_avatar,
+    resize_avatar,
+    save_avatar,
+)
 from app.services.photo_storage import delete_photo
 from app.tenant import current_user_id
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_AVATAR_CONTENT_TYPES = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+    }
+)
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
 
 class AccountService:
@@ -44,6 +62,8 @@ class AccountService:
             user_id=str(user.id),
             email=user.email,
             display_name=user.display_name,
+            avatar_default_index=user.avatar_default_index,
+            has_custom_avatar=user.avatar_custom_filename is not None,
             created_at=user.created_at,
         )
 
@@ -63,6 +83,52 @@ class AccountService:
             user.display_name = (data.display_name or "").strip() or None
             user = await self.crud.commit_refresh(user)
         return self._to_response(user)
+
+    async def upload_avatar(self, file: UploadFile) -> AccountResponse:
+        user = await self._get_current_user()
+        content_type = file.content_type or ""
+        if content_type not in ALLOWED_AVATAR_CONTENT_TYPES:
+            raise ValidationError("Avatar must be a JPEG, PNG, WebP, or HEIC image")
+
+        raw_bytes = await file.read()
+        if not raw_bytes:
+            raise ValidationError("Avatar file is empty")
+        if len(raw_bytes) > MAX_AVATAR_BYTES:
+            raise ValidationError("Avatar must be 5 MB or smaller")
+
+        processed = await asyncio.to_thread(resize_avatar, raw_bytes)
+        relative_path = await asyncio.to_thread(save_avatar, processed, user_id=str(user.id))
+        user.avatar_custom_filename = relative_path
+        user = await self.crud.commit_refresh(user)
+        return self._to_response(user)
+
+    async def delete_avatar(self) -> AccountResponse:
+        user = await self._get_current_user()
+        if user.avatar_custom_filename is None:
+            return self._to_response(user)
+
+        await asyncio.to_thread(delete_avatar, user_id=str(user.id))
+        user.avatar_custom_filename = None
+        user = await self.crud.commit_refresh(user)
+        return self._to_response(user)
+
+    async def get_avatar_file_target(self) -> str:
+        user = await self._get_current_user()
+        if user.avatar_custom_filename is None:
+            raise NotFoundError("No custom avatar")
+        if not avatar_exists(user_id=str(user.id)):
+            raise NotFoundError("Avatar file not found")
+
+        presigned = object_storage.presigned_url_for_relative(
+            user.avatar_custom_filename,
+            user_id=str(user.id),
+        )
+        if presigned:
+            return presigned
+        return os.path.join(
+            os.path.abspath(settings.photo_dir),
+            user.avatar_custom_filename,
+        )
 
     async def change_password(self, data: PasswordChangeRequest) -> None:
         user = await self._get_current_user()
@@ -90,6 +156,7 @@ class AccountService:
             for ref in await LabCRUD(self.db).list_attachment_paths_for_user()
             if object_storage.is_remote_storage_ref(ref)
         }
+        had_custom_avatar = user.avatar_custom_filename is not None
 
         await self.crud.delete_and_commit(user)
         clear_session_cookie(response)
@@ -109,10 +176,15 @@ class AccountService:
                     exc_info=True,
                 )
 
-        await asyncio.gather(
+        cleanup_tasks = [
             *(
                 _delete_soft(partial(delete_photo, name, user_id=str(user_id)), name)
                 for name in filenames
             ),
             *(_delete_soft(partial(object_storage.delete_object, ref), ref) for ref in lab_refs),
-        )
+        ]
+        if had_custom_avatar:
+            cleanup_tasks.append(
+                _delete_soft(partial(delete_avatar, user_id=str(user_id)), "avatar")
+            )
+        await asyncio.gather(*cleanup_tasks)

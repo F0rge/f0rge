@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { SlidersHorizontal, UserRound } from 'lucide-react'
-import { useAccount } from '@/lib/api/hooks'
-import { getAccountInitials } from '@/lib/account-initials'
+import { UserAvatar } from '@/components/account/user-avatar'
 import { cn } from '@/lib/utils'
 
 const MENU_ITEM_CLASS =
@@ -15,7 +14,6 @@ export function ProfileMenu() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const account = useAccount()
 
   useEffect(() => {
     setOpen(false)
@@ -41,8 +39,6 @@ export function ProfileMenu() {
 
   if (pathname.startsWith('/login') || pathname.startsWith('/signup')) return null
 
-  const initials = account.data ? getAccountInitials(account.data) : '…'
-
   return (
     <div
       ref={menuRef}
@@ -55,12 +51,10 @@ export function ProfileMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          'flex size-9 items-center justify-center rounded-full border border-border',
-          'bg-background/88 text-xs font-semibold shadow-sm backdrop-blur-sm',
-          'transition-colors hover:bg-muted',
+          'overflow-hidden rounded-full shadow-sm transition-opacity hover:opacity-90',
         )}
       >
-        {initials}
+        <UserAvatar size="sm" />
       </button>
       {open && (
         <div

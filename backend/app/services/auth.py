@@ -12,6 +12,7 @@ from app.config import settings
 from app.crud.auth import UserCRUD
 from app.exceptions import ConflictError, UnauthorizedError, ValidationError
 from app.models.user import User
+from app.services.avatar_defaults import default_avatar_index
 from app.services.user_provisioning import provision_user_catalogs
 
 JWT_ALGORITHM = "HS256"
@@ -98,6 +99,7 @@ class AuthService:
 
         user = User(email=email, password_hash=hash_password(password))
         await self.crud.add_and_flush(user)
+        user.avatar_default_index = default_avatar_index(user.id)
         await provision_user_catalogs(self.db, user.id)
         await self.crud.commit_refresh(user)
 
