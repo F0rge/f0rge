@@ -82,19 +82,32 @@ jobs:
             const pull_number = context.payload.pull_request.number;
             const base = context.payload.pull_request.base.ref;
 
-            const query = `
-              query ($owner: String!, $repo: String!, $number: Int!) {
+            const threadsQuery = `
+              query ($owner: String!, $repo: String!, $number: Int!, $after: String) {
                 repository(owner: $owner, name: $repo) {
                   pullRequest(number: $number) {
-                    reviewThreads(first: 100) {
+                    reviewThreads(first: 100, after: $after) {
+                      pageInfo { hasNextPage endCursor }
                       nodes { isResolved path line comments(first: 1) { nodes { author { login } } } }
                     }
                   }
                 }
               }
             `;
-            const { repository } = await github.graphql(query, { owner, name: repo, number: pull_number });
-            const threads = repository.pullRequest.reviewThreads.nodes;
+            const threads = [];
+            let after = null;
+            while (true) {
+              const { repository } = await github.graphql(threadsQuery, {
+                owner,
+                name: repo,
+                number: pull_number,
+                after,
+              });
+              const { nodes, pageInfo } = repository.pullRequest.reviewThreads;
+              threads.push(...nodes);
+              if (!pageInfo.hasNextPage) break;
+              after = pageInfo.endCursor;
+            }
             const unresolved = threads.filter((t) => !t.isResolved);
 
             const reviews = await github.paginate(github.rest.pulls.listReviews, {
