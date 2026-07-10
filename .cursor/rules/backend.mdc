@@ -8,7 +8,7 @@ alwaysApply: false
 
 Target **Python 3.10** (no 3.11+ syntax). Package manager: **`uv`** (never pip). Lint/format: **`ruff`**.
 
-## Architecture: Router → Service → Dependency
+## Architecture: Router → Service/Orchestrator → CRUD
 
 ### Routers (`app/routers/`) — strictly thin
 
@@ -28,9 +28,17 @@ def create_thing(data: ThingCreate, service: ThingService = Depends(get_thing_se
 
 ### Services (`app/services/`)
 
-- All business logic lives here
+- All business logic lives here — validation, computation, domain exceptions
 - **Class-based services** are canonical: dependencies via `__init__`, injected via factory in `app/dependencies/`
-- Legacy module-level functions taking `db` as first arg — don't write new ones; convert when already touching the file
+- Services never touch the DB directly — persistence goes through a CRUD class (`self.crud`). No `select`/`db.add`/`db.execute` in service files (excluded: `feature_matrix` compute, LLM clients).
+- **Orchestrators** (`entry_orchestrator.py`, `food_analysis_orchestrator.py`) coordinate multiple services/CRUDs in a single transaction boundary. A class needing both services and CRUDs is an orchestrator.
+- Module-level functions taking `db` as first arg exist only where an external caller needs a plain callable (background tasks, `BackgroundTasks.add_task`, cross-service seams like `sync_seed_tracker_log_from_entry`) — don't write new ones otherwise.
+
+### CRUD (`app/crud/`)
+
+- One CRUD class per domain, subclassing `BaseCRUD` (or `CatalogItemCRUD` for user-scoped catalogs) in `app/crud/base.py`
+- CRUD owns all raw SQLAlchemy: `select`, `add`, `delete`, `flush`
+- Transactions: `unit_of_work(db)` from `app/crud/base.py` — commit-on-success/rollback-on-exception, autobegin-aware (`db.in_transaction()` branch; bare `db.begin()` raises on a request session that already ran the RLS `set_config` SELECT). Never call `db.commit()` outside it.
 
 ### Dependencies (`app/dependencies/`)
 
@@ -63,7 +71,7 @@ SQLAlchemy 2.0 style. Always include `id`, `created_at`. Use `__table_args__` wi
 
 ## New Code Order
 
-1. Schema → 2. Model (if new table) → 3. Service → 4. Dependency factory → 5. Router → 6. Register in `main.py`
+1. Schema → 2. Model (if new table) → 3. CRUD class → 4. Service → 5. Dependency factory → 6. Router → 7. Register in `main.py`
 
 ## Self-Verification Checklist
 
@@ -89,7 +97,7 @@ Self-review before every PR:
 3. **One class per file** for CRUD/Service/Model layers
 4. **Split large functions/classes** — extract when you need comments to explain sections
 5. **Let exceptions propagate** — don't catch just to re-raise
-6. **Use `session.begin()`** / `conditional_transaction` for DB ops — auto-commit/rollback
+6. **Use `unit_of_work(db)`** (`app/crud/base.py`) for DB writes — auto-commit/rollback, autobegin-aware
 7. **Consistent index strategy** — `__table_args__` with named indexes
 8. **Auto-format Alembic migrations**
 9. **Orchestrators coordinate services** — never mix services and CRUDs in one class
@@ -133,7 +141,7 @@ For deep backend work, delegate to the `fastapi-backend` sub-agent in `~/.cursor
 
 - **Domain exceptions:** `NotFoundError`, `ValidationError`, `ConflictError` from `app/exceptions.py` — mapped by global handlers in `app/main.py`. Never `HTTPException` in routers or services.
 - **API prefix:** `/api/v1`
-- **Auth cookie:** `ht_session` (PIN-based session)
+- **Auth cookie:** `ht_session` — JWT (email + password signup/login)
 - **Database:** Postgres via asyncpg — `DATABASE_URL` must use `postgresql+asyncpg://...` driver
 - **Key paths:**
   - Photo storage: `backend/photos/`
