@@ -141,31 +141,33 @@ export function AiSettingsSection() {
         </p>
       </div>
 
-      <ModelPicker
-        label="Analysis model"
-        options={LLM_MODELS}
-        currentModel={userSettings.data?.llm_model}
-        model={llmModel}
-        onModelChange={setLlmModel}
-        customModel={llmCustomModel}
-        onCustomModelChange={setLlmCustomModel}
-        useCustom={llmUseCustom}
-        onUseCustomChange={setLlmUseCustom}
-        customPlaceholder="e.g. mistralai/mistral-7b-instruct"
-      />
+      <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
+        <ModelPicker
+          label="Analysis model"
+          options={LLM_MODELS}
+          currentModel={userSettings.data?.llm_model}
+          model={llmModel}
+          onModelChange={setLlmModel}
+          customModel={llmCustomModel}
+          onCustomModelChange={setLlmCustomModel}
+          useCustom={llmUseCustom}
+          onUseCustomChange={setLlmUseCustom}
+          customPlaceholder="e.g. mistralai/mistral-7b-instruct"
+        />
 
-      <ModelPicker
-        label="Embedding model"
-        options={EMBEDDING_MODELS}
-        currentModel={userSettings.data?.embedding_model}
-        model={embeddingModel}
-        onModelChange={setEmbeddingModel}
-        customModel={embeddingCustomModel}
-        onCustomModelChange={setEmbeddingCustomModel}
-        useCustom={embeddingUseCustom}
-        onUseCustomChange={setEmbeddingUseCustom}
-        customPlaceholder="e.g. cohere/embed-v4"
-      />
+        <ModelPicker
+          label="Embedding model"
+          options={EMBEDDING_MODELS}
+          currentModel={userSettings.data?.embedding_model}
+          model={embeddingModel}
+          onModelChange={setEmbeddingModel}
+          customModel={embeddingCustomModel}
+          onCustomModelChange={setEmbeddingCustomModel}
+          useCustom={embeddingUseCustom}
+          onUseCustomChange={setEmbeddingUseCustom}
+          customPlaceholder="e.g. cohere/embed-v4"
+        />
+      </div>
 
       <p className="text-xs text-muted-foreground">
         Embeddings power future RAG / semantic search. The pipeline is not fully populated yet.
