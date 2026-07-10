@@ -6,6 +6,7 @@ import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, MedicationIntake, StoolStatus } from '@/lib/api/types'
 import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, loadCollapsedCards, saveCollapsedCards, toggleCollapsedCard, type CardId, type CollapseId } from '@/lib/checkin/card-order'
+import { LG_DESKTOP_QUERY, useMediaQuery } from '@/lib/hooks/use-media-query'
 
 interface AutosaveFns {
   flush: () => void
@@ -58,6 +59,8 @@ export function useCheckinBoardState({
     )
   }, [])
 
+  const isDesktop = useMediaQuery(LG_DESKTOP_QUERY)
+
   const handleToggleCollapsed = useCallback((id: CollapseId) => {
     setCollapsedCards((prev) => {
       const next = toggleCollapsedCard(prev, id)
@@ -67,8 +70,8 @@ export function useCheckinBoardState({
   }, [])
 
   const isCardCollapsed = useCallback(
-    (id: CollapseId) => collapsedCards.includes(id),
-    [collapsedCards],
+    (id: CollapseId) => !isDesktop && collapsedCards.includes(id),
+    [collapsedCards, isDesktop],
   )
 
   useEffect(() => {
