@@ -4,6 +4,7 @@ import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.base import unit_of_work
 from app.crud.entries import EntryCRUD
 from app.crud.trackers import TrackerCRUD
 from app.exceptions import ConflictError, NotFoundError, ValidationError
@@ -30,10 +31,15 @@ async def sync_seed_tracker_log_from_entry(
 ) -> None:
     """Upsert tracker_log rows for all seed trackers after an entry is saved.
 
-    Called by the entry service after every create/update (Path A) so that
-    tracker_log stays in sync with the legacy entry columns. Kept as a
+    Called by the entry orchestrator after every create/update (Path A) so
+    that tracker_log stays in sync with the legacy entry columns. Kept as a
     standalone function (not a TrackerService method) — it's a cross-service
     call made on the caller's session, not a request-scoped tracker operation.
+
+    Flushes only (never commits) — the caller owns the transaction, so the
+    entry write and the tracker-log sync land in the same commit-or-rollback
+    unit (#225 6.4: this used to commit on its own, leaving a half-written
+    entry persisted if the sync failed after the entry's own commit).
 
     Rules:
     - Counters (alcohol_units, caffeine_servings): skip when value is None or 0.
@@ -80,7 +86,7 @@ async def sync_seed_tracker_log_from_entry(
                 )
             )
 
-    await crud.commit()
+    await crud.flush()
 
 
 class TrackerService:
@@ -158,41 +164,47 @@ class TrackerService:
 
         existing = await self.crud.get_log(tracker_id, date)
 
+        # Tracker-log upsert + (for a seed tracker) the mirrored Entry column
+        # write are one logical operation -- both stage here and commit
+        # together in a single unit of work, not two separate commits.
         now = datetime.datetime.utcnow()
-        if existing is not None:
-            existing.value = value
-            existing.updated_at = now
-            log = await self.crud.commit_refresh(existing)
-        else:
-            log = TrackerLog(
-                user_id=current_user_id(),
-                tracker_id=tracker_id,
-                date=date,
-                value=value,
-                updated_at=now,
-            )
-            self.crud.add(log)
-            log = await self.crud.commit_refresh(log)
+        async with unit_of_work(self.db):
+            if existing is not None:
+                existing.value = value
+                existing.updated_at = now
+                log = existing
+            else:
+                log = TrackerLog(
+                    user_id=current_user_id(),
+                    tracker_id=tracker_id,
+                    date=date,
+                    value=value,
+                    updated_at=now,
+                )
+                self.crud.add(log)
 
-        # If the tracker is a seed, mirror the value back to the matching entry column.
-        # This handles Path B (direct PUT to tracker_values for a seeded tracker).
-        entry_col = _SEED_NAME_TO_ENTRY_COL.get(tracker.name)
-        if tracker.is_seed and entry_col:
-            await self._mirror_value_to_entry(date, entry_col, tracker.kind, value)
+            # If the tracker is a seed, mirror the value back to the matching entry
+            # column. This handles Path B (direct PUT to tracker_values for a seeded
+            # tracker).
+            entry_col = _SEED_NAME_TO_ENTRY_COL.get(tracker.name)
+            if tracker.is_seed and entry_col:
+                await self._stage_mirror_value_to_entry(date, entry_col, tracker.kind, value)
 
         return log
 
-    async def _mirror_value_to_entry(
+    async def _stage_mirror_value_to_entry(
         self,
         date: datetime.date,
         entry_col: str,
         kind: str,
         value: int,
     ) -> None:
-        """Write a tracker value back to the corresponding Entry column.
+        """Write a tracker value back to the corresponding Entry column -- staged only,
+        caller owns the transaction.
 
-        Skips silently when no entry row exists for the date — the entry service
-        will call sync_seed_tracker_log_from_entry when the entry is created.
+        Skips silently when no entry row exists for the date — the entry
+        orchestrator will call sync_seed_tracker_log_from_entry when the entry
+        is created.
         """
         entry = await EntryCRUD(self.db).get_by_date(date)
         if entry is None:
@@ -202,5 +214,3 @@ class TrackerService:
             setattr(entry, entry_col, bool(value))
         else:
             setattr(entry, entry_col, value)
-
-        await self.crud.commit()

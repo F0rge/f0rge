@@ -147,9 +147,8 @@ class MealService:
         # 5. Commit; on failure remove the just-copied file so the next filename
         #    scan doesn't collide with an orphan (mirrors upload's cleanup).
         try:
-            await self.photo_crud.commit()
+            await self.photo_crud.save()
         except Exception:
             await asyncio.to_thread(delete_photo, new_filename, user_id=user_id_str)
             raise
-        await self.photo_crud.refresh(new_photo)
         return new_photo

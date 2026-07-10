@@ -22,4 +22,4 @@ class SymptomCatalogCRUD(CatalogItemCRUD[SymptomCatalogItem]):
                 .where(SymptomCatalogItem.key == key)
                 .values(sort_order=idx)
             )
-        await self.db.commit()
+        await self.save()

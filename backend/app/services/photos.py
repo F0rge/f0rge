@@ -119,11 +119,10 @@ class PhotoService:
         # doesn't collide with a phantom on disk.
         self.crud.add(photo)
         try:
-            await self.crud.commit()
+            await self.crud.save()
         except Exception:
             await asyncio.to_thread(delete_photo, filename, user_id=str(current_user_id()))
             raise
-        await self.crud.refresh(photo)
 
         # Queue analysis when enabled and credentials resolve (env or BYOK).
         # Credential resolution must not fail the upload — the photo is already persisted.

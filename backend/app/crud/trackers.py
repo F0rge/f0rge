@@ -62,7 +62,7 @@ class TrackerCRUD(BaseCRUD):
             await self.db.execute(
                 update(Tracker).where(Tracker.id == tracker_id).values(position=idx + seed_count)
             )
-        await self.db.commit()
+        await self.save()
 
     async def list_seed_trackers(self) -> list[Tracker]:
         stmt = select(Tracker).where(owned_by_user(Tracker.user_id), Tracker.is_seed.is_(True))

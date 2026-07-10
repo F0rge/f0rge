@@ -63,7 +63,6 @@ class LabMarkerCatalogService:
             description=data.description,
         )
         await self.crud.add_and_flush(item)
-        await self.crud.refresh(item)
         return item
 
     async def add_alias(
@@ -85,7 +84,6 @@ class LabMarkerCatalogService:
             language=language,
         )
         await self.crud.add_and_flush(alias_obj)
-        await self.crud.refresh(alias_obj)
         return alias_obj
 
     async def resolve_or_create(
@@ -120,7 +118,6 @@ class LabMarkerCatalogService:
             common_units=units or [],
         )
         await self.crud.add_and_flush(item)
-        await self.crud.refresh(item)
 
         if normalized_input != canonical:
             alias_obj = LabMarkerAlias(

@@ -182,9 +182,6 @@ class EntryService:
         entry.period_of_day = _period_of_day(now)
         return entry
 
-    async def commit_entry(self, entry: Entry) -> Entry:
-        return await self.crud.commit_refresh(entry)
-
     async def list_entries(self, month: Optional[str] = None) -> list[EntryResponse]:
         start: Optional[datetime.date] = None
         end: Optional[datetime.date] = None

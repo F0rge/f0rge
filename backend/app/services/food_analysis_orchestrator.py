@@ -64,7 +64,7 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
                     existing.status = "failed"
                     existing.error_message = "LLM API key not configured"
                     existing.model_id = model
-                await analysis_crud.commit()
+                await analysis_crud.save()
                 return
 
             # Reuse a pending record or skip if already running/finished.
@@ -142,7 +142,7 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
                 ingredient_crud.add(ingredient)
 
             analysis.status = "needs_review" if analysis_needs_review(vision_result) else "complete"
-            await analysis_crud.commit()
+            await analysis_crud.save()
 
             logger.info(
                 "Analysis complete for photo %d: %s (%d ingredients)",
@@ -164,7 +164,7 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
                         # Store only a short human-readable summary so the UI doesn't
                         # display a raw multi-line stack trace.
                         fresh.error_message = f"{type(e).__name__}: {str(e)[:200]}"
-                        await crud.commit()
+                        await crud.save()
             except Exception:
                 logger.exception("Failed to update analysis status for photo %d", photo_id)
 

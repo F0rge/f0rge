@@ -4,6 +4,7 @@ import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.base import unit_of_work
 from app.models.entry import Entry
 from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
 from app.services.entries import EntryService, _build_response
@@ -14,15 +15,15 @@ from app.services.trackers import sync_seed_tracker_log_from_entry
 
 
 class EntryOrchestrator:
-    """Coordinates entry persistence with its collaborators (Rule 9.2 / 9.3).
+    """Coordinates entry persistence with its collaborators (Rule 9.2 / 9.3;
+    transaction boundary per Rule 6 / #225 6.4).
 
-    ``create_entry``/``update_entry`` used to mix Entry persistence with catalog
-    touches and tracker-log sync inside ``EntryService`` itself. This pulls that
-    coordination out one level: ``EntryService`` now only stages/commits the
-    Entry row, and this class sequences the catalog touches + tracker sync
-    around it on the shared session. Commit boundary is unchanged from before
-    (catalog touches land in the same commit as the entry write) -- #225 will
-    revisit transaction ownership, not this batch.
+    ``create_entry``/``update_entry`` mix Entry persistence with catalog
+    touches and tracker-log sync. All three used to land in *two* separate
+    commits (entry write, then a second commit inside the tracker sync) --
+    a tracker-sync failure left a half-written entry persisted. Now the whole
+    sequence (stage entry -> touch catalogs -> stage tracker sync) runs inside
+    one ``unit_of_work``: it all commits together or rolls back together.
     """
 
     def __init__(self, db: AsyncSession) -> None:
@@ -38,15 +39,23 @@ class EntryOrchestrator:
         )
 
     async def create_entry(self, body: EntryCreate) -> EntryResponse:
-        entry = await self.entry_service.stage_create(body)
-        await self._touch_catalogs(entry)
-        entry = await self.entry_service.commit_entry(entry)
-        await sync_seed_tracker_log_from_entry(self.db, entry)
+        async with unit_of_work(self.db):
+            entry = await self.entry_service.stage_create(body)
+            await self._touch_catalogs(entry)
+            await sync_seed_tracker_log_from_entry(self.db, entry)
+        # Unlike every other write path, this one genuinely needs a refresh:
+        # ``entry`` was *constructed*, never loaded via a SELECT, so the
+        # mapper's ``lazy="selectin"`` companion query for ``photos`` (which
+        # _build_response reads) never fired. Without this, the first bare
+        # ``entry.photos`` access below is an implicit lazy-load outside the
+        # asyncpg greenlet bridge -> ``MissingGreenlet``. ``refresh()`` reloads
+        # it safely because it's awaited (#225 6.5's "keep it when in doubt").
+        await self.db.refresh(entry)
         return _build_response(entry)
 
     async def update_entry(self, date: datetime.date, body: EntryUpdate) -> EntryResponse:
-        entry = await self.entry_service.stage_update(date, body)
-        await self._touch_catalogs(entry)
-        entry = await self.entry_service.commit_entry(entry)
-        await sync_seed_tracker_log_from_entry(self.db, entry)
+        async with unit_of_work(self.db):
+            entry = await self.entry_service.stage_update(date, body)
+            await self._touch_catalogs(entry)
+            await sync_seed_tracker_log_from_entry(self.db, entry)
         return _build_response(entry)

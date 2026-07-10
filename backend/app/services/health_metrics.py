@@ -85,7 +85,7 @@ class HealthMetricsService:
                 self.crud.add(record)
             upserted += 1
 
-        await self.crud.commit()
+        await self.crud.save()
         return {"status": "ok", "dates_upserted": upserted}
 
     async def get_health_metric(self, date: datetime.date) -> HealthMetric:
