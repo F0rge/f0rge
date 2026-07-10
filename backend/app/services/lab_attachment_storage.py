@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.exceptions import ValidationError
 from app.services import object_storage
+from app.tenant import current_user_id
 
 _ALLOWED_MIMES: dict[str, str] = {
     "application/pdf": "pdf",
@@ -34,10 +35,11 @@ class LabAttachmentStorage:
         relative_path = f"lab_attachments/{month_dir}/{dest_filename}"
 
         if object_storage.object_storage_enabled():
-            key = object_storage.build_object_key(relative_path)
+            user_id = str(current_user_id())
+            key = object_storage.build_object_key(relative_path, user_id=user_id)
             if object_storage.object_exists(key):
                 return key
-            return object_storage.save_bytes(relative_path, file_bytes)
+            return object_storage.save_bytes(relative_path, file_bytes, user_id=user_id)
 
         storage_dir = os.path.join(_STORAGE_ROOT, month_dir)
         os.makedirs(storage_dir, exist_ok=True)

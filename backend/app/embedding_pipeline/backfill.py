@@ -49,7 +49,9 @@ async def _enqueue_missing(table_name: str, model: str, dry_run: bool, user_id: 
         WHERE emb.id IS NULL
           AND NOT EXISTS (
             SELECT 1 FROM embedding_queue q
-            WHERE q.source_table = '{table_name}' AND q.source_id = src.id
+            WHERE q.source_table = '{table_name}'
+              AND q.source_id = src.id
+              AND q.user_id = src.user_id
           )
         """
     )
@@ -65,7 +67,9 @@ async def _enqueue_missing(table_name: str, model: str, dry_run: bool, user_id: 
         WHERE emb.id IS NULL
           AND NOT EXISTS (
             SELECT 1 FROM embedding_queue q
-            WHERE q.source_table = '{table_name}' AND q.source_id = src.id
+            WHERE q.source_table = '{table_name}'
+              AND q.source_id = src.id
+              AND q.user_id = src.user_id
           )
         """
     )

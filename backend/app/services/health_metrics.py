@@ -3,16 +3,19 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+import uuid
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth_context import user_id_ctx
 from app.config import settings
 from app.exceptions import NotFoundError, UnauthorizedError
 from app.models.health_metrics import HealthMetric
 from app.services.auth import decode_access_token
 from app.services.health_import import parse_health_auto_export
+from app.tenant import apply_session_user_id, current_user_id, owned_by_user
 
 _logger = logging.getLogger("health_import_debug")
 
@@ -30,12 +33,17 @@ async def validate_health_import_auth(
     if authorization and authorization.startswith("Bearer "):
         token = authorization[7:]
         if settings.health_import_token and token == settings.health_import_token:
+            user_id = uuid.UUID(settings.default_storage_user_id)
+            user_id_ctx.set(user_id)
+            await apply_session_user_id(_db, user_id)
             return
 
     # Try session cookie (JWT)
     if ht_session:
         try:
-            decode_access_token(ht_session)
+            user_id = decode_access_token(ht_session)
+            user_id_ctx.set(user_id)
+            await apply_session_user_id(_db, user_id)
             return
         except UnauthorizedError:
             pass
@@ -59,17 +67,23 @@ async def import_health_data(db: AsyncSession, body: dict) -> dict:
 
     parsed = parse_health_auto_export(body)
     upserted = 0
+    user_id = current_user_id()
 
     for date_key, metric_create in parsed.items():
         existing = (
-            await db.execute(select(HealthMetric).where(HealthMetric.date == metric_create.date))
+            await db.execute(
+                select(HealthMetric).where(
+                    owned_by_user(HealthMetric.user_id),
+                    HealthMetric.date == metric_create.date,
+                )
+            )
         ).scalar_one_or_none()
         if existing:
             update_data = metric_create.model_dump(exclude={"date"}, exclude_none=True)
             for field, value in update_data.items():
                 setattr(existing, field, value)
         else:
-            record = HealthMetric(**metric_create.model_dump())
+            record = HealthMetric(user_id=user_id, **metric_create.model_dump())
             db.add(record)
         upserted += 1
 
