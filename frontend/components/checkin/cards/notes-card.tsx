@@ -1,25 +1,29 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { NotesInput } from '@/components/checkin/notes-input'
+import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
+import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
-interface NotesCardProps {
+interface NotesCardProps extends CheckinCardCollapseProps {
   value: string
   onChange: (v: string) => void
   onBlur: () => void
 }
 
-export function NotesCard({ value, onChange, onBlur }: NotesCardProps) {
+export function NotesCard({ value, onChange, onBlur, collapsed, onToggleCollapsed }: NotesCardProps) {
   return (
     <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Notes
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <NotesInput value={value} onChange={onChange} onBlur={onBlur} />
-      </CardContent>
+      <CheckinCardHeader
+        title="Notes"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
+      {!collapsed && (
+        <CardContent>
+          <NotesInput value={value} onChange={onChange} onBlur={onBlur} />
+        </CardContent>
+      )}
     </Card>
   )
 }

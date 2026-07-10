@@ -1,10 +1,11 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { ScaleInput } from '@/components/checkin/scale-input'
-import { TierPill } from '@/components/customize/tier-pill'
+import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
+import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
-interface WellbeingCardProps {
+interface WellbeingCardProps extends CheckinCardCollapseProps {
   overall: number
   onOverallChange: (v: number) => void
   sleepQuality: number
@@ -25,15 +26,18 @@ export function WellbeingCard({
   stress, onStressChange,
   neuro, onNeuroChange,
   fivePoint,
+  collapsed,
+  onToggleCollapsed,
 }: WellbeingCardProps) {
   return (
     <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Wellbeing
-          <TierPill tier="core" />
-        </CardTitle>
-      </CardHeader>
+      <CheckinCardHeader
+        title="Wellbeing"
+        tier="core"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
+      {!collapsed && (
       <CardContent className="space-y-5">
         <ScaleInput
           label="How was your day?"
@@ -121,6 +125,7 @@ export function WellbeingCard({
           }
         />
       </CardContent>
+      )}
     </Card>
   )
 }

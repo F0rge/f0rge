@@ -12,19 +12,21 @@
 
 import Link from 'next/link'
 import { Check, Flame } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { useProtocol, useLogDose } from '@/lib/api/hooks'
 import type { ProtocolItem } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
+import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
+import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
 const RADIUS = 18
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
-interface ProtocolCardProps {
+interface ProtocolCardProps extends CheckinCardCollapseProps {
   date: string
 }
 
-export function ProtocolCard({ date }: ProtocolCardProps) {
+export function ProtocolCard({ date, collapsed, onToggleCollapsed }: ProtocolCardProps) {
   const { data: protocol } = useProtocol(date)
   const logDose = useLogDose(date)
 
@@ -42,12 +44,13 @@ export function ProtocolCard({ date }: ProtocolCardProps) {
 
   return (
     <Card className="col-span-12 h-full">
-      <CardHeader>
-        <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Today&apos;s Protocol
-        </CardTitle>
-      </CardHeader>
+      <CheckinCardHeader
+        title="Today's Protocol"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
 
+      {!collapsed && (
       <CardContent className="p-0">
         <div
           className={cn(
@@ -137,6 +140,7 @@ export function ProtocolCard({ date }: ProtocolCardProps) {
           </Link>
         </div>
       </CardContent>
+      )}
     </Card>
   )
 }

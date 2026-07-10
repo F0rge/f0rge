@@ -1,26 +1,34 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { SymptomPicker } from '@/components/checkin/symptom-picker'
-import { TierPill } from '@/components/customize/tier-pill'
+import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
+import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
-interface SymptomsCardProps {
+interface SymptomsCardProps extends CheckinCardCollapseProps {
   value: Record<string, number>
   onChange: (v: Record<string, number>) => void
 }
 
-export function SymptomsCard({ value, onChange }: SymptomsCardProps) {
+export function SymptomsCard({
+  value,
+  onChange,
+  collapsed,
+  onToggleCollapsed,
+}: SymptomsCardProps) {
   return (
     <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Symptoms today
-          <TierPill tier="custom" />
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <SymptomPicker value={value} onChange={onChange} />
-      </CardContent>
+      <CheckinCardHeader
+        title="Symptoms today"
+        tier="custom"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
+      {!collapsed && (
+        <CardContent>
+          <SymptomPicker value={value} onChange={onChange} />
+        </CardContent>
+      )}
     </Card>
   )
 }
