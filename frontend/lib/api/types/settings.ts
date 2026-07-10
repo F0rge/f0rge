@@ -15,7 +15,7 @@ export interface LLMSettingsUpdate {
 
 export interface EmbeddingSettingsUpdate {
   embedding_provider?: string
-  embedding_model?: string
+  embedding_model?: string | null
 }
 
 export interface TestConnectionResponse {
