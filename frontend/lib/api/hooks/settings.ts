@@ -10,10 +10,12 @@ import type {
   ExternalTokenResponse,
 } from '../types'
 
-export function useUserSettings() {
+export function useUserSettings(options?: { enabled?: boolean }) {
   return useQuery<UserSettings>({
     queryKey: ['settings'],
     queryFn: () => apiGet('/settings'),
+    enabled: options?.enabled ?? true,
+    retry: false,
   })
 }
 
@@ -65,6 +67,16 @@ export function useRevokeExternalToken() {
   const queryClient = useQueryClient()
   return useMutation<UserSettings, ApiError, void>({
     mutationFn: () => apiPost('/settings/external-token/revoke', {}) as Promise<UserSettings>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+}
+
+export function useCompleteOnboarding() {
+  const queryClient = useQueryClient()
+  return useMutation<UserSettings, ApiError, void>({
+    mutationFn: () => apiPost('/settings/onboarding/complete', {}) as Promise<UserSettings>,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },

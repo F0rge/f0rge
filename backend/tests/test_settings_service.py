@@ -27,6 +27,7 @@ async def test_get_returns_defaults_when_no_row(async_db: AsyncSession) -> None:
     assert resp.llm_provider == "openrouter"
     assert resp.has_api_key is False
     assert resp.has_external_api_token is False
+    assert resp.onboarding_completed is False
 
 
 async def test_update_llm_stores_key_encrypted(async_db: AsyncSession) -> None:

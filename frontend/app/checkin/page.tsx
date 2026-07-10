@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Loader2 } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
+import { PageHeader } from '@/components/layout/page-header'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { FetchError } from '@/components/shared/fetch-error'
 import { useEntry } from '@/lib/api/hooks'
@@ -76,11 +77,13 @@ export default function CheckinPage() {
         sentinelRef={headerRef}
         hidden={isLoading}
       />
-      <div className="mx-auto w-full max-w-7xl p-4 lg:px-8">
-      <div ref={headerRef} className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight">Check-in</h1>
-        <p className="text-sm text-muted-foreground">{formatDisplayDate(today)}</p>
-      </div>
+      <div className="mx-auto w-full max-w-7xl px-4 pb-4 pt-[calc(16px+env(safe-area-inset-top))] lg:px-8">
+      <PageHeader
+        headerRef={headerRef}
+        data-tour="checkin-header"
+        title="Check-in"
+        subtitle={formatDisplayDate(today)}
+      />
 
       {isError ? (
         <FetchError

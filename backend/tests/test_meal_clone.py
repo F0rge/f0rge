@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime
 import io
 import os
+import uuid
 
 import pytest
 import pytest_asyncio
@@ -30,6 +31,7 @@ from app.models.photo_ingredient import PhotoIngredient
 from app.services.diet_flags import compute_photo_signal
 from app.services.meals import MealService
 from app.services.photo_storage import delete_photo, save_photo
+from tests.conftest import authed_user_id
 
 
 @pytest_asyncio.fixture
@@ -56,12 +58,21 @@ def _jpg_bytes(color: str = "blue") -> bytes:
 
 
 async def _ensure_entry(
-    db: AsyncSession, day: datetime.date, *, diet_risk: str = "", overall: int = 0
+    db: AsyncSession,
+    day: datetime.date,
+    *,
+    user_id: uuid.UUID | None = None,
+    diet_risk: str = "",
+    overall: int = 0,
 ) -> Entry:
-    existing = (await db.execute(select(Entry).where(Entry.date == day))).scalar_one_or_none()
+    uid = user_id or uuid.UUID(settings.default_storage_user_id)
+    existing = (
+        await db.execute(select(Entry).where(Entry.user_id == uid, Entry.date == day))
+    ).scalar_one_or_none()
     if existing is not None:
         return existing
     entry = Entry(
+        user_id=uid,
         date=day,
         overall=overall,
         bloating=0,
@@ -95,8 +106,9 @@ async def _add_meal(
 ) -> Photo:
     """Create a Photo + PhotoAnalysis + one PhotoIngredient, writing the file to disk."""
     if write_file:
-        save_photo(_jpg_bytes(color), filename)
+        save_photo(_jpg_bytes(color), filename, user_id=str(entry.user_id))
     photo = Photo(
+        user_id=entry.user_id,
         entry_id=entry.id,
         filename=filename,
         label="Lunch",
@@ -106,6 +118,7 @@ async def _add_meal(
     db.add(photo)
     await db.flush()
     analysis = PhotoAnalysis(
+        user_id=entry.user_id,
         photo_id=photo.id,
         status=status,
         dish_name=dish_name,
@@ -118,6 +131,7 @@ async def _add_meal(
     await db.flush()
     db.add(
         PhotoIngredient(
+            user_id=entry.user_id,
             analysis_id=analysis.id,
             name="Feta",
             canonical_name="feta cheese",
@@ -406,7 +420,8 @@ async def test_clone_never_invokes_vision_client(
 async def test_clone_endpoint_returns_201_photo_response(
     async_db: AsyncSession, storage, authed_client: AsyncClient
 ) -> None:
-    src_entry = await _ensure_entry(async_db, SRC_DAY)
+    user_id = await authed_user_id(authed_client)
+    src_entry = await _ensure_entry(async_db, SRC_DAY, user_id=user_id)
     src = await _add_meal(async_db, src_entry, f"{SRC_DAY}_photo-1.jpg")
 
     resp = await authed_client.post(
@@ -423,7 +438,8 @@ async def test_clone_endpoint_returns_201_photo_response(
 async def test_clone_endpoint_strips_meal_time_tz(
     async_db: AsyncSession, storage, authed_client: AsyncClient
 ) -> None:
-    src_entry = await _ensure_entry(async_db, SRC_DAY)
+    user_id = await authed_user_id(authed_client)
+    src_entry = await _ensure_entry(async_db, SRC_DAY, user_id=user_id)
     src = await _add_meal(async_db, src_entry, f"{SRC_DAY}_photo-1.jpg")
 
     # 14:30 at +02:00 == 12:30 UTC; stored naive-UTC, no offset in the response.

@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { TrackerFormModal } from '@/components/customize/tracker-form-modal'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 import {
   SortableTrackerRow,
   GhostRow,
@@ -123,29 +124,30 @@ export default function TrackersClient() {
 
   return (
     <PageShell>
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <Link
-          href="/customize"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Customize
-        </Link>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5 text-xs"
-          onClick={handleOpenCreate}
-        >
-          <Plus className="size-3.5" />
-          New tracker
-        </Button>
-      </div>
-
-      <div className="mb-4">
-        <h1 className="text-xl font-semibold tracking-tight">Custom trackers</h1>
-      </div>
+      <PageHeader
+        className="mb-4"
+        leading={
+          <Link
+            href="/customize"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Customize
+          </Link>
+        }
+        title="Custom trackers"
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={handleOpenCreate}
+          >
+            <Plus className="size-3.5" />
+            New tracker
+          </Button>
+        }
+      />
 
       <TierBanner tier="custom">
         Add, edit, archive, and reorder your personal trackers. Drag rows to set the

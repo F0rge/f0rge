@@ -9,7 +9,7 @@ from app.dependencies.treatment_log import get_treatment_log_service
 from app.dependencies.treatments import get_treatment_service
 from app.middleware.auth import get_current_session
 from app.schemas.treatment import TreatmentCreate, TreatmentResponse, TreatmentUpdate
-from app.schemas.treatment_log import ProtocolResponse, TreatmentLogResponse, TreatmentLogUpdate
+from app.schemas.treatment_log import ProtocolResponse, TreatmentLogResult, TreatmentLogUpdate
 from app.services.treatment_log import TreatmentLogService
 from app.services.treatments import TreatmentService
 
@@ -63,7 +63,7 @@ async def update_treatment(
     return await service.update(treatment_id, body)
 
 
-@router.put("/{treatment_id}/log", response_model=TreatmentLogResponse)
+@router.put("/{treatment_id}/log", response_model=TreatmentLogResult)
 async def log_treatment_dose(
     treatment_id: int,
     body: TreatmentLogUpdate,

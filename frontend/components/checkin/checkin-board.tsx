@@ -8,10 +8,12 @@
  * cards in ht.cards-v2.hidden filtered out.
  */
 
+import { useMemo } from 'react'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry } from '@/lib/api/types'
+import { computeCardColSpans } from '@/lib/checkin/compute-card-col-spans'
 import { ProtocolCard } from './cards'
-import { buildCheckinCardRenderers, CARD_COL_SPAN } from './checkin-card-registry'
+import { buildCheckinCardRenderers } from './checkin-card-registry'
 import { useCheckinBoardState } from './use-checkin-board-state'
 
 interface AutosaveFns {
@@ -50,18 +52,27 @@ export function CheckinBoard({
     onOpenPhotoFocus,
   })
 
+  const visibleIds = useMemo(
+    () => state.cardOrder.filter((id) => !state.hiddenCards.includes(id)),
+    [state.cardOrder, state.hiddenCards],
+  )
+
+  const colSpans = useMemo(() => computeCardColSpans(visibleIds), [visibleIds])
+
   return (
     <div className="space-y-4 pb-8">
       <div className="grid grid-cols-12 gap-4 auto-rows-min">
-        <ProtocolCard date={date} />
+        <ProtocolCard
+          date={date}
+          collapsed={state.isCardCollapsed('protocol')}
+          onToggleCollapsed={() => state.toggleCardCollapsed('protocol')}
+        />
 
-        {state.cardOrder
-          .filter((id) => !state.hiddenCards.includes(id))
-          .map((id) => (
-            <div key={id} className={CARD_COL_SPAN[id]}>
-              {cardRenderers[id]()}
-            </div>
-          ))}
+        {visibleIds.map((id) => (
+          <div key={id} className={colSpans[id]} data-tour={`checkin-${id}`}>
+            {cardRenderers[id]()}
+          </div>
+        ))}
       </div>
     </div>
   )

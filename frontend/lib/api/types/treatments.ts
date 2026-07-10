@@ -57,6 +57,13 @@ export interface TreatmentLogResponse {
   updated_at: string
 }
 
+export interface TreatmentLogResult {
+  log: TreatmentLogResponse
+  today: ProtocolToday
+  streak: number
+  best_streak: number
+}
+
 export interface ProtocolItem {
   id: number
   name: string

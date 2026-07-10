@@ -67,7 +67,7 @@ Backfill is idempotent — re-running it on already-embedded rows is a no-op at 
 
 ## Troubleshooting
 
-- **Worker logs "permission denied for table embedding"** — the worker is connecting as the wrong role. It must use the read-write `DATABASE_URL` (role `health`), not the read-only `MCP_READONLY_DATABASE_URL` (role `healthtracker_ro`). Check the `embedding-worker` service env in `docker-compose.prod.yml`.
+- **Worker logs "permission denied for table embedding"** — the worker is connecting as the wrong role. It must use the read-write `DATABASE_URL` (role `healthtracker_app`), not the read-only `MCP_READONLY_DATABASE_URL` (role `healthtracker_ro`). Check the `embedding-worker` service env in `docker-compose.prod.yml`.
 - **Queue rows stuck with `attempts >= 5`** — check the `last_error` column on the queue row:
   ```sql
   SELECT id, source_table, source_id, attempts, last_error

@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { CalendarView } from '@/components/history/calendar-view'
 import { EntryCard } from '@/components/history/entry-card'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 import { FetchError } from '@/components/shared/fetch-error'
 import { useEntries } from '@/lib/api/hooks'
 
@@ -52,9 +53,7 @@ function HistoryContent() {
 
   return (
     <PageShell>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight">History</h1>
-      </div>
+      <PageHeader title="History" />
 
       <div className="mb-4 flex items-center justify-between">
         <button
@@ -82,7 +81,7 @@ function HistoryContent() {
         </div>
       ) : (
         <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 lg:col-span-7">
+          <div className="col-span-12 lg:col-span-7" data-tour="history-calendar">
             <CalendarView
               month={month}
               entries={entries ?? []}

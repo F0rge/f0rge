@@ -240,6 +240,7 @@ export function BottomNav() {
     <nav
       ref={barRef}
       aria-label="Primary"
+      data-tour="bottom-nav"
       className={cn(
         'fixed bottom-[calc(20px+env(safe-area-inset-bottom))] left-1/2 z-50 flex',
         'w-3/4 max-w-[400px] -translate-x-1/2 items-stretch rounded-[22px]',

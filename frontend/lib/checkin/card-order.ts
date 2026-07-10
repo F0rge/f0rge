@@ -6,6 +6,7 @@
 
 const STORAGE_KEY = 'ht.cards-v2.order'
 const HIDDEN_KEY = 'ht.cards-v2.hidden'
+const COLLAPSED_KEY = 'ht.cards-v2.collapsed'
 
 export type CardId =
   | 'food'
@@ -17,6 +18,9 @@ export type CardId =
   | 'trackers'
   | 'notes'
 
+/** Cards that support on-page collapse (includes pinned Protocol). */
+export type CollapseId = CardId | 'protocol'
+
 export const DEFAULT_CARD_ORDER: readonly CardId[] = [
   'food',
   'wellbeing',
@@ -27,6 +31,8 @@ export const DEFAULT_CARD_ORDER: readonly CardId[] = [
   'trackers',
   'notes',
 ]
+
+const KNOWN_COLLAPSE_IDS = new Set<string>([...DEFAULT_CARD_ORDER, 'protocol'])
 
 const KNOWN_IDS = new Set<string>(DEFAULT_CARD_ORDER)
 
@@ -131,4 +137,35 @@ export function hasHiddenCards(): boolean {
     // Intentional swallow — same reasoning as loadCardOrder above.
     return false
   }
+}
+
+// ── Collapsed cards (on-page hide, distinct from customize hidden) ───────────
+
+export function loadCollapsedCards(): CollapseId[] {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const raw = localStorage.getItem(COLLAPSED_KEY)
+    if (!raw) return []
+
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+
+    return parsed.filter(
+      (id): id is CollapseId => typeof id === 'string' && KNOWN_COLLAPSE_IDS.has(id),
+    )
+  } catch {
+    return []
+  }
+}
+
+export function saveCollapsedCards(collapsed: CollapseId[]): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsed))
+}
+
+export function toggleCollapsedCard(collapsed: CollapseId[], id: CollapseId): CollapseId[] {
+  return collapsed.includes(id)
+    ? collapsed.filter((c) => c !== id)
+    : [...collapsed, id]
 }

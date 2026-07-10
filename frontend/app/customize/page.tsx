@@ -3,6 +3,7 @@ import { ArrowLeft, Activity, BookOpen, Carrot, Layers, Pill, Settings2, Zap } f
 import { Card } from '@/components/ui/card'
 import { HubRow } from '@/components/customize/hub-row'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 
 export const metadata = { title: 'Customize check-in' }
 
@@ -53,22 +54,25 @@ const HUB_ITEMS = [
 export default function CustomizePage() {
   return (
     <PageShell>
-      <div className="mb-6">
-        <Link
-          href="/checkin"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Back
-        </Link>
-        <div className="mt-3 flex items-center gap-2">
-          <Settings2 className="size-5 text-muted-foreground" />
-          <h1 className="text-xl font-semibold tracking-tight">Customize check-in</h1>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Reorder sections, manage catalogs, and add your own trackers and symptoms.
-        </p>
-      </div>
+      <PageHeader
+        data-tour="customize-hub"
+        leading={
+          <Link
+            href="/checkin"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Back
+          </Link>
+        }
+        title={
+          <div className="flex items-center gap-2">
+            <Settings2 className="size-5 text-muted-foreground" />
+            <h1 className="text-xl font-semibold tracking-tight">Customize check-in</h1>
+          </div>
+        }
+        subtitle="Reorder sections, manage catalogs, and add your own trackers and symptoms."
+      />
 
       {/* Mobile: stacked list */}
       <Card className="overflow-hidden py-0 lg:hidden">

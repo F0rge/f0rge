@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { SlidersHorizontal, UserRound } from 'lucide-react'
 import { UserAvatar } from '@/components/account/user-avatar'
+import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { cn } from '@/lib/utils'
 
 const MENU_ITEM_CLASS =
@@ -36,7 +37,7 @@ export function ProfileMenu() {
   if (pathname.startsWith('/login') || pathname.startsWith('/signup')) return null
 
   return (
-    <div ref={menuRef} className="relative">
+    <div ref={menuRef} className="relative" data-tour="profile-menu">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -52,7 +53,7 @@ export function ProfileMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 min-w-[10rem] rounded-xl border border-border bg-background p-1 shadow-lg"
+          className="absolute right-0 z-50 mt-2 min-w-[10rem] rounded-xl border border-border bg-background p-1 shadow-lg"
         >
           <Link
             href="/account"
@@ -72,6 +73,9 @@ export function ProfileMenu() {
             <SlidersHorizontal className="size-4 text-muted-foreground" />
             Customize
           </Link>
+          <div className="mt-1 border-t border-border pt-1">
+            <ThemeToggle />
+          </div>
         </div>
       )}
     </div>

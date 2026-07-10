@@ -46,6 +46,7 @@ import {
 import { ReorderTile, type CardMeta } from '@/components/checkin/cards/reorder-tile'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { PageShell } from '@/components/layout/page-shell'
+import { PageHeader } from '@/components/layout/page-header'
 
 // ── Card metadata (mirrors CARD_META in checkin-board.tsx) ───────────────────
 // Defined at module scope to satisfy react-hooks/static-components rule.
@@ -194,29 +195,29 @@ export default function ReorderClient() {
 
   return (
     <PageShell>
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <Link
-          href="/customize"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Customize
-        </Link>
-        <button
-          type="button"
-          onClick={handleReset}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          aria-label="Reset to default order"
-        >
-          <RotateCcw className="size-3.5" />
-          Reset
-        </button>
-      </div>
-
-      <div className="mb-4">
-        <h1 className="text-xl font-semibold tracking-tight">Reorder &amp; visibility</h1>
-      </div>
+      <PageHeader
+        leading={
+          <Link
+            href="/customize"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            Customize
+          </Link>
+        }
+        title="Reorder & visibility"
+        actions={
+          <button
+            type="button"
+            onClick={handleReset}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Reset to default order"
+          >
+            <RotateCcw className="size-3.5" />
+            Reset
+          </button>
+        }
+      />
 
       <TierBanner tier="core">
         Drag to reorder. Toggle the eye icon to show or hide a section on your daily check-in.

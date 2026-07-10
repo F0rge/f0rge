@@ -104,7 +104,7 @@ export function NotesInput({
 
   return (
     <div className="space-y-3">
-      <Label className="text-xs text-muted-foreground">Notes (optional)</Label>
+      <Label className="text-sm font-medium leading-none">Notes (optional)</Label>
       <textarea
         ref={textareaRef}
         value={draft}

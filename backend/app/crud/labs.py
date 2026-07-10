@@ -41,8 +41,7 @@ class LabCRUD(BaseCRUD):
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_by_source_path(self, source_path: str) -> Optional[Lab]:
-        # No owned_by_user() here — matches lab_import's pre-existing behavior,
-        # which checks source_path uniqueness across the table, not per-user.
+        # Intentionally unscoped: lab import deduplicates by source_path across users.
         stmt = select(Lab).where(Lab.source_path == source_path)
         return (await self.db.execute(stmt)).scalar_one_or_none()
 

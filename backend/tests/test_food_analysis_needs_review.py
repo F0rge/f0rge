@@ -15,6 +15,7 @@ from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.services.food_analysis import analysis_needs_review
 from app.services.vision_prompt import VisionIngredient, VisionResult
+from tests.conftest import authed_user_id
 
 _DATE = datetime.date(2026, 4, 1)
 
@@ -170,7 +171,9 @@ async def test_confirm_needs_review_transitions_to_confirmed(
     authed_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
+    user_id = await authed_user_id(authed_client)
     entry = Entry(
+        user_id=user_id,
         date=_DATE,
         schema_version=4,
         overall=2,
@@ -188,11 +191,12 @@ async def test_confirm_needs_review_transitions_to_confirmed(
     )
     async_db.add(entry)
     await async_db.flush()
-    photo = Photo(entry_id=entry.id, filename="meal.jpg")
+    photo = Photo(user_id=user_id, entry_id=entry.id, filename="meal.jpg")
     async_db.add(photo)
     await async_db.flush()
     async_db.add(
         PhotoAnalysis(
+            user_id=user_id,
             photo_id=photo.id,
             status="needs_review",
             dish_name="Uncertain dish",
