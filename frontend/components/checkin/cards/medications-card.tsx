@@ -9,19 +9,25 @@
 
 import { useState } from 'react'
 import { Loader2, Pill, X } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { TierPill } from '@/components/customize/tier-pill'
+import { Card, CardContent } from '@/components/ui/card'
+import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
+import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 import { MedicationQuickAddDialog } from '@/components/checkin/medication-quick-add-dialog'
 import { useMedicationCatalog } from '@/lib/api/hooks'
 import { cn } from '@/lib/utils'
 import type { MedicationIntake } from '@/lib/api/types'
 
-interface MedicationsCardProps {
+interface MedicationsCardProps extends CheckinCardCollapseProps {
   value: MedicationIntake[]
   onChange: (v: MedicationIntake[]) => void
 }
 
-export function MedicationsCard({ value, onChange }: MedicationsCardProps) {
+export function MedicationsCard({
+  value,
+  onChange,
+  collapsed,
+  onToggleCollapsed,
+}: MedicationsCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [presetKey, setPresetKey] = useState<string | null>(null)
   const { data: activeCatalog = [], isLoading } = useMedicationCatalog(false)
@@ -49,12 +55,13 @@ export function MedicationsCard({ value, onChange }: MedicationsCardProps) {
 
   return (
     <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Medications
-          <TierPill tier="catalog" />
-        </CardTitle>
-      </CardHeader>
+      <CheckinCardHeader
+        title="Medications"
+        tier="catalog"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
+      {!collapsed && (
       <CardContent className="space-y-3">
         {value.length === 0 ? (
           <p className="py-1 text-sm text-muted-foreground">None taken today</p>
@@ -116,6 +123,7 @@ export function MedicationsCard({ value, onChange }: MedicationsCardProps) {
           </div>
         )}
       </CardContent>
+      )}
 
       <MedicationQuickAddDialog
         key={presetKey ?? 'med-dialog'}

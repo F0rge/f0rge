@@ -13,18 +13,18 @@ const TIER_CONFIG: Record<Tier, {
   Icon: React.ElementType
 }> = {
   core: {
-    wrapperClass: 'bg-zinc-50 border-zinc-100',
-    iconClass: 'text-zinc-400',
+    wrapperClass: 'bg-zinc-50 border-zinc-100 dark:bg-zinc-900/40 dark:border-zinc-800',
+    iconClass: 'text-zinc-400 dark:text-zinc-500',
     Icon: Lock,
   },
   catalog: {
-    wrapperClass: 'bg-blue-50 border-blue-100',
-    iconClass: 'text-blue-500',
+    wrapperClass: 'bg-blue-50 border-blue-100 dark:bg-blue-950/40 dark:border-blue-900',
+    iconClass: 'text-blue-500 dark:text-blue-400',
     Icon: List,
   },
   custom: {
-    wrapperClass: 'bg-emerald-50 border-emerald-100',
-    iconClass: 'text-emerald-500',
+    wrapperClass: 'bg-emerald-50 border-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-900',
+    iconClass: 'text-emerald-500 dark:text-emerald-400',
     Icon: Sparkles,
   },
 }

@@ -3,17 +3,18 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { PhotoCapture } from '@/components/checkin/photo-capture'
 import { RecentMealsStrip } from '@/components/checkin/recent-meals-strip'
 import type { Entry } from '@/lib/api/types'
 import { useDeletePhoto, useDietTagCatalog } from '@/lib/api/hooks'
 import { handleMutationError } from '@/lib/api/client'
-import { TierPill } from '@/components/customize/tier-pill'
+import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
+import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 import { DietRiskSection } from './food/diet-risk-section'
 import { MealCard } from './food/meal-card'
 
-interface FoodCardProps {
+interface FoodCardProps extends CheckinCardCollapseProps {
   date: string
   existingEntry?: Entry | null
   existingPhotos: Entry['photos']
@@ -35,6 +36,8 @@ export function FoodCard({
   ensureEntryExists,
   onEntryEnsured,
   onOpenPhotoFocus,
+  collapsed,
+  onToggleCollapsed,
 }: FoodCardProps) {
   const deletePhotoMutation = useDeletePhoto()
   const queryClient = useQueryClient()
@@ -57,12 +60,13 @@ export function FoodCard({
 
   return (
     <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Food &amp; drinks
-          <TierPill tier="core" />
-        </CardTitle>
-      </CardHeader>
+      <CheckinCardHeader
+        title="Food & drinks"
+        tier="core"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
+      {!collapsed && (
       <CardContent className="space-y-6">
         <DietRiskSection
           existingEntry={existingEntry}
@@ -98,6 +102,7 @@ export function FoodCard({
           onEntryEnsured={onEntryEnsured}
         />
       </CardContent>
+      )}
     </Card>
   )
 }

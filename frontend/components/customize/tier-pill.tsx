@@ -8,9 +8,9 @@ interface TierPillProps {
 }
 
 const TIER_STYLES: Record<Tier, string> = {
-  core:    'bg-zinc-100 text-zinc-400',
-  catalog: 'bg-blue-50 text-blue-600',
-  custom:  'bg-emerald-50 text-emerald-600',
+  core:    'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-400',
+  catalog: 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400',
+  custom:  'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400',
 }
 
 const TIER_LABELS: Record<Tier, string> = {

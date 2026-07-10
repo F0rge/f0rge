@@ -1,12 +1,13 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { ScaleInput } from '@/components/checkin/scale-input'
 import { BristolInput } from '@/components/checkin/bristol-input'
 import type { StoolStatus } from '@/lib/api/types'
-import { TierPill } from '@/components/customize/tier-pill'
+import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
+import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
-interface GutCardProps {
+interface GutCardProps extends CheckinCardCollapseProps {
   bloating: number
   onBloatingChange: (v: number) => void
   stoolStatus: StoolStatus
@@ -25,15 +26,18 @@ export function GutCard({
   bristolType, onBristolTypeChange,
   jointPain, onJointPainChange,
   stoolCompleteness, onStoolCompletenessChange,
+  collapsed,
+  onToggleCollapsed,
 }: GutCardProps) {
   return (
     <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Gut
-          <TierPill tier="core" />
-        </CardTitle>
-      </CardHeader>
+      <CheckinCardHeader
+        title="Gut"
+        tier="core"
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+      />
+      {!collapsed && (
       <CardContent className="space-y-5">
         <ScaleInput
           label="Bloating"
@@ -84,6 +88,7 @@ export function GutCard({
           ]}
         />
       </CardContent>
+      )}
     </Card>
   )
 }

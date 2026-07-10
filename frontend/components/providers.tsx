@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { SessionGuard } from '@/components/auth/session-guard'
 import { AppChrome } from '@/components/layout/app-chrome'
 import { OnboardingProvider } from '@/components/onboarding/onboarding-provider'
+import { ThemeProvider } from '@/components/theme-provider'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -20,13 +21,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionGuard>
-        <OnboardingProvider>
-          {children}
-          <AppChrome />
-        </OnboardingProvider>
-      </SessionGuard>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <SessionGuard>
+          <OnboardingProvider>
+            {children}
+            <AppChrome />
+          </OnboardingProvider>
+        </SessionGuard>
+      </QueryClientProvider>
+    </ThemeProvider>
   )
 }
