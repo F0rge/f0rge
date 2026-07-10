@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth_context import user_id_ctx
 from app.config import settings
 from app.models.entry import Entry
+from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
 from app.services.photos import PhotoService
 
 
@@ -91,7 +92,7 @@ async def _upload(
     token = user_id_ctx.set(user_id)
     try:
         upload = UploadFile(filename="meal.jpg", file=io.BytesIO(_jpg_bytes()))
-        service = PhotoService(db)
+        service = PhotoService(db, FoodAnalysisOrchestrator())
         return await service.upload(
             entry_date=day,
             file=upload,

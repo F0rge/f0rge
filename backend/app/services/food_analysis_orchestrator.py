@@ -1,0 +1,182 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import uuid
+from typing import Optional
+
+from app.crud.food_analysis import PhotoAnalysisCRUD, PhotoIngredientCRUD
+from app.crud.photos import PhotoCRUD
+from app.database import async_session_maker
+from app.exceptions import NotFoundError
+from app.models.photo_analysis import PhotoAnalysis
+from app.models.photo_ingredient import PhotoIngredient
+from app.services.food_analysis import analysis_needs_review
+from app.services.ingredient_lookup import IngredientLookupService
+from app.services.vision_prompt import build_messages, parse_vision_response
+from app.tenant import apply_session_user_id
+
+logger = logging.getLogger(__name__)
+
+
+async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID] = None) -> None:
+    """Run food photo analysis in a background task.
+
+    Opens its own DB session because FastAPI BackgroundTasks execute
+    after the response is sent and the request session is closed.
+    """
+    analysis: Optional[PhotoAnalysis] = None
+    try:
+        async with async_session_maker() as db:
+            analysis_crud = PhotoAnalysisCRUD(db)
+            ingredient_crud = PhotoIngredientCRUD(db)
+            photo_crud = PhotoCRUD(db)
+
+            if user_id is None:
+                resolved = await photo_crud.get_user_id(photo_id)
+                if resolved is None:
+                    logger.warning("Skipping analysis for missing photo %d", photo_id)
+                    return
+                user_id = resolved
+            user_id_str = str(user_id)
+            await apply_session_user_id(db, user_id)
+            from app.services.llm.factory import resolve_llm_credentials
+
+            api_key, model = await resolve_llm_credentials(db, user_id=user_id)
+            if not api_key:
+                logger.warning(
+                    "Food analysis skipped for photo %d: no LLM API key configured. "
+                    "Set OPENROUTER_API_KEY or add a key in Settings, or disable the "
+                    "feature with FOOD_ANALYSIS_ENABLED=false.",
+                    photo_id,
+                )
+                existing = await analysis_crud.get_by_photo_id(photo_id)
+                if existing is None:
+                    analysis = PhotoAnalysis(
+                        user_id=user_id,
+                        photo_id=photo_id,
+                        status="failed",
+                        model_id=model,
+                        error_message="LLM API key not configured",
+                    )
+                    analysis_crud.add(analysis)
+                else:
+                    existing.status = "failed"
+                    existing.error_message = "LLM API key not configured"
+                    existing.model_id = model
+                await analysis_crud.commit()
+                return
+
+            # Reuse a pending record or skip if already running/finished.
+            existing = await analysis_crud.get_by_photo_id(photo_id)
+
+            if existing and existing.status not in ("pending", "failed"):
+                logger.info(
+                    "Analysis already exists for photo %d (status=%s), skipping",
+                    photo_id,
+                    existing.status,
+                )
+                return
+
+            if existing:
+                analysis = existing
+                analysis.status = "analyzing"
+                analysis.error_message = None
+                analysis.model_id = model
+            else:
+                analysis = PhotoAnalysis(
+                    user_id=user_id,
+                    photo_id=photo_id,
+                    status="analyzing",
+                    model_id=model,
+                )
+                analysis_crud.add(analysis)
+            analysis = await analysis_crud.commit_refresh(analysis)
+
+            # Read photo file from disk (blocking I/O wrapped in thread)
+            photo = await photo_crud.get_by_id(photo_id)
+            if not photo:
+                raise NotFoundError(f"Photo {photo_id} not found in database")
+
+            from app.services.photo_storage import photo_exists, read_photo
+
+            if not photo_exists(photo.filename, user_id=user_id_str):
+                raise NotFoundError(f"Photo file not found: {photo.filename}")
+
+            image_bytes = await asyncio.to_thread(read_photo, photo.filename, user_id=user_id_str)
+
+            messages = build_messages(image_bytes)
+
+            from app.services.llm.openrouter import OpenRouterClient
+
+            llm_client = OpenRouterClient(api_key=api_key, default_model=model)
+
+            raw_content = await llm_client.complete_with_image(messages)
+            analysis.raw_response = raw_content
+
+            vision_result = parse_vision_response(raw_content)
+
+            analysis.dish_name = vision_result.dish_name
+            analysis.cuisine = vision_result.cuisine
+            analysis.dish_confidence = vision_result.confidence
+
+            lookup = IngredientLookupService(db)
+            for vi in vision_result.ingredients:
+                match = await lookup.lookup(vi.name)
+                ingredient = PhotoIngredient(
+                    user_id=user_id,
+                    analysis_id=analysis.id,
+                    name=vi.name,
+                    canonical_name=match.canonical_name if match else None,
+                    visible=vi.visible,
+                    confidence=vi.confidence,
+                    user_edited=False,
+                    histamine_score=match.histamine_score if match else None,
+                    fodmap_oligos=match.fodmap_oligos if match else None,
+                    fodmap_fructose=match.fodmap_fructose if match else None,
+                    fodmap_polyols=match.fodmap_polyols if match else None,
+                    fodmap_lactose=match.fodmap_lactose if match else None,
+                    contains_gluten=match.contains_gluten if match else None,
+                    contains_dairy=match.contains_dairy if match else None,
+                )
+                ingredient_crud.add(ingredient)
+
+            analysis.status = "needs_review" if analysis_needs_review(vision_result) else "complete"
+            await analysis_crud.commit()
+
+            logger.info(
+                "Analysis complete for photo %d: %s (%d ingredients)",
+                photo_id,
+                vision_result.dish_name,
+                len(vision_result.ingredients),
+            )
+
+    except Exception as e:
+        logger.exception("Food analysis failed for photo %d", photo_id)
+        if analysis is not None:
+            try:
+                async with async_session_maker() as db:
+                    crud = PhotoAnalysisCRUD(db)
+                    fresh = await crud.get_by_id(analysis.id)
+                    if fresh:
+                        fresh.status = "failed"
+                        # Full traceback is already in logs via logger.exception above.
+                        # Store only a short human-readable summary so the UI doesn't
+                        # display a raw multi-line stack trace.
+                        fresh.error_message = f"{type(e).__name__}: {str(e)[:200]}"
+                        await crud.commit()
+            except Exception:
+                logger.exception("Failed to update analysis status for photo %d", photo_id)
+
+
+class FoodAnalysisOrchestrator:
+    """Coordinates the background analysis pipeline (Rule 9.4): photo storage
+    read, vision LLM call, and PhotoAnalysis/PhotoIngredient persistence.
+
+    Stateless -- takes no DB session at construction time, because it's invoked
+    via FastAPI BackgroundTasks after the request session has already closed
+    and must open its own session per run (see ``trigger_analysis_background``).
+    """
+
+    async def run(self, photo_id: int, user_id: Optional[uuid.UUID] = None) -> None:
+        await trigger_analysis_background(photo_id, user_id)

@@ -4,14 +4,14 @@ import datetime
 from collections import defaultdict
 from typing import Optional
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.treatment_log import TreatmentLogCRUD
+from app.crud.treatments import TreatmentCRUD
 from app.exceptions import NotFoundError
-from app.models.treatment import Treatment
 from app.models.treatment_log import TreatmentLog
 from app.schemas.treatment_log import ProtocolItem, ProtocolResponse, ProtocolToday
-from app.tenant import current_user_id, owned_by_user
+from app.tenant import current_user_id
 from app.utils.dates import local_today
 from app.utils.streak import compute_streak
 
@@ -19,40 +19,25 @@ from app.utils.streak import compute_streak
 class TreatmentLogService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.crud = TreatmentLogCRUD(db)
+        self.treatment_crud = TreatmentCRUD(db)
 
     async def upsert(
         self, treatment_id: int, date: datetime.date, doses_taken: int
     ) -> TreatmentLog:
-        treatment = (
-            await self.db.execute(
-                select(Treatment).where(
-                    owned_by_user(Treatment.user_id),
-                    Treatment.id == treatment_id,
-                )
-            )
-        ).scalar_one_or_none()
+        treatment = await self.treatment_crud.get_by_id(treatment_id)
         if treatment is None:
             raise NotFoundError(f"Treatment {treatment_id} not found.")
 
         clamped = max(0, min(doses_taken, treatment.doses_per_day or 0))
 
-        existing = (
-            await self.db.execute(
-                select(TreatmentLog).where(
-                    owned_by_user(TreatmentLog.user_id),
-                    TreatmentLog.treatment_id == treatment_id,
-                    TreatmentLog.date == date,
-                )
-            )
-        ).scalar_one_or_none()
+        existing = await self.crud.get(treatment_id, date)
 
         now = datetime.datetime.utcnow()
         if existing is not None:
             existing.doses_taken = clamped
             existing.updated_at = now
-            await self.db.commit()
-            await self.db.refresh(existing)
-            return existing
+            return await self.crud.commit_refresh(existing)
 
         log = TreatmentLog(
             user_id=current_user_id(),
@@ -61,15 +46,13 @@ class TreatmentLogService:
             doses_taken=clamped,
             updated_at=now,
         )
-        self.db.add(log)
-        await self.db.commit()
-        await self.db.refresh(log)
-        return log
+        self.crud.add(log)
+        return await self.crud.commit_refresh(log)
 
     async def get_protocol(self, on_date: Optional[datetime.date] = None) -> ProtocolResponse:
         target = on_date if on_date is not None else local_today()
 
-        active = await self._active_treatments(target)
+        active = await self.crud.list_active_treatments(target)
         taken_today = await self._log_map_for_date(target, [t.id for t in active])
 
         items = [
@@ -102,64 +85,21 @@ class TreatmentLogService:
             best_streak=best_streak,
         )
 
-    async def _active_treatments(self, on_date: datetime.date) -> list[Treatment]:
-        stmt = (
-            select(Treatment)
-            .where(
-                owned_by_user(Treatment.user_id),
-                Treatment.start_date <= on_date,
-                (Treatment.end_date.is_(None)) | (Treatment.end_date >= on_date),
-            )
-            .order_by(Treatment.start_date.asc(), Treatment.id.asc())
-        )
-        return list((await self.db.execute(stmt)).scalars().all())
-
     async def _log_map_for_date(
         self, on_date: datetime.date, treatment_ids: list[int]
     ) -> dict[int, int]:
-        if not treatment_ids:
-            return {}
-        stmt = select(TreatmentLog).where(
-            owned_by_user(TreatmentLog.user_id),
-            TreatmentLog.date == on_date,
-            TreatmentLog.treatment_id.in_(treatment_ids),
-        )
-        rows = (await self.db.execute(stmt)).scalars().all()
+        rows = await self.crud.list_logs_for_date(on_date, treatment_ids)
         return {row.treatment_id: row.doses_taken for row in rows}
 
     async def _compute_streaks(self, on_date: datetime.date) -> tuple[int, int]:
-        dose_tracked = list(
-            (
-                await self.db.execute(
-                    select(Treatment).where(
-                        owned_by_user(Treatment.user_id),
-                        Treatment.doses_per_day.is_not(None),
-                        Treatment.start_date <= on_date,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
+        dose_tracked = await self.crud.list_dose_tracked_treatments(on_date)
         if not dose_tracked:
             return compute_streak([], on_date)
 
         earliest = min(t.start_date for t in dose_tracked)
         treatment_ids = [t.id for t in dose_tracked]
-        logs = (
-            (
-                await self.db.execute(
-                    select(TreatmentLog).where(
-                        owned_by_user(TreatmentLog.user_id),
-                        TreatmentLog.treatment_id.in_(treatment_ids),
-                        TreatmentLog.date >= earliest,
-                        TreatmentLog.date <= on_date,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
+        logs = await self.crud.list_logs_in_range(treatment_ids, earliest, on_date)
+
         taken_by_day: dict[datetime.date, dict[int, int]] = defaultdict(dict)
         for log in logs:
             taken_by_day[log.date][log.treatment_id] = log.doses_taken

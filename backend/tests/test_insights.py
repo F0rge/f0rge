@@ -10,12 +10,7 @@ from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
-from app.services.insights import (
-    compute_correlates,
-    compute_sleep_next_day,
-    compute_treatment_response,
-    compute_trends,
-)
+from app.services.insights import InsightsService
 
 
 _BASE_DATE = datetime.date(2026, 1, 1)
@@ -126,7 +121,9 @@ async def _add_treatment(
 async def test_trends_returns_series_for_core_keys(async_db: AsyncSession) -> None:
     for i in range(10):
         await _add_entry(async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i % 5)
-    result = await compute_trends(async_db, _BASE_DATE, _BASE_DATE + datetime.timedelta(days=9))
+    result = await InsightsService(async_db).compute_trends(
+        _BASE_DATE, _BASE_DATE + datetime.timedelta(days=9)
+    )
     keys = {s.key for s in result.series}
     assert "overall" in keys
     assert "bloating" in keys
@@ -140,7 +137,9 @@ async def test_trends_includes_sym_columns(async_db: AsyncSession) -> None:
             _BASE_DATE + datetime.timedelta(days=i),
             symptoms_json={"vss": i + 1},
         )
-    result = await compute_trends(async_db, _BASE_DATE, _BASE_DATE + datetime.timedelta(days=4))
+    result = await InsightsService(async_db).compute_trends(
+        _BASE_DATE, _BASE_DATE + datetime.timedelta(days=4)
+    )
     keys = {s.key for s in result.series}
     assert "sym_vss" in keys
 
@@ -149,7 +148,9 @@ async def test_trends_rolling_avg_7_computed(async_db: AsyncSession) -> None:
     # Seed 10 days with overall = day index (0-9)
     for i in range(10):
         await _add_entry(async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i)
-    result = await compute_trends(async_db, _BASE_DATE, _BASE_DATE + datetime.timedelta(days=9))
+    result = await InsightsService(async_db).compute_trends(
+        _BASE_DATE, _BASE_DATE + datetime.timedelta(days=9)
+    )
     overall_series = next(s for s in result.series if s.key == "overall")
     # points[6].rolling_avg_7 = mean(0,1,2,3,4,5,6)
     assert overall_series.points[6].rolling_avg_7 == pytest.approx(3.0, abs=0.01)
@@ -158,7 +159,9 @@ async def test_trends_rolling_avg_7_computed(async_db: AsyncSession) -> None:
 async def test_trends_delta_30d_computed(async_db: AsyncSession) -> None:
     for i in range(35):
         await _add_entry(async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i % 5)
-    result = await compute_trends(async_db, _BASE_DATE, _BASE_DATE + datetime.timedelta(days=34))
+    result = await InsightsService(async_db).compute_trends(
+        _BASE_DATE, _BASE_DATE + datetime.timedelta(days=34)
+    )
     overall_series = next(s for s in result.series if s.key == "overall")
     # delta_30d should be set (not None) when we have >= 30 points
     assert overall_series.delta_30d is not None
@@ -169,7 +172,9 @@ async def test_trends_delta_30d_computed(async_db: AsyncSession) -> None:
 
 async def test_correlates_invalid_outcome_raises(async_db: AsyncSession) -> None:
     with pytest.raises(ValidationError):
-        await compute_correlates(async_db, None, None, "not_a_real_outcome", None, 3)
+        await InsightsService(async_db).compute_correlates(
+            None, None, "not_a_real_outcome", None, 3
+        )
 
 
 async def test_correlates_hrv_correlates_with_overall(
@@ -191,8 +196,7 @@ async def test_correlates_hrv_correlates_with_overall(
             hrv_mean=hrv_val,
         )
 
-    result = await compute_correlates(
-        async_db,
+    result = await InsightsService(async_db).compute_correlates(
         _BASE_DATE,
         _BASE_DATE + datetime.timedelta(days=n_days - 1),
         "overall",
@@ -215,8 +219,7 @@ async def test_correlates_lag_selection(async_db: AsyncSession) -> None:
         await _add_entry(async_db, d, overall=overall_val)
         await _add_hm(async_db, d, hrv_mean=signal[i])
 
-    result = await compute_correlates(
-        async_db,
+    result = await InsightsService(async_db).compute_correlates(
         _BASE_DATE,
         _BASE_DATE + datetime.timedelta(days=n_days + 1),
         "overall",
@@ -235,8 +238,7 @@ async def test_correlates_category_filter(async_db: AsyncSession) -> None:
         await _add_entry(async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i % 5)
         await _add_hm(async_db, _BASE_DATE + datetime.timedelta(days=i), hrv_mean=float(i))
 
-    result = await compute_correlates(
-        async_db,
+    result = await InsightsService(async_db).compute_correlates(
         _BASE_DATE,
         _BASE_DATE + datetime.timedelta(days=19),
         "overall",
@@ -256,7 +258,9 @@ async def test_correlates_sym_outcome_allowed(async_db: AsyncSession) -> None:
             symptoms_json={"brain_fog": i % 5},
         )
     # Should not raise — sym_ outcomes are in the whitelist
-    result = await compute_correlates(async_db, None, None, "sym_brain_fog", None, min_n=3)
+    result = await InsightsService(async_db).compute_correlates(
+        None, None, "sym_brain_fog", None, min_n=3
+    )
     assert result.outcome == "sym_brain_fog"
 
 
@@ -267,7 +271,7 @@ async def test_treatment_response_invalid_outcome_raises(
     async_db: AsyncSession,
 ) -> None:
     with pytest.raises(ValidationError):
-        await compute_treatment_response(async_db, "not_real")
+        await InsightsService(async_db).compute_treatment_response("not_real")
 
 
 async def test_treatment_response_windows_correct(async_db: AsyncSession) -> None:
@@ -291,7 +295,7 @@ async def test_treatment_response_windows_correct(async_db: AsyncSession) -> Non
         d = tx_end + datetime.timedelta(days=i + 1)
         await _add_entry(async_db, d, overall=3)
 
-    result = await compute_treatment_response(async_db, "overall")
+    result = await InsightsService(async_db).compute_treatment_response("overall")
     assert len(result.rows) == 1
     row = result.rows[0]
 
@@ -316,7 +320,7 @@ async def test_treatment_response_skips_insufficient_baseline(
         d = tx_start - datetime.timedelta(days=3 - i)
         await _add_entry(async_db, d, overall=2)
 
-    result = await compute_treatment_response(async_db, "overall")
+    result = await InsightsService(async_db).compute_treatment_response("overall")
     assert len(result.rows) == 0
 
 
@@ -335,7 +339,7 @@ async def test_treatment_response_no_after_window_when_ongoing(
         d = tx_start + datetime.timedelta(days=i)
         await _add_entry(async_db, d, overall=4)
 
-    result = await compute_treatment_response(async_db, "overall")
+    result = await InsightsService(async_db).compute_treatment_response("overall")
     assert len(result.rows) == 1
     row = result.rows[0]
     assert row.end_date is None
@@ -350,7 +354,9 @@ async def test_sleep_next_day_invalid_outcome_raises(
     async_db: AsyncSession,
 ) -> None:
     with pytest.raises(ValidationError):
-        await compute_sleep_next_day(async_db, None, None, "not_real", "hm_sleep_rem_min")
+        await InsightsService(async_db).compute_sleep_next_day(
+            None, None, "not_real", "hm_sleep_rem_min"
+        )
 
 
 async def test_sleep_next_day_invalid_metric_raises(
@@ -359,7 +365,9 @@ async def test_sleep_next_day_invalid_metric_raises(
     for i in range(5):
         await _add_entry(async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i)
     with pytest.raises(ValidationError):
-        await compute_sleep_next_day(async_db, None, None, "overall", "hm_invalid_metric")
+        await InsightsService(async_db).compute_sleep_next_day(
+            None, None, "overall", "hm_invalid_metric"
+        )
 
 
 async def test_sleep_next_day_pairs_correctly(async_db: AsyncSession) -> None:
@@ -370,8 +378,7 @@ async def test_sleep_next_day_pairs_correctly(async_db: AsyncSession) -> None:
         await _add_entry(async_db, d, overall=i + 1)
         await _add_hm(async_db, d, sleep_rem_min=float(60 + i * 2))
 
-    result = await compute_sleep_next_day(
-        async_db,
+    result = await InsightsService(async_db).compute_sleep_next_day(
         _BASE_DATE,
         _BASE_DATE + datetime.timedelta(days=n_days - 1),
         "overall",
@@ -396,8 +403,7 @@ async def test_sleep_next_day_orphaned_last_day_dropped(
     # Add a health metric on day 5 with NO corresponding entry
     await _add_hm(async_db, _BASE_DATE + datetime.timedelta(days=5), sleep_rem_min=70.0)
 
-    result = await compute_sleep_next_day(
-        async_db,
+    result = await InsightsService(async_db).compute_sleep_next_day(
         _BASE_DATE,
         _BASE_DATE + datetime.timedelta(days=5),
         "overall",
@@ -417,7 +423,7 @@ async def test_correlates_sick_is_valid_outcome(
         await _add_entry(async_db, d)
 
     # Must not raise ValidationError
-    result = await compute_correlates(async_db, None, None, "sick", None, min_n=3)
+    result = await InsightsService(async_db).compute_correlates(None, None, "sick", None, min_n=3)
     assert result.outcome == "sick"
 
 
@@ -428,8 +434,7 @@ async def test_sleep_next_day_rho_returned(async_db: AsyncSession) -> None:
         await _add_entry(async_db, d, overall=i + 1)
         await _add_hm(async_db, d, sleep_efficiency=float(50 + i * 2))
 
-    result = await compute_sleep_next_day(
-        async_db,
+    result = await InsightsService(async_db).compute_sleep_next_day(
         _BASE_DATE,
         _BASE_DATE + datetime.timedelta(days=14),
         "overall",

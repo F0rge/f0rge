@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.diet_tag_catalog import DietTagCatalogCRUD
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.diet_tag_catalog import DietTagCatalogItem
 
@@ -21,76 +21,39 @@ def normalize_key(raw: str) -> str:
     return key
 
 
-async def list_items(db: AsyncSession, include_archived: bool = False) -> list[DietTagCatalogItem]:
-    stmt = select(DietTagCatalogItem)
-    if not include_archived:
-        stmt = stmt.where(DietTagCatalogItem.archived.is_(False))
-    stmt = stmt.order_by(
-        DietTagCatalogItem.sort_order.asc(),
-        DietTagCatalogItem.id.asc(),
-    )
-    return list((await db.execute(stmt)).scalars().all())
-
-
-async def create_item(db: AsyncSession, key: str, label: str) -> DietTagCatalogItem:
-    normalized = normalize_key(key)
-    if not normalized or not _KEY_RE.match(normalized):
-        raise ValidationError("Invalid key; must contain a-z, 0-9, or hyphen.")
-
-    existing = (
-        await db.execute(select(DietTagCatalogItem).where(DietTagCatalogItem.key == normalized))
-    ).scalar_one_or_none()
-
-    if existing:
-        if existing.archived:
-            existing.archived = False
-            existing.label = label
-            await db.commit()
-            await db.refresh(existing)
-            return existing
-        raise ConflictError(f"Catalog item '{normalized}' already exists.")
-
-    max_item = (
-        (
-            await db.execute(
-                select(DietTagCatalogItem).order_by(DietTagCatalogItem.sort_order.desc())
-            )
-        )
-        .scalars()
-        .first()
-    )
-    next_sort = (max_item.sort_order + 1) if max_item else 0
-
-    item = DietTagCatalogItem(key=normalized, label=label, sort_order=next_sort)
-    db.add(item)
-    await db.commit()
-    await db.refresh(item)
-    return item
-
-
-async def update_item(db: AsyncSession, key: str, data: dict) -> DietTagCatalogItem:
-    item = (
-        await db.execute(select(DietTagCatalogItem).where(DietTagCatalogItem.key == key))
-    ).scalar_one_or_none()
-    if not item:
-        raise NotFoundError(f"Catalog item '{key}' not found.")
-
-    for field, value in data.items():
-        setattr(item, field, value)
-    await db.commit()
-    await db.refresh(item)
-    return item
-
-
 class DietTagCatalogService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.crud = DietTagCatalogCRUD(db)
 
     async def list_items(self, include_archived: bool = False) -> list[DietTagCatalogItem]:
-        return await list_items(self.db, include_archived=include_archived)
+        return await self.crud.list(include_archived=include_archived)
 
     async def create_item(self, key: str, label: str) -> DietTagCatalogItem:
-        return await create_item(self.db, key, label)
+        normalized = normalize_key(key)
+        if not normalized or not _KEY_RE.match(normalized):
+            raise ValidationError("Invalid key; must contain a-z, 0-9, or hyphen.")
+
+        existing = await self.crud.get_by_key(normalized)
+        if existing:
+            if existing.archived:
+                existing.archived = False
+                existing.label = label
+                return await self.crud.commit_refresh(existing)
+            raise ConflictError(f"Catalog item '{normalized}' already exists.")
+
+        max_item = await self.crud.get_max_sort_order_item()
+        next_sort = (max_item.sort_order + 1) if max_item else 0
+
+        item = DietTagCatalogItem(key=normalized, label=label, sort_order=next_sort)
+        self.crud.add(item)
+        return await self.crud.commit_refresh(item)
 
     async def update_item(self, key: str, data: dict) -> DietTagCatalogItem:
-        return await update_item(self.db, key, data)
+        item = await self.crud.get_by_key(key)
+        if not item:
+            raise NotFoundError(f"Catalog item '{key}' not found.")
+
+        for field, value in data.items():
+            setattr(item, field, value)
+        return await self.crud.commit_refresh(item)

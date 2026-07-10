@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Optional
 
 import bcrypt
 import jwt
 from fastapi import Response
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.crud.auth import UserCRUD
 from app.exceptions import ConflictError, UnauthorizedError, ValidationError
 from app.models.user import User
 from app.services.user_provisioning import provision_user_catalogs
@@ -80,68 +79,10 @@ def _validate_password(password: str) -> None:
         raise ValidationError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
 
 
-async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> Optional[User]:
-    return (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-
-
-async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
-    return (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
-
-
-async def signup(
-    db: AsyncSession,
-    email: str,
-    password: str,
-    response: Response,
-) -> dict[str, object]:
-    _validate_password(password)
-
-    existing = await get_user_by_email(db, email)
-    if existing is not None:
-        raise ConflictError("Email already registered")
-
-    user = User(email=email, password_hash=_hash_password(password))
-    db.add(user)
-    await db.flush()
-    await provision_user_catalogs(db, user.id)
-    await db.commit()
-    await db.refresh(user)
-
-    token = create_access_token(user.id)
-    set_session_cookie(response, token)
-    return {"authenticated": True, "user_id": str(user.id), "email": user.email}
-
-
-async def login(
-    db: AsyncSession,
-    email: str,
-    password: str,
-    response: Response,
-) -> dict[str, object]:
-    user = await get_user_by_email(db, email)
-    if user is None or not _verify_password(password, user.password_hash):
-        raise UnauthorizedError("Invalid email or password")
-
-    token = create_access_token(user.id)
-    set_session_cookie(response, token)
-    return {"authenticated": True, "user_id": str(user.id), "email": user.email}
-
-
-async def logout(response: Response) -> dict[str, bool]:
-    clear_session_cookie(response)
-    return {"authenticated": False}
-
-
-async def get_me(db: AsyncSession, user_id: uuid.UUID) -> dict[str, object]:
-    user = await get_user_by_id(db, user_id)
-    if user is None:
-        raise UnauthorizedError("Invalid session")
-    return {"authenticated": True, "user_id": str(user.id), "email": user.email}
-
-
 class AuthService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.crud = UserCRUD(db)
 
     async def signup(
         self,
@@ -149,7 +90,20 @@ class AuthService:
         password: str,
         response: Response,
     ) -> dict[str, object]:
-        return await signup(self.db, email, password, response)
+        _validate_password(password)
+
+        existing = await self.crud.get_by_email(email)
+        if existing is not None:
+            raise ConflictError("Email already registered")
+
+        user = User(email=email, password_hash=_hash_password(password))
+        await self.crud.add_and_flush(user)
+        await provision_user_catalogs(self.db, user.id)
+        await self.crud.commit_refresh(user)
+
+        token = create_access_token(user.id)
+        set_session_cookie(response, token)
+        return {"authenticated": True, "user_id": str(user.id), "email": user.email}
 
     async def login(
         self,
@@ -157,10 +111,20 @@ class AuthService:
         password: str,
         response: Response,
     ) -> dict[str, object]:
-        return await login(self.db, email, password, response)
+        user = await self.crud.get_by_email(email)
+        if user is None or not _verify_password(password, user.password_hash):
+            raise UnauthorizedError("Invalid email or password")
+
+        token = create_access_token(user.id)
+        set_session_cookie(response, token)
+        return {"authenticated": True, "user_id": str(user.id), "email": user.email}
 
     async def logout(self, response: Response) -> dict[str, bool]:
-        return await logout(response)
+        clear_session_cookie(response)
+        return {"authenticated": False}
 
     async def get_me(self, user_id: uuid.UUID) -> dict[str, object]:
-        return await get_me(self.db, user_id)
+        user = await self.crud.get_by_id(user_id)
+        if user is None:
+            raise UnauthorizedError("Invalid session")
+        return {"authenticated": True, "user_id": str(user.id), "email": user.email}

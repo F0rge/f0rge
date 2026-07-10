@@ -27,15 +27,7 @@ from app.models.entry import Entry
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
 from app.schemas.tracker import TrackerCreate, TrackerUpdate
-from app.services.trackers import (
-    create_tracker,
-    list_tracker_values,
-    list_trackers,
-    reorder_trackers,
-    sync_seed_tracker_log_from_entry,
-    update_tracker,
-    upsert_tracker_value,
-)
+from app.services.trackers import TrackerService, sync_seed_tracker_log_from_entry
 
 pytestmark = pytest.mark.asyncio
 
@@ -144,7 +136,7 @@ async def test_list_trackers_returns_seeds(async_db: AsyncSession) -> None:
         )
     await async_db.flush()
 
-    trackers = await list_trackers(async_db)
+    trackers = await TrackerService(async_db).list_trackers()
     names = [t.name for t in trackers]
     assert "Alcohol units" in names
     assert "Caffeine servings" in names
@@ -158,7 +150,7 @@ async def test_list_trackers_excludes_archived_by_default(async_db: AsyncSession
     )
     await async_db.flush()
 
-    trackers = await list_trackers(async_db)
+    trackers = await TrackerService(async_db).list_trackers()
     assert not any(t.name == "archived-tracker" for t in trackers)
 
 
@@ -174,7 +166,7 @@ async def test_list_trackers_includes_archived_when_requested(async_db: AsyncSes
     )
     await async_db.flush()
 
-    trackers = await list_trackers(async_db, include_archived=True)
+    trackers = await TrackerService(async_db).list_trackers(include_archived=True)
     assert any(t.name == "archived-tracker-inc" for t in trackers)
 
 
@@ -185,7 +177,7 @@ async def test_list_trackers_includes_archived_when_requested(async_db: AsyncSes
 
 async def test_create_tracker_returns_persisted(async_db: AsyncSession) -> None:
     body = TrackerCreate(name="Mood", kind="binary", icon="smile", unit=None, position=10)
-    tracker = await create_tracker(async_db, body)
+    tracker = await TrackerService(async_db).create_tracker(body)
 
     assert tracker.id is not None
     assert tracker.name == "Mood"
@@ -195,23 +187,25 @@ async def test_create_tracker_returns_persisted(async_db: AsyncSession) -> None:
     assert tracker.archived is False
 
     # Verify it appears in list
-    all_trackers = await list_trackers(async_db)
+    all_trackers = await TrackerService(async_db).list_trackers()
     assert any(t.id == tracker.id for t in all_trackers)
 
 
 async def test_create_tracker_201_persisted(async_db: AsyncSession) -> None:
     body = TrackerCreate(name="Steps", kind="counter", unit="steps", position=5)
-    tracker = await create_tracker(async_db, body)
+    tracker = await TrackerService(async_db).create_tracker(body)
     assert tracker.id is not None
     assert tracker.unit == "steps"
 
 
 async def test_create_tracker_duplicate_name_raises_conflict(async_db: AsyncSession) -> None:
     body = TrackerCreate(name="UniqueTracker", kind="binary")
-    await create_tracker(async_db, body)
+    await TrackerService(async_db).create_tracker(body)
 
     with pytest.raises(ConflictError):
-        await create_tracker(async_db, TrackerCreate(name="UniqueTracker", kind="counter"))
+        await TrackerService(async_db).create_tracker(
+            TrackerCreate(name="UniqueTracker", kind="counter")
+        )
 
 
 async def test_create_tracker_slots_at_end_past_seeds(async_db: AsyncSession) -> None:
@@ -219,14 +213,14 @@ async def test_create_tracker_slots_at_end_past_seeds(async_db: AsyncSession) ->
     with them. Client-provided body.position is ignored."""
     await _insert_seeds(async_db)
     # Client tries to set position=0 (legacy frontend behavior); server overrides.
-    tracker = await create_tracker(
-        async_db, TrackerCreate(name="SlotCheck", kind="counter", position=0)
+    tracker = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="SlotCheck", kind="counter", position=0)
     )
     assert tracker.position == 4  # max(seeds=0..3) + 1
 
     # A second custom slots after the first.
-    second = await create_tracker(
-        async_db, TrackerCreate(name="SlotCheck2", kind="counter", position=0)
+    second = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="SlotCheck2", kind="counter", position=0)
     )
     assert second.position == 5
 
@@ -237,23 +231,33 @@ async def test_create_tracker_slots_at_end_past_seeds(async_db: AsyncSession) ->
 
 
 async def test_update_tracker_rename(async_db: AsyncSession) -> None:
-    tracker = await create_tracker(async_db, TrackerCreate(name="OldName", kind="binary"))
-    updated = await update_tracker(async_db, tracker.id, TrackerUpdate(name="NewName"))
+    tracker = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="OldName", kind="binary")
+    )
+    updated = await TrackerService(async_db).update_tracker(
+        tracker.id, TrackerUpdate(name="NewName")
+    )
     assert updated.name == "NewName"
 
 
 async def test_update_tracker_reorder(async_db: AsyncSession) -> None:
-    tracker = await create_tracker(async_db, TrackerCreate(name="ReorderMe", kind="binary"))
-    updated = await update_tracker(async_db, tracker.id, TrackerUpdate(position=42))
+    tracker = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ReorderMe", kind="binary")
+    )
+    updated = await TrackerService(async_db).update_tracker(tracker.id, TrackerUpdate(position=42))
     assert updated.position == 42
 
 
 async def test_update_tracker_archive(async_db: AsyncSession) -> None:
-    tracker = await create_tracker(async_db, TrackerCreate(name="ArchiveMe", kind="counter"))
-    updated = await update_tracker(async_db, tracker.id, TrackerUpdate(archived=True))
+    tracker = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ArchiveMe", kind="counter")
+    )
+    updated = await TrackerService(async_db).update_tracker(
+        tracker.id, TrackerUpdate(archived=True)
+    )
     assert updated.archived is True
     # Should not appear in default list
-    active = await list_trackers(async_db)
+    active = await TrackerService(async_db).list_trackers()
     assert not any(t.id == tracker.id for t in active)
 
 
@@ -262,7 +266,9 @@ async def test_update_tracker_rejects_kind_change(async_db: AsyncSession) -> Non
     The service also guards against it as defence-in-depth. We test both:
     1. TrackerUpdate has no 'kind' field, so model_dump never produces it.
     2. The service raises ValidationError when a caller injects it directly."""
-    tracker = await create_tracker(async_db, TrackerCreate(name="KindLocked", kind="binary"))
+    tracker = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="KindLocked", kind="binary")
+    )
 
     # 1. Schema-level: kind must not be a declared field on TrackerUpdate
     assert "kind" not in TrackerUpdate.model_fields
@@ -275,12 +281,12 @@ async def test_update_tracker_rejects_kind_change(async_db: AsyncSession) -> Non
 
     body_with_kind = _TrackerUpdateWithKind(kind="counter")  # explicitly set → in fields_set
     with pytest.raises(ValidationError):
-        await update_tracker(async_db, tracker.id, body_with_kind)  # type: ignore[arg-type]
+        await TrackerService(async_db).update_tracker(tracker.id, body_with_kind)  # type: ignore[arg-type]
 
 
 async def test_update_tracker_not_found(async_db: AsyncSession) -> None:
     with pytest.raises(NotFoundError):
-        await update_tracker(async_db, 999999, TrackerUpdate(name="Ghost"))
+        await TrackerService(async_db).update_tracker(999999, TrackerUpdate(name="Ghost"))
 
 
 # ---------------------------------------------------------------------------
@@ -293,11 +299,17 @@ async def test_reorder_trackers_persists_order_offset_past_seeds(
 ) -> None:
     """Reorder writes positions = idx + seed_count so customs sort after the 4 seeds."""
     await _insert_seeds(async_db)
-    a = await create_tracker(async_db, TrackerCreate(name="ReorderA", kind="counter"))
-    b = await create_tracker(async_db, TrackerCreate(name="ReorderB", kind="counter"))
-    c = await create_tracker(async_db, TrackerCreate(name="ReorderC", kind="counter"))
+    a = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ReorderA", kind="counter")
+    )
+    b = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ReorderB", kind="counter")
+    )
+    c = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ReorderC", kind="counter")
+    )
 
-    result = await reorder_trackers(async_db, [c.id, a.id, b.id])
+    result = await TrackerService(async_db).reorder_trackers([c.id, a.id, b.id])
 
     by_id = {t.id: t.position for t in result}
     # 4 seeded trackers occupy positions 0..3, customs get 4, 5, 6 in given order.
@@ -306,7 +318,7 @@ async def test_reorder_trackers_persists_order_offset_past_seeds(
     assert by_id[b.id] == 6
 
     # list_trackers sorts by position then name → seeds first, then customs in given order.
-    active = await list_trackers(async_db, include_archived=False)
+    active = await TrackerService(async_db).list_trackers(include_archived=False)
     custom_names_in_order = [t.name for t in active if not t.is_seed]
     assert custom_names_in_order == ["ReorderC", "ReorderA", "ReorderB"]
 
@@ -316,46 +328,60 @@ async def test_reorder_trackers_keeps_seeds_first_on_daily_card(
 ) -> None:
     """After reorder, list_trackers returns seeds at positions 0..3 then customs at 4+."""
     await _insert_seeds(async_db)
-    a = await create_tracker(async_db, TrackerCreate(name="ReorderA", kind="counter"))
-    b = await create_tracker(async_db, TrackerCreate(name="ReorderB", kind="counter"))
-    await reorder_trackers(async_db, [b.id, a.id])
+    a = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ReorderA", kind="counter")
+    )
+    b = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ReorderB", kind="counter")
+    )
+    await TrackerService(async_db).reorder_trackers([b.id, a.id])
 
-    active = await list_trackers(async_db, include_archived=False)
+    active = await TrackerService(async_db).list_trackers(include_archived=False)
     # First 4 are seeds (positions 0..3), then customs in the chosen order.
     assert [t.is_seed for t in active] == [True, True, True, True, False, False]
     assert [t.name for t in active[-2:]] == ["ReorderB", "ReorderA"]
 
 
 async def test_reorder_trackers_rejects_unknown_id(async_db: AsyncSession) -> None:
-    a = await create_tracker(async_db, TrackerCreate(name="ReorderKnown", kind="counter"))
+    a = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ReorderKnown", kind="counter")
+    )
     with pytest.raises(ValidationError):
-        await reorder_trackers(async_db, [a.id, 999999])
+        await TrackerService(async_db).reorder_trackers([a.id, 999999])
 
 
 async def test_reorder_trackers_rejects_seeded_id(async_db: AsyncSession) -> None:
     """Seeded trackers are not reorderable through this endpoint."""
     await _insert_seeds(async_db)
     seed = await _get_seeded_tracker(async_db, "Alcohol units")
-    custom = await create_tracker(async_db, TrackerCreate(name="ReorderCustom", kind="counter"))
+    custom = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ReorderCustom", kind="counter")
+    )
     with pytest.raises(ValidationError):
-        await reorder_trackers(async_db, [custom.id, seed.id])
+        await TrackerService(async_db).reorder_trackers([custom.id, seed.id])
 
 
 async def test_reorder_trackers_rejects_archived_id(async_db: AsyncSession) -> None:
-    tracker = await create_tracker(async_db, TrackerCreate(name="ReorderArchived", kind="counter"))
-    await update_tracker(async_db, tracker.id, TrackerUpdate(archived=True))
+    tracker = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ReorderArchived", kind="counter")
+    )
+    await TrackerService(async_db).update_tracker(tracker.id, TrackerUpdate(archived=True))
     with pytest.raises(ValidationError):
-        await reorder_trackers(async_db, [tracker.id])
+        await TrackerService(async_db).reorder_trackers([tracker.id])
 
 
 async def test_reorder_trackers_rejects_partial_order(async_db: AsyncSession) -> None:
     """Caller must include every eligible custom tracker in `order`; partial lists
     would leave the omitted trackers with stale positions that collide with the
     newly assigned ones."""
-    a = await create_tracker(async_db, TrackerCreate(name="PartialA", kind="counter"))
-    b = await create_tracker(async_db, TrackerCreate(name="PartialB", kind="counter"))
+    a = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="PartialA", kind="counter")
+    )
+    b = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="PartialB", kind="counter")
+    )
     with pytest.raises(ValidationError, match="exactly all"):
-        await reorder_trackers(async_db, [a.id])  # missing b.id
+        await TrackerService(async_db).reorder_trackers([a.id])  # missing b.id
     # Reference b so the test doesn't trip "unused variable" lint.
     assert b.id != a.id
 
@@ -379,10 +405,10 @@ async def test_order_request_rejects_duplicates() -> None:
 
 
 async def test_upsert_custom_tracker_value_no_entry_mirror(async_db: AsyncSession) -> None:
-    tracker = await create_tracker(
-        async_db, TrackerCreate(name="CustomCounter", kind="counter", unit="reps")
+    tracker = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="CustomCounter", kind="counter", unit="reps")
     )
-    log = await upsert_tracker_value(async_db, _DATE, tracker.id, 5)
+    log = await TrackerService(async_db).upsert_tracker_value(_DATE, tracker.id, 5)
 
     assert log.tracker_id == tracker.id
     assert log.date == _DATE
@@ -394,11 +420,11 @@ async def test_upsert_custom_tracker_value_no_entry_mirror(async_db: AsyncSessio
 
 
 async def test_upsert_custom_tracker_value_idempotent(async_db: AsyncSession) -> None:
-    tracker = await create_tracker(
-        async_db, TrackerCreate(name="IdempotentTracker", kind="counter")
+    tracker = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="IdempotentTracker", kind="counter")
     )
-    await upsert_tracker_value(async_db, _DATE2, tracker.id, 3)
-    log = await upsert_tracker_value(async_db, _DATE2, tracker.id, 7)
+    await TrackerService(async_db).upsert_tracker_value(_DATE2, tracker.id, 3)
+    log = await TrackerService(async_db).upsert_tracker_value(_DATE2, tracker.id, 7)
 
     assert log.value == 7
 
@@ -447,7 +473,7 @@ async def test_upsert_seeded_tracker_mirrors_to_entry(async_db: AsyncSession) ->
     )
     entry = await _make_entry(async_db, date=_DATE, alcohol_units=0)
 
-    log = await upsert_tracker_value(async_db, _DATE, alcohol_tracker.id, 3)
+    log = await TrackerService(async_db).upsert_tracker_value(_DATE, alcohol_tracker.id, 3)
     assert log.value == 3
 
     # Entry column should be mirrored
@@ -459,7 +485,9 @@ async def test_upsert_seeded_tracker_binary_mirrors_to_entry(async_db: AsyncSess
     sick_tracker = await _insert_seed_tracker(async_db, "Sick", "binary", "thermometer", None, 2)
     entry = await _make_entry(async_db, date=datetime.date(2026, 5, 22), sick=False)
 
-    log = await upsert_tracker_value(async_db, datetime.date(2026, 5, 22), sick_tracker.id, 1)
+    log = await TrackerService(async_db).upsert_tracker_value(
+        datetime.date(2026, 5, 22), sick_tracker.id, 1
+    )
     assert log.value == 1
 
     await async_db.refresh(entry)
@@ -473,7 +501,7 @@ async def test_upsert_seeded_tracker_no_entry_skips_mirror(async_db: AsyncSessio
     )
     no_entry_date = datetime.date(2026, 1, 1)
 
-    log = await upsert_tracker_value(async_db, no_entry_date, caffeine_tracker.id, 2)
+    log = await TrackerService(async_db).upsert_tracker_value(no_entry_date, caffeine_tracker.id, 2)
     assert log.value == 2
 
     # No entry should have been created
@@ -510,7 +538,7 @@ async def test_sync_creates_tracker_log_from_entry(async_db: AsyncSession) -> No
 
     await sync_seed_tracker_log_from_entry(async_db, entry)
 
-    logs = await list_tracker_values(async_db, entry_date)
+    logs = await TrackerService(async_db).list_tracker_values(entry_date)
     log_by_tracker = {log.tracker_id: log for log in logs}
 
     # alcohol_units=2 → logged
@@ -537,7 +565,7 @@ async def test_sync_skips_zero_counters(async_db: AsyncSession) -> None:
 
     await sync_seed_tracker_log_from_entry(async_db, entry)
 
-    logs = await list_tracker_values(async_db, entry_date)
+    logs = await TrackerService(async_db).list_tracker_values(entry_date)
     assert not any(log.tracker_id == alcohol_tracker.id for log in logs)
 
 
@@ -551,7 +579,7 @@ async def test_sync_is_idempotent(async_db: AsyncSession) -> None:
     await sync_seed_tracker_log_from_entry(async_db, entry)
     await sync_seed_tracker_log_from_entry(async_db, entry)
 
-    logs = await list_tracker_values(async_db, entry_date)
+    logs = await TrackerService(async_db).list_tracker_values(entry_date)
     alcohol_logs = [log for log in logs if log.tracker_id == alcohol_tracker.id]
     assert len(alcohol_logs) == 1
     assert alcohol_logs[0].value == 3
@@ -563,20 +591,20 @@ async def test_sync_is_idempotent(async_db: AsyncSession) -> None:
 
 
 async def test_list_tracker_values_returns_logs_for_date(async_db: AsyncSession) -> None:
-    tracker = await create_tracker(
-        async_db, TrackerCreate(name="ListValuesTracker", kind="counter")
+    tracker = await TrackerService(async_db).create_tracker(
+        TrackerCreate(name="ListValuesTracker", kind="counter")
     )
     log_date = datetime.date(2026, 5, 15)
     other_date = datetime.date(2026, 5, 16)
 
-    await upsert_tracker_value(async_db, log_date, tracker.id, 10)
-    await upsert_tracker_value(async_db, other_date, tracker.id, 20)
+    await TrackerService(async_db).upsert_tracker_value(log_date, tracker.id, 10)
+    await TrackerService(async_db).upsert_tracker_value(other_date, tracker.id, 20)
 
-    logs = await list_tracker_values(async_db, log_date)
+    logs = await TrackerService(async_db).list_tracker_values(log_date)
     assert any(log.tracker_id == tracker.id and log.value == 10 for log in logs)
     assert not any(log.date == other_date for log in logs)
 
 
 async def test_list_tracker_values_empty_for_date_with_no_logs(async_db: AsyncSession) -> None:
-    logs = await list_tracker_values(async_db, datetime.date(2000, 1, 1))
+    logs = await TrackerService(async_db).list_tracker_values(datetime.date(2000, 1, 1))
     assert logs == []

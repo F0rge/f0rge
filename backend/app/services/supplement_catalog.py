@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import datetime
 import re
 from typing import Iterable
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.supplement_catalog import SupplementCatalogCRUD
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.supplement_catalog import SupplementCatalogItem
-from app.tenant import current_user_id, owned_by_user
+from app.tenant import current_user_id
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
@@ -20,120 +19,44 @@ def normalize_key(raw: str) -> str:
     return key
 
 
-async def list_items(
-    db: AsyncSession, include_archived: bool = False
-) -> list[SupplementCatalogItem]:
-    stmt = select(SupplementCatalogItem).where(owned_by_user(SupplementCatalogItem.user_id))
-    if not include_archived:
-        stmt = stmt.where(SupplementCatalogItem.archived.is_(False))
-    stmt = stmt.order_by(
-        SupplementCatalogItem.sort_order.asc(),
-        SupplementCatalogItem.id.asc(),
-    )
-    return list((await db.execute(stmt)).scalars().all())
-
-
-async def create_item(db: AsyncSession, key: str, label: str) -> SupplementCatalogItem:
-    normalized = normalize_key(key)
-    if not normalized or not _KEY_RE.match(normalized):
-        raise ValidationError("Invalid key; must contain a-z, 0-9, or underscore.")
-
-    existing = (
-        await db.execute(
-            select(SupplementCatalogItem).where(
-                owned_by_user(SupplementCatalogItem.user_id),
-                SupplementCatalogItem.key == normalized,
-            )
-        )
-    ).scalar_one_or_none()
-
-    if existing:
-        if existing.archived:
-            existing.archived = False
-            existing.label = label
-            await db.commit()
-            await db.refresh(existing)
-            return existing
-        raise ConflictError(f"Catalog item '{normalized}' already exists.")
-
-    max_item = (
-        (
-            await db.execute(
-                select(SupplementCatalogItem)
-                .where(owned_by_user(SupplementCatalogItem.user_id))
-                .order_by(SupplementCatalogItem.sort_order.desc())
-            )
-        )
-        .scalars()
-        .first()
-    )
-    next_sort = (max_item.sort_order + 1) if max_item else 0
-
-    item = SupplementCatalogItem(
-        user_id=current_user_id(), key=normalized, label=label, sort_order=next_sort
-    )
-    db.add(item)
-    await db.commit()
-    await db.refresh(item)
-    return item
-
-
-async def update_item(db: AsyncSession, key: str, data: dict) -> SupplementCatalogItem:
-    item = (
-        await db.execute(
-            select(SupplementCatalogItem).where(
-                owned_by_user(SupplementCatalogItem.user_id),
-                SupplementCatalogItem.key == key,
-            )
-        )
-    ).scalar_one_or_none()
-    if not item:
-        raise NotFoundError(f"Catalog item '{key}' not found.")
-
-    for field, value in data.items():
-        setattr(item, field, value)
-    await db.commit()
-    await db.refresh(item)
-    return item
-
-
-async def touch(db: AsyncSession, keys: Iterable[str]) -> None:
-    """Bulk-update first_used_at/last_used_at. Caller owns the transaction."""
-    key_list = list(keys)
-    if not key_list:
-        return
-    now = datetime.datetime.utcnow()
-    existing = {
-        item.key: item
-        for item in (
-            await db.execute(
-                select(SupplementCatalogItem).where(
-                    owned_by_user(SupplementCatalogItem.user_id),
-                    SupplementCatalogItem.key.in_(key_list),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    }
-    for key in key_list:
-        item = existing.get(key)
-        if item is None:
-            continue
-        if item.first_used_at is None:
-            item.first_used_at = now
-        item.last_used_at = now
-
-
 class SupplementCatalogService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.crud = SupplementCatalogCRUD(db)
 
     async def list_items(self, include_archived: bool = False) -> list[SupplementCatalogItem]:
-        return await list_items(self.db, include_archived=include_archived)
+        return await self.crud.list(include_archived=include_archived)
 
     async def create_item(self, key: str, label: str) -> SupplementCatalogItem:
-        return await create_item(self.db, key, label)
+        normalized = normalize_key(key)
+        if not normalized or not _KEY_RE.match(normalized):
+            raise ValidationError("Invalid key; must contain a-z, 0-9, or underscore.")
+
+        existing = await self.crud.get_by_key(normalized)
+        if existing:
+            if existing.archived:
+                existing.archived = False
+                existing.label = label
+                return await self.crud.commit_refresh(existing)
+            raise ConflictError(f"Catalog item '{normalized}' already exists.")
+
+        max_item = await self.crud.get_max_sort_order_item()
+        next_sort = (max_item.sort_order + 1) if max_item else 0
+
+        item = SupplementCatalogItem(
+            user_id=current_user_id(), key=normalized, label=label, sort_order=next_sort
+        )
+        self.crud.add(item)
+        return await self.crud.commit_refresh(item)
 
     async def update_item(self, key: str, data: dict) -> SupplementCatalogItem:
-        return await update_item(self.db, key, data)
+        item = await self.crud.get_by_key(key)
+        if not item:
+            raise NotFoundError(f"Catalog item '{key}' not found.")
+
+        for field, value in data.items():
+            setattr(item, field, value)
+        return await self.crud.commit_refresh(item)
+
+    async def touch(self, keys: Iterable[str]) -> None:
+        return await self.crud.touch(keys)

@@ -2,27 +2,20 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.entry import Entry
-from app.models.health_metrics import HealthMetric
+from app.crud.enriched import EnrichedCRUD
 from app.schemas.enriched import EnrichedDayResponse
-from app.services.weather import get_daily_summary
-
-
-async def get_enriched_day(db: AsyncSession, date: datetime.date) -> EnrichedDayResponse:
-    entry = (await db.execute(select(Entry).where(Entry.date == date))).scalar_one_or_none()
-    weather = await get_daily_summary(db, date)
-    health = (
-        await db.execute(select(HealthMetric).where(HealthMetric.date == date))
-    ).scalar_one_or_none()
-    return EnrichedDayResponse(entry=entry, weather=weather, health_metrics=health)
+from app.services.weather import WeatherService
 
 
 class EnrichedService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.crud = EnrichedCRUD(db)
 
     async def get_enriched_day(self, date: datetime.date) -> EnrichedDayResponse:
-        return await get_enriched_day(self.db, date)
+        entry = await self.crud.get_entry_by_date(date)
+        weather = await WeatherService(self.db).get_daily_summary(date)
+        health = await self.crud.get_health_metric_by_date(date)
+        return EnrichedDayResponse(entry=entry, weather=weather, health_metrics=health)
