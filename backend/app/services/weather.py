@@ -12,8 +12,10 @@ from app.config import settings
 from app.crud.weather import WeatherCRUD
 from app.database import async_session_maker
 from app.exceptions import ExternalServiceError, NotFoundError
+from app.models.user import default_user_id
 from app.models.weather import WeatherReading
 from app.schemas.weather import WeatherDailySummary
+from app.tenant import apply_session_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ async def fetch_and_store_weather() -> Optional[WeatherReading]:
 
     try:
         async with async_session_maker() as db:
+            await apply_session_user_id(db, default_user_id())
             crud = WeatherCRUD(db)
             existing = await crud.get_by_timestamp(truncated)
 

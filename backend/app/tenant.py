@@ -26,10 +26,14 @@ def owned_by_user(column: InstrumentedAttribute[uuid.UUID]) -> sa.ColumnElement[
 async def apply_session_user_id(session: AsyncSession, user_id: uuid.UUID) -> None:
     """Set Postgres ``app.user_id`` for RLS policies for this connection.
 
+    Also sets ``user_id_ctx`` so ``owned_by_user`` / ``current_user_id()`` work
+    in background workers and other non-request code paths that call this helper.
+
     Uses session-scoped config (``is_local=false``) so values survive ``COMMIT``
     within the same request — transaction-local config is cleared on commit and
     breaks ``refresh()`` after writes.
     """
+    user_id_ctx.set(user_id)
     await session.execute(
         sa.text("SELECT set_config('app.user_id', :user_id, false)"),
         {"user_id": str(user_id)},

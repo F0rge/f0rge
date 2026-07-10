@@ -222,6 +222,7 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
         if analysis is not None:
             try:
                 async with async_session_maker() as db:
+                    await apply_session_user_id(db, analysis.user_id)
                     crud = PhotoAnalysisCRUD(db)
                     fresh = await crud.get_by_id(analysis.id)
                     if fresh:

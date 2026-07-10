@@ -7,6 +7,7 @@ real (container) DB session.
 from __future__ import annotations
 
 import datetime
+import uuid
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,12 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
+from tests.conftest import authed_user_id
 
 _DATE = datetime.date(2026, 4, 1)
 
 
-async def _make_photo_with_analysis(db: AsyncSession) -> int:
+async def _make_photo_with_analysis(db: AsyncSession, user_id: uuid.UUID) -> int:
     entry = Entry(
+        user_id=user_id,
         date=_DATE,
         schema_version=4,
         overall=2,
@@ -37,10 +40,10 @@ async def _make_photo_with_analysis(db: AsyncSession) -> int:
     )
     db.add(entry)
     await db.flush()
-    photo = Photo(entry_id=entry.id, filename="meal.jpg")
+    photo = Photo(user_id=user_id, entry_id=entry.id, filename="meal.jpg")
     db.add(photo)
     await db.flush()
-    analysis = PhotoAnalysis(photo_id=photo.id, status="confirmed")
+    analysis = PhotoAnalysis(user_id=user_id, photo_id=photo.id, status="confirmed")
     db.add(analysis)
     await db.flush()
     await db.commit()
@@ -66,7 +69,7 @@ async def test_dietary_confirm_missing_analysis_404(authed_client: AsyncClient) 
 async def test_dietary_confirm_sets_and_returns_flags(
     authed_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    photo_id = await _make_photo_with_analysis(async_db)
+    photo_id = await _make_photo_with_analysis(async_db, await authed_user_id(authed_client))
 
     resp = await authed_client.put(
         f"/api/v1/photos/{photo_id}/analysis/dietary-confirm",
@@ -86,7 +89,7 @@ async def test_dietary_confirm_sets_and_returns_flags(
 async def test_dietary_confirm_partial_update_does_not_clobber_other_flag(
     authed_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    photo_id = await _make_photo_with_analysis(async_db)
+    photo_id = await _make_photo_with_analysis(async_db, await authed_user_id(authed_client))
 
     await authed_client.put(
         f"/api/v1/photos/{photo_id}/analysis/dietary-confirm",

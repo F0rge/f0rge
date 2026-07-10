@@ -48,8 +48,9 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://health:${POSTGRES_PASSWORD}@postgres:5432/health
+      - DATABASE_URL=postgresql+asyncpg://healthtracker_app:${HEALTHTRACKER_APP_PASSWORD}@postgres:5432/health
       - MCP_READONLY_DATABASE_URL=postgresql+asyncpg://healthtracker_ro:${HEALTHTRACKER_RO_PASSWORD}@postgres:5432/health
+      - HEALTHTRACKER_APP_PASSWORD=${HEALTHTRACKER_APP_PASSWORD}
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
       - MCP_SERVER_HOST=0.0.0.0
       - MCP_SERVER_PORT=8005

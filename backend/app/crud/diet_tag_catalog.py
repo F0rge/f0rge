@@ -8,4 +8,4 @@ from app.models.diet_tag_catalog import DietTagCatalogItem
 
 class DietTagCatalogCRUD(CatalogItemCRUD[DietTagCatalogItem]):
     def __init__(self, db: AsyncSession) -> None:
-        super().__init__(db, DietTagCatalogItem, user_scoped=False)
+        super().__init__(db, DietTagCatalogItem, user_scoped=True)

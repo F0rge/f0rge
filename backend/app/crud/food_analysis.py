@@ -12,6 +12,7 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
+from app.tenant import owned_by_user
 
 
 class PhotoAnalysisCRUD(BaseCRUD):
@@ -19,26 +20,30 @@ class PhotoAnalysisCRUD(BaseCRUD):
         super().__init__(db)
 
     async def get_by_id(self, analysis_id: int) -> Optional[PhotoAnalysis]:
-        stmt = select(PhotoAnalysis).where(PhotoAnalysis.id == analysis_id)
+        stmt = select(PhotoAnalysis).where(
+            owned_by_user(PhotoAnalysis.user_id), PhotoAnalysis.id == analysis_id
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_by_id_with_ingredients(self, analysis_id: int) -> Optional[PhotoAnalysis]:
         stmt = (
             select(PhotoAnalysis)
             .options(selectinload(PhotoAnalysis.ingredients))
-            .where(PhotoAnalysis.id == analysis_id)
+            .where(owned_by_user(PhotoAnalysis.user_id), PhotoAnalysis.id == analysis_id)
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_by_photo_id(self, photo_id: int) -> Optional[PhotoAnalysis]:
-        stmt = select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id)
+        stmt = select(PhotoAnalysis).where(
+            owned_by_user(PhotoAnalysis.user_id), PhotoAnalysis.photo_id == photo_id
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_by_photo_id_with_ingredients(self, photo_id: int) -> Optional[PhotoAnalysis]:
         stmt = (
             select(PhotoAnalysis)
             .options(selectinload(PhotoAnalysis.ingredients))
-            .where(PhotoAnalysis.photo_id == photo_id)
+            .where(owned_by_user(PhotoAnalysis.user_id), PhotoAnalysis.photo_id == photo_id)
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
@@ -48,7 +53,7 @@ class PhotoAnalysisCRUD(BaseCRUD):
         stmt = (
             select(PhotoAnalysis)
             .options(selectinload(PhotoAnalysis.ingredients), selectinload(PhotoAnalysis.photo))
-            .where(PhotoAnalysis.photo_id == photo_id)
+            .where(owned_by_user(PhotoAnalysis.user_id), PhotoAnalysis.photo_id == photo_id)
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
@@ -69,6 +74,7 @@ class PhotoAnalysisCRUD(BaseCRUD):
             # analysis.ingredients, and a lazy load here would raise MissingGreenlet.
             .options(selectinload(PhotoAnalysis.ingredients))
             .where(
+                owned_by_user(Entry.user_id),
                 PhotoAnalysis.status == "confirmed",
                 PhotoAnalysis.dish_name.isnot(None),
             )
@@ -82,5 +88,7 @@ class PhotoIngredientCRUD(BaseCRUD):
         super().__init__(db)
 
     async def get_by_id(self, ingredient_id: int) -> Optional[PhotoIngredient]:
-        stmt = select(PhotoIngredient).where(PhotoIngredient.id == ingredient_id)
+        stmt = select(PhotoIngredient).where(
+            owned_by_user(PhotoIngredient.user_id), PhotoIngredient.id == ingredient_id
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()

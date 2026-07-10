@@ -17,6 +17,7 @@ from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
+from app.tenant import owned_by_user
 from app.utils.dates import local_today
 
 FEATURE_SCHEMA_VERSION = 4
@@ -187,7 +188,9 @@ async def build_feature_matrix(
     if end_date is None:
         end_date = local_today()
     if start_date is None:
-        earliest = (await db.execute(select(func.min(Entry.date)))).scalar()
+        earliest = (
+            await db.execute(select(func.min(Entry.date)).where(owned_by_user(Entry.user_id)))
+        ).scalar()
         start_date = earliest if earliest is not None else end_date
 
     # Clamp: start must not exceed end
@@ -198,7 +201,10 @@ async def build_feature_matrix(
         (
             await db.execute(
                 select(Entry)
-                .where(Entry.date.between(start_date, end_date))
+                .where(
+                    owned_by_user(Entry.user_id),
+                    Entry.date.between(start_date, end_date),
+                )
                 .options(
                     selectinload(Entry.photos)
                     .selectinload(Photo.analysis)
@@ -215,7 +221,10 @@ async def build_feature_matrix(
         h.date: h
         for h in (
             await db.execute(
-                select(HealthMetric).where(HealthMetric.date.between(start_date, end_date))
+                select(HealthMetric).where(
+                    owned_by_user(HealthMetric.user_id),
+                    HealthMetric.date.between(start_date, end_date),
+                )
             )
         )
         .scalars()
@@ -226,7 +235,10 @@ async def build_feature_matrix(
     all_weather = (
         (
             await db.execute(
-                select(WeatherReading).where(WeatherReading.date.between(weather_start, end_date))
+                select(WeatherReading).where(
+                    owned_by_user(WeatherReading.user_id),
+                    WeatherReading.date.between(weather_start, end_date),
+                )
             )
         )
         .scalars()
@@ -240,7 +252,10 @@ async def build_feature_matrix(
         (
             await db.execute(
                 select(SupplementCatalogItem)
-                .where(SupplementCatalogItem.first_used_at.isnot(None))
+                .where(
+                    owned_by_user(SupplementCatalogItem.user_id),
+                    SupplementCatalogItem.first_used_at.isnot(None),
+                )
                 .order_by(SupplementCatalogItem.key)
             )
         )
@@ -254,6 +269,7 @@ async def build_feature_matrix(
             await db.execute(
                 select(SymptomCatalogItem)
                 .where(
+                    owned_by_user(SymptomCatalogItem.user_id),
                     SymptomCatalogItem.first_used_at.isnot(None),
                     SymptomCatalogItem.archived.is_(False),
                 )
@@ -270,6 +286,7 @@ async def build_feature_matrix(
             await db.execute(
                 select(Treatment)
                 .where(
+                    owned_by_user(Treatment.user_id),
                     Treatment.start_date <= end_date,
                     (Treatment.end_date.is_(None)) | (Treatment.end_date >= start_date),
                 )

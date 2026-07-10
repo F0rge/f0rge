@@ -11,11 +11,14 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.treatment import Treatment
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
+from app.tenant import owned_by_user
 
 
 async def serialize_entry(db: AsyncSession, source_id: int) -> Optional[str]:
     """Return the canonical text for an entry row, or None if deleted."""
-    result = await db.execute(select(Entry).where(Entry.id == source_id))
+    result = await db.execute(
+        select(Entry).where(owned_by_user(Entry.user_id), Entry.id == source_id)
+    )
     row = result.scalar_one_or_none()
     if row is None:
         return None
@@ -46,7 +49,7 @@ async def serialize_entry(db: AsyncSession, source_id: int) -> Optional[str]:
 
 async def serialize_lab(db: AsyncSession, source_id: int) -> Optional[str]:
     """Return the canonical text for a lab row (uses raw_text), or None if deleted."""
-    result = await db.execute(select(Lab).where(Lab.id == source_id))
+    result = await db.execute(select(Lab).where(owned_by_user(Lab.user_id), Lab.id == source_id))
     row = result.scalar_one_or_none()
     if row is None:
         return None
@@ -61,7 +64,9 @@ async def serialize_lab(db: AsyncSession, source_id: int) -> Optional[str]:
 
 async def serialize_treatment(db: AsyncSession, source_id: int) -> Optional[str]:
     """Return the canonical text for a treatment row, or None if deleted."""
-    result = await db.execute(select(Treatment).where(Treatment.id == source_id))
+    result = await db.execute(
+        select(Treatment).where(owned_by_user(Treatment.user_id), Treatment.id == source_id)
+    )
     row = result.scalar_one_or_none()
     if row is None:
         return None
@@ -81,7 +86,11 @@ async def serialize_treatment(db: AsyncSession, source_id: int) -> Optional[str]
 
 async def serialize_photo_analysis(db: AsyncSession, source_id: int) -> Optional[str]:
     """Return the canonical text for a photo_analysis row (joins photo_ingredients)."""
-    result = await db.execute(select(PhotoAnalysis).where(PhotoAnalysis.id == source_id))
+    result = await db.execute(
+        select(PhotoAnalysis).where(
+            owned_by_user(PhotoAnalysis.user_id), PhotoAnalysis.id == source_id
+        )
+    )
     row = result.scalar_one_or_none()
     if row is None:
         return None
@@ -96,7 +105,9 @@ async def serialize_photo_analysis(db: AsyncSession, source_id: int) -> Optional
 
     # Fetch ingredients separately (lazy="selectin" should handle it, but be explicit).
     ingredients_result = await db.execute(
-        select(PhotoIngredient).where(PhotoIngredient.analysis_id == source_id)
+        select(PhotoIngredient).where(
+            owned_by_user(PhotoIngredient.user_id), PhotoIngredient.analysis_id == source_id
+        )
     )
     ingredients = ingredients_result.scalars().all()
     if ingredients:

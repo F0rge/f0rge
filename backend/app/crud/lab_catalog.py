@@ -10,6 +10,7 @@ from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.models.lab_marker_alias import LabMarkerAlias
 from app.models.lab_marker_catalog import LabMarkerCatalog
+from app.tenant import owned_by_user
 
 
 class LabMarkerCatalogCRUD(BaseCRUD):
@@ -18,12 +19,15 @@ class LabMarkerCatalogCRUD(BaseCRUD):
 
     async def search(self, q: Optional[str], limit: int) -> List[LabMarkerCatalog]:
         """Search catalog by canonical name, display name, or alias (ilike)."""
-        stmt = select(LabMarkerCatalog)
+        stmt = select(LabMarkerCatalog).where(owned_by_user(LabMarkerCatalog.user_id))
         if q:
             pattern = f"%{q}%"
             alias_ids_stmt = (
                 select(LabMarkerAlias.catalog_id)
-                .where(LabMarkerAlias.alias.ilike(pattern))
+                .where(
+                    owned_by_user(LabMarkerAlias.user_id),
+                    LabMarkerAlias.alias.ilike(pattern),
+                )
                 .subquery()
             )
             stmt = stmt.where(
@@ -39,6 +43,8 @@ class LabMarkerCatalogCRUD(BaseCRUD):
             select(LabMarker)
             .join(Lab, LabMarker.lab_id == Lab.id)
             .where(
+                owned_by_user(LabMarker.user_id),
+                owned_by_user(Lab.user_id),
                 LabMarker.canonical_name == canonical_name,
                 LabMarker.value.isnot(None),
             )
@@ -47,17 +53,27 @@ class LabMarkerCatalogCRUD(BaseCRUD):
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def get_by_canonical(self, canonical_name: str) -> Optional[LabMarkerCatalog]:
-        stmt = select(LabMarkerCatalog).where(LabMarkerCatalog.canonical_name == canonical_name)
+        stmt = select(LabMarkerCatalog).where(
+            owned_by_user(LabMarkerCatalog.user_id),
+            LabMarkerCatalog.canonical_name == canonical_name,
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_by_canonical_ilike(self, canonical_name: str) -> Optional[LabMarkerCatalog]:
-        stmt = select(LabMarkerCatalog).where(LabMarkerCatalog.canonical_name.ilike(canonical_name))
+        stmt = select(LabMarkerCatalog).where(
+            owned_by_user(LabMarkerCatalog.user_id),
+            LabMarkerCatalog.canonical_name.ilike(canonical_name),
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_by_id(self, catalog_id: int) -> Optional[LabMarkerCatalog]:
-        stmt = select(LabMarkerCatalog).where(LabMarkerCatalog.id == catalog_id)
+        stmt = select(LabMarkerCatalog).where(
+            owned_by_user(LabMarkerCatalog.user_id), LabMarkerCatalog.id == catalog_id
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_alias(self, alias: str) -> Optional[LabMarkerAlias]:
-        stmt = select(LabMarkerAlias).where(LabMarkerAlias.alias == alias)
+        stmt = select(LabMarkerAlias).where(
+            owned_by_user(LabMarkerAlias.user_id), LabMarkerAlias.alias == alias
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()

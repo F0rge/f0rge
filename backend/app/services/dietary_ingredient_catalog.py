@@ -13,6 +13,7 @@ from app.schemas.dietary_ingredient import (
     DietaryIngredientCreate,
     DietaryIngredientUpdate,
 )
+from app.tenant import current_user_id
 
 
 class DietaryIngredientCatalogService:
@@ -50,7 +51,7 @@ class DietaryIngredientCatalogService:
                 return await self.crud.commit_refresh(existing)
             raise ConflictError(f"Dietary ingredient '{normalized}' already exists.")
 
-        item = DietaryIngredient(**payload)
+        item = DietaryIngredient(**payload, user_id=current_user_id())
         self.crud.add(item)
         return await self.crud.commit_refresh(item)
 
@@ -82,7 +83,12 @@ class DietaryIngredientCatalogService:
         # Append through the relationship (not a bare IngredientAlias(...) + db.add())
         # so the parent's already-loaded `aliases` collection stays in sync --
         # otherwise a second read within the same session sees a stale empty list.
-        alias = IngredientAlias(alias=normalized_alias, language=data.language)
+        alias = IngredientAlias(
+            alias=normalized_alias,
+            language=data.language,
+            user_id=ingredient.user_id,
+            canonical_name=ingredient.canonical_name,
+        )
         ingredient.aliases.append(alias)
         return await self.crud.commit_refresh(alias)
 
