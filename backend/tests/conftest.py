@@ -196,3 +196,9 @@ async def authed_client(async_client: AsyncClient) -> AsyncClient:
     )
     assert resp.status_code == 200
     return async_client
+
+
+async def authed_user_id(client: httpx.AsyncClient) -> uuid.UUID:
+    me = await client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+    return uuid.UUID(me.json()["user_id"])
