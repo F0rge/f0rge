@@ -111,7 +111,7 @@ export function useCheckinBoardState({
   const setNeuroDirty = useCallback((v: number) => { markDirty(); setNeuro(v) }, [markDirty])
   const setSleepQualityDirty = useCallback((v: number) => { markDirty(); setSleepQuality(v) }, [markDirty])
   const setStressDirty = useCallback((v: number) => { markDirty(); setStress(v) }, [markDirty])
-  const setNotesDirty = useCallback((v: string) => { markDirty(); setNotes(v) }, [markDirty])
+  const setNotesValue = useCallback((v: string) => { setNotes(v) }, [])
   const setSickDirty = useCallback((v: boolean) => { markDirty(); setSick(v) }, [markDirty])
   const setHotShowerDirty = useCallback((v: boolean) => { markDirty(); setHotShower(v) }, [markDirty])
   const setSymptomsJsonDirty = useCallback(
@@ -245,13 +245,28 @@ export function useCheckinBoardState({
   }, [autosave.status, autosave.lastSavedAt, autosave.errorMessage, onAutosaveStateChange])
 
   const autosaveRef = useRef(autosave)
+  const notesDraftFlushRef = useRef<(() => void) | null>(null)
+  const registerNotesDraftFlush = useCallback((flush: () => void) => {
+    notesDraftFlushRef.current = flush
+  }, [])
+
   useEffect(() => { autosaveRef.current = autosave })
   useEffect(() => {
+    const flushNotesDraft = () => notesDraftFlushRef.current?.()
     onAutosaveFnsReady?.({
-      flush: () => autosaveRef.current.flush(),
-      forceFlush: () => autosaveRef.current.forceFlush(),
+      flush: () => {
+        flushNotesDraft()
+        autosaveRef.current.flush()
+      },
+      forceFlush: async () => {
+        flushNotesDraft()
+        await autosaveRef.current.forceFlush()
+      },
       retry: () => autosaveRef.current.retry(),
-      flushBeacon: () => autosaveRef.current.flushBeacon(),
+      flushBeacon: () => {
+        flushNotesDraft()
+        autosaveRef.current.flushBeacon()
+      },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -303,7 +318,8 @@ export function useCheckinBoardState({
     hotShower,
     setHotShowerDirty,
     notes,
-    setNotesDirty,
+    setNotesValue,
+    registerNotesDraftFlush,
   }
 }
 
