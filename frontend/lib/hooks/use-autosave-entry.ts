@@ -21,11 +21,13 @@ interface UseAutosaveEntryArgs {
   hasExistingEntry: boolean
 }
 
+type PayloadPatch = Partial<EntryCreate>
+
 interface UseAutosaveEntryReturn extends AutosaveState {
-  flush: () => void
-  forceFlush: () => Promise<void>
+  flush: (patch?: PayloadPatch) => void
+  forceFlush: (patch?: PayloadPatch) => Promise<void>
   retry: () => void
-  flushBeacon: () => void
+  flushBeacon: (patch?: PayloadPatch) => void
 }
 
 const DEBOUNCE_MS = 500
@@ -239,8 +241,14 @@ export function useAutosaveEntry({
     }
   }, [clearDebounce, clearRetry])
 
+  const applyPayloadPatch = useCallback((patch?: PayloadPatch) => {
+    if (!patch || !pendingPayloadRef.current) return
+    pendingPayloadRef.current = { ...pendingPayloadRef.current, ...patch }
+  }, [])
+
   // flush: clear debounce and fire now if there's something pending.
-  const flush = useCallback(() => {
+  const flush = useCallback((patch?: PayloadPatch) => {
+    applyPayloadPatch(patch)
     clearDebounce()
     if (pendingPayloadRef.current && !inFlightRef.current) {
       const serialized = JSON.stringify(pendingPayloadRef.current)
@@ -248,16 +256,17 @@ export function useAutosaveEntry({
         void fire()
       }
     }
-  }, [clearDebounce, fire])
+  }, [applyPayloadPatch, clearDebounce, fire])
 
   // forceFlush: fires even if payload matches last sent — used by photo upload to ensure
   // an entry row exists before uploading a photo.
-  const forceFlush = useCallback(async () => {
+  const forceFlush = useCallback(async (patch?: PayloadPatch) => {
+    applyPayloadPatch(patch)
     clearDebounce()
     if (pendingPayloadRef.current && !inFlightRef.current) {
       await fire()
     }
-  }, [clearDebounce, fire])
+  }, [applyPayloadPatch, clearDebounce, fire])
 
   const retry = useCallback(() => {
     clearRetry()
@@ -269,7 +278,8 @@ export function useAutosaveEntry({
   // flushBeacon: safe to call during pagehide — uses keepalive fetch (PUT) or
   // sendBeacon (POST) so the request survives page teardown. No-ops when
   // pendingPayload matches the last successfully serialized value.
-  const flushBeacon = useCallback(() => {
+  const flushBeacon = useCallback((patch?: PayloadPatch) => {
+    applyPayloadPatch(patch)
     const toSend = pendingPayloadRef.current
     if (!toSend) return
 
@@ -292,7 +302,7 @@ export function useAutosaveEntry({
         new Blob([serialized], { type: 'application/json' }),
       )
     }
-  }, [date])
+  }, [applyPayloadPatch, date])
 
   // Derive blocked state at render time. `blocked` is a first-class prop (the
   // Bristol-gate flag) — not inferred from `enabled` — so clean page load

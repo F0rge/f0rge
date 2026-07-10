@@ -8,10 +8,20 @@ import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card
 interface NotesCardProps extends CheckinCardCollapseProps {
   value: string
   onChange: (v: string) => void
-  onBlur: () => void
+  onEditStart: () => void
+  onBlur: (flushedNotes: string) => void
+  registerDraftFlush: (flush: () => string) => void
 }
 
-export function NotesCard({ value, onChange, onBlur, collapsed, onToggleCollapsed }: NotesCardProps) {
+export function NotesCard({
+  value,
+  onChange,
+  onEditStart,
+  onBlur,
+  registerDraftFlush,
+  collapsed,
+  onToggleCollapsed,
+}: NotesCardProps) {
   return (
     <Card className="h-full">
       <CheckinCardHeader
@@ -21,7 +31,13 @@ export function NotesCard({ value, onChange, onBlur, collapsed, onToggleCollapse
       />
       {!collapsed && (
         <CardContent>
-          <NotesInput value={value} onChange={onChange} onBlur={onBlur} />
+          <NotesInput
+            value={value}
+            onChange={onChange}
+            onEditStart={onEditStart}
+            onBlur={onBlur}
+            registerDraftFlush={registerDraftFlush}
+          />
         </CardContent>
       )}
     </Card>
