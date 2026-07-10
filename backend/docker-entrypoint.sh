@@ -14,7 +14,8 @@ set -e
 case "${RUN_MIGRATIONS:-0}" in
     1|true|TRUE|True|yes|YES)
         echo "[entrypoint] RUN_MIGRATIONS=${RUN_MIGRATIONS} — running alembic upgrade head"
-        uv run alembic upgrade head
+        MIG_URL="${MIGRATION_DATABASE_URL:-$DATABASE_URL}"
+        DATABASE_URL="$MIG_URL" uv run alembic upgrade head
         echo "[entrypoint] alembic upgrade complete"
         ;;
     *)

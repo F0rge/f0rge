@@ -13,6 +13,7 @@ from app.schemas.lab_marker import (
     LabMarkerCatalogCreate,
     MarkerHistoryPoint,
 )
+from app.tenant import current_user_id
 
 CATALOG_SEARCH_LIMIT = 50
 
@@ -57,6 +58,7 @@ class LabMarkerCatalogService:
         if existing is not None:
             raise ConflictError(f"Catalog item with canonical_name={canonical!r} already exists.")
         item = LabMarkerCatalog(
+            user_id=current_user_id(),
             canonical_name=canonical,
             display_name=data.display_name,
             common_units=data.common_units,
@@ -79,6 +81,7 @@ class LabMarkerCatalogService:
                 f"Alias {normalized!r} is already mapped to catalog item {existing.catalog_id}."
             )
         alias_obj = LabMarkerAlias(
+            user_id=catalog.user_id,
             catalog_id=catalog_id,
             alias=normalized,
             language=language,
@@ -113,6 +116,7 @@ class LabMarkerCatalogService:
 
         # 4. Create new
         item = LabMarkerCatalog(
+            user_id=current_user_id(),
             canonical_name=canonical,
             display_name=display_name,
             common_units=units or [],
@@ -121,6 +125,7 @@ class LabMarkerCatalogService:
 
         if normalized_input != canonical:
             alias_obj = LabMarkerAlias(
+                user_id=item.user_id,
                 catalog_id=item.id,
                 alias=normalized_input,
                 language=None,

@@ -16,15 +16,14 @@ class PhotoCRUD(BaseCRUD):
         super().__init__(db)
 
     async def get_by_id(self, photo_id: int) -> Optional[Photo]:
-        stmt = select(Photo).where(Photo.id == photo_id)
-        return (await self.db.execute(stmt)).scalar_one_or_none()
+        return await self.get_by_id_owned(photo_id)
 
     async def get_by_id_owned(self, photo_id: int) -> Optional[Photo]:
         stmt = select(Photo).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_user_id(self, photo_id: int) -> Optional[uuid.UUID]:
-        stmt = select(Photo.user_id).where(Photo.id == photo_id)
+        stmt = select(Photo.user_id).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_filenames_for_entry(self, entry_id: int) -> list[str]:

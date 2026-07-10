@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import BaseCRUD
 from app.models.weather import WeatherReading
+from app.tenant import owned_by_user
 
 
 class WeatherCRUD(BaseCRUD):
@@ -15,9 +16,13 @@ class WeatherCRUD(BaseCRUD):
         super().__init__(db)
 
     async def get_by_timestamp(self, timestamp: datetime.datetime) -> Optional[WeatherReading]:
-        stmt = select(WeatherReading).where(WeatherReading.timestamp == timestamp)
+        stmt = select(WeatherReading).where(
+            owned_by_user(WeatherReading.user_id), WeatherReading.timestamp == timestamp
+        )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_by_date(self, date: datetime.date) -> list[WeatherReading]:
-        stmt = select(WeatherReading).where(WeatherReading.date == date)
+        stmt = select(WeatherReading).where(
+            owned_by_user(WeatherReading.user_id), WeatherReading.date == date
+        )
         return list((await self.db.execute(stmt)).scalars().all())
