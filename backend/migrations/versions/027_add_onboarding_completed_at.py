@@ -34,11 +34,39 @@ def upgrade() -> None:
     )
     op.execute(
         sa.text(
-            "INSERT INTO user_settings "
-            "(user_id, llm_provider, embedding_provider, onboarding_completed_at, created_at, updated_at) "
-            "SELECT u.id, 'openrouter', 'openrouter', NOW(), NOW(), NOW() "
-            "FROM users u "
-            "WHERE NOT EXISTS (SELECT 1 FROM user_settings us WHERE us.user_id = u.id)"
+            """
+            DO $$
+            DECLARE
+              r RECORD;
+            BEGIN
+              FOR r IN
+                SELECT u.id
+                FROM users u
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM user_settings us WHERE us.user_id = u.id
+                )
+              LOOP
+                PERFORM set_config('app.user_id', r.id::text, true);
+                INSERT INTO user_settings (
+                  user_id,
+                  llm_provider,
+                  embedding_provider,
+                  onboarding_completed_at,
+                  created_at,
+                  updated_at
+                )
+                VALUES (
+                  r.id,
+                  'openrouter',
+                  'openrouter',
+                  NOW(),
+                  NOW(),
+                  NOW()
+                );
+              END LOOP;
+            END
+            $$;
+            """
         )
     )
 
