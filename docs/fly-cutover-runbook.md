@@ -58,7 +58,8 @@ cd frontend && fly deploy --config fly.toml
 
 ## Required secrets (API app)
 
-- `DATABASE_URL` — direct MPG URL (`postgresql+asyncpg://...`)
+- `DATABASE_URL` — runtime URL as the least-privilege `healthtracker-app` (writer) role (`postgresql+asyncpg://...`). `app.db_url.resolve_database_url` coerces `postgres://`/`postgresql://` schemes, so an `fly mpg attach` URL works as-is.
+- `MIGRATION_DATABASE_URL` — owner-capable role for `alembic upgrade head` only (see MPG setup notes). The `[deploy] release_command` runs `DATABASE_URL="${MIGRATION_DATABASE_URL:-$DATABASE_URL}" uv run alembic upgrade head` so migrations run as owner while runtime stays least-privilege.
 - `JWT_SECRET` — ≥32 random bytes
 - `SETTINGS_ENCRYPTION_KEY`
 - `HEALTHTRACKER_RO_PASSWORD` — only for self-hosted Pi; skipped on Fly (`FLY_MPG_SKIP_ROLE_DDL=1`)
@@ -74,7 +75,11 @@ MCP app: `MCP_READONLY_DATABASE_URL` (attach with `--username healthtracker-ro`)
 - Enable citext (required by migration 020): `fly mpg databases extensions enable citext -c <cluster> -d fly-db`
 - MPG users: `healthtracker-ro` (reader), `healthtracker-app` (writer)
 - Set `FLY_MPG_SKIP_ROLE_DDL=1` — roles provisioned via `fly mpg users create`
-- **Pi dump restore:** run `alembic upgrade head` as `fly-user` (schema_admin), not `healthtracker-app` — writer lacks CREATE on `public` after pg_restore. Then `GRANT ALL ON ALL TABLES IN SCHEMA public TO "healthtracker-app"` (quote hyphenated role names) and switch `DATABASE_URL` back to writer.
+- **Migration role (implemented):** all tables are owned by `schema_admin`; the runtime `healthtracker-app` (writer) role is intentionally NOT the owner, so it can't `ALTER TABLE` (023's `SET NOT NULL` fails with `must be owner of table embedding`). It must stay a non-owner: a table owner can `ALTER TABLE ... DISABLE/NO FORCE ROW LEVEL SECURITY`, so making the always-on app role the owner would let a compromised connection disable multi-tenant RLS. Instead, migrations run as a dedicated owner-capable user:
+  - `fly mpg users create <cluster> -u htmigrate -r schema_admin`
+  - `fly mpg attach <cluster> -a health-tracker-api-prod -d fly-db -u htmigrate --variable-name MIGRATION_DATABASE_URL`
+  - `[deploy] release_command` in `fly.prod.toml` overrides `DATABASE_URL` with `MIGRATION_DATABASE_URL` for alembic only; web/worker keep the writer `DATABASE_URL`. `htmigrate` is never used at runtime.
+- **Pi dump restore:** run `alembic upgrade head` as `fly-user`/`htmigrate` (schema_admin), not `healthtracker-app` — writer lacks CREATE on `public` after pg_restore. Then `GRANT ALL ON ALL TABLES IN SCHEMA public TO "healthtracker-app"` (quote hyphenated role names).
 - **MCP app:** needs both `MCP_READONLY_DATABASE_URL` and `DATABASE_URL` (copy reader URL or attach twice).
 
 ## Data migration (dry-run)
