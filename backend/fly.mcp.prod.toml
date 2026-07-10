@@ -28,9 +28,8 @@ primary_region = "fra"
   [[http_service.checks]]
     grace_period = "30s"
     interval = "15s"
-    method = "GET"
-    path = "/mcp"
     timeout = "2s"
+    type = "tcp"
 
 [[vm]]
   cpu_kind = "shared"
