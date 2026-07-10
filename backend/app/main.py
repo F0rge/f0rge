@@ -20,6 +20,7 @@ from app.exceptions import (
     ValidationError,
 )
 from app.routers import (
+    account,
     auth,
     diet_tag_catalog,
     dietary_ingredient_catalog,
@@ -161,6 +162,7 @@ async def _handle_external_service(_: Request, exc: ExternalServiceError) -> JSO
 
 
 app.include_router(auth.router)
+app.include_router(account.router)
 app.include_router(entries.router)
 app.include_router(photos.router)
 app.include_router(meals.router)

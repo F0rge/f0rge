@@ -8,9 +8,8 @@ import { AiProviderSection } from '@/components/settings/ai-provider-section'
 import { EmbeddingProviderSection } from '@/components/settings/embedding-provider-section'
 import { ExternalTokenSection } from '@/components/settings/external-token-section'
 import { AppleHealthSection } from '@/components/settings/apple-health-section'
-import { ExportDataSection } from '@/components/settings/export-data-section'
 import { DataSourcesSection } from '@/components/settings/data-sources-section'
-import { LogoutSection } from '@/components/settings/logout-section'
+import { AccountLinkCard } from '@/components/settings/account-link-card'
 
 export default function SettingsPage() {
   return (
@@ -38,14 +37,11 @@ export default function SettingsPage() {
         <div className="col-span-12 lg:col-span-6">
           <AppleHealthSection />
         </div>
-        <div className="col-span-12 lg:col-span-6">
-          <ExportDataSection />
-        </div>
         <div className="col-span-12">
           <DataSourcesSection />
         </div>
         <div className="col-span-12 lg:col-span-6">
-          <LogoutSection />
+          <AccountLinkCard />
         </div>
       </div>
     </PageShell>
