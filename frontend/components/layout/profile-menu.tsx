@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { SlidersHorizontal, UserRound } from 'lucide-react'
 import { UserAvatar } from '@/components/account/user-avatar'
+import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { cn } from '@/lib/utils'
 
 const MENU_ITEM_CLASS =
@@ -72,6 +73,9 @@ export function ProfileMenu() {
             <SlidersHorizontal className="size-4 text-muted-foreground" />
             Customize
           </Link>
+          <div className="mt-1 border-t border-border pt-1">
+            <ThemeToggle />
+          </div>
         </div>
       )}
     </div>
