@@ -21,22 +21,15 @@ from app.seed_data import (
     medication_seed_rows,
     supplement_seed_rows,
 )
+from app.tenant import apply_session_user_id
 
 COPY_REFERENCE_CATALOGS_SQL = sa.text(
     "SELECT copy_user_catalog_from_reference(:new_user_id, :ref_user_id)"
 )
 
-
-async def _set_session_user_id(db: AsyncSession, user_id: uuid.UUID) -> None:
-    await db.execute(
-        sa.text("SELECT set_config('app.user_id', :user_id, true)"),
-        {"user_id": str(user_id)},
-    )
-
-
 async def is_user_provisioned(db: AsyncSession, user_id: uuid.UUID) -> bool:
     """True when the user already has seeded supplement catalog rows."""
-    await _set_session_user_id(db, user_id)
+    await apply_session_user_id(db, user_id)
     count = (await db.execute(select(func.count()).select_from(SupplementCatalogItem))).scalar_one()
     return count > 0
 
@@ -46,7 +39,7 @@ async def provision_user_catalogs(db: AsyncSession, user_id: uuid.UUID) -> None:
     if await is_user_provisioned(db, user_id):
         return
 
-    await _set_session_user_id(db, user_id)
+    await apply_session_user_id(db, user_id)
     now = datetime.datetime.utcnow()
 
     await _insert_key_label_catalog(

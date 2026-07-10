@@ -1,7 +1,15 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, apiPatch, apiDelete, handleMutationError } from '../client'
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiPatch,
+  apiDelete,
+  handleMutationError,
+  ApiError,
+} from '../client'
 import type { Entry, EntryCreate } from '../types'
 
 export function useEntries(month?: string) {
@@ -13,9 +21,19 @@ export function useEntries(month?: string) {
 }
 
 export function useEntry(date: string) {
-  return useQuery<Entry>({
+  return useQuery<Entry | null>({
     queryKey: ['entry', date],
-    queryFn: () => apiGet(`/entries/${date}`),
+    queryFn: async () => {
+      try {
+        return await apiGet(`/entries/${date}`)
+      } catch (err) {
+        // No entry yet for this date — render an empty check-in board.
+        if (err instanceof ApiError && err.status === 404) {
+          return null
+        }
+        throw err
+      }
+    },
     enabled: !!date,
     retry: false,
   })

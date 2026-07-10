@@ -24,9 +24,14 @@ def owned_by_user(column: InstrumentedAttribute[uuid.UUID]) -> sa.ColumnElement[
 
 
 async def apply_session_user_id(session: AsyncSession, user_id: uuid.UUID) -> None:
-    """Set Postgres ``app.user_id`` for RLS policies on this transaction."""
+    """Set Postgres ``app.user_id`` for RLS policies for this connection.
+
+    Uses session-scoped config (``is_local=false``) so values survive ``COMMIT``
+    within the same request — transaction-local config is cleared on commit and
+    breaks ``refresh()`` after writes.
+    """
     await session.execute(
-        sa.text("SELECT set_config('app.user_id', :user_id, true)"),
+        sa.text("SELECT set_config('app.user_id', :user_id, false)"),
         {"user_id": str(user_id)},
     )
 
@@ -34,6 +39,12 @@ async def apply_session_user_id(session: AsyncSession, user_id: uuid.UUID) -> No
 async def apply_service_role(session: AsyncSession, role: str) -> None:
     """Set Postgres ``app.service_role`` for privileged background/MCP auth paths."""
     await session.execute(
-        sa.text("SELECT set_config('app.service_role', :role, true)"),
+        sa.text("SELECT set_config('app.service_role', :role, false)"),
         {"role": role},
     )
+
+
+async def clear_tenant_session(session: AsyncSession) -> None:
+    """Reset tenant GUCs before returning a pooled connection."""
+    await session.execute(sa.text("SELECT set_config('app.user_id', '', false)"))
+    await session.execute(sa.text("SELECT set_config('app.service_role', '', false)"))

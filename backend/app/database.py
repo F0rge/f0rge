@@ -13,7 +13,7 @@ from sqlalchemy.orm import DeclarativeBase
 from app.auth_context import user_id_ctx
 from app.config import settings
 from app.db_url import asyncpg_connect_args, resolve_database_url
-from app.tenant import apply_session_user_id
+from app.tenant import apply_session_user_id, clear_tenant_session
 
 _db_url = resolve_database_url(
     settings.database_url,
@@ -40,6 +40,9 @@ class Base(DeclarativeBase):
 async def get_db() -> AsyncIterator[AsyncSession]:
     async with async_session_maker() as session:
         user_id = user_id_ctx.get()
-        if user_id is not None:
-            await apply_session_user_id(session, user_id)
-        yield session
+        try:
+            if user_id is not None:
+                await apply_session_user_id(session, user_id)
+            yield session
+        finally:
+            await clear_tenant_session(session)
