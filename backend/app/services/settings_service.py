@@ -71,7 +71,7 @@ class SettingsService:
         row = await self._get_or_create_row()
         if data.embedding_provider is not None:
             row.embedding_provider = data.embedding_provider
-        if data.embedding_model is not None:
+        if "embedding_model" in data.model_fields_set:
             row.embedding_model = data.embedding_model
         row = await self.crud.commit_refresh(row)
         return self._to_response(row)

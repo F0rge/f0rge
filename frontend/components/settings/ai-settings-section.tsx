@@ -78,7 +78,7 @@ export function AiSettingsSection() {
       if (embeddingUpdated && previous) {
         try {
           await updateEmbedding.mutateAsync({
-            embedding_model: previous.embedding_model ?? undefined,
+            embedding_model: previous.embedding_model,
           })
         } catch {
           // Best-effort rollback; original error is still reported.

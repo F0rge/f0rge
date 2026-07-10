@@ -24,7 +24,12 @@ depends_on: Union[Sequence[str], None] = None
 def upgrade() -> None:
     op.add_column("users", sa.Column("avatar_default_index", sa.SmallInteger(), nullable=True))
     op.add_column("users", sa.Column("avatar_custom_filename", sa.String(), nullable=True))
-    op.execute(sa.text("UPDATE users SET avatar_default_index = (abs(hashtext(id::text)) % 32)"))
+    op.execute(
+        sa.text(
+            "UPDATE users SET avatar_default_index = "
+            "(get_byte(decode(replace(id::text, '-', ''), 'hex'), 15) % 32)"
+        )
+    )
     op.alter_column("users", "avatar_default_index", nullable=False)
 
 
