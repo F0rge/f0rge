@@ -29,9 +29,7 @@ def upgrade() -> None:
     op.create_table(
         "user_settings",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column(
-            "llm_provider", sa.String(), nullable=False, server_default="openrouter"
-        ),
+        sa.Column("llm_provider", sa.String(), nullable=False, server_default="openrouter"),
         sa.Column("llm_api_key_encrypted", sa.LargeBinary(), nullable=True),
         sa.Column("llm_model", sa.String(), nullable=True),
         sa.Column(

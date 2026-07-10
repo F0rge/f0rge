@@ -14,6 +14,8 @@ from app.schemas.dietary_ingredient import (
     DietaryIngredientUpdate,
 )
 
+CATALOG_SEARCH_LIMIT = 50
+
 
 class DietaryIngredientCatalogService:
     def __init__(self, db: AsyncSession) -> None:
@@ -41,7 +43,7 @@ class DietaryIngredientCatalogService:
             )
             stmt = stmt.distinct()
             if limit is None:
-                limit = 50
+                limit = CATALOG_SEARCH_LIMIT
         stmt = stmt.order_by(DietaryIngredient.canonical_name.asc())
         if limit is not None:
             stmt = stmt.limit(limit)

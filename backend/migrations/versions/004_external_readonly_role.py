@@ -107,15 +107,12 @@ def upgrade() -> None:
     bind.execute(sa.text("GRANT USAGE ON SCHEMA public TO healthtracker_ro"))
 
     # Step 5 — SELECT on all tables that exist right now.
-    bind.execute(
-        sa.text("GRANT SELECT ON ALL TABLES IN SCHEMA public TO healthtracker_ro")
-    )
+    bind.execute(sa.text("GRANT SELECT ON ALL TABLES IN SCHEMA public TO healthtracker_ro"))
 
     # Step 6 — future tables auto-grant SELECT as they are created.
     bind.execute(
         sa.text(
-            "ALTER DEFAULT PRIVILEGES IN SCHEMA public"
-            " GRANT SELECT ON TABLES TO healthtracker_ro"
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO healthtracker_ro"
         )
     )
 
@@ -135,9 +132,7 @@ def downgrade() -> None:
     )
 
     # Revoke explicit grants on existing objects.
-    bind.execute(
-        sa.text("REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM healthtracker_ro")
-    )
+    bind.execute(sa.text("REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM healthtracker_ro"))
     bind.execute(sa.text("REVOKE USAGE ON SCHEMA public FROM healthtracker_ro"))
     bind.execute(
         sa.text(
