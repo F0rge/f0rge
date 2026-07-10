@@ -111,7 +111,7 @@ export function useCheckinBoardState({
   const setNeuroDirty = useCallback((v: number) => { markDirty(); setNeuro(v) }, [markDirty])
   const setSleepQualityDirty = useCallback((v: number) => { markDirty(); setSleepQuality(v) }, [markDirty])
   const setStressDirty = useCallback((v: number) => { markDirty(); setStress(v) }, [markDirty])
-  const setNotesDirty = useCallback((v: string) => { markDirty(); setNotes(v) }, [markDirty])
+  const setNotesValue = useCallback((v: string) => { setNotes(v) }, [])
   const setSickDirty = useCallback((v: boolean) => { markDirty(); setSick(v) }, [markDirty])
   const setHotShowerDirty = useCallback((v: boolean) => { markDirty(); setHotShower(v) }, [markDirty])
   const setSymptomsJsonDirty = useCallback(
@@ -245,18 +245,43 @@ export function useCheckinBoardState({
   }, [autosave.status, autosave.lastSavedAt, autosave.errorMessage, onAutosaveStateChange])
 
   const autosaveRef = useRef(autosave)
+  const notesDraftFlushRef = useRef<(() => string) | null>(null)
+  const registerNotesDraftFlush = useCallback((flush: () => string) => {
+    notesDraftFlushRef.current = flush
+  }, [])
+
+  const notesPayloadPatch = useCallback(
+    (flushedNotes?: string) => (flushedNotes !== undefined ? { notes: flushedNotes } : undefined),
+    [],
+  )
+
   useEffect(() => { autosaveRef.current = autosave })
   useEffect(() => {
+    const flushNotesDraft = () => notesDraftFlushRef.current?.()
     onAutosaveFnsReady?.({
-      flush: () => autosaveRef.current.flush(),
-      forceFlush: () => autosaveRef.current.forceFlush(),
+      flush: () => {
+        const flushedNotes = flushNotesDraft()
+        autosaveRef.current.flush(notesPayloadPatch(flushedNotes))
+      },
+      forceFlush: async () => {
+        const flushedNotes = flushNotesDraft()
+        await autosaveRef.current.forceFlush(notesPayloadPatch(flushedNotes))
+      },
       retry: () => autosaveRef.current.retry(),
-      flushBeacon: () => autosaveRef.current.flushBeacon(),
+      flushBeacon: () => {
+        const flushedNotes = flushNotesDraft()
+        autosaveRef.current.flushBeacon(notesPayloadPatch(flushedNotes))
+      },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleBlur = useCallback(() => { autosave.flush() }, [autosave])
+  const handleBlur = useCallback(
+    (flushedNotes: string) => {
+      autosave.flush(notesPayloadPatch(flushedNotes))
+    },
+    [autosave, notesPayloadPatch],
+  )
 
   return {
     cardOrder,
@@ -303,7 +328,8 @@ export function useCheckinBoardState({
     hotShower,
     setHotShowerDirty,
     notes,
-    setNotesDirty,
+    setNotesValue,
+    registerNotesDraftFlush,
   }
 }
 

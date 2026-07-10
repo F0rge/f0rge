@@ -115,8 +115,10 @@ export function buildCheckinCardRenderers({
     notes: () => (
       <NotesCard
         value={state.notes}
-        onChange={state.setNotesDirty}
+        onChange={state.setNotesValue}
+        onEditStart={state.markDirty}
         onBlur={state.handleBlur}
+        registerDraftFlush={state.registerNotesDraftFlush}
       />
     ),
   }

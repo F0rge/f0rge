@@ -1,38 +1,115 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
+import { Label } from '@/components/ui/label'
+
+const SYNC_DEBOUNCE_MS = 500
 
 interface NotesInputProps {
   value: string
   onChange: (value: string) => void
-  onBlur?: () => void
+  onEditStart?: () => void
+  onBlur?: (flushedNotes: string) => void
+  registerDraftFlush?: (flush: () => string) => void
 }
 
-export function NotesInput({ value, onChange, onBlur }: NotesInputProps) {
+export function NotesInput({
+  value,
+  onChange,
+  onEditStart,
+  onBlur,
+  registerDraftFlush,
+}: NotesInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [draft, setDraft] = useState(value)
+  const draftRef = useRef(value)
+  const onChangeRef = useRef(onChange)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasStartedRef = useRef(false)
 
   useEffect(() => {
-    const el = textareaRef.current
-    if (el) {
-      el.style.height = 'auto'
-      el.style.height = `${el.scrollHeight}px`
-    }
-  }, [value])
+    onChangeRef.current = onChange
+  }, [onChange])
 
-  const remaining = 500 - value.length
+  const adjustHeight = useCallback(() => {
+    requestAnimationFrame(() => {
+      const el = textareaRef.current
+      if (el) {
+        el.style.height = 'auto'
+        el.style.height = `${el.scrollHeight}px`
+      }
+    })
+  }, [])
+
+  const flushToParent = useCallback((): string => {
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
+    }
+    const next = draftRef.current
+    onChangeRef.current(next)
+    return next
+  }, [])
+
+  const scheduleSync = useCallback((next: string) => {
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null
+      onChangeRef.current(next)
+    }, SYNC_DEBOUNCE_MS)
+  }, [])
+
+  // Sync draft when parent value changes externally (entry load / date change).
+  useEffect(() => {
+    if (draftRef.current !== value && debounceTimerRef.current === null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration from server entry only when not mid-typing
+      setDraft(value)
+      draftRef.current = value
+      hasStartedRef.current = false
+      adjustHeight()
+    }
+  }, [value, adjustHeight])
+
+  useEffect(() => {
+    registerDraftFlush?.(flushToParent)
+    return () => {
+      flushToParent()
+      registerDraftFlush?.(() => '')
+    }
+  }, [registerDraftFlush, flushToParent])
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const next = e.target.value
+    if (next.length > 500) return
+
+    if (!hasStartedRef.current) {
+      hasStartedRef.current = true
+      onEditStart?.()
+    }
+
+    setDraft(next)
+    draftRef.current = next
+    scheduleSync(next)
+    adjustHeight()
+  }
+
+  const handleBlur = () => {
+    const flushedNotes = flushToParent()
+    onBlur?.(flushedNotes)
+  }
+
+  const remaining = 500 - draft.length
 
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium leading-none">Notes (optional)</label>
+    <div className="space-y-3">
+      <Label className="text-xs text-muted-foreground">Notes (optional)</Label>
       <textarea
         ref={textareaRef}
-        value={value}
-        onChange={(e) => {
-          if (e.target.value.length <= 500) {
-            onChange(e.target.value)
-          }
-        }}
-        onBlur={onBlur}
+        value={draft}
+        onChange={handleChange}
+        onBlur={handleBlur}
         placeholder="Anything notable today... meals, events, how you felt"
         className="w-full min-h-[80px] resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         rows={3}

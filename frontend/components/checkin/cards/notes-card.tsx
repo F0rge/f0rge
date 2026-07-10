@@ -6,10 +6,18 @@ import { NotesInput } from '@/components/checkin/notes-input'
 interface NotesCardProps {
   value: string
   onChange: (v: string) => void
-  onBlur: () => void
+  onEditStart: () => void
+  onBlur: (flushedNotes: string) => void
+  registerDraftFlush: (flush: () => string) => void
 }
 
-export function NotesCard({ value, onChange, onBlur }: NotesCardProps) {
+export function NotesCard({
+  value,
+  onChange,
+  onEditStart,
+  onBlur,
+  registerDraftFlush,
+}: NotesCardProps) {
   return (
     <Card className="h-full">
       <CardHeader>
@@ -18,7 +26,13 @@ export function NotesCard({ value, onChange, onBlur }: NotesCardProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <NotesInput value={value} onChange={onChange} onBlur={onBlur} />
+        <NotesInput
+          value={value}
+          onChange={onChange}
+          onEditStart={onEditStart}
+          onBlur={onBlur}
+          registerDraftFlush={registerDraftFlush}
+        />
       </CardContent>
     </Card>
   )
