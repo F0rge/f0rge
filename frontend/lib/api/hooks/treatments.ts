@@ -89,6 +89,18 @@ export function useLogDose(date: string) {
           .filter((item) => item.doses_per_day !== null)
           .reduce((sum, item) => sum + item.doses_taken, 0)
         const dosesPlanned = old.today.doses_planned
+        const wasTodayComplete =
+          dosesPlanned > 0 && old.today.doses_taken >= dosesPlanned
+        const isTodayComplete = dosesPlanned > 0 && dosesTakenSum >= dosesPlanned
+        let streak = old.streak
+        let best_streak = old.best_streak
+        if (wasTodayComplete && !isTodayComplete) {
+          streak = Math.max(0, streak - 1)
+          best_streak = old.streak === old.best_streak ? streak : old.best_streak
+        } else if (!wasTodayComplete && isTodayComplete) {
+          streak = streak + 1
+          best_streak = Math.max(best_streak, streak)
+        }
         return {
           ...old,
           items,
@@ -97,6 +109,8 @@ export function useLogDose(date: string) {
             doses_planned: dosesPlanned,
             pct: dosesPlanned > 0 ? dosesTakenSum / dosesPlanned : 0,
           },
+          streak,
+          best_streak,
         }
       })
       return { prev, seq }

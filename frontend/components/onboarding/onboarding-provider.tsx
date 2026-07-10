@@ -134,7 +134,6 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     if (settings?.onboarding_completed) return
     if (pathname.startsWith('/login') || pathname.startsWith('/signup')) return
 
-    autoStartedRef.current = true
     let cancelled = false
 
     const startWhenCheckinReady = async () => {
@@ -143,6 +142,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
       await waitForSelector('[data-tour="checkin-wellbeing"]', 15000)
       if (!cancelled) {
+        autoStartedRef.current = true
         startTour()
       }
     }
