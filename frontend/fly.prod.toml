@@ -7,7 +7,7 @@ primary_region = "fra"
 [build]
   dockerfile = "Dockerfile"
   [build.args]
-    API_URL = "https://health-tracker-api-prod.fly.dev"
+    API_URL = "https://api.marrow-health.com"
 
 [env]
   NODE_ENV = "production"
