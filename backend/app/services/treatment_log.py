@@ -10,7 +10,12 @@ from app.crud.treatment_log import TreatmentLogCRUD
 from app.crud.treatments import TreatmentCRUD
 from app.exceptions import NotFoundError
 from app.models.treatment_log import TreatmentLog
-from app.schemas.treatment_log import ProtocolItem, ProtocolResponse, ProtocolToday, TreatmentLogResult
+from app.schemas.treatment_log import (
+    ProtocolItem,
+    ProtocolResponse,
+    ProtocolToday,
+    TreatmentLogResult,
+)
 from app.tenant import current_user_id
 from app.utils.dates import local_today
 from app.utils.streak import compute_streak
