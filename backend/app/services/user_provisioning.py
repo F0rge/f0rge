@@ -27,6 +27,7 @@ COPY_REFERENCE_CATALOGS_SQL = sa.text(
     "SELECT copy_user_catalog_from_reference(:new_user_id, :ref_user_id)"
 )
 
+
 async def is_user_provisioned(db: AsyncSession, user_id: uuid.UUID) -> bool:
     """True when the user already has seeded supplement catalog rows."""
     await apply_session_user_id(db, user_id)
