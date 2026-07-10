@@ -61,7 +61,7 @@ When invoked, each sub-agent must:
 2. Read `.cursor/review-context/<own-name>-playbook.md` and `.cursor/review-context/_shared/*.md` when doing PR review.
 3. Return review findings in JSON format (see each playbook for the schema).
 
-Canonical playbooks: `.claude/review-context/` (source). Synced copy: `.cursor/review-context/` — run `./scripts/sync-review-context.sh` after editing source.
+Canonical playbooks: `.cursor/review-context/`.
 
 ## Branch & PR conventions
 
