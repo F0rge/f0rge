@@ -155,14 +155,10 @@ def upgrade() -> None:
     op.create_unique_constraint("uq_tracker_user_id_name", "tracker", ["user_id", "name"])
 
     op.drop_constraint("pk_tracker_log", "tracker_log", type_="primary")
-    op.create_primary_key(
-        "pk_tracker_log", "tracker_log", ["user_id", "tracker_id", "date"]
-    )
+    op.create_primary_key("pk_tracker_log", "tracker_log", ["user_id", "tracker_id", "date"])
 
     op.drop_constraint("pk_treatment_log", "treatment_log", type_="primary")
-    op.create_primary_key(
-        "pk_treatment_log", "treatment_log", ["user_id", "treatment_id", "date"]
-    )
+    op.create_primary_key("pk_treatment_log", "treatment_log", ["user_id", "treatment_id", "date"])
 
     op.drop_index("ix_diet_tag_catalog_key", table_name="diet_tag_catalog")
     op.create_unique_constraint(
@@ -315,9 +311,7 @@ def downgrade() -> None:
     )
 
     op.drop_constraint("uq_lab_marker_aliases_user_id_alias", "lab_marker_aliases", type_="unique")
-    op.create_index(
-        "ix_lab_marker_aliases_alias", "lab_marker_aliases", ["alias"], unique=True
-    )
+    op.create_index("ix_lab_marker_aliases_alias", "lab_marker_aliases", ["alias"], unique=True)
 
     op.drop_constraint(
         "uq_lab_marker_catalog_user_id_canonical_name", "lab_marker_catalog", type_="unique"
