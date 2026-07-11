@@ -1,6 +1,6 @@
 ---
 description: React/Next.js App Router, shadcn/ui, and Tailwind conventions. Use proactively when building or reviewing UI components, pages, hooks, styles, forms, or frontend API integration.
-globs: frontend/**/*.tsx, frontend/**/*.ts
+globs: apps/marrow/frontend/**/*.tsx, frontend/**/*.ts
 alwaysApply: false
 ---
 
@@ -31,7 +31,7 @@ alwaysApply: false
 ## State & Data
 
 - **URL state first** (searchParams for filters/pagination)
-- API hooks in `frontend/lib/api/hooks.ts`
+- API hooks in `apps/marrow/frontend/lib/api/hooks.ts`
 - Local state (`useState`) only for UI (dropdowns, modals, inputs)
 - Always handle loading, error, and empty states
 - Export shared types from `types/`
@@ -106,7 +106,7 @@ Guided first-login tour uses **react-joyride v3** via `components/onboarding/`.
 ## Commands
 
 ```bash
-cd frontend
+cd apps/marrow/frontend
 npm run dev    # :3000
 npm run build && npm run lint
 ```

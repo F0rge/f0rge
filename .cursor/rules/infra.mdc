@@ -1,6 +1,6 @@
 ---
 description: Fly.io deploy, CI/CD, and Docker build conventions for Marrow. Use proactively for fly.toml, Dockerfiles, GitHub Actions, and env configuration.
-globs: "**/fly*.toml, .github/**, backend/Dockerfile, backend/docker-entrypoint.sh, frontend/Dockerfile"
+globs: "**/fly*.toml, .github/**, apps/marrow/backend/Dockerfile, apps/marrow/backend/docker-entrypoint.sh, apps/marrow/frontend/Dockerfile"
 alwaysApply: false
 ---
 
@@ -27,9 +27,9 @@ Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-
 
 | Role | Dev app | Prod app | Config |
 |---|---|---|---|
-| API + worker | `marrow-dev` | `marrow` | `backend/fly.toml` / `fly.prod.toml` |
-| MCP | `marrow-mcp-dev` | `marrow-mcp` | `backend/fly.mcp.toml` / `fly.mcp.prod.toml` |
-| Frontend | `marrow-ui-dev` | `marrow-ui` | `frontend/fly.toml` / `fly.prod.toml` |
+| API + worker | `marrow-dev` | `marrow` | `apps/marrow/backend/fly.toml` / `fly.prod.toml` |
+| MCP | `marrow-mcp-dev` | `marrow-mcp` | `apps/marrow/backend/fly.mcp.toml` / `fly.mcp.prod.toml` |
+| Frontend | `marrow-ui-dev` | `marrow-ui` | `apps/marrow/frontend/fly.toml` / `fly.prod.toml` |
 
 ## MPG (Postgres)
 
@@ -44,21 +44,21 @@ Full setup: [docs/fly-cutover-runbook.md](../../docs/fly-cutover-runbook.md).
 
 `[deploy] release_command` in `fly.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime web/worker use `DATABASE_URL` (healthtracker-app). See runbook.
 
-`backend/docker-entrypoint.sh` still supports `RUN_MIGRATIONS=1` for local Docker builds; Fly uses `release_command` instead.
+`apps/marrow/backend/docker-entrypoint.sh` still supports `RUN_MIGRATIONS=1` for local Docker builds; Fly uses `release_command` instead.
 
 ## Local development
 
 ```bash
 ./start.sh          # Both services
-cd backend && uv run uvicorn app.main:app --port 8000 --reload
-cd frontend && npm run dev   # :3000
+cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload
+cd apps/marrow/frontend && npm run dev   # :3000
 ```
 
 ## New config vars checklist
 
 For every new `app/config.py` setting:
 
-- [ ] In `backend/.env.example`
+- [ ] In `apps/marrow/backend/.env.example`
 - [ ] README/deploy doc updated if required
 - [ ] Set on Fly app secrets (`fly secrets set -a marrow-dev` / `marrow`) if deployed
 - [ ] Degrades gracefully when missing (no 500 storm)

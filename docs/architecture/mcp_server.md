@@ -36,7 +36,7 @@ Fly MPG (marrow / marrow_dev database)
 | Prod | `marrow-mcp` | https://marrow-mcp.fly.dev/mcp |
 | Dev | `marrow-mcp-dev` | https://marrow-mcp-dev.fly.dev/mcp |
 
-Deploy: `backend/fly.mcp.toml` (dev) / `fly.mcp.prod.toml` (prod). Secrets: `MCP_READONLY_DATABASE_URL` + `DATABASE_URL` (reader URLs from `fly mpg attach`).
+Deploy: `apps/marrow/backend/fly.mcp.toml` (dev) / `fly.mcp.prod.toml` (prod). Secrets: `MCP_READONLY_DATABASE_URL` + `DATABASE_URL` (reader URLs from `fly mpg attach`).
 
 Settings UI snippet uses `https://marrow-mcp.fly.dev/mcp` as the default remote URL.
 
@@ -51,9 +51,9 @@ For dev: substitute `marrow-mcp-dev.fly.dev`.
 
 ## Adding a new tool
 
-1. Add a function in `backend/app/mcp/tools.py` with `@server.tool()` and a docstring.
+1. Add a function in `apps/marrow/backend/app/mcp/tools.py` with `@server.tool()` and a docstring.
 2. Use `get_ro_engine()` for every DB call.
-3. Add a test in `backend/tests/test_mcp_tools.py`.
+3. Add a test in `apps/marrow/backend/tests/test_mcp_tools.py`.
 4. Redeploy MCP app on Fly.
 
 ## Troubleshooting

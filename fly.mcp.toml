@@ -1,2 +1,0 @@
-# Pointer — canonical MCP fly.toml lives in backend/fly.mcp.toml
-# Deploy: fly deploy --config backend/fly.mcp.toml

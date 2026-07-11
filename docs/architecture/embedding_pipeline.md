@@ -30,7 +30,7 @@ If a row is updated twice in quick succession, both updates enqueue rows. The wo
 ## Adding a new embedable table
 
 1. Identify the table and the columns whose content should be embedded.
-2. Add a serializer to `backend/app/embedding_pipeline/serialization.py`. The serializer takes a source row dict and returns a markdown string with H2 section headers wherever you want chunk boundaries to fall.
+2. Add a serializer to `apps/marrow/backend/app/embedding_pipeline/serialization.py`. The serializer takes a source row dict and returns a markdown string with H2 section headers wherever you want chunk boundaries to fall.
 3. Wire it into the `SERIALIZERS: dict[str, Callable]` registry at the top of that module.
 4. Create a new Alembic migration that adds the trigger:
    ```sql

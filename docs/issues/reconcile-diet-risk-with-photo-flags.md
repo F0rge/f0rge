@@ -4,14 +4,14 @@
 
 The app currently has two parallel, isolated paths for capturing dietary risk:
 
-- **Manual entry** — `Entry.diet_risk` is a comma-separated string from `{normal, high-histamine, high-fodmap, gluten, not-sure}` entered at check-in, one value per day ([entry.py:35](backend/app/models/entry.py:35), [checkin-form.tsx:28-34](frontend/components/checkin/checkin-form.tsx:28))
-- **Photo analysis** — AI vision extracts per-meal ingredients tagged with `histamine_score` (0–3), `fodmap_oligos/fructose/polyols/lactose` (null/moderate/high), `contains_gluten`, `contains_dairy` ([photo_ingredient.py:11-36](backend/app/models/photo_ingredient.py:11))
+- **Manual entry** — `Entry.diet_risk` is a comma-separated string from `{normal, high-histamine, high-fodmap, gluten, not-sure}` entered at check-in, one value per day ([entry.py:35](apps/marrow/backend/app/models/entry.py:35), [checkin-form.tsx:28-34](apps/marrow/frontend/components/checkin/checkin-form.tsx:28))
+- **Photo analysis** — AI vision extracts per-meal ingredients tagged with `histamine_score` (0–3), `fodmap_oligos/fructose/polyols/lactose` (null/moderate/high), `contains_gluten`, `contains_dairy` ([photo_ingredient.py:11-36](apps/marrow/backend/app/models/photo_ingredient.py:11))
 
 The two streams never talk to each other:
 
 - No reconciliation logic compares them
-- The stats feature matrix treats them as **independent** predictors ([feature_matrix.py:90](backend/app/services/feature_matrix.py:90)) — inflates feature importance because both measure the same underlying thing
-- Obsidian export writes both in separate sections ([obsidian.py:302, 367-395](backend/app/services/obsidian.py:302)) — the reader must cross-reference manually
+- The stats feature matrix treats them as **independent** predictors ([feature_matrix.py:90](apps/marrow/backend/app/services/feature_matrix.py:90)) — inflates feature importance because both measure the same underlying thing
+- Obsidian export writes both in separate sections ([obsidian.py:302, 367-395](apps/marrow/backend/app/services/obsidian.py:302)) — the reader must cross-reference manually
 - A user can pick `"normal"` while the photo of dinner contains aged cheese; both happily coexist with no warning
 
 Concrete harms: (1) double-entry friction; (2) noisy diagnostics that double-count signal; (3) ambiguity about which value is canonical when re-reading historical logs months later.
@@ -111,7 +111,7 @@ Default to **(a)** unless query performance is a problem (joins are tiny — it 
 
 **3. UI** (`frontend-dev`)
 
-In [checkin-form.tsx](frontend/components/checkin/checkin-form.tsx), `DIET_OPTIONS` becomes additive checkboxes layered over photo-derived state:
+In [checkin-form.tsx](apps/marrow/frontend/components/checkin/checkin-form.tsx), `DIET_OPTIONS` becomes additive checkboxes layered over photo-derived state:
 
 - Add `"dairy"` to options
 - Remove `"not-sure"` — replaced by "no manual flags added" (effective flags fall back to whatever photos saw, or nothing)
@@ -127,17 +127,17 @@ If photos are still `pending|analyzing`, show "Photos still analyzing — flags 
 
 With approach (a) reads always recompute — automatic. With (b) wire into `confirm_analysis` in `food_analysis.py`.
 
-**5. Vault export** ([obsidian.py:302, 343](backend/app/services/obsidian.py:302))
+**5. Vault export** ([obsidian.py:302, 343](apps/marrow/backend/app/services/obsidian.py:302))
 
 Write `effective_flags` (not raw `diet_risk`) into both the frontmatter and the daily table. When both sources contributed, add a one-line provenance split: `Diet risk: high-histamine, gluten (high-histamine from photos; gluten added manually)`.
 
-**6. Stats / feature matrix** ([feature_matrix.py:90](backend/app/services/feature_matrix.py:90))
+**6. Stats / feature matrix** ([feature_matrix.py:90](apps/marrow/backend/app/services/feature_matrix.py:90))
 
 Drop the separate ordinal encoding of `diet_risk`. The `histamine_load_sum` / `fodmap_*_sum` / `gluten_exposure` / `dairy_exposure` columns already capture the photo-derived signal. Add columns derived from `user_added_flags` only (e.g., `manual_extra_histamine: bool`) so we can later analyse whether manual additions are diagnostically informative.
 
 **7. Backfill** (`data-engineer`)
 
-`backend/scripts/backfill_effective_flags.py`. For every existing entry:
+`apps/marrow/backend/scripts/backfill_effective_flags.py`. For every existing entry:
 
 - Compute `photo_derived_flags` from confirmed photo ingredients
 - Diff against the legacy `diet_risk` string — detect (a) flags photos found that the user didn't pick (now auto-locked), (b) flags the user picked that photos didn't detect (kept as manual addition)
@@ -148,19 +148,19 @@ Drop the separate ordinal encoding of `diet_risk`. The `histamine_load_sum` / `f
 
 **Existing modified:**
 
-- [backend/app/models/entry.py:35](backend/app/models/entry.py:35) — add `effective_flags` property; rename concept (column name unchanged this round)
-- [backend/app/schemas/entry.py:33-34](backend/app/schemas/entry.py:33) — expose `effective_flags`, `photo_derived_flags`, `user_added_flags`, and `photo_signal: PhotoSignal` in `EntryRead`
-- [backend/app/services/food_analysis.py:302-319](backend/app/services/food_analysis.py:302) — call `diet_flags.compute_photo_derived_flags` on confirm (only if approach b)
-- [backend/app/services/feature_matrix.py:90](backend/app/services/feature_matrix.py:90) — drop ordinal `diet_risk` feature, add `manual_extra_*` columns
-- [backend/app/services/obsidian.py:302,343,367-395](backend/app/services/obsidian.py:302) — emit `effective_flags`, new `diet-histamine-load`/`diet-fodmap-count`/`diet-gluten-count`/`diet-dairy-count` keys, and `diet-risk-provenance` map per the frontmatter contract above
-- [frontend/components/checkin/checkin-form.tsx:28-34, 123-139](frontend/components/checkin/checkin-form.tsx:28) — replace the current 3-column `DIET_OPTIONS` grid with the two-row split from the mockup: locked photo chips with score badges + source attribution line + 4-tile stats strip, divider, manual chips below. Drop `"not-sure"` and `"normal"` from manual options; add `"dairy"`.
-- [frontend/lib/api/types.ts](frontend/lib/api/types.ts) — extend `Entry` with `effective_flags`, `photo_derived_flags`, `user_added_flags` arrays and a `photo_signal: { flags, scores: {histamine_load, fodmap_count, gluten_count, dairy_count}, sources }` object
+- [apps/marrow/backend/app/models/entry.py:35](apps/marrow/backend/app/models/entry.py:35) — add `effective_flags` property; rename concept (column name unchanged this round)
+- [apps/marrow/backend/app/schemas/entry.py:33-34](apps/marrow/backend/app/schemas/entry.py:33) — expose `effective_flags`, `photo_derived_flags`, `user_added_flags`, and `photo_signal: PhotoSignal` in `EntryRead`
+- [apps/marrow/backend/app/services/food_analysis.py:302-319](apps/marrow/backend/app/services/food_analysis.py:302) — call `diet_flags.compute_photo_derived_flags` on confirm (only if approach b)
+- [apps/marrow/backend/app/services/feature_matrix.py:90](apps/marrow/backend/app/services/feature_matrix.py:90) — drop ordinal `diet_risk` feature, add `manual_extra_*` columns
+- [apps/marrow/backend/app/services/obsidian.py:302,343,367-395](apps/marrow/backend/app/services/obsidian.py:302) — emit `effective_flags`, new `diet-histamine-load`/`diet-fodmap-count`/`diet-gluten-count`/`diet-dairy-count` keys, and `diet-risk-provenance` map per the frontmatter contract above
+- [apps/marrow/frontend/components/checkin/checkin-form.tsx:28-34, 123-139](apps/marrow/frontend/components/checkin/checkin-form.tsx:28) — replace the current 3-column `DIET_OPTIONS` grid with the two-row split from the mockup: locked photo chips with score badges + source attribution line + 4-tile stats strip, divider, manual chips below. Drop `"not-sure"` and `"normal"` from manual options; add `"dairy"`.
+- [apps/marrow/frontend/lib/api/types.ts](apps/marrow/frontend/lib/api/types.ts) — extend `Entry` with `effective_flags`, `photo_derived_flags`, `user_added_flags` arrays and a `photo_signal: { flags, scores: {histamine_load, fodmap_count, gluten_count, dairy_count}, sources }` object
 
 **New:**
 
-- `backend/app/services/diet_flags.py` — mapping logic, thresholds, union computation
-- `backend/scripts/backfill_effective_flags.py` — one-off backfill with CSV report
-- `backend/tests/test_diet_flags.py` — mapping rules, threshold edge cases, empty/null handling
+- `apps/marrow/backend/app/services/diet_flags.py` — mapping logic, thresholds, union computation
+- `apps/marrow/backend/scripts/backfill_effective_flags.py` — one-off backfill with CSV report
+- `apps/marrow/backend/tests/test_diet_flags.py` — mapping rules, threshold edge cases, empty/null handling
 
 ## Out of scope (non-goals)
 
@@ -196,10 +196,10 @@ Drop the separate ordinal encoding of `diet_risk`. The `histamine_load_sum` / `f
 
 **Code-level:**
 
-- `pytest backend/tests/test_diet_flags.py` passes; covers histamine threshold boundaries (0,1,2,3), each FODMAP subcategory at high/moderate/null, gluten/dairy true/false, empty ingredient list, mix of confirmed + unconfirmed ingredients (unconfirmed are ignored)
+- `pytest apps/marrow/backend/tests/test_diet_flags.py` passes; covers histamine threshold boundaries (0,1,2,3), each FODMAP subcategory at high/moderate/null, gluten/dairy true/false, empty ingredient list, mix of confirmed + unconfirmed ingredients (unconfirmed are ignored)
 - **Scoring tests:** `histamine_load` is the sum (e.g. three ingredients with scores 3,2,2 → 7); `fodmap_count` counts each ingredient once even when multiple subcategories are `high`; `gluten_count` and `dairy_count` are simple ingredient counts; unconfirmed ingredients contribute zero to all scores
 - **Effective-count tests:** `compute_effective_counts` returns photo_count + 1 per manual flag (e.g. photo gluten_count=0 + manual gluten → effective `diet-gluten-count: 1`); `histamine-load` is unchanged by manual additions (manual has no numeric dose)
-- `ruff check backend/` clean
+- `ruff check apps/marrow/backend/` clean
 - `npm run typecheck && npm run lint && npm run build` clean
 - `GET /api/v1/entries/{id}` returns `effective_flags`, `photo_derived_flags`, `user_added_flags` as three distinct arrays plus a `photo_signal` object with `flags`, `scores: {histamine_load, fodmap_count, gluten_count, dairy_count}`, and `sources` (flag → list of ingredient names for the UI source line)
 

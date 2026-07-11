@@ -1,6 +1,6 @@
 ---
 description: QA gate protocol — static analysis, rule adherence, tests, integration, e2e, deployment config audit. Use proactively before any PR or after completing a feature that needs verification.
-globs: backend/tests/**, .github/workflows/**
+globs: apps/marrow/backend/tests/**, .github/workflows/**
 alwaysApply: false
 ---
 
@@ -22,8 +22,8 @@ You are the final gate before a PR ships. **Build, test, verify rules, report.**
 ### Phase 1: Static Analysis
 
 ```bash
-cd backend && uv run ruff check . && uv run ruff format --check .
-cd frontend && npm run build && npm run lint
+cd apps/marrow/backend && uv run ruff check . && uv run ruff format --check .
+cd apps/marrow/frontend && npm run build && npm run lint
 ```
 
 Report every violation with `file:line`.
@@ -39,7 +39,7 @@ Report every violation with `file:line`.
 ### Phase 3: Test Coverage
 
 ```bash
-cd backend && uv run pytest tests/ -v --tb=short
+cd apps/marrow/backend && uv run pytest tests/ -v --tb=short
 ```
 
 Verify tests exist for new service methods/endpoints; cover edge cases (empty, invalid, auth failures).
@@ -78,7 +78,7 @@ For each criterion: met? how verified? edge cases? error states?
 
 For every new `app/config.py` setting:
 
-- [ ] In `backend/.env.example`
+- [ ] In `apps/marrow/backend/.env.example`
 - [ ] README/deploy doc updated if required
 - [ ] Set on Fly app secrets if already deployed
 - [ ] Degrades gracefully when missing (no 500 storm)

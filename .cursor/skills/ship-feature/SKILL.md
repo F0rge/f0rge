@@ -70,8 +70,8 @@ Run `.cursor/rules/qa-gate.mdc` phases. Produce structured **QA Gate Report** wi
 Minimum automated:
 
 ```bash
-cd backend && uv run ruff check . && uv run ruff format --check . && uv run pytest tests/ -v --tb=short
-cd frontend && npm run lint && npm run typecheck && npm run build
+cd apps/marrow/backend && uv run ruff check . && uv run ruff format --check . && uv run pytest tests/ -v --tb=short
+cd apps/marrow/frontend && npm run lint && npm run typecheck && npm run build
 ```
 
 **Live-server E2E** (mandatory for UI/API user paths): `./start.sh`, auth bypass per qa-gate rule, drive golden path + one error path in browser MCP. pytest alone is not the gate.

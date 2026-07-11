@@ -23,7 +23,7 @@ rls_no_force_sql() {
   python3 - <<'PY'
 from pathlib import Path
 import re
-text = Path("backend/app/rls.py").read_text()
+text = Path("apps/marrow/backend/app/rls.py").read_text()
 tables = re.findall(r'"([^"]+)"', text.split("USER_OWNED_TABLES")[1].split(")")[0])
 for t in tables:
     print(f"ALTER TABLE {t} NO FORCE ROW LEVEL SECURITY;")
@@ -34,7 +34,7 @@ rls_force_sql() {
   python3 - <<'PY'
 from pathlib import Path
 import re
-text = Path("backend/app/rls.py").read_text()
+text = Path("apps/marrow/backend/app/rls.py").read_text()
 tables = re.findall(r'"([^"]+)"', text.split("USER_OWNED_TABLES")[1].split(")")[0])
 for t in tables:
     print(f"ALTER TABLE {t} FORCE ROW LEVEL SECURITY;")

@@ -31,7 +31,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 | Frontend | `marrow-ui-dev` | https://app-dev.marrow-health.com |
 | Postgres | MPG `marrow-db-prod` (`d1zj5omzqwvryqkv`) — database `marrow_dev` | via secrets |
 
-Deploy configs: `backend/fly.toml`, `backend/fly.mcp.toml`, `frontend/fly.toml` (dev) and `*.prod.toml` (prod). See [docs/fly-cutover-runbook.md](docs/fly-cutover-runbook.md).
+Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.toml`, `apps/marrow/frontend/fly.toml` (dev) and `*.prod.toml` (prod). See [docs/fly-cutover-runbook.md](docs/fly-cutover-runbook.md).
 
 ## Branch workflow
 
@@ -43,16 +43,16 @@ Deploy configs: `backend/fly.toml`, `backend/fly.mcp.toml`, `frontend/fly.toml` 
 
 ```bash
 ./start.sh          # Both services
-cd backend && uv run uvicorn app.main:app --port 8000 --reload   # Backend only
-cd frontend && npm run dev   # Frontend only
+cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload   # Backend only
+cd apps/marrow/frontend && npm run dev   # Frontend only
 ```
 
 ## Key Paths
 
 - Backend API: http://localhost:8000/api/v1
 - Frontend: http://localhost:3000
-- Database: Fly MPG in deployed envs; local tests use disposable Postgres via `testcontainers` (see `backend/tests/conftest.py`). `DATABASE_URL` must use asyncpg driver, e.g. `postgresql+asyncpg://...`.
-- Photo storage: Tigris on Fly; `backend/photos/` locally
+- Database: Fly MPG in deployed envs; local tests use disposable Postgres via `testcontainers` (see `apps/marrow/backend/tests/conftest.py`). `DATABASE_URL` must use asyncpg driver, e.g. `postgresql+asyncpg://...`.
+- Photo storage: Tigris on Fly; `apps/marrow/backend/photos/` locally
 
 ## Conventions
 
@@ -69,11 +69,11 @@ Scoped rules in `.cursor/rules/` (auto-applied by glob):
 | Rule | Scope |
 |------|-------|
 | `orchestration.mdc` | Always — planning must delegate to sub-agents |
-| `backend.mdc` | `backend/**/*.py`, migrations |
-| `frontend.mdc` | `frontend/**/*.tsx`, `frontend/**/*.ts` |
+| `backend.mdc` | `apps/marrow/backend/**/*.py`, migrations |
+| `frontend.mdc` | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
 | `infra.mdc` | Docker, compose, CI, deploy |
 | `qa-gate.mdc` | tests, workflows |
-| `data-pipelines.mdc` | `backend/scripts/**`, `backend/data/**` |
+| `data-pipelines.mdc` | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 
 ## Sub-agents
 
@@ -125,17 +125,17 @@ References:
 
 ## Cursor Cloud specific instructions
 
-The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and frontend `node_modules`. The startup update script only refreshes deps (`uv sync --frozen --project backend`, `uv tool install ruff@latest`, `npm --prefix frontend ci`). Services and the database are NOT auto-started — bring them up as below. Standard run/lint/test commands live in this file, `.cursor/rules/backend.mdc`, and `.cursor/rules/qa-gate.mdc`.
+The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and frontend `node_modules`. The startup update script only refreshes deps (`uv sync --frozen --project apps/marrow/backend`, `uv tool install ruff@latest`, `npm --prefix apps/marrow/frontend ci`). Services and the database are NOT auto-started — bring them up as below. Standard run/lint/test commands live in this file, `.cursor/rules/backend.mdc`, and `.cursor/rules/qa-gate.mdc`.
 
 ### Database + Docker (must start manually each session)
 - There is **no local dev docker-compose**; the `docker-compose*.yml` files are Coolify/Fly deploy stacks, not local dev.
 - The Docker daemon is not auto-started. Start it once per session: `sudo dockerd > /tmp/dockerd.log 2>&1 &` then `sudo chmod 666 /var/run/docker.sock` (lets `uv run pytest`'s testcontainers reach the socket as the `ubuntu` user). `/etc/docker/daemon.json` is pre-set to `fuse-overlayfs` + `containerd-snapshotter: false` (required for Docker 29 in this VM) — do not change it.
 - Backend + tests need a **pgvector** Postgres on `localhost:5432` with user/pass/db all `health`. Start/reuse it:
   `docker start ht-postgres 2>/dev/null || docker run -d --name ht-postgres -e POSTGRES_USER=health -e POSTGRES_PASSWORD=health -e POSTGRES_DB=health -p 5432:5432 pgvector/pgvector:pg16`
-- `backend/.env` (gitignored) holds local secrets. If missing, recreate with: `JWT_SECRET` (any string), `SETTINGS_ENCRYPTION_KEY` (a valid Fernet key: `uv run --project backend python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"`), `DATABASE_URL=postgresql+asyncpg://health:health@localhost:5432/health`, `PHOTO_DIR=photos`, and `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` (any random strings, consumed by migrations 004/019). Do **not** put `CORS_ORIGINS` as a bare string in `.env` — it is a `list[str]` parsed as JSON and a plain value crashes startup; omit it (default already allows `http://localhost:3000`).
+- `apps/marrow/backend/.env` (gitignored) holds local secrets. If missing, recreate with: `JWT_SECRET` (any string), `SETTINGS_ENCRYPTION_KEY` (a valid Fernet key: `uv run --project apps/marrow/backend python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"`), `DATABASE_URL=postgresql+asyncpg://health:health@localhost:5432/health`, `PHOTO_DIR=photos`, and `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` (any random strings, consumed by migrations 004/019). Do **not** put `CORS_ORIGINS` as a bare string in `.env` — it is a `list[str]` parsed as JSON and a plain value crashes startup; omit it (default already allows `http://localhost:3000`).
 
 ### Migrations gotcha
-- Alembic migrations 004/019 read `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` from **`os.environ`, not** from `.env` via pydantic. Export the `.env` before migrating: `cd backend && set -a && . ./.env && set +a && uv run alembic upgrade head`. Running the backend itself does not need this (pydantic loads `.env`), only the migration step does.
+- Alembic migrations 004/019 read `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` from **`os.environ`, not** from `.env` via pydantic. Export the `.env` before migrating: `cd apps/marrow/backend && set -a && . ./.env && set +a && uv run alembic upgrade head`. Running the backend itself does not need this (pydantic loads `.env`), only the migration step does.
 
 ### Running
 - `./start.sh` runs both (backend `:8000`, frontend `:3000`); frontend proxies `/api/*` → `:8000`. The backend auto-seeds dietary reference tables on first boot against a fresh DB.
