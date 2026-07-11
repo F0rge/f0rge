@@ -4,11 +4,12 @@ import datetime
 import uuid
 
 import sqlalchemy as sa
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import BaseCRUD
+from app.models.dietary_ingredient import DietaryIngredient
 from app.models.user import User
 
 COPY_REFERENCE_CATALOGS_SQL = sa.text(
@@ -30,6 +31,14 @@ class UserProvisioningCRUD(BaseCRUD):
         await self.db.execute(
             update(User).where(User.id == user_id).values(infrastructure_provisioned_at=now)
         )
+
+    async def count_dietary_ingredients(self, user_id: uuid.UUID) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(DietaryIngredient)
+            .where(DietaryIngredient.user_id == user_id)
+        )
+        return (await self.db.execute(stmt)).scalar_one()
 
     async def bulk_insert_ignore_conflict(
         self,
