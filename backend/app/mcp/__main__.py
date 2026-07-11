@@ -30,7 +30,7 @@ async def _run() -> None:
 
 def main() -> None:
     _configure_logging()
-    parser = argparse.ArgumentParser(description="Health Tracker MCP server")
+    parser = argparse.ArgumentParser(description="Marrow MCP server")
     parser.add_argument(
         "--transport",
         choices=["streamable-http"],

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AuthCredentialsForm } from '@/components/auth/auth-credentials-form'
+import { MarrowWordmark } from '@/components/brand/marrow-wordmark'
 import { useSignup } from '@/lib/api/hooks'
 import { getErrorDetail } from '@/lib/api/client'
 
@@ -28,7 +29,10 @@ export default function SignupPage() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-8 p-6">
       <div className="text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Create account</h1>
+        <h1 className="flex justify-center">
+          <MarrowWordmark className="h-8" />
+        </h1>
+        <p className="mt-3 text-lg font-semibold tracking-tight">Create account</p>
         <p className="mt-2 text-sm text-muted-foreground">Sign up to start tracking</p>
       </div>
       <AuthCredentialsForm

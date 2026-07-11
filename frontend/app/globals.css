@@ -49,6 +49,9 @@
 }
 
 :root {
+  --marrow-ground: #f4eee6;
+  --marrow-ink: #2a2320;
+  --marrow-nucleus: #b26144;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -84,6 +87,9 @@
 }
 
 .dark {
+  --marrow-ground: #131110;
+  --marrow-ink: #ede4da;
+  --marrow-nucleus: #c4554d;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
