@@ -605,6 +605,26 @@ dev = [
 ]
 
 [[package]]
+name = "f0rge-storage"
+version = "0.1.0"
+source = { editable = "../../../libs/backend/storage" }
+dependencies = [
+    { name = "boto3" },
+    { name = "pillow" },
+    { name = "pillow-heif" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "boto3", specifier = ">=1.35" },
+    { name = "pillow", specifier = ">=10.0" },
+    { name = "pillow-heif", specifier = ">=0.18" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0" }]
+
+[[package]]
 name = "f0rge-testing"
 version = "0.1.0"
 source = { editable = "../../../libs/backend/testing" }
@@ -893,6 +913,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "f0rge-core" },
     { name = "f0rge-db" },
+    { name = "f0rge-storage" },
     { name = "fastapi", extra = ["standard"] },
     { name = "greenlet" },
     { name = "httpx" },
@@ -924,6 +945,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=42.0" },
     { name = "f0rge-core", editable = "../../../libs/backend/core" },
     { name = "f0rge-db", editable = "../../../libs/backend/db" },
+    { name = "f0rge-storage", editable = "../../../libs/backend/storage" },
     { name = "fastapi", extras = ["standard"] },
     { name = "greenlet", specifier = ">=3.3.2" },
     { name = "httpx", specifier = ">=0.27" },

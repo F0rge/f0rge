@@ -1,25 +1,10 @@
 from __future__ import annotations
 
-import io
-
-from PIL import Image, ImageOps
-from pillow_heif import register_heif_opener
+from f0rge_storage.images import resize_image
 
 from app.services import object_storage
 
-register_heif_opener()
-
-
-def resize_image(file_bytes: bytes, max_dim: int = 2048, quality: int = 85) -> bytes:
-    img = Image.open(io.BytesIO(file_bytes))
-    img = ImageOps.exif_transpose(img)
-    if img.mode not in ("RGB",):
-        img = img.convert("RGB")
-    if img.width > max_dim or img.height > max_dim:
-        img.thumbnail((max_dim, max_dim), Image.LANCZOS)
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=quality)
-    return buf.getvalue()
+__all__ = ["resize_image", "save_photo", "delete_photo", "read_photo", "photo_exists"]
 
 
 def save_photo(file_bytes: bytes, filename: str, *, user_id: str | None = None) -> str:

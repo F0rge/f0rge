@@ -23,6 +23,7 @@ dependencies = [
     "boto3>=1.35",
     "f0rge-core",
     "f0rge-db",
+    "f0rge-storage",
 ]
 
 [dependency-groups]
@@ -36,6 +37,7 @@ dev = [
 [tool.uv.sources]
 f0rge-core = { path = "../../../libs/backend/core", editable = true }
 f0rge-db = { path = "../../../libs/backend/db", editable = true }
+f0rge-storage = { path = "../../../libs/backend/storage", editable = true }
 f0rge-testing = { path = "../../../libs/backend/testing", editable = true }
 
 [tool.pytest.ini_options]
