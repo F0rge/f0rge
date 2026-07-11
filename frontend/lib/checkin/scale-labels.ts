@@ -47,7 +47,35 @@ export function getScaleLabel(
 
 export type ScaleTier = 'good' | 'neutral' | 'poor'
 
-/** Three-way good/neutral/poor split for `overall`, used for badge/dot color. */
+const FIVE_POINT_DOT_CLASS: Record<number, string> = {
+  1: 'bg-rose-700',
+  2: 'bg-red-500',
+  3: 'bg-amber-500',
+  4: 'bg-lime-500',
+  5: 'bg-emerald-500',
+}
+
+const FIVE_POINT_BADGE_CLASS: Record<number, string> = {
+  1: 'bg-rose-900/30 text-rose-400',
+  2: 'bg-red-900/30 text-red-400',
+  3: 'bg-amber-900/30 text-amber-400',
+  4: 'bg-lime-900/30 text-lime-400',
+  5: 'bg-emerald-900/30 text-emerald-400',
+}
+
+const LEGACY_DOT_CLASS: Record<ScaleTier, string> = {
+  poor: 'bg-red-500',
+  neutral: 'bg-amber-500',
+  good: 'bg-green-500',
+}
+
+const LEGACY_BADGE_CLASS: Record<ScaleTier, string> = {
+  poor: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  neutral: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  good: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+}
+
+/** Three-way good/neutral/poor split for legacy `overall` entries. */
 export function getOverallTier(value: number, schemaVersion: number): ScaleTier {
   if (isFivePoint(schemaVersion)) {
     if (value >= 4) return 'good'
@@ -57,6 +85,22 @@ export function getOverallTier(value: number, schemaVersion: number): ScaleTier 
   if (value === 3) return 'good'
   if (value === 2) return 'neutral'
   return 'poor'
+}
+
+/** Solid dot color for calendar wellbeing indicators. */
+export function getOverallDotClass(value: number, schemaVersion: number): string {
+  if (isFivePoint(schemaVersion)) {
+    return FIVE_POINT_DOT_CLASS[value] ?? 'bg-muted-foreground'
+  }
+  return LEGACY_DOT_CLASS[getOverallTier(value, schemaVersion)]
+}
+
+/** Soft pill color for wellbeing badges on history surfaces. */
+export function getOverallBadgeClass(value: number, schemaVersion: number): string {
+  if (isFivePoint(schemaVersion)) {
+    return FIVE_POINT_BADGE_CLASS[value] ?? 'bg-muted text-muted-foreground'
+  }
+  return LEGACY_BADGE_CLASS[getOverallTier(value, schemaVersion)]
 }
 
 export type NeuroDirection = 'worse' | 'better' | 'baseline'

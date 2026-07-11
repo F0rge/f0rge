@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { CalendarView } from '@/components/history/calendar-view'
 import { EntryCard } from '@/components/history/entry-card'
+import { ProtocolStreakHint } from '@/components/history/protocol-streak-hint'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { FetchError } from '@/components/shared/fetch-error'
@@ -72,6 +73,8 @@ function HistoryContent() {
           <ChevronRight className="size-5" />
         </button>
       </div>
+
+      <ProtocolStreakHint month={month} />
 
       {isError ? (
         <FetchError message="Failed to load history." onRetry={() => refetch()} />
