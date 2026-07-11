@@ -2,6 +2,8 @@
 
 Production and develop run entirely on Fly.io. Custom domains on `marrow-health.com` (Cloudflare DNS-only → Fly).
 
+> **Org migration:** See [fly-org-migration.md](fly-org-migration.md) for the `personal` → `f0rge` org cutover runbook.
+
 ## Fly dev stack
 
 | Component | Fly app | URL |
