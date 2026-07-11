@@ -13,6 +13,10 @@ concurrency:
   group: ci-main-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   ci:
     name: ci
