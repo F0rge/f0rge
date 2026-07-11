@@ -72,6 +72,13 @@ def upgrade() -> None:
     ]
     if not rows:
         return
+    bind = op.get_bind()
+    # Fly MPG runs alembic with FORCE RLS — tenant policies block inserts unless
+    # app.user_id matches the reference user we're seeding for.
+    bind.execute(
+        sa.text("SELECT set_config('app.user_id', :user_id, true)"),
+        {"user_id": user_id},
+    )
     table = _symptom_catalog_table()
     stmt = (
         postgresql.insert(table)
@@ -84,6 +91,11 @@ def upgrade() -> None:
 def downgrade() -> None:
     bulk_keys = [key for key, _ in BULK_SYMPTOMS]
     user_id = _reference_user_id()
+    bind = op.get_bind()
+    bind.execute(
+        sa.text("SELECT set_config('app.user_id', :user_id, true)"),
+        {"user_id": user_id},
+    )
     op.execute(
         sa.text(
             "DELETE FROM symptom_catalog WHERE user_id = :user_id AND key = ANY(:keys)"
