@@ -25,6 +25,8 @@ jobs:
     outputs:
       backend: ${{ steps.affected.outputs.backend }}
       frontend: ${{ steps.affected.outputs.frontend }}
+      py_projects: ${{ steps.affected.outputs.py_projects }}
+      ts_projects: ${{ steps.affected.outputs.ts_projects }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,15 +47,23 @@ jobs:
 
       - name: Resolve affected projects
         id: affected
+        # Tag-driven: any project carrying platform:py / platform:ts is covered
+        # automatically. nx 22.7 ignores --sep and always emits a JSON array, so
+        # parse with jq (join -> comma list, which run-many's --projects accepts;
+        # empty affected set -> "" so the boolean flags stay false).
         run: |
-          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --sep=" ")
+          PY=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
+          TS=$(npx nx show projects --affected --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
           backend=false
           frontend=false
-          [[ " $PROJECTS " == *" marrow-backend "* ]] && backend=true
-          [[ " $PROJECTS " == *" marrow-frontend "* ]] && frontend=true
+          [ -n "$PY" ] && backend=true
+          [ -n "$TS" ] && frontend=true
           echo "backend=$backend" >> "$GITHUB_OUTPUT"
           echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
-          echo "affected: $PROJECTS"
+          echo "py_projects=$PY" >> "$GITHUB_OUTPUT"
+          echo "ts_projects=$TS" >> "$GITHUB_OUTPUT"
+          echo "affected py: $PY"
+          echo "affected ts: $TS"
 
   backend:
     name: backend
@@ -77,9 +87,6 @@ jobs:
       - name: Pin Python 3.10
         run: uv python install 3.10
 
-      - name: Install backend deps
-        run: uv sync --frozen --project apps/marrow/backend
-
       - name: Install ruff
         run: uv tool install ruff@latest
 
@@ -92,8 +99,21 @@ jobs:
       - name: Install root deps
         run: npm ci
 
+      - name: Install backend deps
+        env:
+          PY_PROJECTS: ${{ needs.detect.outputs.py_projects }}
+        # Per-project sync. NEVER run a bare `uv sync` from repo root: a root
+        # uv.lock silently flips @nxlv/python into workspace mode. Always --project.
+        run: |
+          for p in ${PY_PROJECTS//,/ }; do
+            ROOT=$(npx nx show project "$p" --json | jq -r '.root')
+            uv sync --frozen --project "$ROOT"
+          done
+
       - name: nx run (backend)
-        run: npx nx run-many -t lint format-check test --projects=marrow-backend
+        env:
+          PY_PROJECTS: ${{ needs.detect.outputs.py_projects }}
+        run: npx nx run-many -t lint format-check test --projects "$PY_PROJECTS"
 
   frontend:
     name: frontend
@@ -122,10 +142,18 @@ jobs:
         run: npm ci
 
       - name: Install frontend deps
-        run: npm ci --prefix apps/marrow/frontend
+        env:
+          TS_PROJECTS: ${{ needs.detect.outputs.ts_projects }}
+        run: |
+          for p in ${TS_PROJECTS//,/ }; do
+            ROOT=$(npx nx show project "$p" --json | jq -r '.root')
+            npm ci --prefix "$ROOT"
+          done
 
       - name: nx run (frontend)
-        run: npx nx run-many -t lint typecheck build --projects=marrow-frontend
+        env:
+          TS_PROJECTS: ${{ needs.detect.outputs.ts_projects }}
+        run: npx nx run-many -t lint typecheck build --projects "$TS_PROJECTS"
 
   ci:
     name: ci
