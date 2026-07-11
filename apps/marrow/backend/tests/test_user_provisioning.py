@@ -180,9 +180,13 @@ async def test_signup_copies_lab_marker_catalog_from_reference(
     assert await _count_for_user(async_db, user_id, LabMarkerCatalog) == 1
 
 
-def test_copy_function_declares_row_security_off() -> None:
-    """Regression guard: prod FORCE RLS requires row_security=off on the copy function."""
-    assert "SET row_security = off" in COPY_USER_CATALOG_FROM_REFERENCE_SQL
+def test_copy_function_does_not_declare_row_security_off() -> None:
+    """Regression guard (migration 032): `row_security = off` does NOT bypass RLS
+    for prod's non-BYPASSRLS `schema_admin` owner — it raises InsufficientPrivilege
+    under FORCE RLS. The copy must instead rely on the `provisioner` service-role
+    policy, so the function must NOT re-declare row_security while staying DEFINER."""
+    assert "row_security" not in COPY_USER_CATALOG_FROM_REFERENCE_SQL
+    assert "SECURITY DEFINER" in COPY_USER_CATALOG_FROM_REFERENCE_SQL
 
 
 async def test_repair_infrastructure_catalogs_refills_empty_ingredients(
