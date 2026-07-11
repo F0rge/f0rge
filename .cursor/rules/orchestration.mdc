@@ -46,7 +46,7 @@ Solo plans where the orchestrator implements every chunk are **not acceptable**.
 Each brief MUST include:
 
 1. Read `~/.cursor/agent-memory/<agent-name>/MEMORY.md` first
-2. Read project `CLAUDE.md`, `AGENTS.md`, and relevant `.cursor/rules/*.mdc`
+2. Read project `AGENTS.md` and relevant `.cursor/rules/*.mdc`
 3. House rules: think / simplify / surgical / goal-driven (Karpathy four)
 4. Scope: plan slice with file paths and acceptance criteria
 5. Write back gotchas to memory when done

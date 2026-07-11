@@ -59,7 +59,7 @@ Curl + build-passes is **not enough** for user-facing features. Drive the golden
 3. Set the `ht_session` cookie via `browser_evaluate` / Playwright `addCookies` (`httpOnly: true`). `document.cookie = ...` from `browser_evaluate` does **not** stick for httpOnly cookies.
 4. If today's entry is required for the test, create it the same way.
 
-**Live-server walkthrough is mandatory** per project `CLAUDE.md` — pytest passing alone is not the gate.
+**Live-server walkthrough is mandatory** per project `AGENTS.md` — pytest passing alone is not the gate.
 
 Skip only if no browser MCP available — document why.
 

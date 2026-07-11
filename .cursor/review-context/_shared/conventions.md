@@ -88,7 +88,7 @@ After this PR merges, the working tree must be clean:
 - `git status` is clean.
 - Session ends on the default branch (`develop`), fast-forwarded to origin.
 
-See global `~/.claude/CLAUDE.md` § "Post-Merge Hygiene".
+See global `~/.cursor/rules/leo-system-wide.mdc` § "Post-Merge Hygiene".
 
 ## Required environment vars must mirror to `.env.example`
 
