@@ -16,7 +16,7 @@ import { useCompleteOnboarding, useUserSettings } from '@/lib/api/hooks/settings
 import { joyrideStyles, joyrideThemeOptions } from './joyride-theme'
 import { OnboardingTooltip } from './setup-tooltip'
 import { TOUR_STEPS, tourStepsForReplay, type TourStepDefinition } from './tour-steps'
-import { OnboardingSetupProvider } from './use-onboarding-setup'
+import { OnboardingSetupProvider, useOnboardingSetup } from './use-onboarding-setup'
 import { routeMatches, waitForSelector } from './wait-for-target'
 
 interface OnboardingContextValue {
@@ -66,6 +66,7 @@ function OnboardingTourInner({ children }: { children: React.ReactNode }) {
     enabled: auth?.authenticated === true,
   })
   const completeOnboarding = useCompleteOnboarding()
+  const { persistSetup } = useOnboardingSetup()
 
   const [run, setRun] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
@@ -83,11 +84,17 @@ function OnboardingTourInner({ children }: { children: React.ReactNode }) {
       setRun(false)
       setStepIndex(0)
       if (shouldPersist) {
-        await completeOnboarding.mutateAsync()
+        try {
+          await persistSetup()
+          await completeOnboarding.mutateAsync()
+        } catch {
+          setIsReplay(false)
+          return
+        }
       }
       setIsReplay(false)
     },
-    [completeOnboarding],
+    [completeOnboarding, persistSetup],
   )
 
   const onEvent = useCallback(
