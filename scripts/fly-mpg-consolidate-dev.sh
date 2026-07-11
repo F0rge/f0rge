@@ -13,6 +13,7 @@ DEV_CLUSTER="${DEV_CLUSTER:-d1zj5omzqg9ryqkv}"
 PROD_CLUSTER="${PROD_CLUSTER:-z23750v13yl096d1}"
 SOURCE_DB="${SOURCE_DB:-fly-db}"
 TARGET_DB="${TARGET_DB:-health_dev}"
+SOURCE_DATABASE_URL="${SOURCE_DATABASE_URL:-}"
 DEV_PROXY_PORT="${DEV_PROXY_PORT:-16381}"
 PROD_PROXY_PORT="${PROD_PROXY_PORT:-16382}"
 FLY_API_APP="${FLY_API_APP:-health-tracker-api-dev}"
@@ -35,10 +36,16 @@ docker_pg_dump() {
 }
 
 docker_pg_restore() {
+  set +e
   docker run --rm -e PGPASSWORD="$PROD_PASS" -v /tmp:/tmp postgres:16 \
     pg_restore --no-owner --no-privileges --clean --if-exists \
     -h host.docker.internal -p "$PROD_PROXY_PORT" -U "$PROD_USER" -d "$TARGET_DB" \
     "$DUMP_FILE"
+  local rc=$?
+  set -e
+  if [[ "$rc" -ne 0 && "$rc" -ne 1 ]]; then
+    return "$rc"
+  fi
 }
 
 load_creds() {
@@ -55,13 +62,16 @@ load_pass() {
 }
 
 rls_tables_sql() {
-  python3 - <<'PY'
+  local mode="$1"
+  python3 - "$mode" <<'PY'
 from pathlib import Path
 import re
+import sys
 text = Path("backend/app/rls.py").read_text()
 tables = re.findall(r'"([^"]+)"', text.split("USER_OWNED_TABLES")[1].split(")")[0])
+force = "FORCE" if sys.argv[1] == "force" else "NO FORCE"
 for t in tables:
-    print(f"ALTER TABLE {t} NO FORCE ROW LEVEL SECURITY;")
+    print(f"ALTER TABLE {t} {force} ROW LEVEL SECURITY;")
 PY
 }
 
@@ -107,9 +117,23 @@ run_counts() {
     psql -h host.docker.internal -p "$port" -U "$user" -d "$db" -Atc "$count_sql" || true
 }
 
+apply_rls_mode() {
+  local port="$1" db="$2" user="$3" pass="$4" mode="$5" label="$6"
+  echo "==> $label"
+  docker run --rm -i -e PGPASSWORD="$pass" postgres:16 \
+    psql -h host.docker.internal -p "$port" -U "$user" -d "$db" \
+    -v ON_ERROR_STOP=1 <<<"$(rls_tables_sql "$mode")"
+}
+
 cd "$(dirname "$0")/.."
-DEV_USER="$(load_creds "$FLY_API_APP")"
-DEV_PASS="$(load_pass "$FLY_API_APP")"
+if [[ -n "$SOURCE_DATABASE_URL" ]]; then
+  source_url="${SOURCE_DATABASE_URL/postgresql+asyncpg/postgresql}"
+  DEV_USER="$(echo "$source_url" | sed -n 's|postgresql://\([^:]*\):.*|\1|p')"
+  DEV_PASS="$(echo "${source_url#postgresql://*:}" | sed 's|@.*||')"
+else
+  DEV_USER="$(load_creds "$FLY_API_APP")"
+  DEV_PASS="$(load_pass "$FLY_API_APP")"
+fi
 PROD_USER="$(load_creds health-tracker-api-prod)"
 PROD_PASS="$(load_pass health-tracker-api-prod)"
 
@@ -119,18 +143,16 @@ start_proxy "$PROD_CLUSTER" "$PROD_PROXY_PORT"
 
 trap 'stop_proxy "$DEV_PROXY_PORT"; stop_proxy "$PROD_PROXY_PORT"' EXIT
 
+apply_rls_mode "$DEV_PROXY_PORT" "$SOURCE_DB" "$DEV_USER" "$DEV_PASS" "no-force" \
+  "Temporarily NO FORCE RLS on source (htmigrate) for row counts / pg_dump"
 run_counts "$DEV_PROXY_PORT" "$SOURCE_DB" "Pre-migration counts (source)" "$DEV_USER" "$DEV_PASS"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
+  apply_rls_mode "$DEV_PROXY_PORT" "$SOURCE_DB" "$DEV_USER" "$DEV_PASS" "force" \
+    "Restore FORCE RLS on source after dry-run counts"
   echo "==> DRY RUN — skipping dump/restore"
   exit 0
 fi
-
-echo "==> Temporarily NO FORCE RLS on source (htmigrate) for pg_dump"
-rls_sql="$(rls_tables_sql)"
-docker run --rm -i -e PGPASSWORD="$DEV_PASS" postgres:16 \
-  psql -h host.docker.internal -p "$DEV_PROXY_PORT" -U "$DEV_USER" -d "$SOURCE_DB" \
-  -v ON_ERROR_STOP=1 <<<"$rls_sql"
 
 echo "==> pg_dump source"
 rm -f "$DUMP_FILE"
@@ -144,6 +166,9 @@ echo "==> Post-restore grants on $TARGET_DB"
 docker run --rm -i -e PGPASSWORD="$PROD_PASS" postgres:16 \
   psql -h host.docker.internal -p "$PROD_PROXY_PORT" -U "$PROD_USER" -d "$TARGET_DB" \
   -v ON_ERROR_STOP=1 <<<"$(grants_sql)"
+
+apply_rls_mode "$PROD_PROXY_PORT" "$TARGET_DB" "$PROD_USER" "$PROD_PASS" "force" \
+  "Re-apply FORCE RLS on target after restore"
 
 run_counts "$PROD_PROXY_PORT" "$TARGET_DB" "Post-migration counts (target)" "$PROD_USER" "$PROD_PASS"
 

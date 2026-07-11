@@ -19,7 +19,7 @@ DRY_RUN=1
 PI_DATABASE_URL="${PI_DATABASE_URL:-}"
 FLY_MPG_CLUSTER="${FLY_MPG_CLUSTER:-z23750v13yl096d1}"
 TARGET_DB="${TARGET_DB:-health_dev}"
-SCRATCH_DB="${SCRATCH_DB:-$TARGET_DB}"
+SCRATCH_DB="${SCRATCH_DB:-health_tracker_scratch}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
