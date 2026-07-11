@@ -24,12 +24,15 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 ### Develop (`develop`)
 
+Org: **`f0rge`** (dev apps migrated 2026-07-11; prod remains on `personal` until soak).
+
 | Component | Fly app | URL |
 |---|---|---|
 | API + worker | `marrow-dev` | https://api-dev.marrow-health.com |
 | MCP | `marrow-mcp-dev` | https://marrow-mcp-dev.fly.dev |
 | Frontend | `marrow-ui-dev` | https://app-dev.marrow-health.com |
-| Postgres | MPG `marrow-db-prod` (`d1zj5omzqwvryqkv`) — database `marrow_dev` | via secrets |
+| Postgres | MPG `marrow-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow_dev` | via secrets |
+| Tigris | `f0rge-marrow-dev-photos` | via secrets on `marrow-dev` |
 
 Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.toml`, `apps/marrow/frontend/fly.toml` (dev) and `*.prod.toml` (prod). See [docs/fly-cutover-runbook.md](docs/fly-cutover-runbook.md).
 

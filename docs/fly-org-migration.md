@@ -21,13 +21,26 @@ Apps **can** move orgs with `fly apps move` (machines, volumes, secrets, certs/d
 
 ## Target state (f0rge org)
 
-| Resource | Name |
+| Resource | Name / ID |
 |---|---|
 | Org | `f0rge` |
-| MPG cluster | `marrow-db` (`fra`) |
+| MPG cluster | `marrow-db` (`nlkxjo5m3240y93v`, `fra`, Basic 10GB) |
 | Databases | `marrow`, `marrow_dev` |
-| Apps | same names, org `f0rge` |
-| Tigris | new bucket(s) in `f0rge` |
+| Dev apps (migrated) | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` |
+| Dev Tigris | `f0rge-marrow-dev-photos` |
+| Prod apps (pending) | `marrow`, `marrow-mcp`, `marrow-ui` — still `personal` org |
+
+### Dev cutover status (2026-07-11)
+
+- [x] `f0rge` org + billing
+- [x] New MPG cluster + extensions (`vector`, `citext`)
+- [x] `marrow_dev` data migrated from `d1zj5omzqwvryqkv` (row counts verified)
+- [x] Dev apps moved to `f0rge`
+- [x] MPG attach + `FLY_MPG_SKIP_ROLE_DDL=1` on API/MCP
+- [x] New Tigris bucket + secrets on `marrow-dev`
+- [x] `FLY_API_TOKEN` multi-token (`personal,f0rge`) for split-org CI window
+- [ ] Prod cutover (after ~1 week dev soak)
+- [ ] Old cluster/bucket decommission
 
 ## Prerequisites
 
@@ -79,11 +92,11 @@ Record new `AWS_*` secrets for each app.
 fly scale count web=0 worker=0 -a marrow-dev
 
 # 2. Dump dev DB via OLD cluster proxy
-fly mpg proxy d1zj5omzqwvryqkv -p 16380 &
+fly mpg proxy d1zj5omzqwvryqkv -p 16380 &   # old cluster (rollback source)
 pg_dump -Fc --no-owner --no-acl -h localhost -p 16380 -U <admin> marrow_dev > /tmp/marrow_dev.dump
 
-# 3. Restore to NEW cluster as schema_admin
-fly mpg proxy <new-cluster-id> -p 16381 &
+# 3. Restore to NEW cluster (nlkxjo5m3240y93v) as schema_admin
+fly mpg proxy nlkxjo5m3240y93v -p 16381 &
 pg_restore -h localhost -p 16381 -U schema_admin -d marrow_dev --no-owner --no-acl /tmp/marrow_dev.dump
 psql ... -c "ANALYZE;"
 
