@@ -4,7 +4,7 @@ import { useRef, useState, useCallback } from 'react'
 import { Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
 import { MealTimeChips } from './meal-time-chips'
 import { useUploadPhoto } from '@/lib/api/hooks'
-import { getErrorDetail } from '@/lib/api/client'
+import { getErrorDetail } from '@f0rge/ui/api'
 
 interface StagedPhoto {
   id: string

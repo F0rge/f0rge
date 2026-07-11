@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Heart, Upload } from 'lucide-react'
-import { apiPostForm, handleMutationError } from '@/lib/api/client'
+import { apiPostForm, handleMutationError } from '@f0rge/ui/api'
 import { SettingsCard } from './settings-card'
 
 export function AppleHealthSection() {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, ApiError } from '../client'
+import { apiGet, apiPost, ApiError } from '@f0rge/ui/api'
 import type { AuthUser, LoginCredentials, SignupCredentials } from '../types'
 
 const UNAUTHENTICATED: AuthUser = { authenticated: false }

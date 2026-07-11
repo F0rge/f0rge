@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPatch } from '../client'
+import { apiGet, apiPost, apiPatch } from '@f0rge/ui/api'
 import type {
   SupplementCatalogItem,
   MedicationCatalogItem,

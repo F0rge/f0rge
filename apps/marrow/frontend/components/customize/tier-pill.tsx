@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 export type Tier = 'core' | 'catalog' | 'custom'
 

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Treatment } from '@/lib/api/types'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import { groupTreatments } from '@/components/treatments/group-treatments'
 
 interface TreatmentTimelineProps {

@@ -1,6 +1,6 @@
 'use client'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 // Maximum label length for a segmented control segment.
 // Longest current label is 9 chars ("Very Poor" / "Very Good"), 3-char buffer

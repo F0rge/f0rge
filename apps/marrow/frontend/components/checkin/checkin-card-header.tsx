@@ -1,10 +1,10 @@
 'use client'
 
 import { Eye, EyeOff } from 'lucide-react'
-import { CardHeader, CardTitle, CardAction } from '@/components/ui/card'
+import { CardHeader, CardTitle, CardAction } from '@f0rge/ui'
 import { TierPill, type Tier } from '@/components/customize/tier-pill'
-import { LG_DESKTOP_QUERY, useMediaQuery } from '@/lib/hooks/use-media-query'
-import { cn } from '@/lib/utils'
+import { LG_DESKTOP_QUERY, useMediaQuery } from '@f0rge/ui'
+import { cn } from '@f0rge/ui'
 
 interface CheckinCardHeaderProps {
   title: string

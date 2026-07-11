@@ -1,7 +1,7 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { Button } from './button'
+import { cn } from '../../lib/utils'
 import { Minus, Plus } from 'lucide-react'
 
 interface StepperProps {

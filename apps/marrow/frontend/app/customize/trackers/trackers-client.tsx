@@ -27,7 +27,7 @@ import {
 } from '@dnd-kit/sortable'
 import { ArrowLeft, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { Button } from '@f0rge/ui'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { TrackerFormModal } from '@/components/customize/tracker-form-modal'
 import { PageShell } from '@/components/layout/page-shell'

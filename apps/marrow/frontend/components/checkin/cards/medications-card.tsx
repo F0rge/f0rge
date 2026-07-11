@@ -9,12 +9,12 @@
 
 import { useState } from 'react'
 import { Loader2, Pill, X } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@f0rge/ui'
 import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 import { MedicationQuickAddDialog } from '@/components/checkin/medication-quick-add-dialog'
 import { useMedicationCatalog } from '@/lib/api/hooks'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import type { MedicationIntake } from '@/lib/api/types'
 
 interface MedicationsCardProps extends CheckinCardCollapseProps {

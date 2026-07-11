@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import { Loader2, ChevronUp, ChevronDown } from 'lucide-react'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@f0rge/ui'
+import { Badge } from '@f0rge/ui'
 import { useInsightsCorrelates } from '@/lib/api/hooks'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import type { CorrelateRow } from '@/lib/api/types'
 
 interface Props {

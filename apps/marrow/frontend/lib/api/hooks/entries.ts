@@ -9,7 +9,7 @@ import {
   apiDelete,
   handleMutationError,
   ApiError,
-} from '../client'
+} from '@f0rge/ui/api'
 import type { Entry, EntryCreate } from '../types'
 
 export function useEntries(month?: string) {

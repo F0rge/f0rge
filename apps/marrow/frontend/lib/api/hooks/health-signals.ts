@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost } from '../client'
+import { apiGet, apiPost } from '@f0rge/ui/api'
 import type { WeatherDailySummary, HealthMetricResponse, EnrichedDayResponse } from '../types'
 
 export function useWeatherSummary(date: string) {

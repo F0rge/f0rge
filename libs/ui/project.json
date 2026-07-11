@@ -1,0 +1,16 @@
+{
+  "name": "f0rge-ui",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/ui/src",
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx tsc --noEmit -p libs/ui/tsconfig.json"
+      }
+    }
+  },
+  "//": "No lint target: eslint-config-next doesn't fit a non-Next lib. No build target: source-consumed via transpilePackages. Revisit both when app #2 lands.",
+  "tags": ["platform:ts", "scope:shared"]
+}

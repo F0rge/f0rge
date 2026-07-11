@@ -139,21 +139,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            apps/marrow/frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
+      # npm workspaces: the root `npm ci` installs every workspace — no
+      # per-project install loop needed.
       - name: Install root deps
         run: npm ci
 
-      - name: Install frontend deps
-        env:
-          TS_PROJECTS: ${{ needs.detect.outputs.ts_projects }}
+      - name: Boundary guard (libs must not import apps)
+        # ponytail: grep guard; @nx/eslint enforce-module-boundaries when app #2 lands
         run: |
-          for p in ${TS_PROJECTS//,/ }; do
-            ROOT=$(npx nx show project "$p" --json | jq -r '.root')
-            npm ci --prefix "$ROOT"
-          done
+          ! grep -rn "from ['\"].*apps/" libs/ --include='*.ts' --include='*.tsx'
 
       - name: nx run (frontend, prod-shaped build)
         env:
@@ -171,11 +167,16 @@ jobs:
     steps:
       - name: Aggregate gate
         env:
+          DETECT_RESULT: ${{ needs.detect.result }}
           BACKEND_FLAG: ${{ needs.detect.outputs.backend }}
           FRONTEND_FLAG: ${{ needs.detect.outputs.frontend }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
         run: |
+          if [ "$DETECT_RESULT" != "success" ]; then
+            echo "detect job required but result was: $DETECT_RESULT"
+            exit 1
+          fi
           gate() {
             local flag="$1" result="$2" name="$3"
             if [ "$flag" = "true" ] && [ "$result" != "success" ]; then

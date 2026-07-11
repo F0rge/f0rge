@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { ClipboardCheck, Pill, CalendarDays, TrendingUp, Settings, Microscope } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 const NAV_ITEMS = [
   { href: '/checkin', label: 'Today', icon: ClipboardCheck },

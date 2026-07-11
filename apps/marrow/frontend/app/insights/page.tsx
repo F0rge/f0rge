@@ -9,7 +9,7 @@ import { TreatmentResponse } from '@/components/insights/treatment-response'
 import { SleepNextDay } from '@/components/insights/sleep-next-day'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
-import { formatLocalDate as fmt } from '@/lib/utils'
+import { formatLocalDate as fmt } from '@f0rge/ui'
 
 function getDefaultDates(): { start: string; end: string } {
   const end = new Date()

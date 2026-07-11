@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { AuthCredentialsForm } from '@/components/auth/auth-credentials-form'
 import { MarrowWordmark } from '@/components/brand/marrow-wordmark'
 import { useSignup } from '@/lib/api/hooks'
-import { getErrorDetail } from '@/lib/api/client'
+import { getErrorDetail } from '@f0rge/ui/api'
 
 export default function SignupPage() {
   const router = useRouter()

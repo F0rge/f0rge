@@ -14,7 +14,7 @@
 import { ChevronUp, ChevronDown, GripVertical, Eye, EyeOff } from 'lucide-react'
 import type { DraggableSyntheticListeners } from '@dnd-kit/core'
 import type { DraggableAttributes } from '@dnd-kit/core'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import type { CardId } from '@/lib/checkin/card-order'
 import type { ReactNode } from 'react'
 

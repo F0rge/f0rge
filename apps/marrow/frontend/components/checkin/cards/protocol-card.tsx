@@ -12,10 +12,10 @@
 
 import Link from 'next/link'
 import { Check, Flame } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@f0rge/ui'
 import { useProtocol, useLogDose } from '@/lib/api/hooks'
 import type { ProtocolItem } from '@/lib/api/types'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 

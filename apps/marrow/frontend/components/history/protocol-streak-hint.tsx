@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Flame } from 'lucide-react'
 import { useProtocol } from '@/lib/api/hooks'
-import { formatLocalDate, cn } from '@/lib/utils'
+import { formatLocalDate, cn } from '@f0rge/ui'
 
 interface ProtocolStreakHintProps {
   /** Currently viewed month in YYYY-MM form. */

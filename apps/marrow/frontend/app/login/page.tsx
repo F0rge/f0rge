@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { AuthCredentialsForm } from '@/components/auth/auth-credentials-form'
 import { MarrowWordmark } from '@/components/brand/marrow-wordmark'
 import { useLogin } from '@/lib/api/hooks'
-import { getErrorDetail } from '@/lib/api/client'
+import { getErrorDetail } from '@f0rge/ui/api'
 
 function LoginForm() {
   const router = useRouter()

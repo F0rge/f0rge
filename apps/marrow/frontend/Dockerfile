@@ -4,15 +4,19 @@
 # standalone output nests the server under apps/marrow/frontend/.
 FROM node:22-alpine AS deps
 WORKDIR /app
-COPY apps/marrow/frontend/package.json apps/marrow/frontend/package-lock.json ./apps/marrow/frontend/
-# P5: swap to a root workspace lockfile + `npm ci` once workspaces land.
-RUN npm ci --prefix apps/marrow/frontend
+# npm workspaces: one root lockfile, one `npm ci` at the root. Copy each
+# workspace's package.json path-preserving so npm can resolve the tree.
+COPY package.json package-lock.json ./
+COPY apps/marrow/frontend/package.json ./apps/marrow/frontend/
+COPY libs/ui/package.json ./libs/ui/
+RUN npm ci
 
 FROM node:22-alpine AS builder
 WORKDIR /app
-COPY --from=deps /app/apps/marrow/frontend/node_modules ./apps/marrow/frontend/node_modules
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+COPY libs/ui ./libs/ui
 COPY apps/marrow/frontend ./apps/marrow/frontend
-# P5: COPY libs/ui ./libs/ui here once the shared UI package exists.
 
 ARG API_URL=http://backend:8000
 ENV API_URL=$API_URL
@@ -20,7 +24,7 @@ ENV API_URL=$API_URL
 # ponytail: cap the build heap so `next build` GCs instead of getting OOM-killed
 # on the remote Fly builder when it races the backend build. Raise if needed.
 ENV NODE_OPTIONS=--max-old-space-size=1536
-RUN npm run build --prefix apps/marrow/frontend
+RUN npm run build -w frontend
 
 FROM node:22-alpine AS runner
 WORKDIR /app

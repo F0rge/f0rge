@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPatch, apiPost, apiDelete, apiPostForm } from '../client'
+import { apiGet, apiPatch, apiPost, apiDelete, apiPostForm } from '@f0rge/ui/api'
 import type { Account, AccountUpdate, ChangePasswordRequest, DeleteAccountRequest } from '../types'
 
 export function useAccount() {

@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Pencil } from 'lucide-react'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent } from '@f0rge/ui'
 import { usePhotoAnalysis, useUpdatePhotoLabel } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 import { PhotoAnalysis } from './photo-analysis'
 import type { Photo } from '@/lib/api/types'
 

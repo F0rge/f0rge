@@ -3,9 +3,9 @@
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Upload, UserRound } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Button } from '@f0rge/ui'
+import { Input } from '@f0rge/ui'
+import { Label } from '@f0rge/ui'
 import { UserAvatar } from '@/components/account/user-avatar'
 import { SettingsCard } from '@/components/settings/settings-card'
 import {
@@ -14,7 +14,7 @@ import {
   useUploadAvatar,
   useDeleteAvatar,
 } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 import type { Account } from '@/lib/api/types'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
