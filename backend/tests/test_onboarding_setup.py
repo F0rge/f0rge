@@ -39,8 +39,50 @@ async def test_catalog_suggestions_returns_curated_lists(async_client: AsyncClie
     assert any(item["key"] == "vitamin_d" for item in data["supplements"])
     assert all(item["key"] != "vitamin_d_k2" for item in data["supplements"])
     assert len(data["trackers"]) == 4
+    assert len(data["bulk_symptoms"]) >= 100
     assert len(data["bulk_supplements"]) > 50
     assert len(data["bulk_medications"]) > 50
+    assert len(data["bulk_trackers"]) >= 20
+
+
+async def test_catalog_setup_accepts_bulk_keys(
+    async_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    user_id = await _signup(async_client, "bulk-setup@example.com")
+
+    resp = await async_client.post(
+        "/api/v1/onboarding/catalog-setup",
+        json={
+            "symptoms": ["migraine"],
+            "medications": ["omeprazole"],
+            "supplements": ["melatonin"],
+            "trackers": ["Water glasses"],
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["symptoms_created"] == 1
+    assert body["medications_created"] == 1
+    assert body["supplements_created"] == 1
+    assert body["trackers_created"] == 1
+
+    await _set_session_user_id(async_db, user_id)
+    symptoms = (
+        await async_db.execute(
+            select(SymptomCatalogItem.key, SymptomCatalogItem.label).where(
+                SymptomCatalogItem.archived.is_(False)
+            )
+        )
+    ).all()
+    assert ("migraine", "Migraine") in symptoms
+
+    trackers = (
+        await async_db.execute(
+            select(Tracker.name, Tracker.is_seed).where(Tracker.archived.is_(False))
+        )
+    ).all()
+    assert ("Water glasses", False) in trackers
 
 
 async def test_catalog_setup_creates_selected_items(

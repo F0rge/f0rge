@@ -12,13 +12,19 @@ import { useCatalogSuggestions, useSetupCatalogs } from '@/lib/api/hooks/onboard
 import type { CatalogSetupRequest } from '@/lib/api/types/onboarding'
 import type { SetupKind } from './tour-steps'
 
+interface PickerItem {
+  id: string
+  label: string
+}
+
 interface OnboardingSetupContextValue {
   selections: CatalogSetupRequest
   setSelection: (kind: SetupKind, values: string[]) => void
   persistSetup: () => Promise<void>
   isPersisting: boolean
   persistError: string | null
-  getItemsForKind: (kind: SetupKind) => Array<{ id: string; label: string }>
+  getCuratedItemsForKind: (kind: SetupKind) => PickerItem[]
+  getSearchableItemsForKind: (kind: SetupKind) => PickerItem[]
   isLoadingSuggestions: boolean
 }
 
@@ -31,6 +37,25 @@ const EMPTY_SELECTIONS: CatalogSetupRequest = {
   trackers: [],
 }
 
+function dedupePickerItems(items: PickerItem[]): PickerItem[] {
+  const seen = new Set<string>()
+  const result: PickerItem[] = []
+  for (const item of items) {
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    result.push(item)
+  }
+  return result
+}
+
+function keyLabelItems(items: Array<{ key: string; label: string }>): PickerItem[] {
+  return items.map((item) => ({ id: item.key, label: item.label }))
+}
+
+function trackerItems(items: Array<{ name: string }>): PickerItem[] {
+  return items.map((item) => ({ id: item.name, label: item.name }))
+}
+
 export function OnboardingSetupProvider({ children }: { children: ReactNode }) {
   const { data: suggestions, isLoading: isLoadingSuggestions } = useCatalogSuggestions()
   const setupCatalogs = useSetupCatalogs()
@@ -41,17 +66,42 @@ export function OnboardingSetupProvider({ children }: { children: ReactNode }) {
     setSelections((current) => ({ ...current, [kind]: values }))
   }, [])
 
-  const getItemsForKind = useCallback(
-    (kind: SetupKind): Array<{ id: string; label: string }> => {
+  const getCuratedItemsForKind = useCallback(
+    (kind: SetupKind): PickerItem[] => {
       if (!suggestions) return []
       if (kind === 'trackers') {
-        return suggestions.trackers.map((tracker) => ({
-          id: tracker.name,
-          label: tracker.name,
-        }))
+        return trackerItems(suggestions.trackers)
       }
-      const list = suggestions[kind]
-      return list.map((item) => ({ id: item.key, label: item.label }))
+      return keyLabelItems(suggestions[kind])
+    },
+    [suggestions],
+  )
+
+  const getSearchableItemsForKind = useCallback(
+    (kind: SetupKind): PickerItem[] => {
+      if (!suggestions) return []
+      if (kind === 'symptoms') {
+        return dedupePickerItems([
+          ...keyLabelItems(suggestions.symptoms),
+          ...keyLabelItems(suggestions.bulk_symptoms),
+        ])
+      }
+      if (kind === 'medications') {
+        return dedupePickerItems([
+          ...keyLabelItems(suggestions.medications),
+          ...keyLabelItems(suggestions.bulk_medications),
+        ])
+      }
+      if (kind === 'supplements') {
+        return dedupePickerItems([
+          ...keyLabelItems(suggestions.supplements),
+          ...keyLabelItems(suggestions.bulk_supplements),
+        ])
+      }
+      return dedupePickerItems([
+        ...trackerItems(suggestions.trackers),
+        ...trackerItems(suggestions.bulk_trackers),
+      ])
     },
     [suggestions],
   )
@@ -75,7 +125,8 @@ export function OnboardingSetupProvider({ children }: { children: ReactNode }) {
       persistSetup,
       isPersisting: setupCatalogs.isPending,
       persistError,
-      getItemsForKind,
+      getCuratedItemsForKind,
+      getSearchableItemsForKind,
       isLoadingSuggestions,
     }),
     [
@@ -84,7 +135,8 @@ export function OnboardingSetupProvider({ children }: { children: ReactNode }) {
       persistSetup,
       setupCatalogs.isPending,
       persistError,
-      getItemsForKind,
+      getCuratedItemsForKind,
+      getSearchableItemsForKind,
       isLoadingSuggestions,
     ],
   )
