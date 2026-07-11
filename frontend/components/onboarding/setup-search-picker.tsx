@@ -49,7 +49,20 @@ export function SetupSearchPicker({
       )
       return [...curatedItems, ...selectedExtras]
     }
-    return searchableItems.filter((item) => matchesQuery(item, trimmedSearch))
+    const matching = searchableItems.filter((item) =>
+      matchesQuery(item, trimmedSearch),
+    )
+    const visibleIds = new Set(matching.map((item) => item.id))
+    const selectedNotVisible = [...curatedItems, ...searchableItems].filter(
+      (item) => selectedSet.has(item.id) && !visibleIds.has(item.id),
+    )
+    const dedupedIds = new Set(visibleIds)
+    const selectedExtras = selectedNotVisible.filter((item) => {
+      if (dedupedIds.has(item.id)) return false
+      dedupedIds.add(item.id)
+      return true
+    })
+    return [...matching, ...selectedExtras]
   }, [curatedItems, searchableItems, trimmedSearch, selectedSet])
 
   function toggle(id: string) {
