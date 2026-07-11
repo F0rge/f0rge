@@ -8,14 +8,14 @@ Repo-specific checklist for the Claude PR review bot when reviewing frontend dif
 
 ## Scope — what files this playbook covers
 
-- `frontend/app/**` (App Router pages, layouts, route segments)
-- `frontend/components/**`
-- `frontend/lib/**` (api client, hooks, utils)
-- `frontend/hooks/**`
-- `frontend/public/**`
-- `frontend/package.json`, `frontend/tsconfig.json`, `frontend/next.config.*`
+- `apps/marrow/frontend/app/**` (App Router pages, layouts, route segments)
+- `apps/marrow/frontend/components/**`
+- `apps/marrow/frontend/lib/**` (api client, hooks, utils)
+- `apps/marrow/frontend/hooks/**`
+- `apps/marrow/frontend/public/**`
+- `apps/marrow/frontend/package.json`, `apps/marrow/frontend/tsconfig.json`, `apps/marrow/frontend/next.config.*`
 
-NOT in scope for this playbook: `.github/`, `backend/`, `docker-compose*.yml`, migration files.
+NOT in scope for this playbook: `.github/`, `apps/marrow/backend/`, `docker-compose*.yml`, migration files.
 
 ---
 
@@ -243,7 +243,7 @@ Return JSON:
   "findings": [
     {
       "severity": "block | warn | nit",
-      "file": "frontend/components/...",
+      "file": "apps/marrow/frontend/components/...",
       "line": 42,
       "msg": "terse description of the violation",
       "cites": "frontend-dev/dnd_kit_grid_drag_reorder.md"

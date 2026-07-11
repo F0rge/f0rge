@@ -1,0 +1,40 @@
+{
+  "name": "marrow-backend",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/marrow/backend",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/marrow/backend",
+        "command": "uvx ruff check ."
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/marrow/backend",
+        "command": "uvx ruff format --check ."
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/marrow/backend",
+        "command": "uv run pytest -ra"
+      }
+    },
+    "lock": {
+      "executor": "@nxlv/python:lock",
+      "options": {
+        "update": false
+      }
+    },
+    "sync": {
+      "executor": "@nxlv/python:sync",
+      "options": {}
+    }
+  },
+  "tags": []
+}

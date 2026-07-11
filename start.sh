@@ -3,7 +3,7 @@
 cd "$(dirname "$0")"
 
 # Backend
-cd backend
+cd apps/marrow/backend
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 

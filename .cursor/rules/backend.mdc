@@ -1,6 +1,6 @@
 ---
 description: FastAPI backend conventions — Router → Service → Dependency pattern, Pydantic v2, async SQLAlchemy, domain exceptions. Use proactively when writing or reviewing Python API code, routers, services, schemas, migrations, or backend tests.
-globs: backend/**/*.py, backend/migrations/**
+globs: apps/marrow/backend/**/*.py, apps/marrow/backend/migrations/**
 alwaysApply: false
 ---
 
@@ -129,7 +129,7 @@ result = await self.crud.get(id)
 ## Commands
 
 ```bash
-cd backend
+cd apps/marrow/backend
 uv run ruff check . && uv run ruff format .
 uv run uvicorn app.main:app --port 8000 --reload
 uv run pytest tests/ -v --tb=short
@@ -144,4 +144,4 @@ For deep backend work, delegate to the `fastapi-backend` sub-agent in `~/.cursor
 - **Auth cookie:** `ht_session` — JWT (email + password signup/login)
 - **Database:** Postgres via asyncpg — `DATABASE_URL` must use `postgresql+asyncpg://...` driver
 - **Key paths:**
-  - Photo storage: `backend/photos/`
+  - Photo storage: `apps/marrow/backend/photos/`

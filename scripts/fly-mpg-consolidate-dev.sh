@@ -67,7 +67,7 @@ rls_tables_sql() {
 from pathlib import Path
 import re
 import sys
-text = Path("backend/app/rls.py").read_text()
+text = Path("apps/marrow/backend/app/rls.py").read_text()
 tables = re.findall(r'"([^"]+)"', text.split("USER_OWNED_TABLES")[1].split(")")[0])
 force = "FORCE" if sys.argv[1] == "force" else "NO FORCE"
 for t in tables:

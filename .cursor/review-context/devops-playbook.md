@@ -8,18 +8,18 @@ Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker
 
 - `.github/workflows/**`
 - `**/fly*.toml`
-- `backend/Dockerfile`, `backend/docker-entrypoint.sh`
-- `backend/migrations/versions/*.py` (migration safety + deploy compatibility ONLY)
-- `backend/migrations/env.py`, `backend/alembic.ini`
-- `frontend/Dockerfile`, `frontend/next.config.*`
+- `apps/marrow/backend/Dockerfile`, `apps/marrow/backend/docker-entrypoint.sh`
+- `apps/marrow/backend/migrations/versions/*.py` (migration safety + deploy compatibility ONLY)
+- `apps/marrow/backend/migrations/env.py`, `apps/marrow/backend/alembic.ini`
+- `apps/marrow/frontend/Dockerfile`, `apps/marrow/frontend/next.config.*`
 - Root scripts: `start.sh`, `scripts/fly-*.sh`
 - `.dockerignore`, `.gitignore`
 - Anything affecting Fly apps, MPG, Cloudflare DNS (`marrow-health.com`), CI workflows
-- NOT app code under `backend/app/**` or `frontend/app/**`
+- NOT app code under `apps/marrow/backend/app/**` or `apps/marrow/frontend/app/**`
 
 ## Hard rules — instant block findings
 
-- **Migration added without Fly release_command path.** Any PR adding `backend/migrations/versions/` MUST leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running `alembic upgrade head` via `MIGRATION_DATABASE_URL`. Runtime `DATABASE_URL` stays least-privilege (`healthtracker-app`).
+- **Migration added without Fly release_command path.** Any PR adding `apps/marrow/backend/migrations/versions/` MUST leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running `alembic upgrade head` via `MIGRATION_DATABASE_URL`. Runtime `DATABASE_URL` stays least-privilege (`healthtracker-app`).
 
 - **MPG role DDL on Fly.** Set `FLY_MPG_SKIP_ROLE_DDL=1` on Fly apps; roles are provisioned via `fly mpg users create`, not migration-side DDL on Fly.
 
@@ -42,7 +42,7 @@ Full reference: `docs/fly-cutover-runbook.md`, `.cursor/rules/infra.mdc`.
 
 ## New env var checklist
 
-- [ ] `backend/.env.example` updated
+- [ ] `apps/marrow/backend/.env.example` updated
 - [ ] `fly secrets set` on `marrow-dev` / `marrow` documented if required
 - [ ] Degrades gracefully when missing
 

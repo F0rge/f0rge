@@ -22,7 +22,7 @@ Fill `{{...}}` variables. Send verbatim — do not skip memory or house-rules bl
 
 ## Hard rules
 
-From `CLAUDE.md` + `.cursor/rules/*.mdc` for your scope.
+From `AGENTS.md` + `.cursor/rules/*.mdc` for your scope.
 
 ## Scope
 

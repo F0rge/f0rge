@@ -5,7 +5,7 @@ description: Plan and ship a feature or fix end-to-end from a short prompt or Gi
 
 # Ship Feature — Idea/Issue → Develop → Dev Smoke → Main PR
 
-Orchestrator workflow for health-tracker. Read `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/orchestration.mdc`, and `~/.cursor/rules/leo-system-wide.mdc` before starting.
+Orchestrator workflow for health-tracker. Read `AGENTS.md`, `.cursor/rules/orchestration.mdc`, and `~/.cursor/rules/leo-system-wide.mdc` before starting.
 
 **Intake:** either a GitHub issue (`gh issue view N`) or a short user prompt. Turn prompts into a one-paragraph problem statement + acceptance criteria before planning.
 
@@ -70,8 +70,8 @@ Run `.cursor/rules/qa-gate.mdc` phases. Produce structured **QA Gate Report** wi
 Minimum automated:
 
 ```bash
-cd backend && uv run ruff check . && uv run ruff format --check . && uv run pytest tests/ -v --tb=short
-cd frontend && npm run lint && npm run typecheck && npm run build
+cd apps/marrow/backend && uv run ruff check . && uv run ruff format --check . && uv run pytest tests/ -v --tb=short
+cd apps/marrow/frontend && npm run lint && npm run typecheck && npm run build
 ```
 
 **Live-server E2E** (mandatory for UI/API user paths): `./start.sh`, auth bypass per qa-gate rule, drive golden path + one error path in browser MCP. pytest alone is not the gate.

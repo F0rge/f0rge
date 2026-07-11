@@ -8,19 +8,19 @@ Authoritative review checklist for the Claude PR review bot operating on health-
 
 ## Scope — what files YOU review
 
-- `backend/app/routers/**` — thin HTTP layer
-- `backend/app/services/**` — all business logic
-- `backend/app/dependencies/**` — `Depends()` factories
-- `backend/app/schemas/**` — Pydantic v2 input/output shapes
-- `backend/app/models/**` — SQLAlchemy ORM models
-- `backend/app/exceptions.py` — domain exception definitions
-- `backend/app/main.py` — global exception handler registration, router inclusion
-- `backend/app/config.py` — settings + `resolve_llm_credentials`
-- `backend/migrations/versions/*.py` — Alembic revisions
-- `backend/tests/**` — pytest suite
-- `backend/pyproject.toml` — deps + ruff config
+- `apps/marrow/backend/app/routers/**` — thin HTTP layer
+- `apps/marrow/backend/app/services/**` — all business logic
+- `apps/marrow/backend/app/dependencies/**` — `Depends()` factories
+- `apps/marrow/backend/app/schemas/**` — Pydantic v2 input/output shapes
+- `apps/marrow/backend/app/models/**` — SQLAlchemy ORM models
+- `apps/marrow/backend/app/exceptions.py` — domain exception definitions
+- `apps/marrow/backend/app/main.py` — global exception handler registration, router inclusion
+- `apps/marrow/backend/app/config.py` — settings + `resolve_llm_credentials`
+- `apps/marrow/backend/migrations/versions/*.py` — Alembic revisions
+- `apps/marrow/backend/tests/**` — pytest suite
+- `apps/marrow/backend/pyproject.toml` — deps + ruff config
 
-**NOT your scope:** `.github/`, `docker-compose*.yml`, `backend/docker-entrypoint.sh`, `frontend/` — those go to `devops` or `frontend-dev`.
+**NOT your scope:** `.github/`, `docker-compose*.yml`, `apps/marrow/backend/docker-entrypoint.sh`, `apps/marrow/frontend/` — those go to `devops` or `frontend-dev`.
 
 ---
 
@@ -41,7 +41,7 @@ Authoritative review checklist for the Claude PR review bot operating on health-
 
 - **Services injected via `Depends()`** — routers must never instantiate a service directly (`MyService(db=...)` in a router body is a BLOCK). See agent definition.
 
-- **`from __future__ import annotations` missing** — every new `.py` file in `backend/app/` or `backend/tests/` must have this as the first non-comment line. BLOCK if absent. See agent definition.
+- **`from __future__ import annotations` missing** — every new `.py` file in `apps/marrow/backend/app/` or `apps/marrow/backend/tests/` must have this as the first non-comment line. BLOCK if absent. See agent definition.
 
 ### Testing
 
@@ -125,7 +125,7 @@ Authoritative review checklist for the Claude PR review bot operating on health-
 
 ### Config hygiene
 
-- **`.env.example` mirror** — every new field added to `app/config.py` (i.e., a new `Settings` attribute with a default that must be overridden in deployment) requires a matching entry in `backend/.env.example`. BLOCK if absent.
+- **`.env.example` mirror** — every new field added to `app/config.py` (i.e., a new `Settings` attribute with a default that must be overridden in deployment) requires a matching entry in `apps/marrow/backend/.env.example`. BLOCK if absent.
 
 ---
 
@@ -135,11 +135,11 @@ When a fix touches a named pattern, grep for siblings before approving. Past inc
 
 | Pattern | Grep command | Known incident |
 |---|---|---|
-| tz-aware datetime bound to tz-naive column | `grep -rn "Mapped\[datetime\|Mapped\[Optional\[datetime" backend/app/models/` then trace input paths | 2026-05-17: entry_time fixed, photos.meal_time missed; two 500s |
-| `save_photo`/`delete_photo` called in service without DB-first commit order | `grep -n "save_photo\|delete_photo" backend/app/services/photos.py` — commit must precede filesystem | 2026-05-16: orphan file on commit failure |
-| Filename collision — MAX vs COUNT | `grep -n "count()\|COUNT()" backend/app/services/photos.py` — must use MAX+1, not COUNT+1 | 2026-05-16: deleted row caused collision |
-| Monkeypatch path after router→service refactor | `grep -rn "monkeypatch.setattr.*app.routers" backend/tests/` — stale paths silently pass | 2026-05-16: test suite green, prod 500 |
-| BYOK bypass | `grep -rn "settings\.openrouter_api_key" backend/app/` — must go through `resolve_llm_credentials` | lab_extraction.py miss flagged in gate #48 |
+| tz-aware datetime bound to tz-naive column | `grep -rn "Mapped\[datetime\|Mapped\[Optional\[datetime" apps/marrow/backend/app/models/` then trace input paths | 2026-05-17: entry_time fixed, photos.meal_time missed; two 500s |
+| `save_photo`/`delete_photo` called in service without DB-first commit order | `grep -n "save_photo\|delete_photo" apps/marrow/backend/app/services/photos.py` — commit must precede filesystem | 2026-05-16: orphan file on commit failure |
+| Filename collision — MAX vs COUNT | `grep -n "count()\|COUNT()" apps/marrow/backend/app/services/photos.py` — must use MAX+1, not COUNT+1 | 2026-05-16: deleted row caused collision |
+| Monkeypatch path after router→service refactor | `grep -rn "monkeypatch.setattr.*app.routers" apps/marrow/backend/tests/` — stale paths silently pass | 2026-05-16: test suite green, prod 500 |
+| BYOK bypass | `grep -rn "settings\.openrouter_api_key" apps/marrow/backend/app/` — must go through `resolve_llm_credentials` | lab_extraction.py miss flagged in gate #48 |
 
 ---
 
@@ -147,7 +147,7 @@ When a fix touches a named pattern, grep for siblings before approving. Past inc
 
 Work through this in order for any non-trivial backend diff.
 
-1. **Router thinness** — run: `grep -En "if |raise |try:|HTTPException|db\.query|db\.add|db\.commit|db\.flush" backend/app/routers/<file>.py` → must return nothing for new code.
+1. **Router thinness** — run: `grep -En "if |raise |try:|HTTPException|db\.query|db\.add|db\.commit|db\.flush" apps/marrow/backend/app/routers/<file>.py` → must return nothing for new code.
 2. **`from __future__ import annotations`** at top of every new `.py` file.
 3. **Python 3.10 syntax** — no `match/case`, no `X | Y` union syntax in runtime code (use `Union[X, Y]` or `Optional[X]`). `X | Y` is allowed in type comments and `isinstance(..., X | Y)` only in 3.10+, which we target, but avoid for consistency.
 4. **Pydantic v2 schema naming** — `ThingCreate` / `ThingUpdate` / `ThingResponse`. `model_config = ConfigDict(from_attributes=True)` on any schema that is returned from an ORM query.
@@ -186,9 +186,9 @@ Source of truth: `docs/architecture/ai_seams.md` (verify it exists before overri
 ## Migration safety
 
 - `RUN_MIGRATIONS=1` env var must only be set on the **backend** service in `docker-compose.prod.yml` and `docker-compose.dev.yml`. The `mcp-server` and `embedding-worker` share the same image but must NOT set this flag (they'd race the backend on startup). See `devops/deploy_migration_entrypoint.md`.
-- `backend/docker-entrypoint.sh` runs `alembic upgrade head` before `exec "$@"` when `RUN_MIGRATIONS=1`. New migrations land automatically on next deploy — no manual `docker exec` needed since PR #96.
+- `apps/marrow/backend/docker-entrypoint.sh` runs `alembic upgrade head` before `exec "$@"` when `RUN_MIGRATIONS=1`. New migrations land automatically on next deploy — no manual `docker exec` needed since PR #96.
 - After `alembic revision --autogenerate -m "..."`, always audit the generated file. Autogenerate misses: index renames, `server_default` changes, `CHECK` constraint adds/drops, and extension-level DDL. Hand-write those `op.execute()` calls.
-- Migration 004 introduced `HEALTHTRACKER_RO_PASSWORD` env var requirement. Any new migration that references Postgres roles must document the required env var in the migration file's docstring and in `backend/.env.example`. See `project_mcp_migrations.md`.
+- Migration 004 introduced `HEALTHTRACKER_RO_PASSWORD` env var requirement. Any new migration that references Postgres roles must document the required env var in the migration file's docstring and in `apps/marrow/backend/.env.example`. See `project_mcp_migrations.md`.
 
 ---
 
@@ -212,7 +212,7 @@ Return JSON matching this schema:
   "findings": [
     {
       "severity": "block" | "warn" | "nit",
-      "file": "backend/app/routers/foo.py",
+      "file": "apps/marrow/backend/app/routers/foo.py",
       "line": 42,
       "msg": "Router endpoint contains `if` statement — move condition to service. See feedback_thin_routers.md.",
       "cites": ["feedback_thin_routers.md"]
