@@ -11,6 +11,7 @@ enabled (prod). Backfills users marked provisioned but missing ingredients.
 
 from __future__ import annotations
 
+import os
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -23,10 +24,13 @@ down_revision: Union[str, None] = "029"
 branch_labels: Union[Sequence[str], None] = None
 depends_on: Union[Sequence[str], None] = None
 
-REF_USER_ID = "00000000-0000-0000-0000-000000000001"
+
+def _reference_user_id() -> str:
+    return os.environ.get("DEFAULT_STORAGE_USER_ID", "00000000-0000-0000-0000-000000000001")
 
 
 def upgrade() -> None:
+    ref_user_id = _reference_user_id()
     op.execute(sa.text(COPY_USER_CATALOG_FROM_REFERENCE_SQL))
     op.execute(
         sa.text(
@@ -37,7 +41,7 @@ def upgrade() -> None:
             BEGIN
                 FOR u IN
                     SELECT id FROM users
-                    WHERE id != '{REF_USER_ID}'::uuid
+                    WHERE id != '{ref_user_id}'::uuid
                       AND infrastructure_provisioned_at IS NOT NULL
                       AND NOT EXISTS (
                           SELECT 1 FROM dietary_ingredients di
@@ -45,7 +49,7 @@ def upgrade() -> None:
                           LIMIT 1
                       )
                 LOOP
-                    PERFORM copy_user_catalog_from_reference(u.id, '{REF_USER_ID}'::uuid);
+                    PERFORM copy_user_catalog_from_reference(u.id, '{ref_user_id}'::uuid);
                 END LOOP;
             END
             $$;

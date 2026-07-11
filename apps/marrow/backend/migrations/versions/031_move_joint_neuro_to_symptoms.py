@@ -109,7 +109,7 @@ def upgrade() -> None:
         sa.text(
             """
             UPDATE entries
-            SET symptoms_json = symptoms_json || jsonb_build_object(
+            SET symptoms_json = COALESCE(symptoms_json, '{}'::jsonb) || jsonb_build_object(
                 'joint_pain',
                 CASE joint_pain
                     WHEN 1 THEN 3
@@ -127,7 +127,7 @@ def upgrade() -> None:
         sa.text(
             """
             UPDATE entries
-            SET symptoms_json = symptoms_json || jsonb_build_object(
+            SET symptoms_json = COALESCE(symptoms_json, '{}'::jsonb) || jsonb_build_object(
                 'neuro_symptoms',
                 LEAST(10, ROUND(((5 - neuro) * 10.0) / 4))
             )
@@ -142,7 +142,7 @@ def upgrade() -> None:
         sa.text(
             """
             UPDATE entries
-            SET symptoms_json = symptoms_json || jsonb_build_object(
+            SET symptoms_json = COALESCE(symptoms_json, '{}'::jsonb) || jsonb_build_object(
                 'neuro_symptoms',
                 CASE neuro
                     WHEN -1 THEN 8
