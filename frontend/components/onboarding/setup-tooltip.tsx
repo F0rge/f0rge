@@ -2,7 +2,7 @@
 
 import type { MouseEvent } from 'react'
 import type { TooltipRenderProps } from 'react-joyride'
-import { SetupChipPicker } from './setup-chip-picker'
+import { SetupSearchPicker } from './setup-search-picker'
 import { useOnboardingSetup } from './use-onboarding-setup'
 import type { SetupKind } from './tour-steps'
 
@@ -13,6 +13,20 @@ function isSetupKind(value: unknown): value is SetupKind {
     value === 'supplements' ||
     value === 'trackers'
   )
+}
+
+const SEARCH_PLACEHOLDERS: Record<SetupKind, string> = {
+  symptoms: 'Search symptoms…',
+  medications: 'Search medications…',
+  supplements: 'Search supplements…',
+  trackers: 'Search daily trackers…',
+}
+
+const ADD_LATER_HINTS: Record<SetupKind, string> = {
+  symptoms: 'You can add custom symptoms later in Customize → Symptoms.',
+  medications: 'You can add custom medications later in Customize → Catalogs.',
+  supplements: 'You can add custom supplements later in Customize → Catalogs.',
+  trackers: 'You can add custom trackers later in Customize → Trackers.',
 }
 
 export function OnboardingTooltip(props: TooltipRenderProps) {
@@ -34,7 +48,8 @@ export function OnboardingTooltip(props: TooltipRenderProps) {
     persistSetup,
     isPersisting,
     persistError,
-    getItemsForKind,
+    getCuratedItemsForKind,
+    getSearchableItemsForKind,
     isLoadingSuggestions,
   } = useOnboardingSetup()
 
@@ -65,11 +80,14 @@ export function OnboardingTooltip(props: TooltipRenderProps) {
       {isSetupStep ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">{step.content}</p>
-          <SetupChipPicker
-            items={getItemsForKind(setupKind)}
+          <SetupSearchPicker
+            curatedItems={getCuratedItemsForKind(setupKind)}
+            searchableItems={getSearchableItemsForKind(setupKind)}
             selected={selections[setupKind]}
             onChange={(values) => setSelection(setupKind, values)}
             isLoading={isLoadingSuggestions}
+            searchPlaceholder={SEARCH_PLACEHOLDERS[setupKind]}
+            addLaterHint={ADD_LATER_HINTS[setupKind]}
           />
           {persistError && (
             <p className="text-sm text-destructive">{persistError}</p>

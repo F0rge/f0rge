@@ -65,6 +65,37 @@ DEFAULT_TRACKERS: list[tuple[str, str, str, str | None, int]] = [
     ("Hot shower", "binary", "droplets", None, 3),
 ]
 
+# Onboarding / customize search templates — not seeded to DB (no global tracker table).
+# Positions start at 4 (after DEFAULT_TRACKERS). Icons must match KNOWN_ICONS in
+# frontend/components/checkin/cards/components/IconPicker.tsx.
+BULK_TRACKERS: list[tuple[str, str, str, str | None, int]] = [
+    ("Water glasses", "counter", "droplet", "glasses", 4),
+    ("Exercise minutes", "counter", "activity", "minutes", 5),
+    ("Steps", "counter", "footprints", "steps", 6),
+    ("Meditation", "counter", "brain", "minutes", 7),
+    ("Screen time", "counter", "tv", "hours", 8),
+    ("Sleep hours", "counter", "moon", "hours", 9),
+    ("Sugar servings", "counter", "cookie", "servings", 10),
+    ("Cannabis", "binary", "flame", None, 11),
+    ("Nicotine", "binary", "pill", None, 12),
+    ("Fasting", "binary", "clock", None, 13),
+    ("Travel day", "binary", "bike", None, 14),
+    ("Period", "binary", "droplets", None, 15),
+    ("Sauna", "binary", "flame", None, 16),
+    ("Cold exposure", "binary", "thermometer", None, 17),
+    ("Social outing", "binary", "smile", None, 18),
+    ("Work from home", "binary", "bookopen", None, 19),
+    ("Stressful day", "binary", "zap", None, 20),
+    ("Migraine day", "binary", "frown", None, 21),
+    ("Meal prep", "binary", "utensils", None, 22),
+    ("Outdoor time", "counter", "sun", "hours", 23),
+    ("Reading", "counter", "bookopen", "minutes", 24),
+    ("Music practice", "counter", "music", "minutes", 25),
+    ("Strength training", "counter", "dumbbell", "minutes", 26),
+    ("Cardio", "counter", "heartpulse", "minutes", 27),
+    ("Supplements taken", "binary", "pill", None, 28),
+]
+
 
 def supplement_seed_rows() -> list[tuple[str, str, bool, int]]:
     """Return (key, label, archived, sort_order) matching migrations 009 + 011."""
@@ -352,3 +383,167 @@ BULK_MEDICATIONS: list[tuple[str, str]] = [
     ("naloxone", "Naloxone"),
     ("activated_charcoal_med", "Activated Charcoal (Medicinal)"),
 ]
+
+# Bulk symptom reference data for onboarding search. Seeded ARCHIVED (archived=true)
+# by migration 029 for the reference user — discoverable via search without flooding
+# the daily picker. DEFAULT_SYMPTOMS keys are excluded (they are the curated chips).
+BULK_SYMPTOMS: list[tuple[str, str]] = [
+    # --- Head / neurological ---
+    ("headache", "Headache"),
+    ("migraine", "Migraine"),
+    ("dizziness", "Dizziness"),
+    ("vertigo", "Vertigo"),
+    ("lightheadedness", "Lightheadedness"),
+    ("brain_zaps", "Brain Zaps"),
+    ("numbness_tingling", "Numbness / Tingling"),
+    ("weakness", "Weakness"),
+    ("tremor", "Tremor"),
+    ("seizure", "Seizure"),
+    ("aphasia", "Aphasia / Word-Finding"),
+    ("memory_issues", "Memory Issues"),
+    ("concentration_issues", "Concentration Issues"),
+    ("aphantasia_episode", "Aphantasia Episode"),
+    ("visual_aura", "Visual Aura"),
+    ("ocular_migraine", "Ocular Migraine"),
+    ("double_vision", "Double Vision"),
+    ("blurred_vision", "Blurred Vision"),
+    ("eye_pain", "Eye Pain"),
+    ("dry_eyes", "Dry Eyes"),
+    ("hearing_loss", "Hearing Loss"),
+    ("hyperacusis", "Hyperacusis"),
+    ("ear_fullness", "Ear Fullness"),
+    ("ear_pain", "Ear Pain"),
+    # --- Chronic illness / dysautonomia / MCAS ---
+    ("orthostatic_intolerance", "Orthostatic Intolerance"),
+    ("pots_flare", "POTS Flare"),
+    ("dysautonomia", "Dysautonomia"),
+    ("mcas_reaction", "MCAS Reaction"),
+    ("histamine_flare", "Histamine Flare"),
+    ("mast_cell_activation", "Mast Cell Activation"),
+    ("anaphylaxis", "Anaphylaxis"),
+    ("allergic_reaction", "Allergic Reaction"),
+    ("crash", "Crash / Flare"),
+    ("flare", "General Flare"),
+    ("relapse", "Relapse"),
+    ("overstimulation", "Overstimulation"),
+    ("sensory_overload", "Sensory Overload"),
+    ("adrenaline_surge", "Adrenaline Surge"),
+    ("autonomic_dysfunction", "Autonomic Dysfunction"),
+    ("heat_intolerance", "Heat Intolerance"),
+    ("cold_intolerance", "Cold Intolerance"),
+    ("temperature_dysregulation", "Temperature Dysregulation"),
+    ("blood_pressure_spike", "Blood Pressure Spike"),
+    ("blood_pressure_drop", "Blood Pressure Drop"),
+    ("tachycardia", "Tachycardia"),
+    ("bradycardia", "Bradycardia"),
+    ("palpitations", "Palpitations"),
+    ("syncope", "Syncope / Fainting"),
+    ("near_syncope", "Near-Syncope"),
+    # --- Pain / musculoskeletal ---
+    ("joint_pain", "Joint Pain"),
+    ("muscle_pain", "Muscle Pain"),
+    ("myalgia", "Myalgia"),
+    ("back_pain", "Back Pain"),
+    ("neck_pain", "Neck Pain"),
+    ("chest_pain", "Chest Pain"),
+    ("abdominal_pain", "Abdominal Pain"),
+    ("pelvic_pain", "Pelvic Pain"),
+    ("nerve_pain", "Nerve Pain"),
+    ("neuropathy", "Neuropathy"),
+    ("fibromyalgia_flare", "Fibromyalgia Flare"),
+    ("cramping", "Cramping"),
+    ("stiffness", "Stiffness"),
+    ("spasms", "Muscle Spasms"),
+    # --- GI ---
+    ("nausea", "Nausea"),
+    ("vomiting", "Vomiting"),
+    ("diarrhea", "Diarrhea"),
+    ("constipation", "Constipation"),
+    ("bloating", "Bloating"),
+    ("gas", "Gas"),
+    ("heartburn", "Heartburn"),
+    ("reflux", "Acid Reflux"),
+    ("indigestion", "Indigestion"),
+    ("appetite_loss", "Appetite Loss"),
+    ("appetite_increase", "Increased Appetite"),
+    ("food_intolerance", "Food Intolerance Reaction"),
+    ("early_satiety", "Early Satiety"),
+    ("abdominal_cramping", "Abdominal Cramping"),
+    # --- Respiratory / ENT ---
+    ("shortness_of_breath", "Shortness of Breath"),
+    ("cough", "Cough"),
+    ("congestion", "Congestion"),
+    ("sinus_pressure", "Sinus Pressure"),
+    ("sore_throat", "Sore Throat"),
+    ("hoarse_voice", "Hoarse Voice"),
+    ("runny_nose", "Runny Nose"),
+    ("post_nasal_drip", "Post-Nasal Drip"),
+    # --- Skin / allergic ---
+    ("rash", "Rash"),
+    ("hives", "Hives"),
+    ("itching", "Itching"),
+    ("flushing", "Flushing"),
+    ("eczema_flare", "Eczema Flare"),
+    ("acne_flare", "Acne Flare"),
+    ("swelling", "Swelling"),
+    ("angioedema", "Angioedema"),
+    # --- Sleep / fatigue ---
+    ("insomnia", "Insomnia"),
+    ("hypersomnia", "Hypersomnia"),
+    ("unrefreshing_sleep", "Unrefreshing Sleep"),
+    ("night_sweats", "Night Sweats"),
+    ("fatigue", "Fatigue"),
+    ("exhaustion", "Exhaustion"),
+    ("wired_tired", "Wired but Tired"),
+    ("daytime_sleepiness", "Daytime Sleepiness"),
+    # --- Mental health / mood ---
+    ("anxiety", "Anxiety"),
+    ("panic_attack", "Panic Attack"),
+    ("depression", "Depression"),
+    ("irritability", "Irritability"),
+    ("mood_swings", "Mood Swings"),
+    ("brain_fog_severe", "Severe Brain Fog"),
+    ("dissociation", "Dissociation"),
+    ("depersonalization", "Depersonalization"),
+    ("emotional_lability", "Emotional Lability"),
+    # --- Endocrine / metabolic ---
+    ("hypoglycemia", "Hypoglycemia"),
+    ("blood_sugar_spike", "Blood Sugar Spike"),
+    ("thirst", "Excessive Thirst"),
+    ("frequent_urination", "Frequent Urination"),
+    # --- Immune / infection ---
+    ("fever", "Fever"),
+    ("chills", "Chills"),
+    ("lymph_node_swelling", "Lymph Node Swelling"),
+    ("sore_muscles_viral", "Body Aches (Viral)"),
+    ("post_viral_symptoms", "Post-Viral Symptoms"),
+    # --- Reproductive / hormonal ---
+    ("period_cramps", "Period Cramps"),
+    ("pms", "PMS"),
+    ("hot_flashes", "Hot Flashes"),
+    ("hormone_flare", "Hormone Flare"),
+    # --- Other ---
+    ("hair_loss", "Hair Loss"),
+    ("weight_gain", "Weight Gain"),
+    ("weight_loss", "Weight Loss"),
+    ("edema", "Edema / Water Retention"),
+    ("restless_legs", "Restless Legs"),
+    ("jaw_pain", "Jaw Pain / TMJ"),
+    ("tooth_pain", "Tooth Pain"),
+    ("bruising", "Easy Bruising"),
+    ("cognitive_fatigue", "Cognitive Fatigue"),
+    ("speech_difficulty", "Speech Difficulty"),
+    ("balance_issues", "Balance Issues"),
+    ("coordination_issues", "Coordination Issues"),
+]
+
+
+def symptom_seed_rows() -> list[tuple[str, str, bool, int]]:
+    """Return (key, label, archived, sort_order) matching migrations 009 + 029."""
+    rows: list[tuple[str, str, bool, int]] = [
+        (key, label, False, sort_order) for sort_order, (key, label) in enumerate(DEFAULT_SYMPTOMS)
+    ]
+    offset = len(DEFAULT_SYMPTOMS)
+    for index, (key, label) in enumerate(BULK_SYMPTOMS):
+        rows.append((key, label, True, offset + index))
+    return rows

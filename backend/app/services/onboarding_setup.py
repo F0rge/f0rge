@@ -5,11 +5,16 @@ import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog_suggestions import (
+    bulk_tracker_suggestion_rows,
     curated_supplements,
+    is_legacy_seed_tracker,
     key_label_rows,
     medication_allowlist,
+    medication_labels_by_key,
     supplement_allowlist,
+    supplement_labels_by_key,
     symptom_allowlist,
+    symptom_labels_by_key,
     tracker_allowlist,
     tracker_seed_by_name,
     tracker_suggestion_rows,
@@ -24,6 +29,7 @@ from app.models.tracker import Tracker
 from app.seed_data import (
     BULK_MEDICATIONS,
     BULK_SUPPLEMENTS,
+    BULK_SYMPTOMS,
     DEFAULT_MEDICATIONS,
     DEFAULT_SYMPTOMS,
 )
@@ -46,8 +52,10 @@ class OnboardingSetupService:
             medications=key_label_rows(DEFAULT_MEDICATIONS),
             supplements=key_label_rows(curated_supplements()),
             trackers=tracker_suggestion_rows(),
+            bulk_symptoms=key_label_rows(BULK_SYMPTOMS),
             bulk_supplements=key_label_rows(BULK_SUPPLEMENTS),
             bulk_medications=key_label_rows(BULK_MEDICATIONS),
+            bulk_trackers=bulk_tracker_suggestion_rows(),
         )
 
     async def apply_catalog_setup(self, body: CatalogSetupRequest) -> CatalogSetupResponse:
@@ -58,6 +66,9 @@ class OnboardingSetupService:
 
         now = datetime.datetime.utcnow()
         user_id = current_user_id()
+        symptom_labels = symptom_labels_by_key()
+        medication_labels = medication_labels_by_key()
+        supplement_labels = supplement_labels_by_key()
 
         async with unit_of_work(self.db):
             symptoms_created = await self._insert_catalog_items(
@@ -65,7 +76,7 @@ class OnboardingSetupService:
                 "uq_symptom_catalog_user_id_key",
                 user_id,
                 body.symptoms,
-                {key: label for key, label in DEFAULT_SYMPTOMS},
+                symptom_labels,
                 now,
                 include_usage_timestamps=True,
             )
@@ -74,7 +85,7 @@ class OnboardingSetupService:
                 "uq_medication_catalog_user_id_key",
                 user_id,
                 body.medications,
-                {key: label for key, label in DEFAULT_MEDICATIONS},
+                medication_labels,
                 now,
                 include_usage_timestamps=True,
             )
@@ -83,7 +94,7 @@ class OnboardingSetupService:
                 "uq_supplement_catalog_user_id_key",
                 user_id,
                 body.supplements,
-                {key: label for key, label in curated_supplements()},
+                supplement_labels,
                 now,
                 include_usage_timestamps=True,
             )
@@ -150,7 +161,7 @@ class OnboardingSetupService:
                     "unit": unit,
                     "position": position,
                     "archived": False,
-                    "is_seed": True,
+                    "is_seed": is_legacy_seed_tracker(name),
                 }
             )
 

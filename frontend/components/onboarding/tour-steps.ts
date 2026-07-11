@@ -38,7 +38,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: 'body',
     title: 'Symptoms to track',
     content:
-      'Pick the symptoms you want on your daily check-in. Choose as many or as few as you like — you can add more later in Customize.',
+      'Pick symptoms for your daily check-in — tap quick picks or search our list. Choose as many or as few as you like.',
     placement: 'center',
     isFixed: true,
     stepType: 'setup',
@@ -49,7 +49,8 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     route: '/checkin',
     target: 'body',
     title: 'Common medications',
-    content: 'Pick medications you might log as needed. These become quick-add chips on your check-in.',
+    content:
+      'Search or pick medications you might log as needed. These become quick-add chips on your check-in.',
     placement: 'center',
     isFixed: true,
     stepType: 'setup',
@@ -60,7 +61,8 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     route: '/checkin',
     target: 'body',
     title: 'Supplements you take',
-    content: 'Select supplements you want to track daily. Skip anything you do not use.',
+    content:
+      'Search or select supplements you want to track daily. Skip anything you do not use.',
     placement: 'center',
     isFixed: true,
     stepType: 'setup',
@@ -71,7 +73,8 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     route: '/checkin',
     target: 'body',
     title: 'Daily trackers',
-    content: 'Choose lifestyle trackers like caffeine or alcohol. We will save your picks when you continue.',
+    content:
+      'Search or choose lifestyle trackers like water, exercise, or caffeine. We save your picks when you continue.',
     placement: 'center',
     isFixed: true,
     stepType: 'setup',
