@@ -13,6 +13,8 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 ## Environments
 
+All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`marrow-db`, `nlkxjo5m3240y93v`).
+
 ### Production (`main`)
 
 | Component | Fly app | URL |
@@ -20,11 +22,10 @@ Personal daily symptom check-in app for Leo's health research vault.
 | API + worker | `marrow` | https://api.marrow-health.com |
 | MCP | `marrow-mcp` | https://marrow-mcp.fly.dev |
 | Frontend | `marrow-ui` | https://marrow-health.com |
-| Postgres | MPG `marrow-db-prod` (`d1zj5omzqwvryqkv`) — database `marrow` | via secrets |
+| Postgres | MPG `marrow-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow` | via secrets |
+| Tigris | `f0rge-marrow-prod-photos` | via secrets on `marrow` |
 
 ### Develop (`develop`)
-
-Org: **`f0rge`** (dev apps migrated 2026-07-11; prod remains on `personal` until soak).
 
 | Component | Fly app | URL |
 |---|---|---|

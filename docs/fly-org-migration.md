@@ -28,7 +28,8 @@ Apps **can** move orgs with `fly apps move` (machines, volumes, secrets, certs/d
 | Databases | `marrow`, `marrow_dev` |
 | Dev apps (migrated) | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` |
 | Dev Tigris | `f0rge-marrow-dev-photos` |
-| Prod apps (pending) | `marrow`, `marrow-mcp`, `marrow-ui` — still `personal` org |
+| Prod apps (migrated) | `marrow`, `marrow-mcp`, `marrow-ui` |
+| Prod Tigris | `f0rge-marrow-prod-photos` |
 
 ### Dev cutover status (2026-07-11)
 
@@ -39,9 +40,16 @@ Apps **can** move orgs with `fly apps move` (machines, volumes, secrets, certs/d
 - [x] MPG attach + `FLY_MPG_SKIP_ROLE_DDL=1` on API/MCP
 - [x] New Tigris bucket + secrets on `marrow-dev`
 - [x] `rclone copy` old bucket `empty-sea-6682` → `f0rge-marrow-dev-photos` (required — DB rows reference filenames, not bucket)
-- [x] `FLY_API_TOKEN` multi-token (`personal,f0rge`) for split-org CI window
-- [ ] Prod cutover (after ~1 week dev soak)
+- [x] `FLY_API_TOKEN` → single `f0rge` org token (all apps in `f0rge`)
 - [ ] Old cluster/bucket decommission
+
+### Prod cutover status (2026-07-11)
+
+- [x] `marrow` database migrated to `nlkxjo5m3240y93v` (104 entries, 148 photos, 5 users, 18 labs)
+- [x] `rclone copy` `late-rain-9962` → `f0rge-marrow-prod-photos` (151 objects)
+- [x] Prod apps moved to `f0rge` + MPG attach
+- [x] Deployed API/MCP/frontend from `main` monorepo paths
+- [ ] Old cluster/bucket decommission (after soak)
 
 ## Prerequisites
 
