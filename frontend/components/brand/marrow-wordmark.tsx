@@ -4,7 +4,7 @@ interface MarrowWordmarkProps {
   className?: string
 }
 
-/** Mono wordmark — ink follows `currentColor`, nucleus uses `--marrow-nucleus`. */
+/** Mono wordmark with open membrane glyph — ink follows `currentColor`, nucleus uses `--marrow-nucleus`. */
 export function MarrowWordmark({ className }: MarrowWordmarkProps) {
   return (
     <svg
@@ -20,10 +20,11 @@ export function MarrowWordmark({ className }: MarrowWordmarkProps) {
       />
       <g transform="translate(181.15 29.09) scale(0.4245)">
         <path
-          d="M54 15 C72 15 87 33 87 55 C87 72 69 86 47 86 C28 86 13 68 13 46 C13 29 31 15 54 15 Z"
+          d="M86.03 45.42 C86.66 48.49 87 51.7 87 55 C87 72 69 86 47 86 C28 86 13 68 13 46 C13 29 31 15 54 15 C57.6 15 61.08 15.72 64.34 17.05"
           fill="none"
           stroke="currentColor"
           strokeWidth="22"
+          strokeLinecap="round"
         />
         <circle cx="43" cy="55" r="9.5" fill="var(--marrow-nucleus)" />
       </g>
