@@ -1,0 +1,9 @@
+{
+  "name": "f0rge",
+  "private": true,
+  "devDependencies": {
+    "@nx/next": "~22.7.0",
+    "@nxlv/python": "~22.2.1",
+    "nx": "~22.7.0"
+  }
+}
