@@ -1,14 +1,7 @@
 name: CI (main)
 
-# Runs on PRs targeting `main` — i.e. promotion of `develop` → `main`.
-# Stricter than ci-develop: same lint/format/test, plus a production-shaped
-# frontend build (no API_URL leak from .env), plus any integration-marked
-# tests if/when they get added.
-#
-# When markers like `@pytest.mark.integration` are introduced under
-# backend/tests/, add a dedicated job here that runs them with
-# `pytest -m integration`. For now there's no marker split — the full
-# suite already gives complete coverage of what we have.
+# Runs on PRs targeting `main` — promotion of `develop` → `main`.
+# Same nx affected targets as develop, plus prod-shaped frontend build env.
 
 on:
   pull_request:
@@ -21,69 +14,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  backend:
-    name: backend (ruff + pytest)
+  ci:
+    name: ci
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: apps/marrow/backend
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/marrow/frontend/package-lock.json
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Install frontend deps
+        run: npm ci --prefix apps/marrow/frontend
+
+      - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
 
       - name: Pin Python 3.10
         run: uv python install 3.10
 
-      - name: Install deps
-        run: uv sync --frozen
+      - name: Install backend deps
+        run: uv sync --frozen --project apps/marrow/backend
 
       - name: Install ruff
         run: uv tool install ruff@latest
 
-      - name: ruff check
-        run: uv tool run ruff check .
-
-      - name: ruff format --check
-        run: uv tool run ruff format --check .
-
-      - name: pytest (full suite)
-        run: uv run pytest -ra
-
-      # When integration markers exist, uncomment:
-      # - name: pytest (integration)
-      #   run: uv run pytest -ra -m integration
-
-  frontend:
-    name: frontend (lint + typecheck + prod build)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: apps/marrow/frontend
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: apps/marrow/frontend/package-lock.json
-
-      - run: npm ci
-
-      - run: npm run lint
-
-      - run: npm run typecheck
-
-      - name: next build (prod-shaped env)
-        # Matches the shape of the build that Coolify runs against main.
-        # The Docker build pins API_URL via ARG; here we mirror that.
+      - name: nx affected (prod-shaped frontend build)
         env:
           API_URL: http://backend:8000
           NODE_ENV: production
-        run: npm run build
+        run: npx nx affected -t lint format-check typecheck test build
