@@ -142,7 +142,13 @@ jobs:
         run: npm ci
 
       - name: Install frontend deps
-        run: npm ci --prefix apps/marrow/frontend
+        env:
+          TS_PROJECTS: ${{ needs.detect.outputs.ts_projects }}
+        run: |
+          for p in ${TS_PROJECTS//,/ }; do
+            ROOT=$(npx nx show project "$p" --json | jq -r '.root')
+            npm ci --prefix "$ROOT"
+          done
 
       - name: nx run (frontend)
         env:
