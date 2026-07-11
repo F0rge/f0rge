@@ -150,8 +150,7 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
       - name: Deploy API (alembic via release_command)
-        working-directory: apps/marrow/backend
-        run: flyctl deploy --remote-only --config "$FLY_CONFIG"
+        run: flyctl deploy . --remote-only --config "apps/marrow/backend/$FLY_CONFIG"
 
   deploy-mcp:
     name: deploy mcp
@@ -175,8 +174,7 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
       - name: Deploy MCP
-        working-directory: apps/marrow/backend
-        run: flyctl deploy --remote-only --config "$FLY_CONFIG"
+        run: flyctl deploy . --remote-only --config "apps/marrow/backend/$FLY_CONFIG"
 
   deploy-frontend:
     name: deploy frontend
@@ -200,8 +198,7 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
       - name: Deploy frontend
-        working-directory: apps/marrow/frontend
-        run: flyctl deploy --remote-only --config "$FLY_CONFIG"
+        run: flyctl deploy . --remote-only --config "apps/marrow/frontend/$FLY_CONFIG"
 
   smoke:
     name: smoke

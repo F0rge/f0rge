@@ -3,26 +3,30 @@ FROM python:3.10-slim
 # Match host user `leo` (uid 1000) so bind-mounted volumes land owned correctly
 RUN groupadd --gid 1000 app && useradd --uid 1000 --gid 1000 --create-home app
 
-WORKDIR /app
+# Repo-root build context: mirror the monorepo layout inside the image so shared
+# libs/ (added in P3) resolve at the same relative paths as in the repo. The app
+# lives under /app/apps/marrow/backend; /app stays the writable root for volumes.
+WORKDIR /app/apps/marrow/backend
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-COPY pyproject.toml uv.lock ./
+COPY apps/marrow/backend/pyproject.toml apps/marrow/backend/uv.lock ./
+# P3: COPY libs/backend ... here (before uv sync) once path dependencies exist.
 RUN uv sync --frozen --no-dev
 
-COPY ./app ./app
-COPY ./scripts ./scripts
-COPY ./alembic.ini ./alembic.ini
-COPY ./migrations ./migrations
+COPY apps/marrow/backend/app ./app
+COPY apps/marrow/backend/scripts ./scripts
+COPY apps/marrow/backend/alembic.ini ./alembic.ini
+COPY apps/marrow/backend/migrations ./migrations
 # Ship the dietary reference JSON files under a separate path so they
 # aren't shadowed by the runtime /app/data volume mount that holds health.db.
-COPY ./data /app/data-seed
+COPY apps/marrow/backend/data /app/data-seed
 
 # Entrypoint runs `alembic upgrade head` before the CMD when RUN_MIGRATIONS=1.
 # See backend/docker-entrypoint.sh for the opt-in mechanic (only the backend
 # service sets the flag; mcp-server and embedding-worker share the image but
 # skip migrations to avoid racing on DDL locks).
-COPY ./docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY apps/marrow/backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Tell the seed scripts and the lifespan hook where to find the JSON files.
