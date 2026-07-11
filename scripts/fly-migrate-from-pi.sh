@@ -4,18 +4,21 @@
 # Does NOT touch production Pi services. Requires:
 #   - pg_dump access to Pi Postgres (SSH tunnel or VPN)
 #   - flyctl + FLY_API_TOKEN
-#   - Target MPG cluster ID (dev: d1zj5omzqg9ryqkv)
+#   - Target MPG cluster ID (shared: z23750v13yl096d1)
+#   - Target database: fly-db (prod) or health_dev (dev Fly stack)
 #
 # Usage:
 #   PI_DATABASE_URL=postgresql://health:***@pi-host:5432/health \
-#   FLY_MPG_CLUSTER=d1zj5omzqg9ryqkv \
+#   FLY_MPG_CLUSTER=z23750v13yl096d1 \
+#   TARGET_DB=health_dev \
 #   ./scripts/fly-migrate-from-pi.sh --dry-run
 #
 set -euo pipefail
 
 DRY_RUN=1
 PI_DATABASE_URL="${PI_DATABASE_URL:-}"
-FLY_MPG_CLUSTER="${FLY_MPG_CLUSTER:-d1zj5omzqg9ryqkv}"
+FLY_MPG_CLUSTER="${FLY_MPG_CLUSTER:-z23750v13yl096d1}"
+TARGET_DB="${TARGET_DB:-health_dev}"
 SCRATCH_DB="${SCRATCH_DB:-health_tracker_scratch}"
 
 while [[ $# -gt 0 ]]; do
@@ -42,7 +45,7 @@ echo "    dump size: ${DUMP_BYTES} bytes"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "==> DRY RUN — skipping restore to Fly MPG"
-  echo "    Would restore to cluster: $FLY_MPG_CLUSTER (scratch DB: $SCRATCH_DB)"
+  echo "    Would restore to cluster: $FLY_MPG_CLUSTER (database: $SCRATCH_DB)"
   echo "    Next: fly mpg import / pg_restore via fly mpg proxy"
   echo "    Then: copy Pi photo + lab_attachment volumes to Tigris under Leo user prefix"
   exit 0
