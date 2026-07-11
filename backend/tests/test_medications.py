@@ -33,17 +33,11 @@ async def test_get_catalog_unauthenticated_401(async_client: AsyncClient) -> Non
     assert resp.status_code == 401
 
 
-async def test_get_catalog_returns_seeded_meds(authed_client: AsyncClient) -> None:
-    """Signup provisioning seeds the default medication catalog for new users."""
+async def test_get_catalog_empty_after_signup(authed_client: AsyncClient) -> None:
+    """New users start with an empty medication catalog until onboarding setup."""
     resp = await authed_client.get("/api/v1/medications/catalog")
     assert resp.status_code == 200
-    body = resp.json()
-    keys = {item["key"] for item in body}
-    assert "ibuprofen" in keys
-    assert "paracetamol" in keys
-    item = next(i for i in body if i["key"] == "ibuprofen")
-    assert item["label"] == "Ibuprofen"
-    assert item["archived"] is False
+    assert resp.json() == []
 
 
 async def test_post_catalog_item_creates_and_returns_201(authed_client: AsyncClient) -> None:
@@ -137,6 +131,12 @@ async def test_archived_catalog_key_preserved_on_historical_entry(
     the key is not FK-constrained and archiving must not strip history."""
     payload = dict(_VALID_PAYLOAD)
     payload["medications"] = [{"key": "imodium", "reason": "upset stomach"}]
+    create_catalog = await authed_client.post(
+        "/api/v1/medications/catalog",
+        json={"key": "imodium", "label": "Imodium"},
+    )
+    assert create_catalog.status_code == 201
+
     create_resp = await authed_client.post("/api/v1/entries", json=payload)
     assert create_resp.status_code == 201
 
