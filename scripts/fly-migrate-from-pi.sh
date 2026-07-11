@@ -5,12 +5,12 @@
 #   - pg_dump access to Pi Postgres (SSH tunnel or VPN)
 #   - flyctl + FLY_API_TOKEN
 #   - Target MPG cluster ID (shared: z23750v13yl096d1)
-#   - Target database: fly-db (prod) or health_dev (dev Fly stack)
+#   - Target database: marrow (prod) or marrow_dev (dev Fly stack)
 #
 # Usage:
 #   PI_DATABASE_URL=postgresql://health:***@pi-host:5432/health \
 #   FLY_MPG_CLUSTER=z23750v13yl096d1 \
-#   TARGET_DB=health_dev \
+#   TARGET_DB=marrow_dev \
 #   ./scripts/fly-migrate-from-pi.sh --dry-run
 #
 set -euo pipefail
@@ -18,7 +18,7 @@ set -euo pipefail
 DRY_RUN=1
 PI_DATABASE_URL="${PI_DATABASE_URL:-}"
 FLY_MPG_CLUSTER="${FLY_MPG_CLUSTER:-z23750v13yl096d1}"
-TARGET_DB="${TARGET_DB:-health_dev}"
+TARGET_DB="${TARGET_DB:-marrow_dev}"
 SCRATCH_DB="${SCRATCH_DB:-health_tracker_scratch}"
 
 while [[ $# -gt 0 ]]; do

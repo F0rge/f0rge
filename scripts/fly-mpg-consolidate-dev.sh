@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Migrate dev Fly MPG data (fly-db on dev cluster) → health_dev on prod cluster.
+# Migrate dev Fly MPG data (marrow on dev cluster) → marrow_dev on prod cluster.
 #
 # Prerequisites: flyctl, docker (postgres:16 image), FLY_API_TOKEN, fly mpg proxy.
 #
@@ -11,12 +11,12 @@ set -euo pipefail
 
 DEV_CLUSTER="${DEV_CLUSTER:-d1zj5omzqg9ryqkv}"
 PROD_CLUSTER="${PROD_CLUSTER:-z23750v13yl096d1}"
-SOURCE_DB="${SOURCE_DB:-fly-db}"
-TARGET_DB="${TARGET_DB:-health_dev}"
+SOURCE_DB="${SOURCE_DB:-marrow}"
+TARGET_DB="${TARGET_DB:-marrow_dev}"
 SOURCE_DATABASE_URL="${SOURCE_DATABASE_URL:-}"
 DEV_PROXY_PORT="${DEV_PROXY_PORT:-16381}"
 PROD_PROXY_PORT="${PROD_PROXY_PORT:-16382}"
-FLY_API_APP="${FLY_API_APP:-health-tracker-api-dev}"
+FLY_API_APP="${FLY_API_APP:-marrow-dev}"
 DUMP_FILE="${DUMP_FILE:-/tmp/health-dev-migrate.dump}"
 
 DRY_RUN=1
@@ -134,8 +134,8 @@ else
   DEV_USER="$(load_creds "$FLY_API_APP")"
   DEV_PASS="$(load_pass "$FLY_API_APP")"
 fi
-PROD_USER="$(load_creds health-tracker-api-prod)"
-PROD_PASS="$(load_pass health-tracker-api-prod)"
+PROD_USER="$(load_creds marrow)"
+PROD_PASS="$(load_pass marrow)"
 
 echo "==> Dev cluster: $DEV_CLUSTER ($SOURCE_DB) → prod cluster: $PROD_CLUSTER ($TARGET_DB)"
 start_proxy "$DEV_CLUSTER" "$DEV_PROXY_PORT"
