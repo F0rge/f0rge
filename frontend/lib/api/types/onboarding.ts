@@ -15,8 +15,10 @@ export interface CatalogSuggestions {
   medications: CatalogSuggestionItem[]
   supplements: CatalogSuggestionItem[]
   trackers: TrackerSuggestionItem[]
+  bulk_symptoms: CatalogSuggestionItem[]
   bulk_supplements: CatalogSuggestionItem[]
   bulk_medications: CatalogSuggestionItem[]
+  bulk_trackers: TrackerSuggestionItem[]
 }
 
 export interface CatalogSetupRequest {

@@ -20,8 +20,10 @@ class CatalogSuggestionsResponse(BaseModel):
     medications: list[CatalogSuggestionItem]
     supplements: list[CatalogSuggestionItem]
     trackers: list[TrackerSuggestionItem]
+    bulk_symptoms: list[CatalogSuggestionItem]
     bulk_supplements: list[CatalogSuggestionItem]
     bulk_medications: list[CatalogSuggestionItem]
+    bulk_trackers: list[TrackerSuggestionItem]
 
 
 class CatalogSetupRequest(BaseModel):
