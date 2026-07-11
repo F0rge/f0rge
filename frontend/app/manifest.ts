@@ -2,12 +2,13 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Health Tracker',
-    short_name: 'Health',
+    name: 'Marrow',
+    short_name: 'Marrow',
+    description: 'Daily symptom check-in and health tracking.',
     start_url: '/checkin',
     display: 'standalone',
-    theme_color: '#0f172a',
-    background_color: '#ffffff',
+    theme_color: '#131110',
+    background_color: '#F4EEE6',
     icons: [
       {
         src: '/icons/icon-192.png',

@@ -125,7 +125,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _weather_task.cancel()
 
 
-app = FastAPI(title="Health Tracker", lifespan=lifespan)
+app = FastAPI(title="Marrow", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

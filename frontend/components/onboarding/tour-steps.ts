@@ -26,7 +26,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     id: 'welcome',
     route: '/checkin',
     target: 'body',
-    title: 'Welcome to Health Tracker',
+    title: 'Welcome to Marrow',
     content:
       'This quick tour shows how to log daily symptoms, navigate the app, and unlock insights over time.',
     placement: 'center',
