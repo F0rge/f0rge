@@ -21,7 +21,7 @@ Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml`, then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml`.
-- After CI green on push, `.github/workflows/fly-deploy-develop.yml` / `fly-deploy-main.yml` deploy API → MCP → frontend.
+- After CI green on push, `.github/workflows/fly-deploy-develop.yml` / `fly-deploy-main.yml` deploy via reusable workflow: API → MCP (serial), frontend (parallel). Per-component `workflow_dispatch` supported.
 
 ## Fly apps
 

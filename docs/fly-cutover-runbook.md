@@ -50,7 +50,18 @@ After merge to `develop` or `main`, Fly deploys run automatically once the match
 | `develop` | `CI (develop)` | `.github/workflows/fly-deploy-develop.yml` | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` |
 | `main` | `CI (main)` | `.github/workflows/fly-deploy-main.yml` | `marrow`, `marrow-mcp`, `marrow-ui` |
 
-Deploy order: **API** (runs `alembic upgrade head` via `release_command`) → **MCP** → **frontend**. Failed CI does not trigger a deploy. PR CI runs are ignored (push-only).
+Deploy order: **API** (runs `alembic upgrade head` via `release_command`) → **MCP** (serial after API); **frontend** runs in parallel with MCP when both are affected. Each component is a separate job (`plan`, `deploy api`, `deploy mcp`, `deploy frontend`, `smoke`). Failed CI does not trigger a deploy. PR CI runs are ignored (push-only).
+
+**Manual dispatch** — redeploy one component without touching the others:
+
+```bash
+gh workflow run "Fly Deploy (develop)" --ref develop -f component=mcp
+gh workflow run "Fly Deploy (main)" --ref main -f component=api
+```
+
+`component` choices: `all` (default), `api`, `mcp`, `frontend`. MCP-only dispatch skips API (and migrations); use only when schema is already current.
+
+**CI** — `CI (develop)` / `CI (main)` run parallel `backend` and `frontend` jobs when Nx affected; aggregate `ci` job is the required branch check. Post-deploy `smoke` curls API/frontend health for components that deployed.
 
 **One-time setup:** add repo secret `FLY_API_TOKEN` in GitHub → Settings → Secrets and variables → Actions.
 

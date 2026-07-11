@@ -41,7 +41,7 @@ Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.tom
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).
-- After CI green on push, Fly deploy workflows deploy API → MCP → frontend automatically.
+- After CI green on push, Fly deploy workflows run per-component jobs (API → MCP serial, frontend parallel) with post-deploy smoke checks.
 
 ## Running locally
 

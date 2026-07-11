@@ -34,7 +34,7 @@ Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker
 | Dev | `develop` | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` | `fly-deploy-develop.yml` |
 | Prod | `main` | `marrow`, `marrow-mcp`, `marrow-ui` | `fly-deploy-main.yml` |
 
-Deploy order: API (alembic via `release_command`) → MCP → frontend.
+Deploy order: API (alembic via `release_command`) → MCP (serial); frontend parallel. Jobs: `plan`, `deploy api`, `deploy mcp`, `deploy frontend`, `smoke`. `workflow_dispatch` supports `component=all|api|mcp|frontend`.
 
 MPG cluster: `nlkxjo5m3240y93v` (`f0rge-db`, org `f0rge`). Databases: `marrow` (prod), `marrow_dev` (dev).
 

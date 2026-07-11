@@ -1,0 +1,236 @@
+name: Fly Deploy (reusable)
+
+# Called by fly-deploy-develop.yml and fly-deploy-main.yml.
+# plan → deploy-api → deploy-mcp (serial after API); deploy-frontend parallel with MCP.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: develop or main
+        required: true
+        type: string
+      sha:
+        description: Commit SHA to deploy
+        required: true
+        type: string
+      base_branch:
+        description: Branch used for nx-set-shas base
+        required: true
+        type: string
+      workflow_id:
+        description: Caller workflow filename for nx-set-shas
+        required: true
+        type: string
+      component:
+        description: auto (nx affected) or all/api/mcp/frontend (manual dispatch)
+        required: false
+        type: string
+        default: auto
+    secrets:
+      FLY_API_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      deploy_api: ${{ steps.flags.outputs.deploy_api }}
+      deploy_mcp: ${{ steps.flags.outputs.deploy_mcp }}
+      deploy_frontend: ${{ steps.flags.outputs.deploy_frontend }}
+      api_health_url: ${{ steps.urls.outputs.api_health_url }}
+      frontend_health_url: ${{ steps.urls.outputs.frontend_health_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root deps
+        run: npm ci
+
+      - uses: nrwl/nx-set-shas@v4
+        if: inputs.component == 'auto'
+        with:
+          main-branch-name: ${{ inputs.base_branch }}
+          workflow-id: ${{ inputs.workflow_id }}
+
+      - name: Resolve affected projects
+        id: affected
+        if: inputs.component == 'auto'
+        run: |
+          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --sep=" " 2>/dev/null || true)
+          echo "projects=$PROJECTS" >> "$GITHUB_OUTPUT"
+
+      - name: Set deploy flags
+        id: flags
+        env:
+          COMPONENT: ${{ inputs.component }}
+          PROJECTS: ${{ steps.affected.outputs.projects }}
+        run: |
+          backend_affected=false
+          frontend_affected=false
+          if [ "$COMPONENT" = "auto" ]; then
+            [[ " $PROJECTS " == *" marrow-backend "* ]] && backend_affected=true
+            [[ " $PROJECTS " == *" marrow-frontend "* ]] && frontend_affected=true
+          elif [ "$COMPONENT" = "all" ]; then
+            backend_affected=true
+            frontend_affected=true
+          elif [ "$COMPONENT" = "api" ]; then
+            backend_affected=true
+          elif [ "$COMPONENT" = "mcp" ]; then
+            echo "deploy_api=false" >> "$GITHUB_OUTPUT"
+            echo "deploy_mcp=true" >> "$GITHUB_OUTPUT"
+            echo "deploy_frontend=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          elif [ "$COMPONENT" = "frontend" ]; then
+            frontend_affected=true
+          fi
+
+          deploy_api=false
+          deploy_mcp=false
+          if [ "$backend_affected" = true ]; then
+            if [ "$COMPONENT" = "api" ]; then
+              deploy_api=true
+            else
+              deploy_api=true
+              deploy_mcp=true
+            fi
+          fi
+
+          echo "deploy_api=$deploy_api" >> "$GITHUB_OUTPUT"
+          echo "deploy_mcp=$deploy_mcp" >> "$GITHUB_OUTPUT"
+          echo "deploy_frontend=$frontend_affected" >> "$GITHUB_OUTPUT"
+
+      - name: Set health URLs
+        id: urls
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          if [ "$ENVIRONMENT" = "main" ]; then
+            echo "api_health_url=https://api.marrow-health.com/api/v1/health" >> "$GITHUB_OUTPUT"
+            echo "frontend_health_url=https://marrow-health.com/" >> "$GITHUB_OUTPUT"
+          else
+            echo "api_health_url=https://api-dev.marrow-health.com/api/v1/health" >> "$GITHUB_OUTPUT"
+            echo "frontend_health_url=https://app-dev.marrow-health.com/" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-api:
+    name: deploy api
+    needs: plan
+    if: needs.plan.outputs.deploy_api == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: fly-api-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_CONFIG: ${{ inputs.environment == 'main' && 'fly.prod.toml' || 'fly.toml' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Deploy API (alembic via release_command)
+        working-directory: apps/marrow/backend
+        run: flyctl deploy --remote-only --config "$FLY_CONFIG"
+
+  deploy-mcp:
+    name: deploy mcp
+    needs: [plan, deploy-api]
+    if: >-
+      needs.plan.outputs.deploy_mcp == 'true' &&
+      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: fly-mcp-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_CONFIG: ${{ inputs.environment == 'main' && 'fly.mcp.prod.toml' || 'fly.mcp.toml' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Deploy MCP
+        working-directory: apps/marrow/backend
+        run: flyctl deploy --remote-only --config "$FLY_CONFIG"
+
+  deploy-frontend:
+    name: deploy frontend
+    needs: plan
+    if: needs.plan.outputs.deploy_frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: fly-ui-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_CONFIG: ${{ inputs.environment == 'main' && 'fly.prod.toml' || 'fly.toml' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Deploy frontend
+        working-directory: apps/marrow/frontend
+        run: flyctl deploy --remote-only --config "$FLY_CONFIG"
+
+  smoke:
+    name: smoke
+    needs: [plan, deploy-api, deploy-mcp, deploy-frontend]
+    if: >-
+      always() &&
+      (
+        needs.deploy-api.result == 'success' ||
+        needs.deploy-mcp.result == 'success' ||
+        needs.deploy-frontend.result == 'success'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Smoke API health
+        if: needs.deploy-api.result == 'success'
+        run: |
+          for i in $(seq 1 12); do
+            if curl -sf "${{ needs.plan.outputs.api_health_url }}"; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "API health check failed: ${{ needs.plan.outputs.api_health_url }}"
+          exit 1
+
+      - name: Smoke frontend
+        if: needs.deploy-frontend.result == 'success'
+        run: |
+          for i in $(seq 1 12); do
+            if curl -sf "${{ needs.plan.outputs.frontend_health_url }}" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Frontend health check failed: ${{ needs.plan.outputs.frontend_health_url }}"
+          exit 1
