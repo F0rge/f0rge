@@ -12,7 +12,7 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 class PhotoAnalysisCRUD(BaseCRUD):

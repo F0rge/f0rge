@@ -5,7 +5,7 @@ import datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import ValidationError
+from f0rge_core.exceptions import ValidationError
 from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
 from app.models.symptom_catalog import SymptomCatalogItem

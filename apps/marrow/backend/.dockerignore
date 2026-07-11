@@ -14,7 +14,7 @@ libs/*
 !libs/**
 
 # Re-exclude heavy / secret / non-shippable paths inside the whitelist.
-apps/marrow/backend/.venv
+**/.venv
 apps/marrow/backend/tests
 apps/marrow/backend/data/health.db
 apps/marrow/backend/data/health.db-journal

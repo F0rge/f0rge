@@ -11,11 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud.weather import WeatherCRUD
 from app.database import async_session_maker
-from app.exceptions import ExternalServiceError, NotFoundError
+from f0rge_core.exceptions import ExternalServiceError, NotFoundError
 from app.models.user import default_user_id
 from app.models.weather import WeatherReading
 from app.schemas.weather import WeatherDailySummary
-from app.tenant import apply_session_user_id
+from f0rge_db.tenant import apply_session_user_id
 
 logger = logging.getLogger(__name__)
 

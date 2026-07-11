@@ -22,11 +22,11 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth_context import user_id_ctx
+from f0rge_db.auth_context import user_id_ctx
 from app.database import get_db
 from app.main import app
 from app.models.entry import Entry
-from app.tenant import apply_session_user_id
+from f0rge_db.tenant import apply_session_user_id
 
 _ATOMICITY_EMAIL = "atomicity-test@example.com"
 _ATOMICITY_PASSWORD = "test-password-12"

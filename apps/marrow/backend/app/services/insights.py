@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.insights import InsightsCRUD
-from app.exceptions import ValidationError
+from f0rge_core.exceptions import ValidationError
 from app.schemas.insights import (
     CorrelateRow,
     CorrelatesResponse,

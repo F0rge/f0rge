@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 # Import Base so metadata is populated.
 from app.database import Base  # noqa: F401
 from app.config import settings
-from app.db_url import resolve_database_url
+from f0rge_db.db_url import resolve_database_url
 
 # Explicitly import every model so their tables appear in Base.metadata
 # when autogenerate runs — even if nothing else imported them yet.

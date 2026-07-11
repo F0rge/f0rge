@@ -11,13 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud.entries import EntryCRUD
 from app.crud.photos import PhotoCRUD
-from app.exceptions import NotFoundError
+from f0rge_core.exceptions import NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.schemas.photo import PhotoUpdate
 from app.services import object_storage
 from app.services.photo_storage import delete_photo, resize_image, save_photo
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator

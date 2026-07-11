@@ -6,7 +6,7 @@ import secrets
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.settings import UserSettingsCRUD
-from app.exceptions import ExternalServiceError
+from f0rge_core.exceptions import ExternalServiceError
 from app.models.user_settings import UserSettings
 from app.schemas.settings import (
     EmbeddingSettingsUpdate,
@@ -17,7 +17,7 @@ from app.schemas.settings import (
 )
 from app.services.llm.base import EmbeddingClient, LLMClient
 from app.services.llm.encryption import encrypt
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 
 class SettingsService:

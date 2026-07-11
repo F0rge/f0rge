@@ -6,9 +6,9 @@ from typing import Iterable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.medication_catalog import MedicationCatalogCRUD
-from app.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.medication_catalog import MedicationCatalogItem
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
 

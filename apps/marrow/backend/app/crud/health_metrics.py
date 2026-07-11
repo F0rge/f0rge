@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import BaseCRUD
 from app.models.health_metrics import HealthMetric
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 class HealthMetricsCRUD(BaseCRUD):

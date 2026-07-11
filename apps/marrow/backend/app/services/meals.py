@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.food_analysis import PhotoAnalysisCRUD, PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
-from app.exceptions import NotFoundError, ValidationError
+from f0rge_core.exceptions import NotFoundError, ValidationError
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
@@ -17,7 +17,7 @@ from app.services.diet_flags import compute_signal_from_analyses
 from app.services.entries import get_or_create_entry
 from app.services.photo_storage import delete_photo, photo_exists, read_photo, save_photo
 from app.services.photos import next_photo_filename
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 
 class MealService:

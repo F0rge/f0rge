@@ -1,5 +1,9 @@
 """Shared pytest fixtures for the backend test suite.
 
+Container + savepoint machinery comes from ``f0rge_testing``; everything
+app-specific (extensions, schema, RLS enablement, catalog seeding, default
+user, ASGI clients, jwt patch) stays here.
+
 Provides:
 - ``postgres_container`` — session-scoped real Postgres (testcontainers, pgvector/pg16 image)
 - ``async_engine``       — session-scoped AsyncEngine bound to that container with the
@@ -30,17 +34,19 @@ os.environ.setdefault(
 )
 
 import uuid
-from typing import AsyncIterator, Iterator  # noqa: E402
+from typing import AsyncIterator  # noqa: E402
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 import sqlalchemy as sa  # noqa: E402
+from f0rge_db.auth_context import user_id_ctx  # noqa: E402
+from f0rge_db.tenant import apply_session_user_id  # noqa: E402
+from f0rge_testing import async_url, postgres_container_fixture, savepoint_session  # noqa: E402
 from httpx import ASGITransport  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncEngine,
     AsyncSession,
-    async_sessionmaker,
     create_async_engine,
 )
 from testcontainers.postgres import PostgresContainer  # noqa: E402
@@ -49,13 +55,11 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 import app.models  # noqa: F401, E402
 
 from app.config import settings
-from app.auth_context import user_id_ctx
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH  # noqa: E402
 from app.rls import enable_row_level_security
 from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL
-from app.tenant import apply_session_user_id
 
 TEST_JWT_SECRET = "test-jwt-secret-for-pytest-only-32b"
 TEST_EMAIL = "test@example.com"
@@ -66,27 +70,7 @@ TEST_PASSWORD = "test-password-12"
 # Session-scoped containers + engine
 # ---------------------------------------------------------------------------
 
-
-@pytest.fixture(scope="session")
-def postgres_container() -> Iterator[PostgresContainer]:
-    """Spawn a real Postgres (pgvector/pg16) for the duration of the test session."""
-    container = PostgresContainer("pgvector/pgvector:pg16")
-    container.start()
-    try:
-        yield container
-    finally:
-        container.stop()
-
-
-def _async_url(container: PostgresContainer) -> str:
-    """Convert the container's sync psycopg2 URL into an asyncpg URL."""
-    url = container.get_connection_url()
-    # testcontainers gives us postgresql+psycopg2://; swap to asyncpg.
-    if "+psycopg2" in url:
-        url = url.replace("+psycopg2", "+asyncpg")
-    elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    return url
+postgres_container = postgres_container_fixture("pgvector/pgvector:pg16")
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -94,7 +78,7 @@ async def async_engine(
     postgres_container: PostgresContainer,
 ) -> AsyncIterator[AsyncEngine]:
     """One AsyncEngine for the whole session, with the schema created."""
-    engine = create_async_engine(_async_url(postgres_container), echo=False)
+    engine = create_async_engine(async_url(postgres_container), echo=False)
     async with engine.begin() as conn:
         # pgvector extension must be installed before any VECTOR column can be created.
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
@@ -132,29 +116,16 @@ async def async_engine(
 async def async_db(async_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     """A function-scoped ``AsyncSession`` that rolls back at the end of the test.
 
-    Pattern: open a connection, begin an outer transaction, bind a session to
-    that connection, begin a nested transaction (SAVEPOINT) that the session
-    flushes into, then on teardown roll back the outer transaction so nothing
-    persists across tests.
+    Savepoint machinery lives in ``f0rge_testing.savepoint_session``; here we
+    only layer marrow's tenant context (ContextVar + ``app.user_id`` GUC) on top.
     """
-    async with async_engine.connect() as conn:
-        outer = await conn.begin()
-        session_maker = async_sessionmaker(
-            bind=conn,
-            expire_on_commit=False,
-            class_=AsyncSession,
-            join_transaction_mode="create_savepoint",
-        )
-        session = session_maker()
+    async with savepoint_session(async_engine) as session:
         user_token = user_id_ctx.set(uuid.UUID(settings.default_storage_user_id))
         try:
             await apply_session_user_id(session, uuid.UUID(settings.default_storage_user_id))
             yield session
         finally:
             user_id_ctx.reset(user_token)
-            await session.close()
-            if outer.is_active:
-                await outer.rollback()
 
 
 # ---------------------------------------------------------------------------

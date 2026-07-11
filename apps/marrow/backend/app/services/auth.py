@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crud.auth import UserCRUD
-from app.exceptions import ConflictError, UnauthorizedError, ValidationError
+from f0rge_core.exceptions import ConflictError, UnauthorizedError, ValidationError
 from app.models.user import User
 from app.services.avatar_defaults import default_avatar_index
 from app.services.user_provisioning import provision_user_catalogs, repair_infrastructure_catalogs

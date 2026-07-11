@@ -9,12 +9,12 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth_context import user_id_ctx
+from f0rge_db.auth_context import user_id_ctx
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
-from app.tenant import apply_session_user_id, owned_by_user
+from f0rge_db.tenant import apply_session_user_id, owned_by_user
 from tests.conftest import authed_user_id
 
 _DATE = datetime.date(2026, 4, 1)

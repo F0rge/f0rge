@@ -24,7 +24,7 @@ from httpx import AsyncClient
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth_context import user_id_ctx
+from f0rge_db.auth_context import user_id_ctx
 from app.config import settings
 from app.models.entry import Entry
 from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator

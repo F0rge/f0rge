@@ -7,14 +7,14 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.entries import EntryCRUD
-from app.exceptions import ConflictError, NotFoundError
+from f0rge_core.exceptions import ConflictError, NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
 from app.schemas.photo import PhotoResponse
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
 from app.services.photo_storage import delete_photo
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 # Bump whenever Entry's column shape changes; both entry-creation paths below
 # (form submit and photo-first skeleton) must always stamp the same value.

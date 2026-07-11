@@ -1,0 +1,39 @@
+[project]
+name = "f0rge-core"
+version = "0.1.0"
+description = "Shared domain exception types and FastAPI exception handlers"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/f0rge_core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+# Cloned from apps/marrow/backend plus TID: shared libs must never import app code.
+select = ["E", "F", "W", "TID"]
+ignore = [
+    "E501",  # line too long — formatter handles this
+    "F821",  # undefined name — false-positive on Mapped["Name"] forward refs
+]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"app".msg = "shared libs must not import app code"

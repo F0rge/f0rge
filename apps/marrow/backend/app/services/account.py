@@ -13,7 +13,7 @@ from app.config import settings
 from app.crud.auth import UserCRUD
 from app.crud.labs import LabCRUD
 from app.crud.photos import PhotoCRUD
-from app.exceptions import NotFoundError, UnauthorizedError, ValidationError
+from f0rge_core.exceptions import NotFoundError, UnauthorizedError, ValidationError
 from app.models.user import User
 from app.schemas.account import (
     AccountDeleteRequest,
@@ -35,7 +35,7 @@ from app.services.avatar_storage import (
     save_avatar,
 )
 from app.services.photo_storage import delete_photo
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 logger = logging.getLogger(__name__)
 

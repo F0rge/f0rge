@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import BaseCRUD
 from app.models.weather import WeatherReading
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 class WeatherCRUD(BaseCRUD):

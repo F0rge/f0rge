@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.exceptions import ValidationError
+from f0rge_core.exceptions import ValidationError
 from app.services import lab_attachment_storage as storage_module
 from app.services.lab_attachment_storage import LabAttachmentStorage
 

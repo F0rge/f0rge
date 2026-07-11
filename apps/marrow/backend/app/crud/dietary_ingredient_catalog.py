@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.base import BaseCRUD
 from app.models.dietary_ingredient import DietaryIngredient
 from app.models.ingredient_alias import IngredientAlias
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 CATALOG_SEARCH_LIMIT = 50
 

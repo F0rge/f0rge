@@ -26,7 +26,7 @@ from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.exceptions import NotFoundError
+from f0rge_core.exceptions import NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.schemas.photo import PhotoUpdate

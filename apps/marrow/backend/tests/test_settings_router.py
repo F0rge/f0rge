@@ -8,7 +8,7 @@ from cryptography.fernet import Fernet
 from httpx import AsyncClient
 
 from app.config import settings
-from app.exceptions import ExternalServiceError
+from f0rge_core.exceptions import ExternalServiceError
 from app.services.llm.base import EmbeddingClient, LLMClient
 from app.services.llm.factory import get_embedding_client, get_llm_client
 
@@ -29,7 +29,7 @@ def fernet_key(monkeypatch: pytest.MonkeyPatch) -> str:
 @pytest.fixture(autouse=True)
 def auth_bypass(monkeypatch: pytest.MonkeyPatch) -> None:
     """Bypass auth middleware for settings router tests."""
-    from app.auth_context import user_id_ctx
+    from f0rge_db.auth_context import user_id_ctx
     from app.middleware.auth import get_current_user_id
     from app.main import app
 
