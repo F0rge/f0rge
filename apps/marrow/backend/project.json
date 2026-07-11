@@ -8,21 +8,21 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/marrow/backend",
-        "command": "uvx ruff check ."
+        "command": "uv tool run ruff check ."
       }
     },
     "format-check": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/marrow/backend",
-        "command": "uvx ruff format --check ."
+        "command": "uv tool run ruff format --check ."
       }
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/marrow/backend",
-        "command": "uv run pytest -ra"
+        "command": "uv sync --frozen && uv run pytest -ra"
       }
     },
     "lock": {
