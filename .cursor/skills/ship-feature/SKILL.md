@@ -95,7 +95,7 @@ If FAIL: fix inline (small) or loop sub-agent (large). Do not open PR until PASS
 gh pr checks <pr-number> --watch
 ```
 
-Required green: `backend (ruff + pytest)`, `frontend (lint + build)` from `ci-develop.yml`.
+Required green: aggregate `ci` job from `CI (develop)` (parallel `backend` + `frontend` when Nx affected).
 
 On failure: push fixes, re-watch. Do not merge until all required checks pass.
 
@@ -124,6 +124,7 @@ gh run watch <run-id>
 # Fly deploy (triggered by CI success)
 gh run list --branch develop --workflow "Fly Deploy (develop)" --limit 1
 gh run watch <fly-run-id>
+# Jobs: plan → deploy api / deploy mcp / deploy frontend (parallel UI) → smoke
 
 # Dev stack readiness (API + frontend)
 until curl -sf https://api-dev.marrow-health.com/api/v1/health; do sleep 15; done
@@ -179,7 +180,7 @@ EOF
 gh pr checks <pr-number> --watch
 ```
 
-Required green from `ci-main.yml` (stricter frontend prod-shaped build).
+Required green: aggregate `ci` job from `CI (main)` (parallel `backend` + `frontend` when Nx affected; prod-shaped frontend build).
 
 On failure: fix on `develop`, re-promote. Do not ask for final review until green.
 

@@ -1,7 +1,8 @@
 name: CI (main)
 
 # Runs on PRs targeting `main` — promotion of `develop` → `main`.
-# Same nx affected targets as develop, plus prod-shaped frontend build env.
+# Parallel backend/frontend jobs gated by nx affected; aggregate `ci` job for branch rules.
+# Frontend build uses prod-shaped env.
 
 on:
   pull_request:
@@ -18,10 +19,89 @@ permissions:
   actions: read
 
 jobs:
-  ci:
-    name: ci
+  detect:
+    name: detect
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
+    outputs:
+      backend: ${{ steps.affected.outputs.backend }}
+      frontend: ${{ steps.affected.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Resolve affected projects
+        id: affected
+        run: |
+          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --sep=" " 2>/dev/null || true)
+          backend=false
+          frontend=false
+          [[ " $PROJECTS " == *" marrow-backend "* ]] && backend=true
+          [[ " $PROJECTS " == *" marrow-frontend "* ]] && frontend=true
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "affected: $PROJECTS"
+
+  backend:
+    name: backend
+    needs: detect
+    if: needs.detect.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: main
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Pin Python 3.10
+        run: uv python install 3.10
+
+      - name: Install backend deps
+        run: uv sync --frozen --project apps/marrow/backend
+
+      - name: Install ruff
+        run: uv tool install ruff@latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: nx run (backend)
+        run: npx nx run-many -t lint format-check test --projects=marrow-backend
+
+  frontend:
+    name: frontend
+    needs: detect
+    if: needs.detect.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,21 +125,32 @@ jobs:
       - name: Install frontend deps
         run: npm ci --prefix apps/marrow/frontend
 
-      - uses: astral-sh/setup-uv@v3
-        with:
-          enable-cache: true
-
-      - name: Pin Python 3.10
-        run: uv python install 3.10
-
-      - name: Install backend deps
-        run: uv sync --frozen --project apps/marrow/backend
-
-      - name: Install ruff
-        run: uv tool install ruff@latest
-
-      - name: nx affected (prod-shaped frontend build)
+      - name: nx run (frontend, prod-shaped build)
         env:
           API_URL: http://backend:8000
           NODE_ENV: production
-        run: npx nx affected -t lint format-check typecheck test build
+        run: npx nx run-many -t lint typecheck build --projects=marrow-frontend
+
+  ci:
+    name: ci
+    needs: [detect, backend, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate gate
+        env:
+          BACKEND_FLAG: ${{ needs.detect.outputs.backend }}
+          FRONTEND_FLAG: ${{ needs.detect.outputs.frontend }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+        run: |
+          gate() {
+            local flag="$1" result="$2" name="$3"
+            if [ "$flag" = "true" ] && [ "$result" != "success" ]; then
+              echo "$name job required but result was: $result"
+              exit 1
+            fi
+          }
+          gate "$BACKEND_FLAG" "$BACKEND_RESULT" "backend"
+          gate "$FRONTEND_FLAG" "$FRONTEND_RESULT" "frontend"
