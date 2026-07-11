@@ -36,5 +36,5 @@
       "options": {}
     }
   },
-  "tags": []
+  "tags": ["platform:py", "scope:marrow"]
 }

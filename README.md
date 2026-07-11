@@ -32,7 +32,7 @@ npx nx reset                                   # clear the Nx cache
 
 ## CI/CD
 
-- **`CI (develop)` / `CI (main)`** — parallel `backend` and `frontend` jobs when Nx affected; aggregate `ci` job is the required branch check (`main-pr-gate` on `main`).
+- **`CI (develop)` / `CI (main)`** — parallel `backend` and `frontend` jobs when Nx affected; aggregate `ci` job is the required branch check (`main-pr-gate` on `main`). Detection is tag-driven: the `backend` job runs for affected projects tagged `platform:py`, `frontend` for `platform:ts`. Every new project must carry the matching `platform:` tag in its `project.json` or CI will silently ignore it.
 - **`Fly Deploy (develop)` / `Fly Deploy (main)`** — triggered after a green CI push (`workflow_run`). Reusable workflow jobs:
   - `plan` → `deploy api` → `deploy mcp` (serial, migrations via API `release_command`) → `deploy frontend` (parallel with MCP)
   - `smoke` — health curls for components that deployed
