@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Button } from '@f0rge/ui'
+import { Input } from '@f0rge/ui'
+import { Label } from '@f0rge/ui'
 
 interface AuthCredentialsFormProps {
   mode: 'login' | 'signup'

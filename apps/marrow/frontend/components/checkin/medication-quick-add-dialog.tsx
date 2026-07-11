@@ -17,11 +17,11 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { cn, nowHHMM } from '@/lib/utils'
+} from '@f0rge/ui'
+import { Button } from '@f0rge/ui'
+import { Input } from '@f0rge/ui'
+import { Label } from '@f0rge/ui'
+import { cn, nowHHMM } from '@f0rge/ui'
 import { useMedicationCatalog } from '@/lib/api/hooks'
 import type { MedicationIntake } from '@/lib/api/types'
 

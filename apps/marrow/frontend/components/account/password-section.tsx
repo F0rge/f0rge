@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { KeyRound } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Button } from '@f0rge/ui'
+import { Input } from '@f0rge/ui'
+import { Label } from '@f0rge/ui'
 import { SettingsCard } from '@/components/settings/settings-card'
 import { useChangePassword } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 
 export function PasswordSection() {
   const [currentPassword, setCurrentPassword] = useState('')

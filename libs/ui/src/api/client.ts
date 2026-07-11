@@ -1,12 +1,27 @@
 import { toast } from 'sonner'
 
-const BASE = '/api/v1'
+interface ApiConfig {
+  base: string
+  publicPaths: string[]
+  loginPath: string
+}
 
-const PUBLIC_PATHS = ['/login', '/signup']
+// ponytail: module-level config, not a client class — one API per app is the
+// reality until an app needs two backends.
+let config: ApiConfig = {
+  base: '/api/v1',
+  publicPaths: ['/login', '/signup'],
+  loginPath: '/login',
+}
+
+/** Override the API defaults. Apps whose behavior matches the defaults need not call this. */
+export function configureApi(overrides: Partial<ApiConfig>) {
+  config = { ...config, ...overrides }
+}
 
 function isPublicAuthPath() {
   if (typeof window === 'undefined') return false
-  return PUBLIC_PATHS.some((path) => window.location.pathname.startsWith(path))
+  return config.publicPaths.some((path) => window.location.pathname.startsWith(path))
 }
 
 class ApiError extends Error {
@@ -23,7 +38,7 @@ async function handleResponse(res: Response) {
     // Session expired — redirect to login with return URL
     if (typeof window !== 'undefined' && !isPublicAuthPath()) {
       const returnTo = encodeURIComponent(window.location.pathname)
-      window.location.href = `/login?redirect=${returnTo}`
+      window.location.href = `${config.loginPath}?redirect=${returnTo}`
     }
     throw new ApiError('Session expired', 401)
   }
@@ -43,14 +58,14 @@ async function handleResponse(res: Response) {
 }
 
 export async function apiGetRaw(path: string): Promise<Response> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${config.base}${path}`, {
     method: 'GET',
     credentials: 'include',
   })
   if (res.status === 401) {
     if (typeof window !== 'undefined' && !isPublicAuthPath()) {
       const returnTo = encodeURIComponent(window.location.pathname)
-      window.location.href = `/login?redirect=${returnTo}`
+      window.location.href = `${config.loginPath}?redirect=${returnTo}`
     }
     throw new ApiError('Session expired', 401)
   }
@@ -62,7 +77,7 @@ export async function apiGetRaw(path: string): Promise<Response> {
 }
 
 export async function apiGet(path: string) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${config.base}${path}`, {
     method: 'GET',
     credentials: 'include',
   })
@@ -70,7 +85,7 @@ export async function apiGet(path: string) {
 }
 
 export async function apiPost(path: string, body: unknown) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${config.base}${path}`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -80,7 +95,7 @@ export async function apiPost(path: string, body: unknown) {
 }
 
 export async function apiPut(path: string, body: unknown) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${config.base}${path}`, {
     method: 'PUT',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -90,7 +105,7 @@ export async function apiPut(path: string, body: unknown) {
 }
 
 export async function apiPatch(path: string, body: unknown) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${config.base}${path}`, {
     method: 'PATCH',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -100,7 +115,7 @@ export async function apiPatch(path: string, body: unknown) {
 }
 
 export async function apiDelete(path: string, body?: unknown) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${config.base}${path}`, {
     method: 'DELETE',
     credentials: 'include',
     ...(body !== undefined
@@ -111,7 +126,7 @@ export async function apiDelete(path: string, body?: unknown) {
 }
 
 export async function apiPostForm(path: string, formData: FormData) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${config.base}${path}`, {
     method: 'POST',
     credentials: 'include',
     body: formData,

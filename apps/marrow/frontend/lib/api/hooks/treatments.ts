@@ -2,7 +2,7 @@
 
 import { useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, apiDelete, handleMutationError } from '../client'
+import { apiGet, apiPost, apiPut, apiDelete, handleMutationError } from '@f0rge/ui/api'
 import type {
   Treatment,
   TreatmentCreate,

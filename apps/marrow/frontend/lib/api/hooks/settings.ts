@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, ApiError } from '../client'
+import { apiGet, apiPost, apiPut, ApiError } from '@f0rge/ui/api'
 import type {
   UserSettings,
   LLMSettingsUpdate,

@@ -2,6 +2,10 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Tailwind must scan the shared UI lib's sources (app/ -> frontend -> marrow ->
+   apps -> repo root -> libs/ui/src) or lib-only classes get pruned in prod. */
+@source "../../../../libs/ui/src";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

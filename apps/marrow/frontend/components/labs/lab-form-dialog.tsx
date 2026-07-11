@@ -10,15 +10,15 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+} from '@f0rge/ui'
+import { Button } from '@f0rge/ui'
+import { Input } from '@f0rge/ui'
+import { Label } from '@f0rge/ui'
+import { Textarea } from '@f0rge/ui'
 import { useCreateLab, useUpdateLab } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 import { MarkerPicker } from './marker-picker'
-import { cn, formatLocalDate } from '@/lib/utils'
+import { cn, formatLocalDate } from '@f0rge/ui'
 import type { Lab, LabType, LabMarkerCreate, ExtractedLabPayload } from '@/lib/api/types'
 
 interface LabFormDialogProps {

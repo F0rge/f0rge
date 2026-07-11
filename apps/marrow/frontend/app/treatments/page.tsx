@@ -9,9 +9,9 @@ import { DiscontinueDialog } from '@/components/treatments/discontinue-dialog'
 import { TreatmentTimeline } from '@/components/treatments/treatment-timeline'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
-import { FetchError } from '@/components/shared/fetch-error'
+import { FetchError } from '@f0rge/ui'
 import type { Treatment } from '@/lib/api/types'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import { groupTreatments } from '@/components/treatments/group-treatments'
 
 export default function TreatmentsPage() {

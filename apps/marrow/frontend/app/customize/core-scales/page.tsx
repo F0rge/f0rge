@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@f0rge/ui'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { TierPill } from '@/components/customize/tier-pill'
 import { PageShell } from '@/components/layout/page-shell'

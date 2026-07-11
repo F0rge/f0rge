@@ -1,7 +1,7 @@
 'use client'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiDelete, apiGet, apiPatch, apiPost } from '../client'
+import { apiDelete, apiGet, apiPatch, apiPost } from '@f0rge/ui/api'
 import type {
   DietaryIngredient,
   IngredientCreatePayload,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, Search } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 interface CatalogItem {
   key: string

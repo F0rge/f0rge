@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2, Check, AlertTriangle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import type { AutosaveStatus } from '@/lib/hooks/use-autosave-entry'
 
 interface FloatingStatusCapsuleProps {

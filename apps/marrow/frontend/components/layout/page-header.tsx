@@ -2,7 +2,7 @@
 
 import type { ReactNode, Ref } from 'react'
 import { ProfileMenu } from '@/components/layout/profile-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 interface PageHeaderProps {
   title: ReactNode

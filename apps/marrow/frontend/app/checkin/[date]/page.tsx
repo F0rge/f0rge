@@ -7,7 +7,7 @@ import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { PageHeader } from '@/components/layout/page-header'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
-import { FetchError } from '@/components/shared/fetch-error'
+import { FetchError } from '@f0rge/ui'
 import { useEntry } from '@/lib/api/hooks'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 

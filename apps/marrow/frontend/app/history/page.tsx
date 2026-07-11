@@ -8,7 +8,7 @@ import { EntryCard } from '@/components/history/entry-card'
 import { ProtocolStreakHint } from '@/components/history/protocol-streak-hint'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
-import { FetchError } from '@/components/shared/fetch-error'
+import { FetchError } from '@f0rge/ui'
 import { useEntries } from '@/lib/api/hooks'
 
 function getCurrentMonth(): string {

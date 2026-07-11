@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { apiGet } from '../client'
+import { apiGet } from '@f0rge/ui/api'
 import type {
   TrendsResponse,
   CorrelatesResponse,

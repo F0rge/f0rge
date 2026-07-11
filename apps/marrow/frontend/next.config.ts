@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   turbopack: { root: repoRoot },
+  // @f0rge/ui is raw TS (internal-package pattern, no build step) — Next must
+  // transpile it.
+  transpilePackages: ["@f0rge/ui"],
   // ponytail: CI (ci-develop.yml / ci-main.yml) runs `npm run typecheck` on every
   // PR, so re-type-checking inside the Docker build on Fly is redundant memory
   // + time — and peak RAM is what OOM-kills the build under concurrent-build

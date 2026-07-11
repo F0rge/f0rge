@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Label } from '@/components/ui/label'
+import { Label } from '@f0rge/ui'
 
 const SYNC_DEBOUNCE_MS = 500
 

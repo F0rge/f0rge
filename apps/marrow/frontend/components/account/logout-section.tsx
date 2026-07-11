@@ -2,10 +2,10 @@
 
 import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@f0rge/ui'
 import { SettingsCard } from '@/components/settings/settings-card'
 import { useLogout } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 
 export function LogoutSection() {
   const router = useRouter()

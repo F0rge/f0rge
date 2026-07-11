@@ -6,7 +6,7 @@
  * All slots are optional — omit the ones you don't need.
  */
 
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import type { ReactNode } from 'react'
 
 interface RowItemProps {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost } from '../client'
+import { apiGet, apiPost } from '@f0rge/ui/api'
 import type { CatalogSetupRequest, CatalogSuggestions } from '../types/onboarding'
 
 export function useCatalogSuggestions(enabled = true) {

@@ -10,7 +10,7 @@ import {
   useUpdateIngredient,
   useUpdateDietaryConfirm,
 } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 import { IngredientEditor } from './ingredient-editor'
 import { DietaryBadges } from './dietary-badges'
 import type { PhotoIngredient } from '@/lib/api/types'

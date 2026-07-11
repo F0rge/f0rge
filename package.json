@@ -1,9 +1,21 @@
 {
   "name": "f0rge",
   "private": true,
+  "workspaces": [
+    "apps/marrow/frontend",
+    "libs/ui"
+  ],
+  "overrides": {
+    "next": "16.2.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "eslint-plugin-react-hooks": "7.0.1"
+  },
   "devDependencies": {
     "@nx/next": "~22.7.0",
     "@nxlv/python": "~22.2.1",
-    "nx": "~22.7.0"
+    "@types/react": "^19",
+    "nx": "~22.7.0",
+    "typescript": "^5"
   }
 }

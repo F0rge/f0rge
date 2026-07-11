@@ -3,7 +3,7 @@
 import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useSyncExternalStore } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', Icon: Sun },

@@ -33,7 +33,7 @@ import {
   Zap,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 // Canonical list of picker icons. Key = lowercase string stored in DB.
 export const KNOWN_ICONS = [

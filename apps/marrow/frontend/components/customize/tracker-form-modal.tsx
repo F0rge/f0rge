@@ -16,12 +16,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@f0rge/ui'
+import { Button } from '@f0rge/ui'
+import { Input } from '@f0rge/ui'
+import { Label } from '@f0rge/ui'
 import { useCreateTracker, useUpdateTracker } from '@/lib/api/hooks'
-import { ApiError, handleMutationError } from '@/lib/api/client'
+import { ApiError, handleMutationError } from '@f0rge/ui/api'
 import type { Tracker, TrackerKind } from '@/lib/api/types'
 import { IconPicker } from '@/components/checkin/cards/components/IconPicker'
 

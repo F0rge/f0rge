@@ -9,21 +9,21 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+} from '@f0rge/ui'
+import { Button } from '@f0rge/ui'
+import { Label } from '@f0rge/ui'
+import { Textarea } from '@f0rge/ui'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@f0rge/ui'
 import { useUpdateTreatment } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 import type { Treatment } from '@/lib/api/types'
-import { formatLocalDate } from '@/lib/utils'
+import { formatLocalDate } from '@f0rge/ui'
 import { END_REASON_OPTIONS } from './end-reason'
 
 interface DiscontinueDialogProps {

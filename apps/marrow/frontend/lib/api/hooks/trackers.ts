@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, apiPatch } from '../client'
+import { apiGet, apiPost, apiPut, apiPatch } from '@f0rge/ui/api'
 import type { Tracker, TrackerValue, TrackerCreate, TrackerUpdate } from '../types'
 
 export function useTrackers(includeArchived = false) {

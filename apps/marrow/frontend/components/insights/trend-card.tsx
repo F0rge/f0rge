@@ -16,8 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
+} from '@f0rge/ui'
+import { cn } from '@f0rge/ui'
 import type { TrendSeries } from '@/lib/api/types'
 
 interface Props {

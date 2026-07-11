@@ -1,7 +1,7 @@
 'use client'
 
 import type { Lab, LabType } from '@/lib/api/types'
-import { cn, formatDisplayDate } from '@/lib/utils'
+import { cn, formatDisplayDate } from '@f0rge/ui'
 
 interface LabCardProps {
   lab: Lab

@@ -1,7 +1,7 @@
 'use client'
 
 import type { Treatment } from '@/lib/api/types'
-import { formatDisplayDate } from '@/lib/utils'
+import { formatDisplayDate } from '@f0rge/ui'
 import { getEndReasonLabel } from './end-reason'
 
 interface TreatmentCardProps {
