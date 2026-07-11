@@ -10,6 +10,8 @@ apps/*
 apps/marrow/*
 !apps/marrow/backend
 !libs
+libs/*
+!libs/**
 
 # Re-exclude heavy / secret / non-shippable paths inside the whitelist.
 apps/marrow/backend/.venv

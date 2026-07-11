@@ -10,6 +10,8 @@ apps/*
 apps/marrow/*
 !apps/marrow/frontend
 !libs
+libs/*
+!libs/**
 
 # Re-exclude rebuilt / secret / non-shippable paths inside the whitelist.
 apps/marrow/frontend/node_modules

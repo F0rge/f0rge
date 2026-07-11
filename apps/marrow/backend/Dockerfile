@@ -32,7 +32,9 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Tell the seed scripts and the lifespan hook where to find the JSON files.
 ENV DIETARY_DATA_DIR=/app/data-seed
 
-RUN mkdir -p /app/data /app/photos /app/lab_attachments && chown -R app:app /app
+RUN mkdir -p /app/data /app/photos /app/lab_attachments /app/apps/marrow/backend \
+    && ln -sfn /app/lab_attachments /app/apps/marrow/backend/lab_attachments \
+    && chown -R app:app /app
 
 USER app
 
