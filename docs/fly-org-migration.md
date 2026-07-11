@@ -38,6 +38,7 @@ Apps **can** move orgs with `fly apps move` (machines, volumes, secrets, certs/d
 - [x] Dev apps moved to `f0rge`
 - [x] MPG attach + `FLY_MPG_SKIP_ROLE_DDL=1` on API/MCP
 - [x] New Tigris bucket + secrets on `marrow-dev`
+- [x] `rclone copy` old bucket `empty-sea-6682` → `f0rge-marrow-dev-photos` (required — DB rows reference filenames, not bucket)
 - [x] `FLY_API_TOKEN` multi-token (`personal,f0rge`) for split-org CI window
 - [ ] Prod cutover (after ~1 week dev soak)
 - [ ] Old cluster/bucket decommission
