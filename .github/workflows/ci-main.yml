@@ -167,11 +167,16 @@ jobs:
     steps:
       - name: Aggregate gate
         env:
+          DETECT_RESULT: ${{ needs.detect.result }}
           BACKEND_FLAG: ${{ needs.detect.outputs.backend }}
           FRONTEND_FLAG: ${{ needs.detect.outputs.frontend }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
         run: |
+          if [ "$DETECT_RESULT" != "success" ]; then
+            echo "detect job required but result was: $DETECT_RESULT"
+            exit 1
+          fi
           gate() {
             local flag="$1" result="$2" name="$3"
             if [ "$flag" = "true" ] && [ "$result" != "success" ]; then
