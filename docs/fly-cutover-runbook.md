@@ -92,7 +92,9 @@ MCP app: `MCP_READONLY_DATABASE_URL` (attach with `--username healthtracker-ro`)
   ```
 - **MPG users** (cluster-scoped): `healthtracker-ro` (reader), `healthtracker-app` (writer), `htmigrate` (`schema_admin`)
 - Set `FLY_MPG_SKIP_ROLE_DDL=1` — roles provisioned via `fly mpg users create`
-- **Migration role:** migrations run as `htmigrate`; runtime uses `healthtracker-app` (writer). See migration 027 / RLS notes in repo.
+- **Migration role (implemented):** all tables are owned by `schema_admin`; the runtime `healthtracker-app` (writer) role is intentionally NOT the owner, so it can't `ALTER TABLE` (023's `SET NOT NULL` fails with `must be owner of table embedding`). It must stay a non-owner: a table owner can `ALTER TABLE ... DISABLE/NO FORCE ROW LEVEL SECURITY`, so making the always-on app role the owner would let a compromised connection disable multi-tenant RLS. Instead, migrations run as a dedicated owner-capable user:
+  - `fly mpg users create <cluster> -u htmigrate -r schema_admin`
+  - `[deploy] release_command` in `fly.prod.toml` overrides `DATABASE_URL` with `MIGRATION_DATABASE_URL` for alembic only; web/worker keep the writer `DATABASE_URL`. `htmigrate` is never used at runtime.
 - **Attach commands** (use `fly secrets set --stage` + `fly deploy` if secrets already exist — attach alone redeploys):
   ```bash
   CLUSTER=z23750v13yl096d1
@@ -113,7 +115,7 @@ MCP app: `MCP_READONLY_DATABASE_URL` (attach with `--username healthtracker-ro`)
   fly mpg attach $CLUSTER -a marrow-mcp-dev -d marrow_dev -u healthtracker-ro --variable-name MCP_READONLY_DATABASE_URL
   fly mpg attach $CLUSTER -a marrow-mcp-dev -d marrow_dev -u healthtracker-ro --variable-name DATABASE_URL
   ```
-- **Pi dump restore:** run `alembic upgrade head` as `htmigrate`, not `healthtracker-app`. Then grant tables to `healthtracker-app` / `healthtracker-ro` (quote hyphenated names). See `scripts/fly-mpg-consolidate-dev.sh` for grant SQL.
+- **Pi dump restore:** run `alembic upgrade head` as `htmigrate` (schema_admin), not `healthtracker-app` — writer lacks CREATE on `public` after pg_restore. Then grant tables to `healthtracker-app` / `healthtracker-ro` (quote hyphenated names). See `scripts/fly-mpg-consolidate-dev.sh` for grant SQL.
 - **MCP app:** needs both `MCP_READONLY_DATABASE_URL` and `DATABASE_URL` (reader URL for both is fine on Fly).
 
 ## Marrow rename migration (2026-07)
