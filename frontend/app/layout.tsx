@@ -13,11 +13,10 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Marrow',
   description: 'Daily symptom check-in and health tracking.',
+  // ICO + PNG only — SVG favicons break on dark browser chrome (Clay stroke invisible).
   icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: '48x48' },
-      { url: '/icon.svg', type: 'image/svg+xml' },
-    ],
+    icon: [{ url: '/favicon.ico', sizes: 'any' }],
+    shortcut: '/favicon.ico',
     apple: '/apple-icon.png',
   },
   appleWebApp: {
