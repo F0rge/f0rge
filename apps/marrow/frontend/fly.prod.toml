@@ -1,11 +1,15 @@
 # Marrow Next.js frontend (prod)
-# Deploy: fly deploy --config fly.prod.toml (from frontend/)
+# Deploy from repo root: fly deploy . --config apps/marrow/frontend/fly.prod.toml
+# The `.` arg sets the build context to the repo root, but dockerfile/ignorefile
+# resolve relative to THIS config file's directory (apps/marrow/frontend/), so
+# they stay bare filenames while the .dockerignore uses repo-root-relative paths.
 
 app = "marrow-ui"
 primary_region = "fra"
 
 [build]
   dockerfile = "Dockerfile"
+  ignorefile = ".dockerignore"
   [build.args]
     API_URL = "https://api.marrow-health.com"
 

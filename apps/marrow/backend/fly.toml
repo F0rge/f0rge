@@ -1,5 +1,8 @@
 # Marrow API + embedding worker (dev)
-# Deploy from repo root: fly deploy --config backend/fly.toml
+# Deploy from repo root: fly deploy . --config apps/marrow/backend/fly.toml
+# The `.` arg sets the build context to the repo root, but dockerfile/ignorefile
+# resolve relative to THIS config file's directory (apps/marrow/backend/), so
+# they stay bare filenames while the .dockerignore uses repo-root-relative paths.
 
 app = "marrow-dev"
 primary_region = "fra"

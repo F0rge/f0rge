@@ -1,27 +1,28 @@
-# Dependencies and build output — rebuilt inside the image (see Dockerfile)
-node_modules/
-.next/
-out/
-build/
-dist/
+# Repo-root build context (CI runs `flyctl deploy .` from the repo root).
+# Exclude everything, then descend and whitelist ONLY this app + shared libs so
+# the sibling backend app never bloats the frontend build context. The explicit
+# per-level `apps/*` / `apps/marrow/*` excludes are what make nested whitelisting
+# work under BuildKit.
+*
+!apps
+apps/*
+!apps/marrow
+apps/marrow/*
+!apps/marrow/frontend
+!libs
+libs/*
+!libs/**
 
-# Git metadata
-.git/
-.gitignore
-
-# Env files — never bake secrets into the build context
-.env
-.env.local
-.env.*.local
-
-# Editor and OS noise
-.vscode/
-.idea/
-.DS_Store
-
-# Logs and caches
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.eslintcache
-coverage/
+# Re-exclude rebuilt / secret / non-shippable paths inside the whitelist.
+apps/marrow/frontend/node_modules
+apps/marrow/frontend/.next
+apps/marrow/frontend/out
+apps/marrow/frontend/build
+apps/marrow/frontend/dist
+**/.env
+**/.env.local
+**/.env.*.local
+**/.DS_Store
+**/npm-debug.log*
+**/.eslintcache
+**/coverage

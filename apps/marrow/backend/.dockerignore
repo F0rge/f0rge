@@ -1,25 +1,33 @@
-# Don't ship the local dev database — production uses a Docker volume
-data/health.db
-data/health.db-journal
-data/health.db-wal
-data/health.db-shm
+# Repo-root build context (CI runs `flyctl deploy .` from the repo root).
+# Exclude everything, then descend and whitelist ONLY this app + shared libs so
+# the sibling frontend app never bloats the backend build context. Each `apps/*`
+# / `apps/marrow/*` line re-excludes the level below a re-included parent — this
+# explicit descend is what makes nested whitelisting work under BuildKit.
+*
+!apps
+apps/*
+!apps/marrow
+apps/marrow/*
+!apps/marrow/backend
+!libs
+libs/*
+!libs/**
 
-# Build artifacts and caches
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-
-# Virtualenvs and editor noise
-.venv/
-venv/
-.env
-.env.local
-.vscode/
-.idea/
-
-# Tests don't run in production
-tests/
+# Re-exclude heavy / secret / non-shippable paths inside the whitelist.
+apps/marrow/backend/.venv
+apps/marrow/backend/tests
+apps/marrow/backend/data/health.db
+apps/marrow/backend/data/health.db-journal
+apps/marrow/backend/data/health.db-wal
+apps/marrow/backend/data/health.db-shm
+apps/marrow/backend/photos
+apps/marrow/backend/lab_attachments
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.env
+**/.env.local

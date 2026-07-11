@@ -51,7 +51,11 @@ jobs:
         # automatically. nx 22.7 ignores --sep and always emits a JSON array, so
         # parse with jq (join -> comma list, which run-many's --projects accepts;
         # empty affected set -> "" so the boolean flags stay false).
+        # pipefail is load-bearing: without it a broken project graph makes nx
+        # fail while jq exits 0 on empty stdin -> "" -> both jobs skip -> ci
+        # passes vacuously. Detect must die loudly when nx can't compute.
         run: |
+          set -o pipefail
           PY=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
           TS=$(npx nx show projects --affected --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
           backend=false

@@ -1,5 +1,8 @@
 # Marrow MCP server (dev)
-# Deploy from repo root: fly deploy --config backend/fly.mcp.toml
+# Deploy from repo root: fly deploy . --config apps/marrow/backend/fly.mcp.toml
+# The `.` arg sets the build context to the repo root, but dockerfile/ignorefile
+# resolve relative to THIS config file's directory (apps/marrow/backend/), so
+# they stay bare filenames while the .dockerignore uses repo-root-relative paths.
 
 app = "marrow-mcp-dev"
 primary_region = "fra"
@@ -15,7 +18,7 @@ primary_region = "fra"
   FLY_MPG_SKIP_ROLE_DDL = "1"
 
 [processes]
-  mcp = "/app/.venv/bin/python -m app.mcp --transport streamable-http --host 0.0.0.0 --port 8005"
+  mcp = "/app/apps/marrow/backend/.venv/bin/python -m app.mcp --transport streamable-http --host 0.0.0.0 --port 8005"
 
 [http_service]
   internal_port = 8005
