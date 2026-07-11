@@ -1,7 +1,7 @@
-# health-tracker Next.js frontend (dev)
+# Marrow Next.js frontend (dev)
 # Deploy: fly deploy --config fly.toml (from frontend/)
 
-app = "health-tracker-web-dev"
+app = "marrow-ui-dev"
 primary_region = "fra"
 
 [build]

@@ -1,7 +1,7 @@
-# health-tracker API + embedding worker (dev)
+# Marrow API + embedding worker (dev)
 # Deploy from repo root: fly deploy --config backend/fly.toml
 
-app = "health-tracker-api-dev"
+app = "marrow-dev"
 primary_region = "fra"
 
 [build]
