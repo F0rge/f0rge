@@ -26,7 +26,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 | API + worker | https://health-tracker-api-dev.fly.dev |
 | Frontend | https://health-tracker-web-dev.fly.dev |
 | MCP | https://health-tracker-mcp-dev.fly.dev |
-| MPG | `health-tracker-db-dev` (`fra`) |
+| MPG | Shared cluster `health-tracker-db-prod` (`z23750v13yl096d1`, `fra`) — dev database `health_dev` |
 
 Deploy: `backend/fly.toml`, `backend/fly.mcp.toml`, `frontend/fly.toml`. See [docs/fly-cutover-runbook.md](docs/fly-cutover-runbook.md).
 

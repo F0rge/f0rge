@@ -9,7 +9,7 @@ Parallel stack only until Leo signs off. **Do not run DNS cutover or stop Coolif
 | API + worker | `health-tracker-api-dev` | https://health-tracker-api-dev.fly.dev |
 | MCP | `health-tracker-mcp-dev` | https://health-tracker-mcp-dev.fly.dev |
 | Frontend | `health-tracker-web-dev` | https://health-tracker-web-dev.fly.dev |
-| Postgres | MPG `health-tracker-db-dev` (`d1zj5omzqg9ryqkv`, `fra`) | via secrets |
+| Postgres | Shared MPG `health-tracker-db-prod` — database `health_dev` | via secrets |
 | Object storage | Tigris (when billing enabled) | via `fly storage create` |
 
 ## Fly prod stack (parallel — no DNS cutover)
@@ -19,8 +19,19 @@ Parallel stack only until Leo signs off. **Do not run DNS cutover or stop Coolif
 | API + worker | `health-tracker-api-prod` | https://health-tracker-api-prod.fly.dev |
 | MCP | `health-tracker-mcp-prod` | https://health-tracker-mcp-prod.fly.dev |
 | Frontend | `health-tracker-web-prod` | https://health-tracker-web-prod.fly.dev |
-| Postgres | MPG `health-tracker-db-prod` (`fra`) | via secrets |
+| Postgres | Shared MPG `health-tracker-db-prod` (`z23750v13yl096d1`, `fra`) — database `fly-db` | via secrets |
 | Object storage | Tigris on API prod app | via `fly storage create` |
+
+### Shared MPG cluster (one cluster, multiple apps + databases)
+
+Dev and prod Fly stacks share **one** MPG cluster (`z23750v13yl096d1`, `fra`). Environment isolation is by **database name**, not separate clusters:
+
+| Database | Environment | Attached apps |
+|---|---|---|
+| `fly-db` | prod | `health-tracker-api-prod`, `health-tracker-mcp-prod` |
+| `health_dev` | dev | `health-tracker-api-dev`, `health-tracker-mcp-dev` |
+
+Consolidation script (dev data migration): `./scripts/fly-mpg-consolidate-dev.sh`.
 
 Deploy configs: `backend/fly.prod.toml`, `backend/fly.mcp.prod.toml`, `frontend/fly.prod.toml`.
 
@@ -70,18 +81,40 @@ MCP app: `MCP_READONLY_DATABASE_URL` (attach with `--username healthtracker-ro`)
 
 ## MPG setup notes
 
-- Region: `fra` (MPG not available in `cdg`)
-- Enable pgvector: `fly mpg databases extensions enable vector -c <cluster> -d fly-db`
-- Enable citext (required by migration 020): `fly mpg databases extensions enable citext -c <cluster> -d fly-db`
-- MPG users: `healthtracker-ro` (reader), `healthtracker-app` (writer)
+- **Cluster:** `z23750v13yl096d1` (`health-tracker-db-prod`, region `fra`). MPG not available in `cdg`.
+- **Databases:** `fly-db` (prod), `health_dev` (dev Fly stack). Create with `fly mpg databases create z23750v13yl096d1 -n health_dev`.
+- **Extensions** (per database): `vector`, `citext` (migration 020)
+  ```bash
+  fly mpg databases extensions enable vector -c z23750v13yl096d1 -d fly-db
+  fly mpg databases extensions enable citext -c z23750v13yl096d1 -d fly-db
+  fly mpg databases extensions enable vector -c z23750v13yl096d1 -d health_dev
+  fly mpg databases extensions enable citext -c z23750v13yl096d1 -d health_dev
+  ```
+- **MPG users** (cluster-scoped): `healthtracker-ro` (reader), `healthtracker-app` (writer), `htmigrate` (`schema_admin`)
 - Set `FLY_MPG_SKIP_ROLE_DDL=1` — roles provisioned via `fly mpg users create`
-- **Migration role (implemented):** all tables are owned by `schema_admin`; the runtime `healthtracker-app` (writer) role is intentionally NOT the owner, so it can't `ALTER TABLE` (023's `SET NOT NULL` fails with `must be owner of table embedding`). It must stay a non-owner: a table owner can `ALTER TABLE ... DISABLE/NO FORCE ROW LEVEL SECURITY`, so making the always-on app role the owner would let a compromised connection disable multi-tenant RLS. Instead, migrations run as a dedicated owner-capable user:
-  - `fly mpg users create <cluster> -u htmigrate -r schema_admin`
-  - Dev: `fly mpg attach d1zj5omzqg9ryqkv -a health-tracker-api-dev -d fly-db -u htmigrate --variable-name MIGRATION_DATABASE_URL`
-  - Prod: `fly mpg attach z23750v13yl096d1 -a health-tracker-api-prod -d fly-db -u htmigrate --variable-name MIGRATION_DATABASE_URL`
-  - `[deploy] release_command` in `fly.prod.toml` overrides `DATABASE_URL` with `MIGRATION_DATABASE_URL` for alembic only; web/worker keep the writer `DATABASE_URL`. `htmigrate` is never used at runtime.
-- **Pi dump restore:** run `alembic upgrade head` as `fly-user`/`htmigrate` (schema_admin), not `healthtracker-app` — writer lacks CREATE on `public` after pg_restore. Then `GRANT ALL ON ALL TABLES IN SCHEMA public TO "healthtracker-app"` (quote hyphenated role names).
-- **MCP app:** needs both `MCP_READONLY_DATABASE_URL` and `DATABASE_URL` (copy reader URL or attach twice).
+- **Migration role:** migrations run as `htmigrate`; runtime uses `healthtracker-app` (writer). See migration 027 / RLS notes in repo.
+- **Attach commands** (use `fly secrets set --stage` + `fly deploy` if secrets already exist — attach alone redeploys):
+  ```bash
+  CLUSTER=z23750v13yl096d1
+
+  # Prod API
+  fly mpg attach $CLUSTER -a health-tracker-api-prod -d fly-db -u healthtracker-app --variable-name DATABASE_URL
+  fly mpg attach $CLUSTER -a health-tracker-api-prod -d fly-db -u htmigrate --variable-name MIGRATION_DATABASE_URL
+
+  # Prod MCP
+  fly mpg attach $CLUSTER -a health-tracker-mcp-prod -d fly-db -u healthtracker-ro --variable-name MCP_READONLY_DATABASE_URL
+  fly mpg attach $CLUSTER -a health-tracker-mcp-prod -d fly-db -u healthtracker-ro --variable-name DATABASE_URL
+
+  # Dev API
+  fly mpg attach $CLUSTER -a health-tracker-api-dev -d health_dev -u healthtracker-app --variable-name DATABASE_URL
+  fly mpg attach $CLUSTER -a health-tracker-api-dev -d health_dev -u htmigrate --variable-name MIGRATION_DATABASE_URL
+
+  # Dev MCP
+  fly mpg attach $CLUSTER -a health-tracker-mcp-dev -d health_dev -u healthtracker-ro --variable-name MCP_READONLY_DATABASE_URL
+  fly mpg attach $CLUSTER -a health-tracker-mcp-dev -d health_dev -u healthtracker-ro --variable-name DATABASE_URL
+  ```
+- **Pi dump restore:** run `alembic upgrade head` as `htmigrate`, not `healthtracker-app`. Then grant tables to `healthtracker-app` / `healthtracker-ro` (quote hyphenated names). See `scripts/fly-mpg-consolidate-dev.sh` for grant SQL.
+- **MCP app:** needs both `MCP_READONLY_DATABASE_URL` and `DATABASE_URL` (reader URL for both is fine on Fly).
 
 ## Data migration (dry-run)
 
