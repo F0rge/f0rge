@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copy marrow + marrow_dev from source MPG cluster to marrow-db-prod.
+# Copy marrow + marrow_dev from source MPG cluster to target (historical: marrow-db-prod).
+# Current f0rge org cluster: f0rge-db (nlkxjo5m3240y93v).
 #
 # Prerequisites: docker (postgres:16), flyctl, source apps reachable via ssh.
 #

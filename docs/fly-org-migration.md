@@ -24,7 +24,7 @@ Apps **can** move orgs with `fly apps move` (machines, volumes, secrets, certs/d
 | Resource | Name / ID |
 |---|---|
 | Org | `f0rge` |
-| MPG cluster | `marrow-db` (`nlkxjo5m3240y93v`, `fra`, Basic 10GB) |
+| MPG cluster | `f0rge-db` (`nlkxjo5m3240y93v`, `fra`, Basic 10GB) |
 | Databases | `marrow`, `marrow_dev` |
 | Dev apps (migrated) | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` |
 | Dev Tigris | `f0rge-marrow-dev-photos` |
@@ -74,7 +74,7 @@ Destroyed: MPG `d1zj5omzqwvryqkv`, Tigris `empty-sea-6682`, `late-rain-9962`.
 fly orgs create f0rge
 # Add billing in https://fly.io/dashboard
 
-fly mpg create --name marrow-db --org f0rge --region fra
+fly mpg create --name f0rge-db --org f0rge --region fra
 # Size ≥ current cluster; note new cluster ID
 
 fly mpg databases create marrow --cluster <new-cluster-id>

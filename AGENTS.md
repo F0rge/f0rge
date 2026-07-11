@@ -13,7 +13,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 ## Environments
 
-All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`marrow-db`, `nlkxjo5m3240y93v`).
+All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`f0rge-db`, `nlkxjo5m3240y93v`).
 
 ### Production (`main`)
 
@@ -22,7 +22,7 @@ All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`marrow
 | API + worker | `marrow` | https://api.marrow-health.com |
 | MCP | `marrow-mcp` | https://marrow-mcp.fly.dev |
 | Frontend | `marrow-ui` | https://marrow-health.com |
-| Postgres | MPG `marrow-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow` | via secrets |
+| Postgres | MPG `f0rge-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow` | via secrets |
 | Tigris | `f0rge-marrow-prod-photos` | via secrets on `marrow` |
 
 ### Develop (`develop`)
@@ -32,7 +32,7 @@ All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`marrow
 | API + worker | `marrow-dev` | https://api-dev.marrow-health.com |
 | MCP | `marrow-mcp-dev` | https://marrow-mcp-dev.fly.dev |
 | Frontend | `marrow-ui-dev` | https://app-dev.marrow-health.com |
-| Postgres | MPG `marrow-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow_dev` | via secrets |
+| Postgres | MPG `f0rge-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow_dev` | via secrets |
 | Tigris | `f0rge-marrow-dev-photos` | via secrets on `marrow-dev` |
 
 Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.toml`, `apps/marrow/frontend/fly.toml` (dev) and `*.prod.toml` (prod). See [docs/fly-cutover-runbook.md](docs/fly-cutover-runbook.md).

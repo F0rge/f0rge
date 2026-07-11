@@ -36,7 +36,7 @@ Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker
 
 Deploy order: API (alembic via `release_command`) → MCP → frontend.
 
-MPG cluster: `nlkxjo5m3240y93v` (`marrow-db`, org `f0rge`). Databases: `marrow` (prod), `marrow_dev` (dev).
+MPG cluster: `nlkxjo5m3240y93v` (`f0rge-db`, org `f0rge`). Databases: `marrow` (prod), `marrow_dev` (dev).
 
 Full reference: `docs/fly-cutover-runbook.md`, `.cursor/rules/infra.mdc`.
 
