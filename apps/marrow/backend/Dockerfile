@@ -11,7 +11,15 @@ WORKDIR /app/apps/marrow/backend
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 COPY apps/marrow/backend/pyproject.toml apps/marrow/backend/uv.lock ./
-# P3: COPY libs/backend ... here (before uv sync) once path dependencies exist.
+# Shared libs are uv path deps (../../../libs/backend/<name> relative to this
+# WORKDIR -> /app/libs/backend/<name>), so they must exist before `uv sync`.
+# COPY pyproject + src per lib (not the whole dir) so local .venv/ never ships.
+COPY libs/backend/core/pyproject.toml /app/libs/backend/core/pyproject.toml
+COPY libs/backend/core/src /app/libs/backend/core/src
+COPY libs/backend/db/pyproject.toml /app/libs/backend/db/pyproject.toml
+COPY libs/backend/db/src /app/libs/backend/db/src
+COPY libs/backend/testing/pyproject.toml /app/libs/backend/testing/pyproject.toml
+COPY libs/backend/testing/src /app/libs/backend/testing/src
 RUN uv sync --frozen --no-dev
 
 COPY apps/marrow/backend/app ./app

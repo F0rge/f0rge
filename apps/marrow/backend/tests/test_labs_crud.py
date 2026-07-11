@@ -8,7 +8,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import NotFoundError
+from f0rge_core.exceptions import NotFoundError
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.models.lab_marker_catalog import LabMarkerCatalog

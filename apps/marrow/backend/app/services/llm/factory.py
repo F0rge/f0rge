@@ -7,10 +7,10 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth_context import user_id_ctx
+from f0rge_db.auth_context import user_id_ctx
 from app.config import settings
 from app.database import get_db
-from app.exceptions import ConflictError
+from f0rge_core.exceptions import ConflictError
 from app.models.user_settings import UserSettings
 from app.services.llm.base import EmbeddingClient, LLMClient
 from app.services.llm.encryption import decrypt

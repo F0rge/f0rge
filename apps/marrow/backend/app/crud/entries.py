@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.crud.base import BaseCRUD
 from app.models.entry import Entry
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 class EntryCRUD(BaseCRUD):

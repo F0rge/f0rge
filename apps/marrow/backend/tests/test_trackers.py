@@ -22,7 +22,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.entry import Entry
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.base import BaseCRUD
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 class TrackerCRUD(BaseCRUD):

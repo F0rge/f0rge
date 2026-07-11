@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.crud.base import BaseCRUD
 from app.models.lab import Lab
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 class LabCRUD(BaseCRUD):

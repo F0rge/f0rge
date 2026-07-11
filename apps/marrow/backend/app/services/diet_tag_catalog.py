@@ -5,7 +5,7 @@ import re
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.diet_tag_catalog import DietTagCatalogCRUD
-from app.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.diet_tag_catalog import DietTagCatalogItem
 
 _KEY_RE = re.compile(r"^[a-z0-9-]+$")

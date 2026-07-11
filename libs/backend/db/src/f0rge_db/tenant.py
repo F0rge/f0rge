@@ -6,8 +6,8 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.auth_context import user_id_ctx
-from app.exceptions import UnauthorizedError
+from f0rge_core.exceptions import UnauthorizedError
+from f0rge_db.auth_context import user_id_ctx
 
 
 def current_user_id() -> uuid.UUID:

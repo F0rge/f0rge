@@ -7,11 +7,11 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.labs import LabCRUD
-from app.exceptions import NotFoundError, ValidationError
+from f0rge_core.exceptions import NotFoundError, ValidationError
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.schemas.lab import LabCreate, LabUpdate, LabMarkerCreate
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 _ABNORMAL_REF_RE = re.compile(
     r"\b(positive|elevated|reactive|abnormal|class\s*[>=]\s*\d|high|present)\b",

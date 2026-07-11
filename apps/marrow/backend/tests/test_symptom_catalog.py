@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.services.symptom_catalog import SymptomCatalogService
 
 

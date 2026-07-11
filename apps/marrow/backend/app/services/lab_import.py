@@ -8,7 +8,7 @@ from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.labs import LabCRUD
-from app.exceptions import ValidationError
+from f0rge_core.exceptions import ValidationError
 from app.models.lab import Lab
 from app.schemas.lab import LabCreate, LabMarkerCreate
 from app.schemas.lab_marker import CatalogHint

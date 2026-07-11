@@ -5,8 +5,8 @@ class DomainError(Exception):
     """Base class for domain exceptions raised by services.
 
     Services raise these instead of constructing HTTPException directly.
-    Global handlers registered in ``app/main.py`` map each subclass to a
-    matching HTTP response, keeping routers free of branching logic.
+    Global handlers registered via ``f0rge_core.handlers`` map each subclass
+    to a matching HTTP response, keeping routers free of branching logic.
     """
 
     def __init__(self, detail: str) -> None:

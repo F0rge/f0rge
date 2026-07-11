@@ -13,7 +13,7 @@ from app.services.settings_service import SettingsService
 @pytest.fixture(autouse=True)
 def auth_bypass(monkeypatch: pytest.MonkeyPatch) -> None:
     """Bypass auth middleware for settings onboarding tests."""
-    from app.auth_context import user_id_ctx
+    from f0rge_db.auth_context import user_id_ctx
     from app.main import app
     from app.middleware.auth import get_current_user_id
 

@@ -7,7 +7,7 @@ import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import ConflictError, NotFoundError
+from f0rge_core.exceptions import ConflictError, NotFoundError
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.models.lab_marker_alias import LabMarkerAlias

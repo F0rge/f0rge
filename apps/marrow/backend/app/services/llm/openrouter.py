@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 import httpx
 
-from app.exceptions import ExternalServiceError
+from f0rge_core.exceptions import ExternalServiceError
 from app.services.llm.base import EmbeddingClient, LLMClient
 
 _COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"

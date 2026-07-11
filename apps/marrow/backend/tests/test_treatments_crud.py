@@ -9,7 +9,7 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import NotFoundError, ValidationError
+from f0rge_core.exceptions import NotFoundError, ValidationError
 from app.models.treatment import Treatment
 from app.schemas.treatment import TreatmentCreate, TreatmentUpdate
 from app.services.treatments import TreatmentService

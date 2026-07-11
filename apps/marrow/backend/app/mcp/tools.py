@@ -8,7 +8,7 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import Context, FastMCP
 from sqlalchemy import Float, func, select, text
 
-from app.exceptions import ConflictError
+from f0rge_core.exceptions import ConflictError
 from app.mcp.database import scoped_main_session, scoped_ro_session
 from app.models.embedding import Embedding
 from app.models.entry import Entry
@@ -20,7 +20,7 @@ from app.services.llm.factory import (
     build_embedding_client,
     resolve_embedding_credentials,
 )
-from app.tenant import current_user_id, owned_by_user
+from f0rge_db.tenant import current_user_id, owned_by_user
 
 _MAX_ENTRIES = 200
 _MAX_LABS = 200

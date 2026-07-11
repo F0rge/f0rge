@@ -13,7 +13,7 @@ from app.services.llm.factory import (
     DEFAULT_EMBEDDING_MODEL,
     resolve_embedding_credentials,
 )
-from app.tenant import apply_service_role, apply_session_user_id
+from f0rge_db.tenant import apply_service_role, apply_session_user_id
 
 # Tables embedded by the pipeline. Order matches the triggers in migration 005.
 _EMBEDABLE_TABLES: tuple[str, ...] = (

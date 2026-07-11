@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.base import unit_of_work
 from app.crud.treatment_log import TreatmentLogCRUD
 from app.crud.treatments import TreatmentCRUD
-from app.exceptions import NotFoundError
+from f0rge_core.exceptions import NotFoundError
 from app.models.treatment_log import TreatmentLog
 from app.schemas.treatment_log import (
     ProtocolItem,
@@ -17,7 +17,7 @@ from app.schemas.treatment_log import (
     ProtocolToday,
     TreatmentLogResult,
 )
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 from app.utils.dates import local_today
 from app.utils.streak import compute_streak
 

@@ -13,7 +13,7 @@ from app.config import settings
 from app.schemas.treatment import TreatmentCreate
 from app.services.treatment_log import TreatmentLogService
 from app.services.treatments import TreatmentService
-from app.tenant import apply_session_user_id, clear_tenant_session
+from f0rge_db.tenant import apply_session_user_id, clear_tenant_session
 
 _LOG_DATE = datetime.date(2026, 7, 10)
 _TREATMENT_PAYLOAD = {
