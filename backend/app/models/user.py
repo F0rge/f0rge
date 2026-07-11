@@ -35,3 +35,7 @@ class User(Base):
         nullable=False,
         default=datetime.datetime.utcnow,
     )
+    infrastructure_provisioned_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )

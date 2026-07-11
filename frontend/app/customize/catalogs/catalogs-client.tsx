@@ -10,10 +10,13 @@ import { PageHeader } from '@/components/layout/page-header'
 import {
   useSupplementCatalog,
   useUpdateSupplementCatalogItem,
+  useAddSupplementCatalogItem,
   useMedicationCatalog,
   useUpdateMedicationCatalogItem,
+  useAddMedicationCatalogItem,
   useDietTagCatalog,
   useUpdateDietTagCatalogItem,
+  useCatalogSuggestions,
 } from '@/lib/api/hooks'
 
 export default function CatalogsClient() {
@@ -32,9 +35,12 @@ export default function CatalogsClient() {
     isLoading: dietTagsLoading,
     isError: dietTagsError,
   } = useDietTagCatalog(true)
+  const { data: suggestions } = useCatalogSuggestions()
 
   const updateSupplement = useUpdateSupplementCatalogItem()
+  const addSupplement = useAddSupplementCatalogItem()
   const updateMedication = useUpdateMedicationCatalogItem()
+  const addMedication = useAddMedicationCatalogItem()
   const updateDietTag = useUpdateDietTagCatalogItem()
 
   const isLoading = supplementsLoading || medicationsLoading || dietTagsLoading
@@ -60,6 +66,35 @@ export default function CatalogsClient() {
       { onError: () => toast.error('Failed to update diet tag') },
     )
   }
+
+  function handleAddSupplement(key: string, label: string) {
+    addSupplement.mutate(
+      { key, label },
+      {
+        onSuccess: () => toast.success(`Added ${label}`),
+        onError: () => toast.error('Failed to add supplement'),
+      },
+    )
+  }
+
+  function handleAddMedication(key: string, label: string) {
+    addMedication.mutate(
+      { key, label },
+      {
+        onSuccess: () => toast.success(`Added ${label}`),
+        onError: () => toast.error('Failed to add medication'),
+      },
+    )
+  }
+
+  const supplementSuggestions = [
+    ...(suggestions?.supplements ?? []),
+    ...(suggestions?.bulk_supplements ?? []),
+  ]
+  const medicationSuggestions = [
+    ...(suggestions?.medications ?? []),
+    ...(suggestions?.bulk_medications ?? []),
+  ]
 
   const activeSupplements = supplements.filter((s) => !s.archived).length
   const activeMedications = medications.filter((m) => !m.archived).length
@@ -102,7 +137,9 @@ export default function CatalogsClient() {
           <CatalogSection
             title="Supplements"
             items={supplements}
+            suggestions={supplementSuggestions}
             onToggleArchive={handleToggleSupplement}
+            onAddSuggestion={handleAddSupplement}
             selectedCount={activeSupplements}
             totalCount={supplements.length}
           />
@@ -110,7 +147,9 @@ export default function CatalogsClient() {
           <CatalogSection
             title="Medications"
             items={medications}
+            suggestions={medicationSuggestions}
             onToggleArchive={handleToggleMedication}
+            onAddSuggestion={handleAddMedication}
             selectedCount={activeMedications}
             totalCount={medications.length}
           />

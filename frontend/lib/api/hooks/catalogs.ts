@@ -52,6 +52,17 @@ export function useMedicationCatalog(includeArchived = false) {
   })
 }
 
+export function useAddMedicationCatalogItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { key: string; label: string }) =>
+      apiPost('/medications/catalog', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['medication-catalog'] })
+    },
+  })
+}
+
 export function useUpdateMedicationCatalogItem() {
   const queryClient = useQueryClient()
   return useMutation({
