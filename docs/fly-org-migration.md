@@ -75,8 +75,8 @@ Record new `AWS_*` secrets for each app.
 **Order matters.** Old cluster stays live as rollback until decommission.
 
 ```bash
-# 1. Stop writes
-fly scale count worker=0 -a marrow-dev
+# 1. Stop writes (web serves API mutations; worker only drains embeddings)
+fly scale count web=0 worker=0 -a marrow-dev
 
 # 2. Dump dev DB via OLD cluster proxy
 fly mpg proxy d1zj5omzqwvryqkv -p 16380 &
@@ -99,8 +99,8 @@ fly secrets set DATABASE_URL=... MIGRATION_DATABASE_URL=... -a marrow-dev
 fly secrets set MCP_READONLY_DATABASE_URL=... DATABASE_URL=... -a marrow-mcp-dev
 fly secrets set AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... BUCKET_NAME=... -a marrow-dev
 
-# 7. Worker back + deploy-all
-fly scale count worker=1 -a marrow-dev
+# 7. Scale API + worker back, then deploy-all
+fly scale count web=1 worker=1 -a marrow-dev
 gh workflow run "Fly Deploy (develop)" --ref develop
 ```
 
