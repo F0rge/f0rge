@@ -10,7 +10,7 @@
 set -euo pipefail
 
 DEV_CLUSTER="${DEV_CLUSTER:-d1zj5omzqg9ryqkv}"
-PROD_CLUSTER="${PROD_CLUSTER:-z23750v13yl096d1}"
+PROD_CLUSTER="${PROD_CLUSTER:-d1zj5omzqwvryqkv}"
 SOURCE_DB="${SOURCE_DB:-fly-db}"
 TARGET_DB="${TARGET_DB:-marrow_dev}"
 SOURCE_DATABASE_URL="${SOURCE_DATABASE_URL:-}"

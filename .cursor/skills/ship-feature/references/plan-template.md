@@ -48,4 +48,4 @@ Decisions needing user sign-off before Phase 2.
 
 1. Lint + tests + build commands
 2. Local live-server E2E (if UI/API)
-3. Dev smoke on `health-dev.leo-figueiredo.com` after merge to develop
+3. Dev smoke on `app-dev.marrow-health.com` after merge to develop

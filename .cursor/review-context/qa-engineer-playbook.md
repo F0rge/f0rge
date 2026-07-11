@@ -18,7 +18,7 @@ Cite the originating memory file in every block-level comment so future-Leo can 
 - **Class-of-bug audit missing** — when a fix names a pattern (tz-aware bind, `scalar_one_or_none` on non-unique WHERE, `field || undefined` + `exclude_unset`, etc.), the PR must either fix every sibling occurrence in the same diff or open a tracked follow-up issue. Block if neither. See `feedback_audit_class_of_bug.md` (root-cause: 2026-05-17 two prod outages from missing sibling audit on `photos.meal_time`).
 - **`.env.example` not updated for new required env vars** — block on any new entry in `backend/app/config.py` (e.g. `HEALTHTRACKER_RO_PASSWORD`, `SETTINGS_ENCRYPTION_KEY`, `MCP_READONLY_DATABASE_URL`) that isn't mirrored in `backend/.env.example`. Redeploys silently break without it. See `mcp_server_issue_49_findings.md`.
 - **`ruff format` regression** — if a touched file used to pass `ruff format --check` and no longer does, block. Note: `ruff format --check` is currently OFF in CI (see "What NOT to flag" below), but format regressions are still review-blocking because they leak into the formatting backlog.
-- **Migration without RUN_MIGRATIONS verification path** — PRs adding files under `backend/migrations/versions/` must not regress the entrypoint. If `backend/docker-entrypoint.sh` or `RUN_MIGRATIONS=1` on the `backend` service in `docker-compose.{dev,prod}.yml` is touched, block until verified — mcp-server and embedding-worker must still have it unset. See `devops/deploy_migration_entrypoint.md` + `qa-engineer/migrations_not_auto_run.md`.
+- **Migration without Fly release_command path** — PRs adding files under `backend/migrations/versions/` must leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running alembic via `MIGRATION_DATABASE_URL`. See `docs/fly-cutover-runbook.md`.
 - **pgvector extension order** — block any new test fixture or context that calls `Base.metadata.create_all` on a fresh Postgres without first executing `CREATE EXTENSION IF NOT EXISTS vector`. The `embedding.embedding VECTOR(1024)` column will crash `create_all`. See `project_byok_pgvector.md`.
 - **BYOK key resolution missed** — block any new AI/LLM call site that imports `settings.openrouter_api_key` directly instead of calling `resolve_llm_credentials(db)`. Lab extraction has this as an open follow-up; new code must not repeat it. See `project_byok_pgvector_gate.md`.
 - **Embedding vector dim != 1024** — block any new embedding column, request, or response that uses a dim other than 1024. The column is locked. See `project_ai_seams.md`.
@@ -54,12 +54,12 @@ The bot can't run `./start.sh`, drive Playwright, or ssh to the Pi. Instead, whe
 - [ ] Confirm `git status` is clean and any temp servers/worktrees are torn down (per global post-merge hygiene rule).
 
 **Add when diff includes:**
-- Migration files → `ssh leo@rpi "docker exec <postgres> psql -U health -d health -c 'SELECT version_num FROM alembic_version;'"` after Coolify redeploys; must match new revision id. Recipe in `devops/deploy_migration_entrypoint.md` § "Coolify post-deploy verification".
-- Any `Mapped[datetime]` schema change → after local PASS, verify against the dev Postgres on the Pi (not local SQLite, which silently accepts tz-aware datetimes). `project_datetime_tz_convention.md` final paragraph.
-- MCP / embedding / OpenRouter changes → run the dev-env gate recipe Phase 1–5 against `health-dev*.leo-figueiredo.com`. Full recipe in `qa-engineer/dev_env_qa_recipe.md`.
+- Migration files → after Fly deploy on develop, verify `alembic_version` via API health + exercise changed paths on `app-dev.marrow-health.com`.
+- Any `Mapped[datetime]` schema change → verify against Postgres dev (`app-dev.marrow-health.com`), not local SQLite.
+- MCP / embedding / OpenRouter changes → run dev-env gate against `api-dev.marrow-health.com` / `app-dev.marrow-health.com`.
 - dnd-kit changes → use real `page.mouse` not synthetic events; mobile path requires real-device verify (CDP `Input.dispatchTouchEvent` does NOT activate dnd-kit `TouchSensor`). See `qa-engineer/issue_78_findings.md`.
 - New `Dialog` / overlay / fixed-position UI → `elementsFromPoint(cx, cy)` z-index audit. The capsule lives at z:40, Dialog at z:50, bottom nav at z:50. Pattern in `qa-engineer/issue_pr100_findings.md`.
-- New env var → confirm Coolify env has it set on both dev (`lunthdq8rqd0ad3hi6gcoac0`) and prod (`mk404cskowkgcow48g8s8okw`) backend services. UUIDs in `devops/deploy_migration_entrypoint.md`.
+- New env var → confirm Fly secrets on `marrow-dev` and `marrow` API apps.
 
 For Playwright auth bypass: insert directly into `auth_sessions` then `addCookies({httpOnly:true})` — `document.cookie = ...` from `browser_evaluate` does not stick. Recipe in `MEMORY.md` § "Auth bypass for Playwright/UI smoke tests".
 
@@ -91,7 +91,7 @@ Per `project_datetime_tz_convention.md`:
 - **Pydantic v2 immutable-field guard tests** — to test a service guard for a field that `XxxUpdate` excludes, subclass with the field as an explicit constructor arg. `object.__setattr__` and `__pydantic_fields_set__` hacks do not work with v2's storage. See `fastapi-backend/immutable_field_guard_test_pattern.md`.
 - **AI seam contracts** — OpenRouter `openai/text-embedding-3-small` with `dimensions=1024` returns 1024-float vectors. Response has extra `provider` + `id` top-level keys vs OpenAI. Access via `response["data"][i]["embedding"]`. Default model in `ai_seams.md` is `google/gemini-2.5-flash` (the `2.0-flash` one is rejected by OpenRouter). See `project_ai_seams.md` and `project_byok_pgvector_gate.md` follow-up 3.
 - **BYOK + pgvector ordering** — every code path that calls `Base.metadata.create_all` (production startup, every test fixture, every migration smoke harness) must execute `CREATE EXTENSION IF NOT EXISTS vector` first. The migration itself does this, but `create_all` bypasses migrations. `main.py` aliases the settings router (`from app.routers import settings as settings_router`) because the module name collides with `app.config.settings`. See `project_byok_pgvector.md`.
-- **MCP `read_sql` points at prod, NOT dev** — for dev-DB queries during QA, use `curl` against `https://health-dev-api.leo-figueiredo.com/api/v1/...` with a logged-in cookie, OR ask devops to point MCP at dev. See `qa-engineer/issue_79_findings.md`.
+- **MCP `read_sql` points at prod, NOT dev** — for dev-DB queries during QA, use `curl` against `https://api-dev.marrow-health.com/api/v1/...` with a logged-in cookie. See `qa-engineer/issue_79_findings.md`.
 - **Trackers dual-write path** — seeded trackers (`Alcohol units`, `Caffeine servings`, `Sick`, `Hot shower`) must keep both `entries.<col>` and `tracker_log` in sync. Path A: entry autosave → `sync_seed_tracker_log_from_entry` after `db.refresh`. Path B: `PUT tracker_values/{id}` → `_mirror_value_to_entry` (silently skips if no entry exists; Path A will catch up on entry creation). New seeded trackers must be added to `_SEED_NAME_TO_ENTRY_COL`. Zero-suppression: skip None/0 for counters, None/False for binaries. See `fastapi-backend/trackers_dual_write_pattern.md`.
 
 ---
@@ -119,13 +119,9 @@ Per `project_datetime_tz_convention.md`:
 
 ## DevOps / infra patterns
 
-- **`docker-entrypoint.sh` + `RUN_MIGRATIONS=1`** — `backend/Dockerfile` ENTRYPOINT runs `uv run alembic upgrade head` then `exec "$@"` when the flag is set. ONLY the `backend` service in `docker-compose.{dev,prod}.yml` sets it. `mcp-server` and `embedding-worker` share the image but leave it unset (avoids DDL race). Single-replica backend in both envs — if scaled >1, need an init-container or job. See `devops/deploy_migration_entrypoint.md`.
-- **Coolify bind-mount materialization quirk** — Coolify's dockercompose build-pack does NOT do a full repo checkout on the Pi; only paths referenced as compose bind-mount sources are materialized. The entrypoint script is fine because it's `COPY`'d into the image, not bind-mounted. New scripts that need to be on the Pi must either be COPY'd in or referenced from a bind-mount source. See `devops/deploy_migration_entrypoint.md` "Caveats" + `MEMORY.md` link to `health-tracker-backup-strategy`.
-- **`mem_limit:` not `deploy.resources.limits.memory:`** — `docker-compose.prod.yml` uses the legacy v2 style consistently. Match it for new services (mcp-server 256m, embedding-worker 512m). Same for `env_file: [.env]` + inline `environment:` block. See `project_mcp_phase_2_2c_infra.md`.
-- **Port allocation on the Pi** — 8000–8006 are all occupied (8005 by entre-nos). `health-tracker` MCP uses host:8007 → container:8005. Before adding any new exposed port, `ssh leo@rpi "sudo ss -tlnp | grep ':80[0-9][0-9]\s'"`. See `project_mcp_phase_2_2c_infra.md`.
-- **Cloudflare config** — `*.leo-figueiredo.com` routes go in file-mode `/etc/cloudflared/config.yml` on the Pi (mirror at `/home/leo/.cloudflared/config.yml`). Tunnel ID `6c58d6b1-ad4d-4df9-8249-0e2bb88a9c01`. The `*.taxpilot.lu` routes increasingly live in Zero Trust dashboard — don't mix patterns. See `project_mcp_phase_2_2c_infra.md`.
-- **Catalog seeds re-run on every backend boot** — `app.main.lifespan` is idempotent (early-returns when rows exist). If the postgres volume is wiped, seeds re-run automatically. Don't add new seeds outside `lifespan` without preserving idempotency. See `devops/deploy_migration_entrypoint.md`.
-- **`HEALTHTRACKER_RO_PASSWORD` required by migration 004** — already set on both Coolify envs. Missing it crashes the entrypoint on a fresh DB. If a future migration requires a new env var, set it on the `backend` service (entrypoint sees it before alembic runs).
+- **Fly migrations** — `[deploy] release_command` in `fly.toml` / `fly.prod.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker-app). See `docs/fly-cutover-runbook.md`.
+- **MPG on Fly** — cluster `d1zj5omzqwvryqkv`; `FLY_MPG_SKIP_ROLE_DDL=1`; roles via `fly mpg users create`.
+- **Custom domains** — `marrow-health.com` DNS on Cloudflare (grey cloud); certs via `fly certs add`.
 
 ---
 

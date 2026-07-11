@@ -34,7 +34,7 @@ Solo plans where the orchestrator implements every chunk are **not acceptable**.
 | `frontend/**` | `frontend-dev` |
 | `backend/scripts/**`, `backend/data/**`, ETL | `data-engineer` |
 | ML prompts, classification, vision analysis | `data-scientist` |
-| Docker, compose, `.github/`, Pi/Coolify deploy | `devops` |
+| Docker, `.github/`, Fly deploy | `devops` |
 | QA gate, test matrix, e2e evidence | `qa-engineer` |
 | Read-only codebase recon | `Explore` |
 | Architecture / plan-only pass | `Plan` |

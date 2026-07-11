@@ -1,4 +1,4 @@
-# Health Tracker
+# Health Tracker (Marrow)
 
 **Extends `~/.claude/CLAUDE.md`** — see there for global preferences, stack defaults, git workflow, boundaries, sub-agent delegation rules, family disambiguations, self-update protocol, and Brain vault encouragement. This file holds only project-specific rules.
 
@@ -8,37 +8,38 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 - Backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.10
 - Frontend: Next.js 16 + React 19 + Tailwind 4 + shadcn/ui
-- Auth: JWT in `ht_session` httpOnly cookie (email + password); Coolify stacks still use PIN until cutover
+- Auth: JWT in `ht_session` httpOnly cookie (email + password)
+- Deploy: Fly.io (API, MCP, frontend) + Fly MPG Postgres + Tigris object storage
 
 ## Environments
 
-### Coolify (Pi) — current production path
+### Production (`main`)
 
-| Env | Branch | Frontend | Backend API | MCP | Coolify project |
-|---|---|---|---|---|---|
-| Production | `main` | https://health.leo-figueiredo.com | (internal, behind frontend rewrite) | https://health-mcp.leo-figueiredo.com | Health Tracker |
-| Develop | `develop` | https://health-dev.leo-figueiredo.com | https://health-dev-api.leo-figueiredo.com | https://health-dev-mcp.leo-figueiredo.com | Health Tracker Dev |
+| Component | Fly app | URL |
+|---|---|---|
+| API + worker | `marrow` | https://api.marrow-health.com |
+| MCP | `marrow-mcp` | https://marrow-mcp.fly.dev |
+| Frontend | `marrow-ui` | https://marrow-health.com |
+| Postgres | MPG `marrow-db-prod` (`d1zj5omzqwvryqkv`) — database `marrow` | via secrets |
 
-### Fly.io (parallel dev stack — epic #207)
+### Develop (`develop`)
 
-| Component | URL |
-|---|---|
-| API + worker | https://marrow-dev.fly.dev |
-| Frontend | https://marrow-ui-dev.fly.dev |
-| MCP | https://marrow-mcp-dev.fly.dev |
-| MPG | Shared cluster `health-tracker-db-prod` (`z23750v13yl096d1`, `fra`) — dev database `marrow_dev` |
+| Component | Fly app | URL |
+|---|---|---|
+| API + worker | `marrow-dev` | https://api-dev.marrow-health.com |
+| MCP | `marrow-mcp-dev` | https://marrow-mcp-dev.fly.dev |
+| Frontend | `marrow-ui-dev` | https://app-dev.marrow-health.com |
+| Postgres | MPG `marrow-db-prod` (`d1zj5omzqwvryqkv`) — database `marrow_dev` | via secrets |
 
-Deploy: `backend/fly.toml`, `backend/fly.mcp.toml`, `frontend/fly.toml`. See [docs/fly-cutover-runbook.md](docs/fly-cutover-runbook.md).
+Deploy configs: `backend/fly.toml`, `backend/fly.mcp.toml`, `frontend/fly.toml` (dev) and `*.prod.toml` (prod). See [docs/fly-cutover-runbook.md](docs/fly-cutover-runbook.md).
 
-## Environments (shared notes)
+## Branch workflow
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).
-- Dev stack has NO backup sidecar and a disposable Postgres. PIN must be seeded manually after first deploy.
-- Dev host ports on the Pi: backend 8104, MCP 8107, frontend 3104. Do not collide.
-- Compose files: `docker-compose.prod.yml` (main) and `docker-compose.dev.yml` (develop). Both are deployed by Coolify's dockercompose build-pack — Coolify does NOT run a full repo checkout, only paths referenced as bind-mount sources are materialized on the Pi (see `~/.claude/agent-memory/devops/project_health_tracker_backup_strategy_2026-05-17.md`).
+- After CI green on push, Fly deploy workflows deploy API → MCP → frontend automatically.
 
-## Running
+## Running locally
 
 ```bash
 ./start.sh          # Both services
@@ -50,8 +51,8 @@ cd frontend && npm run dev   # Frontend only
 
 - Backend API: http://localhost:8000/api/v1
 - Frontend: http://localhost:3000
-- Database: Postgres on the Pi (deployed via Coolify); `DATABASE_URL` env var must use the asyncpg driver, e.g. `postgresql+asyncpg://health:...@host:5432/health`. Tests spin up a disposable Postgres via `testcontainers` (see `backend/tests/conftest.py`).
-- Photo storage: backend/photos/
+- Database: Fly MPG in deployed envs; local tests use disposable Postgres via `testcontainers` (see `backend/tests/conftest.py`). `DATABASE_URL` must use asyncpg driver, e.g. `postgresql+asyncpg://...`.
+- Photo storage: Tigris on Fly; `backend/photos/` locally
 
 ## Conventions
 
@@ -80,7 +81,7 @@ Every implementation issue is a self-contained prompt for an agent that has no p
 10. **Rollback** — only when destructive or production-affecting. Trigger criteria + concrete revert steps.
 
 **Anti-patterns to avoid:**
-- Vague acceptance criteria ("user can log in" — write "POST /auth/login with valid PIN returns 200 and sets `ht_session` cookie")
+- Vague acceptance criteria ("user can log in" — write "POST /auth/login with valid credentials returns 200 and sets `ht_session` cookie")
 - Implicit scope ("just clean things up while you're there" — list every file)
 - Bundling unrelated work (one issue = one cohesive change)
 - Skipping the live-server walkthrough in favor of "tests pass"

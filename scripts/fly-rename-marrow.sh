@@ -14,7 +14,7 @@
 #
 set -euo pipefail
 
-CLUSTER="${CLUSTER:-z23750v13yl096d1}"
+CLUSTER="${CLUSTER:-d1zj5omzqwvryqkv}"
 PROXY_PORT="${PROXY_PORT:-16401}"
 BASELINE_FILE="${BASELINE_FILE:-/tmp/marrow-rename/baseline.txt}"
 
