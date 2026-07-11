@@ -62,8 +62,25 @@ No root-level `start.sh` — use `docker compose` when a compose file is added f
 
 - Backend API: http://localhost:8000/api/v1
 - Frontend: http://localhost:3000
+- Shared libs: `libs/backend/{core,db,storage,testing}/`, `libs/ui/`
 - Database: Fly MPG in deployed envs; local tests use disposable Postgres via `testcontainers` (see `apps/marrow/backend/tests/conftest.py`). `DATABASE_URL` must use asyncpg driver, e.g. `postgresql+asyncpg://...`.
 - Photo storage: Tigris on Fly; `apps/marrow/backend/photos/` locally
+
+## Shared libraries
+
+Canonical reference for what lives in `libs/` and the non-duplication mandate. See also [`.cursor/rules/shared-libs.mdc`](.cursor/rules/shared-libs.mdc).
+
+| Lib | Import | Contents | Owner | Mandate |
+|-----|--------|----------|-------|---------|
+| `libs/backend/core` | `f0rge_core` | Domain exceptions, `register_exception_handlers` | `fastapi-backend` | Import only — never re-implement |
+| `libs/backend/db` | `f0rge_db` | Engine/session/get_db factories, auth context, RLS mechanism, `unit_of_work`, `BaseCRUD`, mixins | `fastapi-backend` | Import only — never re-implement |
+| `libs/backend/storage` | `f0rge_storage` | Object storage client, `resize_image` | `fastapi-backend` | Import only — app wires settings |
+| `libs/backend/testing` | `f0rge_testing` | pgvector testcontainer, savepoint session fixtures | `fastapi-backend` | Dev dep only |
+| `libs/ui` | `@f0rge/ui`, `@f0rge/ui/api` | 12 shadcn primitives, `cn`, hooks, API client, `FetchError` | `frontend-dev` | All UI primitives from lib; shadcn adds land in `libs/ui` |
+
+**Stays in marrow (deliberately):** shared `Base` instance, `USER_OWNED_TABLES`, LLM/prompts, domain schemas, `CatalogItemCRUD`, `use-autosave-entry`, brand tokens (`--marrow-*`).
+
+**Never create a root `uv.lock`** — `@nxlv/python` silently flips to workspace mode. Always `uv --project <dir>`.
 
 ## Conventions
 
@@ -80,6 +97,7 @@ Scoped rules in `.cursor/rules/` (auto-applied by glob):
 | Rule | Scope |
 |------|-------|
 | `orchestration.mdc` | Always — planning must delegate to sub-agents |
+| `shared-libs.mdc` | `libs/**` — shared library conventions |
 | `backend.mdc` | `apps/marrow/backend/**/*.py`, migrations |
 | `frontend.mdc` | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
 | `infra.mdc` | Docker, compose, CI, deploy |
@@ -136,7 +154,7 @@ References:
 
 ## Cursor Cloud specific instructions
 
-The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and frontend `node_modules`. The startup update script only refreshes deps (`uv sync --frozen --project apps/marrow/backend`, `uv tool install ruff@latest`, `npm --prefix apps/marrow/frontend ci`). Services and the database are NOT auto-started — bring them up as below. Standard run/lint/test commands live in this file, `.cursor/rules/backend.mdc`, and `.cursor/rules/qa-gate.mdc`.
+The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and frontend `node_modules`. The startup update script only refreshes deps (`uv sync --frozen --project apps/marrow/backend`, `uv tool install ruff@latest`, `npm ci` at repo root). Services and the database are NOT auto-started — bring them up as below. Standard run/lint/test commands live in this file, `.cursor/rules/backend.mdc`, and `.cursor/rules/qa-gate.mdc`.
 
 ### Database + Docker (must start manually each session)
 - There is **no local dev docker-compose**; the `docker-compose*.yml` files are Coolify/Fly deploy stacks, not local dev.
@@ -149,6 +167,6 @@ The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and 
 - Alembic migrations 004/019 read `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` from **`os.environ`, not** from `.env` via pydantic. Export the `.env` before migrating: `cd apps/marrow/backend && set -a && . ./.env && set +a && uv run alembic upgrade head`. Running the backend itself does not need this (pydantic loads `.env`), only the migration step does.
 
 ### Running
-- Backend `:8000` + frontend `:3000` (frontend proxies `/api/*` → `:8000`): run `uv run uvicorn app.main:app --port 8000 --reload` in `apps/marrow/backend` and `npm run dev` in `apps/marrow/frontend` (after Postgres is up — see above). Backend auto-seeds dietary reference tables on first boot against a fresh DB.
+- Backend `:8000` + frontend `:3000` (frontend proxies `/api/*` → `:8000`): run `uv run uvicorn app.main:app --port 8000 --reload` in `apps/marrow/backend` and `npm run dev` in `apps/marrow/frontend` (from repo root: `npx nx run marrow-frontend:dev`). Install deps with `npm ci` at repo root (workspaces).
 - Signup rejects non-routable email TLDs (e.g. `.local`); use a normal domain like `demo@example.com` when testing auth.
 - Optional services (not needed for the core check-in app): embedding worker (`uv run python -m app.embedding_pipeline`, needs `OPENROUTER_API_KEY`) and MCP server (`uv run python -m app.mcp ...`).

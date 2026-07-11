@@ -32,6 +32,9 @@ Solo plans where the orchestrator implements every chunk are **not acceptable**.
 | --- | --- |
 | `apps/marrow/backend/app/**`, migrations, API tests | `fastapi-backend` |
 | `apps/marrow/frontend/**` | `frontend-dev` |
+| `libs/backend/**` | `fastapi-backend` |
+| `libs/ui/**` | `frontend-dev` |
+| Workspaces, Nx, CI, Fly deploy | `devops` |
 | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**`, ETL | `data-engineer` |
 | ML prompts, classification, vision analysis | `data-scientist` |
 | Docker, `.github/`, Fly deploy | `devops` |

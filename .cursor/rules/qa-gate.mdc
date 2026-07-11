@@ -1,6 +1,6 @@
 ---
 description: QA gate protocol — static analysis, rule adherence, tests, integration, e2e, deployment config audit. Use proactively before any PR or after completing a feature that needs verification.
-globs: apps/marrow/backend/tests/**, .github/workflows/**
+globs: apps/marrow/backend/tests/**, libs/**, .github/workflows/**
 alwaysApply: false
 ---
 
@@ -23,7 +23,8 @@ You are the final gate before a PR ships. **Build, test, verify rules, report.**
 
 ```bash
 cd apps/marrow/backend && uv run ruff check . && uv run ruff format --check .
-cd apps/marrow/frontend && npm run build && npm run lint
+npx nx run-many -t lint format-check test --projects tag:platform:py
+npx nx run-many -t lint typecheck build --projects tag:platform:ts
 ```
 
 Report every violation with `file:line`.
@@ -32,14 +33,16 @@ Report every violation with `file:line`.
 
 **Backend:** thin routers, `Depends()` injection, class-based services, Pydantic schemas, `from __future__ import annotations`, no secrets, Python 3.10 syntax.
 
-**Frontend:** TypeScript strict (no `any`), shadcn/ui where applicable, loading/error/empty states, mobile-first.
+**Frontend:** TypeScript strict (no `any`), `@f0rge/ui` primitives, loading/error/empty states, mobile-first.
+
+**Shared libs:** lib tests pass; no `libs/**` imports from `apps/`; grep diff for re-implementations of lib-owned helpers (exceptions, CRUD base, API client, shadcn primitives). New projects carry `platform:` tag in `project.json`.
 
 **Data:** confidence scores on AI output, idempotent ETL, versioned/traceable source data.
 
 ### Phase 3: Test Coverage
 
 ```bash
-cd apps/marrow/backend && uv run pytest tests/ -v --tb=short
+npx nx run-many -t test --projects tag:platform:py
 ```
 
 Verify tests exist for new service methods/endpoints; cover edge cases (empty, invalid, auth failures).

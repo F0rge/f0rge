@@ -2,6 +2,16 @@
 
 Hard rules every reviewing agent must honour, regardless of domain. Block-level findings here apply to backend, frontend, devops, and qa-engineer alike.
 
+## Shared libraries — non-duplication
+
+Apps import from `libs/` — never the reverse. Block on:
+- `libs/**` importing from `apps/` or `@/` paths resolving to apps
+- App code re-implementing lib-owned helpers (see `.cursor/rules/shared-libs.mdc`)
+- New projects missing `platform:` / `scope:` tags in `project.json`
+- Creating a root `uv.lock` (breaks per-project lock isolation)
+
+See `AGENTS.md` § Shared libraries for the canonical inventory.
+
 ## Plans must delegate to sub-agents
 
 **At planning time** (before any code), every implementation plan MUST include a sub-agent map: one named sub-agent from `~/.cursor/agents/` per work chunk, with deliverable and dependencies. The planning agent orchestrates; it does not implement the chunks. See `.cursor/rules/orchestration.mdc` and `.cursor/skills/ship-feature/SKILL.md`.

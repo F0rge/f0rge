@@ -57,6 +57,24 @@ cd apps/marrow/frontend && npm run dev   # :3000
 
 Prefer `docker compose up` when a compose file exists for full-stack local dev.
 
+## Monorepo build context
+
+Docker builds use **repo root** as context (not `apps/marrow/{backend,frontend}`):
+
+```bash
+docker build -f apps/marrow/backend/Dockerfile .
+docker build -f apps/marrow/frontend/Dockerfile .
+flyctl deploy . --remote-only --config apps/marrow/backend/fly.toml
+```
+
+`.dockerignore` files are **root-relative whitelists** (`*` then `!apps/marrow/...` then `!libs/**`). Blacklist patterns ship the whole repo to remote builders.
+
+Frontend Dockerfile: root `npm ci` (workspaces), `npm run build -w frontend`. Backend Dockerfile: `COPY libs/backend/...` before `uv sync`.
+
+## Root `uv.lock` warning
+
+**Never create a root `uv.lock`.** `@nxlv/python`'s UVProvider checks `fs.existsSync(<root>/uv.lock)` and silently flips to workspace mode, breaking per-project lock isolation. Always `uv --project <dir>`.
+
 ## New config vars checklist
 
 For every new `app/config.py` setting:
