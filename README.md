@@ -12,14 +12,6 @@ apps/marrow/
 
 Agent workflow, environments, conventions, and sub-agent delegation rules live in [AGENTS.md](AGENTS.md). Fly deploy conventions: [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc).
 
-## Running locally
-
-```bash
-./start.sh                                                                    # both services
-cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload    # backend only
-cd apps/marrow/frontend && npm run dev                                        # frontend only
-```
-
 ## Nx workspace
 
 Two projects: `marrow-backend`, `marrow-frontend`. Frontend targets (`build`/`dev`/`start`) are inferred by the `@nx/next` plugin; backend targets (`lock`/`sync`) by `@nxlv/python`. `defaultBase` is `develop`.

@@ -92,8 +92,8 @@ jobs:
       - name: Install root deps
         run: npm ci
 
-      - name: nx affected (backend)
-        run: npx nx affected -t lint format-check test --projects=marrow-backend
+      - name: nx run (backend)
+        run: npx nx run-many -t lint format-check test --projects=marrow-backend
 
   frontend:
     name: frontend
@@ -124,8 +124,8 @@ jobs:
       - name: Install frontend deps
         run: npm ci --prefix apps/marrow/frontend
 
-      - name: nx affected (frontend)
-        run: npx nx affected -t lint typecheck build --projects=marrow-frontend
+      - name: nx run (frontend)
+        run: npx nx run-many -t lint typecheck build --projects=marrow-frontend
 
   ci:
     name: ci
