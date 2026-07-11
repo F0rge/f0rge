@@ -92,8 +92,8 @@ See global `~/.cursor/rules/leo-system-wide.mdc` § "Post-Merge Hygiene".
 
 ## Required environment vars must mirror to `.env.example`
 
-Every new `Settings` attribute in `backend/app/config.py` requires:
-1. A matching line in `backend/.env.example`.
+Every new `Settings` attribute in `apps/marrow/backend/app/config.py` requires:
+1. A matching line in `apps/marrow/backend/.env.example`.
 2. If required (no safe default), documentation of how to obtain the value.
 3. For deployed environments: set the value on Fly app secrets (`fly secrets set -a marrow-dev` / `marrow`).
 

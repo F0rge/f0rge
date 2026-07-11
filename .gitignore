@@ -10,18 +10,18 @@ venv/
 .mcp.json
 
 # Backend data
-backend/photos/
-backend/lab_attachments/
-backend/.env
+apps/marrow/backend/photos/
+apps/marrow/backend/lab_attachments/
+apps/marrow/backend/.env
 
 # Lab import runtime artifacts
-backend/scripts/extraction_audit.jsonl
-backend/scripts/import_labs.log
+apps/marrow/backend/scripts/extraction_audit.jsonl
+apps/marrow/backend/scripts/import_labs.log
 
 # Node
 node_modules/
 .next/
-frontend/.env.local
+apps/marrow/frontend/.env.local
 
 # OS
 .DS_Store

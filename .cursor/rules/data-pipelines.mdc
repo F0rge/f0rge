@@ -1,6 +1,6 @@
 ---
 description: ETL pipelines, ingredient normalization, ML prompts, and dietary data schema for health-tracker. Use proactively for data ingestion, transformation scripts, normalization layers, prompt engineering, or reference table maintenance.
-globs: backend/scripts/**, backend/data/**
+globs: apps/marrow/backend/scripts/**, apps/marrow/backend/data/**
 alwaysApply: false
 ---
 
@@ -28,7 +28,7 @@ Map raw vision-model ingredient names to canonical lookup entries:
 
 ### 3. Lookup Table Schema
 
-Postgres tables (managed by Alembic, models in `backend/app/models/`):
+Postgres tables (managed by Alembic, models in `apps/marrow/backend/app/models/`):
 
 **`dietary_ingredients`** — one row per canonical ingredient
 | Column | Type | Notes |
@@ -56,7 +56,7 @@ Postgres tables (managed by Alembic, models in `backend/app/models/`):
 | `canonical_name` | text FK → `dietary_ingredients.canonical_name` | CASCADE |
 | `language` | text | default "en" |
 
-Source JSON files live in `backend/data/`. `backend/data/manifest.json` records SHA-256, source URL, and `downloaded_at` for each file.
+Source JSON files live in `apps/marrow/backend/data/`. `apps/marrow/backend/data/manifest.json` records SHA-256, source URL, and `downloaded_at` for each file.
 
 ### 4. Data Quality
 
@@ -67,7 +67,7 @@ Source JSON files live in `backend/data/`. `backend/data/manifest.json` records 
 
 ## ETL Script Conventions
 
-- Location: `backend/scripts/` → output to `backend/data/`
+- Location: `apps/marrow/backend/scripts/` → output to `apps/marrow/backend/data/`
 - Run: `uv run python -m scripts.<name>`
 - Self-contained with clear logging
 - Summary on completion (rows loaded, errors, warnings)
@@ -84,7 +84,7 @@ Source JSON files live in `backend/data/`. `backend/data/manifest.json` records 
 ## Commands
 
 ```bash
-cd backend
+cd apps/marrow/backend
 uv run python -m scripts.<script_name>
 uv run ruff check . && uv run ruff format .
 ```
@@ -151,7 +151,7 @@ Correlate dietary intake with symptom scores; time-series trigger identification
 ## Commands
 
 ```bash
-cd backend
+cd apps/marrow/backend
 uv run python -m scripts.<script_name>
 uv run ruff check . && uv run ruff format .
 ```

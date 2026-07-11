@@ -36,13 +36,13 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
       - name: Deploy API (alembic via release_command)
-        working-directory: backend
+        working-directory: apps/marrow/backend
         run: flyctl deploy --remote-only --config fly.prod.toml
 
       - name: Deploy MCP
-        working-directory: backend
+        working-directory: apps/marrow/backend
         run: flyctl deploy --remote-only --config fly.mcp.prod.toml
 
       - name: Deploy frontend
-        working-directory: frontend
+        working-directory: apps/marrow/frontend
         run: flyctl deploy --remote-only --config fly.prod.toml

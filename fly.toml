@@ -1,2 +1,0 @@
-# Pointer — canonical API fly.toml lives in backend/fly.toml
-# Deploy: fly deploy --config backend/fly.toml

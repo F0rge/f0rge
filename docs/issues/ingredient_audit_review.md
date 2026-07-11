@@ -1,6 +1,6 @@
 # Ingredient lookup audit — review
 
-333 ingredients audited across 8 parallel agents. The agents cross-checked our `backend/data/{sighi_histamine,fodmap_list,allergens}.json` against authoritative primary sources (SIGHI Food Compatibility List PDF for histamine, Monash University FODMAP App for FODMAP, ingredient composition for gluten/dairy).
+333 ingredients audited across 8 parallel agents. The agents cross-checked our `apps/marrow/backend/data/{sighi_histamine,fodmap_list,allergens}.json` against authoritative primary sources (SIGHI Food Compatibility List PDF for histamine, Monash University FODMAP App for FODMAP, ingredient composition for gluten/dairy).
 
 **Totals:** 220 keep • 93 modify • 20 drop (compound dishes) • 5 additions proposed
 **Confidence:** 254 high • 72 medium • 7 low

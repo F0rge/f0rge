@@ -51,7 +51,7 @@ These are known to handle tz correctly as of 2026-05-25:
 
 ## Candidates to audit on every model-touching PR
 
-Run: `grep -rn "Mapped\[datetime\|Mapped\[Optional\[datetime" backend/app/models/`
+Run: `grep -rn "Mapped\[datetime\|Mapped\[Optional\[datetime" apps/marrow/backend/app/models/`
 
 Not yet confirmed-safe as of 2026-05-25:
 - `treatments.start_date` / `treatments.end_date`

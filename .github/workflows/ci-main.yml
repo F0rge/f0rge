@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: backend
+        working-directory: apps/marrow/backend
     steps:
       - uses: actions/checkout@v4
 
@@ -64,7 +64,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: frontend
+        working-directory: apps/marrow/frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +72,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: apps/marrow/frontend/package-lock.json
 
       - run: npm ci
 

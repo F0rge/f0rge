@@ -80,7 +80,7 @@ Response shape (top-level keys: object, data, model, usage, provider, id):
 
 ## `LLMClient` contract
 
-Abstract base class. Location: `backend/app/services/llm/base.py` (to be created by the backend agent).
+Abstract base class. Location: `apps/marrow/backend/app/services/llm/base.py` (to be created by the backend agent).
 
 ```python
 from __future__ import annotations
@@ -123,7 +123,7 @@ Concrete implementation: `OpenRouterLLMClient` wraps the existing `food_analysis
 
 ## `EmbeddingClient` contract
 
-Abstract base class. Location: `backend/app/services/llm/base.py` (same file as `LLMClient`).
+Abstract base class. Location: `apps/marrow/backend/app/services/llm/base.py` (same file as `LLMClient`).
 
 ```python
 class EmbeddingClient(ABC):
@@ -308,7 +308,7 @@ When the user switches `user_settings.embedding_model` to `google/gemini-embeddi
 
 Cohere's embedding models are not on OpenRouter (only Cohere's chat + rerank models are routed there). Adding Cohere requires a dedicated client.
 
-- **File**: `backend/app/services/llm/cohere.py`
+- **File**: `apps/marrow/backend/app/services/llm/cohere.py`
 - **Class**: `CohereEmbeddingClient(EmbeddingClient)`
 - **Endpoint**: `POST https://api.cohere.com/v2/embed`
 - **Model**: `cohere/embed-v4` supports Matryoshka at dim=1024 — drop-in compatible with the schema

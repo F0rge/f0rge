@@ -31,12 +31,12 @@ Dev and prod share **one** MPG cluster (`d1zj5omzqwvryqkv`, `fra`, name `marrow-
 | `marrow` | prod | `marrow`, `marrow-mcp` |
 | `marrow_dev` | dev | `marrow-dev`, `marrow-mcp-dev` |
 
-Deploy configs: `backend/fly.prod.toml`, `backend/fly.mcp.prod.toml`, `frontend/fly.prod.toml`.
+Deploy configs: `apps/marrow/backend/fly.prod.toml`, `apps/marrow/backend/fly.mcp.prod.toml`, `apps/marrow/frontend/fly.prod.toml`.
 
 ```bash
-cd backend && fly deploy --config fly.prod.toml
-cd backend && fly deploy --config fly.mcp.prod.toml
-cd frontend && fly deploy --config fly.prod.toml
+cd apps/marrow/backend && fly deploy --config fly.prod.toml
+cd apps/marrow/backend && fly deploy --config fly.mcp.prod.toml
+cd apps/marrow/frontend && fly deploy --config fly.prod.toml
 ```
 
 ## CI/CD (automated)
@@ -58,9 +58,9 @@ Deploy order: **API** (runs `alembic upgrade head` via `release_command`) → **
 
 ```bash
 export FLY_API_TOKEN=...
-cd backend && fly deploy --config fly.toml
-cd backend && fly deploy --config fly.mcp.toml
-cd frontend && fly deploy --config fly.toml
+cd apps/marrow/backend && fly deploy --config fly.toml
+cd apps/marrow/backend && fly deploy --config fly.mcp.toml
+cd apps/marrow/frontend && fly deploy --config fly.toml
 ```
 
 ## Required secrets (API app)
