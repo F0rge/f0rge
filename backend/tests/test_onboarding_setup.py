@@ -105,7 +105,9 @@ async def test_catalog_setup_is_idempotent(
     first = await async_client.post("/api/v1/onboarding/catalog-setup", json=payload)
     second = await async_client.post("/api/v1/onboarding/catalog-setup", json=payload)
     assert first.status_code == 200
+    assert first.json()["supplements_created"] == 1
     assert second.status_code == 200
+    assert second.json()["supplements_created"] == 0
 
     await _set_session_user_id(async_db, user_id)
     count = (

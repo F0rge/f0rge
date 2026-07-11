@@ -131,8 +131,7 @@ class OnboardingSetupService:
                 row["last_used_at"] = None
             values.append(row)
 
-        await self.crud.bulk_insert_ignore_conflict(model, values, constraint_name)
-        return len(keys)
+        return await self.crud.bulk_insert_ignore_conflict(model, values, constraint_name)
 
     async def _insert_trackers(self, user_id: object, names: list[str]) -> int:
         if not names:
@@ -155,5 +154,4 @@ class OnboardingSetupService:
                 }
             )
 
-        await self.crud.bulk_insert_ignore_conflict(Tracker, values, "uq_tracker_user_id_name")
-        return len(names)
+        return await self.crud.bulk_insert_ignore_conflict(Tracker, values, "uq_tracker_user_id_name")

@@ -36,11 +36,12 @@ class UserProvisioningCRUD(BaseCRUD):
         model: type,
         values: list[dict[str, object]],
         constraint_name: str,
-    ) -> None:
+    ) -> int:
         if not values:
-            return
+            return 0
         stmt = insert(model).values(values).on_conflict_do_nothing(constraint=constraint_name)
-        await self.db.execute(stmt)
+        result = await self.db.execute(stmt)
+        return result.rowcount or 0
 
     async def copy_reference_catalogs(self, new_user_id: uuid.UUID, ref_user_id: uuid.UUID) -> None:
         await self.db.execute(
