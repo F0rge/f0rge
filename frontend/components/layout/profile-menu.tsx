@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { SlidersHorizontal, UserRound } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { LogOut, SlidersHorizontal, UserRound } from 'lucide-react'
 import { UserAvatar } from '@/components/account/user-avatar'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
+import { useLogout } from '@/lib/api/hooks'
+import { handleMutationError } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
 
 const MENU_ITEM_CLASS =
@@ -13,8 +15,20 @@ const MENU_ITEM_CLASS =
 
 export function ProfileMenu() {
   const pathname = usePathname()
+  const router = useRouter()
+  const logout = useLogout()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  const handleLogout = async () => {
+    try {
+      await logout.mutateAsync()
+      setOpen(false)
+      router.replace('/login')
+    } catch (err) {
+      handleMutationError(err, 'Could not log out')
+    }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -73,6 +87,16 @@ export function ProfileMenu() {
             <SlidersHorizontal className="size-4 text-muted-foreground" />
             Customize
           </Link>
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU_ITEM_CLASS}
+            onClick={handleLogout}
+            disabled={logout.isPending}
+          >
+            <LogOut className="size-4 text-muted-foreground" />
+            Log out
+          </button>
           <div className="mt-1 border-t border-border pt-1">
             <ThemeToggle />
           </div>
