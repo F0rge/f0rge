@@ -1,7 +1,6 @@
 name: Fly Deploy (main)
 
 # Deploys the Fly prod stack after CI (main) passes on a push to main.
-# Coolify/Pi deploy is unchanged — this is the parallel Fly stack only.
 
 on:
   workflow_run:

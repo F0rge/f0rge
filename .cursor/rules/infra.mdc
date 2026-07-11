@@ -1,59 +1,50 @@
 ---
-description: Docker, Coolify, CI/CD, and deployment conventions for health-tracker. Use proactively for compose files, Dockerfiles, GitHub Actions, Pi deploys, and env configuration.
-globs: docker-compose*.yml, .github/**, backend/Dockerfile, backend/docker-entrypoint.sh, frontend/Dockerfile
+description: Fly.io deploy, CI/CD, and Docker build conventions for Marrow. Use proactively for fly.toml, Dockerfiles, GitHub Actions, and env configuration.
+globs: "**/fly*.toml, .github/**, backend/Dockerfile, backend/docker-entrypoint.sh, frontend/Dockerfile"
 alwaysApply: false
 ---
 
-# Health Tracker Infrastructure
+# Marrow Infrastructure (Fly.io)
 
 Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
 
-**Deploy gotchas:** read `~/.cursor/agent-memory/devops/project_health_tracker_*.md` before changing compose, Coolify, or Pi config.
+**Deploy gotchas:** read `~/.cursor/agent-memory/devops/project_health_tracker_*.md` before changing Fly apps, MPG, or DNS.
 
 ## Environments
 
-| Env | Branch | Frontend | Backend API | MCP | Coolify project |
-|---|---|---|---|---|---|
-| Production | `main` | https://health.leo-figueiredo.com | (internal, behind frontend rewrite) | https://health-mcp.leo-figueiredo.com | Health Tracker |
-| Develop | `develop` | https://health-dev.leo-figueiredo.com | https://health-dev-api.leo-figueiredo.com | https://health-dev-mcp.leo-figueiredo.com | Health Tracker Dev |
+| Env | Branch | Frontend | Backend API | MCP |
+|---|---|---|---|---|
+| Production | `main` | https://marrow-health.com | https://api.marrow-health.com | https://marrow-mcp.fly.dev |
+| Develop | `develop` | https://app-dev.marrow-health.com | https://api-dev.marrow-health.com | https://marrow-mcp-dev.fly.dev |
 
-- `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).
+Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-ui-dev`, `marrow-dev`, `marrow-mcp-dev` (dev).
 
-## Dev vs prod differences
+- `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml`, then merge.
+- Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml`.
+- After CI green on push, `.github/workflows/fly-deploy-develop.yml` / `fly-deploy-main.yml` deploy API → MCP → frontend.
 
-| Aspect | Production (`main`) | Develop (`develop`) |
-|---|---|---|
-| Backup sidecar | Yes | **No** |
-| Postgres | Persistent | Disposable |
-| PIN | Seeded in prod | **Must seed manually** after first deploy |
+## Fly apps
 
-## Compose files
+| Role | Dev app | Prod app | Config |
+|---|---|---|---|
+| API + worker | `marrow-dev` | `marrow` | `backend/fly.toml` / `fly.prod.toml` |
+| MCP | `marrow-mcp-dev` | `marrow-mcp` | `backend/fly.mcp.toml` / `fly.mcp.prod.toml` |
+| Frontend | `marrow-ui-dev` | `marrow-ui` | `frontend/fly.toml` / `fly.prod.toml` |
 
-- `docker-compose.prod.yml` — `main`, Coolify project **Health Tracker** (postgres, postgres-backup, backend, embedding-worker)
-- `docker-compose.dev.yml` — `develop`, Coolify project **Health Tracker Dev** (postgres, backend, embedding-worker)
-- `docker-compose.mcp.prod.yml` / `docker-compose.mcp.dev.yml` — MCP server split into its own single-service Coolify app so a backend-stack redeploy no longer flaps the MCP host port (8007 prod / 8107 dev). Attaches to the backend stack's external UUID network to reach `postgres`.
-- All use legacy v2 `mem_limit:` style consistently
-- Both use `env_file: [.env]` + inline `environment:` block style
-- Coolify's dockercompose build-pack does **not** run a full repo checkout — only paths referenced as bind-mount sources are materialized on the Pi (see `~/.cursor/agent-memory/devops/project_health_tracker_backup_strategy_2026-05-17.md`)
+## MPG (Postgres)
 
-## Port allocation (Pi host)
+- Cluster: `marrow-db-prod` (`d1zj5omzqwvryqkv`, `fra`)
+- Databases: `marrow` (prod), `marrow_dev` (dev)
+- Users: `healthtracker-app` (writer), `healthtracker-ro` (reader), `htmigrate` (migrations only)
+- Set `FLY_MPG_SKIP_ROLE_DDL=1` on Fly apps
 
-| Service | Prod (host → container) | Dev (host → container) |
-|---|---|---|
-| Backend | **8004** → 8000 | **8104** → 8000 |
-| MCP | **8007** → 8005 | **8107** → 8005 |
-| Frontend | **3004** → 3000 | **3104** → 3000 |
+Full setup: [docs/fly-cutover-runbook.md](../../docs/fly-cutover-runbook.md).
 
-MCP now lives in its own Coolify app (`docker-compose.mcp.prod.yml` / `docker-compose.mcp.dev.yml`); the backend stack no longer publishes the MCP port. Do not collide with other Pi services.
+## Migrations on Fly
 
-## RUN_MIGRATIONS contract (non-negotiable)
+`[deploy] release_command` in `fly.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime web/worker use `DATABASE_URL` (healthtracker-app). See runbook.
 
-`backend/docker-entrypoint.sh` runs `uv run alembic upgrade head` then `exec "$@"` when `RUN_MIGRATIONS=1`.
-
-- `RUN_MIGRATIONS=1` is set **ONLY** on the `backend` service in **BOTH** compose files.
-- `mcp-server` and `embedding-worker` share the image but **MUST** leave it unset (DDL race).
-- Single-replica backend in both envs. Scaling >1 requires moving alembic to an init container.
+`backend/docker-entrypoint.sh` still supports `RUN_MIGRATIONS=1` for local Docker builds; Fly uses `release_command` instead.
 
 ## Local development
 
@@ -63,23 +54,12 @@ cd backend && uv run uvicorn app.main:app --port 8000 --reload
 cd frontend && npm run dev   # :3000
 ```
 
-## Infra map
-
-| Component | Where | Branch trigger |
-|---|---|---|
-| Prod frontend | `https://health.leo-figueiredo.com` | `main` |
-| Prod backend | Behind frontend rewrite (internal) | `main` |
-| Prod MCP | `https://health-mcp.leo-figueiredo.com` | `main` |
-| Dev frontend | `https://health-dev.leo-figueiredo.com` | `develop` |
-| Dev backend | `https://health-dev-api.leo-figueiredo.com` | `develop` |
-| Dev MCP | `https://health-dev-mcp.leo-figueiredo.com` | `develop` |
-
 ## New config vars checklist
 
 For every new `app/config.py` setting:
 
 - [ ] In `backend/.env.example`
 - [ ] README/deploy doc updated if required
-- [ ] Set on deployment target (Coolify/Pi) if already deployed
+- [ ] Set on Fly app secrets (`fly secrets set -a marrow-dev` / `marrow`) if deployed
 - [ ] Degrades gracefully when missing (no 500 storm)
 - [ ] Startup warning when feature enabled but credentials missing

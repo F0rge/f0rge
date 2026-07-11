@@ -14,7 +14,7 @@ Frontend code typically calls `new Date().toISOString()`, which produces `2026-0
 
 **asyncpg refuses to bind a tz-aware datetime to a tz-naive column** — it returns a 500 with `DataError: invalid input for query argument: datetime.datetime(...) (can't subtract offset-naive and offset-aware datetimes)`.
 
-**Local SQLite + aiosqlite silently accepts tz-aware**, so the bug only surfaces against the real Postgres dev env. Always verify against `health-dev.leo-figueiredo.com` or a local Postgres testcontainer before declaring done.
+**Local SQLite + aiosqlite silently accepts tz-aware**, so the bug only surfaces against the real Postgres dev env. Always verify against `app-dev.marrow-health.com` or a local Postgres testcontainer before declaring done.
 
 ## The required stripper
 
