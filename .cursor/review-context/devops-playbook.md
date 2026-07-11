@@ -19,6 +19,10 @@ Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker
 
 ## Hard rules — instant block findings
 
+- **Root build context** — Docker builds must use repo root as context (`docker build -f apps/marrow/backend/Dockerfile .`). Block on `working-directory` in fly deploy that hides `libs/`.
+- **Whitelist `.dockerignore`** — must use `*` + `!apps/...` + `!libs/**` pattern. Block on blacklist-only dockerignore that ships the whole repo.
+- **No root `uv.lock`** — block on any PR creating `<root>/uv.lock`. Per-project locks only.
+
 - **Migration added without Fly release_command path.** Any PR adding `apps/marrow/backend/migrations/versions/` MUST leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running `alembic upgrade head` via `MIGRATION_DATABASE_URL`. Runtime `DATABASE_URL` stays least-privilege (`healthtracker-app`).
 
 - **MPG role DDL on Fly.** Set `FLY_MPG_SKIP_ROLE_DDL=1` on Fly apps; roles are provisioned via `fly mpg users create`, not migration-side DDL on Fly.

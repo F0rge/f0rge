@@ -19,8 +19,11 @@ Authoritative review checklist for the Claude PR review bot operating on health-
 - `apps/marrow/backend/migrations/versions/*.py` — Alembic revisions
 - `apps/marrow/backend/tests/**` — pytest suite
 - `apps/marrow/backend/pyproject.toml` — deps + ruff config
+- `libs/backend/**` — shared Python libs (`f0rge_core`, `f0rge_db`, `f0rge_storage`, `f0rge_testing`)
 
-**NOT your scope:** `.github/`, `docker-compose*.yml`, `apps/marrow/backend/docker-entrypoint.sh`, `apps/marrow/frontend/` — those go to `devops` or `frontend-dev`.
+**NOT your scope:** `.github/`, `docker-compose*.yml`, `apps/marrow/backend/docker-entrypoint.sh`, `apps/marrow/frontend/`, `libs/ui/` — those go to `devops` or `frontend-dev`.
+
+**Non-duplication:** block re-implementations of lib-owned helpers. Apps must import from `f0rge_core`, `f0rge_db`, `f0rge_storage`, `f0rge_testing` — never duplicate exceptions, CRUD base, session factories, RLS hooks, or object storage clients.
 
 ---
 
@@ -170,7 +173,7 @@ Work through this in order for any non-trivial backend diff.
 
 ## AI seam contracts
 
-Source of truth: `docs/architecture/ai_seams.md` (verify it exists before overriding these).
+Source of truth: `~/.cursor/agent-memory/fastapi-backend/project_ai_seams.md` (verify it exists before overriding these).
 
 | Contract | Value |
 |---|---|

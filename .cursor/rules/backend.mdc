@@ -18,7 +18,7 @@ Each endpoint is **1–3 lines**: signature, optional one-line delegation, `retu
 
 **Allowed:** `Depends()` injection, single service call, `return`.
 
-Validation and "not found" conditions are raised by **services** as domain exceptions (`NotFoundError`, `ValidationError`, `ConflictError` from `app/exceptions.py`). Global handlers in `app/main.py` map them to HTTP. Routers never use `HTTPException`.
+Validation and "not found" conditions are raised by **services** as domain exceptions (`NotFoundError`, `ValidationError`, `ConflictError` from `f0rge_core.exceptions`). Global handlers via `register_exception_handlers(app)` from `f0rge_core.handlers`. Routers never use `HTTPException`.
 
 ```python
 @router.post("/", response_model=ThingOut, status_code=status.HTTP_201_CREATED)
@@ -36,9 +36,9 @@ def create_thing(data: ThingCreate, service: ThingService = Depends(get_thing_se
 
 ### CRUD (`app/crud/`)
 
-- One CRUD class per domain, subclassing `BaseCRUD` (or `CatalogItemCRUD` for user-scoped catalogs) in `app/crud/base.py`
+- One CRUD class per domain, subclassing `BaseCRUD` (or `CatalogItemCRUD` for user-scoped catalogs) from `f0rge_db.crud` / `app/crud/base.py`
 - CRUD owns all raw SQLAlchemy: `select`, `add`, `delete`, `flush`
-- Transactions: `unit_of_work(db)` from `app/crud/base.py` — commit-on-success/rollback-on-exception, autobegin-aware (`db.in_transaction()` branch; bare `db.begin()` raises on a request session that already ran the RLS `set_config` SELECT). Never call `db.commit()` outside it.
+- Transactions: `unit_of_work(db)` from `f0rge_db.crud` — commit-on-success/rollback-on-exception, autobegin-aware (`db.in_transaction()` branch; bare `db.begin()` raises on a request session that already ran the RLS `set_config` SELECT). Never call `db.commit()` outside it.
 
 ### Dependencies (`app/dependencies/`)
 
@@ -78,7 +78,7 @@ SQLAlchemy 2.0 style. Always include `id`, `created_at`. Use `__table_args__` wi
 - [ ] Router endpoints 1–3 lines — no `if`, `try/except`, `raise`, helpers, ORM
 - [ ] `grep -E "if |raise |try:|HTTPException|db\.query|db\.add|db\.commit" app/routers/<file>.py` returns nothing
 - [ ] Services injected via `Depends()`
-- [ ] Domain exceptions in `app/exceptions.py`, mapped in `main.py`
+- [ ] Domain exceptions in `f0rge_core.exceptions`, handlers via `register_exception_handlers(app)`
 - [ ] Schemas follow Create/Update/Response convention
 - [ ] `ruff check` and `ruff format` pass
 
@@ -97,7 +97,7 @@ Self-review before every PR:
 3. **One class per file** for CRUD/Service/Model layers
 4. **Split large functions/classes** — extract when you need comments to explain sections
 5. **Let exceptions propagate** — don't catch just to re-raise
-6. **Use `unit_of_work(db)`** (`app/crud/base.py`) for DB writes — auto-commit/rollback, autobegin-aware
+6. **Use `unit_of_work(db)`** (`f0rge_db.crud`) for DB writes — auto-commit/rollback, autobegin-aware
 7. **Consistent index strategy** — `__table_args__` with named indexes
 8. **Auto-format Alembic migrations**
 9. **Orchestrators coordinate services** — never mix services and CRUDs in one class
@@ -139,9 +139,20 @@ For deep backend work, delegate to the `fastapi-backend` sub-agent in `~/.cursor
 
 ## Health Tracker specifics
 
-- **Domain exceptions:** `NotFoundError`, `ValidationError`, `ConflictError` from `app/exceptions.py` — mapped by global handlers in `app/main.py`. Never `HTTPException` in routers or services.
+- **Domain exceptions:** `NotFoundError`, `ValidationError`, `ConflictError` from `f0rge_core.exceptions` — mapped by `register_exception_handlers(app)` from `f0rge_core.handlers`. Never `HTTPException` in routers or services.
 - **API prefix:** `/api/v1`
 - **Auth cookie:** `ht_session` — JWT (email + password signup/login)
 - **Database:** Postgres via asyncpg — `DATABASE_URL` must use `postgresql+asyncpg://...` driver
 - **Key paths:**
   - Photo storage: `apps/marrow/backend/photos/`
+
+## Non-duplication mandate — import from libs, never re-implement
+
+| Need | Import from | Never |
+|------|-------------|-------|
+| Domain exceptions + handler registration | `f0rge_core.exceptions`, `f0rge_core.handlers` | Local exception classes or inline handlers in `main.py` |
+| Engine/session/get_db factories, tenancy/RLS, CRUD base | `f0rge_db.engine`, `f0rge_db.crud`, `f0rge_db.rls`, `f0rge_db.mixins` | Re-implement session factories, RLS hooks, or `BaseCRUD` |
+| Object storage + image resize | `f0rge_storage` (app wires settings via composition) | Duplicate S3/Tigris client or Pillow resize |
+| Test fixtures (pgvector container, savepoint session) | `f0rge_testing` | Copy testcontainer boilerplate into app conftest |
+
+LLM machinery stays app-side until a second consumer exists. Parser duplication in `lab_extraction_prompt.py` / `vision_prompt.py` is known debt.

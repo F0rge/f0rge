@@ -1,0 +1,57 @@
+---
+description: Shared library conventions for libs/backend/* and libs/ui. Use when creating, modifying, or consuming shared libs.
+globs: libs/**
+alwaysApply: false
+---
+
+# Shared Libraries (`libs/`)
+
+Genuinely generic code lives here. Apps import from libs — never the reverse.
+
+## Inventory
+
+| Lib | Import | Contents | Owner |
+|-----|--------|----------|-------|
+| `libs/backend/core` | `f0rge_core` | `DomainError` tree, `register_exception_handlers(app)` | `fastapi-backend` |
+| `libs/backend/db` | `f0rge_db` | Engine/session/get_db factories, auth context, tenant/RLS mechanism, `unit_of_work`, `BaseCRUD`, mixins (`UUIDPk`, `Timestamp`, `UserOwned`) | `fastapi-backend` |
+| `libs/backend/storage` | `f0rge_storage` | `ObjectStorageConfig` + client, `resize_image` | `fastapi-backend` |
+| `libs/backend/testing` | `f0rge_testing` | pgvector testcontainer fixture, savepoint-session fixture factories | `fastapi-backend` |
+| `libs/ui` | `@f0rge/ui`, `@f0rge/ui/api` | 12 shadcn primitives, `cn`, date formatters, hooks, `fetch-error`, API client | `frontend-dev` |
+
+**Deferred:** `f0rge-llm` — extract when a second LLM consumer exists. Parser duplication in `lab_extraction_prompt.py` / `vision_prompt.py` is known debt.
+
+## Hard rules
+
+1. **Libs never import app code** — no `from app.`, no `@/` paths that resolve to `apps/`. CI enforces: `! grep -rn "from ['\"].*apps/" libs/`.
+2. **A lib change affects every consumer** — tag-driven CI (`platform:py` / `platform:ts`) runs lib + app tests when libs change.
+3. **Never create a root `uv.lock`** — `@nxlv/python`'s UVProvider checks `fs.existsSync(<root>/uv.lock)` and silently flips to workspace mode. Always `uv --project <dir>`.
+4. **Apps own domain code** — `Base` instance, `USER_OWNED_TABLES`, LLM prompts, domain schemas, brand tokens (`--marrow-*`), `CatalogItemCRUD`, `use-autosave-entry`.
+
+## Python lib conventions
+
+- `uv init --lib` src layout: `libs/backend/<name>/src/f0rge_<name>/`
+- Own `pyproject.toml`, `uv.lock`, `project.json` with tags `["platform:py", "scope:shared"]`
+- Ruff: marrow config + TID + `flake8-tidy-imports.banned-api` banning `"app"`
+- Apps consume via `[tool.uv.sources]` editable path deps
+- Each lib needs its own `project.json` (plugin has no createNodes)
+
+## TypeScript lib conventions (`libs/ui`)
+
+- Package name: `@f0rge/ui`
+- Exports map pointing at `src/*.ts` (internal-package pattern, no build step)
+- `react` / `react-dom` / `next` as peerDependencies
+- Apps: `transpilePackages: ["@f0rge/ui"]`, `globals.css` `@source` for Tailwind 4 scanning
+- **Semantic tokens only** in lib components (`var(--primary)`, `text-muted-foreground`) — never `--marrow-*` brand vars
+- shadcn CLI additions land in `libs/ui`, never `apps/`
+
+## New project checklist
+
+Every new lib or app project must have:
+
+1. `project.json` with correct tags:
+   - Python lib: `["platform:py", "scope:shared"]`
+   - TS lib: `["platform:ts", "scope:shared"]`
+   - App backend: `["platform:py", "scope:<app>"]`
+   - App frontend: `["platform:ts", "scope:<app>"]`
+2. Nx targets: `lint`, `test` (and `format-check` for Python)
+3. Without `platform:` tags, CI silently ignores the project

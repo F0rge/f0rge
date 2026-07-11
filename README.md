@@ -5,16 +5,24 @@ Personal Nx monorepo. Currently home to **marrow** (daily health check-in app).
 ## Structure
 
 ```
+libs/
+├── backend/
+│   ├── core/       f0rge-core     exceptions + handler registration
+│   ├── db/         f0rge-db       engine/session/RLS/CRUD factories
+│   ├── storage/    f0rge-storage  object storage + image resize
+│   └── testing/    f0rge-testing  testcontainer + savepoint fixtures
+└── ui/             @f0rge/ui      shadcn primitives, API client, hooks
+
 apps/marrow/
 ├── backend/   FastAPI + async SQLAlchemy + Postgres (Fly MPG) — Python 3.10, uv
-└── frontend/  Next.js 16 + React 19 + Tailwind + shadcn/ui
+└── frontend/  Next.js 16 + React 19 + Tailwind + @f0rge/ui
 ```
 
 Agent workflow, environments, conventions, and sub-agent delegation rules live in [AGENTS.md](AGENTS.md). Fly deploy conventions: [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc).
 
 ## Nx workspace
 
-Two projects: `marrow-backend`, `marrow-frontend`. Frontend targets (`build`/`dev`/`start`) are inferred by the `@nx/next` plugin; backend targets (`lock`/`sync`) by `@nxlv/python`. `defaultBase` is `develop`.
+Seven projects: `marrow-backend`, `marrow-frontend`, `f0rge-core`, `f0rge-db`, `f0rge-storage`, `f0rge-testing`, `f0rge-ui`. Frontend targets (`build`/`dev`/`start`) are inferred by the `@nx/next` plugin; backend targets (`lock`/`sync`) by `@nxlv/python`. `defaultBase` is `develop`.
 
 ```bash
 npx nx graph                                   # interactive dependency graph (opens a browser)

@@ -14,8 +14,11 @@ Repo-specific checklist for the Claude PR review bot when reviewing frontend dif
 - `apps/marrow/frontend/hooks/**`
 - `apps/marrow/frontend/public/**`
 - `apps/marrow/frontend/package.json`, `apps/marrow/frontend/tsconfig.json`, `apps/marrow/frontend/next.config.*`
+- `libs/ui/**` — shared `@f0rge/ui` component library
 
-NOT in scope for this playbook: `.github/`, `apps/marrow/backend/`, `docker-compose*.yml`, migration files.
+NOT in scope for this playbook: `.github/`, `apps/marrow/backend/`, `libs/backend/`, `docker-compose*.yml`, migration files.
+
+**Non-duplication:** block re-implementations of `@f0rge/ui` primitives, API client, or shared hooks. All shadcn components come from `@f0rge/ui`; shadcn CLI additions land in `libs/ui`.
 
 ---
 
