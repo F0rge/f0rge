@@ -13,7 +13,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 ## Environments
 
-All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`marrow-db`, `nlkxjo5m3240y93v`).
+All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`f0rge-db`, `nlkxjo5m3240y93v`).
 
 ### Production (`main`)
 
@@ -22,7 +22,7 @@ All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`marrow
 | API + worker | `marrow` | https://api.marrow-health.com |
 | MCP | `marrow-mcp` | https://marrow-mcp.fly.dev |
 | Frontend | `marrow-ui` | https://marrow-health.com |
-| Postgres | MPG `marrow-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow` | via secrets |
+| Postgres | MPG `f0rge-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow` | via secrets |
 | Tigris | `f0rge-marrow-prod-photos` | via secrets on `marrow` |
 
 ### Develop (`develop`)
@@ -32,24 +32,31 @@ All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`marrow
 | API + worker | `marrow-dev` | https://api-dev.marrow-health.com |
 | MCP | `marrow-mcp-dev` | https://marrow-mcp-dev.fly.dev |
 | Frontend | `marrow-ui-dev` | https://app-dev.marrow-health.com |
-| Postgres | MPG `marrow-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow_dev` | via secrets |
+| Postgres | MPG `f0rge-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow_dev` | via secrets |
 | Tigris | `f0rge-marrow-dev-photos` | via secrets on `marrow-dev` |
 
-Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.toml`, `apps/marrow/frontend/fly.toml` (dev) and `*.prod.toml` (prod). See [docs/fly-cutover-runbook.md](docs/fly-cutover-runbook.md).
+Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.toml`, `apps/marrow/frontend/fly.toml` (dev) and `*.prod.toml` (prod). CI/CD and deploy job layout: [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc).
 
 ## Branch workflow
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).
-- After CI green on push, Fly deploy workflows deploy API → MCP → frontend automatically.
+- After CI green on push, Fly deploy workflows run per-component jobs (API → MCP serial, frontend parallel) with post-deploy smoke checks.
 
 ## Running locally
 
+Postgres (pgvector) via Docker; backend and frontend in separate terminals:
+
 ```bash
-./start.sh          # Both services
-cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload   # Backend only
-cd apps/marrow/frontend && npm run dev   # Frontend only
+docker start ht-postgres 2>/dev/null || docker run -d --name ht-postgres \
+  -e POSTGRES_USER=health -e POSTGRES_PASSWORD=health -e POSTGRES_DB=health \
+  -p 5432:5432 pgvector/pgvector:pg16
+
+cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload   # :8000
+cd apps/marrow/frontend && npm run dev                                      # :3000, proxies /api/* → :8000
 ```
+
+No root-level `start.sh` — use `docker compose` when a compose file is added for full-stack local dev.
 
 ## Key Paths
 
@@ -142,6 +149,6 @@ The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and 
 - Alembic migrations 004/019 read `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` from **`os.environ`, not** from `.env` via pydantic. Export the `.env` before migrating: `cd apps/marrow/backend && set -a && . ./.env && set +a && uv run alembic upgrade head`. Running the backend itself does not need this (pydantic loads `.env`), only the migration step does.
 
 ### Running
-- `./start.sh` runs both (backend `:8000`, frontend `:3000`); frontend proxies `/api/*` → `:8000`. The backend auto-seeds dietary reference tables on first boot against a fresh DB.
+- Backend `:8000` + frontend `:3000` (frontend proxies `/api/*` → `:8000`): run `uv run uvicorn app.main:app --port 8000 --reload` in `apps/marrow/backend` and `npm run dev` in `apps/marrow/frontend` (after Postgres is up — see above). Backend auto-seeds dietary reference tables on first boot against a fresh DB.
 - Signup rejects non-routable email TLDs (e.g. `.local`); use a normal domain like `demo@example.com` when testing auth.
 - Optional services (not needed for the core check-in app): embedding worker (`uv run python -m app.embedding_pipeline`, needs `OPENROUTER_API_KEY`) and MCP server (`uv run python -m app.mcp ...`).

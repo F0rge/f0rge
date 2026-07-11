@@ -109,6 +109,7 @@ class FoodAnalysisService:
         match = await lookup.lookup(data.name)
 
         ingredient = PhotoIngredient(
+            user_id=analysis.user_id,
             analysis_id=analysis_id,
             name=data.name,
             canonical_name=match.canonical_name if match else data.canonical_name,
@@ -134,7 +135,11 @@ class FoodAnalysisService:
 
     async def create_pending_analysis(self, photo_id: int) -> PhotoAnalysis:
         """Create a new pending analysis record for a photo."""
+        photo = await PhotoCRUD(self.db).get_by_id(photo_id)
+        if photo is None:
+            raise NotFoundError(f"Photo {photo_id} not found")
         analysis = PhotoAnalysis(
+            user_id=photo.user_id,
             photo_id=photo_id,
             status="pending",
             model_id=settings.openrouter_model,

@@ -21,7 +21,7 @@ Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml`, then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml`.
-- After CI green on push, `.github/workflows/fly-deploy-develop.yml` / `fly-deploy-main.yml` deploy API → MCP → frontend.
+- After CI green on push, `.github/workflows/fly-deploy-develop.yml` / `fly-deploy-main.yml` deploy via reusable workflow: API → MCP (serial), frontend (parallel). Per-component `workflow_dispatch` supported.
 
 ## Fly apps
 
@@ -33,26 +33,29 @@ Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-
 
 ## MPG (Postgres)
 
-- Cluster: `marrow-db` (`nlkxjo5m3240y93v`, `fra`, org `f0rge`)
+- Cluster: `f0rge-db` (`nlkxjo5m3240y93v`, `fra`, org `f0rge`)
 - Databases: `marrow` (prod), `marrow_dev` (dev)
 - Users: `healthtracker-app` (writer), `healthtracker-ro` (reader), `htmigrate` (migrations only)
 - Set `FLY_MPG_SKIP_ROLE_DDL=1` on Fly apps
 
-Full setup: [docs/fly-cutover-runbook.md](../../docs/fly-cutover-runbook.md).
-
-## Migrations on Fly
-
-`[deploy] release_command` in `fly.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime web/worker use `DATABASE_URL` (healthtracker-app). See runbook.
+Migrations: `[deploy] release_command` in `fly.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker-app).
 
 `apps/marrow/backend/docker-entrypoint.sh` still supports `RUN_MIGRATIONS=1` for local Docker builds; Fly uses `release_command` instead.
 
 ## Local development
 
+Postgres via Docker; backend and frontend in separate terminals (no root `start.sh`):
+
 ```bash
-./start.sh          # Both services
+docker start ht-postgres 2>/dev/null || docker run -d --name ht-postgres \
+  -e POSTGRES_USER=health -e POSTGRES_PASSWORD=health -e POSTGRES_DB=health \
+  -p 5432:5432 pgvector/pgvector:pg16
+
 cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload
 cd apps/marrow/frontend && npm run dev   # :3000
 ```
+
+Prefer `docker compose up` when a compose file exists for full-stack local dev.
 
 ## New config vars checklist
 

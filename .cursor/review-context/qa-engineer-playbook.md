@@ -18,7 +18,7 @@ Cite the originating memory file in every block-level comment so future-Leo can 
 - **Class-of-bug audit missing** — when a fix names a pattern (tz-aware bind, `scalar_one_or_none` on non-unique WHERE, `field || undefined` + `exclude_unset`, etc.), the PR must either fix every sibling occurrence in the same diff or open a tracked follow-up issue. Block if neither. See `feedback_audit_class_of_bug.md` (root-cause: 2026-05-17 two prod outages from missing sibling audit on `photos.meal_time`).
 - **`.env.example` not updated for new required env vars** — block on any new entry in `apps/marrow/backend/app/config.py` (e.g. `HEALTHTRACKER_RO_PASSWORD`, `SETTINGS_ENCRYPTION_KEY`, `MCP_READONLY_DATABASE_URL`) that isn't mirrored in `apps/marrow/backend/.env.example`. Redeploys silently break without it. See `mcp_server_issue_49_findings.md`.
 - **`ruff format` regression** — if a touched file used to pass `ruff format --check` and no longer does, block. Note: `ruff format --check` is currently OFF in CI (see "What NOT to flag" below), but format regressions are still review-blocking because they leak into the formatting backlog.
-- **Migration without Fly release_command path** — PRs adding files under `apps/marrow/backend/migrations/versions/` must leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running alembic via `MIGRATION_DATABASE_URL`. See `docs/fly-cutover-runbook.md`.
+- **Migration without Fly release_command path** — PRs adding files under `apps/marrow/backend/migrations/versions/` must leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running alembic via `MIGRATION_DATABASE_URL`. See `.cursor/rules/infra.mdc`.
 - **pgvector extension order** — block any new test fixture or context that calls `Base.metadata.create_all` on a fresh Postgres without first executing `CREATE EXTENSION IF NOT EXISTS vector`. The `embedding.embedding VECTOR(1024)` column will crash `create_all`. See `project_byok_pgvector.md`.
 - **BYOK key resolution missed** — block any new AI/LLM call site that imports `settings.openrouter_api_key` directly instead of calling `resolve_llm_credentials(db)`. Lab extraction has this as an open follow-up; new code must not repeat it. See `project_byok_pgvector_gate.md`.
 - **Embedding vector dim != 1024** — block any new embedding column, request, or response that uses a dim other than 1024. The column is locked. See `project_ai_seams.md`.
@@ -119,8 +119,8 @@ Per `project_datetime_tz_convention.md`:
 
 ## DevOps / infra patterns
 
-- **Fly migrations** — `[deploy] release_command` in `fly.toml` / `fly.prod.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker-app). See `docs/fly-cutover-runbook.md`.
-- **MPG on Fly** — cluster `nlkxjo5m3240y93v` (`marrow-db`, org `f0rge`); `FLY_MPG_SKIP_ROLE_DDL=1`; roles via `fly mpg users create`.
+- **Fly migrations** — `[deploy] release_command` in `fly.toml` / `fly.prod.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker-app). See `.cursor/rules/infra.mdc`.
+- **MPG on Fly** — cluster `nlkxjo5m3240y93v` (`f0rge-db`, org `f0rge`); `FLY_MPG_SKIP_ROLE_DDL=1`; roles via `fly mpg users create`.
 - **Custom domains** — `marrow-health.com` DNS on Cloudflare (grey cloud); certs via `fly certs add`.
 
 ---
