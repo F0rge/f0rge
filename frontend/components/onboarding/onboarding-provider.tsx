@@ -14,7 +14,9 @@ import {
 import { useAuth } from '@/lib/api/hooks/auth'
 import { useCompleteOnboarding, useUserSettings } from '@/lib/api/hooks/settings'
 import { joyrideStyles, joyrideThemeOptions } from './joyride-theme'
-import { TOUR_STEPS } from './tour-steps'
+import { OnboardingTooltip } from './setup-tooltip'
+import { TOUR_STEPS, tourStepsForReplay, type TourStepDefinition } from './tour-steps'
+import { OnboardingSetupProvider } from './use-onboarding-setup'
 import { routeMatches, waitForSelector } from './wait-for-target'
 
 interface OnboardingContextValue {
@@ -24,14 +26,21 @@ interface OnboardingContextValue {
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null)
 
-function buildJoyrideSteps(navigate: (route: string) => void): Step[] {
-  return TOUR_STEPS.map((def) => ({
+function buildJoyrideSteps(
+  definitions: TourStepDefinition[],
+  navigate: (route: string) => void,
+): Step[] {
+  return definitions.map((def) => ({
     target: def.target,
     title: def.title,
     content: def.content,
     placement: def.placement ?? 'bottom',
     isFixed: def.isFixed,
-    data: { route: def.route },
+    data: {
+      route: def.route,
+      stepType: def.stepType ?? 'tour',
+      setupKind: def.setupKind,
+    },
     before: async () => {
       if (!routeMatches(window.location.pathname, def.route)) {
         navigate(def.route)
@@ -42,6 +51,14 @@ function buildJoyrideSteps(navigate: (route: string) => void): Step[] {
 }
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <OnboardingSetupProvider>
+      <OnboardingTourInner>{children}</OnboardingTourInner>
+    </OnboardingSetupProvider>
+  )
+}
+
+function OnboardingTourInner({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const { data: auth } = useAuth()
@@ -52,19 +69,23 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const [run, setRun] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
-  const isReplayRef = useRef(false)
+  const [isReplay, setIsReplay] = useState(false)
   const autoStartedRef = useRef(false)
 
-  const steps = useMemo(() => buildJoyrideSteps((route) => router.push(route)), [router])
+  const stepDefinitions = isReplay ? tourStepsForReplay() : TOUR_STEPS
+  const steps = useMemo(
+    () => buildJoyrideSteps(stepDefinitions, (route) => router.push(route)),
+    [router, stepDefinitions],
+  )
 
   const finishTour = useCallback(
     async (shouldPersist: boolean) => {
       setRun(false)
       setStepIndex(0)
-      if (shouldPersist && !isReplayRef.current) {
+      if (shouldPersist) {
         await completeOnboarding.mutateAsync()
       }
-      isReplayRef.current = false
+      setIsReplay(false)
     },
     [completeOnboarding],
   )
@@ -86,11 +107,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         status === STATUS.FINISHED ||
         status === STATUS.SKIPPED
       ) {
-        const shouldPersist = !isReplayRef.current
-        void finishTour(shouldPersist)
+        void finishTour(!isReplay)
       }
     },
-    [finishTour],
+    [finishTour, isReplay],
   )
 
   const { Tour } = useJoyride({
@@ -106,6 +126,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       skip: 'Skip tour',
       last: 'Done',
     },
+    tooltipComponent: OnboardingTooltip,
     options: {
       ...joyrideThemeOptions,
       showProgress: true,
@@ -119,7 +140,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const startTour = useCallback(
     (options?: { replay?: boolean }) => {
-      isReplayRef.current = options?.replay ?? false
+      setIsReplay(options?.replay ?? false)
       setStepIndex(0)
       setRun(true)
       if (!routeMatches(pathname, '/checkin')) {
@@ -138,18 +159,18 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
     let cancelled = false
 
-    const startWhenCheckinReady = async () => {
+    const startWhenReady = async () => {
       if (!routeMatches(pathname, '/checkin')) {
         router.push('/checkin')
       }
-      await waitForSelector('[data-tour="checkin-wellbeing"]', 15000)
+      await waitForSelector('body', 15000)
       if (!cancelled) {
         autoStartedRef.current = true
         startTour()
       }
     }
 
-    void startWhenCheckinReady()
+    void startWhenReady()
 
     return () => {
       cancelled = true

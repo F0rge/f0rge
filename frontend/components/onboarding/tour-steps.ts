@@ -7,6 +7,8 @@
  * Replay entry point: Settings → Help → Replay app tour.
  */
 
+export type SetupKind = 'symptoms' | 'medications' | 'supplements' | 'trackers'
+
 export interface TourStepDefinition {
   id: string
   route: string
@@ -15,6 +17,8 @@ export interface TourStepDefinition {
   content: string
   placement?: 'top' | 'bottom' | 'left' | 'right' | 'center' | 'auto'
   isFixed?: boolean
+  stepType?: 'setup' | 'tour'
+  setupKind?: SetupKind
 }
 
 export const TOUR_STEPS: TourStepDefinition[] = [
@@ -26,6 +30,52 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     content:
       'This quick tour shows how to log daily symptoms, navigate the app, and unlock insights over time.',
     placement: 'center',
+    isFixed: true,
+  },
+  {
+    id: 'setup-symptoms',
+    route: '/checkin',
+    target: 'body',
+    title: 'Symptoms to track',
+    content:
+      'Pick the symptoms you want on your daily check-in. Choose as many or as few as you like — you can add more later in Customize.',
+    placement: 'center',
+    isFixed: true,
+    stepType: 'setup',
+    setupKind: 'symptoms',
+  },
+  {
+    id: 'setup-medications',
+    route: '/checkin',
+    target: 'body',
+    title: 'Common medications',
+    content: 'Pick medications you might log as needed. These become quick-add chips on your check-in.',
+    placement: 'center',
+    isFixed: true,
+    stepType: 'setup',
+    setupKind: 'medications',
+  },
+  {
+    id: 'setup-supplements',
+    route: '/checkin',
+    target: 'body',
+    title: 'Supplements you take',
+    content: 'Select supplements you want to track daily. Skip anything you do not use.',
+    placement: 'center',
+    isFixed: true,
+    stepType: 'setup',
+    setupKind: 'supplements',
+  },
+  {
+    id: 'setup-trackers',
+    route: '/checkin',
+    target: 'body',
+    title: 'Daily trackers',
+    content: 'Choose lifestyle trackers like caffeine or alcohol. We will save your picks when you continue.',
+    placement: 'center',
+    isFixed: true,
+    stepType: 'setup',
+    setupKind: 'trackers',
   },
   {
     id: 'bottom-nav',
@@ -70,7 +120,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="checkin-supplements"]',
     title: 'Supplements & medications',
     content:
-      'Tap pills to mark what you took today. Your starter catalog is pre-seeded — customize active items in Customize.',
+      'Tap pills to mark what you took today. Add or change your catalog anytime in Customize.',
     placement: 'bottom',
   },
   {
@@ -79,7 +129,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="checkin-symptoms"]',
     title: 'Symptoms & trackers',
     content:
-      'Log symptom severity and lifestyle trackers (caffeine, alcohol, etc.). Add your own in Customize when you are ready.',
+      'Log symptom severity and lifestyle trackers you chose during setup. Add more anytime in Customize.',
     placement: 'bottom',
   },
   {
@@ -165,3 +215,11 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     isFixed: true,
   },
 ]
+
+export const SETUP_STEP_IDS = new Set(
+  TOUR_STEPS.filter((step) => step.stepType === 'setup').map((step) => step.id),
+)
+
+export function tourStepsForReplay(): TourStepDefinition[] {
+  return TOUR_STEPS.filter((step) => step.stepType !== 'setup')
+}

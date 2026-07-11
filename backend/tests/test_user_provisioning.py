@@ -17,16 +17,7 @@ from app.models.supplement_catalog import SupplementCatalogItem
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.tracker import Tracker
 from app.models.user import User
-from app.seed_data import (
-    BULK_MEDICATIONS,
-    BULK_SUPPLEMENTS,
-    DEFAULT_DIET_TAGS,
-    DEFAULT_MEDICATIONS,
-    DEFAULT_SYMPTOMS,
-    DEFAULT_SUPPLEMENTS,
-    DEFAULT_TRACKERS,
-    SPLIT_VITAMIN_D_K2,
-)
+from app.seed_data import DEFAULT_DIET_TAGS
 from app.services.user_provisioning import is_user_provisioned, provision_user_catalogs
 
 
@@ -87,22 +78,17 @@ async def _seed_leo_dietary_reference(async_db: AsyncSession) -> None:
     await async_db.flush()
 
 
-async def test_signup_seeds_default_catalogs(
+async def test_signup_seeds_infrastructure_only(
     async_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
     user_id = await _signup_user(async_client)
 
-    expected_supplements = (
-        len(DEFAULT_SUPPLEMENTS) + len(SPLIT_VITAMIN_D_K2) + len(BULK_SUPPLEMENTS)
-    )
-    expected_medications = len(DEFAULT_MEDICATIONS) + len(BULK_MEDICATIONS)
-
-    assert await _count_for_user(async_db, user_id, SupplementCatalogItem) == expected_supplements
-    assert await _count_for_user(async_db, user_id, SymptomCatalogItem) == len(DEFAULT_SYMPTOMS)
-    assert await _count_for_user(async_db, user_id, MedicationCatalogItem) == expected_medications
+    assert await _count_for_user(async_db, user_id, SupplementCatalogItem) == 0
+    assert await _count_for_user(async_db, user_id, SymptomCatalogItem) == 0
+    assert await _count_for_user(async_db, user_id, MedicationCatalogItem) == 0
+    assert await _count_for_user(async_db, user_id, Tracker) == 0
     assert await _count_for_user(async_db, user_id, DietTagCatalogItem) == len(DEFAULT_DIET_TAGS)
-    assert await _count_for_user(async_db, user_id, Tracker) == len(DEFAULT_TRACKERS)
 
 
 async def _create_user(async_db: AsyncSession, email: str) -> uuid.UUID:
@@ -117,13 +103,13 @@ async def test_provision_user_catalogs_is_idempotent(async_db: AsyncSession) -> 
     await _set_session_user_id(async_db, user_id)
 
     await provision_user_catalogs(async_db, user_id)
-    first_count = await _count_for_user(async_db, user_id, SupplementCatalogItem)
+    first_tags = await _count_for_user(async_db, user_id, DietTagCatalogItem)
 
     await provision_user_catalogs(async_db, user_id)
-    second_count = await _count_for_user(async_db, user_id, SupplementCatalogItem)
+    second_tags = await _count_for_user(async_db, user_id, DietTagCatalogItem)
 
-    assert first_count > 0
-    assert second_count == first_count
+    assert first_tags == len(DEFAULT_DIET_TAGS)
+    assert second_tags == first_tags
 
 
 async def test_signup_does_not_change_leo_catalogs(
@@ -161,32 +147,11 @@ async def test_signup_copies_dietary_reference_catalog(
     assert await _count_for_user(async_db, user_id, IngredientAlias) == 1
 
 
-async def test_is_user_provisioned_reflects_seeded_state(async_db: AsyncSession) -> None:
+async def test_is_user_provisioned_reflects_infrastructure_state(async_db: AsyncSession) -> None:
     user_id = await _create_user(async_db, "provisioned-check@example.com")
     assert await is_user_provisioned(async_db, user_id) is False
     await provision_user_catalogs(async_db, user_id)
     assert await is_user_provisioned(async_db, user_id) is True
-
-
-async def test_signup_seeds_active_supplements_for_daily_picker(
-    async_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    user_id = await _signup_user(async_client)
-    await _set_session_user_id(async_db, user_id)
-    active = (
-        (
-            await async_db.execute(
-                select(SupplementCatalogItem.key).where(SupplementCatalogItem.archived.is_(False))
-            )
-        )
-        .scalars()
-        .all()
-    )
-    assert "nac" in active
-    assert "vitamin_d" in active
-    assert "vitamin_k2" in active
-    assert "vitamin_d_k2" not in active
 
 
 async def test_signup_copies_lab_marker_catalog_from_reference(
