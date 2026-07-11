@@ -61,10 +61,7 @@ jobs:
             echo "projects=marrow-backend marrow-frontend" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" 2>/dev/null || true)
-          if [ -z "$PROJECTS" ]; then
-            PROJECTS="marrow-backend marrow-frontend"
-          fi
+          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --sep=" " 2>/dev/null || true)
           echo "projects=$PROJECTS" >> "$GITHUB_OUTPUT"
 
       - uses: superfly/flyctl-actions/setup-flyctl@v1
