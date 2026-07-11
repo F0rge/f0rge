@@ -233,8 +233,6 @@ export function useCheckinBoardState({
     stool_status: stoolStatus,
     bristol_type: stoolStatus === 'abnormal' && bristolType !== null ? bristolType : undefined,
     stool_completeness: stoolCompleteness ?? undefined,
-    joint_pain: 0,
-    neuro: 0,
     sleep_quality: sleepQuality,
     stress,
     diet_risk: dietRisk,

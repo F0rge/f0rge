@@ -129,7 +129,7 @@ def upgrade() -> None:
             UPDATE entries
             SET symptoms_json = symptoms_json || jsonb_build_object(
                 'neuro_symptoms',
-                LEAST(10, ROUND(((6 - neuro) * 10.0) / 4))
+                LEAST(10, ROUND(((5 - neuro) * 10.0) / 4))
             )
             WHERE schema_version >= 4
               AND neuro BETWEEN 1 AND 5
