@@ -1,7 +1,6 @@
 name: CI (develop)
 
-# Runs on PRs targeting `develop` and on push to `develop`. This is the
-# inner ring: cheap lint/format/test, no production-shaped builds.
+# Runs on PRs targeting `develop` and on push to `develop`. Single nx affected job.
 
 on:
   pull_request:
@@ -9,72 +8,50 @@ on:
   push:
     branches: [develop]
 
-# Cancel older runs on the same ref when a new commit lands.
 concurrency:
   group: ci-develop-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  backend:
-    name: backend (ruff + pytest)
+  ci:
+    name: ci
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: apps/marrow/backend
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: develop
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/marrow/frontend/package-lock.json
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Install frontend deps
+        run: npm ci --prefix apps/marrow/frontend
+
+      - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
 
       - name: Pin Python 3.10
         run: uv python install 3.10
 
-      - name: Install deps (incl. dev group for ruff/pytest/testcontainers)
-        run: uv sync --frozen
+      - name: Install backend deps
+        run: uv sync --frozen --project apps/marrow/backend
 
       - name: Install ruff
-        # ruff isn't in pyproject — install it explicitly into the project venv.
         run: uv tool install ruff@latest
 
-      - name: ruff check
-        # Config in backend/pyproject.toml. Initial gate is narrow
-        # (E/F/W, minus E501/F821). Follow-up: enable I + UP + B + SIM + RUF.
-        run: uv tool run ruff check .
-
-      - name: ruff format --check
-        # Guards against format drift re-accumulating after the one-shot
-        # `ruff format` sweep. Run `uv run ruff format .` in backend/ to fix.
-        run: uv tool run ruff format --check .
-
-      - name: pytest
-        # testcontainers needs a Docker daemon — ubuntu-latest runners ship with one.
-        run: uv run pytest -ra
-
-  frontend:
-    name: frontend (lint + build)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: apps/marrow/frontend
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: apps/marrow/frontend/package-lock.json
-
-      - run: npm ci
-
-      - run: npm run lint
-
-      - run: npm run typecheck
-
-      - name: next build
-        run: npm run build
+      - name: nx affected
+        run: npx nx affected -t lint format-check typecheck test build

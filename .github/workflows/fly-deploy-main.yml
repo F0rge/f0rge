@@ -1,14 +1,16 @@
 name: Fly Deploy (main)
 
 # Deploys the Fly prod stack after CI (main) passes on a push to main.
+# Each component deploys only when its Nx project is affected since the last
+# successful deploy. workflow_dispatch deploys all components.
 
 on:
   workflow_run:
     workflows: ["CI (main)"]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
 
-# One Fly deploy at a time per env — do not cancel an in-flight deploy.
 concurrency:
   group: fly-deploy-main
   cancel-in-progress: false
@@ -21,9 +23,12 @@ jobs:
   deploy:
     name: deploy api → mcp → frontend
     if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -31,18 +36,50 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root deps
+        run: npm ci
+
+      - uses: nrwl/nx-set-shas@v4
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          main-branch-name: main
+          workflow-id: fly-deploy-main.yml
+
+      - name: Resolve affected projects
+        id: affected
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "projects=marrow-backend marrow-frontend" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" 2>/dev/null || true)
+          if [ -z "$PROJECTS" ]; then
+            PROJECTS="marrow-backend marrow-frontend"
+          fi
+          echo "projects=$PROJECTS" >> "$GITHUB_OUTPUT"
 
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
       - name: Deploy API (alembic via release_command)
+        if: contains(steps.affected.outputs.projects, 'marrow-backend')
         working-directory: apps/marrow/backend
         run: flyctl deploy --remote-only --config fly.prod.toml
 
       - name: Deploy MCP
+        if: contains(steps.affected.outputs.projects, 'marrow-backend')
         working-directory: apps/marrow/backend
         run: flyctl deploy --remote-only --config fly.mcp.prod.toml
 
       - name: Deploy frontend
+        if: contains(steps.affected.outputs.projects, 'marrow-frontend')
         working-directory: apps/marrow/frontend
         run: flyctl deploy --remote-only --config fly.prod.toml
