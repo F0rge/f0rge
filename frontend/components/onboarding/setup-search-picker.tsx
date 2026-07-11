@@ -43,10 +43,14 @@ export function SetupSearchPicker({
 
   const visibleItems = useMemo(() => {
     if (!trimmedSearch) {
-      return curatedItems
+      const curatedIds = new Set(curatedItems.map((item) => item.id))
+      const selectedExtras = searchableItems.filter(
+        (item) => selectedSet.has(item.id) && !curatedIds.has(item.id),
+      )
+      return [...curatedItems, ...selectedExtras]
     }
     return searchableItems.filter((item) => matchesQuery(item, trimmedSearch))
-  }, [curatedItems, searchableItems, trimmedSearch])
+  }, [curatedItems, searchableItems, trimmedSearch, selectedSet])
 
   function toggle(id: string) {
     if (selectedSet.has(id)) {
