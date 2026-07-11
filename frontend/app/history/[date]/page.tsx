@@ -9,7 +9,7 @@ import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-dis
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
 import type { Entry, Photo } from '@/lib/api/types'
-import { getOverallTier, getScaleLabel, type ScaleTier } from '@/lib/checkin/scale-labels'
+import { getOverallBadgeClass, getScaleLabel } from '@/lib/checkin/scale-labels'
 
 function formatDisplayDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00')
@@ -19,12 +19,6 @@ function formatDisplayDate(dateStr: string): string {
     month: 'long',
     year: 'numeric',
   })
-}
-
-const OVERALL_BADGE_CLASS: Record<ScaleTier, string> = {
-  good: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  neutral: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  poor: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
 }
 
 // bloating is 0-3 in every schema version — unaffected by v4.
@@ -173,7 +167,7 @@ function EntryDetail({ entry }: { entry: Entry }) {
       <div className="border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Overall</span>
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${OVERALL_BADGE_CLASS[getOverallTier(entry.overall, entry.schema_version)]}`}>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getOverallBadgeClass(entry.overall, entry.schema_version)}`}>
             {getScaleLabel('overall', entry.overall, entry.schema_version)}
           </span>
         </div>
