@@ -38,11 +38,7 @@ Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-
 - Users: `healthtracker-app` (writer), `healthtracker-ro` (reader), `htmigrate` (migrations only)
 - Set `FLY_MPG_SKIP_ROLE_DDL=1` on Fly apps
 
-Full setup: [docs/fly-cutover-runbook.md](../../docs/fly-cutover-runbook.md).
-
-## Migrations on Fly
-
-`[deploy] release_command` in `fly.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime web/worker use `DATABASE_URL` (healthtracker-app). See runbook.
+Migrations: `[deploy] release_command` in `fly.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker-app).
 
 `apps/marrow/backend/docker-entrypoint.sh` still supports `RUN_MIGRATIONS=1` for local Docker builds; Fly uses `release_command` instead.
 

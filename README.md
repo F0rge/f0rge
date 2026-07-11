@@ -10,7 +10,7 @@ apps/marrow/
 └── frontend/  Next.js 16 + React 19 + Tailwind + shadcn/ui
 ```
 
-Agent workflow, environments, conventions, and sub-agent delegation rules live in [AGENTS.md](AGENTS.md). Deploy runbook and architecture references live in [docs/](docs/).
+Agent workflow, environments, conventions, and sub-agent delegation rules live in [AGENTS.md](AGENTS.md). Fly deploy conventions: [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc).
 
 ## Running locally
 
@@ -40,5 +40,9 @@ npx nx reset                                   # clear the Nx cache
 
 ## CI/CD
 
-- `ci-develop.yml` / `ci-main.yml` — lint + test + build gates on PRs into `develop` / `main`
-- `fly-deploy-*.yml` — auto-deploy to Fly after CI is green
+- **`CI (develop)` / `CI (main)`** — parallel `backend` and `frontend` jobs when Nx affected; aggregate `ci` job is the required branch check (`main-pr-gate` on `main`).
+- **`Fly Deploy (develop)` / `Fly Deploy (main)`** — triggered after a green CI push (`workflow_run`). Reusable workflow jobs:
+  - `plan` → `deploy api` → `deploy mcp` (serial, migrations via API `release_command`) → `deploy frontend` (parallel with MCP)
+  - `smoke` — health curls for components that deployed
+- **Manual dispatch** — redeploy one component: `gh workflow run "Fly Deploy (develop)" --ref develop -f component=mcp` (`all` / `api` / `mcp` / `frontend`).
+- **Note:** `workflow_run` deploy workflows execute from the repo default branch (`main`); merge workflow changes to `main` before automated prod deploys pick them up.

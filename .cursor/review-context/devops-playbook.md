@@ -38,7 +38,7 @@ Deploy order: API (alembic via `release_command`) → MCP (serial); frontend par
 
 MPG cluster: `nlkxjo5m3240y93v` (`f0rge-db`, org `f0rge`). Databases: `marrow` (prod), `marrow_dev` (dev).
 
-Full reference: `docs/fly-cutover-runbook.md`, `.cursor/rules/infra.mdc`.
+Full reference: [README.md](../../README.md#cicd), `.cursor/rules/infra.mdc`.
 
 ## New env var checklist
 
