@@ -13,7 +13,7 @@ from app.crud.auth import UserCRUD
 from app.exceptions import ConflictError, UnauthorizedError, ValidationError
 from app.models.user import User
 from app.services.avatar_defaults import default_avatar_index
-from app.services.user_provisioning import provision_user_catalogs
+from app.services.user_provisioning import provision_user_catalogs, repair_infrastructure_catalogs
 
 JWT_ALGORITHM = "HS256"
 JWT_COOKIE_NAME = "ht_session"
@@ -116,6 +116,9 @@ class AuthService:
         user = await self.crud.get_by_email(email)
         if user is None or not verify_password(password, user.password_hash):
             raise UnauthorizedError("Invalid email or password")
+
+        await repair_infrastructure_catalogs(self.db, user.id)
+        await self.crud.commit_refresh(user)
 
         token = create_access_token(user.id)
         set_session_cookie(response, token)

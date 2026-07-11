@@ -78,13 +78,23 @@ async def _seed_dietary_db_if_empty() -> None:
     builds the image without the scripts/ COPY), log a warning and continue.
     The feature degrades to '?' badges rather than crashing the app.
     """
+    import uuid
+
     from sqlalchemy import func, select
 
     from app.models.dietary_ingredient import DietaryIngredient
+    from app.tenant import apply_session_user_id
+
+    ref_user_id = uuid.UUID(settings.default_storage_user_id)
 
     async with async_session_maker() as session:
+        await apply_session_user_id(session, ref_user_id)
         existing = (
-            await session.execute(select(func.count()).select_from(DietaryIngredient))
+            await session.execute(
+                select(func.count())
+                .select_from(DietaryIngredient)
+                .where(DietaryIngredient.user_id == ref_user_id)
+            )
         ).scalar_one()
 
     if existing > 0:
@@ -102,8 +112,13 @@ async def _seed_dietary_db_if_empty() -> None:
 
         await asyncio.to_thread(seed_main)
         async with async_session_maker() as session:
+            await apply_session_user_id(session, ref_user_id)
             count = (
-                await session.execute(select(func.count()).select_from(DietaryIngredient))
+                await session.execute(
+                    select(func.count())
+                    .select_from(DietaryIngredient)
+                    .where(DietaryIngredient.user_id == ref_user_id)
+                )
             ).scalar_one()
         logger.info("Dietary seed complete: %d ingredients loaded", count)
     except Exception:

@@ -18,7 +18,13 @@ from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.tracker import Tracker
 from app.models.user import User
 from app.seed_data import DEFAULT_DIET_TAGS
-from app.services.user_provisioning import is_user_provisioned, provision_user_catalogs
+from app.crud.user_provisioning import UserProvisioningCRUD
+from app.services.user_provisioning import (
+    is_user_provisioned,
+    provision_user_catalogs,
+    repair_infrastructure_catalogs,
+)
+from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL
 
 
 async def _set_session_user_id(async_db: AsyncSession, user_id: uuid.UUID) -> None:
@@ -172,3 +178,24 @@ async def test_signup_copies_lab_marker_catalog_from_reference(
 
     user_id = await _signup_user(async_client, email="lab-user@example.com")
     assert await _count_for_user(async_db, user_id, LabMarkerCatalog) == 1
+
+
+def test_copy_function_declares_row_security_off() -> None:
+    """Regression guard: prod FORCE RLS requires row_security=off on the copy function."""
+    assert "SET row_security = off" in COPY_USER_CATALOG_FROM_REFERENCE_SQL
+
+
+async def test_repair_infrastructure_catalogs_refills_empty_ingredients(
+    async_db: AsyncSession,
+) -> None:
+    await _seed_leo_dietary_reference(async_db)
+    user_id = await _create_user(async_db, "repair-me@example.com")
+    await _set_session_user_id(async_db, user_id)
+    crud = UserProvisioningCRUD(async_db)
+    await crud.mark_infrastructure_provisioned(user_id)
+    assert await _count_for_user(async_db, user_id, DietaryIngredient) == 0
+
+    await repair_infrastructure_catalogs(async_db, user_id)
+
+    assert await _count_for_user(async_db, user_id, DietaryIngredient) == 1
+    assert await _count_for_user(async_db, user_id, IngredientAlias) == 1

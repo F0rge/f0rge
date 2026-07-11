@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crud.user_provisioning import UserProvisioningCRUD
+from app.exceptions import ExternalServiceError
 from app.models.diet_tag_catalog import DietTagCatalogItem
 from app.seed_data import DEFAULT_DIET_TAGS
 from app.tenant import apply_session_user_id
@@ -39,8 +40,43 @@ async def provision_user_catalogs(db: AsyncSession, user_id: uuid.UUID) -> None:
         now,
         include_usage_timestamps=False,
     )
+    ref_user_id = uuid.UUID(settings.default_storage_user_id)
     await _copy_reference_catalogs(crud, user_id)
+    if ref_user_id != user_id:
+        await _require_reference_catalog_copied(crud, user_id, ref_user_id)
     await crud.mark_infrastructure_provisioned(user_id)
+
+
+async def repair_infrastructure_catalogs(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """Re-copy reference catalogs when a user was marked provisioned with an empty copy."""
+    if user_id == uuid.UUID(settings.default_storage_user_id):
+        return
+
+    await apply_session_user_id(db, user_id)
+    crud = UserProvisioningCRUD(db)
+    if not await crud.is_infrastructure_provisioned(user_id):
+        await provision_user_catalogs(db, user_id)
+        return
+
+    if await crud.count_dietary_ingredients(user_id) > 0:
+        return
+
+    ref_user_id = uuid.UUID(settings.default_storage_user_id)
+    await crud.copy_reference_catalogs(user_id, ref_user_id)
+    await _require_reference_catalog_copied(crud, user_id, ref_user_id)
+
+
+async def _require_reference_catalog_copied(
+    crud: UserProvisioningCRUD,
+    user_id: uuid.UUID,
+    ref_user_id: uuid.UUID,
+) -> None:
+    await apply_session_user_id(crud.db, ref_user_id)
+    ref_count = await crud.count_dietary_ingredients(ref_user_id)
+    await apply_session_user_id(crud.db, user_id)
+    user_count = await crud.count_dietary_ingredients(user_id)
+    if ref_count > 0 and user_count == 0:
+        raise ExternalServiceError("Reference catalog copy failed during signup")
 
 
 async def _insert_key_label_catalog(
