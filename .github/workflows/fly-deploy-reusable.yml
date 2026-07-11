@@ -46,6 +46,7 @@ jobs:
       deploy_frontend: ${{ steps.flags.outputs.deploy_frontend }}
       api_health_url: ${{ steps.urls.outputs.api_health_url }}
       frontend_health_url: ${{ steps.urls.outputs.frontend_health_url }}
+      mcp_health_url: ${{ steps.urls.outputs.mcp_health_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -122,9 +123,11 @@ jobs:
           if [ "$ENVIRONMENT" = "main" ]; then
             echo "api_health_url=https://api.marrow-health.com/api/v1/health" >> "$GITHUB_OUTPUT"
             echo "frontend_health_url=https://marrow-health.com/" >> "$GITHUB_OUTPUT"
+            echo "mcp_health_url=https://marrow-mcp.fly.dev/mcp" >> "$GITHUB_OUTPUT"
           else
             echo "api_health_url=https://api-dev.marrow-health.com/api/v1/health" >> "$GITHUB_OUTPUT"
             echo "frontend_health_url=https://app-dev.marrow-health.com/" >> "$GITHUB_OUTPUT"
+            echo "mcp_health_url=https://marrow-mcp-dev.fly.dev/mcp" >> "$GITHUB_OUTPUT"
           fi
 
   deploy-api:
@@ -177,8 +180,10 @@ jobs:
 
   deploy-frontend:
     name: deploy frontend
-    needs: plan
-    if: needs.plan.outputs.deploy_frontend == 'true'
+    needs: [plan, deploy-api]
+    if: >-
+      needs.plan.outputs.deploy_frontend == 'true' &&
+      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
@@ -233,4 +238,17 @@ jobs:
             sleep 10
           done
           echo "Frontend health check failed: ${{ needs.plan.outputs.frontend_health_url }}"
+          exit 1
+
+      - name: Smoke MCP
+        if: needs.deploy-mcp.result == 'success'
+        run: |
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.plan.outputs.mcp_health_url }}")
+            if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "MCP health check failed: ${{ needs.plan.outputs.mcp_health_url }}"
           exit 1
