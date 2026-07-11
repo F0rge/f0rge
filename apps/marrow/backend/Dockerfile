@@ -18,6 +18,8 @@ COPY libs/backend/core/pyproject.toml /app/libs/backend/core/pyproject.toml
 COPY libs/backend/core/src /app/libs/backend/core/src
 COPY libs/backend/db/pyproject.toml /app/libs/backend/db/pyproject.toml
 COPY libs/backend/db/src /app/libs/backend/db/src
+COPY libs/backend/storage/pyproject.toml /app/libs/backend/storage/pyproject.toml
+COPY libs/backend/storage/src /app/libs/backend/storage/src
 COPY libs/backend/testing/pyproject.toml /app/libs/backend/testing/pyproject.toml
 COPY libs/backend/testing/src /app/libs/backend/testing/src
 RUN uv sync --frozen --no-dev

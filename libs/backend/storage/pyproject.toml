@@ -1,0 +1,40 @@
+[project]
+name = "f0rge-storage"
+version = "0.1.0"
+description = "Shared S3-compatible object storage with local-filesystem fallback, plus image helpers"
+requires-python = ">=3.10"
+dependencies = [
+    "boto3>=1.35",
+    "pillow>=10.0",
+    "pillow-heif>=0.18",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/f0rge_storage"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+# Cloned from apps/marrow/backend plus TID: shared libs must never import app code.
+select = ["E", "F", "W", "TID"]
+ignore = [
+    "E501",  # line too long — formatter handles this
+    "F821",  # undefined name — false-positive on Mapped["Name"] forward refs
+]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"app".msg = "shared libs must not import app code"

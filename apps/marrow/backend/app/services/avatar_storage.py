@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import io
-
-from PIL import Image, ImageOps
-from pillow_heif import register_heif_opener
+from f0rge_storage.images import resize_image
 
 from app.services import object_storage
-
-register_heif_opener()
 
 AVATAR_MAX_DIM = 256
 AVATAR_JPEG_QUALITY = 85
@@ -18,15 +13,7 @@ def avatar_relative_path(user_id: str) -> str:
 
 
 def resize_avatar(file_bytes: bytes) -> bytes:
-    img = Image.open(io.BytesIO(file_bytes))
-    img = ImageOps.exif_transpose(img)
-    if img.mode not in ("RGB",):
-        img = img.convert("RGB")
-    if img.width > AVATAR_MAX_DIM or img.height > AVATAR_MAX_DIM:
-        img.thumbnail((AVATAR_MAX_DIM, AVATAR_MAX_DIM), Image.LANCZOS)
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=AVATAR_JPEG_QUALITY)
-    return buf.getvalue()
+    return resize_image(file_bytes, max_dim=AVATAR_MAX_DIM, quality=AVATAR_JPEG_QUALITY)
 
 
 def avatar_exists(*, user_id: str) -> bool:
