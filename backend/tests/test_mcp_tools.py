@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from mcp.server.auth.provider import AccessToken
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.mcp.tools import _mcp_user_id
 
 from app.models.entry import Entry
 from app.models.lab import Lab
@@ -93,6 +97,24 @@ async def _seed_lab(db: AsyncSession) -> tuple[Lab, LabMarkerCatalog, LabMarker]
 # ---------------------------------------------------------------------------
 # Inline tool functions (we call the service logic directly, not via MCP transport)
 # ---------------------------------------------------------------------------
+
+
+def test_mcp_user_id_prefers_ctx_client_id() -> None:
+    user_id = uuid.uuid4()
+
+    class _Ctx:
+        client_id = str(user_id)
+
+    with patch("app.mcp.tools.get_access_token", return_value=None):
+        assert _mcp_user_id(_Ctx()) == user_id
+
+
+def test_mcp_user_id_falls_back_to_bearer_access_token() -> None:
+    user_id = uuid.uuid4()
+    token = AccessToken(token="test-token", client_id=str(user_id), scopes=[])
+
+    with patch("app.mcp.tools.get_access_token", return_value=token):
+        assert _mcp_user_id(None) == user_id
 
 
 async def test_get_entry_returns_none_when_missing(async_db: AsyncSession) -> None:

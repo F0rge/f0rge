@@ -4,6 +4,7 @@ import datetime
 import uuid
 from typing import Any, Optional
 
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import Context, FastMCP
 from sqlalchemy import Float, func, select, text
 
@@ -37,6 +38,9 @@ def _validate_date(value: str, field: str) -> datetime.date:
 def _mcp_user_id(ctx: Context | None) -> uuid.UUID:
     if ctx is not None and ctx.client_id:
         return uuid.UUID(ctx.client_id)
+    access_token = get_access_token()
+    if access_token is not None and access_token.client_id:
+        return uuid.UUID(access_token.client_id)
     return current_user_id()
 
 
