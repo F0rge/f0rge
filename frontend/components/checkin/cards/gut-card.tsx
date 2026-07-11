@@ -14,8 +14,6 @@ interface GutCardProps extends CheckinCardCollapseProps {
   onStoolStatusChange: (v: StoolStatus) => void
   bristolType: number | null
   onBristolTypeChange: (v: number | null) => void
-  jointPain: number
-  onJointPainChange: (v: number) => void
   stoolCompleteness: 'complete' | 'incomplete' | null
   onStoolCompletenessChange: (v: 'complete' | 'incomplete') => void
 }
@@ -24,7 +22,6 @@ export function GutCard({
   bloating, onBloatingChange,
   stoolStatus, onStoolStatusChange,
   bristolType, onBristolTypeChange,
-  jointPain, onJointPainChange,
   stoolCompleteness, onStoolCompletenessChange,
   collapsed,
   onToggleCollapsed,
@@ -76,17 +73,6 @@ export function GutCard({
             />
           )}
         </div>
-        <ScaleInput
-          label="Joint pain / crepitus"
-          value={jointPain}
-          onChange={(v) => onJointPainChange(v as number)}
-          options={[
-            { value: 0, label: 'None' },
-            { value: 1, label: 'Mild' },
-            { value: 2, label: 'Moderate' },
-            { value: 3, label: 'Severe' },
-          ]}
-        />
       </CardContent>
       )}
     </Card>

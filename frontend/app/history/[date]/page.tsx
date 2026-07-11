@@ -3,7 +3,7 @@
 import { use, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Pencil, Loader2, Pill } from 'lucide-react'
-import { useEntry, useUpdatePhotoMealTime, useMedicationCatalog } from '@/lib/api/hooks'
+import { useEntry, useUpdatePhotoMealTime, useMedicationCatalog, useSymptomCatalog } from '@/lib/api/hooks'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-disclosure'
 import { PageShell } from '@/components/layout/page-shell'
@@ -27,12 +27,8 @@ const OVERALL_BADGE_CLASS: Record<ScaleTier, string> = {
   poor: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
 }
 
-// bloating / joint_pain are 0-3 in every schema version — unaffected by v4.
+// bloating is 0-3 in every schema version — unaffected by v4.
 function getBloatingLabel(v: number): string {
-  return ['None', 'Mild', 'Moderate', 'Severe'][v] ?? 'Unknown'
-}
-
-function getJointPainLabel(v: number): string {
   return ['None', 'Mild', 'Moderate', 'Severe'][v] ?? 'Unknown'
 }
 
@@ -104,9 +100,6 @@ function PhotoWithMealTime({ photo }: { photo: Photo }) {
   )
 }
 
-// Read-only — history is a review surface, not an editor. Historical entries
-// can reference archived (or since-renamed) catalog keys, so we fetch with
-// includeArchived and fall back to the raw key if no catalog match is found.
 function MedicationsSection({ medications }: { medications: Entry['medications'] }) {
   const { data: catalog = [] } = useMedicationCatalog(true)
   const labelFor = (key: string) => catalog.find((m) => m.key === key)?.label ?? key
@@ -142,6 +135,29 @@ function MedicationsSection({ medications }: { medications: Entry['medications']
   )
 }
 
+function SymptomsSection({ symptoms }: { symptoms: Record<string, number> }) {
+  const { data: catalog = [] } = useSymptomCatalog(true)
+  const labelFor = (key: string) => catalog.find((s) => s.key === key)?.label ?? key
+  const entries = Object.entries(symptoms).filter(([, severity]) => severity > 0)
+
+  if (entries.length === 0) return null
+
+  return (
+    <div className="border-t border-border px-4 py-3">
+      <p className="mb-2 text-xs font-medium text-muted-foreground">Symptoms</p>
+      <div className="space-y-2">
+        {entries.map(([key, severity]) => (
+          <DetailRow
+            key={key}
+            label={labelFor(key)}
+            value={`${severity}/10`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-3 border-b border-border py-2 last:border-b-0">
@@ -171,8 +187,6 @@ function EntryDetail({ entry }: { entry: Entry }) {
             value={entry.stool_completeness === 'complete' ? 'Complete' : 'Incomplete'}
           />
         )}
-        <DetailRow label="Joint pain" value={getJointPainLabel(entry.joint_pain)} />
-        <DetailRow label="Neuro" value={getScaleLabel('neuro', entry.neuro, entry.schema_version)} />
         <DetailRow label="Sleep" value={getScaleLabel('sleep_quality', entry.sleep_quality, entry.schema_version)} />
         <DetailRow label="Stress" value={getScaleLabel('stress', entry.stress, entry.schema_version)} />
         <DetailRow
@@ -193,6 +207,8 @@ function EntryDetail({ entry }: { entry: Entry }) {
           />
         )}
       </div>
+
+      <SymptomsSection symptoms={entry.symptoms_json ?? {}} />
 
       {entry.notes && (
         <div className="border-t border-border px-4 py-3">

@@ -1,7 +1,7 @@
 'use client'
 
 import type { Entry } from '@/lib/api/types'
-import { getNeuroDirection, getOverallTier, getScaleLabel, type ScaleTier } from '@/lib/checkin/scale-labels'
+import { getOverallTier, getScaleLabel, type ScaleTier } from '@/lib/checkin/scale-labels'
 
 interface EntryCardProps {
   entry: Entry
@@ -35,13 +35,13 @@ function getSummary(entry: Entry): string {
   } else if (stool === 'none') {
     parts.push('no stool')
   }
-  if (entry.joint_pain > 0) {
-    const level = entry.joint_pain === 1 ? 'mild' : entry.joint_pain === 2 ? 'moderate' : 'severe'
-    parts.push(`${level} joint pain`)
+
+  for (const [key, severity] of Object.entries(entry.symptoms_json ?? {})) {
+    if (severity > 0) {
+      parts.push(`${key.replace(/_/g, ' ')} ${severity}/10`)
+    }
   }
-  const neuroDirection = getNeuroDirection(entry.neuro, entry.schema_version)
-  if (neuroDirection === 'worse') parts.push('neuro worse')
-  if (neuroDirection === 'better') parts.push('neuro better')
+
   if (entry.sick) parts.push('sick')
   if (entry.hot_shower) parts.push('hot shower')
   if (parts.length === 0) return 'Baseline day'

@@ -12,8 +12,6 @@ interface WellbeingCardProps extends CheckinCardCollapseProps {
   onSleepQualityChange: (v: number) => void
   stress: number
   onStressChange: (v: number) => void
-  neuro: number
-  onNeuroChange: (v: number) => void
   // v4 entries (and any new, not-yet-created day) use 5-point core scales.
   // Legacy entries (schema_version <= 3) keep their original 3-point scales
   // so old stored values keep meaning what they meant when they were saved.
@@ -24,7 +22,6 @@ export function WellbeingCard({
   overall, onOverallChange,
   sleepQuality, onSleepQualityChange,
   stress, onStressChange,
-  neuro, onNeuroChange,
   fivePoint,
   collapsed,
   onToggleCollapsed,
@@ -96,31 +93,6 @@ export function WellbeingCard({
                   { value: 1, label: 'Low' },
                   { value: 2, label: 'Medium' },
                   { value: 3, label: 'High' },
-                ]
-          }
-        />
-        <ScaleInput
-          label="Neuro symptoms"
-          value={neuro}
-          onChange={(v) => onNeuroChange(v as number)}
-          options={
-            fivePoint
-              ? [
-                  // Single short words only — "Much worse"/"Much better" (two-word,
-                  // 10-11 char) overflowed a 5-column segment at 390px and visually
-                  // ran into the next label, even though each is under
-                  // MAX_SCALE_LABEL_LENGTH. Every other 5-point row here uses
-                  // single words for the same reason.
-                  { value: 1, label: 'Worst' },
-                  { value: 2, label: 'Worse' },
-                  { value: 3, label: 'Base' },
-                  { value: 4, label: 'Better' },
-                  { value: 5, label: 'Best' },
-                ]
-              : [
-                  { value: -1, label: 'Worse' },
-                  { value: 0, label: 'Baseline' },
-                  { value: 1, label: 'Better' },
                 ]
           }
         />

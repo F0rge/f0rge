@@ -25,8 +25,6 @@ import { useSymptomCatalog } from '@/lib/api/hooks'
 const CORE_OUTCOMES = [
   { value: 'overall', label: 'Overall' },
   { value: 'bloating', label: 'Bloating' },
-  { value: 'joint_pain', label: 'Joint Pain' },
-  { value: 'neuro', label: 'Neuro' },
   { value: 'sleep_quality', label: 'Sleep Quality' },
   { value: 'stress', label: 'Stress' },
   { value: 'sick', label: 'Sick' },

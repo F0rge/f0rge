@@ -28,8 +28,6 @@ _CORE_OUTCOMES: frozenset[str] = frozenset(
     {
         "overall",
         "bloating",
-        "joint_pain",
-        "neuro",
         "sleep_quality",
         "stress",
         "sick",
@@ -65,8 +63,6 @@ TREND_DELTA_WINDOW_DAYS = 30
 _TREND_SERIES_KEYS: list[str] = [
     "overall",
     "bloating",
-    "joint_pain",
-    "neuro",
     "sleep_quality",
     "stress",
     "hm_hrv_mean",

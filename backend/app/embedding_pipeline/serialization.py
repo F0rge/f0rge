@@ -28,8 +28,6 @@ async def serialize_entry(db: AsyncSession, source_id: int) -> Optional[str]:
         parts.append(f"Notes: {row.notes}")
     parts.append(f"Overall: {row.overall}/10")
     parts.append(f"Bloating: {row.bloating}/10")
-    parts.append(f"Joint pain: {row.joint_pain}/10")
-    parts.append(f"Neuro: {row.neuro}/10")
     parts.append(f"Sleep quality: {row.sleep_quality}/10")
     parts.append(f"Stress: {row.stress}/10")
     _effective = sorted(compute_photo_signal(row).flags | parse_diet_risk_csv(row.diet_risk))

@@ -413,6 +413,7 @@ BULK_SYMPTOMS: list[tuple[str, str]] = [
     ("hyperacusis", "Hyperacusis"),
     ("ear_fullness", "Ear Fullness"),
     ("ear_pain", "Ear Pain"),
+    ("neuro_symptoms", "Neuro symptoms"),
     # --- Chronic illness / dysautonomia / MCAS ---
     ("orthostatic_intolerance", "Orthostatic Intolerance"),
     ("pots_flare", "POTS Flare"),
@@ -440,7 +441,7 @@ BULK_SYMPTOMS: list[tuple[str, str]] = [
     ("syncope", "Syncope / Fainting"),
     ("near_syncope", "Near-Syncope"),
     # --- Pain / musculoskeletal ---
-    ("joint_pain", "Joint Pain"),
+    ("joint_pain", "Joint pain / crepitus"),
     ("muscle_pain", "Muscle Pain"),
     ("myalgia", "Myalgia"),
     ("back_pain", "Back Pain"),
