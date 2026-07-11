@@ -63,4 +63,10 @@ async def get_db() -> AsyncIterator[AsyncSession]:
                 await apply_session_user_id(session, user_id)
             yield session
         finally:
+            # Roll back any aborted/pending txn first so the RESET statements in
+            # clear_tenant_session can run. Without this, an aborted transaction
+            # makes RESET raise InFailedSQLTransactionError, masking the original
+            # error. Safe no-op on success: services commit their own work and
+            # get_db never commits.
+            await session.rollback()
             await clear_tenant_session(session)

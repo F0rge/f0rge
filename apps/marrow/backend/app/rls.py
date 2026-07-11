@@ -65,3 +65,21 @@ async def enable_row_level_security(conn: AsyncConnection) -> None:
             """
         )
     )
+    # Mirrors migration 032: lets copy_user_catalog_from_reference cross tenants
+    # under FORCE RLS when the caller sets app.service_role='provisioner'.
+    for table in (
+        "dietary_ingredients",
+        "ingredient_aliases",
+        "lab_marker_catalog",
+        "lab_marker_aliases",
+    ):
+        await conn.execute(
+            sa.text(
+                f"""
+                CREATE POLICY provisioner_copy ON {table}
+                    FOR ALL
+                    USING (current_setting('app.service_role', true) = 'provisioner')
+                    WITH CHECK (current_setting('app.service_role', true) = 'provisioner')
+                """
+            )
+        )

@@ -8,7 +8,6 @@ CREATE OR REPLACE FUNCTION copy_user_catalog_from_reference(
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-SET row_security = off
 AS $$
 BEGIN
     INSERT INTO dietary_ingredients (

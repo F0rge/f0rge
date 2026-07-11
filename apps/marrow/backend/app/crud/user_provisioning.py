@@ -15,6 +15,10 @@ from app.models.user import User
 COPY_REFERENCE_CATALOGS_SQL = sa.text(
     "SELECT copy_user_catalog_from_reference(:new_user_id, :ref_user_id)"
 )
+# Transaction-local (is_local=true) so a rollback auto-clears it and it never
+# leaks into the tenant-scoped queries that follow in the same request.
+_SET_PROVISIONER_ROLE_SQL = sa.text("SELECT set_config('app.service_role', 'provisioner', true)")
+_CLEAR_PROVISIONER_ROLE_SQL = sa.text("SELECT set_config('app.service_role', '', true)")
 
 
 class UserProvisioningCRUD(BaseCRUD):
@@ -53,7 +57,12 @@ class UserProvisioningCRUD(BaseCRUD):
         return result.rowcount or 0
 
     async def copy_reference_catalogs(self, new_user_id: uuid.UUID, ref_user_id: uuid.UUID) -> None:
+        # Cross-tenant copy under FORCE RLS: authorize via the `provisioner`
+        # service role + policy (no BYPASSRLS needed), then clear it before the
+        # tenant-scoped verification COUNTs run later in the same transaction.
+        await self.db.execute(_SET_PROVISIONER_ROLE_SQL)
         await self.db.execute(
             COPY_REFERENCE_CATALOGS_SQL,
             {"new_user_id": str(new_user_id), "ref_user_id": str(ref_user_id)},
         )
+        await self.db.execute(_CLEAR_PROVISIONER_ROLE_SQL)
