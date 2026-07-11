@@ -9,6 +9,7 @@
 #   ./scripts/fly-rename-marrow.sh attach-mpg [--db fly-db|health_dev]
 #   ./scripts/fly-rename-marrow.sh baseline-counts
 #   ./scripts/fly-rename-marrow.sh rename-databases
+#   ./scripts/fly-rename-marrow.sh copy-databases
 #   ./scripts/fly-rename-marrow.sh attach-mpg-renamed
 #
 set -euo pipefail
@@ -157,7 +158,7 @@ scale_old_apps() {
 
 rename_databases() {
   echo "NOTE: ALTER DATABASE requires postgres owner on Fly MPG." >&2
-  echo "Use copy_databases instead (pg_dump/pg_restore to marrow + marrow_dev)." >&2
+  echo "Use copy-databases instead (pg_dump/pg_restore to marrow + marrow_dev)." >&2
   exit 1
 }
 
@@ -178,8 +179,9 @@ case "$cmd" in
   attach-mpg-renamed) attach_mpg_renamed ;;
   baseline-counts) baseline_counts ;;
   rename-databases) rename_databases ;;
+  copy-databases) copy_databases ;;
   *)
-    echo "Usage: $0 {create-apps|clone-secrets|attach-mpg-legacy|attach-mpg-renamed|baseline-counts|rename-databases}" >&2
+    echo "Usage: $0 {create-apps|clone-secrets|attach-mpg-legacy|attach-mpg-renamed|baseline-counts|rename-databases|copy-databases}" >&2
     exit 1
     ;;
 esac

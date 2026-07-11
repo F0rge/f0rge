@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Migrate dev Fly MPG data (marrow on dev cluster) → marrow_dev on prod cluster.
+# Migrate dev Fly MPG data (fly-db on dev cluster) → marrow_dev on prod cluster.
 #
 # Prerequisites: flyctl, docker (postgres:16 image), FLY_API_TOKEN, fly mpg proxy.
 #
@@ -11,7 +11,7 @@ set -euo pipefail
 
 DEV_CLUSTER="${DEV_CLUSTER:-d1zj5omzqg9ryqkv}"
 PROD_CLUSTER="${PROD_CLUSTER:-z23750v13yl096d1}"
-SOURCE_DB="${SOURCE_DB:-marrow}"
+SOURCE_DB="${SOURCE_DB:-fly-db}"
 TARGET_DB="${TARGET_DB:-marrow_dev}"
 SOURCE_DATABASE_URL="${SOURCE_DATABASE_URL:-}"
 DEV_PROXY_PORT="${DEV_PROXY_PORT:-16381}"
