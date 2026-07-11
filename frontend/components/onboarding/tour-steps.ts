@@ -96,7 +96,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="checkin-wellbeing"]',
     title: 'Wellbeing scales',
     content:
-      'Rate overall wellbeing, sleep, stress, and neurological symptoms. Tap a segment to set today\'s value.',
+      'Rate overall wellbeing, sleep, and stress. Tap a segment to set today\'s value.',
     placement: 'bottom',
   },
   {
@@ -105,7 +105,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="checkin-gut"]',
     title: 'Gut health',
     content:
-      'Track bloating, stool status, Bristol type, and related gut symptoms on the same daily entry.',
+      'Track bloating, stool status, Bristol type, and completeness on the same daily entry.',
     placement: 'bottom',
   },
   {

@@ -104,8 +104,6 @@ export function useCheckinBoardState({
   const [stoolStatus, setStoolStatus] = useState<StoolStatus>('normal')
   const [bristolType, setBristolType] = useState<number | null>(null)
   const [stoolCompleteness, setStoolCompleteness] = useState<'complete' | 'incomplete' | null>(null)
-  const [jointPain, setJointPain] = useState(0)
-  const [neuro, setNeuro] = useState(0)
   const [sleepQuality, setSleepQuality] = useState(2)
   const [stress, setStress] = useState(1)
   const [dietRisk, setDietRisk] = useState<string>('')
@@ -137,8 +135,6 @@ export function useCheckinBoardState({
     (v: 'complete' | 'incomplete') => { markDirty(); setStoolCompleteness(v) },
     [markDirty],
   )
-  const setJointPainDirty = useCallback((v: number) => { markDirty(); setJointPain(v) }, [markDirty])
-  const setNeuroDirty = useCallback((v: number) => { markDirty(); setNeuro(v) }, [markDirty])
   const setSleepQualityDirty = useCallback((v: number) => { markDirty(); setSleepQuality(v) }, [markDirty])
   const setStressDirty = useCallback((v: number) => { markDirty(); setStress(v) }, [markDirty])
   const setNotesValue = useCallback((v: string) => { setNotes(v) }, [])
@@ -200,8 +196,6 @@ export function useCheckinBoardState({
         ?? (resolvedStool === 'abnormal' ? 4 : null)
       setBristolType(resolvedBristol)
       setStoolCompleteness(existingEntry.stool_completeness ?? null)
-      setJointPain(existingEntry.joint_pain)
-      setNeuro(existingEntry.neuro)
       setSleepQuality(existingEntry.sleep_quality)
       setStress(existingEntry.stress)
       setDietRisk(
@@ -239,8 +233,6 @@ export function useCheckinBoardState({
     stool_status: stoolStatus,
     bristol_type: stoolStatus === 'abnormal' && bristolType !== null ? bristolType : undefined,
     stool_completeness: stoolCompleteness ?? undefined,
-    joint_pain: jointPain,
-    neuro,
     sleep_quality: sleepQuality,
     stress,
     diet_risk: dietRisk,
@@ -253,7 +245,7 @@ export function useCheckinBoardState({
     symptoms_json: symptomsJson,
     medications,
   }), [
-    date, overall, bloating, stoolStatus, bristolType, stoolCompleteness, jointPain, neuro,
+    date, overall, bloating, stoolStatus, bristolType, stoolCompleteness,
     sleepQuality, stress, dietRisk, supplements, sick, hotShower, notes,
     alcoholUnits, caffeineServings, symptomsJson, medications,
   ])
@@ -335,8 +327,6 @@ export function useCheckinBoardState({
     setSleepQualityDirty,
     stress,
     setStressDirty,
-    neuro,
-    setNeuroDirty,
     bloating,
     setBloatingDirty,
     stoolStatus,
@@ -345,8 +335,6 @@ export function useCheckinBoardState({
     setBristolTypeDirty,
     stoolCompleteness,
     setStoolCompletenessDirty,
-    jointPain,
-    setJointPainDirty,
     supplements,
     medications,
     setMedicationsDirty,

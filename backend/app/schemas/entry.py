@@ -48,8 +48,8 @@ class EntryCreate(BaseModel):
         default=None,
         description="v4: 'complete' | 'incomplete'",
     )
-    joint_pain: int
-    neuro: int
+    joint_pain: int = 0
+    neuro: int = 0
     sleep_quality: int
     stress: int
     diet_risk: str

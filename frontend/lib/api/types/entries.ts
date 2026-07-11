@@ -77,8 +77,8 @@ export interface EntryCreate {
   stool_status?: StoolStatus
   bristol_type?: number
   stool_completeness?: 'complete' | 'incomplete' | null
-  joint_pain: number
-  neuro: number
+  joint_pain?: number
+  neuro?: number
   sleep_quality: number
   stress: number
   diet_risk: string

@@ -56,8 +56,6 @@ export function buildCheckinCardRenderers({
         onSleepQualityChange={state.setSleepQualityDirty}
         stress={state.stress}
         onStressChange={state.setStressDirty}
-        neuro={state.neuro}
-        onNeuroChange={state.setNeuroDirty}
         fivePoint={state.fivePoint}
         {...collapseProps('wellbeing')}
       />
@@ -72,8 +70,6 @@ export function buildCheckinCardRenderers({
         onBristolTypeChange={state.setBristolTypeDirty}
         stoolCompleteness={state.stoolCompleteness}
         onStoolCompletenessChange={state.setStoolCompletenessDirty}
-        jointPain={state.jointPain}
-        onJointPainChange={state.setJointPainDirty}
         {...collapseProps('gut')}
       />
     ),

@@ -52,8 +52,8 @@ import { PageHeader } from '@/components/layout/page-header'
 // Defined at module scope to satisfy react-hooks/static-components rule.
 const CARD_META: Record<CardId, CardMeta & { meta: string }> = {
   food:        { id: 'food',        icon: <Apple className="size-4" />,    label: 'Food & Diet',     meta: 'Photos + diet tags' },
-  wellbeing:   { id: 'wellbeing',   icon: <Moon className="size-4" />,     label: 'Wellbeing',       meta: '4 scales' },
-  gut:         { id: 'gut',         icon: <Activity className="size-4" />, label: 'Gut',             meta: '3 scales + Bristol' },
+  wellbeing:   { id: 'wellbeing',   icon: <Moon className="size-4" />,     label: 'Wellbeing',       meta: '3 scales' },
+  gut:         { id: 'gut',         icon: <Activity className="size-4" />, label: 'Gut',             meta: '2 scales + Bristol' },
   supplements: { id: 'supplements', icon: <Pill className="size-4" />,     label: 'Supplements',     meta: 'Catalog' },
   medications: { id: 'medications', icon: <Pill className="size-4" />,     label: 'Medications',     meta: 'Catalog' },
   symptoms:    { id: 'symptoms',    icon: <Zap className="size-4" />,      label: 'Symptoms',        meta: 'Custom' },

@@ -14,13 +14,11 @@ const WELLBEING_SCALES = [
   { label: 'How was your day?',       values: 'Very Poor · Standard · Very Good' },
   { label: 'Sleep quality (last night)', values: 'Poor · OK · Good' },
   { label: 'Stress level',            values: 'Low · Medium · High' },
-  { label: 'Neuro symptoms',          values: 'Worse · Baseline · Better' },
 ]
 
 const GUT_SCALES = [
   { label: 'Bloating',            values: 'None · Mild · Moderate · Severe' },
   { label: 'Stool',               values: 'Normal · Abnormal · Skipped (when Abnormal: Bristol type 1–7)' },
-  { label: 'Joint pain / crepitus', values: 'None · Mild · Moderate · Severe' },
 ]
 
 interface ScaleRowProps {
