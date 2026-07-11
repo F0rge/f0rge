@@ -67,7 +67,9 @@ Backfill is idempotent — re-running it on already-embedded rows is a no-op at 
 
 ## Troubleshooting
 
-- **Worker logs "permission denied for table embedding"** — the worker is connecting as the wrong role. It must use the read-write `DATABASE_URL` (role `healthtracker_app`), not the read-only `MCP_READONLY_DATABASE_URL` (role `healthtracker_ro`). Check the `embedding-worker` service env in `docker-compose.prod.yml`.
+- **Worker logs "permission denied for table embedding"** — the worker is connecting as the wrong role. It must use the read-write `DATABASE_URL` (role `healthtracker-app`), not `MCP_READONLY_DATABASE_URL` (role `healthtracker_ro`). Check the worker process env on the Fly API app (`marrow` / `marrow-dev`).
+
+All three are picked up at worker start; redeploy the API app after changing secrets on Fly.
 - **Queue rows stuck with `attempts >= 5`** — check the `last_error` column on the queue row:
   ```sql
   SELECT id, source_table, source_id, attempts, last_error
@@ -92,4 +94,4 @@ Backfill is idempotent — re-running it on already-embedded rows is a no-op at 
 | `EMBEDDING_WORKER_BATCH_SIZE` | `10` | Rows claimed per wakeup. Higher = better OpenRouter batching, more memory pressure during chunking. |
 | `EMBEDDING_WORKER_MAX_ATTEMPTS` | `5` | Per-row retry limit before the row is parked with `last_error` set. The worker stops touching parked rows until they are manually retried. |
 
-All three are picked up at worker start; restart the `embedding-worker` container after changing them in Coolify env.
+All three are picked up at worker start; redeploy the API app after changing secrets on Fly.

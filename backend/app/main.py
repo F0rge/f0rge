@@ -53,7 +53,7 @@ _weather_task = None
 def _warn_misconfigured_features() -> None:
     """Log a loud warning when a feature flag is on but its required
     credentials are missing. Catches deployments where the env var wasn't
-    added to Coolify/the host but the flag stayed enabled."""
+    added to the host but the flag stayed enabled."""
     if settings.food_analysis_enabled and not settings.openrouter_api_key:
         logger.warning(
             "FOOD_ANALYSIS_ENABLED=true but OPENROUTER_API_KEY is empty. "

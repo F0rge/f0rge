@@ -33,7 +33,7 @@ Common patterns that warrant an audit:
 
 Automated checks (lint, pytest, build, typecheck) are NOT a complete gate. The PR is not done until:
 
-- A human has driven the new feature in a live dev server (`./start.sh` locally OR `health-dev.leo-figueiredo.com`).
+- A human has driven the new feature in a live dev server (`./start.sh` locally OR `app-dev.marrow-health.com`).
 - The golden path works end-to-end through the UI.
 - At least one error path was driven and the UI failed gracefully.
 - Backend logs were tailed during the test for hidden 500s.
@@ -95,6 +95,6 @@ See global `~/.claude/CLAUDE.md` § "Post-Merge Hygiene".
 Every new `Settings` attribute in `backend/app/config.py` requires:
 1. A matching line in `backend/.env.example`.
 2. If required (no safe default), documentation of how to obtain the value.
-3. For deployed environments: a follow-up to set it in the Coolify env UI for both project UUIDs.
+3. For deployed environments: set the value on Fly app secrets (`fly secrets set -a marrow-dev` / `marrow`).
 
 Block on missing `.env.example` entry. See `mcp_server_issue_49_findings.md`.

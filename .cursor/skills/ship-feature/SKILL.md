@@ -114,16 +114,20 @@ Confirm `git status` clean. Run `git cleanup` if remote branch was deleted.
 
 ## Phase 7 — Wait for dev deployment
 
-Coolify redeploys on push to `develop` (not GitHub Actions). Poll until healthy:
+Fly deploy runs after CI (develop) succeeds on push. Poll until healthy:
 
 ```bash
 # CI on develop push (post-merge)
 gh run list --branch develop --workflow "CI (develop)" --limit 1
 gh run watch <run-id>
 
+# Fly deploy (triggered by CI success)
+gh run list --branch develop --workflow "Fly Deploy (develop)" --limit 1
+gh run watch <fly-run-id>
+
 # Dev stack readiness (API + frontend)
-until curl -sf https://health-dev-api.leo-figueiredo.com/api/v1/health; do sleep 15; done
-until curl -sf https://health-dev.leo-figueiredo.com >/dev/null; do sleep 15; done
+until curl -sf https://api-dev.marrow-health.com/api/v1/health; do sleep 15; done
+until curl -sf https://app-dev.marrow-health.com >/dev/null; do sleep 15; done
 ```
 
 If health never recovers within ~15 min, surface blocker — do not proceed to smoke test.
@@ -132,7 +136,7 @@ If health never recovers within ~15 min, surface blocker — do not proceed to s
 
 ## Phase 8 — Dev environment smoke test
 
-Manual verification on **https://health-dev.leo-figueiredo.com** (PIN required — use project dev PIN from env/memory, never log it).
+Manual verification on **https://app-dev.marrow-health.com** (email + password login).
 
 Checklist:
 
@@ -157,7 +161,7 @@ gh pr create --base main --head develop --title "Release: <short summary>" --bod
 
 ## Dev verification
 - [x] CI (develop) green on merge commit
-- [x] Dev smoke on health-dev.leo-figueiredo.com — <1-line result>
+- [x] Dev smoke on app-dev.marrow-health.com — <1-line result>
 
 ## Test plan
 - [ ] CI (main) — awaiting checks

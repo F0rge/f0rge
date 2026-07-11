@@ -80,7 +80,7 @@ For every new `app/config.py` setting:
 
 - [ ] In `backend/.env.example`
 - [ ] README/deploy doc updated if required
-- [ ] Set on deployment target (Coolify/Pi) if already deployed
+- [ ] Set on Fly app secrets if already deployed
 - [ ] Degrades gracefully when missing (no 500 storm)
 - [ ] Startup warning when feature enabled but credentials missing
 

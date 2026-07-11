@@ -26,7 +26,7 @@ Closes #{{issue-number}}.
 
 ## Dev smoke (post-merge)
 
-Orchestrator will verify on https://health-dev.leo-figueiredo.com per ship-feature Phase 8.
+Orchestrator will verify on https://app-dev.marrow-health.com per ship-feature Phase 8.
 
 ## Known follow-ups
 

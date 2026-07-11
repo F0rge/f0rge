@@ -15,7 +15,7 @@ import { BUTTON_CLASS } from './constants'
 const MCP_CONFIG_SNIPPET = `{
   "mcpServers": {
     "marrow": {
-      "url": "https://health-mcp.leo-figueiredo.com/mcp",
+      "url": "https://marrow-mcp.fly.dev/mcp",
       "headers": {
         "Authorization": "Bearer {TOKEN}"
       }

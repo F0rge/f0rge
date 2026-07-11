@@ -1,7 +1,6 @@
 name: Fly Deploy (develop)
 
 # Deploys the Fly dev stack after CI (develop) passes on a push to develop.
-# Coolify/Pi deploy is unchanged — this is the parallel Fly stack only.
 
 on:
   workflow_run:
