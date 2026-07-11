@@ -154,4 +154,6 @@ class OnboardingSetupService:
                 }
             )
 
-        return await self.crud.bulk_insert_ignore_conflict(Tracker, values, "uq_tracker_user_id_name")
+        return await self.crud.bulk_insert_ignore_conflict(
+            Tracker, values, "uq_tracker_user_id_name"
+        )
