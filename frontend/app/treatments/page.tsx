@@ -45,6 +45,7 @@ export default function TreatmentsPage() {
   return (
     <PageShell>
       <PageHeader
+        layout="responsive"
         data-tour="treatments-page"
         title="Treatments"
         actions={
