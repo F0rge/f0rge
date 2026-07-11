@@ -31,8 +31,8 @@ Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker
 
 | Env | Branch | Apps | Workflow |
 |---|---|---|---|
-| Dev | `develop` | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` | `fly-deploy-develop.yml` |
-| Prod | `main` | `marrow`, `marrow-mcp`, `marrow-ui` | `fly-deploy-main.yml` |
+| Dev | `develop` | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` | `fly-deploy.yml` (`environment=develop`) |
+| Prod | `main` | `marrow`, `marrow-mcp`, `marrow-ui` | `fly-deploy.yml` (`environment=main`) |
 
 Deploy order: API (alembic via `release_command`) → MCP (serial); frontend parallel. Jobs: `plan`, `deploy api`, `deploy mcp`, `deploy frontend`, `smoke`. `workflow_dispatch` supports `component=all|api|mcp|frontend`.
 

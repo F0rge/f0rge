@@ -66,8 +66,8 @@ Canonical playbooks: `.cursor/review-context/`.
 ## Branch & PR conventions
 
 - `develop` is the default integration branch.
-- PRs land on `develop`, run `.github/workflows/ci-develop.yml`, then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml`.
+- PRs land on `develop`, run `.github/workflows/ci.yml`, then merge.
+- Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci.yml`.
 - Feature branches: `feat/<descriptive-name>`, `fix/<descriptive-name>`, `chore/<descriptive-name>`.
 - Direct push to `main` is only acceptable for single-file edits on personal config.
 

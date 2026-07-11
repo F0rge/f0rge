@@ -32,9 +32,9 @@ npx nx reset                                   # clear the Nx cache
 
 ## CI/CD
 
-- **`CI (develop)` / `CI (main)`** — parallel `backend` and `frontend` jobs when Nx affected; aggregate `ci` job is the required branch check (`main-pr-gate` on `main`).
-- **`Fly Deploy (develop)` / `Fly Deploy (main)`** — triggered after a green CI push (`workflow_run`). Reusable workflow jobs:
+- **`CI`** — parallel `backend` and `frontend` jobs when Nx affected (develop + main); aggregate `ci` job is the required branch check (`main-pr-gate` on `main`).
+- **`Fly Deploy`** — triggered after a green CI push (`workflow_run`). Jobs:
   - `plan` → `deploy api` → `deploy mcp` (serial, migrations via API `release_command`) → `deploy frontend` (parallel with MCP)
   - `smoke` — health curls for components that deployed
-- **Manual dispatch** — redeploy one component: `gh workflow run "Fly Deploy (develop)" --ref develop -f component=mcp` (`all` / `api` / `mcp` / `frontend`).
+- **Manual dispatch** — `gh workflow run "Fly Deploy" --ref develop -f environment=develop -f component=mcp` (`environment`: `develop` / `main`; `component`: `all` / `api` / `mcp` / `frontend`).
 - **Note:** `workflow_run` deploy workflows execute from the repo default branch (`main`); merge workflow changes to `main` before automated prod deploys pick them up.

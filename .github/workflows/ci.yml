@@ -1,17 +1,16 @@
-name: CI (main)
+name: CI
 
-# Runs on PRs targeting `main` — promotion of `develop` → `main`.
-# Parallel backend/frontend jobs gated by nx affected; aggregate `ci` job for branch rules.
-# Frontend build uses prod-shaped env.
+# PRs and pushes to develop and main. Parallel backend/frontend jobs (Nx affected);
+# aggregate `ci` job is the required branch check on main.
 
 on:
   pull_request:
-    branches: [main]
+    branches: [develop, main]
   push:
-    branches: [main]
+    branches: [develop, main]
 
 concurrency:
-  group: ci-main-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -33,7 +32,7 @@ jobs:
 
       - uses: nrwl/nx-set-shas@v4
         with:
-          main-branch-name: main
+          main-branch-name: ${{ github.event.pull_request.base.ref || github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -69,7 +68,7 @@ jobs:
 
       - uses: nrwl/nx-set-shas@v4
         with:
-          main-branch-name: main
+          main-branch-name: ${{ github.event.pull_request.base.ref || github.ref_name }}
 
       - uses: astral-sh/setup-uv@v3
         with:
@@ -109,7 +108,7 @@ jobs:
 
       - uses: nrwl/nx-set-shas@v4
         with:
-          main-branch-name: main
+          main-branch-name: ${{ github.event.pull_request.base.ref || github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -125,11 +124,13 @@ jobs:
       - name: Install frontend deps
         run: npm ci --prefix apps/marrow/frontend
 
-      - name: nx run (frontend, prod-shaped build)
-        env:
-          API_URL: http://backend:8000
-          NODE_ENV: production
-        run: npx nx run-many -t lint typecheck build --projects=marrow-frontend
+      - name: nx run (frontend)
+        run: |
+          BASE="${{ github.event.pull_request.base.ref || github.ref_name }}"
+          if [ "$BASE" = "main" ]; then
+            export API_URL=http://backend:8000 NODE_ENV=production
+          fi
+          npx nx run-many -t lint typecheck build --projects=marrow-frontend
 
   ci:
     name: ci
@@ -140,11 +141,16 @@ jobs:
     steps:
       - name: Aggregate gate
         env:
+          DETECT_RESULT: ${{ needs.detect.result }}
           BACKEND_FLAG: ${{ needs.detect.outputs.backend }}
           FRONTEND_FLAG: ${{ needs.detect.outputs.frontend }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
         run: |
+          if [ "$DETECT_RESULT" != "success" ]; then
+            echo "detect job required but result was: $DETECT_RESULT"
+            exit 1
+          fi
           gate() {
             local flag="$1" result="$2" name="$3"
             if [ "$flag" = "true" ] && [ "$result" != "success" ]; then

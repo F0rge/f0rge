@@ -1,43 +1,83 @@
-name: Fly Deploy (reusable)
+name: Fly Deploy
 
-# Called by fly-deploy-develop.yml and fly-deploy-main.yml.
-# plan → deploy-api → deploy-mcp (serial after API); deploy-frontend parallel with MCP.
+# After a green CI push to develop/main, deploy affected Fly components.
+# plan → deploy-api → deploy-mcp (serial); deploy-frontend parallel with MCP.
 
 on:
-  workflow_call:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [develop, main]
+  workflow_dispatch:
     inputs:
       environment:
-        description: develop or main
-        required: true
-        type: string
-      sha:
-        description: Commit SHA to deploy
-        required: true
-        type: string
-      base_branch:
-        description: Branch used for nx-set-shas base
-        required: true
-        type: string
-      workflow_id:
-        description: Caller workflow filename for nx-set-shas
-        required: true
-        type: string
+        description: Target environment
+        type: choice
+        options: [develop, main]
+        default: develop
       component:
-        description: auto (nx affected) or all/api/mcp/frontend (manual dispatch)
-        required: false
-        type: string
-        default: auto
-    secrets:
-      FLY_API_TOKEN:
-        required: true
+        description: Component to deploy
+        type: choice
+        options: [all, api, mcp, frontend]
+        default: all
 
 permissions:
   contents: read
   actions: read
 
 jobs:
+  resolve:
+    name: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      should_run: ${{ steps.meta.outputs.should_run }}
+      environment: ${{ steps.meta.outputs.environment }}
+      sha: ${{ steps.meta.outputs.sha }}
+      base_branch: ${{ steps.meta.outputs.base_branch }}
+      component: ${{ steps.meta.outputs.component }}
+    steps:
+      - name: Resolve deploy context
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_ENV: ${{ inputs.environment }}
+          DISPATCH_COMPONENT: ${{ inputs.component }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "environment=$DISPATCH_ENV" >> "$GITHUB_OUTPUT"
+            echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+            echo "base_branch=$DISPATCH_ENV" >> "$GITHUB_OUTPUT"
+            echo "component=$DISPATCH_COMPONENT" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$RUN_CONCLUSION" != "success" ] || [ "$RUN_EVENT" != "push" ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$RUN_BRANCH" != "develop" ] && [ "$RUN_BRANCH" != "main" ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          echo "environment=$RUN_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "sha=$RUN_SHA" >> "$GITHUB_OUTPUT"
+          echo "base_branch=$RUN_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "component=auto" >> "$GITHUB_OUTPUT"
+
   plan:
     name: plan
+    needs: resolve
+    if: needs.resolve.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -47,11 +87,16 @@ jobs:
       api_health_url: ${{ steps.urls.outputs.api_health_url }}
       frontend_health_url: ${{ steps.urls.outputs.frontend_health_url }}
       mcp_health_url: ${{ steps.urls.outputs.mcp_health_url }}
+    env:
+      DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
+      BASE_BRANCH: ${{ needs.resolve.outputs.base_branch }}
+      COMPONENT: ${{ needs.resolve.outputs.component }}
+      ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -63,14 +108,14 @@ jobs:
         run: npm ci
 
       - uses: nrwl/nx-set-shas@v4
-        if: inputs.component == 'auto'
+        if: env.COMPONENT == 'auto'
         with:
-          main-branch-name: ${{ inputs.base_branch }}
-          workflow-id: ${{ inputs.workflow_id }}
+          main-branch-name: ${{ needs.resolve.outputs.base_branch }}
+          workflow-id: fly-deploy.yml
 
       - name: Resolve affected projects
         id: affected
-        if: inputs.component == 'auto'
+        if: env.COMPONENT == 'auto'
         run: |
           PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --sep=" " 2>/dev/null || true)
           echo "projects=$PROJECTS" >> "$GITHUB_OUTPUT"
@@ -78,7 +123,6 @@ jobs:
       - name: Set deploy flags
         id: flags
         env:
-          COMPONENT: ${{ inputs.component }}
           PROJECTS: ${{ steps.affected.outputs.projects }}
         run: |
           backend_affected=false
@@ -117,8 +161,6 @@ jobs:
 
       - name: Set health URLs
         id: urls
-        env:
-          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           if [ "$ENVIRONMENT" = "main" ]; then
             echo "api_health_url=https://api.marrow-health.com/api/v1/health" >> "$GITHUB_OUTPUT"
@@ -132,20 +174,20 @@ jobs:
 
   deploy-api:
     name: deploy api
-    needs: plan
-    if: needs.plan.outputs.deploy_api == 'true'
+    needs: [resolve, plan]
+    if: needs.resolve.outputs.should_run == 'true' && needs.plan.outputs.deploy_api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
-      group: fly-api-${{ inputs.environment }}
+      group: fly-api-${{ needs.resolve.outputs.environment }}
       cancel-in-progress: false
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      FLY_CONFIG: ${{ inputs.environment == 'main' && 'fly.prod.toml' || 'fly.toml' }}
+      FLY_CONFIG: ${{ needs.resolve.outputs.environment == 'main' && 'fly.prod.toml' || 'fly.toml' }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
@@ -155,22 +197,23 @@ jobs:
 
   deploy-mcp:
     name: deploy mcp
-    needs: [plan, deploy-api]
+    needs: [resolve, plan, deploy-api]
     if: >-
+      needs.resolve.outputs.should_run == 'true' &&
       needs.plan.outputs.deploy_mcp == 'true' &&
       (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: fly-mcp-${{ inputs.environment }}
+      group: fly-mcp-${{ needs.resolve.outputs.environment }}
       cancel-in-progress: false
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      FLY_CONFIG: ${{ inputs.environment == 'main' && 'fly.mcp.prod.toml' || 'fly.mcp.toml' }}
+      FLY_CONFIG: ${{ needs.resolve.outputs.environment == 'main' && 'fly.mcp.prod.toml' || 'fly.mcp.toml' }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
@@ -180,22 +223,23 @@ jobs:
 
   deploy-frontend:
     name: deploy frontend
-    needs: [plan, deploy-api]
+    needs: [resolve, plan, deploy-api]
     if: >-
+      needs.resolve.outputs.should_run == 'true' &&
       needs.plan.outputs.deploy_frontend == 'true' &&
       (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: fly-ui-${{ inputs.environment }}
+      group: fly-ui-${{ needs.resolve.outputs.environment }}
       cancel-in-progress: false
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      FLY_CONFIG: ${{ inputs.environment == 'main' && 'fly.prod.toml' || 'fly.toml' }}
+      FLY_CONFIG: ${{ needs.resolve.outputs.environment == 'main' && 'fly.prod.toml' || 'fly.toml' }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
@@ -205,8 +249,9 @@ jobs:
 
   smoke:
     name: smoke
-    needs: [plan, deploy-api, deploy-mcp, deploy-frontend]
+    needs: [resolve, plan, deploy-api, deploy-mcp, deploy-frontend]
     if: >-
+      needs.resolve.outputs.should_run == 'true' &&
       always() &&
       (
         needs.deploy-api.result == 'success' ||

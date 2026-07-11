@@ -95,7 +95,7 @@ If FAIL: fix inline (small) or loop sub-agent (large). Do not open PR until PASS
 gh pr checks <pr-number> --watch
 ```
 
-Required green: aggregate `ci` job from `CI (develop)` (parallel `backend` + `frontend` when Nx affected).
+Required green: aggregate `ci` job from `CI` workflow (parallel `backend` + `frontend` when Nx affected).
 
 On failure: push fixes, re-watch. Do not merge until all required checks pass.
 
@@ -114,15 +114,15 @@ Confirm `git status` clean. Run `git cleanup` if remote branch was deleted.
 
 ## Phase 7 — Wait for dev deployment
 
-Fly deploy runs after CI (develop) succeeds on push. Poll until healthy:
+Fly deploy runs after CI succeeds on push. Poll until healthy:
 
 ```bash
 # CI on develop push (post-merge)
-gh run list --branch develop --workflow "CI (develop)" --limit 1
+gh run list --branch develop --workflow "CI" --limit 1
 gh run watch <run-id>
 
 # Fly deploy (triggered by CI success)
-gh run list --branch develop --workflow "Fly Deploy (develop)" --limit 1
+gh run list --branch develop --workflow "Fly Deploy" --limit 1
 gh run watch <fly-run-id>
 # Jobs: plan → deploy api / deploy mcp / deploy frontend (parallel UI) → smoke
 
@@ -161,11 +161,11 @@ gh pr create --base main --head develop --title "Release: <short summary>" --bod
 - <bullets of what shipped since last main promotion>
 
 ## Dev verification
-- [x] CI (develop) green on merge commit
+- [x] CI green on merge commit
 - [x] Dev smoke on app-dev.marrow-health.com — <1-line result>
 
 ## Test plan
-- [ ] CI (main) — awaiting checks
+- [ ] CI — awaiting checks
 - [ ] Final human review before merge
 
 EOF
@@ -180,7 +180,7 @@ EOF
 gh pr checks <pr-number> --watch
 ```
 
-Required green: aggregate `ci` job from `CI (main)` (parallel `backend` + `frontend` when Nx affected; prod-shaped frontend build).
+Required green: aggregate `ci` job from `CI` workflow (parallel `backend` + `frontend` when Nx affected; prod-shaped frontend build on `main`).
 
 On failure: fix on `develop`, re-promote. Do not ask for final review until green.
 
