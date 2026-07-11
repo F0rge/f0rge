@@ -1,4 +1,4 @@
-# Fly.io cutover runbook (health-tracker)
+# Fly.io cutover runbook (Marrow)
 
 Parallel stack only until Leo signs off. **Do not run DNS cutover or stop Coolify without explicit approval.**
 
@@ -6,21 +6,32 @@ Parallel stack only until Leo signs off. **Do not run DNS cutover or stop Coolif
 
 | Component | Fly app | URL |
 |---|---|---|
-| API + worker | `health-tracker-api-dev` | https://health-tracker-api-dev.fly.dev |
-| MCP | `health-tracker-mcp-dev` | https://health-tracker-mcp-dev.fly.dev |
-| Frontend | `health-tracker-web-dev` | https://health-tracker-web-dev.fly.dev |
-| Postgres | MPG `health-tracker-db-dev` (`d1zj5omzqg9ryqkv`, `fra`) | via secrets |
+| API + worker | `marrow-dev` | https://marrow-dev.fly.dev |
+| MCP | `marrow-mcp-dev` | https://marrow-mcp-dev.fly.dev |
+| Frontend | `marrow-ui-dev` | https://marrow-ui-dev.fly.dev |
+| Postgres | Shared MPG `health-tracker-db-prod` — database `marrow_dev` | via secrets |
 | Object storage | Tigris (when billing enabled) | via `fly storage create` |
 
 ## Fly prod stack (parallel — no DNS cutover)
 
 | Component | Fly app | URL |
 |---|---|---|
-| API + worker | `health-tracker-api-prod` | https://health-tracker-api-prod.fly.dev |
-| MCP | `health-tracker-mcp-prod` | https://health-tracker-mcp-prod.fly.dev |
-| Frontend | `health-tracker-web-prod` | https://health-tracker-web-prod.fly.dev |
-| Postgres | MPG `health-tracker-db-prod` (`fra`) | via secrets |
+| API + worker | `marrow` | https://marrow.fly.dev |
+| MCP | `marrow-mcp` | https://marrow-mcp.fly.dev |
+| Frontend | `marrow-ui` | https://marrow-ui.fly.dev |
+| Postgres | Shared MPG `health-tracker-db-prod` (`z23750v13yl096d1`, `fra`) — database `marrow` | via secrets |
 | Object storage | Tigris on API prod app | via `fly storage create` |
+
+### Shared MPG cluster (one cluster, multiple apps + databases)
+
+Dev and prod Fly stacks share **one** MPG cluster (`z23750v13yl096d1`, `fra`). Environment isolation is by **database name**, not separate clusters:
+
+| Database | Environment | Attached apps |
+|---|---|---|
+| `marrow` | prod | `marrow`, `marrow-mcp` |
+| `marrow_dev` | dev | `marrow-dev`, `marrow-mcp-dev` |
+
+Consolidation script (dev data migration): `./scripts/fly-mpg-consolidate-dev.sh`.
 
 Deploy configs: `backend/fly.prod.toml`, `backend/fly.mcp.prod.toml`, `frontend/fly.prod.toml`.
 
@@ -38,8 +49,8 @@ After merge to `develop` or `main`, Fly deploys run automatically once the match
 
 | Branch | CI gate | Fly workflow | Apps deployed |
 |---|---|---|---|
-| `develop` | `CI (develop)` | `.github/workflows/fly-deploy-develop.yml` | `health-tracker-api-dev`, `health-tracker-mcp-dev`, `health-tracker-web-dev` |
-| `main` | `CI (main)` | `.github/workflows/fly-deploy-main.yml` | `health-tracker-api-prod`, `health-tracker-mcp-prod`, `health-tracker-web-prod` |
+| `develop` | `CI (develop)` | `.github/workflows/fly-deploy-develop.yml` | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` |
+| `main` | `CI (main)` | `.github/workflows/fly-deploy-main.yml` | `marrow`, `marrow-mcp`, `marrow-ui` |
 
 Deploy order: **API** (runs `alembic upgrade head` via `release_command`) → **MCP** → **frontend**. Failed CI does not trigger a deploy. PR CI runs are ignored (push-only).
 
@@ -63,25 +74,55 @@ cd frontend && fly deploy --config fly.toml
 - `JWT_SECRET` — ≥32 random bytes
 - `SETTINGS_ENCRYPTION_KEY`
 - `HEALTHTRACKER_RO_PASSWORD` — only for self-hosted Pi; skipped on Fly (`FLY_MPG_SKIP_ROLE_DDL=1`)
-- `CORS_ORIGINS` — include Fly frontend URL
+- `CORS_ORIGINS` — include Fly frontend URL (`https://marrow-ui-dev.fly.dev`, `https://marrow-ui.fly.dev`)
 - Tigris: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `BUCKET_NAME`, `AWS_REGION=auto`
 
 MCP app: `MCP_READONLY_DATABASE_URL` (attach with `--username healthtracker-ro`).
 
 ## MPG setup notes
 
-- Region: `fra` (MPG not available in `cdg`)
-- Enable pgvector: `fly mpg databases extensions enable vector -c <cluster> -d fly-db`
-- Enable citext (required by migration 020): `fly mpg databases extensions enable citext -c <cluster> -d fly-db`
-- MPG users: `healthtracker-ro` (reader), `healthtracker-app` (writer)
+- **Cluster:** `z23750v13yl096d1` (`health-tracker-db-prod`, region `fra`). MPG not available in `cdg`. Cluster display name is unchanged; databases were renamed to `marrow` / `marrow_dev`.
+- **Databases:** `marrow` (prod), `marrow_dev` (dev Fly stack). Create with `fly mpg databases create z23750v13yl096d1 -n marrow_dev`.
+- **Extensions** (per database): `vector`, `citext` (migration 020)
+  ```bash
+  fly mpg databases extensions enable vector z23750v13yl096d1 -d marrow
+  fly mpg databases extensions enable citext z23750v13yl096d1 -d marrow
+  fly mpg databases extensions enable vector z23750v13yl096d1 -d marrow_dev
+  fly mpg databases extensions enable citext z23750v13yl096d1 -d marrow_dev
+  ```
+- **MPG users** (cluster-scoped): `healthtracker-ro` (reader), `healthtracker-app` (writer), `htmigrate` (`schema_admin`)
 - Set `FLY_MPG_SKIP_ROLE_DDL=1` — roles provisioned via `fly mpg users create`
 - **Migration role (implemented):** all tables are owned by `schema_admin`; the runtime `healthtracker-app` (writer) role is intentionally NOT the owner, so it can't `ALTER TABLE` (023's `SET NOT NULL` fails with `must be owner of table embedding`). It must stay a non-owner: a table owner can `ALTER TABLE ... DISABLE/NO FORCE ROW LEVEL SECURITY`, so making the always-on app role the owner would let a compromised connection disable multi-tenant RLS. Instead, migrations run as a dedicated owner-capable user:
   - `fly mpg users create <cluster> -u htmigrate -r schema_admin`
-  - Dev: `fly mpg attach d1zj5omzqg9ryqkv -a health-tracker-api-dev -d fly-db -u htmigrate --variable-name MIGRATION_DATABASE_URL`
-  - Prod: `fly mpg attach z23750v13yl096d1 -a health-tracker-api-prod -d fly-db -u htmigrate --variable-name MIGRATION_DATABASE_URL`
   - `[deploy] release_command` in `fly.prod.toml` overrides `DATABASE_URL` with `MIGRATION_DATABASE_URL` for alembic only; web/worker keep the writer `DATABASE_URL`. `htmigrate` is never used at runtime.
-- **Pi dump restore:** run `alembic upgrade head` as `fly-user`/`htmigrate` (schema_admin), not `healthtracker-app` — writer lacks CREATE on `public` after pg_restore. Then `GRANT ALL ON ALL TABLES IN SCHEMA public TO "healthtracker-app"` (quote hyphenated role names).
-- **MCP app:** needs both `MCP_READONLY_DATABASE_URL` and `DATABASE_URL` (copy reader URL or attach twice).
+- **Attach commands** (use `fly secrets set --stage` + `fly deploy` if secrets already exist — attach alone redeploys):
+  ```bash
+  CLUSTER=z23750v13yl096d1
+
+  # Prod API
+  fly mpg attach $CLUSTER -a marrow -d marrow -u healthtracker-app --variable-name DATABASE_URL
+  fly mpg attach $CLUSTER -a marrow -d marrow -u htmigrate --variable-name MIGRATION_DATABASE_URL
+
+  # Prod MCP
+  fly mpg attach $CLUSTER -a marrow-mcp -d marrow -u healthtracker-ro --variable-name MCP_READONLY_DATABASE_URL
+  fly mpg attach $CLUSTER -a marrow-mcp -d marrow -u healthtracker-ro --variable-name DATABASE_URL
+
+  # Dev API
+  fly mpg attach $CLUSTER -a marrow-dev -d marrow_dev -u healthtracker-app --variable-name DATABASE_URL
+  fly mpg attach $CLUSTER -a marrow-dev -d marrow_dev -u htmigrate --variable-name MIGRATION_DATABASE_URL
+
+  # Dev MCP
+  fly mpg attach $CLUSTER -a marrow-mcp-dev -d marrow_dev -u healthtracker-ro --variable-name MCP_READONLY_DATABASE_URL
+  fly mpg attach $CLUSTER -a marrow-mcp-dev -d marrow_dev -u healthtracker-ro --variable-name DATABASE_URL
+  ```
+- **Pi dump restore:** run `alembic upgrade head` as `htmigrate` (schema_admin), not `healthtracker-app` — writer lacks CREATE on `public` after pg_restore. Then grant tables to `healthtracker-app` / `healthtracker-ro` (quote hyphenated names). See `scripts/fly-mpg-consolidate-dev.sh` for grant SQL.
+- **MCP app:** needs both `MCP_READONLY_DATABASE_URL` and `DATABASE_URL` (reader URL for both is fine on Fly).
+
+## Marrow rename migration (2026-07)
+
+Legacy apps (`health-tracker-*`) were replaced with `marrow*` apps via blue/green deploy. Databases were migrated by **copy** (`pg_dump` → `pg_restore` into new `marrow` / `marrow_dev` databases). In-place `ALTER DATABASE` requires the `postgres` owner on Fly MPG. Legacy databases `fly-db` and `health_dev` remain on the cluster for rollback until Leo signs off.
+
+Helper script: `./scripts/fly-rename-marrow.sh`. Pre-rename backup ID recorded in PR notes.
 
 ## Data migration (dry-run)
 
@@ -111,4 +152,4 @@ Full restore: pg_dump → scratch MPG → verify per-table counts vs Pi → copy
 
 ## Rollback
 
-Re-point DNS/tunnels to Pi. Keep MPG/Tigris as staging until re-verified. Do not delete Pi data or backups until signed off.
+Re-point DNS/tunnels to Pi. Keep MPG/Tigris as staging until re-verified. Do not delete Pi data or backups until signed off. To undo database rename (only if no new writes): `ALTER DATABASE marrow RENAME TO "fly-db"; ALTER DATABASE marrow_dev RENAME TO health_dev;`

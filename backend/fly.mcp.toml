@@ -1,7 +1,7 @@
-# health-tracker MCP server (dev)
+# Marrow MCP server (dev)
 # Deploy from repo root: fly deploy --config backend/fly.mcp.toml
 
-app = "health-tracker-mcp-dev"
+app = "marrow-mcp-dev"
 primary_region = "fra"
 
 [build]

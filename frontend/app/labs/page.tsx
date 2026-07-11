@@ -160,13 +160,11 @@ export default function LabsPage() {
 
       <LabUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
 
-      {!isDesktop && (
-        <LabDetailPanel
-          lab={selectedLab}
-          open={!!selectedLab}
-          onOpenChange={(o) => { if (!o) setSelectedLab(null) }}
-        />
-      )}
+      <LabDetailPanel
+        lab={selectedLab}
+        open={!!selectedLab && !isDesktop}
+        onOpenChange={(o) => { if (!o) setSelectedLab(null) }}
+      />
     </PageShell>
   )
 }

@@ -34,6 +34,7 @@ from app.routers import (
     labs,
     meals,
     medication_catalog,
+    onboarding,
     photos,
     settings as settings_router,
     supplement_catalog,
@@ -124,7 +125,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _weather_task.cancel()
 
 
-app = FastAPI(title="Health Tracker", lifespan=lifespan)
+app = FastAPI(title="Marrow", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -173,6 +174,7 @@ app.include_router(supplement_catalog.router)
 app.include_router(diet_tag_catalog.router)
 app.include_router(dietary_ingredient_catalog.router)
 app.include_router(medication_catalog.router)
+app.include_router(onboarding.router)
 app.include_router(symptom_catalog.router)
 app.include_router(food_analysis.router)
 app.include_router(insights.router)

@@ -14,7 +14,7 @@ import { BUTTON_CLASS } from './constants'
 
 const MCP_CONFIG_SNIPPET = `{
   "mcpServers": {
-    "health-tracker": {
+    "marrow": {
       "url": "https://health-mcp.leo-figueiredo.com/mcp",
       "headers": {
         "Authorization": "Bearer {TOKEN}"

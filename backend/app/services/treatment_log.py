@@ -6,6 +6,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.base import unit_of_work
 from app.crud.treatment_log import TreatmentLogCRUD
 from app.crud.treatments import TreatmentCRUD
 from app.exceptions import NotFoundError
@@ -39,22 +40,26 @@ class TreatmentLogService:
         existing = await self.crud.get(treatment_id, date)
 
         now = datetime.datetime.utcnow()
-        if existing is not None:
-            existing.doses_taken = clamped
-            existing.updated_at = now
-            log = await self.crud.commit_refresh(existing)
-        else:
-            log = TreatmentLog(
-                user_id=current_user_id(),
-                treatment_id=treatment_id,
-                date=date,
-                doses_taken=clamped,
-                updated_at=now,
-            )
-            self.crud.add(log)
-            log = await self.crud.commit_refresh(log)
+        async with unit_of_work(self.db):
+            if existing is not None:
+                existing.doses_taken = clamped
+                existing.updated_at = now
+                log = existing
+                await self.crud.flush()
+            else:
+                log = TreatmentLog(
+                    user_id=current_user_id(),
+                    treatment_id=treatment_id,
+                    date=date,
+                    doses_taken=clamped,
+                    updated_at=now,
+                )
+                self.crud.add(log)
+                await self.crud.flush()
 
-        protocol = await self.get_protocol(date)
+            protocol = await self.get_protocol(date)
+            await self.crud.refresh(log)
+
         return TreatmentLogResult(
             log=log,
             today=protocol.today,

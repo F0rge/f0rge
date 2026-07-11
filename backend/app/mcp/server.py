@@ -17,7 +17,7 @@ def create_server() -> FastMCP:
     # OAuth flow — these URLs are metadata only, never resolved.
     base = AnyHttpUrl(f"http://{settings.mcp_server_host}:{settings.mcp_server_port}")
     return FastMCP(
-        name="health-tracker",
+        name="marrow",
         host=settings.mcp_server_host,
         port=settings.mcp_server_port,
         streamable_http_path="/mcp",
