@@ -41,11 +41,3 @@ Thumbs.db
 
 # QA screenshots (local agent evidence; not committed)
 qa-screenshots/
-
-# Claude agent state — runtime only, never tracked.
-# Exceptions tracked in repo:
-#   .claude/agents/         — project-level sub-agent definitions
-#   .claude/review-context/ — PR-review-bot playbooks (see .github/workflows/claude-pr-review.yml)
-.claude/*
-!.claude/agents/
-!.claude/review-context/
