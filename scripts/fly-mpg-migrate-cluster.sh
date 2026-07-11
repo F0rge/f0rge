@@ -56,9 +56,10 @@ SQL
 
 parse_url() {
   local url="$1"
-  export PGUSER="${url#postgresql://}"
-  PGUSER="${PGUSER%%:*}"
-  export PGPASSWORD="${url#postgresql://*:}"
+  url="${url#postgresql+asyncpg://}"
+  url="${url#postgresql://}"
+  export PGUSER="${url%%:*}"
+  export PGPASSWORD="${url#*:}"
   PGPASSWORD="${PGPASSWORD%%@*}"
 }
 
@@ -121,7 +122,7 @@ SRC_DEV_USER="$PGUSER" SRC_DEV_PASS="$PGPASSWORD"
 if [[ -f "$TARGET_URL_FILE" ]]; then
   DST_HTMIGRATE_URL="$(tr -d '\r' <"$TARGET_URL_FILE")"
 else
-  TARGET_CRED_APP="${TARGET_CRED_APP:-marrow-ui-dev}"
+  TARGET_CRED_APP="${TARGET_CRED_APP:-marrow-dev}"
   DST_HTMIGRATE_URL="$(flyctl ssh console -a "$TARGET_CRED_APP" -C 'printenv MIGRATION_DATABASE_URL' 2>/dev/null | tail -1 | tr -d '\r')"
 fi
 if [[ -z "$DST_HTMIGRATE_URL" ]]; then
