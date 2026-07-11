@@ -120,7 +120,7 @@ Per `project_datetime_tz_convention.md`:
 ## DevOps / infra patterns
 
 - **Fly migrations** — `[deploy] release_command` in `fly.toml` / `fly.prod.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker-app). See `docs/fly-cutover-runbook.md`.
-- **MPG on Fly** — cluster `d1zj5omzqwvryqkv`; `FLY_MPG_SKIP_ROLE_DDL=1`; roles via `fly mpg users create`.
+- **MPG on Fly** — cluster `nlkxjo5m3240y93v` (`marrow-db`, org `f0rge`); `FLY_MPG_SKIP_ROLE_DDL=1`; roles via `fly mpg users create`.
 - **Custom domains** — `marrow-health.com` DNS on Cloudflare (grey cloud); certs via `fly certs add`.
 
 ---

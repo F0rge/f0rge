@@ -33,7 +33,7 @@ Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-
 
 ## MPG (Postgres)
 
-- Cluster: `marrow-db-prod` (`d1zj5omzqwvryqkv`, `fra`)
+- Cluster: `marrow-db` (`nlkxjo5m3240y93v`, `fra`, org `f0rge`)
 - Databases: `marrow` (prod), `marrow_dev` (dev)
 - Users: `healthtracker-app` (writer), `healthtracker-ro` (reader), `htmigrate` (migrations only)
 - Set `FLY_MPG_SKIP_ROLE_DDL=1` on Fly apps

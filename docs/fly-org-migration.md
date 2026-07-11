@@ -41,7 +41,7 @@ Apps **can** move orgs with `fly apps move` (machines, volumes, secrets, certs/d
 - [x] New Tigris bucket + secrets on `marrow-dev`
 - [x] `rclone copy` old bucket `empty-sea-6682` → `f0rge-marrow-dev-photos` (required — DB rows reference filenames, not bucket)
 - [x] `FLY_API_TOKEN` → single `f0rge` org token (all apps in `f0rge`)
-- [ ] Old cluster/bucket decommission
+- [x] Old cluster/bucket decommission (2026-07-11)
 
 ### Prod cutover status (2026-07-11)
 
@@ -49,7 +49,17 @@ Apps **can** move orgs with `fly apps move` (machines, volumes, secrets, certs/d
 - [x] `rclone copy` `late-rain-9962` → `f0rge-marrow-prod-photos` (151 objects)
 - [x] Prod apps moved to `f0rge` + MPG attach
 - [x] Deployed API/MCP/frontend from `main` monorepo paths
-- [ ] Old cluster/bucket decommission (after soak)
+- [x] Old cluster/bucket decommission (2026-07-11)
+
+### Decommission archive
+
+Final dumps before destroy (local, not in repo):
+
+- `/tmp/marrow-decommission-archive/marrow-final.dump` (~1.5 MB)
+- `/tmp/marrow-decommission-archive/marrow_dev-final.dump` (~335 KB)
+
+`rclone check` verified 10/10 dev objects and 151/151 prod objects before bucket destroy.
+Destroyed: MPG `d1zj5omzqwvryqkv`, Tigris `empty-sea-6682`, `late-rain-9962`.
 
 ## Prerequisites
 

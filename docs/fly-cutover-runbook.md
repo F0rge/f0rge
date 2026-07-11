@@ -11,7 +11,7 @@ Production and develop run entirely on Fly.io. Custom domains on `marrow-health.
 | API + worker | `marrow-dev` | https://marrow-dev.fly.dev · https://api-dev.marrow-health.com |
 | MCP | `marrow-mcp-dev` | https://marrow-mcp-dev.fly.dev |
 | Frontend | `marrow-ui-dev` | https://marrow-ui-dev.fly.dev · https://app-dev.marrow-health.com |
-| Postgres | MPG `marrow-db-prod` — database `marrow_dev` | via secrets |
+| Postgres | MPG `marrow-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow_dev` | via secrets |
 | Object storage | Tigris | via `fly storage create` |
 
 ## Fly prod stack
@@ -21,12 +21,12 @@ Production and develop run entirely on Fly.io. Custom domains on `marrow-health.
 | API + worker | `marrow` | https://marrow.fly.dev · https://api.marrow-health.com |
 | MCP | `marrow-mcp` | https://marrow-mcp.fly.dev |
 | Frontend | `marrow-ui` | https://marrow-ui.fly.dev · https://marrow-health.com |
-| Postgres | MPG `marrow-db-prod` (`d1zj5omzqwvryqkv`, `fra`) — database `marrow` | via secrets |
+| Postgres | MPG `marrow-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow` | via secrets |
 | Object storage | Tigris on API prod app | via `fly storage create` |
 
 ### Shared MPG cluster
 
-Dev and prod share **one** MPG cluster (`d1zj5omzqwvryqkv`, `fra`, name `marrow-db-prod`). Isolation is by database name:
+Dev and prod share **one** MPG cluster (`nlkxjo5m3240y93v`, `fra`, name `marrow-db`, org `f0rge`). Isolation is by database name:
 
 | Database | Environment | Attached apps |
 |---|---|---|
@@ -79,7 +79,7 @@ MCP app: `MCP_READONLY_DATABASE_URL` + `DATABASE_URL` (reader URLs).
 
 ## MPG setup
 
-- **Cluster:** `d1zj5omzqwvryqkv` (`marrow-db-prod`, region `fra`)
+- **Cluster:** `nlkxjo5m3240y93v` (`marrow-db`, org `f0rge`, region `fra`)
 - **Databases:** `marrow` (prod), `marrow_dev` (dev)
 - **Extensions** (per database): `vector`, `citext`
 - **Users:** `healthtracker-ro`, `healthtracker-app`, `htmigrate` (`schema_admin`)
@@ -89,7 +89,7 @@ Migrations run as `htmigrate` via `[deploy] release_command`; runtime uses `heal
 **Attach commands:**
 
 ```bash
-CLUSTER=d1zj5omzqwvryqkv
+CLUSTER=nlkxjo5m3240y93v
 
 # Prod API
 fly mpg attach $CLUSTER -a marrow -d marrow -u healthtracker-app --variable-name DATABASE_URL
