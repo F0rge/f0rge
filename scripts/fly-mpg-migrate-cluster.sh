@@ -159,6 +159,16 @@ docker run --rm -i -e PGPASSWORD="$SRC_DEV_PASS" postgres:16 \
   psql -h host.docker.internal -p "$SOURCE_PROXY_PORT" -U "$SRC_DEV_USER" -d marrow_dev \
   -v ON_ERROR_STOP=1 <<<"$(rls_force_sql)"
 
+echo "==> NO FORCE RLS on target marrow (for row counts)"
+docker run --rm -i -e PGPASSWORD="$DST_PASS" postgres:16 \
+  psql -h host.docker.internal -p "$TARGET_PROXY_PORT" -U "$DST_USER" -d marrow \
+  -v ON_ERROR_STOP=1 <<<"$(rls_no_force_sql)"
+
+echo "==> NO FORCE RLS on target marrow_dev (for row counts)"
+docker run --rm -i -e PGPASSWORD="$DST_PASS" postgres:16 \
+  psql -h host.docker.internal -p "$TARGET_PROXY_PORT" -U "$DST_USER" -d marrow_dev \
+  -v ON_ERROR_STOP=1 <<<"$(rls_no_force_sql)"
+
 COUNT_SQL="SELECT 'entries', count(*) FROM entries UNION ALL SELECT 'users', count(*) FROM users UNION ALL SELECT 'labs', count(*) FROM labs;"
 echo "==> target counts marrow"
 docker run --rm -e PGPASSWORD="$DST_PASS" postgres:16 \
@@ -166,5 +176,15 @@ docker run --rm -e PGPASSWORD="$DST_PASS" postgres:16 \
 echo "==> target counts marrow_dev"
 docker run --rm -e PGPASSWORD="$DST_PASS" postgres:16 \
   psql -h host.docker.internal -p "$TARGET_PROXY_PORT" -U "$DST_USER" -d marrow_dev -Atc "$COUNT_SQL"
+
+echo "==> FORCE RLS on target marrow"
+docker run --rm -i -e PGPASSWORD="$DST_PASS" postgres:16 \
+  psql -h host.docker.internal -p "$TARGET_PROXY_PORT" -U "$DST_USER" -d marrow \
+  -v ON_ERROR_STOP=1 <<<"$(rls_force_sql)"
+
+echo "==> FORCE RLS on target marrow_dev"
+docker run --rm -i -e PGPASSWORD="$DST_PASS" postgres:16 \
+  psql -h host.docker.internal -p "$TARGET_PROXY_PORT" -U "$DST_USER" -d marrow_dev \
+  -v ON_ERROR_STOP=1 <<<"$(rls_force_sql)"
 
 echo "==> Done — re-attach all apps to $TARGET_CLUSTER next"
