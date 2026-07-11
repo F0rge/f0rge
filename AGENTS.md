@@ -45,11 +45,18 @@ Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.tom
 
 ## Running locally
 
+Postgres (pgvector) via Docker; backend and frontend in separate terminals:
+
 ```bash
-./start.sh          # Both services
-cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload   # Backend only
-cd apps/marrow/frontend && npm run dev   # Frontend only
+docker start ht-postgres 2>/dev/null || docker run -d --name ht-postgres \
+  -e POSTGRES_USER=health -e POSTGRES_PASSWORD=health -e POSTGRES_DB=health \
+  -p 5432:5432 pgvector/pgvector:pg16
+
+cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload   # :8000
+cd apps/marrow/frontend && npm run dev                                      # :3000, proxies /api/* → :8000
 ```
+
+No root-level `start.sh` — use `docker compose` when a compose file is added for full-stack local dev.
 
 ## Key Paths
 
@@ -142,6 +149,6 @@ The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and 
 - Alembic migrations 004/019 read `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` from **`os.environ`, not** from `.env` via pydantic. Export the `.env` before migrating: `cd apps/marrow/backend && set -a && . ./.env && set +a && uv run alembic upgrade head`. Running the backend itself does not need this (pydantic loads `.env`), only the migration step does.
 
 ### Running
-- `./start.sh` runs both (backend `:8000`, frontend `:3000`); frontend proxies `/api/*` → `:8000`. The backend auto-seeds dietary reference tables on first boot against a fresh DB.
+- Backend `:8000` + frontend `:3000` (frontend proxies `/api/*` → `:8000`): run `uv run uvicorn app.main:app --port 8000 --reload` in `apps/marrow/backend` and `npm run dev` in `apps/marrow/frontend` (after Postgres is up — see above). Backend auto-seeds dietary reference tables on first boot against a fresh DB.
 - Signup rejects non-routable email TLDs (e.g. `.local`); use a normal domain like `demo@example.com` when testing auth.
 - Optional services (not needed for the core check-in app): embedding worker (`uv run python -m app.embedding_pipeline`, needs `OPENROUTER_API_KEY`) and MCP server (`uv run python -m app.mcp ...`).

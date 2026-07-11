@@ -44,11 +44,18 @@ Migrations: `[deploy] release_command` in `fly.toml` runs `alembic upgrade head`
 
 ## Local development
 
+Postgres via Docker; backend and frontend in separate terminals (no root `start.sh`):
+
 ```bash
-./start.sh          # Both services
+docker start ht-postgres 2>/dev/null || docker run -d --name ht-postgres \
+  -e POSTGRES_USER=health -e POSTGRES_PASSWORD=health -e POSTGRES_DB=health \
+  -p 5432:5432 pgvector/pgvector:pg16
+
 cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload
 cd apps/marrow/frontend && npm run dev   # :3000
 ```
+
+Prefer `docker compose up` when a compose file exists for full-stack local dev.
 
 ## New config vars checklist
 
