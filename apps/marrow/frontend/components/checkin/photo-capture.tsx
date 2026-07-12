@@ -3,7 +3,9 @@
 import { useRef, useState, useCallback } from 'react'
 import { Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
 import { MealTimeChips } from './meal-time-chips'
+import { TagPeoplePicker } from './tag-people-picker'
 import { useUploadPhoto } from '@/lib/api/hooks'
+import { useConnections } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 
 interface StagedPhoto {
@@ -11,6 +13,7 @@ interface StagedPhoto {
   file: File
   label: string
   mealTime: Date
+  taggedHandles: string[]
   status: 'staged' | 'uploading' | 'error'
   errorMessage?: string
 }
@@ -29,6 +32,8 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const uploadPhoto = useUploadPhoto()
+  const connections = useConnections()
+  const acceptedConnections = connections.data?.accepted ?? []
 
   const [photos, setPhotos] = useState<StagedPhoto[]>([])
 
@@ -44,6 +49,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
       file,
       label: '',
       mealTime: new Date(now),
+      taggedHandles: [],
       status: 'staged',
     }))
     setPhotos((prev) => [...prev, ...staged])
@@ -70,6 +76,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         file: photo.file,
         label: photo.label || undefined,
         mealTime: photo.mealTime,
+        taggedHandles: photo.taggedHandles,
       })
 
       setPhotos((prev) => prev.filter((p) => p.id !== id))
@@ -102,6 +109,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         file: photo.file,
         label: photo.label || undefined,
         mealTime: photo.mealTime,
+        taggedHandles: photo.taggedHandles,
       })
 
       setPhotos((prev) => prev.filter((p) => p.id !== id))
@@ -241,6 +249,18 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                   }}
                 />
               </div>
+              {acceptedConnections.length > 0 && (
+                <TagPeoplePicker
+                  connections={acceptedConnections}
+                  selectedHandles={photo.taggedHandles}
+                  onChange={(taggedHandles) => {
+                    setPhotos((prev) =>
+                      prev.map((p) => p.id === photo.id ? { ...p, taggedHandles } : p),
+                    )
+                  }}
+                  disabled={photo.status === 'uploading'}
+                />
+              )}
             </div>
           ))}
         </div>

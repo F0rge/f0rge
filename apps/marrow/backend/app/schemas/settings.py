@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class SettingsResponse(BaseModel):
@@ -15,6 +15,7 @@ class SettingsResponse(BaseModel):
     has_api_key: bool
     has_external_api_token: bool
     onboarding_completed: bool
+    tagged_meal_mode: str = "approve"
 
 
 class LLMSettingsUpdate(BaseModel):
@@ -46,6 +47,17 @@ class ExternalTokenResponse(BaseModel):
     Store it immediately — it cannot be recovered after this response."""
 
     token: str
+
+
+class TaggedMealModeUpdate(BaseModel):
+    tagged_meal_mode: str
+
+    @field_validator("tagged_meal_mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        if value not in ("approve", "auto"):
+            raise ValueError("tagged_meal_mode must be 'approve' or 'auto'")
+        return value
 
 
 class TokenRevokedResponse(BaseModel):

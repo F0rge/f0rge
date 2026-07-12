@@ -6,6 +6,7 @@ import uuid
 import bcrypt
 import jwt
 from fastapi import Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -13,6 +14,7 @@ from app.crud.auth import UserCRUD
 from f0rge_core.exceptions import ConflictError, UnauthorizedError, ValidationError
 from app.models.user import User
 from app.services.avatar_defaults import default_avatar_index
+from app.services.social import SocialService
 from app.services.user_provisioning import provision_user_catalogs, repair_infrastructure_catalogs
 
 JWT_ALGORITHM = "HS256"
@@ -89,6 +91,7 @@ class AuthService:
         self,
         email: str,
         password: str,
+        handle: str,
         response: Response,
     ) -> dict[str, object]:
         validate_password(password)
@@ -97,15 +100,30 @@ class AuthService:
         if existing is not None:
             raise ConflictError("Email already registered")
 
-        user = User(email=email, password_hash=hash_password(password))
+        social = SocialService(self.db)
+        normalized_handle = await social.assert_handle_available(handle)
+
+        user = User(
+            email=email,
+            password_hash=hash_password(password),
+            handle=normalized_handle,
+        )
         await self.crud.add_and_flush(user)
         user.avatar_default_index = default_avatar_index(user.id)
         await provision_user_catalogs(self.db, user.id)
-        await self.crud.commit_refresh(user)
+        try:
+            await self.crud.commit_refresh(user)
+        except IntegrityError as exc:
+            raise ConflictError("Handle already taken") from exc
 
         token = create_access_token(user.id)
         set_session_cookie(response, token)
-        return {"authenticated": True, "user_id": str(user.id), "email": user.email}
+        return {
+            "authenticated": True,
+            "user_id": str(user.id),
+            "email": user.email,
+            "handle": user.handle,
+        }
 
     async def login(
         self,
@@ -122,7 +140,12 @@ class AuthService:
 
         token = create_access_token(user.id)
         set_session_cookie(response, token)
-        return {"authenticated": True, "user_id": str(user.id), "email": user.email}
+        return {
+            "authenticated": True,
+            "user_id": str(user.id),
+            "email": user.email,
+            "handle": user.handle,
+        }
 
     async def logout(self, response: Response) -> dict[str, bool]:
         clear_session_cookie(response)
@@ -132,4 +155,9 @@ class AuthService:
         user = await self.crud.get_by_id(user_id)
         if user is None:
             raise UnauthorizedError("Invalid session")
-        return {"authenticated": True, "user_id": str(user.id), "email": user.email}
+        return {
+            "authenticated": True,
+            "user_id": str(user.id),
+            "email": user.email,
+            "handle": user.handle,
+        }

@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LogOut, SlidersHorizontal, UserRound } from 'lucide-react'
+import { LogOut, SlidersHorizontal, UserRound, Users } from 'lucide-react'
 import { UserAvatar } from '@/components/account/user-avatar'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
-import { useLogout } from '@/lib/api/hooks'
+import { useLogout, useUnreadCount } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import { cn } from '@f0rge/ui'
 
@@ -17,6 +17,8 @@ export function ProfileMenu() {
   const pathname = usePathname()
   const router = useRouter()
   const logout = useLogout()
+  const unread = useUnreadCount()
+  const unreadCount = unread.data?.count ?? 0
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -59,10 +61,15 @@ export function ProfileMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          'overflow-hidden rounded-full shadow-sm transition-opacity hover:opacity-90',
+          'relative overflow-hidden rounded-full shadow-sm transition-opacity hover:opacity-90',
         )}
       >
         <UserAvatar size="sm" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
       </button>
       {open && (
         <div
@@ -77,6 +84,16 @@ export function ProfileMenu() {
           >
             <UserRound className="size-4 text-muted-foreground" />
             Account
+          </Link>
+          <Link
+            href="/people"
+            role="menuitem"
+            className={MENU_ITEM_CLASS}
+            onClick={() => setOpen(false)}
+            data-tour="people-menu"
+          >
+            <Users className="size-4 text-muted-foreground" />
+            People
           </Link>
           <Link
             href="/customize"

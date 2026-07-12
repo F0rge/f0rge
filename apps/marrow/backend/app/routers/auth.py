@@ -18,7 +18,7 @@ async def signup(
     response: Response,
     service: AuthService = Depends(get_auth_service),
 ):
-    return await service.signup(body.email, body.password, response)
+    return await service.signup(body.email, body.password, body.handle, response)
 
 
 @router.post("/login", response_model=AuthStatus)

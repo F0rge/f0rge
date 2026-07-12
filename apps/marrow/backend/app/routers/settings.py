@@ -11,6 +11,7 @@ from app.schemas.settings import (
     ExternalTokenResponse,
     LLMSettingsUpdate,
     SettingsResponse,
+    TaggedMealModeUpdate,
     TestConnectionResponse,
 )
 from app.services.llm.base import EmbeddingClient, LLMClient
@@ -86,3 +87,12 @@ async def complete_onboarding(
     _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> SettingsResponse:
     return await service.complete_onboarding()
+
+
+@router.put("/tagged-meal-mode", response_model=SettingsResponse)
+async def update_tagged_meal_mode(
+    body: TaggedMealModeUpdate,
+    service: SettingsService = Depends(get_settings_service),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
+) -> SettingsResponse:
+    return await service.update_tagged_meal_mode(body.tagged_meal_mode)

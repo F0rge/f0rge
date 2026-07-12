@@ -27,6 +27,22 @@ _EVENING_START_HOUR = 17
 _NIGHT_START_HOUR = 21
 
 
+def _photo_response(photo: Photo) -> PhotoResponse:
+    handle = None
+    if photo.tagged_by_user is not None:
+        handle = photo.tagged_by_user.handle
+    return PhotoResponse(
+        id=photo.id,
+        entry_id=photo.entry_id,
+        filename=photo.filename,
+        label=photo.label,
+        meal_time=photo.meal_time,
+        created_at=photo.created_at,
+        source_photo_id=photo.source_photo_id,
+        tagged_by_handle=handle,
+    )
+
+
 def _build_response(entry: Entry) -> EntryResponse:
     """Construct an ``EntryResponse`` with all computed diet-signal fields."""
     user_added = parse_diet_risk_csv(entry.diet_risk)
@@ -35,7 +51,7 @@ def _build_response(entry: Entry) -> EntryResponse:
         {
             **{c.name: getattr(entry, c.name) for c in entry.__table__.columns},
             "medications": entry.medications_json or [],
-            "photos": [PhotoResponse.model_validate(p, from_attributes=True) for p in entry.photos],
+            "photos": [_photo_response(p) for p in entry.photos],
             "photo_signal": signal,
             "photo_derived_flags": sorted(signal.flags),
             "user_added_flags": sorted(user_added),

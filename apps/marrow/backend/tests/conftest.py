@@ -6,8 +6,10 @@ user, ASGI clients, jwt patch) stays here.
 
 Provides:
 - ``postgres_container`` — session-scoped real Postgres (testcontainers, pgvector/pg16 image)
-- ``async_engine``       — session-scoped AsyncEngine bound to that container with the
-                           full ORM schema created via ``Base.metadata.create_all``
+- ``superuser_engine``   — session-scoped AsyncEngine (container superuser) for schema
+                           bootstrap and tests that must seed cross-tenant rows
+- ``async_engine``       — session-scoped AsyncEngine for the ``test_app`` NOSUPERUSER role;
+                           app-facing sessions use this so RLS is actually enforced
 - ``async_db``            — function-scoped ``AsyncSession`` running inside a SAVEPOINT
                            that is rolled back after the test, giving per-test isolation
                            without truncating tables
@@ -17,6 +19,10 @@ Provides:
 Tests in this repo call services directly (no TestClient). The ``async_client``
 fixture is provided for future HTTP-level tests but isn't required by the current
 suite.
+
+Cross-user assertions on a shared ``async_db`` session must set the GUC via
+``apply_session_user_id`` (or go through HTTP clients). The session GUC follows
+the last ``apply_session_user_id`` call — see issue #308.
 """
 
 from __future__ import annotations
@@ -45,8 +51,10 @@ from f0rge_db.tenant import apply_session_user_id  # noqa: E402
 from f0rge_testing import async_url, postgres_container_fixture, savepoint_session  # noqa: E402
 from httpx import ASGITransport  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncConnection,
     AsyncEngine,
     AsyncSession,
+    async_sessionmaker,
     create_async_engine,
 )
 from testcontainers.postgres import PostgresContainer  # noqa: E402
@@ -58,12 +66,18 @@ from app.config import settings
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH  # noqa: E402
-from app.rls import enable_row_level_security
+from app.rls import enable_row_level_security, enable_social_security
 from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL
+from tests.helpers import signup_payload  # noqa: E402
 
 TEST_JWT_SECRET = "test-jwt-secret-for-pytest-only-32b"
+
+TEST_APP_ROLE = "test_app"
+TEST_APP_PASSWORD = "test"
+
 TEST_EMAIL = "test@example.com"
 TEST_PASSWORD = "test-password-12"
+TEST_HANDLE = "test_user"
 
 
 # ---------------------------------------------------------------------------
@@ -73,11 +87,49 @@ TEST_PASSWORD = "test-password-12"
 postgres_container = postgres_container_fixture("pgvector/pgvector:pg16")
 
 
+def test_app_async_url(container: PostgresContainer) -> str:
+    """Connection URL for the NOSUPERUSER role used by app-facing test sessions."""
+    url = async_url(container)
+    return url.replace("://postgres:postgres@", f"://{TEST_APP_ROLE}:{TEST_APP_PASSWORD}@")
+
+
+async def _provision_test_app_role(conn: AsyncConnection) -> None:
+    """Create ``test_app`` with the same table/sequence/function grants as migration 019."""
+    await conn.execute(
+        sa.text(
+            f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{TEST_APP_ROLE}') THEN
+                    CREATE ROLE {TEST_APP_ROLE}
+                        WITH LOGIN PASSWORD '{TEST_APP_PASSWORD}'
+                        NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+                END IF;
+            END
+            $$;
+            """
+        )
+    )
+    await conn.execute(sa.text(f"GRANT USAGE ON SCHEMA public TO {TEST_APP_ROLE}"))
+    await conn.execute(
+        sa.text(
+            f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public "
+            f"TO {TEST_APP_ROLE}"
+        )
+    )
+    await conn.execute(
+        sa.text(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {TEST_APP_ROLE}")
+    )
+    await conn.execute(
+        sa.text(f"GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO {TEST_APP_ROLE}")
+    )
+
+
 @pytest_asyncio.fixture(scope="session")
-async def async_engine(
+async def superuser_engine(
     postgres_container: PostgresContainer,
 ) -> AsyncIterator[AsyncEngine]:
-    """One AsyncEngine for the whole session, with the schema created."""
+    """Superuser engine — schema bootstrap and cross-tenant seeding only."""
     engine = create_async_engine(async_url(postgres_container), echo=False)
     async with engine.begin() as conn:
         # pgvector extension must be installed before any VECTOR column can be created.
@@ -85,6 +137,8 @@ async def async_engine(
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS citext"))
         await conn.run_sync(Base.metadata.create_all)
         await enable_row_level_security(conn)
+        await enable_social_security(conn)
+        await _provision_test_app_role(conn)
         await conn.execute(sa.text(COPY_USER_CATALOG_FROM_REFERENCE_SQL))
         await conn.execute(
             sa.text(
@@ -105,6 +159,39 @@ async def async_engine(
         yield engine
     finally:
         await engine.dispose()
+
+
+@pytest_asyncio.fixture(scope="session")
+async def async_engine(
+    superuser_engine: AsyncEngine,
+    postgres_container: PostgresContainer,
+) -> AsyncIterator[AsyncEngine]:
+    """App-facing engine — ``test_app`` NOSUPERUSER so RLS policies apply."""
+    _ = superuser_engine  # ensure bootstrap finished before connecting as test_app
+    engine = create_async_engine(test_app_async_url(postgres_container), echo=False)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
+
+
+# Modules that bind ``async_session_maker`` at import time — patch per test so
+# background tasks use the testcontainer ``test_app`` engine, not ``.env`` URL.
+_BACKGROUND_SESSION_MODULES = (
+    "app.services.tag_delivery",
+    "app.services.food_analysis_orchestrator",
+    "app.embedding_pipeline.worker",
+    "app.embedding_pipeline.backfill",
+)
+
+
+@pytest.fixture(autouse=True)
+def patch_background_session_maker(
+    async_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    for module in _BACKGROUND_SESSION_MODULES:
+        monkeypatch.setattr(f"{module}.async_session_maker", real_maker)
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +250,7 @@ async def authed_client(async_client: AsyncClient) -> AsyncClient:
     """Log in via a real signup round-trip (rolled back with the test savepoint)."""
     resp = await async_client.post(
         "/api/v1/auth/signup",
-        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+        json=signup_payload(TEST_EMAIL, TEST_PASSWORD, TEST_HANDLE),
     )
     assert resp.status_code == 200
     return async_client

@@ -74,12 +74,12 @@ async def _seed_prod_condition(
     await conn.execute(sa.text("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO rls_probe"))
 
 
-async def test_migration_031_seed_is_rls_safe(async_engine: AsyncEngine) -> None:
+async def test_migration_031_seed_is_rls_safe(superuser_engine: AsyncEngine) -> None:
     leo_id = uuid.UUID(settings.default_storage_user_id)
     other_id = uuid.uuid4()
 
     # --- negative (documents the bug): cross-tenant INSERT without bypass RAISES. ---
-    async with async_engine.connect() as conn:
+    async with superuser_engine.connect() as conn:
         trans = await conn.begin()
         try:
             await _seed_prod_condition(conn, leo_id, other_id)
@@ -102,9 +102,10 @@ async def test_migration_031_seed_is_rls_safe(async_engine: AsyncEngine) -> None
         finally:
             # Top-level ROLLBACK clears the aborted txn + undoes the CREATE ROLE.
             await trans.rollback()
+            await conn.execute(sa.text("RESET ALL"))
 
     # --- positive (proves the fix): transient migration_bypass succeeds under RLS. ---
-    async with async_engine.connect() as conn:
+    async with superuser_engine.connect() as conn:
         trans = await conn.begin()
         try:
             await _seed_prod_condition(conn, leo_id, other_id)
@@ -189,3 +190,4 @@ async def test_migration_031_seed_is_rls_safe(async_engine: AsyncEngine) -> None
             assert by_user_key[(leo_id, "neuro_symptoms")] is False
         finally:
             await trans.rollback()
+            await conn.execute(sa.text("RESET ALL"))

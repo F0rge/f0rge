@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Upload, UserRound } from 'lucide-react'
 import { Button } from '@f0rge/ui'
@@ -14,8 +14,9 @@ import {
   useUploadAvatar,
   useDeleteAvatar,
 } from '@/lib/api/hooks'
-import { handleMutationError } from '@f0rge/ui/api'
+import { getErrorDetail, handleMutationError } from '@f0rge/ui/api'
 import type { Account } from '@/lib/api/types'
+import { useHandleAvailable } from '@/lib/api/hooks'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
 const MAX_BYTES = 5 * 1024 * 1024
@@ -42,13 +43,38 @@ function ProfileForm({ account }: { account: Account }) {
   const uploadAvatar = useUploadAvatar()
   const deleteAvatar = useDeleteAvatar()
   const [displayName, setDisplayName] = useState(account.display_name ?? '')
+  const [handle, setHandle] = useState(account.handle ?? '')
+  const [handleError, setHandleError] = useState<string | null>(null)
+  const debouncedHandle = useDebouncedValue(handle, 400)
+  const availability = useHandleAvailable(debouncedHandle)
+  const handleChanged = handle.trim().toLowerCase() !== (account.handle ?? '')
+  const handleStatus =
+    !handleChanged || debouncedHandle.length < 3
+      ? null
+      : availability.isLoading
+        ? 'checking'
+        : availability.data?.available
+          ? 'available'
+          : 'taken'
 
   const handleSave = async () => {
+    setHandleError(null)
     try {
-      await updateAccount.mutateAsync({ display_name: displayName.trim() || null })
+      const payload: { display_name: string | null; handle?: string } = {
+        display_name: displayName.trim() || null,
+      }
+      if (handleChanged) {
+        payload.handle = handle.trim().toLowerCase().replace(/^@/, '')
+      }
+      await updateAccount.mutateAsync(payload)
       toast.success('Profile updated')
     } catch (err) {
-      handleMutationError(err, 'Failed to update profile')
+      const detail = getErrorDetail(err, 'Failed to update profile')
+      if (handleChanged) {
+        setHandleError(detail)
+      } else {
+        handleMutationError(err, 'Failed to update profile')
+      }
     }
   }
 
@@ -120,6 +146,31 @@ function ProfileForm({ account }: { account: Account }) {
       </div>
 
       <div className="space-y-1.5">
+        <Label htmlFor="handle">Handle</Label>
+        <div className="relative">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            @
+          </span>
+          <Input
+            id="handle"
+            value={handle}
+            onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/^@/, ''))}
+            className="pl-7"
+            placeholder="your_name"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+        {handleStatus === 'available' && (
+          <p className="text-xs text-emerald-600">Available</p>
+        )}
+        {handleStatus === 'taken' && (
+          <p className="text-xs text-destructive">Already taken</p>
+        )}
+        {handleError && <p className="text-xs text-destructive">{handleError}</p>}
+      </div>
+
+      <div className="space-y-1.5">
         <Label htmlFor="display-name">Display name</Label>
         <Input
           id="display-name"
@@ -132,11 +183,20 @@ function ProfileForm({ account }: { account: Account }) {
       <Button
         type="button"
         onClick={handleSave}
-        disabled={updateAccount.isPending}
+        disabled={updateAccount.isPending || (handleChanged && handleStatus !== 'available' && handleStatus !== null)}
         className="w-full sm:w-auto"
       >
         {updateAccount.isPending ? 'Saving...' : 'Save'}
       </Button>
     </SettingsCard>
   )
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delayMs)
+    return () => window.clearTimeout(timer)
+  }, [value, delayMs])
+  return debounced
 }

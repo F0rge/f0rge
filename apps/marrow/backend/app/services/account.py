@@ -29,6 +29,7 @@ from app.services.auth import (
     validate_password,
     verify_password,
 )
+from app.services.social import SocialService
 from app.services.avatar_storage import (
     avatar_exists,
     delete_avatar,
@@ -63,6 +64,7 @@ class AccountService:
             user_id=str(user.id),
             email=user.email,
             display_name=user.display_name,
+            handle=user.handle,
             avatar_default_index=user.avatar_default_index,
             has_custom_avatar=user.avatar_custom_filename is not None,
             created_at=user.created_at,
@@ -82,6 +84,10 @@ class AccountService:
         user = await self._get_current_user()
         if "display_name" in data.model_fields_set:
             user.display_name = (data.display_name or "").strip() or None
+        if "handle" in data.model_fields_set and data.handle is not None:
+            social = SocialService(self.db)
+            user = await social.set_user_handle(user, data.handle)
+        elif "display_name" in data.model_fields_set:
             user = await self.crud.commit_refresh(user)
         return self._to_response(user)
 

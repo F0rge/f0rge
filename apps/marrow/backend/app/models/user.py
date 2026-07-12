@@ -28,6 +28,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(CITEXT, unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     display_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    handle: Mapped[str | None] = mapped_column(CITEXT, unique=True, nullable=True)
     avatar_default_index: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     avatar_custom_filename: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(

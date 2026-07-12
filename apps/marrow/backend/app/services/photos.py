@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.crud.base import unit_of_work
 from app.crud.entries import EntryCRUD
 from app.crud.photos import PhotoCRUD
 from f0rge_core.exceptions import NotFoundError
@@ -22,6 +23,7 @@ from f0rge_db.tenant import current_user_id
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
+    from app.services.meal_tags import MealTagService
 
 
 async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg") -> str:
@@ -56,11 +58,17 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
 
 
 class PhotoService:
-    def __init__(self, db: AsyncSession, orchestrator: "FoodAnalysisOrchestrator") -> None:
+    def __init__(
+        self,
+        db: AsyncSession,
+        orchestrator: "FoodAnalysisOrchestrator",
+        meal_tags: "MealTagService",
+    ) -> None:
         self.db = db
         self.crud = PhotoCRUD(db)
         self.entry_crud = EntryCRUD(db)
         self.orchestrator = orchestrator
+        self.meal_tags = meal_tags
 
     async def update_photo(self, photo_id: int, data: PhotoUpdate) -> Photo:
         photo = await self.crud.get_by_id_owned(photo_id)
@@ -84,10 +92,13 @@ class PhotoService:
         label: Optional[str],
         meal_time: Optional[datetime.datetime],
         background_tasks: BackgroundTasks,
+        tagged_handles: Optional[str] = None,
     ) -> Photo:
         entry = await self.entry_crud.get_by_date(entry_date)
         if entry is None:
             raise NotFoundError(f"No entry for {entry_date}")
+
+        recipients = await self.meal_tags.resolve_tagged_recipients(tagged_handles)
 
         filename = await next_photo_filename(self.db, entry)
 
@@ -106,6 +117,9 @@ class PhotoService:
             utc_offset = normalized_meal_time.utcoffset()
             normalized_meal_time = (normalized_meal_time - utc_offset).replace(tzinfo=None)
 
+        # Invariant: a file on disk implies a DB row exists.
+        # If the commit fails we clean up the file so the next upload
+        # doesn't collide with a phantom on disk.
         photo = Photo(
             user_id=current_user_id(),
             entry_id=entry.id,
@@ -115,18 +129,19 @@ class PhotoService:
             meal_time=normalized_meal_time if normalized_meal_time is not None else now,
             created_at=now,
         )
-        # Invariant: a file on disk implies a DB row exists.
-        # If the commit fails we clean up the file so the next upload
-        # doesn't collide with a phantom on disk.
-        self.crud.add(photo)
         try:
-            await self.crud.save()
+            async with unit_of_work(self.db):
+                self.crud.add(photo)
+                await self.db.flush()
+                if recipients:
+                    await self.meal_tags.insert_tags_for_photo(photo, entry_date, recipients)
         except Exception:
             await asyncio.to_thread(delete_photo, filename, user_id=str(current_user_id()))
             raise
 
         # Queue analysis when enabled and credentials resolve (env or BYOK).
         # Credential resolution must not fail the upload — the photo is already persisted.
+        analysis_will_run = False
         if settings.food_analysis_enabled:
             from app.services.llm.factory import resolve_llm_credentials
 
@@ -135,7 +150,11 @@ class PhotoService:
             except Exception:
                 api_key = None
             if api_key:
+                analysis_will_run = True
                 background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
+
+        if recipients and not analysis_will_run:
+            await self.meal_tags.delivery.process_photo_only_source(photo.id, current_user_id())
 
         return photo
 

@@ -15,7 +15,33 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-from app.rls import USER_OWNED_TABLES
+# frozen copy of app.rls.py USER_OWNED_TABLES as of revision 021 — do NOT import
+# the live list; new tables get RLS in their own migrations.
+_USER_OWNED_TABLES_021: tuple[str, ...] = (
+    "entries",
+    "photos",
+    "photo_analyses",
+    "photo_ingredients",
+    "tracker",
+    "tracker_log",
+    "treatments",
+    "treatment_log",
+    "labs",
+    "lab_markers",
+    "health_metrics",
+    "weather_readings",
+    "embedding",
+    "embedding_queue",
+    "user_settings",
+    "diet_tag_catalog",
+    "supplement_catalog",
+    "symptom_catalog",
+    "medication_catalog",
+    "lab_marker_catalog",
+    "lab_marker_aliases",
+    "dietary_ingredients",
+    "ingredient_aliases",
+)
 
 revision: str = "021"
 down_revision: Union[str, None] = "020"
@@ -25,7 +51,7 @@ depends_on: Union[Sequence[str], None] = None
 
 def upgrade() -> None:
     bind = op.get_bind()
-    for table in USER_OWNED_TABLES:
+    for table in _USER_OWNED_TABLES_021:
         bind.execute(sa.text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
         bind.execute(sa.text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
         bind.execute(
@@ -63,7 +89,7 @@ def downgrade() -> None:
     bind = op.get_bind()
     bind.execute(sa.text("DROP POLICY IF EXISTS worker_queue ON embedding_queue"))
     bind.execute(sa.text("DROP POLICY IF EXISTS mcp_auth_lookup ON user_settings"))
-    for table in reversed(USER_OWNED_TABLES):
+    for table in reversed(_USER_OWNED_TABLES_021):
         bind.execute(sa.text(f"DROP POLICY IF EXISTS tenant_isolation ON {table}"))
         bind.execute(sa.text(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY"))
         bind.execute(sa.text(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))

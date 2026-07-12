@@ -28,6 +28,7 @@ from f0rge_db.auth_context import user_id_ctx
 from app.config import settings
 from app.models.entry import Entry
 from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
+from app.services.meal_tags import MealTagService
 from app.services.photos import PhotoService
 
 
@@ -92,7 +93,7 @@ async def _upload(
     token = user_id_ctx.set(user_id)
     try:
         upload = UploadFile(filename="meal.jpg", file=io.BytesIO(_jpg_bytes()))
-        service = PhotoService(db, FoodAnalysisOrchestrator())
+        service = PhotoService(db, FoodAnalysisOrchestrator(), MealTagService(db))
         return await service.upload(
             entry_date=day,
             file=upload,

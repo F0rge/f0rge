@@ -13,6 +13,8 @@ class PhotoResponse(BaseModel):
     label: Optional[str] = None
     meal_time: Optional[datetime.datetime] = None
     created_at: datetime.datetime
+    source_photo_id: Optional[int] = None
+    tagged_by_handle: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

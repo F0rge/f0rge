@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from PIL import Image
 
 from conftest import TEST_EMAIL
+from tests.helpers import signup_payload
 
 
 def _make_jpeg_bytes() -> bytes:
@@ -54,7 +55,7 @@ async def test_signup_assigns_stable_default_avatar_index(async_client: AsyncCli
     password = "test-password-12"
     signup = await async_client.post(
         "/api/v1/auth/signup",
-        json={"email": email, "password": password},
+        json=signup_payload(email, password),
     )
     assert signup.status_code == 200
 

@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.user import default_user_id
+from app.models.user import User, default_user_id
 
 
 class Photo(Base):
@@ -30,11 +30,26 @@ class Photo(Base):
     label: Mapped[str | None] = mapped_column(String, nullable=True)
     original_filename: Mapped[str | None] = mapped_column(String, nullable=True)
     meal_time: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    source_photo_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("photos.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    tagged_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         default=datetime.datetime.utcnow,
     )
 
     entry: Mapped[Entry] = relationship("Entry", back_populates="photos", lazy="selectin")
+    tagged_by_user: Mapped[Optional[User]] = relationship(
+        "User",
+        foreign_keys=[tagged_by_user_id],
+        lazy="selectin",
+    )
     # cascade="all, delete-orphan" is required: PhotoAnalysis.photo_id is
     # NOT NULL, so without an ORM-level cascade SQLAlchemy tries to NULL
     # the FK on photo delete and the commit blows up with an IntegrityError.

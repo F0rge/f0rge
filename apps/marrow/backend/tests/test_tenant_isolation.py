@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import AsyncIterator
 from unittest.mock import AsyncMock, patch
 
 from httpx import ASGITransport, AsyncClient
@@ -22,6 +21,7 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH, User
 from f0rge_db.tenant import apply_session_user_id, owned_by_user
+from tests.helpers import make_tenant_get_db_override, signup_payload
 
 PASSWORD = "tenant-test-password-12"
 _ENTRY_PAYLOAD = {
@@ -94,14 +94,11 @@ async def _entry_for_user(db: AsyncSession, user_id: uuid.UUID, day: datetime.da
 
 
 async def _signup_client(async_db: AsyncSession, email: str) -> AsyncClient:
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield async_db
-
-    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_db] = make_tenant_get_db_override(async_db)
     client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     resp = await client.post(
         "/api/v1/auth/signup",
-        json={"email": email, "password": PASSWORD},
+        json=signup_payload(email, PASSWORD),
     )
     assert resp.status_code == 200
     return client

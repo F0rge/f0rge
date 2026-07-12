@@ -1,6 +1,22 @@
 from __future__ import annotations
 
+import sqlalchemy as sa
 from f0rge_db.rls import create_service_role_policy, enable_tenant_isolation
+from app.sql.social_functions import (
+    CREATE_NOTIFICATION_SQL,
+    IS_GROUP_MEMBER_SQL,
+    IS_GROUP_OWNER_SQL,
+    SOCIAL_LOOKUP_GROUP_MEMBERS_POLICY_SQL,
+    SOCIAL_LOOKUP_GROUPS_POLICY_SQL,
+    SOCIAL_NOTIFIER_POLICY_SQL,
+)
+from app.sql.social_rls import (
+    CONNECTIONS_RLS_STATEMENTS,
+    GROUP_MEMBERS_RLS_STATEMENTS,
+    GROUPS_RLS_STATEMENTS,
+    MEAL_TAGS_RLS_STATEMENTS,
+    NOTIFICATIONS_RLS_STATEMENTS,
+)
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 # Frozen import surface: migrations/versions/021_row_level_security.py does
@@ -64,3 +80,26 @@ async def enable_row_level_security(conn: AsyncConnection) -> None:
         tables=PROVISIONER_COPY_TABLES,
         role="provisioner",
     )
+
+
+async def enable_social_security(conn: AsyncConnection) -> None:
+    """Mirror social-layer migration DDL for test schema bootstrap."""
+    for stmt in NOTIFICATIONS_RLS_STATEMENTS:
+        await conn.execute(sa.text(stmt))
+    await conn.execute(sa.text(SOCIAL_NOTIFIER_POLICY_SQL))
+    await conn.execute(sa.text(CREATE_NOTIFICATION_SQL))
+
+    for stmt in CONNECTIONS_RLS_STATEMENTS:
+        await conn.execute(sa.text(stmt))
+
+    await conn.execute(sa.text(SOCIAL_LOOKUP_GROUPS_POLICY_SQL))
+    await conn.execute(sa.text(SOCIAL_LOOKUP_GROUP_MEMBERS_POLICY_SQL))
+    await conn.execute(sa.text(IS_GROUP_MEMBER_SQL))
+    await conn.execute(sa.text(IS_GROUP_OWNER_SQL))
+
+    for stmt in GROUPS_RLS_STATEMENTS:
+        await conn.execute(sa.text(stmt))
+    for stmt in GROUP_MEMBERS_RLS_STATEMENTS:
+        await conn.execute(sa.text(stmt))
+    for stmt in MEAL_TAGS_RLS_STATEMENTS:
+        await conn.execute(sa.text(stmt))

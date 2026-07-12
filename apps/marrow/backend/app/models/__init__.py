@@ -25,6 +25,10 @@ from app.models.embedding import Embedding
 from app.models.embedding_queue import EmbeddingQueue
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
+from app.models.notification import Notification
+from app.models.connection import Connection
+from app.models.group import Group, GroupMember
+from app.models.meal_tag import MealTag
 
 __all__ = [
     "User",
@@ -52,4 +56,9 @@ __all__ = [
     "EmbeddingQueue",
     "Tracker",
     "TrackerLog",
+    "Notification",
+    "Connection",
+    "Group",
+    "GroupMember",
+    "MealTag",
 ]

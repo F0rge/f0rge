@@ -34,6 +34,7 @@ class UserSettings(Base):
     onboarding_completed_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime, nullable=True
     )
+    tagged_meal_mode: Mapped[str] = mapped_column(String, nullable=False, default="approve")
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )
