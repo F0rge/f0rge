@@ -13,6 +13,23 @@ import { cn } from '@f0rge/ui'
 const MENU_ITEM_CLASS =
   'flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted'
 
+function UnreadBadge({ count, className }: { count: number; className?: string }) {
+  if (count <= 0) return null
+  const label = count > 9 ? '9+' : String(count)
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center justify-center rounded-full bg-destructive font-semibold leading-none text-white ring-2 ring-background',
+        label.length === 1 ? 'size-[18px] text-[10px]' : 'h-[18px] min-w-[18px] px-1 text-[10px]',
+        className,
+      )}
+      aria-hidden
+    >
+      {label}
+    </span>
+  )
+}
+
 export function ProfileMenu() {
   const pathname = usePathname()
   const router = useRouter()
@@ -54,23 +71,23 @@ export function ProfileMenu() {
 
   return (
     <div ref={menuRef} className="relative" data-tour="profile-menu">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-label="Profile menu"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className={cn(
-          'relative overflow-hidden rounded-full shadow-sm transition-opacity hover:opacity-90',
-        )}
-      >
-        <UserAvatar size="sm" />
-        {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
-      </button>
+      <div className="relative inline-flex">
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-label={
+            unreadCount > 0
+              ? `Profile menu, ${unreadCount} unread in People`
+              : 'Profile menu'
+          }
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="rounded-full shadow-sm transition-opacity hover:opacity-90"
+        >
+          <UserAvatar size="sm" />
+        </button>
+        <UnreadBadge count={unreadCount} className="pointer-events-none absolute -right-0.5 -top-0.5" />
+      </div>
       {open && (
         <div
           role="menu"
@@ -88,12 +105,15 @@ export function ProfileMenu() {
           <Link
             href="/people"
             role="menuitem"
-            className={MENU_ITEM_CLASS}
+            className={cn(MENU_ITEM_CLASS, 'justify-between')}
             onClick={() => setOpen(false)}
             data-tour="people-menu"
           >
-            <Users className="size-4 text-muted-foreground" />
-            People
+            <span className="flex items-center gap-2">
+              <Users className="size-4 text-muted-foreground" />
+              People
+            </span>
+            <UnreadBadge count={unreadCount} />
           </Link>
           <Link
             href="/customize"
