@@ -33,6 +33,10 @@ export interface GroupListItem {
   my_role: GroupMemberRole
 }
 
+export interface GroupListResponse {
+  groups: GroupListItem[]
+}
+
 export interface GroupMember {
   handle: string
   display_name: string | null

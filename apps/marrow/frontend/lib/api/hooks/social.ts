@@ -6,6 +6,7 @@ import type {
   ConnectionListResponse,
   GroupDetail,
   GroupListItem,
+  GroupListResponse,
   HandleAvailableResponse,
   MealTagsResponse,
   PublicUserCard,
@@ -124,7 +125,10 @@ export function useDeleteConnection() {
 export function useGroups() {
   return useQuery<GroupListItem[]>({
     queryKey: ['social', 'groups'],
-    queryFn: () => apiGet('/social/groups'),
+    queryFn: async () => {
+      const res = (await apiGet('/social/groups')) as GroupListResponse
+      return res.groups
+    },
   })
 }
 
