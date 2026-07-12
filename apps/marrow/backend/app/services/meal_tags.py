@@ -51,17 +51,10 @@ class MealTagService:
             raise ValidationError(f"At most {MAX_TAGS_PER_MEAL} tags per meal")
         return [validate_handle_format(h) for h in parsed]
 
-    async def create_tags_for_photo(
-        self,
-        photo: Photo,
-        entry_date: datetime.date,
-        tagged_handles_raw: Optional[str],
-        *,
-        analysis_will_run: bool,
-    ) -> None:
+    async def resolve_tagged_recipients(self, tagged_handles_raw: Optional[str]) -> list[uuid.UUID]:
         handles = self.parse_tagged_handles(tagged_handles_raw)
         if not handles:
-            return
+            return []
 
         me = current_user_id()
         seen: set[str] = set()
@@ -81,21 +74,44 @@ class MealTagService:
 
         if len(recipients) > MAX_TAGS_PER_MEAL:
             raise ValidationError(f"At most {MAX_TAGS_PER_MEAL} tags per meal")
+        return recipients
 
+    async def insert_tags_for_photo(
+        self,
+        photo: Photo,
+        entry_date: datetime.date,
+        recipients: list[uuid.UUID],
+    ) -> None:
+        me = current_user_id()
+        for recipient_id in recipients:
+            tag = MealTag(
+                source_photo_id=photo.id,
+                tagger_id=me,
+                tagged_user_id=recipient_id,
+                status="pending_analysis",
+                source_label=photo.label,
+                source_date=entry_date,
+            )
+            try:
+                await self.crud.add_tag(tag)
+            except IntegrityError as exc:
+                raise ConflictError("This meal was already tagged for that user") from exc
+
+    async def create_tags_for_photo(
+        self,
+        photo: Photo,
+        entry_date: datetime.date,
+        tagged_handles_raw: Optional[str],
+        *,
+        analysis_will_run: bool,
+    ) -> None:
+        recipients = await self.resolve_tagged_recipients(tagged_handles_raw)
+        if not recipients:
+            return
+
+        me = current_user_id()
         async with unit_of_work(self.db):
-            for recipient_id in recipients:
-                tag = MealTag(
-                    source_photo_id=photo.id,
-                    tagger_id=me,
-                    tagged_user_id=recipient_id,
-                    status="pending_analysis",
-                    source_label=photo.label,
-                    source_date=entry_date,
-                )
-                try:
-                    await self.crud.add_tag(tag)
-                except IntegrityError as exc:
-                    raise ConflictError("This meal was already tagged for that user") from exc
+            await self.insert_tags_for_photo(photo, entry_date, recipients)
 
         if not analysis_will_run:
             await self.delivery.process_photo_only_source(photo.id, me)

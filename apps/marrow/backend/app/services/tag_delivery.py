@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import logging
 import uuid
 from typing import Optional
 
@@ -24,9 +23,8 @@ from app.services.entries import get_or_create_entry
 from app.services.notifications import NotificationService
 from app.services.photo_storage import delete_photo, photo_exists, read_photo, save_photo
 from app.services.photos import next_photo_filename
+from f0rge_core.exceptions import NotFoundError
 from f0rge_db.tenant import apply_session_user_id, clear_tenant_session
-
-logger = logging.getLogger(__name__)
 
 
 class TagDeliveryService:
@@ -45,7 +43,7 @@ class TagDeliveryService:
     """
 
     async def deliver_for_source(self, source_photo_id: int, tagger_id: uuid.UUID) -> None:
-        """BackgroundTask entry after analysis confirm — fresh session per call."""
+        """Entry after analysis confirm — fresh session per call."""
         async with async_session_maker() as db:
             try:
                 await apply_session_user_id(db, tagger_id)
@@ -56,9 +54,6 @@ class TagDeliveryService:
                 dish_name = await self._load_confirmed_dish_name(db, tagger_id, source_photo_id)
                 await self._transition_pending_analysis(db, tags, dish_name)
                 await db.commit()
-            except Exception:
-                logger.exception("Tag delivery failed for source photo %d", source_photo_id)
-                await db.rollback()
             finally:
                 await clear_tenant_session(db)
 
@@ -69,12 +64,9 @@ class TagDeliveryService:
                 await apply_session_user_id(db, recipient_id)
                 tag = await MealTagCRUD(db).get_by_id_for_user(tag_id)
                 if tag is None or tag.status != "pending_approval":
-                    return
+                    raise NotFoundError("Meal tag not found")
                 await self._deliver_tag(db, tag, notify=False)
                 await db.commit()
-            except Exception:
-                logger.exception("Tag delivery failed for tag %s", tag_id)
-                await db.rollback()
             finally:
                 await clear_tenant_session(db)
 
@@ -89,11 +81,6 @@ class TagDeliveryService:
                     return
                 await self._transition_pending_analysis(db, tags, dish_name=None)
                 await db.commit()
-            except Exception:
-                logger.exception(
-                    "Photo-only tag delivery failed for source photo %d", source_photo_id
-                )
-                await db.rollback()
             finally:
                 await clear_tenant_session(db)
 
@@ -143,13 +130,11 @@ class TagDeliveryService:
         await apply_session_user_id(db, tag.tagger_id)
         source_photo = await PhotoCRUD(db).get_by_id(tag.source_photo_id)
         if source_photo is None:
-            logger.warning("Source photo %d missing for tag %s", tag.source_photo_id, tag.id)
-            return
+            raise NotFoundError(f"Source photo {tag.source_photo_id} not found for tag {tag.id}")
 
         tagger_id_str = str(tag.tagger_id)
         if not photo_exists(source_photo.filename, user_id=tagger_id_str):
-            logger.warning("Source photo file missing for tag %s", tag.id)
-            return
+            raise NotFoundError(f"Source photo file missing for tag {tag.id}")
 
         src_bytes = await asyncio.to_thread(
             read_photo, source_photo.filename, user_id=tagger_id_str

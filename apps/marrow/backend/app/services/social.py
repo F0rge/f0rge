@@ -28,7 +28,7 @@ class SocialService:
     @staticmethod
     def to_public_card(user) -> PublicUserCard:
         return PublicUserCard(
-            handle=user.handle,
+            handle=user.handle or "",
             display_name=user.display_name,
             avatar_default_index=user.avatar_default_index,
         )

@@ -15,7 +15,12 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-from app.sql.social_functions import IS_GROUP_MEMBER_SQL, IS_GROUP_OWNER_SQL
+from app.sql.social_functions import (
+    IS_GROUP_MEMBER_SQL,
+    IS_GROUP_OWNER_SQL,
+    SOCIAL_LOOKUP_GROUP_MEMBERS_POLICY_SQL,
+    SOCIAL_LOOKUP_GROUPS_POLICY_SQL,
+)
 
 revision: str = "037"
 down_revision: Union[str, None] = "036"
@@ -149,6 +154,8 @@ def upgrade() -> None:
     op.create_index("ix_group_members_user_id", "group_members", ["user_id"])
 
     bind = op.get_bind()
+    bind.execute(sa.text(SOCIAL_LOOKUP_GROUPS_POLICY_SQL))
+    bind.execute(sa.text(SOCIAL_LOOKUP_GROUP_MEMBERS_POLICY_SQL))
     bind.execute(sa.text(IS_GROUP_MEMBER_SQL))
     bind.execute(sa.text(IS_GROUP_OWNER_SQL))
     for stmt in _GROUPS_RLS:
@@ -166,11 +173,13 @@ def downgrade() -> None:
         "group_members_select",
     ):
         bind.execute(sa.text(f"DROP POLICY IF EXISTS {policy} ON group_members"))
+    bind.execute(sa.text("DROP POLICY IF EXISTS social_lookup ON group_members"))
     bind.execute(sa.text("ALTER TABLE group_members NO FORCE ROW LEVEL SECURITY"))
     bind.execute(sa.text("ALTER TABLE group_members DISABLE ROW LEVEL SECURITY"))
 
     for policy in ("groups_delete", "groups_update", "groups_insert", "groups_select"):
         bind.execute(sa.text(f"DROP POLICY IF EXISTS {policy} ON groups"))
+    bind.execute(sa.text("DROP POLICY IF EXISTS social_lookup ON groups"))
     bind.execute(sa.text("ALTER TABLE groups NO FORCE ROW LEVEL SECURITY"))
     bind.execute(sa.text("ALTER TABLE groups DISABLE ROW LEVEL SECURITY"))
 

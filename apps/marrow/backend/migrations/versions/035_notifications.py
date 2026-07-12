@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-from app.sql.social_functions import CREATE_NOTIFICATION_SQL
+from app.sql.social_functions import CREATE_NOTIFICATION_SQL, SOCIAL_NOTIFIER_POLICY_SQL
 
 revision: str = "035"
 down_revision: Union[str, None] = "034"
@@ -72,12 +72,14 @@ def upgrade() -> None:
             """
         )
     )
+    bind.execute(sa.text(SOCIAL_NOTIFIER_POLICY_SQL))
     bind.execute(sa.text(CREATE_NOTIFICATION_SQL))
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     bind.execute(sa.text("DROP FUNCTION IF EXISTS create_notification(uuid, text, jsonb)"))
+    bind.execute(sa.text("DROP POLICY IF EXISTS social_notifier ON notifications"))
     bind.execute(sa.text("DROP POLICY IF EXISTS notifications_owner ON notifications"))
     bind.execute(sa.text("ALTER TABLE notifications NO FORCE ROW LEVEL SECURITY"))
     bind.execute(sa.text("ALTER TABLE notifications DISABLE ROW LEVEL SECURITY"))

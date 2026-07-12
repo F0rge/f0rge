@@ -6,6 +6,9 @@ from app.sql.social_functions import (
     CREATE_NOTIFICATION_SQL,
     IS_GROUP_MEMBER_SQL,
     IS_GROUP_OWNER_SQL,
+    SOCIAL_LOOKUP_GROUP_MEMBERS_POLICY_SQL,
+    SOCIAL_LOOKUP_GROUPS_POLICY_SQL,
+    SOCIAL_NOTIFIER_POLICY_SQL,
 )
 from app.sql.social_rls import (
     CONNECTIONS_RLS_STATEMENTS,
@@ -83,11 +86,14 @@ async def enable_social_security(conn: AsyncConnection) -> None:
     """Mirror social-layer migration DDL for test schema bootstrap."""
     for stmt in NOTIFICATIONS_RLS_STATEMENTS:
         await conn.execute(sa.text(stmt))
+    await conn.execute(sa.text(SOCIAL_NOTIFIER_POLICY_SQL))
     await conn.execute(sa.text(CREATE_NOTIFICATION_SQL))
 
     for stmt in CONNECTIONS_RLS_STATEMENTS:
         await conn.execute(sa.text(stmt))
 
+    await conn.execute(sa.text(SOCIAL_LOOKUP_GROUPS_POLICY_SQL))
+    await conn.execute(sa.text(SOCIAL_LOOKUP_GROUP_MEMBERS_POLICY_SQL))
     await conn.execute(sa.text(IS_GROUP_MEMBER_SQL))
     await conn.execute(sa.text(IS_GROUP_OWNER_SQL))
 
