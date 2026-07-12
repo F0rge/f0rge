@@ -129,16 +129,6 @@ class PhotoService:
             meal_time=normalized_meal_time if normalized_meal_time is not None else now,
             created_at=now,
         )
-        try:
-            async with unit_of_work(self.db):
-                self.crud.add(photo)
-                await self.db.flush()
-                if recipients:
-                    await self.meal_tags.insert_tags_for_photo(photo, entry_date, recipients)
-        except Exception:
-            await asyncio.to_thread(delete_photo, filename, user_id=str(current_user_id()))
-            raise
-
         # Queue analysis when enabled and credentials resolve (env or BYOK).
         # Credential resolution must not fail the upload — the photo is already persisted.
         analysis_will_run = False
@@ -151,10 +141,23 @@ class PhotoService:
                 api_key = None
             if api_key:
                 analysis_will_run = True
-                background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
 
-        if recipients and not analysis_will_run:
-            await self.meal_tags.delivery.process_photo_only_source(photo.id, current_user_id())
+        try:
+            async with unit_of_work(self.db):
+                self.crud.add(photo)
+                await self.db.flush()
+                if recipients:
+                    await self.meal_tags.insert_tags_for_photo(photo, entry_date, recipients)
+                if recipients and not analysis_will_run:
+                    await self.meal_tags.delivery.process_photo_only_source_in_transaction(
+                        self.db, photo.id, current_user_id()
+                    )
+        except Exception:
+            await asyncio.to_thread(delete_photo, filename, user_id=str(current_user_id()))
+            raise
+
+        if analysis_will_run:
+            background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
 
         return photo
 

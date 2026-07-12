@@ -14,7 +14,6 @@ from app.schemas.food_analysis import (
     PhotoAnalysisResponse,
 )
 from app.services.food_analysis import FoodAnalysisService
-from app.services.tag_delivery_background import deliver_tags_for_source_background
 
 router = APIRouter(
     prefix="/api/v1",
@@ -37,9 +36,7 @@ async def confirm_analysis(
     service: FoodAnalysisService = Depends(get_food_analysis_service),
     user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> PhotoAnalysisResponse:
-    result = await service.confirm_analysis_by_photo_id(photo_id)
-    await deliver_tags_for_source_background(photo_id, user_id)
-    return result
+    return await service.confirm_analysis_by_photo_id(photo_id, user_id)
 
 
 @router.put("/photos/{photo_id}/analysis/dietary-confirm", response_model=PhotoAnalysisResponse)

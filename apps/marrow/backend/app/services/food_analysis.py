@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING, Optional
 
 from fastapi import BackgroundTasks
@@ -14,6 +15,7 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, IngredientUpdate
 from app.services.ingredient_lookup import IngredientLookupService
+from app.services.tag_delivery import TagDeliveryService
 from app.services.vision_prompt import VisionResult
 
 if TYPE_CHECKING:
@@ -53,10 +55,15 @@ class FoodAnalysisService:
         analysis.status = "confirmed"
         return await self.analysis_crud.commit_refresh(analysis)
 
-    async def confirm_analysis_by_photo_id(self, photo_id: int) -> PhotoAnalysis:
-        """Resolve the analysis for a photo and confirm it; raises NotFoundError if absent."""
+    async def confirm_analysis_by_photo_id(
+        self, photo_id: int, tagger_id: uuid.UUID
+    ) -> PhotoAnalysis:
+        """Resolve the analysis for a photo, deliver tags, then confirm."""
         analysis = await self.get_analysis_or_404(photo_id)
-        return await self.confirm_analysis(analysis.id)
+        analysis.status = "confirmed"
+        await self.analysis_crud.flush()
+        await TagDeliveryService().deliver_for_source_in_transaction(self.db, photo_id, tagger_id)
+        return await self.analysis_crud.commit_refresh(analysis)
 
     async def set_dietary_confirmations(
         self, photo_id: int, updates: DietaryConfirmUpdate

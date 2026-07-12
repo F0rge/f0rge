@@ -46,16 +46,19 @@ class TagDeliveryService:
         """Entry after analysis confirm — fresh session per call."""
         async with async_session_maker() as db:
             try:
-                await apply_session_user_id(db, tagger_id)
-                crud = MealTagCRUD(db)
-                tags = await crud.list_pending_analysis_for_source(source_photo_id)
-                if not tags:
-                    return
-                dish_name = await self._load_confirmed_dish_name(db, tagger_id, source_photo_id)
-                await self._transition_pending_analysis(db, tags, dish_name)
+                await self.deliver_for_source_in_transaction(db, source_photo_id, tagger_id)
                 await db.commit()
             finally:
                 await clear_tenant_session(db)
+
+    async def deliver_for_source_in_transaction(
+        self, db: AsyncSession, source_photo_id: int, tagger_id: uuid.UUID
+    ) -> None:
+        """Deliver pending tags using the caller's session; caller owns commit/rollback."""
+        await apply_session_user_id(db, tagger_id)
+        await self._deliver_pending_analysis_for_source(
+            db, tagger_id, source_photo_id, load_dish_name=True
+        )
 
     async def deliver_one(self, tag_id: uuid.UUID, recipient_id: uuid.UUID) -> None:
         """Synchronous approve path — delivers a single pending_approval tag."""
@@ -74,15 +77,36 @@ class TagDeliveryService:
         """When analysis pipeline won't run, transition tags immediately (photo-only)."""
         async with async_session_maker() as db:
             try:
-                await apply_session_user_id(db, tagger_id)
-                crud = MealTagCRUD(db)
-                tags = await crud.list_pending_analysis_for_source(source_photo_id)
-                if not tags:
-                    return
-                await self._transition_pending_analysis(db, tags, dish_name=None)
+                await self.process_photo_only_source_in_transaction(db, source_photo_id, tagger_id)
                 await db.commit()
             finally:
                 await clear_tenant_session(db)
+
+    async def process_photo_only_source_in_transaction(
+        self, db: AsyncSession, source_photo_id: int, tagger_id: uuid.UUID
+    ) -> None:
+        """Photo-only tag delivery using the caller's session; caller owns commit/rollback."""
+        await apply_session_user_id(db, tagger_id)
+        await self._deliver_pending_analysis_for_source(
+            db, tagger_id, source_photo_id, load_dish_name=False
+        )
+
+    async def _deliver_pending_analysis_for_source(
+        self,
+        db: AsyncSession,
+        tagger_id: uuid.UUID,
+        source_photo_id: int,
+        *,
+        load_dish_name: bool,
+    ) -> None:
+        crud = MealTagCRUD(db)
+        tags = await crud.list_pending_analysis_for_source(source_photo_id)
+        if not tags:
+            return
+        dish_name: Optional[str] = None
+        if load_dish_name:
+            dish_name = await self._load_confirmed_dish_name(db, tagger_id, source_photo_id)
+        await self._transition_pending_analysis(db, tags, dish_name)
 
     async def _transition_pending_analysis(
         self,
