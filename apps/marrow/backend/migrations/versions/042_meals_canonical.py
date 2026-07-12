@@ -25,6 +25,10 @@ down_revision: Union[str, None] = "041"
 branch_labels: Union[Sequence[str], None] = None
 depends_on: Union[Sequence[str], None] = None
 
+# Tables touched while FORCE RLS is active — keep one bypass for the whole block
+# so DDL after backfill does not evaluate tenant_isolation with app.user_id=''.
+_RLS_TABLES = ("photos", "photo_analyses", "meal_tags")
+
 
 def upgrade() -> None:
     op.create_table(
@@ -45,11 +49,11 @@ def upgrade() -> None:
     )
     op.create_index("ix_meals_owner_user_id", "meals", ["owner_user_id"])
 
-    op.add_column("photos", sa.Column("meal_id", sa.Integer(), nullable=True))
-    op.create_index("ix_photos_meal_id", "photos", ["meal_id"])
-
     bind = op.get_bind()
-    with migration_bypass(bind, ["photos"]):
+    with migration_bypass(bind, _RLS_TABLES):
+        op.add_column("photos", sa.Column("meal_id", sa.Integer(), nullable=True))
+        op.create_index("ix_photos_meal_id", "photos", ["meal_id"])
+
         bind.execute(
             sa.text(
                 """
@@ -84,19 +88,18 @@ def upgrade() -> None:
             )
         )
 
-    op.alter_column("photos", "meal_id", nullable=False)
-    op.create_foreign_key(
-        "photos_meal_id_fkey",
-        "photos",
-        "meals",
-        ["meal_id"],
-        ["id"],
-        ondelete="RESTRICT",
-    )
+        op.alter_column("photos", "meal_id", nullable=False)
+        op.create_foreign_key(
+            "photos_meal_id_fkey",
+            "photos",
+            "meals",
+            ["meal_id"],
+            ["id"],
+            ondelete="RESTRICT",
+        )
 
-    op.add_column("photo_analyses", sa.Column("meal_id", sa.Integer(), nullable=True))
+        op.add_column("photo_analyses", sa.Column("meal_id", sa.Integer(), nullable=True))
 
-    with migration_bypass(bind, ["photo_analyses"]):
         bind.execute(
             sa.text(
                 """
@@ -122,33 +125,32 @@ def upgrade() -> None:
             )
         )
 
-    op.alter_column("photo_analyses", "meal_id", nullable=False)
-    op.create_unique_constraint("uq_photo_analyses_meal_id", "photo_analyses", ["meal_id"])
-    op.create_foreign_key(
-        "photo_analyses_meal_id_fkey",
-        "photo_analyses",
-        "meals",
-        ["meal_id"],
-        ["id"],
-        ondelete="CASCADE",
-    )
-    op.create_index("ix_photo_analyses_meal_id", "photo_analyses", ["meal_id"])
+        op.alter_column("photo_analyses", "meal_id", nullable=False)
+        op.create_unique_constraint("uq_photo_analyses_meal_id", "photo_analyses", ["meal_id"])
+        op.create_foreign_key(
+            "photo_analyses_meal_id_fkey",
+            "photo_analyses",
+            "meals",
+            ["meal_id"],
+            ["id"],
+            ondelete="CASCADE",
+        )
+        op.create_index("ix_photo_analyses_meal_id", "photo_analyses", ["meal_id"])
 
-    op.drop_constraint("photo_analyses_photo_id_key", "photo_analyses", type_="unique")
-    op.drop_constraint("photo_analyses_photo_id_fkey", "photo_analyses", type_="foreignkey")
-    op.create_foreign_key(
-        "photo_analyses_photo_id_fkey",
-        "photo_analyses",
-        "photos",
-        ["photo_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
-    op.alter_column("photo_analyses", "photo_id", nullable=True)
+        op.drop_constraint("photo_analyses_photo_id_key", "photo_analyses", type_="unique")
+        op.drop_constraint("photo_analyses_photo_id_fkey", "photo_analyses", type_="foreignkey")
+        op.create_foreign_key(
+            "photo_analyses_photo_id_fkey",
+            "photo_analyses",
+            "photos",
+            ["photo_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+        op.alter_column("photo_analyses", "photo_id", nullable=True)
 
-    op.add_column("meal_tags", sa.Column("source_meal_id", sa.Integer(), nullable=True))
+        op.add_column("meal_tags", sa.Column("source_meal_id", sa.Integer(), nullable=True))
 
-    with migration_bypass(bind, ["meal_tags"]):
         bind.execute(
             sa.text(
                 """
@@ -160,16 +162,16 @@ def upgrade() -> None:
             )
         )
 
-    op.alter_column("meal_tags", "source_meal_id", nullable=False)
-    op.create_foreign_key(
-        "meal_tags_source_meal_id_fkey",
-        "meal_tags",
-        "meals",
-        ["source_meal_id"],
-        ["id"],
-        ondelete="CASCADE",
-    )
-    op.create_index("ix_meal_tags_source_meal", "meal_tags", ["source_meal_id"])
+        op.alter_column("meal_tags", "source_meal_id", nullable=False)
+        op.create_foreign_key(
+            "meal_tags_source_meal_id_fkey",
+            "meal_tags",
+            "meals",
+            ["source_meal_id"],
+            ["id"],
+            ondelete="CASCADE",
+        )
+        op.create_index("ix_meal_tags_source_meal", "meal_tags", ["source_meal_id"])
 
     for stmt in MEALS_RLS_STATEMENTS:
         op.execute(sa.text(stmt))
