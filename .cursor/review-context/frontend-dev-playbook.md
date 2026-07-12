@@ -233,7 +233,6 @@ Block any core-scales page change that diverges from the above without also upda
 - Bristol gate using caption + amber pill instead of amber ring — intentional UX decision
 - `/checkin/{date}` is an editor; `/history/{date}` is a read-only summary — different pages, different affordances
 - `comingSoon=true` rows on the Customize Hub with `opacity-50` — intentional roadmap placeholder, not dead UI
-- `components/auth/pin-pad.tsx` pre-existing lint (resolved as of branch `fix/pin-pad-lint-re-enable`) — confirm pre-existing before treating as a regression
 
 ---
 
