@@ -133,16 +133,19 @@ async def test_extract_multiple_treatments(
     assert result.payload.treatments[1].group_name == "Course 1"
 
 
-async def test_extract_empty_treatments_raises(
+async def test_extract_empty_treatments_returns(
     monkeypatch: pytest.MonkeyPatch,
     audit_log_path: Path,
     extraction_service: TreatmentExtractionService,
 ) -> None:
-    raw = json.dumps({"treatments": [], "confidence": 0.1})
+    raw = json.dumps({"treatments": [], "confidence": 0.0})
     _patch_call(monkeypatch, [raw])
 
-    with pytest.raises(ValidationError, match="Could not extract any medications"):
-        await extraction_service.extract_pdf(b"%PDF-1.4")
+    result = await extraction_service.extract_pdf(b"%PDF-1.4")
+
+    assert result.attempts == 1
+    assert result.payload.treatments == []
+    assert result.payload.confidence == 0.0
 
 
 async def test_preview_upload_unsupported_mime(

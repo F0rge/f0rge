@@ -124,12 +124,6 @@ async def _extract(
                 retried_due_to.append(last_error)
             continue
 
-        if not payload.treatments:
-            raise ValidationError(
-                "Could not extract any medications from this document. "
-                "Try a clearer PDF or add treatments manually."
-            )
-
         result = TreatmentExtractionResult(
             payload=payload,
             raw_response=raw,

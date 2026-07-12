@@ -102,6 +102,9 @@ export function TreatmentReviewDialog({
           doses_per_day: row.doses_per_day,
           notes: row.notes?.trim() || null,
         })
+        setRows((prev) =>
+          prev.map((r) => (r.id === row.id ? { ...r, selected: false } : r)),
+        )
       }
       toast.success(
         selected.length === 1
