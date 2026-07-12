@@ -18,6 +18,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL
+
 revision: str = "033"
 down_revision: Union[str, None] = "032"
 branch_labels: Union[Sequence[str], None] = None
@@ -70,6 +72,9 @@ def upgrade() -> None:
             """
         )
     )
+
+    # Alias tables now require created_at; refresh the signup copy function.
+    op.execute(sa.text(COPY_USER_CATALOG_FROM_REFERENCE_SQL))
 
 
 def downgrade() -> None:

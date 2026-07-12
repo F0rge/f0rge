@@ -31,6 +31,13 @@ export function NotesInput({
     onChangeRef.current = onChange
   }, [onChange])
 
+  useEffect(() => {
+    if (!hasStartedRef.current && debounceTimerRef.current === null) {
+      setDraft(value)
+      draftRef.current = value
+    }
+  }, [value])
+
   const adjustHeight = useCallback(() => {
     requestAnimationFrame(() => {
       const el = textareaRef.current
