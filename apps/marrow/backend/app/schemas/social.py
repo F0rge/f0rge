@@ -124,3 +124,22 @@ class OutgoingMealTagItem(BaseModel):
 class MealTagListResponse(BaseModel):
     incoming_pending: list[IncomingMealTagItem]
     outgoing: list[OutgoingMealTagItem]
+
+
+class PhotoMealTagItem(BaseModel):
+    id: uuid.UUID
+    user: PublicUserCard
+    status: str
+
+
+class PhotoMealTagListResponse(BaseModel):
+    tags: list[PhotoMealTagItem]
+
+
+class PhotoTagRequest(BaseModel):
+    handles: list[str] = Field(min_length=1, max_length=10)
+
+    @field_validator("handles")
+    @classmethod
+    def check_handles(cls, values: list[str]) -> list[str]:
+        return [validate_handle_format(v) for v in values]

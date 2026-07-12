@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@f0rge/ui'
+import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
 import { usePhotoAnalysis, useUpdatePhotoLabel } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import { PhotoAnalysis } from './photo-analysis'
@@ -415,6 +416,11 @@ export function PhotoFocusOverlay({
         {/* Body: existing PhotoAnalysis, reused unchanged. The surrounding wrapper
             gives it the breathing room the inline placement lacks. */}
         <div ref={scrollRef} data-sheet-scroll className="overflow-y-auto px-4 pb-4 pt-2">
+          {currentPhoto && (
+            <div className="mb-3">
+              <MealCompanionsSection photo={currentPhoto} variant="editor" />
+            </div>
+          )}
           {photoId !== null && (
             <PhotoAnalysis
               key={photoId}

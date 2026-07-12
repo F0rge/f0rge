@@ -514,3 +514,40 @@ async def test_recipient_edit_does_not_touch_source(
         )
     ).scalar_one()
     assert source_name == "spinach"
+
+
+async def _upload_plain(client: AsyncClient, day: datetime.date = DAY) -> int:
+    await _ensure_entry(client, day)
+    files = {"file": ("meal.jpg", _jpg_bytes(), "image/jpeg")}
+    resp = await client.post(
+        f"/api/v1/entries/{day.isoformat()}/photos",
+        files=files,
+        data={"label": "Dinner"},
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+async def test_retroactive_photo_tags(async_db: AsyncSession, storage: None):
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    await _connect_users(a, b)
+    b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
+    photo_id = await _upload_plain(a)
+
+    tagged = await a.post(f"/api/v1/photos/{photo_id}/tags", json={"handles": [b_handle]})
+    assert tagged.status_code == 200, tagged.text
+    assert len(tagged.json()["tags"]) == 1
+
+    listed = await a.get(f"/api/v1/photos/{photo_id}/tags")
+    assert listed.status_code == 200
+    assert listed.json()["tags"][0]["user"]["handle"] == b_handle
+
+    entry = await a.get(f"/api/v1/entries/{DAY.isoformat()}")
+    assert entry.status_code == 200
+    photo = next(p for p in entry.json()["photos"] if p["id"] == photo_id)
+    assert b_handle in photo["tagged_with_handles"]
+
+    duplicate = await a.post(f"/api/v1/photos/{photo_id}/tags", json={"handles": [b_handle]})
+    assert duplicate.status_code == 200
+    assert len(duplicate.json()["tags"]) == 1

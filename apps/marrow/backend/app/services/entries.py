@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.entries import EntryCRUD
+from app.crud.meal_tags import MealTagCRUD
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
@@ -27,7 +28,7 @@ _EVENING_START_HOUR = 17
 _NIGHT_START_HOUR = 21
 
 
-def _photo_response(photo: Photo) -> PhotoResponse:
+def _photo_response(photo: Photo, companion_handles: list[str] | None = None) -> PhotoResponse:
     handle = None
     if photo.tagged_by_user is not None:
         handle = photo.tagged_by_user.handle
@@ -40,18 +41,23 @@ def _photo_response(photo: Photo) -> PhotoResponse:
         created_at=photo.created_at,
         source_photo_id=photo.source_photo_id,
         tagged_by_handle=handle,
+        tagged_with_handles=companion_handles or [],
     )
 
 
-def _build_response(entry: Entry) -> EntryResponse:
+async def _build_response(db: AsyncSession, entry: Entry) -> EntryResponse:
     """Construct an ``EntryResponse`` with all computed diet-signal fields."""
+    photo_ids = [p.id for p in entry.photos]
+    companions = await MealTagCRUD(db).companion_handles_by_photo_ids(photo_ids)
     user_added = parse_diet_risk_csv(entry.diet_risk)
     signal = compute_photo_signal(entry)
     return EntryResponse.model_validate(
         {
             **{c.name: getattr(entry, c.name) for c in entry.__table__.columns},
             "medications": entry.medications_json or [],
-            "photos": [_photo_response(p) for p in entry.photos],
+            "photos": [
+                _photo_response(p, companions.get(p.id, [])) for p in entry.photos
+            ],
             "photo_signal": signal,
             "photo_derived_flags": sorted(signal.flags),
             "user_added_flags": sorted(user_added),
@@ -209,13 +215,13 @@ class EntryService:
             else:
                 end = datetime.date(int(year), int(mon) + 1, 1)
         entries = await self.crud.list(start, end)
-        return [_build_response(e) for e in entries]
+        return [await _build_response(self.db, e) for e in entries]
 
     async def get_entry(self, date: datetime.date) -> EntryResponse:
         entry = await self.crud.get_by_date(date)
         if not entry:
             raise NotFoundError(f"No entry for {date}")
-        return _build_response(entry)
+        return await _build_response(self.db, entry)
 
     async def delete_entry(self, date: datetime.date) -> None:
         entry = await self.crud.get_by_date_with_photos(date)

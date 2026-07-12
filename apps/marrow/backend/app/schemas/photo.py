@@ -15,6 +15,7 @@ class PhotoResponse(BaseModel):
     created_at: datetime.datetime
     source_photo_id: Optional[int] = None
     tagged_by_handle: Optional[str] = None
+    tagged_with_handles: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 

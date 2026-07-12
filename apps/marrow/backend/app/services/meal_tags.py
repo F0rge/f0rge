@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import unit_of_work
 from app.crud.meal_tags import MealTagCRUD
+from app.crud.photo_analysis import PhotoAnalysisCRUD
+from app.crud.photos import PhotoCRUD
 from app.crud.social import SocialCRUD
 from app.models.meal_tag import MealTag
 from app.models.photo import Photo
@@ -18,12 +20,14 @@ from app.schemas.social import (
     IncomingMealTagItem,
     MealTagListResponse,
     OutgoingMealTagItem,
+    PhotoMealTagItem,
+    PhotoMealTagListResponse,
     PublicUserCard,
     validate_handle_format,
 )
 from app.services.social import SocialService
 from app.services.tag_delivery import TagDeliveryService
-from f0rge_db.tenant import current_user_id
+from f0rge_db.tenant import apply_session_user_id, current_user_id
 
 MAX_TAGS_PER_MEAL = 10
 
@@ -115,6 +119,7 @@ class MealTagService:
 
         if not analysis_will_run:
             await self.delivery.process_photo_only_source(photo.id, me)
+            await apply_session_user_id(self.db, me)
 
     async def list_tags(self) -> MealTagListResponse:
         incoming: list[IncomingMealTagItem] = []
@@ -193,3 +198,84 @@ class MealTagService:
 
     async def cancel_pending_for_connection(self, user_a: uuid.UUID, user_b: uuid.UUID) -> None:
         await self.crud.cancel_pending_between_users(user_a, user_b)
+
+    async def list_tags_for_photo(self, photo_id: int) -> PhotoMealTagListResponse:
+        photo = await PhotoCRUD(self.db).get_by_id_owned(photo_id)
+        if photo is None:
+            raise NotFoundError("Photo not found")
+        me = current_user_id()
+        await apply_session_user_id(self.db, me)
+        return await self._tags_response_for_photo(photo_id)
+
+    async def add_tags_to_photo(self, photo_id: int, handles: list[str]) -> PhotoMealTagListResponse:
+        photo_crud = PhotoCRUD(self.db)
+        photo = await photo_crud.get_by_id_owned(photo_id)
+        if photo is None:
+            raise NotFoundError("Photo not found")
+        if photo.source_photo_id is not None:
+            raise ValidationError("You can only tag people on meals you logged yourself")
+
+        normalized = self._normalize_handle_list(handles)
+        if not normalized:
+            raise ValidationError("At least one handle is required")
+
+        me = current_user_id()
+        existing_ids = set(await self.crud.list_tagged_user_ids_for_source(photo_id))
+        new_recipients: list[uuid.UUID] = []
+        seen: set[str] = set()
+        social = SocialService(self.db)
+
+        for handle in normalized:
+            if handle in seen:
+                continue
+            seen.add(handle)
+            user = await self.social_crud.get_by_handle(handle)
+            if user is None or user.handle is None:
+                raise NotFoundError(f"No user with handle @{handle}")
+            if user.id == me:
+                raise ValidationError("You cannot tag yourself")
+            if user.id in existing_ids:
+                continue
+            await social.assert_connected(user.id)
+            new_recipients.append(user.id)
+
+        if len(existing_ids) + len(new_recipients) > MAX_TAGS_PER_MEAL:
+            raise ValidationError(f"At most {MAX_TAGS_PER_MEAL} tags per meal")
+
+        if new_recipients:
+            entry_date = photo.entry.date
+            async with unit_of_work(self.db):
+                await self.insert_tags_for_photo(photo, entry_date, new_recipients)
+            await apply_session_user_id(self.db, me)
+            await self._deliver_new_tags_if_ready(photo_id, me)
+
+        await apply_session_user_id(self.db, me)
+        return await self._tags_response_for_photo(photo_id)
+
+    @staticmethod
+    def _normalize_handle_list(handles: list[str]) -> list[str]:
+        if len(handles) > MAX_TAGS_PER_MEAL:
+            raise ValidationError(f"At most {MAX_TAGS_PER_MEAL} tags per meal")
+        return [validate_handle_format(h) for h in handles]
+
+    async def _tags_response_for_photo(self, photo_id: int) -> PhotoMealTagListResponse:
+        items: list[PhotoMealTagItem] = []
+        for tag in await self.crud.list_for_source_photo(photo_id):
+            tagged = await self.social_crud.get_by_id(tag.tagged_user_id)
+            items.append(
+                PhotoMealTagItem(
+                    id=tag.id,
+                    user=SocialService.to_public_card(tagged)
+                    if tagged
+                    else PublicUserCard(handle="", avatar_default_index=0),
+                    status=tag.status,
+                )
+            )
+        return PhotoMealTagListResponse(tags=items)
+
+    async def _deliver_new_tags_if_ready(self, photo_id: int, tagger_id: uuid.UUID) -> None:
+        analysis = await PhotoAnalysisCRUD(self.db).get_by_photo_id(photo_id)
+        if analysis is None:
+            await self.delivery.process_photo_only_source(photo_id, tagger_id)
+        elif analysis.status == "confirmed":
+            await self.delivery.deliver_for_source(photo_id, tagger_id)

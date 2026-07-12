@@ -4,6 +4,43 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, ApiError } from '@f0rge/ui/api'
 import type { PhotoAnalysis } from '../types'
 
+export interface PhotoMealTagItem {
+  id: string
+  user: {
+    handle: string
+    display_name: string | null
+    avatar_default_index: number
+  }
+  status: string
+}
+
+export interface PhotoMealTagListResponse {
+  tags: PhotoMealTagItem[]
+}
+
+export function usePhotoTags(photoId: number, enabled = true) {
+  return useQuery<PhotoMealTagListResponse>({
+    queryKey: ['photo-tags', photoId],
+    queryFn: () => apiGet(`/photos/${photoId}/tags`),
+    enabled: enabled && photoId > 0,
+  })
+}
+
+export function useAddPhotoTags() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ photoId, handles }: { photoId: number; handles: string[] }) =>
+      apiPost(`/photos/${photoId}/tags`, { handles }),
+    onSuccess: (_data, { photoId }) => {
+      queryClient.invalidateQueries({ queryKey: ['photo-tags', photoId] })
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['social', 'meal-tags'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
 export function useUploadPhoto() {
   const queryClient = useQueryClient()
   return useMutation({
