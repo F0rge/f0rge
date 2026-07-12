@@ -15,7 +15,7 @@ import { SettingsCard } from './settings-card'
 import { ModelPicker } from './model-picker'
 import { BUTTON_CLASS } from './constants'
 
-// Canonical slugs: docs/architecture/ai_seams.md
+// Canonical model slugs: docs/architecture/ai_seams.md
 const LLM_MODELS = [
   { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash Preview (default)' },
   { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
