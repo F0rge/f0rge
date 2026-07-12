@@ -90,6 +90,7 @@ export function TreatmentReviewDialog({
       }
     }
 
+    const savedIds: string[] = []
     try {
       for (const row of selected) {
         await createMutation.mutateAsync({
@@ -102,9 +103,7 @@ export function TreatmentReviewDialog({
           doses_per_day: row.doses_per_day,
           notes: row.notes?.trim() || null,
         })
-        setRows((prev) =>
-          prev.map((r) => (r.id === row.id ? { ...r, selected: false } : r)),
-        )
+        savedIds.push(row.id)
       }
       toast.success(
         selected.length === 1
@@ -113,6 +112,14 @@ export function TreatmentReviewDialog({
       )
       onOpenChange(false)
     } catch (err) {
+      if (savedIds.length > 0) {
+        setRows((prev) => prev.filter((r) => !savedIds.includes(r.id)))
+        toast.warning(
+          savedIds.length === 1
+            ? '1 treatment saved before the error'
+            : `${savedIds.length} treatments saved before the error`,
+        )
+      }
       handleMutationError(err, 'Failed to save treatments')
     }
   }
