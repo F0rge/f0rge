@@ -7,6 +7,7 @@ from collections.abc import Callable
 from functools import partial
 
 from fastapi import Response, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -140,6 +141,12 @@ class AccountService:
             os.path.abspath(settings.photo_dir),
             user.avatar_custom_filename,
         )
+
+    async def serve_avatar_response(self) -> FileResponse | RedirectResponse:
+        target = await self.get_avatar_file_target()
+        if target.startswith("http://") or target.startswith("https://"):
+            return RedirectResponse(target)
+        return FileResponse(target, media_type="image/jpeg")
 
     async def change_password(self, data: PasswordChangeRequest) -> None:
         user = await self._get_current_user()

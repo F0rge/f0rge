@@ -6,7 +6,8 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.food_analysis import PhotoAnalysisCRUD, PhotoIngredientCRUD
+from app.crud.photo_analysis import PhotoAnalysisCRUD
+from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from app.models.photo import Photo

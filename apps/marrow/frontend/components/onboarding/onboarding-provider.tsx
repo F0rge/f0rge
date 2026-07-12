@@ -13,6 +13,7 @@ import {
 } from 'react-joyride'
 import { useAuth } from '@/lib/api/hooks/auth'
 import { useCompleteOnboarding, useUserSettings } from '@/lib/api/hooks/settings'
+import { handleMutationError } from '@f0rge/ui/api'
 import { joyrideStyles, joyrideThemeOptions } from './joyride-theme'
 import { OnboardingTooltip } from './setup-tooltip'
 import { TOUR_STEPS, tourStepsForReplay, type TourStepDefinition } from './tour-steps'
@@ -87,7 +88,8 @@ function OnboardingTourInner({ children }: { children: React.ReactNode }) {
         try {
           await persistSetup()
           await completeOnboarding.mutateAsync()
-        } catch {
+        } catch (error) {
+          handleMutationError(error, 'Failed to complete onboarding')
           setIsReplay(false)
           return
         }

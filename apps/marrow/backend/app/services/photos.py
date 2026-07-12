@@ -6,6 +6,7 @@ import os
 from typing import TYPE_CHECKING, Optional
 
 from fastapi import BackgroundTasks, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -150,6 +151,12 @@ class PhotoService:
         if presigned:
             return presigned
         return os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
+
+    async def serve_photo_file(self, photo_id: int) -> FileResponse | RedirectResponse:
+        target = await self.get_file_path(photo_id)
+        if target.startswith("http://") or target.startswith("https://"):
+            return RedirectResponse(target)
+        return FileResponse(target, media_type="image/jpeg")
 
     async def delete(self, photo_id: int) -> None:
         photo = await self.crud.get_by_id_owned(photo_id)

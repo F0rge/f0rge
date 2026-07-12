@@ -48,10 +48,7 @@ async def serve_photo(
     photo_id: int,
     service: PhotoService = Depends(get_photo_service),
 ) -> FileResponse | RedirectResponse:
-    target = await service.get_file_path(photo_id)
-    if target.startswith("http://") or target.startswith("https://"):
-        return RedirectResponse(target)
-    return FileResponse(target, media_type="image/jpeg")
+    return await service.serve_photo_file(photo_id)
 
 
 @router.delete("/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
