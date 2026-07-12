@@ -108,6 +108,10 @@ Scoped rules in `.cursor/rules/` (auto-applied by glob):
 
 Delegate per `~/.cursor/rules/leo-system-wide.mdc` and `.cursor/rules/orchestration.mdc`. Every plan names a sub-agent per work chunk before implementation. Brief each sub-agent to read `~/.cursor/agent-memory/<agent-name>/MEMORY.md` before starting and write back gotchas when done.
 
+## Creating issues
+
+Agent-ready GitHub issue authoring (scope split, decision surfacing, parent/sub-issues): `.cursor/skills/create-github-issue/SKILL.md`.
+
 ## Shipping features
 
 End-to-end workflow (prompt or GitHub issue → develop → dev smoke → main PR): `.cursor/skills/ship-feature/SKILL.md`.
