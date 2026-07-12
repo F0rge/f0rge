@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useAccount, useAvatarCacheBust } from '@/lib/api/hooks'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 interface UserAvatarProps {
   size?: 'sm' | 'md'

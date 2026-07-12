@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { ArrowLeft, Activity, BookOpen, Carrot, Layers, Pill, Settings2, Zap } from 'lucide-react'
-import { Card } from '@/components/ui/card'
+import { Card } from '@f0rge/ui'
 import { HubRow } from '@/components/customize/hub-row'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'

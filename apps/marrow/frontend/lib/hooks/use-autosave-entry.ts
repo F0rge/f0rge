@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
-import { apiPost, apiPut, ApiError } from '@/lib/api/client'
+import { apiPost, apiPut, ApiError } from '@f0rge/ui/api'
 import type { Entry, EntryCreate } from '@/lib/api/types'
 
 export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'blocked'

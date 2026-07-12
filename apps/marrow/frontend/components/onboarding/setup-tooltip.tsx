@@ -2,6 +2,7 @@
 
 import type { MouseEvent } from 'react'
 import type { TooltipRenderProps } from 'react-joyride'
+import { handleMutationError } from '@f0rge/ui/api'
 import { SetupSearchPicker } from './setup-search-picker'
 import { useOnboardingSetup } from './use-onboarding-setup'
 import type { SetupKind } from './tour-steps'
@@ -62,7 +63,8 @@ export function OnboardingTooltip(props: TooltipRenderProps) {
     if (setupKind === 'trackers') {
       try {
         await persistSetup()
-      } catch {
+      } catch (error) {
+        handleMutationError(error, 'Failed to save your selections')
         return
       }
     }

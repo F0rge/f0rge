@@ -1,6 +1,6 @@
 'use client'
 
-import { formatLocalDate } from '@/lib/utils'
+import { formatLocalDate } from '@f0rge/ui'
 import { getOverallDotClass } from '@/lib/checkin/scale-labels'
 import type { Entry } from '@/lib/api/types'
 

@@ -17,7 +17,7 @@ from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 from app.utils.dates import local_today
 
 FEATURE_SCHEMA_VERSION = 4

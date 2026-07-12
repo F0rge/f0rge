@@ -27,6 +27,9 @@ class TreatmentLog(Base):
     )
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     doses_taken: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )

@@ -9,10 +9,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+} from '@f0rge/ui'
+import { Button } from '@f0rge/ui'
 import { useExtractLabUpload, useImportLabUpload } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 import { LabFormDialog } from './lab-form-dialog'
 import type { ExtractionResult } from '@/lib/api/types'
 

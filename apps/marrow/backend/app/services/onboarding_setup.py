@@ -21,7 +21,7 @@ from app.catalog_suggestions import (
 )
 from app.crud.base import unit_of_work
 from app.crud.user_provisioning import UserProvisioningCRUD
-from app.exceptions import ValidationError
+from f0rge_core.exceptions import ValidationError
 from app.models.medication_catalog import MedicationCatalogItem
 from app.models.supplement_catalog import SupplementCatalogItem
 from app.models.symptom_catalog import SymptomCatalogItem
@@ -38,7 +38,7 @@ from app.schemas.onboarding import (
     CatalogSetupResponse,
     CatalogSuggestionsResponse,
 )
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 
 class OnboardingSetupService:

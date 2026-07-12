@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Label } from '@/components/ui/label'
+import { Label } from '@f0rge/ui'
 
 const SYNC_DEBOUNCE_MS = 500
 
@@ -60,17 +60,6 @@ export function NotesInput({
       onChangeRef.current(next)
     }, SYNC_DEBOUNCE_MS)
   }, [])
-
-  // Sync draft when parent value changes externally (entry load / date change).
-  useEffect(() => {
-    if (draftRef.current !== value && debounceTimerRef.current === null) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration from server entry only when not mid-typing
-      setDraft(value)
-      draftRef.current = value
-      hasStartedRef.current = false
-      adjustHeight()
-    }
-  }, [value, adjustHeight])
 
   useEffect(() => {
     registerDraftFlush?.(flushToParent)

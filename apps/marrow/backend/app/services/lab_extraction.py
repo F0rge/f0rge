@@ -10,7 +10,7 @@ from typing import List, Optional
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import ValidationError
+from f0rge_core.exceptions import ValidationError
 from app.schemas.lab_marker import (
     CatalogHint,
     ExtractedLabPayload,
@@ -98,7 +98,7 @@ def _cross_check_and_fix(
 async def _call_openrouter(messages: List[dict], model: str, api_key: str) -> str:
     """Make a single call to OpenRouter and return the raw content string."""
     from app.services.llm.openrouter import OpenRouterClient
-    from app.exceptions import ExternalServiceError
+    from f0rge_core.exceptions import ExternalServiceError
 
     response_format = get_response_format(model)
     llm_client = OpenRouterClient(

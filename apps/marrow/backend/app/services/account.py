@@ -7,13 +7,14 @@ from collections.abc import Callable
 from functools import partial
 
 from fastapi import Response, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crud.auth import UserCRUD
 from app.crud.labs import LabCRUD
 from app.crud.photos import PhotoCRUD
-from app.exceptions import NotFoundError, UnauthorizedError, ValidationError
+from f0rge_core.exceptions import NotFoundError, UnauthorizedError, ValidationError
 from app.models.user import User
 from app.schemas.account import (
     AccountDeleteRequest,
@@ -35,7 +36,7 @@ from app.services.avatar_storage import (
     save_avatar,
 )
 from app.services.photo_storage import delete_photo
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,12 @@ class AccountService:
             os.path.abspath(settings.photo_dir),
             user.avatar_custom_filename,
         )
+
+    async def serve_avatar_response(self) -> FileResponse | RedirectResponse:
+        target = await self.get_avatar_file_target()
+        if target.startswith("http://") or target.startswith("https://"):
+            return RedirectResponse(target)
+        return FileResponse(target, media_type="image/jpeg")
 
     async def change_password(self, data: PasswordChangeRequest) -> None:
         user = await self._get_current_user()

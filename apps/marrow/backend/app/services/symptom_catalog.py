@@ -6,7 +6,7 @@ from typing import Iterable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.symptom_catalog import SymptomCatalogCRUD
-from app.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.symptom_catalog import SymptomCatalogItem
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")

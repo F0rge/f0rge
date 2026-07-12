@@ -74,7 +74,7 @@ cd apps/marrow/backend && uv run ruff check . && uv run ruff format --check . &&
 cd apps/marrow/frontend && npm run lint && npm run typecheck && npm run build
 ```
 
-**Live-server E2E** (mandatory for UI/API user paths): `./start.sh`, auth bypass per qa-gate rule, drive golden path + one error path in browser MCP. pytest alone is not the gate.
+**Live-server E2E** (mandatory for UI/API user paths): start backend (`uvicorn`) + frontend (`npm run dev`), auth bypass per qa-gate rule, drive golden path + one error path in browser MCP. pytest alone is not the gate.
 
 If FAIL: fix inline (small) or loop sub-agent (large). Do not open PR until PASS.
 

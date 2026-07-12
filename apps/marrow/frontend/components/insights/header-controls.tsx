@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@f0rge/ui'
 import {
   Select,
   SelectContent,
@@ -17,9 +17,9 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
+} from '@f0rge/ui'
+import { Button } from '@f0rge/ui'
+import { Label } from '@f0rge/ui'
 import { useSymptomCatalog } from '@/lib/api/hooks'
 
 const CORE_OUTCOMES = [

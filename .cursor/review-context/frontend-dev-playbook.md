@@ -14,8 +14,11 @@ Repo-specific checklist for the Claude PR review bot when reviewing frontend dif
 - `apps/marrow/frontend/hooks/**`
 - `apps/marrow/frontend/public/**`
 - `apps/marrow/frontend/package.json`, `apps/marrow/frontend/tsconfig.json`, `apps/marrow/frontend/next.config.*`
+- `libs/ui/**` — shared `@f0rge/ui` component library
 
-NOT in scope for this playbook: `.github/`, `apps/marrow/backend/`, `docker-compose*.yml`, migration files.
+NOT in scope for this playbook: `.github/`, `apps/marrow/backend/`, `libs/backend/`, `docker-compose*.yml`, migration files.
+
+**Non-duplication:** block re-implementations of `@f0rge/ui` primitives, API client, or shared hooks. All shadcn components come from `@f0rge/ui`; shadcn CLI additions land in `libs/ui`.
 
 ---
 
@@ -230,7 +233,6 @@ Block any core-scales page change that diverges from the above without also upda
 - Bristol gate using caption + amber pill instead of amber ring — intentional UX decision
 - `/checkin/{date}` is an editor; `/history/{date}` is a read-only summary — different pages, different affordances
 - `comingSoon=true` rows on the Customize Hub with `opacity-50` — intentional roadmap placeholder, not dead UI
-- `components/auth/pin-pad.tsx` pre-existing lint (resolved as of branch `fix/pin-pad-lint-re-enable`) — confirm pre-existing before treating as a regression
 
 ---
 

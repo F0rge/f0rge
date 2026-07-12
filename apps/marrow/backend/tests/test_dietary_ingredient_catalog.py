@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.exceptions import ConflictError, NotFoundError
+from f0rge_core.exceptions import ConflictError, NotFoundError
 from app.schemas.dietary_ingredient import (
     AliasCreate,
     DietaryIngredientCreate,

@@ -7,17 +7,18 @@ from typing import NamedTuple, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.food_analysis import PhotoAnalysisCRUD, PhotoIngredientCRUD
+from app.crud.photo_analysis import PhotoAnalysisCRUD
+from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
 from app.database import async_session_maker
-from app.exceptions import NotFoundError
+from f0rge_core.exceptions import NotFoundError
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.services.food_analysis import analysis_needs_review
 from app.services.ingredient_lookup import IngredientLookupService
 from app.services.vision_prompt import VisionResult, build_messages, parse_vision_response
-from app.tenant import apply_session_user_id
+from f0rge_db.tenant import apply_session_user_id
 
 logger = logging.getLogger(__name__)
 

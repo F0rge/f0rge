@@ -1,11 +1,12 @@
 'use client'
 
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@f0rge/ui'
 import { NotesInput } from '@/components/checkin/notes-input'
 import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
 interface NotesCardProps extends CheckinCardCollapseProps {
+  entryKey: string
   value: string
   onChange: (v: string) => void
   onEditStart: () => void
@@ -14,6 +15,7 @@ interface NotesCardProps extends CheckinCardCollapseProps {
 }
 
 export function NotesCard({
+  entryKey,
   value,
   onChange,
   onEditStart,
@@ -32,6 +34,7 @@ export function NotesCard({
       {!collapsed && (
         <CardContent>
           <NotesInput
+            key={entryKey}
             value={value}
             onChange={onChange}
             onEditStart={onEditStart}

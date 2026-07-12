@@ -47,10 +47,7 @@ async def upload_avatar(
 async def serve_avatar(
     service: AccountService = Depends(get_account_service),
 ) -> FileResponse | RedirectResponse:
-    target = await service.get_avatar_file_target()
-    if target.startswith("http://") or target.startswith("https://"):
-        return RedirectResponse(target)
-    return FileResponse(target, media_type="image/jpeg")
+    return await service.serve_avatar_response()
 
 
 @router.delete("/avatar", response_model=AccountResponse)

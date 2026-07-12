@@ -6,7 +6,7 @@ from fastapi import Cookie, HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
-from app.auth_context import user_id_ctx
+from f0rge_db.auth_context import user_id_ctx
 from app.services.auth import JWT_COOKIE_NAME, decode_access_token
 
 

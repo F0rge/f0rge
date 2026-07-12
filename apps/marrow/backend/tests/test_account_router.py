@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.exceptions import ValidationError
+from f0rge_core.exceptions import ValidationError
 from app.models.entry import Entry
 from app.models.lab import Lab
 from app.models.photo import Photo

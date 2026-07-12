@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 interface PageShellProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode

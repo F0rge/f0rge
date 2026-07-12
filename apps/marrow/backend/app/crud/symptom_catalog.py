@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import CatalogItemCRUD
 from app.models.symptom_catalog import SymptomCatalogItem
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 class SymptomCatalogCRUD(CatalogItemCRUD[SymptomCatalogItem]):

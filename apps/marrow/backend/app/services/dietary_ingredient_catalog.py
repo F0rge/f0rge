@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.dietary_ingredient_catalog import DietaryIngredientCRUD
-from app.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.dietary_ingredient import DietaryIngredient
 from app.models.ingredient_alias import IngredientAlias
 from app.schemas.dietary_ingredient import (
@@ -13,7 +13,7 @@ from app.schemas.dietary_ingredient import (
     DietaryIngredientCreate,
     DietaryIngredientUpdate,
 )
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 
 class DietaryIngredientCatalogService:

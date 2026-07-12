@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, ApiError } from '../client'
+import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, ApiError } from '@f0rge/ui/api'
 import type { PhotoAnalysis } from '../types'
 
 export function useUploadPhoto() {

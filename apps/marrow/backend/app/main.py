@@ -5,20 +5,13 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from f0rge_core.handlers import register_exception_handlers
 
 from app.config import settings
 from app.database import async_session_maker
 from app.middleware.auth import AuthContextMiddleware
-from app.exceptions import (
-    ConflictError,
-    ExternalServiceError,
-    NotFoundError,
-    UnauthorizedError,
-    ValidationError,
-)
 from app.routers import (
     account,
     auth,
@@ -83,7 +76,7 @@ async def _seed_dietary_db_if_empty() -> None:
     from sqlalchemy import func, select
 
     from app.models.dietary_ingredient import DietaryIngredient
-    from app.tenant import apply_session_user_id
+    from f0rge_db.tenant import apply_session_user_id
 
     ref_user_id = uuid.UUID(settings.default_storage_user_id)
 
@@ -151,31 +144,7 @@ app.add_middleware(
 )
 app.add_middleware(AuthContextMiddleware)
 
-
-@app.exception_handler(NotFoundError)
-async def _handle_not_found(_: Request, exc: NotFoundError) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": exc.detail})
-
-
-@app.exception_handler(ValidationError)
-async def _handle_validation(_: Request, exc: ValidationError) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": exc.detail})
-
-
-@app.exception_handler(ConflictError)
-async def _handle_conflict(_: Request, exc: ConflictError) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": exc.detail})
-
-
-@app.exception_handler(UnauthorizedError)
-async def _handle_unauthorized(_: Request, exc: UnauthorizedError) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": exc.detail})
-
-
-@app.exception_handler(ExternalServiceError)
-async def _handle_external_service(_: Request, exc: ExternalServiceError) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_502_BAD_GATEWAY, content={"detail": exc.detail})
-
+register_exception_handlers(app)
 
 app.include_router(auth.router)
 app.include_router(account.router)

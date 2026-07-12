@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.exceptions import ValidationError
+from f0rge_core.exceptions import ValidationError
 from app.schemas.lab_marker import CatalogHint
 from app.services import lab_extraction as extraction_module
 from app.services.lab_extraction import LabExtractionService

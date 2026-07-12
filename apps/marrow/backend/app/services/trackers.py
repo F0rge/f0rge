@@ -7,11 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.base import unit_of_work
 from app.crud.entries import EntryCRUD
 from app.crud.trackers import TrackerCRUD
-from app.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
 from app.schemas.tracker import TrackerCreate, TrackerUpdate
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 # Maps seeded tracker names to the corresponding column on the Entry model.
 _SEED_NAME_TO_ENTRY_COL: dict[str, str] = {

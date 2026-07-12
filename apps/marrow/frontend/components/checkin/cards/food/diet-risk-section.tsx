@@ -2,7 +2,7 @@
 
 import { useQueries } from '@tanstack/react-query'
 import { Camera } from 'lucide-react'
-import { apiGet, ApiError } from '@/lib/api/client'
+import { apiGet, ApiError } from '@f0rge/ui/api'
 import type { Entry, PhotoSignal, DietTagCatalogItem, PhotoAnalysis } from '@/lib/api/types'
 
 function getFlagScore(flag: string, signal: PhotoSignal): number {

@@ -9,7 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@f0rge/ui'
 import type { LabMarkerCatalog } from '@/lib/api/types'
 
 export function MarkerList() {

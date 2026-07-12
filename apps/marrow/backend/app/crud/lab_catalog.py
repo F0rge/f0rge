@@ -10,7 +10,7 @@ from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.models.lab_marker_alias import LabMarkerAlias
 from app.models.lab_marker_catalog import LabMarkerCatalog
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 class LabMarkerCatalogCRUD(BaseCRUD):

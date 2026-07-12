@@ -4,9 +4,9 @@ import hashlib
 import os
 from datetime import datetime
 
-from app.exceptions import ValidationError
+from f0rge_core.exceptions import ValidationError
 from app.services import object_storage
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 _ALLOWED_MIMES: dict[str, str] = {
     "application/pdf": "pdf",

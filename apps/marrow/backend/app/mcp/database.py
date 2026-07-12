@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import settings
-from app.db_url import asyncpg_connect_args, resolve_database_url
-from app.tenant import apply_session_user_id, clear_tenant_session
+from f0rge_db.db_url import asyncpg_connect_args, resolve_database_url
+from f0rge_db.tenant import apply_session_user_id, clear_tenant_session
 
 _ro_engine: Optional[AsyncEngine] = None
 _main_engine: Optional[AsyncEngine] = None

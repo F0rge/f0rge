@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
+import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +35,9 @@ class LabMarkerAlias(Base):
     # no standalone index on this column exists in the DB, so it is not redeclared here.
     alias: Mapped[str] = mapped_column(String, nullable=False)
     language: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
 
     catalog: Mapped[LabMarkerCatalog] = relationship(
         "LabMarkerCatalog", back_populates="aliases", lazy="selectin"

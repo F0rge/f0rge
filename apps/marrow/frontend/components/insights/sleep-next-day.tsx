@@ -17,8 +17,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
+} from '@f0rge/ui'
+import { Badge } from '@f0rge/ui'
 import { useInsightsSleepNextDay } from '@/lib/api/hooks'
 
 interface Props {

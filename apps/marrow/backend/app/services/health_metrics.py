@@ -8,14 +8,14 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth_context import user_id_ctx
+from f0rge_db.auth_context import user_id_ctx
 from app.config import settings
 from app.crud.health_metrics import HealthMetricsCRUD
-from app.exceptions import NotFoundError, UnauthorizedError
+from f0rge_core.exceptions import NotFoundError, UnauthorizedError
 from app.models.health_metrics import HealthMetric
 from app.services.auth import decode_access_token
 from app.services.health_import import parse_health_auto_export
-from app.tenant import apply_session_user_id, current_user_id
+from f0rge_db.tenant import apply_session_user_id, current_user_id
 
 _logger = logging.getLogger("health_import_debug")
 

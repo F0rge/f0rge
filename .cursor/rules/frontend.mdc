@@ -1,6 +1,6 @@
 ---
 description: React/Next.js App Router, shadcn/ui, and Tailwind conventions. Use proactively when building or reviewing UI components, pages, hooks, styles, forms, or frontend API integration.
-globs: apps/marrow/frontend/**/*.tsx, frontend/**/*.ts
+globs: apps/marrow/frontend/**/*.tsx, apps/marrow/frontend/**/*.ts
 alwaysApply: false
 ---
 
@@ -12,7 +12,20 @@ alwaysApply: false
 - **React 19**, **TypeScript** strict mode
 - **shadcn/ui** + **Tailwind CSS v4**
 - Backend API at `http://localhost:8000/api/v1` via `/api/*` rewrite
-- Auth: `ht_session` cookie (PIN-based)
+- Auth: `ht_session` cookie (email + password)
+
+## UI/UX standards — enforced repo-wide
+
+- **Primitives from `@f0rge/ui`** — Button, Card, Dialog, Input, Select, etc. Never copy shadcn components into `apps/`
+- **shadcn CLI additions** land in `libs/ui`, never `apps/marrow/frontend/components/ui`
+- **Icons:** lucide-react only
+- **Toasts:** sonner only
+- **Dark mode:** next-themes (via profile menu theme toggle)
+- **Server state:** react-query (`@tanstack/react-query`) via hooks in `lib/api/hooks/`
+- **Dates:** shared formatters from `@f0rge/ui` (`formatLocalDate`, `formatDisplayDate`)
+- **API client:** `@f0rge/ui/api` — never re-implement `ApiError` / `handleResponse`
+- **Loading/empty/error states:** use shared `FetchError` from `@f0rge/ui`
+- **Shared lib components:** semantic tokens only (`var(--primary)`, `text-muted-foreground`) — apps own token values + `--marrow-*` brand vars
 
 ## Core Principles
 
@@ -25,7 +38,7 @@ alwaysApply: false
 
 - Single responsibility; explicit TypeScript prop interfaces
 - Composition over configuration
-- Use shadcn/ui — don't rebuild what exists
+- Use `@f0rge/ui` primitives — don't rebuild what exists in the shared lib
 - Descriptive names: `IngredientTagEditor` not `Editor1`
 
 ## State & Data
@@ -100,15 +113,15 @@ Guided first-login tour uses **react-joyride v3** via `components/onboarding/`.
 
 1. Will a junior dev understand this in 6 months?
 2. Am I solving a problem I don't have yet?
-3. Can shadcn/ui do this instead?
+3. Can `@f0rge/ui` do this instead?
 4. Should this state be in the URL?
 
 ## Commands
 
 ```bash
-cd apps/marrow/frontend
-npm run dev    # :3000
-npm run build && npm run lint
+npm ci   # root workspaces install (from repo root)
+npx nx run marrow-frontend:dev    # :3000
+npx nx run-many -t lint typecheck build --projects f0rge-ui,marrow-frontend
 ```
 
 For deep frontend work, delegate to the `frontend-dev` sub-agent in `~/.cursor/agents/`.

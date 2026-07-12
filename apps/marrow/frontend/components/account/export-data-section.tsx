@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Download } from 'lucide-react'
-import { apiGetRaw, handleMutationError } from '@/lib/api/client'
+import { apiGetRaw, handleMutationError } from '@f0rge/ui/api'
 import { SettingsCard } from '@/components/settings/settings-card'
 
 export function ExportDataSection() {

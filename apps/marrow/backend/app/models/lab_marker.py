@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Float, ForeignKey, Index, String
+import datetime
+
+from sqlalchemy import DateTime, Float, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,6 +45,9 @@ class LabMarker(Base):
     ref_high: Mapped[float | None] = mapped_column(Float, nullable=True)
     ref_text: Mapped[str | None] = mapped_column(String, nullable=True)
     flag: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
 
     lab: Mapped[Lab] = relationship("Lab", back_populates="markers", lazy="selectin")
     catalog: Mapped[LabMarkerCatalog] = relationship("LabMarkerCatalog", lazy="selectin")

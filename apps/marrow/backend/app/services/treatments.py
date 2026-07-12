@@ -7,10 +7,10 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.treatments import TreatmentCRUD
-from app.exceptions import NotFoundError, ValidationError
+from f0rge_core.exceptions import NotFoundError, ValidationError
 from app.models.treatment import Treatment
 from app.schemas.treatment import TreatmentCreate, TreatmentUpdate
-from app.tenant import current_user_id
+from f0rge_db.tenant import current_user_id
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 

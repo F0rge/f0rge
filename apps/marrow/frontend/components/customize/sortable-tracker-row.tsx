@@ -12,7 +12,7 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Pencil, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@f0rge/ui'
 import { RowItem } from '@/components/customize/row-item'
 import { ICON_COMPONENT_MAP } from '@/components/checkin/cards/components/IconPicker'
 import type { Tracker } from '@/lib/api/types'

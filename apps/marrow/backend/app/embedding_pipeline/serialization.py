@@ -11,7 +11,7 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.treatment import Treatment
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 async def serialize_entry(db: AsyncSession, source_id: int) -> Optional[str]:

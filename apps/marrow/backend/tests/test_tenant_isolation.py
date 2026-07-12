@@ -12,7 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth_context import user_id_ctx
+from f0rge_db.auth_context import user_id_ctx
 from app.database import get_db
 from app.main import app
 from app.mcp import tools as t_mod
@@ -21,7 +21,7 @@ from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH, User
-from app.tenant import apply_session_user_id, owned_by_user
+from f0rge_db.tenant import apply_session_user_id, owned_by_user
 
 PASSWORD = "tenant-test-password-12"
 _ENTRY_PAYLOAD = {

@@ -2,15 +2,15 @@
 
 import { useRef, useState } from 'react'
 import { Loader2, Plus, Search } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@f0rge/ui'
+import { Input } from '@f0rge/ui'
+import { Badge } from '@f0rge/ui'
 import { useAddIngredient, useIngredientCatalog } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
-import { useDebouncedValue } from '@/lib/hooks/use-debounced-value'
+import { handleMutationError } from '@f0rge/ui/api'
+import { useDebouncedValue } from '@f0rge/ui'
 import { categoryLabel, highFodmapAxes } from '@/lib/ingredients'
 import type { DietaryIngredient } from '@/lib/api/types'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 interface IngredientEditorProps {
   photoId: number

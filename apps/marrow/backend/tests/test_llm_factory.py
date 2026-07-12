@@ -4,7 +4,7 @@ import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import ConflictError
+from f0rge_core.exceptions import ConflictError
 from app.models.user_settings import UserSettings
 from app.services.llm.factory import get_embedding_client, get_llm_client
 from app.services.llm.openrouter import OpenRouterClient, OpenRouterEmbeddingClient

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from f0rge_db.rls import create_service_role_policy, enable_tenant_isolation
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+# Frozen import surface: migrations/versions/021_row_level_security.py does
+# `from app.rls import USER_OWNED_TABLES` — this name must stay here forever.
 USER_OWNED_TABLES: tuple[str, ...] = (
     "entries",
     "photos",
@@ -28,40 +31,36 @@ USER_OWNED_TABLES: tuple[str, ...] = (
     "ingredient_aliases",
 )
 
+# The four catalog tables the signup copy touches (mirrors migration 032).
+PROVISIONER_COPY_TABLES: tuple[str, ...] = (
+    "dietary_ingredients",
+    "ingredient_aliases",
+    "lab_marker_catalog",
+    "lab_marker_aliases",
+)
+
 
 async def enable_row_level_security(conn: AsyncConnection) -> None:
-    """Apply tenant RLS policies (mirrors migration 021)."""
-    import sqlalchemy as sa
-
-    for table in USER_OWNED_TABLES:
-        await conn.execute(sa.text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
-        await conn.execute(sa.text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
-        await conn.execute(
-            sa.text(
-                f"""
-                CREATE POLICY tenant_isolation ON {table}
-                    FOR ALL
-                    USING (user_id = current_setting('app.user_id', true)::uuid)
-                    WITH CHECK (user_id = current_setting('app.user_id', true)::uuid)
-                """
-            )
-        )
-    await conn.execute(
-        sa.text(
-            """
-            CREATE POLICY mcp_auth_lookup ON user_settings
-                FOR SELECT
-                USING (current_setting('app.service_role', true) = 'mcp_auth')
-            """
-        )
+    """Apply tenant RLS policies (mirrors migrations 021 + 032)."""
+    await enable_tenant_isolation(conn, USER_OWNED_TABLES)
+    await create_service_role_policy(
+        conn,
+        name="mcp_auth_lookup",
+        tables=("user_settings",),
+        role="mcp_auth",
+        command="SELECT",
     )
-    await conn.execute(
-        sa.text(
-            """
-            CREATE POLICY worker_queue ON embedding_queue
-                FOR ALL
-                USING (current_setting('app.service_role', true) = 'worker')
-                WITH CHECK (current_setting('app.service_role', true) = 'worker')
-            """
-        )
+    await create_service_role_policy(
+        conn,
+        name="worker_queue",
+        tables=("embedding_queue",),
+        role="worker",
+    )
+    # Mirrors migration 032: lets copy_user_catalog_from_reference cross tenants
+    # under FORCE RLS when the caller sets app.service_role='provisioner'.
+    await create_service_role_policy(
+        conn,
+        name="provisioner_copy",
+        tables=PROVISIONER_COPY_TABLES,
+        role="provisioner",
     )

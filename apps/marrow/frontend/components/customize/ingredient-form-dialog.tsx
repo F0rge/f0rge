@@ -10,31 +10,31 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@f0rge/ui'
+import { Button } from '@f0rge/ui'
+import { Input } from '@f0rge/ui'
+import { Label } from '@f0rge/ui'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@f0rge/ui'
 import {
   useAddDietaryIngredient,
   useUpdateDietaryIngredient,
   useAddIngredientAlias,
   useRemoveIngredientAlias,
 } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 import type {
   DietaryIngredient,
   FodmapLevel,
   IngredientCreatePayload,
   IngredientUpdatePayload,
 } from '@/lib/api/types'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import { CATEGORY_OPTIONS, FODMAP_AXES, FODMAP_LEVEL_OPTIONS, HISTAMINE_OPTIONS } from '@/lib/ingredients'
 
 const NONE = '__none__'

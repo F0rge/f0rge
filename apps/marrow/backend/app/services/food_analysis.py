@@ -6,9 +6,10 @@ from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.crud.food_analysis import PhotoAnalysisCRUD, PhotoIngredientCRUD
+from app.crud.photo_analysis import PhotoAnalysisCRUD
+from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
-from app.exceptions import NotFoundError
+from f0rge_core.exceptions import NotFoundError
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, IngredientUpdate

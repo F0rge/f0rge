@@ -9,7 +9,7 @@ from sqlalchemy import select
 from app.mcp.database import make_main_session
 from app.models.user_settings import UserSettings
 from app.services.llm.encryption import decrypt
-from app.tenant import apply_service_role
+from f0rge_db.tenant import apply_service_role
 
 
 class BearerTokenVerifier(TokenVerifier):

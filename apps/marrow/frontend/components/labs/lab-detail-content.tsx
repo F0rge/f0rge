@@ -1,6 +1,6 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@f0rge/ui'
 import { MarkerSparkline } from './marker-sparkline'
 import type { Lab, MarkerFlag, LabType } from '@/lib/api/types'
 

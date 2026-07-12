@@ -1,7 +1,7 @@
 'use client'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost } from '../client'
+import { apiGet, apiPost } from '@f0rge/ui/api'
 import type { RecentMeal } from '../types'
 
 export function useRecentMeals(limit = 12) {

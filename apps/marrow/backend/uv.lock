@@ -565,6 +565,90 @@ wheels = [
 ]
 
 [[package]]
+name = "f0rge-core"
+version = "0.1.0"
+source = { editable = "../../../libs/backend/core" }
+dependencies = [
+    { name = "fastapi" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "fastapi" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pytest", specifier = ">=9.0" },
+]
+
+[[package]]
+name = "f0rge-db"
+version = "0.1.0"
+source = { editable = "../../../libs/backend/db" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "f0rge-core" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.29" },
+    { name = "f0rge-core", editable = "../../../libs/backend/core" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+]
+
+[[package]]
+name = "f0rge-storage"
+version = "0.1.0"
+source = { editable = "../../../libs/backend/storage" }
+dependencies = [
+    { name = "boto3" },
+    { name = "pillow" },
+    { name = "pillow-heif" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "boto3", specifier = ">=1.35" },
+    { name = "pillow", specifier = ">=10.0" },
+    { name = "pillow-heif", specifier = ">=0.18" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0" }]
+
+[[package]]
+name = "f0rge-testing"
+version = "0.1.0"
+source = { editable = "../../../libs/backend/testing" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "testcontainers" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.29" },
+    { name = "pytest", specifier = ">=9.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "testcontainers", extras = ["postgres"], specifier = ">=4.7" },
+]
+
+[package.metadata.requires-dev]
+dev = []
+
+[[package]]
 name = "fastapi"
 version = "0.135.2"
 source = { registry = "https://pypi.org/simple" }
@@ -827,6 +911,9 @@ dependencies = [
     { name = "bcrypt" },
     { name = "boto3" },
     { name = "cryptography" },
+    { name = "f0rge-core" },
+    { name = "f0rge-db" },
+    { name = "f0rge-storage" },
     { name = "fastapi", extra = ["standard"] },
     { name = "greenlet" },
     { name = "httpx" },
@@ -843,6 +930,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "f0rge-testing" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "testcontainers" },
@@ -855,6 +943,9 @@ requires-dist = [
     { name = "bcrypt", specifier = ">=4.0" },
     { name = "boto3", specifier = ">=1.35" },
     { name = "cryptography", specifier = ">=42.0" },
+    { name = "f0rge-core", editable = "../../../libs/backend/core" },
+    { name = "f0rge-db", editable = "../../../libs/backend/db" },
+    { name = "f0rge-storage", editable = "../../../libs/backend/storage" },
     { name = "fastapi", extras = ["standard"] },
     { name = "greenlet", specifier = ">=3.3.2" },
     { name = "httpx", specifier = ">=0.27" },
@@ -871,6 +962,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "f0rge-testing", editable = "../../../libs/backend/testing" },
     { name = "pytest", specifier = ">=9.0" },
     { name = "pytest-asyncio", specifier = ">=0.23" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.7" },
@@ -2312,6 +2404,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/95/32107c4d13be077a9cae61e9ae49966a35dc4bf442a8852dd871db31f62e/sqlalchemy-2.0.48-cp314-cp314t-win32.whl", hash = "sha256:b8438ec5594980d405251451c5b7ea9aa58dda38eb7ac35fb7e4c696712ee24f", size = 2147209, upload-time = "2026-03-02T15:52:54.274Z" },
     { url = "https://files.pythonhosted.org/packages/d2/d7/1e073da7a4bc645eb83c76067284a0374e643bc4be57f14cc6414656f92c/sqlalchemy-2.0.48-cp314-cp314t-win_amd64.whl", hash = "sha256:d854b3970067297f3a7fbd7a4683587134aa9b3877ee15aa29eea478dc68f933", size = 2182198, upload-time = "2026-03-02T15:52:55.606Z" },
     { url = "https://files.pythonhosted.org/packages/46/2c/9664130905f03db57961b8980b05cab624afd114bf2be2576628a9f22da4/sqlalchemy-2.0.48-py3-none-any.whl", hash = "sha256:a66fe406437dd65cacd96a72689a3aaaecaebbcd62d81c5ac1c0fdbeac835096", size = 1940202, upload-time = "2026-03-02T15:52:43.285Z" },
+]
+
+[package.optional-dependencies]
+asyncio = [
+    { name = "greenlet" },
 ]
 
 [[package]]

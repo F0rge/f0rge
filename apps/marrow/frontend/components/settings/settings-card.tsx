@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 
 interface SettingsCardProps {
   icon?: LucideIcon

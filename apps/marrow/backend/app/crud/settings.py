@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import BaseCRUD
 from app.models.user_settings import UserSettings
-from app.tenant import owned_by_user
+from f0rge_db.tenant import owned_by_user
 
 
 class UserSettingsCRUD(BaseCRUD):

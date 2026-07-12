@@ -7,10 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crud.user_provisioning import UserProvisioningCRUD
-from app.exceptions import ExternalServiceError
+from f0rge_core.exceptions import ExternalServiceError
 from app.models.diet_tag_catalog import DietTagCatalogItem
 from app.seed_data import DEFAULT_DIET_TAGS
-from app.tenant import apply_session_user_id
+from f0rge_db.tenant import apply_session_user_id
 
 
 async def is_user_provisioned(db: AsyncSession, user_id: uuid.UUID) -> bool:

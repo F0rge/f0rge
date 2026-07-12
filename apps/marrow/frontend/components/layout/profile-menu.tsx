@@ -7,8 +7,8 @@ import { LogOut, SlidersHorizontal, UserRound } from 'lucide-react'
 import { UserAvatar } from '@/components/account/user-avatar'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { useLogout } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
-import { cn } from '@/lib/utils'
+import { handleMutationError } from '@f0rge/ui/api'
+import { cn } from '@f0rge/ui'
 
 const MENU_ITEM_CLASS =
   'flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted'

@@ -12,12 +12,16 @@ Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker
 - `apps/marrow/backend/migrations/versions/*.py` (migration safety + deploy compatibility ONLY)
 - `apps/marrow/backend/migrations/env.py`, `apps/marrow/backend/alembic.ini`
 - `apps/marrow/frontend/Dockerfile`, `apps/marrow/frontend/next.config.*`
-- Root scripts: `start.sh`, `scripts/fly-*.sh`
+- Root scripts affecting deploy (no `start.sh` in repo)
 - `.dockerignore`, `.gitignore`
 - Anything affecting Fly apps, MPG, Cloudflare DNS (`marrow-health.com`), CI workflows
 - NOT app code under `apps/marrow/backend/app/**` or `apps/marrow/frontend/app/**`
 
 ## Hard rules — instant block findings
+
+- **Root build context** — Docker builds must use repo root as context (`docker build -f apps/marrow/backend/Dockerfile .`). Block on `working-directory` in fly deploy that hides `libs/`.
+- **Whitelist `.dockerignore`** — must use `*` + `!apps/...` + `!libs/**` pattern. Block on blacklist-only dockerignore that ships the whole repo.
+- **No root `uv.lock`** — block on any PR creating `<root>/uv.lock`. Per-project locks only.
 
 - **Migration added without Fly release_command path.** Any PR adding `apps/marrow/backend/migrations/versions/` MUST leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running `alembic upgrade head` via `MIGRATION_DATABASE_URL`. Runtime `DATABASE_URL` stays least-privilege (`healthtracker-app`).
 

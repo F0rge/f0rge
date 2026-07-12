@@ -1,5 +1,5 @@
 import { Lock, List, Sparkles } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@f0rge/ui'
 import type { Tier } from './tier-pill'
 
 interface TierBannerProps {

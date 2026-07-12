@@ -2,6 +2,16 @@
 
 Hard rules every reviewing agent must honour, regardless of domain. Block-level findings here apply to backend, frontend, devops, and qa-engineer alike.
 
+## Shared libraries — non-duplication
+
+Apps import from `libs/` — never the reverse. Block on:
+- `libs/**` importing from `apps/` or `@/` paths resolving to apps
+- App code re-implementing lib-owned helpers (see `.cursor/rules/shared-libs.mdc`)
+- New projects missing `platform:` / `scope:` tags in `project.json`
+- Creating a root `uv.lock` (breaks per-project lock isolation)
+
+See `AGENTS.md` § Shared libraries for the canonical inventory.
+
 ## Plans must delegate to sub-agents
 
 **At planning time** (before any code), every implementation plan MUST include a sub-agent map: one named sub-agent from `~/.cursor/agents/` per work chunk, with deliverable and dependencies. The planning agent orchestrates; it does not implement the chunks. See `.cursor/rules/orchestration.mdc` and `.cursor/skills/ship-feature/SKILL.md`.
@@ -33,7 +43,7 @@ Common patterns that warrant an audit:
 
 Automated checks (lint, pytest, build, typecheck) are NOT a complete gate. The PR is not done until:
 
-- A human has driven the new feature in a live dev server (`./start.sh` locally OR `app-dev.marrow-health.com`).
+- A human has driven the new feature in a live dev server (`uvicorn` + `npm run dev` locally OR `app-dev.marrow-health.com`).
 - The golden path works end-to-end through the UI.
 - At least one error path was driven and the UI failed gracefully.
 - Backend logs were tailed during the test for hidden 500s.

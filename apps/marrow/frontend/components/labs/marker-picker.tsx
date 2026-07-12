@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Loader2, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMarkerCatalog, useCreateMarker } from '@/lib/api/hooks'
-import { handleMutationError } from '@/lib/api/client'
+import { handleMutationError } from '@f0rge/ui/api'
 import type { LabMarkerCatalog } from '@/lib/api/types'
 
 interface MarkerPickerProps {
