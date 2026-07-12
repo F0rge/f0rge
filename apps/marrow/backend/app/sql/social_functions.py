@@ -9,9 +9,11 @@ SET search_path = public
 AS $$
 DECLARE nid uuid;
 BEGIN
+    PERFORM set_config('app.service_role', 'social_notifier', true);
     INSERT INTO notifications (user_id, type, payload)
     VALUES (recipient, notif_type, notif_payload)
     RETURNING id INTO nid;
+    PERFORM set_config('app.service_role', '', true);
     RETURN nid;
 END;
 $$;

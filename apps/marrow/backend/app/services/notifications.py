@@ -31,12 +31,6 @@ class NotificationService:
     async def notify(self, recipient_id: uuid.UUID, type: str, payload: dict) -> None:
         """Insert a notification for ANY user via create_notification SECURITY DEFINER."""
         await self.db.execute(
-            text("SELECT set_config('app.service_role', 'social_notifier', true)")
+            text("SELECT create_notification(:r, :t, cast(:p as jsonb))"),
+            {"r": str(recipient_id), "t": type, "p": json.dumps(payload)},
         )
-        try:
-            await self.db.execute(
-                text("SELECT create_notification(:r, :t, cast(:p as jsonb))"),
-                {"r": str(recipient_id), "t": type, "p": json.dumps(payload)},
-            )
-        finally:
-            await self.db.execute(text("SELECT set_config('app.service_role', '', true)"))

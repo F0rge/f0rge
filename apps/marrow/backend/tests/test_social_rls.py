@@ -338,9 +338,6 @@ async def test_create_notification_cross_user_succeeds(
     async with _rls_probe(superuser_engine) as conn:
         await _insert_users_conn(conn, sender, recipient)
         await _set_app_user(conn, sender)
-        await conn.execute(
-            sa.text("SELECT set_config('app.service_role', 'social_notifier', true)")
-        )
         new_id = (
             await conn.execute(
                 sa.text(
