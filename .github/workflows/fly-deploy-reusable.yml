@@ -71,8 +71,10 @@ jobs:
       - name: Resolve affected projects
         id: affected
         if: inputs.component == 'auto'
+        # nx 22.7 ignores --sep and emits a JSON array; pipefail so nx failures fail the step.
         run: |
-          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --sep=" " 2>/dev/null || true)
+          set -o pipefail
+          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(" ")')
           echo "projects=$PROJECTS" >> "$GITHUB_OUTPUT"
 
       - name: Set deploy flags
