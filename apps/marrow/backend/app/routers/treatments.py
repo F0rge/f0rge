@@ -3,12 +3,21 @@ from __future__ import annotations
 import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, UploadFile, status
 
 from app.dependencies.treatment_log import get_treatment_log_service
-from app.dependencies.treatments import get_treatment_service
+from app.dependencies.treatments import (
+    get_treatment_extraction_orchestrator,
+    get_treatment_service,
+)
 from app.middleware.auth import get_current_session
-from app.schemas.treatment import TreatmentCreate, TreatmentResponse, TreatmentUpdate
+from app.schemas.treatment import (
+    TreatmentCreate,
+    TreatmentExtractionResult,
+    TreatmentResponse,
+    TreatmentUpdate,
+)
+from app.services.treatment_extraction_orchestrator import TreatmentExtractionOrchestrator
 from app.schemas.treatment_log import ProtocolResponse, TreatmentLogResult, TreatmentLogUpdate
 from app.services.treatment_log import TreatmentLogService
 from app.services.treatments import TreatmentService
@@ -36,6 +45,14 @@ async def get_protocol(
     service: TreatmentLogService = Depends(get_treatment_log_service),
 ):
     return await service.get_protocol(date)
+
+
+@router.post("/extract-upload", response_model=TreatmentExtractionResult)
+async def extract_treatment_upload(
+    file: UploadFile,
+    orchestrator: TreatmentExtractionOrchestrator = Depends(get_treatment_extraction_orchestrator),
+):
+    return await orchestrator.preview_upload(file)
 
 
 @router.get("/{treatment_id}", response_model=TreatmentResponse)

@@ -42,7 +42,7 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-full overflow-x-hidden overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="sr-only">{lab.name}</DialogTitle>
           </DialogHeader>

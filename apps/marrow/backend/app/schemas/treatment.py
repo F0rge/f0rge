@@ -71,6 +71,56 @@ class TreatmentUpdate(BaseModel):
     _validate_end_reason = field_validator("end_reason")(_validate_end_reason)
 
 
+class ExtractedTreatmentCandidate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    type: TREATMENT_TYPES = "prescription"
+    start_date: Optional[datetime.date] = None
+    end_date: Optional[datetime.date] = None
+    dose: Optional[str] = Field(default=None, max_length=500)
+    doses_per_day: Optional[int] = Field(default=None, ge=1, le=12)
+    notes: Optional[str] = None
+    group_name: Optional[str] = Field(default=None, max_length=100)
+
+    _clean_group_name = field_validator("group_name")(_clean_group_name)
+
+    @field_validator("start_date", mode="before")
+    @classmethod
+    def _default_start_date(cls, v: object) -> datetime.date:
+        if v is None or v == "":
+            return local_today()
+        if isinstance(v, str):
+            return datetime.date.fromisoformat(v)
+        if isinstance(v, datetime.date):
+            return v
+        raise ValueError(f"start_date must be a date, got {type(v)}")
+
+    @field_validator("end_date", mode="before")
+    @classmethod
+    def _optional_end_date(cls, v: object) -> Optional[datetime.date]:
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            return datetime.date.fromisoformat(v)
+        if isinstance(v, datetime.date):
+            return v
+        raise ValueError(f"end_date must be a date or null, got {type(v)}")
+
+
+class ExtractedTreatmentsPayload(BaseModel):
+    treatments: list[ExtractedTreatmentCandidate] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+
+class TreatmentExtractionResult(BaseModel):
+    payload: ExtractedTreatmentsPayload
+    raw_response: str
+    model: str
+    attempts: int
+    retried_due_to: list[str] = Field(default_factory=list)
+
+
 class TreatmentResponse(BaseModel):
     id: int
     name: str

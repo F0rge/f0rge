@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Plus, Pill, List, BarChart3 } from 'lucide-react'
+import { Loader2, Plus, Pill, List, BarChart3, Upload } from 'lucide-react'
 import { useTreatments } from '@/lib/api/hooks'
 import { TreatmentCard } from '@/components/treatments/treatment-card'
 import { TreatmentFormDialog } from '@/components/treatments/treatment-form-dialog'
+import { TreatmentUploadDialog } from '@/components/treatments/treatment-upload-dialog'
 import { DiscontinueDialog } from '@/components/treatments/discontinue-dialog'
 import { TreatmentTimeline } from '@/components/treatments/treatment-timeline'
 import { PageShell } from '@/components/layout/page-shell'
@@ -18,6 +19,7 @@ export default function TreatmentsPage() {
   const { data: treatments, isLoading, isError, refetch } = useTreatments()
   const [view, setView] = useState<'list' | 'timeline'>('list')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [editTreatment, setEditTreatment] = useState<Treatment | null>(null)
   const [dialogKey, setDialogKey] = useState(0)
   const [discontinueTarget, setDiscontinueTarget] = useState<Treatment | null>(null)
@@ -78,6 +80,14 @@ export default function TreatmentsPage() {
                 Timeline
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              <Upload className="size-3.5" />
+              Upload
+            </button>
             <button
               type="button"
               onClick={openAdd}
@@ -149,6 +159,8 @@ export default function TreatmentsPage() {
         onOpenChange={setDialogOpen}
         treatment={editTreatment}
       />
+
+      <TreatmentUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
 
       {discontinueTarget && (
         <DiscontinueDialog
