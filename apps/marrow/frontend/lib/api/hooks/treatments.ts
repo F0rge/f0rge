@@ -2,13 +2,14 @@
 
 import { useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, apiDelete, handleMutationError } from '@f0rge/ui/api'
+import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, handleMutationError } from '@f0rge/ui/api'
 import type {
   Treatment,
   TreatmentCreate,
   TreatmentUpdate,
   ProtocolResponse,
   TreatmentLogResult,
+  TreatmentExtractionResult,
 } from '../types'
 
 export function useTreatments(activeOn?: string) {
@@ -33,6 +34,16 @@ export function useCreateTreatment() {
     mutationFn: (data: TreatmentCreate) => apiPost('/treatments', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treatments'] })
+    },
+  })
+}
+
+export function useExtractTreatmentUpload() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return apiPostForm('/treatments/extract-upload', formData) as Promise<TreatmentExtractionResult>
     },
   })
 }
