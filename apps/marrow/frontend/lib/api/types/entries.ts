@@ -5,6 +5,7 @@ export interface Photo {
   label: string | null
   meal_time: string | null
   created_at: string
+  tagged_by_handle?: string | null
 }
 
 export interface PhotoScores {

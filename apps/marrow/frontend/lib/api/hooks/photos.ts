@@ -12,16 +12,21 @@ export function useUploadPhoto() {
       file,
       label,
       mealTime,
+      taggedHandles,
     }: {
       date: string
       file: File
       label?: string
       mealTime?: Date | null
+      taggedHandles?: string[]
     }) => {
       const formData = new FormData()
       formData.append('file', file)
       if (label) formData.append('label', label)
       if (mealTime) formData.append('meal_time', mealTime.toISOString())
+      if (taggedHandles && taggedHandles.length > 0) {
+        formData.append('tagged_handles', JSON.stringify(taggedHandles))
+      }
       return apiPostForm(`/entries/${date}/photos`, formData)
     },
     onSuccess: () => {

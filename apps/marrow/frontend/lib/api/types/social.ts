@@ -50,3 +50,35 @@ export interface GroupDetail {
   my_status: GroupMemberStatus
   members: GroupMember[]
 }
+
+export type MealTagStatus =
+  | 'pending_analysis'
+  | 'pending_approval'
+  | 'delivered'
+  | 'declined'
+  | 'cancelled'
+
+export interface IncomingMealTag {
+  id: string
+  tagger: PublicUserCard
+  source_dish_name: string | null
+  source_label: string | null
+  source_date: string
+  created_at: string
+}
+
+export interface OutgoingMealTag {
+  id: string
+  tagged_user: PublicUserCard
+  status: MealTagStatus
+  source_dish_name: string | null
+  source_label: string | null
+  source_date: string
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface MealTagsResponse {
+  incoming_pending: IncomingMealTag[]
+  outgoing: OutgoingMealTag[]
+}

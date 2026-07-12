@@ -1,3 +1,5 @@
+'use client'
+
 import dynamic from 'next/dynamic'
 import { PageShell } from '@/components/layout/page-shell'
 
@@ -11,8 +13,6 @@ const PeopleClient = dynamic(() => import('./people-client'), {
     </PageShell>
   ),
 })
-
-export const metadata = { title: 'People' }
 
 export default function PeoplePage() {
   return <PeopleClient />

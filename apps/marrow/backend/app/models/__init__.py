@@ -28,6 +28,7 @@ from app.models.tracker_log import TrackerLog
 from app.models.notification import Notification
 from app.models.connection import Connection
 from app.models.group import Group, GroupMember
+from app.models.meal_tag import MealTag
 
 __all__ = [
     "User",
@@ -59,4 +60,5 @@ __all__ = [
     "Connection",
     "Group",
     "GroupMember",
+    "MealTag",
 ]

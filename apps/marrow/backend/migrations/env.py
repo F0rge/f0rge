@@ -35,6 +35,7 @@ import app.models.user  # noqa: F401
 import app.models.notification  # noqa: F401
 import app.models.connection  # noqa: F401
 import app.models.group  # noqa: F401
+import app.models.meal_tag  # noqa: F401
 
 config = context.config
 

@@ -43,6 +43,7 @@ class SettingsService:
             has_api_key=row.llm_api_key_encrypted is not None,
             has_external_api_token=row.external_api_token_encrypted is not None,
             onboarding_completed=row.onboarding_completed_at is not None,
+            tagged_meal_mode=row.tagged_meal_mode,
         )
 
     async def get(self) -> SettingsResponse:
@@ -56,6 +57,7 @@ class SettingsService:
                 has_api_key=False,
                 has_external_api_token=False,
                 onboarding_completed=False,
+                tagged_meal_mode="approve",
             )
         return self._to_response(row)
 
@@ -113,4 +115,10 @@ class SettingsService:
         if row.onboarding_completed_at is None:
             row.onboarding_completed_at = datetime.datetime.utcnow()
             row = await self.crud.commit_refresh(row)
+        return self._to_response(row)
+
+    async def update_tagged_meal_mode(self, mode: str) -> SettingsResponse:
+        row = await self._get_or_create_row()
+        row.tagged_meal_mode = mode
+        row = await self.crud.commit_refresh(row)
         return self._to_response(row)

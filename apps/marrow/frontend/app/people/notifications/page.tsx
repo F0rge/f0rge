@@ -1,3 +1,5 @@
+'use client'
+
 import dynamic from 'next/dynamic'
 import { PageShell } from '@/components/layout/page-shell'
 
@@ -10,8 +12,6 @@ const NotificationsClient = dynamic(() => import('./notifications-client'), {
     </PageShell>
   ),
 })
-
-export const metadata = { title: 'Notifications' }
 
 export default function NotificationsPage() {
   return <NotificationsClient />

@@ -1,3 +1,5 @@
+export type TaggedMealMode = 'approve' | 'auto'
+
 export interface UserSettings {
   llm_provider: string
   llm_model: string | null
@@ -6,6 +8,7 @@ export interface UserSettings {
   has_api_key: boolean
   has_external_api_token: boolean
   onboarding_completed: boolean
+  tagged_meal_mode: TaggedMealMode
 }
 
 export interface LLMSettingsUpdate {
@@ -17,6 +20,10 @@ export interface LLMSettingsUpdate {
 export interface EmbeddingSettingsUpdate {
   embedding_provider?: string
   embedding_model?: string | null
+}
+
+export interface TaggedMealModeUpdate {
+  tagged_meal_mode: TaggedMealMode
 }
 
 export interface TestConnectionResponse {

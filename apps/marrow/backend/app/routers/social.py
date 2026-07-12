@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 
 from app.dependencies.groups import get_group_service
+from app.dependencies.meal_tags import get_meal_tag_service
 from app.dependencies.notifications import get_notification_service
 from app.dependencies.social import get_social_service
 from app.middleware.auth import get_current_session
@@ -20,9 +21,11 @@ from app.schemas.social import (
     GroupMemberItem,
     GroupRename,
     HandleAvailableResponse,
+    MealTagListResponse,
     PublicUserCard,
 )
 from app.services.groups import GroupService
+from app.services.meal_tags import MealTagService
 from app.services.notifications import NotificationService
 from app.services.social import SocialService
 
@@ -200,3 +203,48 @@ async def remove_group_member(
     service: GroupService = Depends(get_group_service),
 ):
     await service.remove_member(group_id, handle)
+
+
+@router.get(
+    "/meal-tags",
+    response_model=MealTagListResponse,
+    dependencies=[Depends(get_current_session)],
+)
+async def list_meal_tags(service: MealTagService = Depends(get_meal_tag_service)):
+    return await service.list_tags()
+
+
+@router.post(
+    "/meal-tags/{tag_id}/approve",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_session)],
+)
+async def approve_meal_tag(
+    tag_id: uuid.UUID,
+    service: MealTagService = Depends(get_meal_tag_service),
+):
+    await service.approve(tag_id)
+
+
+@router.post(
+    "/meal-tags/{tag_id}/decline",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_session)],
+)
+async def decline_meal_tag(
+    tag_id: uuid.UUID,
+    service: MealTagService = Depends(get_meal_tag_service),
+):
+    await service.decline(tag_id)
+
+
+@router.delete(
+    "/meal-tags/{tag_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_session)],
+)
+async def cancel_meal_tag(
+    tag_id: uuid.UUID,
+    service: MealTagService = Depends(get_meal_tag_service),
+):
+    await service.cancel(tag_id)

@@ -58,6 +58,11 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
             <>
               <div className="flex items-center gap-1.5">
                 <span className="truncate text-sm font-semibold text-foreground">{title}</span>
+                {photo.tagged_by_handle && (
+                  <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800">
+                    from @{photo.tagged_by_handle}
+                  </span>
+                )}
                 {confidence !== null && (
                   <span className="shrink-0 text-xs text-muted-foreground">({confidence}%)</span>
                 )}

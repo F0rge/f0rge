@@ -22,6 +22,7 @@ from f0rge_db.tenant import current_user_id
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
+    from app.services.meal_tags import MealTagService
 
 
 async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg") -> str:
@@ -56,11 +57,17 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
 
 
 class PhotoService:
-    def __init__(self, db: AsyncSession, orchestrator: "FoodAnalysisOrchestrator") -> None:
+    def __init__(
+        self,
+        db: AsyncSession,
+        orchestrator: "FoodAnalysisOrchestrator",
+        meal_tags: "MealTagService",
+    ) -> None:
         self.db = db
         self.crud = PhotoCRUD(db)
         self.entry_crud = EntryCRUD(db)
         self.orchestrator = orchestrator
+        self.meal_tags = meal_tags
 
     async def update_photo(self, photo_id: int, data: PhotoUpdate) -> Photo:
         photo = await self.crud.get_by_id_owned(photo_id)
@@ -84,6 +91,7 @@ class PhotoService:
         label: Optional[str],
         meal_time: Optional[datetime.datetime],
         background_tasks: BackgroundTasks,
+        tagged_handles: Optional[str] = None,
     ) -> Photo:
         entry = await self.entry_crud.get_by_date(entry_date)
         if entry is None:
@@ -127,6 +135,7 @@ class PhotoService:
 
         # Queue analysis when enabled and credentials resolve (env or BYOK).
         # Credential resolution must not fail the upload — the photo is already persisted.
+        analysis_will_run = False
         if settings.food_analysis_enabled:
             from app.services.llm.factory import resolve_llm_credentials
 
@@ -135,7 +144,15 @@ class PhotoService:
             except Exception:
                 api_key = None
             if api_key:
+                analysis_will_run = True
                 background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
+
+        await self.meal_tags.create_tags_for_photo(
+            photo,
+            entry_date,
+            tagged_handles,
+            analysis_will_run=analysis_will_run,
+        )
 
         return photo
 

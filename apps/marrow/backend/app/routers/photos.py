@@ -38,9 +38,10 @@ async def upload_photo(
     file: UploadFile = File(...),
     label: Optional[str] = Form(None),
     meal_time: Optional[datetime.datetime] = Form(None),
+    tagged_handles: Optional[str] = Form(None),
     service: PhotoService = Depends(get_photo_service),
 ) -> Photo:
-    return await service.upload(date, file, label, meal_time, background_tasks)
+    return await service.upload(date, file, label, meal_time, background_tasks, tagged_handles)
 
 
 @router.get("/photos/{photo_id}/file", response_model=None)

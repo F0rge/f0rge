@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 import { PageShell } from '@/components/layout/page-shell'
 
-const ConnectionsClient = dynamic(() => import('./connections-client'), {
+const TagsClient = dynamic(() => import('./tags-client'), {
   ssr: false,
   loading: () => (
     <PageShell>
@@ -13,6 +13,6 @@ const ConnectionsClient = dynamic(() => import('./connections-client'), {
   ),
 })
 
-export default function ConnectionsPage() {
-  return <ConnectionsClient />
+export default function TagsPage() {
+  return <TagsClient />
 }

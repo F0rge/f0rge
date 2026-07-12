@@ -100,3 +100,27 @@ class GroupDetailResponse(BaseModel):
     my_status: str
     my_role: str
     members: list[GroupMemberItem]
+
+
+class IncomingMealTagItem(BaseModel):
+    id: uuid.UUID
+    tagger: PublicUserCard
+    source_dish_name: str | None = None
+    source_label: str | None = None
+    source_date: datetime.date
+    created_at: datetime.datetime
+
+
+class OutgoingMealTagItem(BaseModel):
+    id: uuid.UUID
+    tagged_user: PublicUserCard
+    status: str
+    source_dish_name: str | None = None
+    source_label: str | None = None
+    source_date: datetime.date
+    created_at: datetime.datetime
+
+
+class MealTagListResponse(BaseModel):
+    incoming_pending: list[IncomingMealTagItem]
+    outgoing: list[OutgoingMealTagItem]

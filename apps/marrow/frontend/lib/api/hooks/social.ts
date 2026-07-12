@@ -7,6 +7,7 @@ import type {
   GroupDetail,
   GroupListItem,
   HandleAvailableResponse,
+  MealTagsResponse,
   PublicUserCard,
 } from '../types/social'
 
@@ -39,6 +40,44 @@ export function useUserLookup(handle: string) {
     queryFn: () => apiGet(`/social/users/lookup?handle=${encodeURIComponent(normalized)}`),
     enabled,
     retry: false,
+  })
+}
+
+function invalidateMealTags(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['social', 'meal-tags'] })
+  queryClient.invalidateQueries({ queryKey: ['entry'] })
+  queryClient.invalidateQueries({ queryKey: ['entries'] })
+  queryClient.invalidateQueries({ queryKey: ['notifications'] })
+}
+
+export function useMealTags() {
+  return useQuery<MealTagsResponse>({
+    queryKey: ['social', 'meal-tags'],
+    queryFn: () => apiGet('/social/meal-tags'),
+  })
+}
+
+export function useApproveMealTag() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => apiPost(`/social/meal-tags/${id}/approve`, {}),
+    onSuccess: () => invalidateMealTags(queryClient),
+  })
+}
+
+export function useDeclineMealTag() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => apiPost(`/social/meal-tags/${id}/decline`, {}),
+    onSuccess: () => invalidateMealTags(queryClient),
+  })
+}
+
+export function useCancelMealTag() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/social/meal-tags/${id}`),
+    onSuccess: () => invalidateMealTags(queryClient),
   })
 }
 

@@ -1,3 +1,5 @@
+'use client'
+
 import dynamic from 'next/dynamic'
 import { PageShell } from '@/components/layout/page-shell'
 
@@ -10,8 +12,6 @@ const GroupsClient = dynamic(() => import('./groups-client'), {
     </PageShell>
   ),
 })
-
-export const metadata = { title: 'Groups' }
 
 export default function GroupsPage() {
   return <GroupsClient />

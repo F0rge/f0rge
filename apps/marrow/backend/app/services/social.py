@@ -171,14 +171,20 @@ class SocialService:
 
         return ConnectionItem(
             id=connection.id,
-            user=self.to_public_card(requester) if requester else PublicUserCard(handle="", avatar_default_index=0),
+            user=self.to_public_card(requester)
+            if requester
+            else PublicUserCard(handle="", avatar_default_index=0),
             since=connection.responded_at,
         )
 
     async def delete_connection(self, connection_id: uuid.UUID) -> None:
+        from app.services.meal_tags import MealTagService
+
         connection = await self.crud.get_connection_by_id(connection_id)
         if connection is None:
             raise NotFoundError("Connection not found")
-        # P5 hook: cancel pending meal_tags for this pair
+        me = current_user_id()
+        other = connection.user_high if connection.user_low == me else connection.user_low
         async with unit_of_work(self.db):
+            await MealTagService(self.db).cancel_pending_for_connection(me, other)
             await self.crud.delete_connection(connection)

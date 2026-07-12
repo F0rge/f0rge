@@ -15,7 +15,7 @@ import { HubRow } from '@/components/customize/hub-row'
 import { PageHeader } from '@/components/layout/page-header'
 import { PageShell } from '@/components/layout/page-shell'
 import { useAccount, useHandleAvailable, useUpdateAccount } from '@/lib/api/hooks'
-import { useConnections, useGroups } from '@/lib/api/hooks/social'
+import { useConnections, useGroups, useMealTags } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { toast } from 'sonner'
 
@@ -100,8 +100,10 @@ function ClaimHandleCard() {
 export default function PeopleClient() {
   const connections = useConnections()
   const groups = useGroups()
+  const mealTags = useMealTags()
   const pendingIncoming = connections.data?.pending_incoming.length ?? 0
   const pendingGroupInvites = groups.data?.filter((g) => g.my_status === 'invited').length ?? 0
+  const pendingMealTags = mealTags.data?.incoming_pending.length ?? 0
 
   const hubItems = [
     {
@@ -122,9 +124,11 @@ export default function PeopleClient() {
     {
       href: '/people/tags',
       icon: <Tag className="size-4" />,
-      title: 'Tagged meals',
+      title:
+        pendingMealTags > 0
+          ? `Tagged meals (${pendingMealTags} pending)`
+          : 'Tagged meals',
       description: 'Review meal tags waiting for your approval.',
-      comingSoon: true,
     },
     {
       href: '/people/notifications',

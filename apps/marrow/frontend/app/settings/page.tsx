@@ -11,6 +11,7 @@ import { ExternalTokenSection } from '@/components/settings/external-token-secti
 import { AppleHealthSection } from '@/components/settings/apple-health-section'
 import { DataSourcesSection } from '@/components/settings/data-sources-section'
 import { OnboardingSection } from '@/components/settings/onboarding-section'
+import { TaggedMealsSection } from '@/components/settings/tagged-meals-section'
 
 function SettingsGroup({
   title,
@@ -54,6 +55,10 @@ export default function SettingsPage() {
 
       <SettingsGroup title="AI">
         <AiSettingsSection />
+      </SettingsGroup>
+
+      <SettingsGroup title="Social">
+        <TaggedMealsSection />
       </SettingsGroup>
 
       <SettingsGroup title="About">

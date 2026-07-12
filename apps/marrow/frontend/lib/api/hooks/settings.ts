@@ -6,6 +6,7 @@ import type {
   UserSettings,
   LLMSettingsUpdate,
   EmbeddingSettingsUpdate,
+  TaggedMealModeUpdate,
   TestConnectionResponse,
   ExternalTokenResponse,
 } from '../types'
@@ -34,6 +35,17 @@ export function useUpdateEmbeddingSettings() {
   return useMutation({
     mutationFn: (data: EmbeddingSettingsUpdate) =>
       apiPut('/settings/embedding', data) as Promise<UserSettings>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+}
+
+export function useUpdateTaggedMealMode() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: TaggedMealModeUpdate) =>
+      apiPut('/settings/tagged-meal', data) as Promise<UserSettings>,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
