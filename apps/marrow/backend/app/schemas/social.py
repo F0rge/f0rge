@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import uuid
+import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -28,6 +30,23 @@ class PublicUserCard(BaseModel):
 
 class HandleAvailableResponse(BaseModel):
     available: bool
+
+
+class ConnectionRequest(BaseModel):
+    handle: str = Field(min_length=3, max_length=30)
+
+
+class ConnectionItem(BaseModel):
+    id: uuid.UUID
+    user: PublicUserCard
+    since: datetime.datetime | None = None
+    created_at: datetime.datetime | None = None
+
+
+class ConnectionListResponse(BaseModel):
+    accepted: list[ConnectionItem]
+    pending_incoming: list[ConnectionItem]
+    pending_outgoing: list[ConnectionItem]
 
 
 class HandleField(BaseModel):

@@ -14,39 +14,42 @@ import { Button, Card, Input, Label } from '@f0rge/ui'
 import { HubRow } from '@/components/customize/hub-row'
 import { PageHeader } from '@/components/layout/page-header'
 import { PageShell } from '@/components/layout/page-shell'
-import { useAccount, useHandleAvailable, useUpdateAccount } from '@/lib/api/hooks'
+import { useAccount, useHandleAvailable, useUpdateAccount, useConnections } from '@/lib/api/hooks'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { toast } from 'sonner'
 
-const HUB_ITEMS = [
-  {
-    href: '/people/connections',
-    icon: <UserPlus className="size-4" />,
-    title: 'Connections',
-    description: 'Send requests and manage people you can tag on meals.',
-    comingSoon: true,
-  },
-  {
-    href: '/people/groups',
-    icon: <UsersRound className="size-4" />,
-    title: 'Groups',
-    description: 'Organize connected people into named groups.',
-    comingSoon: true,
-  },
-  {
-    href: '/people/tags',
-    icon: <Tag className="size-4" />,
-    title: 'Tagged meals',
-    description: 'Review meal tags waiting for your approval.',
-    comingSoon: true,
-  },
-  {
-    href: '/people/notifications',
-    icon: <Bell className="size-4" />,
-    title: 'Notifications',
-    description: 'Connection requests, invites, and tag activity.',
-  },
-]
+export default function PeopleClient() {
+  const connections = useConnections()
+  const pendingIncoming = connections.data?.pending_incoming.length ?? 0
+
+  const hubItems = [
+    {
+      href: '/people/connections',
+      icon: <UserPlus className="size-4" />,
+      title: pendingIncoming > 0 ? `Connections (${pendingIncoming} pending)` : 'Connections',
+      description: 'Send requests and manage people you can tag on meals.',
+    },
+    {
+      href: '/people/groups',
+      icon: <UsersRound className="size-4" />,
+      title: 'Groups',
+      description: 'Organize connected people into named groups.',
+      comingSoon: true,
+    },
+    {
+      href: '/people/tags',
+      icon: <Tag className="size-4" />,
+      title: 'Tagged meals',
+      description: 'Review meal tags waiting for your approval.',
+      comingSoon: true,
+    },
+    {
+      href: '/people/notifications',
+      icon: <Bell className="size-4" />,
+      title: 'Notifications',
+      description: 'Connection requests, invites, and tag activity.',
+    },
+  ]
 
 function ClaimHandleCard() {
   const account = useAccount()
@@ -153,13 +156,13 @@ export default function PeopleClient() {
         <ClaimHandleCard />
 
         <Card className="overflow-hidden py-0 lg:hidden">
-          {HUB_ITEMS.map((item) => (
+          {hubItems.map((item) => (
             <HubRow key={item.href} {...item} />
           ))}
         </Card>
 
         <div className="hidden lg:grid lg:grid-cols-2 lg:gap-4">
-          {HUB_ITEMS.map((item) => (
+          {hubItems.map((item) => (
             <Card key={item.href} className="overflow-hidden py-0">
               <HubRow {...item} variant="tile" />
             </Card>

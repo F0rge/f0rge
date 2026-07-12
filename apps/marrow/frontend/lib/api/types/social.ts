@@ -7,3 +7,16 @@ export interface PublicUserCard {
 export interface HandleAvailableResponse {
   available: boolean
 }
+
+export interface ConnectionItem {
+  id: string
+  user: PublicUserCard
+  since?: string | null
+  created_at?: string | null
+}
+
+export interface ConnectionListResponse {
+  accepted: ConnectionItem[]
+  pending_incoming: ConnectionItem[]
+  pending_outgoing: ConnectionItem[]
+}

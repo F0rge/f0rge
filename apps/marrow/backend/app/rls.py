@@ -84,3 +84,30 @@ async def enable_social_security(conn: AsyncConnection) -> None:
     for stmt in statements:
         await conn.execute(sa.text(stmt))
     await conn.execute(sa.text(CREATE_NOTIFICATION_SQL))
+
+    connection_policies = [
+        "ALTER TABLE connections ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE connections FORCE ROW LEVEL SECURITY",
+        """
+        CREATE POLICY connections_select ON connections FOR SELECT
+            USING (current_setting('app.user_id', true)::uuid IN (user_low, user_high))
+        """,
+        """
+        CREATE POLICY connections_insert ON connections FOR INSERT
+            WITH CHECK (
+                requester_id = current_setting('app.user_id', true)::uuid
+                AND current_setting('app.user_id', true)::uuid IN (user_low, user_high)
+            )
+        """,
+        """
+        CREATE POLICY connections_update ON connections FOR UPDATE
+            USING (current_setting('app.user_id', true)::uuid IN (user_low, user_high))
+            WITH CHECK (current_setting('app.user_id', true)::uuid IN (user_low, user_high))
+        """,
+        """
+        CREATE POLICY connections_delete ON connections FOR DELETE
+            USING (current_setting('app.user_id', true)::uuid IN (user_low, user_high))
+        """,
+    ]
+    for stmt in connection_policies:
+        await conn.execute(sa.text(stmt))
