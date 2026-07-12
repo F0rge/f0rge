@@ -17,6 +17,7 @@ class MealTag(Base):
         Index("ix_meal_tags_tagged_user", "tagged_user_id"),
         Index("ix_meal_tags_tagger", "tagger_id"),
         Index("ix_meal_tags_source", "source_photo_id"),
+        Index("ix_meal_tags_source_meal", "source_meal_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -27,6 +28,11 @@ class MealTag(Base):
     source_photo_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("photos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_meal_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("meals.id", ondelete="CASCADE"),
         nullable=False,
     )
     tagger_id: Mapped[uuid.UUID] = mapped_column(

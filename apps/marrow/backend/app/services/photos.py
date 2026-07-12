@@ -12,9 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud.base import unit_of_work
 from app.crud.entries import EntryCRUD
+from app.crud.meals import MealCRUD
 from app.crud.photos import PhotoCRUD
 from f0rge_core.exceptions import NotFoundError
 from app.models.entry import Entry
+from app.models.meal import Meal
 from app.models.photo import Photo
 from app.schemas.photo import PhotoUpdate
 from app.services import object_storage
@@ -66,6 +68,7 @@ class PhotoService:
     ) -> None:
         self.db = db
         self.crud = PhotoCRUD(db)
+        self.meal_crud = MealCRUD(db)
         self.entry_crud = EntryCRUD(db)
         self.orchestrator = orchestrator
         self.meal_tags = meal_tags
@@ -117,16 +120,27 @@ class PhotoService:
             utc_offset = normalized_meal_time.utcoffset()
             normalized_meal_time = (normalized_meal_time - utc_offset).replace(tzinfo=None)
 
+        effective_meal_time = normalized_meal_time if normalized_meal_time is not None else now
+        user_id = current_user_id()
+
         # Invariant: a file on disk implies a DB row exists.
         # If the commit fails we clean up the file so the next upload
         # doesn't collide with a phantom on disk.
+        meal = Meal(
+            owner_user_id=user_id,
+            filename=filename,
+            label=label,
+            original_filename=file.filename,
+            meal_time=effective_meal_time,
+            created_at=now,
+        )
         photo = Photo(
-            user_id=current_user_id(),
+            user_id=user_id,
             entry_id=entry.id,
             filename=filename,
             label=label,
             original_filename=file.filename,
-            meal_time=normalized_meal_time if normalized_meal_time is not None else now,
+            meal_time=effective_meal_time,
             created_at=now,
         )
         # Queue analysis when enabled and credentials resolve (env or BYOK).
@@ -144,16 +158,18 @@ class PhotoService:
 
         try:
             async with unit_of_work(self.db):
+                await self.meal_crud.add_and_flush(meal)
+                photo.meal_id = meal.id
                 self.crud.add(photo)
                 await self.db.flush()
                 if recipients:
                     await self.meal_tags.insert_tags_for_photo(photo, entry_date, recipients)
                 if recipients:
                     await self.meal_tags.delivery.process_photo_only_source_in_transaction(
-                        self.db, photo.id, current_user_id()
+                        self.db, photo.id, user_id
                     )
         except Exception:
-            await asyncio.to_thread(delete_photo, filename, user_id=str(current_user_id()))
+            await asyncio.to_thread(delete_photo, filename, user_id=str(user_id))
             raise
 
         if analysis_will_run:
@@ -185,10 +201,13 @@ class PhotoService:
         if photo is None:
             raise NotFoundError("Photo not found")
         filename = photo.filename
+        meal_id = photo.meal_id
+        user_id_str = str(photo.user_id)
 
         # Commit DB delete before touching the filesystem. If the commit fails,
         # no files are removed and the DB row remains — consistent state.
         await self.crud.delete_and_commit(photo)
+        await self.meal_crud.delete_if_orphaned(meal_id)
 
         # File cleanup happens after the successful commit.
-        await asyncio.to_thread(delete_photo, filename, user_id=str(photo.user_id))
+        await asyncio.to_thread(delete_photo, filename, user_id=user_id_str)

@@ -319,6 +319,8 @@ export function PhotoFocusOverlay({
       : null
 
   const currentPhoto = photoId !== null ? photos.find((p) => p.id === photoId) ?? null : null
+  const isSharedMeal =
+    currentPhoto?.source_photo_id != null || currentPhoto?.tagged_by_handle != null
   const mealTime = formatMealTime(currentPhoto?.meal_time ?? null)
 
   const { style: gestureStyle, handlers } = useSheetGestures({
@@ -360,7 +362,13 @@ export function PhotoFocusOverlay({
               />
             )}
             <div className="mt-0.5 truncate text-xs text-muted-foreground">
-              {[mealTime, confidence != null ? `${confidence}% confident` : null]
+              {[
+                currentPhoto?.tagged_by_handle
+                  ? `Shared by @${currentPhoto.tagged_by_handle}`
+                  : null,
+                mealTime,
+                confidence != null ? `${confidence}% confident` : null,
+              ]
                 .filter(Boolean)
                 .join(' · ') || 'Tap an ingredient to edit'}
             </div>
@@ -428,6 +436,7 @@ export function PhotoFocusOverlay({
               mode={mode}
               hideConfirmButton={false}
               hideTitle
+              isSharedMeal={isSharedMeal}
             />
           )}
         </div>

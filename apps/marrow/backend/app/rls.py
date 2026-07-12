@@ -14,8 +14,10 @@ from app.sql.social_rls import (
     CONNECTIONS_RLS_STATEMENTS,
     GROUP_MEMBERS_RLS_STATEMENTS,
     GROUPS_RLS_STATEMENTS,
+    MEALS_RLS_STATEMENTS,
     MEAL_TAGS_RLS_STATEMENTS,
     NOTIFICATIONS_RLS_STATEMENTS,
+    PHOTO_ANALYSES_MEAL_RLS_STATEMENTS,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -102,4 +104,8 @@ async def enable_social_security(conn: AsyncConnection) -> None:
     for stmt in GROUP_MEMBERS_RLS_STATEMENTS:
         await conn.execute(sa.text(stmt))
     for stmt in MEAL_TAGS_RLS_STATEMENTS:
+        await conn.execute(sa.text(stmt))
+    for stmt in MEALS_RLS_STATEMENTS:
+        await conn.execute(sa.text(stmt))
+    for stmt in PHOTO_ANALYSES_MEAL_RLS_STATEMENTS:
         await conn.execute(sa.text(stmt))
