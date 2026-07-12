@@ -25,10 +25,13 @@ down_revision: Union[str, None] = "032"
 branch_labels: Union[Sequence[str], None] = None
 depends_on: Union[Sequence[str], None] = None
 
-_CREATED_AT_TABLES: tuple[tuple[str, str | None], ...] = (
-    ("ingredient_aliases", None),
-    ("lab_marker_aliases", None),
-    ("lab_markers", None),
+_CREATED_AT_DEFAULT_TABLES: tuple[str, ...] = (
+    "ingredient_aliases",
+    "lab_marker_aliases",
+    "lab_markers",
+)
+
+_CREATED_AT_FROM_COLUMN: tuple[tuple[str, str], ...] = (
     ("tracker_log", "updated_at"),
     ("treatment_log", "updated_at"),
 )
@@ -37,17 +40,31 @@ _CREATED_AT_TABLES: tuple[tuple[str, str | None], ...] = (
 def upgrade() -> None:
     bind = op.get_bind()
 
-    for table, backfill_column in _CREATED_AT_TABLES:
-        op.add_column(table, sa.Column("created_at", sa.DateTime(), nullable=True))
-        if backfill_column is None:
-            bind.execute(sa.text(f"UPDATE {table} SET created_at = now() WHERE created_at IS NULL"))
-        else:
-            bind.execute(
-                sa.text(
-                    f"UPDATE {table} SET created_at = {backfill_column} WHERE created_at IS NULL"
-                )
-            )
-        op.alter_column(table, "created_at", nullable=False)
+    # DDL ADD COLUMN ... DEFAULT backfills existing rows without going through RLS UPDATE.
+    for table in _CREATED_AT_DEFAULT_TABLES:
+        op.add_column(
+            table,
+            sa.Column(
+                "created_at",
+                sa.DateTime(),
+                nullable=False,
+                server_default=sa.text("now()"),
+            ),
+        )
+        op.alter_column(table, "created_at", server_default=None)
+
+    for table, source_column in _CREATED_AT_FROM_COLUMN:
+        op.add_column(
+            table,
+            sa.Column(
+                "created_at",
+                sa.DateTime(),
+                nullable=False,
+                server_default=sa.text("now()"),
+            ),
+        )
+        bind.execute(sa.text(f"UPDATE {table} SET created_at = {source_column}"))
+        op.alter_column(table, "created_at", server_default=None)
 
     bind.execute(
         sa.text(
@@ -99,5 +116,8 @@ def downgrade() -> None:
         )
     )
 
-    for table, _ in reversed(_CREATED_AT_TABLES):
+    for table, _ in reversed(_CREATED_AT_FROM_COLUMN):
+        op.drop_column(table, "created_at")
+
+    for table in reversed(_CREATED_AT_DEFAULT_TABLES):
         op.drop_column(table, "created_at")
