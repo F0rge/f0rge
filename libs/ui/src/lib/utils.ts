@@ -22,6 +22,19 @@ export function formatDisplayDate(dateStr: string): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
 }
 
+// en-GB "12 Jul 2026, 18:50" for ISO datetimes from the API.
+export function formatDisplayDateTime(dateTimeStr: string): string {
+  const date = new Date(dateTimeStr)
+  if (Number.isNaN(date.getTime())) return dateTimeStr
+  return date.toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 // Current local wall-clock time as "HH:MM" (zero-padded, no tz logic).
 export function nowHHMM(): string {
   const now = new Date()

@@ -22,6 +22,7 @@ from app.schemas.account import (
     AccountUpdate,
     PasswordChangeRequest,
 )
+from app.schemas.social import validate_handle_format
 from app.services import object_storage
 from app.services.auth import (
     clear_session_cookie,
@@ -85,8 +86,13 @@ class AccountService:
         if "display_name" in data.model_fields_set:
             user.display_name = (data.display_name or "").strip() or None
         if "handle" in data.model_fields_set and data.handle is not None:
-            social = SocialService(self.db)
-            user = await social.set_user_handle(user, data.handle)
+            if user.handle is not None:
+                normalized = validate_handle_format(data.handle)
+                if normalized != user.handle:
+                    raise ValidationError("Handle cannot be changed once set")
+            else:
+                social = SocialService(self.db)
+                user = await social.set_user_handle(user, data.handle)
         elif "display_name" in data.model_fields_set:
             user = await self.crud.commit_refresh(user)
         return self._to_response(user)

@@ -11,7 +11,7 @@ import {
   useMarkRead,
   useNotifications,
 } from '@/lib/api/hooks/notifications'
-import { formatDisplayDate } from '@f0rge/ui'
+import { formatDisplayDateTime } from '@f0rge/ui'
 
 export default function NotificationsClient() {
   const notifications = useNotifications()
@@ -68,7 +68,7 @@ export default function NotificationsClient() {
           >
             <p className="text-sm">{notificationCopy(item)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {formatDisplayDate(item.created_at)}
+              {formatDisplayDateTime(item.created_at)}
             </p>
           </div>
         ))}

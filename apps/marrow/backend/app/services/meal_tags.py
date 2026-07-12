@@ -117,9 +117,8 @@ class MealTagService:
         async with unit_of_work(self.db):
             await self.insert_tags_for_photo(photo, entry_date, recipients)
 
-        if not analysis_will_run:
-            await self.delivery.process_photo_only_source(photo.id, me)
-            await apply_session_user_id(self.db, me)
+        await self.delivery.process_photo_only_source(photo.id, me)
+        await apply_session_user_id(self.db, me)
 
     async def list_tags(self) -> MealTagListResponse:
         incoming: list[IncomingMealTagItem] = []
@@ -275,7 +274,7 @@ class MealTagService:
 
     async def _deliver_new_tags_if_ready(self, photo_id: int, tagger_id: uuid.UUID) -> None:
         analysis = await PhotoAnalysisCRUD(self.db).get_by_photo_id(photo_id)
-        if analysis is None:
-            await self.delivery.process_photo_only_source(photo_id, tagger_id)
-        elif analysis.status == "confirmed":
+        if analysis is not None and analysis.status == "confirmed":
             await self.delivery.deliver_for_source(photo_id, tagger_id)
+        else:
+            await self.delivery.process_photo_only_source(photo_id, tagger_id)

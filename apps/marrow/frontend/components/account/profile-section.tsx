@@ -63,7 +63,7 @@ function ProfileForm({ account }: { account: Account }) {
       const payload: { display_name: string | null; handle?: string } = {
         display_name: displayName.trim() || null,
       }
-      if (handleChanged) {
+      if (handleChanged && !account.handle) {
         payload.handle = handle.trim().toLowerCase().replace(/^@/, '')
       }
       await updateAccount.mutateAsync(payload)
@@ -147,27 +147,36 @@ function ProfileForm({ account }: { account: Account }) {
 
       <div className="space-y-1.5">
         <Label htmlFor="handle">Handle</Label>
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-            @
-          </span>
-          <Input
-            id="handle"
-            value={handle}
-            onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/^@/, ''))}
-            className="pl-7"
-            placeholder="your_name"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-        {handleStatus === 'available' && (
-          <p className="text-xs text-emerald-600">Available</p>
+        {account.handle ? (
+          <p className="text-sm font-medium">@{account.handle}</p>
+        ) : (
+          <>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                @
+              </span>
+              <Input
+                id="handle"
+                value={handle}
+                onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/^@/, ''))}
+                className="pl-7"
+                placeholder="your_name"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+            {handleStatus === 'available' && (
+              <p className="text-xs text-emerald-600">Available</p>
+            )}
+            {handleStatus === 'taken' && (
+              <p className="text-xs text-destructive">Already taken</p>
+            )}
+            {handleError && <p className="text-xs text-destructive">{handleError}</p>}
+          </>
         )}
-        {handleStatus === 'taken' && (
-          <p className="text-xs text-destructive">Already taken</p>
+        {account.handle && (
+          <p className="text-xs text-muted-foreground">Your handle is permanent and cannot be changed.</p>
         )}
-        {handleError && <p className="text-xs text-destructive">{handleError}</p>}
       </div>
 
       <div className="space-y-1.5">
@@ -183,7 +192,13 @@ function ProfileForm({ account }: { account: Account }) {
       <Button
         type="button"
         onClick={handleSave}
-        disabled={updateAccount.isPending || (handleChanged && handleStatus !== 'available' && handleStatus !== null)}
+        disabled={
+          updateAccount.isPending ||
+          (!account.handle &&
+            handleChanged &&
+            handleStatus !== 'available' &&
+            handleStatus !== null)
+        }
         className="w-full sm:w-auto"
       >
         {updateAccount.isPending ? 'Saving...' : 'Save'}

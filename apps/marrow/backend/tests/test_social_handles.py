@@ -6,6 +6,13 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.main import app
+from app.models.user import User
+from app.services.auth import JWT_COOKIE_NAME, create_access_token, hash_password
+from tests.helpers import make_tenant_get_db_override
 
 pytestmark = pytest.mark.asyncio
 
@@ -79,35 +86,38 @@ async def test_uppercase_handle_stored_lowercase(async_client: AsyncClient):
     assert me.json()["handle"] == handle
 
 
-async def test_patch_account_claims_handle(authed_client: AsyncClient):
-    handle = f"claim_{uuid.uuid4().hex[:8]}"
-    resp = await authed_client.patch("/api/v1/account", json={"handle": handle})
+async def test_patch_account_claims_handle(async_db: AsyncSession, async_client: AsyncClient):
+    suffix = uuid.uuid4().hex[:8]
+    email = f"claim_{suffix}@example.com"
+    user = User(email=email, password_hash=hash_password("secure-pass-12"), handle=None)
+    async_db.add(user)
+    await async_db.commit()
+    await async_db.refresh(user)
+
+    app.dependency_overrides[get_db] = make_tenant_get_db_override(async_db)
+    async_client.cookies.set(JWT_COOKIE_NAME, create_access_token(user.id))
+
+    handle = f"claim_{suffix}"
+    resp = await async_client.patch("/api/v1/account", json={"handle": handle})
     assert resp.status_code == 200
     assert resp.json()["handle"] == handle
 
 
-async def test_changing_handle_releases_old(authed_client: AsyncClient, async_client: AsyncClient):
-    old = f"old_{uuid.uuid4().hex[:8]}"
-    new = f"new_{uuid.uuid4().hex[:8]}"
-    await authed_client.patch("/api/v1/account", json={"handle": old})
-    await authed_client.patch("/api/v1/account", json={"handle": new})
-
-    avail = await async_client.post(
-        "/api/v1/auth/signup",
-        json={
-            "email": f"reuse_{uuid.uuid4().hex[:6]}@example.com",
-            "password": "secure-pass-12",
-            "handle": old,
-        },
+async def test_handle_cannot_change_once_set(authed_client: AsyncClient):
+    me = await authed_client.get("/api/v1/auth/me")
+    current = me.json()["handle"]
+    resp = await authed_client.patch(
+        "/api/v1/account", json={"handle": f"new_{uuid.uuid4().hex[:8]}"}
     )
-    assert avail.status_code == 200
+    assert resp.status_code == 400
+    again = await authed_client.get("/api/v1/auth/me")
+    assert again.json()["handle"] == current
 
 
 async def test_lookup_returns_whitelisted_fields_only(authed_client: AsyncClient):
-    handle = f"lookup_{uuid.uuid4().hex[:8]}"
-    await authed_client.patch(
-        "/api/v1/account", json={"handle": handle, "display_name": "Test User"}
-    )
+    me = await authed_client.get("/api/v1/auth/me")
+    handle = me.json()["handle"]
+    await authed_client.patch("/api/v1/account", json={"display_name": "Test User"})
 
     resp = await authed_client.get(f"/api/v1/social/users/lookup?handle={handle}")
     assert resp.status_code == 200
@@ -137,7 +147,11 @@ async def test_handle_available_taken_and_free(
     assert free.status_code == 200
     assert free.json()["available"] is True
 
-    await authed_client.patch("/api/v1/account", json={"handle": handle})
+    claimed = await async_client.post(
+        "/api/v1/auth/signup",
+        json={"email": f"{handle}@example.com", "password": "secure-pass-12", "handle": handle},
+    )
+    assert claimed.status_code == 200
     taken = await async_client.get(f"/api/v1/social/handle-available?handle={handle}")
     assert taken.json()["available"] is False
 

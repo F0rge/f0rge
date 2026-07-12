@@ -267,9 +267,9 @@ async def test_auto_mode_delivers_on_confirm(async_db: AsyncSession, deferred_ta
     assert uploaded.user_id == tagger_id, (uploaded.user_id, tagger_id)
 
     outgoing = (await a.get("/api/v1/social/meal-tags")).json()["outgoing"]
-    assert outgoing[0]["status"] == "pending_analysis"
+    assert outgoing[0]["status"] == "delivered"
 
-    assert await _recipient_photo_count_http(b, day) == 0
+    assert await _recipient_photo_count_http(b, day) == 1
 
     await _seed_confirmed_analysis(async_db, photo_id, tagger_id)
     await deliver_tags_for_source_background(photo_id, tagger_id)
@@ -301,18 +301,19 @@ async def test_approve_mode_waits_for_approval(async_db: AsyncSession, deferred_
     b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
 
     photo_id = await _upload_tagged(a, handles=[b_handle])
-    tagger_id = await _user_id(a)
-
-    await _seed_confirmed_analysis(async_db, photo_id, tagger_id)
-    await deliver_tags_for_source_background(photo_id, tagger_id)
-
     assert await _recipient_photo_count_http(b, DAY) == 0
 
     incoming = await b.get("/api/v1/social/meal-tags")
     pending = incoming.json()["incoming_pending"]
     assert len(pending) == 1
-    assert pending[0]["source_dish_name"] == "Spinach omelette"
     tag_id = pending[0]["id"]
+
+    tagger_id = await _user_id(a)
+    await _seed_confirmed_analysis(async_db, photo_id, tagger_id)
+    await deliver_tags_for_source_background(photo_id, tagger_id)
+
+    pending = (await b.get("/api/v1/social/meal-tags")).json()["incoming_pending"]
+    assert pending[0]["source_dish_name"] == "Spinach omelette"
 
     approved = await b.post(f"/api/v1/social/meal-tags/{tag_id}/approve")
     assert approved.status_code == 204
@@ -432,7 +433,7 @@ async def test_connection_removal_cancels_pending(
     pending_photo = await _upload_tagged(a, handles=[b_handle])
     assert pending_photo
     outgoing = (await a.get("/api/v1/social/meal-tags")).json()["outgoing"]
-    pending_tag = next(t for t in outgoing if t["status"] == "pending_analysis")
+    pending_tag = next(t for t in outgoing if t["status"] == "pending_approval")
     assert pending_tag is not None
 
     deleted = await a.delete(f"/api/v1/social/connections/{conn_id}")

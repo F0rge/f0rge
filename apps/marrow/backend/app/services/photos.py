@@ -148,7 +148,7 @@ class PhotoService:
                 await self.db.flush()
                 if recipients:
                     await self.meal_tags.insert_tags_for_photo(photo, entry_date, recipients)
-                if recipients and not analysis_will_run:
+                if recipients:
                     await self.meal_tags.delivery.process_photo_only_source_in_transaction(
                         self.db, photo.id, current_user_id()
                     )
