@@ -1,0 +1,212 @@
+from __future__ import annotations
+
+import asyncio
+import datetime
+import json
+import logging
+import os
+from typing import List, Optional
+
+from pydantic import ValidationError as PydanticValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from f0rge_core.exceptions import ValidationError
+from app.schemas.treatment import ExtractedTreatmentsPayload, TreatmentExtractionResult
+from app.services.treatment_extraction_prompt import (
+    MODEL_CAPABILITIES,
+    build_image_messages,
+    build_pdf_messages,
+    get_response_format,
+    parse_response,
+)
+
+logger = logging.getLogger(__name__)
+
+_AUDIT_LOG_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "..", "scripts", "extraction_audit.jsonl"
+)
+_AUDIT_LOG_PATH = os.path.normpath(_AUDIT_LOG_PATH)
+
+_MAX_ATTEMPTS = 3
+_AUDIT_MAX_BYTES = 64 * 1024
+
+
+def _audit_log(
+    *,
+    model: str,
+    attempts: int,
+    confidence: float,
+    retried_due_to: List[str],
+    raw_response: str,
+) -> None:
+    try:
+        os.makedirs(os.path.dirname(_AUDIT_LOG_PATH), exist_ok=True)
+        entry = {
+            "ts": datetime.datetime.utcnow().isoformat(),
+            "kind": "treatment",
+            "model": model,
+            "attempts": attempts,
+            "confidence": confidence,
+            "retried_due_to": retried_due_to,
+            "raw_response": raw_response[:_AUDIT_MAX_BYTES],
+        }
+        with open(_AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        logger.exception("Failed to write treatment extraction audit log")
+
+
+async def _call_openrouter(messages: List[dict], model: str, api_key: str) -> str:
+    from app.services.llm.openrouter import OpenRouterClient
+    from f0rge_core.exceptions import ExternalServiceError
+
+    response_format = get_response_format(model)
+    llm_client = OpenRouterClient(api_key=api_key, default_model=model)
+    try:
+        return await llm_client.complete(
+            messages,
+            model=model,
+            response_format=response_format,
+            temperature=0.0,
+            max_tokens=8192,
+        )
+    except ExternalServiceError as exc:
+        raise ValidationError(exc.detail) from exc
+
+
+async def _extract(
+    initial_messages: List[dict],
+    api_key: str,
+    model: str,
+) -> TreatmentExtractionResult:
+    messages = list(initial_messages)
+    retried_due_to: List[str] = []
+    last_error = ""
+    last_raw = ""
+
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        raw = await _call_openrouter(messages, model, api_key)
+        last_raw = raw
+
+        try:
+            parsed_dict = parse_response(raw)
+        except ValueError as exc:
+            last_error = str(exc)
+            if attempt < _MAX_ATTEMPTS:
+                messages.append({"role": "assistant", "content": raw})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Your previous response failed validation: {last_error}. "
+                            "Please return a corrected JSON object."
+                        ),
+                    }
+                )
+                retried_due_to.append(last_error)
+            continue
+
+        try:
+            payload = ExtractedTreatmentsPayload.model_validate(parsed_dict)
+        except PydanticValidationError as exc:
+            last_error = str(exc)
+            if attempt < _MAX_ATTEMPTS:
+                messages.append({"role": "assistant", "content": raw})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Your previous response failed validation: {last_error}. "
+                            "Please return a corrected JSON object."
+                        ),
+                    }
+                )
+                retried_due_to.append(last_error)
+            continue
+
+        result = TreatmentExtractionResult(
+            payload=payload,
+            raw_response=raw,
+            model=model,
+            attempts=attempt,
+            retried_due_to=retried_due_to,
+        )
+        await asyncio.to_thread(
+            _audit_log,
+            model=model,
+            attempts=attempt,
+            confidence=payload.confidence,
+            retried_due_to=retried_due_to,
+            raw_response=raw,
+        )
+        return result
+
+    await asyncio.to_thread(
+        _audit_log,
+        model=model,
+        attempts=_MAX_ATTEMPTS,
+        confidence=0.0,
+        retried_due_to=retried_due_to,
+        raw_response=last_raw,
+    )
+    raise ValidationError(
+        f"Treatment extraction failed after {_MAX_ATTEMPTS} attempts: {last_error}"
+    )
+
+
+class TreatmentExtractionService:
+    """Multimodal prescription extraction backed by OpenRouter."""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def _resolve_credentials(self) -> tuple[str, str]:
+        from app.services.llm.factory import resolve_llm_credentials
+
+        api_key, model = await resolve_llm_credentials(self.db)
+        if not api_key:
+            raise ValidationError(
+                "LLM not configured. Set an API key in Settings or OPENROUTER_API_KEY."
+            )
+        return api_key, model
+
+    async def extract_pdf(
+        self,
+        pdf_bytes: bytes,
+        filename: Optional[str] = None,
+    ) -> TreatmentExtractionResult:
+        api_key, model = await self._resolve_credentials()
+        caps = MODEL_CAPABILITIES.get(model, set())
+        if "pdf" not in caps:
+            raise ValidationError(
+                f"Current model {model!r} does not support PDF; switch model or convert to image."
+            )
+        schema_json = ExtractedTreatmentsPayload.model_json_schema().__str__()
+        messages = build_pdf_messages(pdf_bytes, schema_json, filename=filename)
+        return await _extract(messages, api_key, model)
+
+    async def extract_image(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        filename: Optional[str] = None,
+    ) -> TreatmentExtractionResult:
+        api_key, model = await self._resolve_credentials()
+        caps = MODEL_CAPABILITIES.get(model, set())
+        if "image" not in caps:
+            raise ValidationError(f"Current model {model!r} does not support image input.")
+        schema_json = ExtractedTreatmentsPayload.model_json_schema().__str__()
+        messages = build_image_messages(image_bytes, mime_type, schema_json, filename=filename)
+        return await _extract(messages, api_key, model)
+
+    async def preview_upload(
+        self,
+        file_bytes: bytes,
+        mime_type: str,
+        filename: str,
+    ) -> TreatmentExtractionResult:
+        if mime_type == "application/pdf":
+            return await self.extract_pdf(file_bytes, filename=filename)
+        if mime_type.startswith("image/"):
+            return await self.extract_image(file_bytes, mime_type, filename=filename)
+        raise ValidationError(f"Unsupported MIME type for extraction: {mime_type}")

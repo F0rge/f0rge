@@ -50,6 +50,30 @@ export interface TreatmentUpdate {
   notes?: string | null
 }
 
+export interface ExtractedTreatmentCandidate {
+  name: string
+  type: TreatmentType
+  start_date: string
+  end_date: string | null
+  dose: string | null
+  doses_per_day: number | null
+  notes: string | null
+  group_name: string | null
+}
+
+export interface ExtractedTreatmentsPayload {
+  treatments: ExtractedTreatmentCandidate[]
+  confidence: number
+}
+
+export interface TreatmentExtractionResult {
+  payload: ExtractedTreatmentsPayload
+  raw_response: string
+  model: string
+  attempts: number
+  retried_due_to: string[]
+}
+
 export interface TreatmentLogResponse {
   treatment_id: number
   date: string
