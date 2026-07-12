@@ -31,7 +31,9 @@ class SocialCRUD(UserCRUD):
         user = await self.get_by_handle(handle)
         return user is not None
 
-    async def get_connection_by_pair(self, user_a: uuid.UUID, user_b: uuid.UUID) -> Optional[Connection]:
+    async def get_connection_by_pair(
+        self, user_a: uuid.UUID, user_b: uuid.UUID
+    ) -> Optional[Connection]:
         low, high = _pair_ids(user_a, user_b)
         # Two-party row: scoped by RLS policies, not owned_by_user().
         stmt = select(Connection).where(Connection.user_low == low, Connection.user_high == high)

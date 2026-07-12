@@ -12,16 +12,13 @@ from app.crud.base import unit_of_work
 from app.database import get_db
 from app.main import app
 from app.services.notifications import NotificationService
-from tests.helpers import signup_payload
+from tests.helpers import make_tenant_get_db_override, signup_payload
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _signup_client(async_db: AsyncSession, suffix: str) -> AsyncClient:
-    async def _override_get_db():
-        yield async_db
-
-    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_db] = make_tenant_get_db_override(async_db)
     client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     email = f"notif_{suffix}@example.com"
     resp = await client.post(

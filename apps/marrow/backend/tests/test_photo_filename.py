@@ -30,6 +30,7 @@ from app.config import settings
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
+from app.services.meal_tags import MealTagService
 from app.services.photo_storage import save_photo
 from app.services.photos import PhotoService
 
@@ -90,18 +91,19 @@ def _png_bytes() -> bytes:
 
 async def _upload(db: AsyncSession, day: datetime.date, name: str = "x.png") -> Photo:
     upload = UploadFile(filename=name, file=io.BytesIO(_png_bytes()))
-    service = PhotoService(db, FoodAnalysisOrchestrator())
+    service = PhotoService(db, FoodAnalysisOrchestrator(), MealTagService(db))
     return await service.upload(
         entry_date=day,
         file=upload,
         label=None,
         meal_time=None,
         background_tasks=BackgroundTasks(),
+        tagged_handles=None,
     )
 
 
 async def _delete(db: AsyncSession, photo_id: int) -> None:
-    await PhotoService(db, FoodAnalysisOrchestrator()).delete(photo_id)
+    await PhotoService(db, FoodAnalysisOrchestrator(), MealTagService(db)).delete(photo_id)
 
 
 # ---------------------------------------------------------------------------

@@ -33,6 +33,7 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
+from app.services.meal_tags import MealTagService
 from app.services.photos import PhotoService
 
 
@@ -114,7 +115,7 @@ async def test_sequential_uploads_write_files_and_db_rows(
 ) -> None:
     day = datetime.date(2026, 5, 16)
     await _make_entry(async_db, day)
-    service = PhotoService(async_db, FoodAnalysisOrchestrator())
+    service = PhotoService(async_db, FoodAnalysisOrchestrator(), MealTagService(async_db))
 
     photos = [await _upload(service, day) for _ in range(3)]
 
@@ -156,7 +157,7 @@ async def test_orphan_file_on_disk_does_not_collide_with_next_upload(
     with open(orphan_path, "wb") as f:
         f.write(b"orphan-bytes-not-a-real-image")
 
-    service = PhotoService(async_db, FoodAnalysisOrchestrator())
+    service = PhotoService(async_db, FoodAnalysisOrchestrator(), MealTagService(async_db))
 
     # Pre-bug behaviour: this would raise FileExistsError because the
     # filename generator picked _photo-1, then a real upload for _photo-2
@@ -203,7 +204,7 @@ async def test_commit_failure_removes_file_from_disk(
 
     monkeypatch.setattr(async_db, "commit", _fail_once)
 
-    service = PhotoService(async_db, FoodAnalysisOrchestrator())
+    service = PhotoService(async_db, FoodAnalysisOrchestrator(), MealTagService(async_db))
 
     # Snapshot disk state before — we want to assert no NEW file was orphaned.
     files_before = set(os.listdir(settings.photo_dir))
@@ -392,7 +393,7 @@ async def test_upload_succeeds_when_credential_resolution_raises(
 
     day = datetime.date(2026, 6, 1)
     await _make_entry(async_db, day)
-    service = PhotoService(async_db, FoodAnalysisOrchestrator())
+    service = PhotoService(async_db, FoodAnalysisOrchestrator(), MealTagService(async_db))
 
     photo = await _upload(service, day)
 

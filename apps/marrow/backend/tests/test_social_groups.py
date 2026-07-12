@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from typing import AsyncIterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -11,17 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.main import app
-from tests.helpers import signup_payload
+from tests.helpers import make_tenant_get_db_override, signup_payload
 
 pytestmark = pytest.mark.asyncio
 PASSWORD = "secure-pass-12"
 
 
 async def _signup_client(async_db: AsyncSession, suffix: str) -> AsyncClient:
-    async def _override_get_db() -> AsyncIterator[AsyncSession]:
-        yield async_db
-
-    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_db] = make_tenant_get_db_override(async_db)
     client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     handle = f"grp_{suffix}"
     resp = await client.post(

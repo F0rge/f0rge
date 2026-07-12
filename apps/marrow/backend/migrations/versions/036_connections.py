@@ -49,12 +49,37 @@ _CONNECTIONS_RLS = [
 def upgrade() -> None:
     op.create_table(
         "connections",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("user_low", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("user_high", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("requester_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "user_low",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "user_high",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "requester_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("status", sa.Text(), server_default="pending", nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("(now() at time zone 'utc')"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(),
+            server_default=sa.text("(now() at time zone 'utc')"),
+            nullable=False,
+        ),
         sa.Column("responded_at", sa.DateTime(), nullable=True),
         sa.CheckConstraint("user_low < user_high", name="ck_connections_order"),
         sa.CheckConstraint("status IN ('pending', 'accepted')", name="ck_connections_status"),
@@ -72,7 +97,12 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    for policy in ("connections_delete", "connections_update", "connections_insert", "connections_select"):
+    for policy in (
+        "connections_delete",
+        "connections_update",
+        "connections_insert",
+        "connections_select",
+    ):
         bind.execute(sa.text(f"DROP POLICY IF EXISTS {policy} ON connections"))
     bind.execute(sa.text("ALTER TABLE connections NO FORCE ROW LEVEL SECURITY"))
     bind.execute(sa.text("ALTER TABLE connections DISABLE ROW LEVEL SECURITY"))
