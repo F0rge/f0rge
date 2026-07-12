@@ -64,6 +64,7 @@ async def _seed_prod_condition(
     await conn.execute(
         sa.text("GRANT SELECT, INSERT, UPDATE ON symptom_catalog, entries TO rls_probe")
     )
+    await conn.execute(sa.text("GRANT SELECT ON users TO rls_probe"))
     await conn.execute(sa.text("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO rls_probe"))
 
 
@@ -103,6 +104,28 @@ async def test_migration_031_seed_is_rls_safe(async_engine: AsyncEngine) -> None
         trans = await conn.begin()
         try:
             await _seed_prod_condition(conn, leo_id, other_id)
+            # Migration 029 bulk-seeds Leo's catalog rows archived; 031's per-user
+            # INSERTs no-op on conflict, so the post-loop un-archive is required.
+            await conn.execute(
+                sa.text(
+                    """
+                    UPDATE symptom_catalog SET archived = true
+                    WHERE user_id = :u AND key = 'joint_pain'
+                    """
+                ),
+                {"u": leo_id},
+            )
+            await conn.execute(
+                sa.text(
+                    """
+                    INSERT INTO symptom_catalog
+                        (user_id, key, label, archived, sort_order, created_at, updated_at)
+                    VALUES (:u, 'neuro_symptoms', 'Neuro symptoms', true, 99, now(), now())
+                    ON CONFLICT ON CONSTRAINT uq_symptom_catalog_user_id_key DO NOTHING
+                    """
+                ),
+                {"u": leo_id},
+            )
             await conn.execute(sa.text("SET ROLE rls_probe"))
             for uid in (leo_id, other_id):
                 await conn.execute(
@@ -131,19 +154,34 @@ async def test_migration_031_seed_is_rls_safe(async_engine: AsyncEngine) -> None
                     ),
                     {"uid": str(uid), "leo_id": str(leo_id)},
                 )
+            # Leo-only un-archive from migration 031 (lines 159–173).
+            await conn.execute(
+                sa.text("SELECT set_config('app.user_id', :u, true)"),
+                {"u": str(leo_id)},
+            )
+            await conn.execute(
+                sa.text(
+                    """
+                    UPDATE symptom_catalog
+                    SET archived = false, updated_at = now()
+                    WHERE key = ANY(:keys)
+                    """
+                ),
+                {"keys": ["joint_pain", "neuro_symptoms"]},
+            )
             await conn.execute(sa.text("RESET ROLE"))
 
             rows = (
                 await conn.execute(
                     sa.text(
-                        "SELECT user_id, archived FROM symptom_catalog "
-                        "WHERE key = 'neuro_symptoms'"
+                        "SELECT user_id, key, archived FROM symptom_catalog "
+                        "WHERE key IN ('joint_pain', 'neuro_symptoms')"
                     )
                 )
             ).all()
-            by_user = {r.user_id: r.archived for r in rows}
-            assert by_user.keys() >= {leo_id, other_id}
-            assert by_user[other_id] is True
-            assert by_user[leo_id] is False
+            by_user_key = {(r.user_id, r.key): r.archived for r in rows}
+            assert by_user_key[(other_id, "neuro_symptoms")] is True
+            assert by_user_key[(leo_id, "joint_pain")] is False
+            assert by_user_key[(leo_id, "neuro_symptoms")] is False
         finally:
             await trans.rollback()
