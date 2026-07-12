@@ -3,8 +3,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { Label } from '@f0rge/ui'
 
-const SYNC_DEBOUNCE_MS = 500
-
 interface NotesInputProps {
   value: string
   onChange: (value: string) => void
@@ -24,7 +22,6 @@ export function NotesInput({
   const [draft, setDraft] = useState(value)
   const draftRef = useRef(value)
   const onChangeRef = useRef(onChange)
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasStartedRef = useRef(false)
 
   useEffect(() => {
@@ -42,29 +39,27 @@ export function NotesInput({
   }, [])
 
   const flushToParent = useCallback((): string => {
-    if (debounceTimerRef.current !== null) {
-      clearTimeout(debounceTimerRef.current)
-      debounceTimerRef.current = null
-    }
     const next = draftRef.current
     onChangeRef.current(next)
     return next
   }, [])
 
-  const scheduleSync = useCallback((next: string) => {
-    if (debounceTimerRef.current !== null) {
-      clearTimeout(debounceTimerRef.current)
-    }
-    debounceTimerRef.current = setTimeout(() => {
-      debounceTimerRef.current = null
-      onChangeRef.current(next)
-    }, SYNC_DEBOUNCE_MS)
-  }, [])
+  // Sync draft when parent value changes externally (entry hydration / date change).
+  useEffect(() => {
+    if (hasStartedRef.current) return
+    if (draftRef.current === value) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration from server entry only when not mid-typing
+    setDraft(value)
+    draftRef.current = value
+    adjustHeight()
+  }, [value, adjustHeight])
 
   useEffect(() => {
     registerDraftFlush?.(flushToParent)
     return () => {
-      flushToParent()
+      if (hasStartedRef.current) {
+        flushToParent()
+      }
       registerDraftFlush?.(() => '')
     }
   }, [registerDraftFlush, flushToParent])
@@ -80,11 +75,12 @@ export function NotesInput({
 
     setDraft(next)
     draftRef.current = next
-    scheduleSync(next)
+    onChangeRef.current(next)
     adjustHeight()
   }
 
   const handleBlur = () => {
+    if (!hasStartedRef.current) return
     const flushedNotes = flushToParent()
     onBlur?.(flushedNotes)
   }
