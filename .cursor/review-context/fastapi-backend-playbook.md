@@ -173,13 +173,13 @@ Work through this in order for any non-trivial backend diff.
 
 ## AI seam contracts
 
-Source of truth: `~/.cursor/agent-memory/fastapi-backend/project_ai_seams.md` (verify it exists before overriding these).
+Source of truth: `docs/architecture/ai_seams.md`.
 
 | Contract | Value |
 |---|---|
 | Embedding model | `openai/text-embedding-3-small` via OpenRouter |
 | Embedding dim | `1024` — locked to `VECTOR(1024)` column; `dimensions=1024` required in every request |
-| Default LLM | `google/gemini-2.5-flash` — NOT `gemini-2.0-flash` (OpenRouter rejects it) |
+| Default LLM | `google/gemini-3-flash-preview` — NOT `gemini-2.0-flash` (OpenRouter rejects it) |
 | Embedding response access | `response["data"][i]["embedding"]` — top-level has extra `provider` + `id` keys vs OpenAI, do not assert on key set |
 | BYOK resolution order | `resolve_llm_credentials(db)` → user `user_settings.openrouter_api_key` if set, else `settings.openrouter_api_key` env var |
 | Async embed method patch | `new=async_fn` not `side_effect=lambda` — `side_effect` adds `self` as extra arg on instance method patches |

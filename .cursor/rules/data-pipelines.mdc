@@ -101,7 +101,7 @@ Work on health-tracker ML pipelines: food image analysis, ingredient-to-dietary-
 
 ### 1. Food Image Analysis
 
-- Optimize prompts for vision models (Gemini 3 Flash via OpenRouter)
+- Optimize prompts for vision models (`google/gemini-3-flash-preview` via OpenRouter — see `docs/architecture/ai_seams.md`)
 - Extract ingredients from food photos → structured JSON
 - Handle edge cases: mixed dishes, sauces, cultural foods, partial views
 - Evaluate and improve accuracy over time
