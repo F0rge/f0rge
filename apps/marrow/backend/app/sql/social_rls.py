@@ -95,6 +95,107 @@ GROUP_MEMBERS_RLS_STATEMENTS: tuple[str, ...] = (
     """,
 )
 
+MEALS_RLS_STATEMENTS: tuple[str, ...] = (
+    "ALTER TABLE meals ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE meals FORCE ROW LEVEL SECURITY",
+    """
+    CREATE POLICY meals_owner ON meals FOR ALL
+        USING (owner_user_id = current_setting('app.user_id', true)::uuid)
+        WITH CHECK (owner_user_id = current_setting('app.user_id', true)::uuid)
+    """,
+    """
+    CREATE POLICY meals_participant_select ON meals FOR SELECT
+        USING (
+            EXISTS (
+                SELECT 1 FROM photos p
+                WHERE p.meal_id = meals.id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+    """,
+)
+
+PHOTO_ANALYSES_MEAL_RLS_STATEMENTS: tuple[str, ...] = (
+    """
+    CREATE POLICY photo_analyses_meal_participant_select ON photo_analyses FOR SELECT
+        USING (
+            EXISTS (
+                SELECT 1 FROM photos p
+                WHERE p.meal_id = photo_analyses.meal_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+    """,
+    """
+    CREATE POLICY photo_analyses_meal_participant_update ON photo_analyses FOR UPDATE
+        USING (
+            EXISTS (
+                SELECT 1 FROM photos p
+                WHERE p.meal_id = photo_analyses.meal_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+        WITH CHECK (
+            EXISTS (
+                SELECT 1 FROM photos p
+                WHERE p.meal_id = photo_analyses.meal_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+    """,
+    """
+    CREATE POLICY photo_analyses_meal_participant_delete ON photo_analyses FOR DELETE
+        USING (
+            EXISTS (
+                SELECT 1 FROM photos p
+                WHERE p.meal_id = photo_analyses.meal_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+    """,
+    """
+    CREATE POLICY photo_ingredients_meal_participant_select ON photo_ingredients FOR SELECT
+        USING (
+            EXISTS (
+                SELECT 1 FROM photo_analyses pa
+                JOIN photos p ON p.meal_id = pa.meal_id
+                WHERE pa.id = photo_ingredients.analysis_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+    """,
+    """
+    CREATE POLICY photo_ingredients_meal_participant_update ON photo_ingredients FOR UPDATE
+        USING (
+            EXISTS (
+                SELECT 1 FROM photo_analyses pa
+                JOIN photos p ON p.meal_id = pa.meal_id
+                WHERE pa.id = photo_ingredients.analysis_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+        WITH CHECK (
+            EXISTS (
+                SELECT 1 FROM photo_analyses pa
+                JOIN photos p ON p.meal_id = pa.meal_id
+                WHERE pa.id = photo_ingredients.analysis_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+    """,
+    """
+    CREATE POLICY photo_ingredients_meal_participant_delete ON photo_ingredients FOR DELETE
+        USING (
+            EXISTS (
+                SELECT 1 FROM photo_analyses pa
+                JOIN photos p ON p.meal_id = pa.meal_id
+                WHERE pa.id = photo_ingredients.analysis_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+    """,
+)
+
 MEAL_TAGS_RLS_STATEMENTS: tuple[str, ...] = (
     "ALTER TABLE meal_tags ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE meal_tags FORCE ROW LEVEL SECURITY",
@@ -123,4 +224,5 @@ SOCIAL_TABLES: tuple[str, ...] = (
     "groups",
     "group_members",
     "meal_tags",
+    "meals",
 )

@@ -84,7 +84,11 @@ export function useDeletePhoto() {
   })
 }
 
-export function usePhotoAnalysis(photoId: number | null) {
+export function usePhotoAnalysis(
+  photoId: number | null,
+  options?: { sharedMeal?: boolean },
+) {
+  const sharedMeal = options?.sharedMeal ?? false
   return useQuery<PhotoAnalysis | null>({
     queryKey: ['photo-analysis', photoId],
     queryFn: async () => {
@@ -102,6 +106,9 @@ export function usePhotoAnalysis(photoId: number | null) {
       const status = query.state.data?.status
       if (status === 'pending' || status === 'analyzing') {
         return 2000
+      }
+      if (sharedMeal && query.state.data === null) {
+        return 3000
       }
       return false
     },

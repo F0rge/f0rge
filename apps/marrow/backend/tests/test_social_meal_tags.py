@@ -349,6 +349,7 @@ async def test_decline_blocks_retag(async_db: AsyncSession, deferred_tag_storage
 
     dup = MealTag(
         source_photo_id=photo_id,
+        source_meal_id=(await async_db.get(Photo, photo_id)).meal_id,
         tagger_id=tagger_id,
         tagged_user_id=recipient_id,
         status="pending_analysis",
@@ -485,7 +486,77 @@ async def test_settings_mode_persists_and_validates(
     assert bad.status_code == 422
 
 
-async def test_recipient_edit_does_not_touch_source(
+async def test_recipient_edit_updates_shared_analysis(
+    async_db: AsyncSession, deferred_tag_storage: None
+):
+    """Shared meal: ingredient edits on a copy are visible on the tagger's analysis."""
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    await _connect_users(a, b)
+    b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
+    await b.put("/api/v1/settings/tagged-meal-mode", json={"tagged_meal_mode": "auto"})
+
+    photo_id = await _upload_tagged(a, handles=[b_handle])
+    tagger_id = await _user_id(a)
+    await _seed_confirmed_analysis(async_db, photo_id, tagger_id)
+    await deliver_tags_for_source_background(photo_id, tagger_id)
+
+    entry = await b.get(f"/api/v1/entries/{DAY.isoformat()}")
+    copy_photo_id = entry.json()["photos"][0]["id"]
+    analysis = await b.get(f"/api/v1/photos/{copy_photo_id}/analysis")
+    assert analysis.status_code == 200
+    ingredient_id = analysis.json()["ingredients"][0]["id"]
+    await b.put(f"/api/v1/ingredients/{ingredient_id}", json={"name": "edited-on-copy"})
+
+    source_analysis = await a.get(f"/api/v1/photos/{photo_id}/analysis")
+    assert source_analysis.status_code == 200
+    assert source_analysis.json()["ingredients"][0]["name"] == "edited-on-copy"
+
+
+async def _upload_plain(client: AsyncClient, day: datetime.date = DAY) -> int:
+    await _ensure_entry(client, day)
+    files = {"file": ("meal.jpg", _jpg_bytes(), "image/jpeg")}
+    resp = await client.post(
+        f"/api/v1/entries/{day.isoformat()}/photos",
+        files=files,
+        data={"label": "Dinner"},
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+async def test_recipient_sees_complete_analysis_before_tagger_confirms(
+    async_db: AsyncSession, deferred_tag_storage: None
+):
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    await _connect_users(a, b)
+    b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
+    await b.put("/api/v1/settings/tagged-meal-mode", json={"tagged_meal_mode": "auto"})
+
+    photo_id = await _upload_tagged(a, handles=[b_handle])
+    tagger_id = await _user_id(a)
+    await apply_session_user_id(async_db, tagger_id)
+    analysis = PhotoAnalysis(
+        user_id=tagger_id,
+        photo_id=photo_id,
+        status="complete",
+        dish_name="Shared pasta",
+        cuisine="italian",
+        dish_confidence=0.85,
+    )
+    async_db.add(analysis)
+    await async_db.commit()
+
+    entry = await b.get(f"/api/v1/entries/{DAY.isoformat()}")
+    copy_photo_id = entry.json()["photos"][0]["id"]
+    resp = await b.get(f"/api/v1/photos/{copy_photo_id}/analysis")
+    assert resp.status_code == 200
+    assert resp.json()["dish_name"] == "Shared pasta"
+    assert resp.json()["status"] == "complete"
+
+
+async def test_linked_confirm_visible_to_all_participants(
     async_db: AsyncSession, deferred_tag_storage: None
 ):
     a = await _signup_client(async_db, uuid.uuid4().hex[:6])
@@ -501,32 +572,69 @@ async def test_recipient_edit_does_not_touch_source(
 
     entry = await b.get(f"/api/v1/entries/{DAY.isoformat()}")
     copy_photo_id = entry.json()["photos"][0]["id"]
-    analysis = await b.get(f"/api/v1/photos/{copy_photo_id}/analysis")
-    ingredient_id = analysis.json()["ingredients"][0]["id"]
-    await b.put(f"/api/v1/ingredients/{ingredient_id}", json={"name": "edited-on-copy"})
+    confirmed = await a.put(f"/api/v1/photos/{photo_id}/analysis/confirm", json={})
+    assert confirmed.status_code == 200
+
+    copy_analysis = await b.get(f"/api/v1/photos/{copy_photo_id}/analysis")
+    assert copy_analysis.json()["status"] == "confirmed"
+
+
+async def test_recipient_confirm_updates_shared_meal(
+    async_db: AsyncSession, deferred_tag_storage: None
+):
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    await _connect_users(a, b)
+    b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
+    await b.put("/api/v1/settings/tagged-meal-mode", json={"tagged_meal_mode": "auto"})
+
+    photo_id = await _upload_tagged(a, handles=[b_handle])
+    tagger_id = await _user_id(a)
+    await apply_session_user_id(async_db, tagger_id)
+    analysis = PhotoAnalysis(
+        user_id=tagger_id,
+        photo_id=photo_id,
+        status="needs_review",
+        dish_name="Salad",
+        dish_confidence=0.6,
+    )
+    async_db.add(analysis)
+    await async_db.commit()
+    await deliver_tags_for_source_background(photo_id, tagger_id)
+
+    entry = await b.get(f"/api/v1/entries/{DAY.isoformat()}")
+    copy_photo_id = entry.json()["photos"][0]["id"]
+    confirmed = await b.put(f"/api/v1/photos/{copy_photo_id}/analysis/confirm", json={})
+    assert confirmed.status_code == 200
+
+    source = await a.get(f"/api/v1/photos/{photo_id}/analysis")
+    assert source.json()["status"] == "confirmed"
+
+
+async def test_approve_mode_placement_shares_meal_id(
+    async_db: AsyncSession, deferred_tag_storage: None
+):
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    await _connect_users(a, b)
+    b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
+
+    photo_id = await _upload_tagged(a, handles=[b_handle])
+    tagger_id = await _user_id(a)
+    await _seed_confirmed_analysis(async_db, photo_id, tagger_id)
+    await deliver_tags_for_source_background(photo_id, tagger_id)
+
+    tag_id = (await b.get("/api/v1/social/meal-tags")).json()["incoming_pending"][0]["id"]
+    await b.post(f"/api/v1/social/meal-tags/{tag_id}/approve")
 
     await apply_session_user_id(async_db, tagger_id)
-    async_db.expire_all()
-    source_name = (
+    source = await async_db.get(Photo, photo_id)
+    copy = (
         await async_db.execute(
-            select(PhotoIngredient.name)
-            .join(PhotoAnalysis)
-            .where(PhotoAnalysis.photo_id == photo_id)
+            select(Photo).where(Photo.source_photo_id == photo_id)
         )
     ).scalar_one()
-    assert source_name == "spinach"
-
-
-async def _upload_plain(client: AsyncClient, day: datetime.date = DAY) -> int:
-    await _ensure_entry(client, day)
-    files = {"file": ("meal.jpg", _jpg_bytes(), "image/jpeg")}
-    resp = await client.post(
-        f"/api/v1/entries/{day.isoformat()}/photos",
-        files=files,
-        data={"label": "Dinner"},
-    )
-    assert resp.status_code == 201, resp.text
-    return resp.json()["id"]
+    assert copy.meal_id == source.meal_id
 
 
 async def test_retroactive_photo_tags(async_db: AsyncSession, storage: None):

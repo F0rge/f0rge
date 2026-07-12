@@ -90,6 +90,7 @@ class MealTagService:
         for recipient_id in recipients:
             tag = MealTag(
                 source_photo_id=photo.id,
+                source_meal_id=photo.meal_id,
                 tagger_id=me,
                 tagged_user_id=recipient_id,
                 status="pending_analysis",
@@ -273,7 +274,7 @@ class MealTagService:
         return PhotoMealTagListResponse(tags=items)
 
     async def _deliver_new_tags_if_ready(self, photo_id: int, tagger_id: uuid.UUID) -> None:
-        analysis = await PhotoAnalysisCRUD(self.db).get_by_photo_id(photo_id)
+        analysis = await PhotoAnalysisCRUD(self.db).get_for_photo(photo_id)
         if analysis is not None and analysis.status == "confirmed":
             await self.delivery.deliver_for_source(photo_id, tagger_id)
         else:
