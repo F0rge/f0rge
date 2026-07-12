@@ -27,6 +27,9 @@ class TrackerLog(Base):
     )
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     value: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )

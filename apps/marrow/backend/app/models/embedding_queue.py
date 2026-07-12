@@ -58,12 +58,10 @@ class EmbeddingQueue(Base):
     source_id: Mapped[int] = mapped_column(Integer, nullable=False)
     action: Mapped[str] = mapped_column(String, nullable=False)
     enqueued_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True),
+        DateTime,
         nullable=False,
         server_default=text("now()"),
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    last_attempt_at: Mapped[datetime.datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_attempt_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -4,7 +4,7 @@ import datetime
 import uuid
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,13 +14,13 @@ from app.models.user import default_user_id
 
 class Photo(Base):
     __tablename__ = "photos"
+    __table_args__ = (Index("ix_photos_user_id", "user_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     entry_id: Mapped[int] = mapped_column(
