@@ -40,9 +40,6 @@ npx nx reset                                   # clear the Nx cache
 
 ## CI/CD
 
-- **`CI (develop)` / `CI (main)`** — parallel `backend` and `frontend` jobs when Nx affected; aggregate `ci` job is the required branch check (`main-pr-gate` on `main`). Detection is tag-driven: the `backend` job runs for affected projects tagged `platform:py`, `frontend` for `platform:ts`. Every new project must carry the matching `platform:` tag in its `project.json` or CI will silently ignore it.
-- **`Fly Deploy (develop)` / `Fly Deploy (main)`** — triggered after a green CI push (`workflow_run`). Reusable workflow jobs:
-  - `plan` → `deploy api` → `deploy mcp` (serial, migrations via API `release_command`) → `deploy frontend` (parallel with MCP)
-  - `smoke` — health curls for components that deployed
-- **Manual dispatch** — redeploy one component: `gh workflow run "Fly Deploy (develop)" --ref develop -f component=mcp` (`all` / `api` / `mcp` / `frontend`).
-- **Note:** `workflow_run` deploy workflows execute from the repo default branch (`main`); merge workflow changes to `main` before automated prod deploys pick them up.
+- **`CI (develop)` / `CI (main)`** — single pipeline per branch: `detect` → `backend` / `frontend` (Nx affected) → `ci` gate → `deploy` (push only). The `ci` job is the required branch check (`main-pr-gate` on `main`). Detection is tag-driven: `backend` for `platform:py`, `frontend` for `platform:ts`. Every new project must carry the matching `platform:` tag in its `project.json` or CI will silently ignore it.
+- **Deploy stage** (reusable workflow): `plan` → `deploy api` → `deploy mcp` (serial, migrations via API `release_command`) → `deploy frontend` (parallel with MCP) → `smoke`. CI jobs cancel on new pushes; deploy uses its own concurrency group and does not.
+- **Manual deploy** (skips CI): `gh workflow run "CI (develop)" --ref develop -f component=mcp` (`all` / `api` / `mcp` / `frontend`).

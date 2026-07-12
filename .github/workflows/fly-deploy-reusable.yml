@@ -1,6 +1,6 @@
 name: Fly Deploy (reusable)
 
-# Called by fly-deploy-develop.yml and fly-deploy-main.yml.
+# Called by the deploy job in ci-develop.yml and ci-main.yml.
 # plan → deploy-api → deploy-mcp (serial after API); deploy-frontend parallel with MCP.
 
 on:

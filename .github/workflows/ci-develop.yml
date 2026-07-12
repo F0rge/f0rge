@@ -1,17 +1,20 @@
 name: CI (develop)
 
-# Runs on PRs targeting `develop` and on push to `develop`.
-# Parallel backend/frontend jobs gated by nx affected; aggregate `ci` job for branch rules.
+# PR + push to develop: detect → backend/frontend → ci gate → deploy (push only).
+# workflow_dispatch: deploy only (no CI). Branch protection requires the `ci` job.
 
 on:
   pull_request:
     branches: [develop]
   push:
     branches: [develop]
-
-concurrency:
-  group: ci-develop-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Component to deploy (skips CI)
+        type: choice
+        options: [all, api, mcp, frontend]
+        default: all
 
 permissions:
   contents: read
@@ -20,6 +23,10 @@ permissions:
 jobs:
   detect:
     name: detect
+    if: github.event_name != 'workflow_dispatch'
+    concurrency:
+      group: ci-develop-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -47,13 +54,6 @@ jobs:
 
       - name: Resolve affected projects
         id: affected
-        # Tag-driven: any project carrying platform:py / platform:ts is covered
-        # automatically. nx 22.7 ignores --sep and always emits a JSON array, so
-        # parse with jq (join -> comma list, which run-many's --projects accepts;
-        # empty affected set -> "" so the boolean flags stay false).
-        # pipefail is load-bearing: without it a broken project graph makes nx
-        # fail while jq exits 0 on empty stdin -> "" -> both jobs skip -> ci
-        # passes vacuously. Detect must die loudly when nx can't compute.
         run: |
           set -o pipefail
           PY=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
@@ -72,7 +72,10 @@ jobs:
   backend:
     name: backend
     needs: detect
-    if: needs.detect.outputs.backend == 'true'
+    if: github.event_name != 'workflow_dispatch' && needs.detect.outputs.backend == 'true'
+    concurrency:
+      group: ci-develop-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -106,8 +109,6 @@ jobs:
       - name: Install backend deps
         env:
           PY_PROJECTS: ${{ needs.detect.outputs.py_projects }}
-        # Per-project sync. NEVER run a bare `uv sync` from repo root: a root
-        # uv.lock silently flips @nxlv/python into workspace mode. Always --project.
         run: |
           for p in ${PY_PROJECTS//,/ }; do
             ROOT=$(npx nx show project "$p" --json | jq -r '.root')
@@ -122,7 +123,10 @@ jobs:
   frontend:
     name: frontend
     needs: detect
-    if: needs.detect.outputs.frontend == 'true'
+    if: github.event_name != 'workflow_dispatch' && needs.detect.outputs.frontend == 'true'
+    concurrency:
+      group: ci-develop-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -140,13 +144,10 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      # npm workspaces: the root `npm ci` installs every workspace — no
-      # per-project install loop needed.
       - name: Install root deps
         run: npm ci
 
       - name: Boundary guard (libs must not import apps)
-        # ponytail: grep guard; @nx/eslint enforce-module-boundaries when app #2 lands
         run: |
           ! grep -rn "from ['\"].*apps/" libs/ --include='*.ts' --include='*.tsx'
 
@@ -158,7 +159,10 @@ jobs:
   ci:
     name: ci
     needs: [detect, backend, frontend]
-    if: always()
+    if: github.event_name != 'workflow_dispatch' && always()
+    concurrency:
+      group: ci-develop-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -183,3 +187,25 @@ jobs:
           }
           gate "$BACKEND_FLAG" "$BACKEND_RESULT" "backend"
           gate "$FRONTEND_FLAG" "$FRONTEND_RESULT" "frontend"
+
+  deploy:
+    name: deploy
+    needs: [ci]
+    if: >-
+      always() &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' && needs.ci.result == 'success')
+      )
+    concurrency:
+      group: fly-deploy-develop
+      cancel-in-progress: false
+    uses: ./.github/workflows/fly-deploy-reusable.yml
+    with:
+      environment: develop
+      sha: ${{ github.sha }}
+      base_branch: develop
+      workflow_id: ci-develop.yml
+      component: ${{ github.event_name == 'workflow_dispatch' && inputs.component || 'auto' }}
+    secrets:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

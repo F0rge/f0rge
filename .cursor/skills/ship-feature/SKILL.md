@@ -122,7 +122,7 @@ gh run list --branch develop --workflow "CI (develop)" --limit 1
 gh run watch <run-id>
 
 # Fly deploy (triggered by CI success)
-gh run list --branch develop --workflow "Fly Deploy (develop)" --limit 1
+gh run list --branch develop --workflow "CI (develop)" --limit 1
 gh run watch <fly-run-id>
 # Jobs: plan → deploy api / deploy mcp / deploy frontend (parallel UI) → smoke
 
