@@ -19,3 +19,8 @@ class UserCRUD(BaseCRUD):
 
     async def get_by_email(self, email: str) -> Optional[User]:
         return (await self.db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+
+    async def get_by_handle(self, handle: str) -> Optional[User]:
+        return (
+            await self.db.execute(select(User).where(User.handle == handle))
+        ).scalar_one_or_none()

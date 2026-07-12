@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.supplement_catalog import SupplementCatalogItem
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.tracker import Tracker
+from tests.helpers import signup_payload
 
 
 async def _set_session_user_id(async_db: AsyncSession, user_id: uuid.UUID) -> None:
@@ -22,7 +23,7 @@ async def _set_session_user_id(async_db: AsyncSession, user_id: uuid.UUID) -> No
 async def _signup(async_client: AsyncClient, email: str) -> uuid.UUID:
     resp = await async_client.post(
         "/api/v1/auth/signup",
-        json={"email": email, "password": "test-password-12"},
+        json=signup_payload(email, "test-password-12"),
     )
     assert resp.status_code == 200
     return uuid.UUID(resp.json()["user_id"])

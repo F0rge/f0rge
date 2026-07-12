@@ -60,10 +60,13 @@ from app.main import app  # noqa: E402
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH  # noqa: E402
 from app.rls import enable_row_level_security
 from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL
+from tests.helpers import signup_payload  # noqa: E402
 
 TEST_JWT_SECRET = "test-jwt-secret-for-pytest-only-32b"
+
 TEST_EMAIL = "test@example.com"
 TEST_PASSWORD = "test-password-12"
+TEST_HANDLE = "test_user"
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +166,7 @@ async def authed_client(async_client: AsyncClient) -> AsyncClient:
     """Log in via a real signup round-trip (rolled back with the test savepoint)."""
     resp = await async_client.post(
         "/api/v1/auth/signup",
-        json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
+        json=signup_payload(TEST_EMAIL, TEST_PASSWORD, TEST_HANDLE),
     )
     assert resp.status_code == 200
     return async_client

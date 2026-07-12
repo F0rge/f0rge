@@ -30,6 +30,7 @@ from app.routers import (
     onboarding,
     photos,
     settings as settings_router,
+    social,
     supplement_catalog,
     symptom_catalog,
     trackers,
@@ -168,6 +169,7 @@ app.include_router(labs.router)
 app.include_router(settings_router.router)
 app.include_router(lab_markers.router)
 app.include_router(trackers.router)
+app.include_router(social.router)
 
 
 @app.get("/api/v1/health")

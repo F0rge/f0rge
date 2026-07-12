@@ -26,6 +26,7 @@ from f0rge_db.auth_context import user_id_ctx
 from app.database import get_db
 from app.main import app
 from app.models.entry import Entry
+from tests.helpers import signup_payload
 from f0rge_db.tenant import apply_session_user_id
 
 _ATOMICITY_EMAIL = "atomicity-test@example.com"
@@ -75,7 +76,7 @@ async def error_client(async_db: AsyncSession) -> AsyncIterator[AsyncClient]:
 async def authed_error_client(error_client: AsyncClient) -> AsyncClient:
     resp = await error_client.post(
         "/api/v1/auth/signup",
-        json={"email": _ATOMICITY_EMAIL, "password": _ATOMICITY_PASSWORD},
+        json=signup_payload(_ATOMICITY_EMAIL, _ATOMICITY_PASSWORD),
     )
     assert resp.status_code == 200
     return error_client

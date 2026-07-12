@@ -10,6 +10,7 @@ class AccountResponse(BaseModel):
     user_id: str
     email: str
     display_name: Optional[str] = None
+    handle: Optional[str] = None
     avatar_default_index: int
     has_custom_avatar: bool
     created_at: datetime.datetime
@@ -17,6 +18,7 @@ class AccountResponse(BaseModel):
 
 class AccountUpdate(BaseModel):
     display_name: Optional[str] = Field(default=None, max_length=100)
+    handle: Optional[str] = Field(default=None, min_length=3, max_length=30)
 
 
 class PasswordChangeRequest(BaseModel):

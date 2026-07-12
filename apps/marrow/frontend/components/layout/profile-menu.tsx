@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LogOut, SlidersHorizontal, UserRound } from 'lucide-react'
+import { LogOut, SlidersHorizontal, UserRound, Users } from 'lucide-react'
 import { UserAvatar } from '@/components/account/user-avatar'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { useLogout } from '@/lib/api/hooks'
@@ -77,6 +77,16 @@ export function ProfileMenu() {
           >
             <UserRound className="size-4 text-muted-foreground" />
             Account
+          </Link>
+          <Link
+            href="/people"
+            role="menuitem"
+            className={MENU_ITEM_CLASS}
+            onClick={() => setOpen(false)}
+            data-tour="people-menu"
+          >
+            <Users className="size-4 text-muted-foreground" />
+            People
           </Link>
           <Link
             href="/customize"

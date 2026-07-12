@@ -22,6 +22,7 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH, User
 from f0rge_db.tenant import apply_session_user_id, owned_by_user
+from tests.helpers import signup_payload
 
 PASSWORD = "tenant-test-password-12"
 _ENTRY_PAYLOAD = {
@@ -101,7 +102,7 @@ async def _signup_client(async_db: AsyncSession, email: str) -> AsyncClient:
     client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     resp = await client.post(
         "/api/v1/auth/signup",
-        json={"email": email, "password": PASSWORD},
+        json=signup_payload(email, PASSWORD),
     )
     assert resp.status_code == 200
     return client
