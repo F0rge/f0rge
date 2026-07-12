@@ -36,14 +36,16 @@ CREATE POLICY social_notifier ON notifications
 
 SOCIAL_LOOKUP_GROUPS_POLICY_SQL = """
 CREATE POLICY social_lookup ON groups
-    FOR SELECT
+    FOR ALL
     USING (current_setting('app.service_role', true) = 'social_lookup')
+    WITH CHECK (current_setting('app.service_role', true) = 'social_lookup')
 """
 
 SOCIAL_LOOKUP_GROUP_MEMBERS_POLICY_SQL = """
 CREATE POLICY social_lookup ON group_members
-    FOR SELECT
+    FOR ALL
     USING (current_setting('app.service_role', true) = 'social_lookup')
+    WITH CHECK (current_setting('app.service_role', true) = 'social_lookup')
 """
 
 IS_GROUP_MEMBER_SQL = """
