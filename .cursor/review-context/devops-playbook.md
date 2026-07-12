@@ -12,7 +12,7 @@ Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker
 - `apps/marrow/backend/migrations/versions/*.py` (migration safety + deploy compatibility ONLY)
 - `apps/marrow/backend/migrations/env.py`, `apps/marrow/backend/alembic.ini`
 - `apps/marrow/frontend/Dockerfile`, `apps/marrow/frontend/next.config.*`
-- Root scripts: `start.sh`, `scripts/fly-*.sh`
+- Root scripts affecting deploy (no `start.sh` in repo)
 - `.dockerignore`, `.gitignore`
 - Anything affecting Fly apps, MPG, Cloudflare DNS (`marrow-health.com`), CI workflows
 - NOT app code under `apps/marrow/backend/app/**` or `apps/marrow/frontend/app/**`

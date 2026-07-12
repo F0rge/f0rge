@@ -11,7 +11,6 @@ from app.crud.base import BaseCRUD
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
-from app.models.photo_ingredient import PhotoIngredient
 from f0rge_db.tenant import owned_by_user
 
 
@@ -81,14 +80,3 @@ class PhotoAnalysisCRUD(BaseCRUD):
             .order_by(Entry.date.desc(), PhotoAnalysis.photo_id.desc())
         )
         return list((await self.db.execute(stmt)).all())
-
-
-class PhotoIngredientCRUD(BaseCRUD):
-    def __init__(self, db: AsyncSession) -> None:
-        super().__init__(db)
-
-    async def get_by_id(self, ingredient_id: int) -> Optional[PhotoIngredient]:
-        stmt = select(PhotoIngredient).where(
-            owned_by_user(PhotoIngredient.user_id), PhotoIngredient.id == ingredient_id
-        )
-        return (await self.db.execute(stmt)).scalar_one_or_none()

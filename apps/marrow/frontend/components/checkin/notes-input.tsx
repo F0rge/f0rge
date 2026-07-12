@@ -61,17 +61,6 @@ export function NotesInput({
     }, SYNC_DEBOUNCE_MS)
   }, [])
 
-  // Sync draft when parent value changes externally (entry load / date change).
-  useEffect(() => {
-    if (draftRef.current !== value && debounceTimerRef.current === null) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration from server entry only when not mid-typing
-      setDraft(value)
-      draftRef.current = value
-      hasStartedRef.current = false
-      adjustHeight()
-    }
-  }, [value, adjustHeight])
-
   useEffect(() => {
     registerDraftFlush?.(flushToParent)
     return () => {

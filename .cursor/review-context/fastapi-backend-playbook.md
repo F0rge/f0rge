@@ -21,7 +21,7 @@ Authoritative review checklist for the Claude PR review bot operating on health-
 - `apps/marrow/backend/pyproject.toml` — deps + ruff config
 - `libs/backend/**` — shared Python libs (`f0rge_core`, `f0rge_db`, `f0rge_storage`, `f0rge_testing`)
 
-**NOT your scope:** `.github/`, `docker-compose*.yml`, `apps/marrow/backend/docker-entrypoint.sh`, `apps/marrow/frontend/`, `libs/ui/` — those go to `devops` or `frontend-dev`.
+**NOT your scope:** `.github/`, `apps/marrow/backend/docker-entrypoint.sh`, `apps/marrow/frontend/`, `libs/ui/` — those go to `devops` or `frontend-dev`.
 
 **Non-duplication:** block re-implementations of lib-owned helpers. Apps must import from `f0rge_core`, `f0rge_db`, `f0rge_storage`, `f0rge_testing` — never duplicate exceptions, CRUD base, session factories, RLS hooks, or object storage clients.
 
@@ -31,7 +31,7 @@ Authoritative review checklist for the Claude PR review bot operating on health-
 
 ### Architecture
 
-- **Thin routers** — any router endpoint longer than ~3 lines, or containing `if`, `else`, ternary, `try`, `except`, `raise`, `raise HTTPException`, `db.query`, `db.add`, `db.commit`, `db.flush`, or a helper function defined in the same router module is a BLOCK. Pre-existing fat routers (`entries.py`, `food_analysis.py`, `photos.upload_photo`) are NOT this PR's problem — flag NEW violations only. See `feedback_thin_routers.md`.
+- **Thin routers** — any router endpoint longer than ~3 lines, or containing `if`, `else`, ternary, `try`, `except`, `raise`, `raise HTTPException`, `db.query`, `db.add`, `db.commit`, `db.flush`, or a helper function defined in the same router module is a BLOCK. Pre-existing redirect branches in `photos.serve_photo` and `account.serve_avatar` are grandfathered — flag NEW violations only. See `feedback_thin_routers.md`.
 
   Canonical 3-line endpoint shape:
   ```python
@@ -173,13 +173,13 @@ Work through this in order for any non-trivial backend diff.
 
 ## AI seam contracts
 
-Source of truth: `~/.cursor/agent-memory/fastapi-backend/project_ai_seams.md` (verify it exists before overriding these).
+Source of truth: `docs/architecture/ai_seams.md`.
 
 | Contract | Value |
 |---|---|
 | Embedding model | `openai/text-embedding-3-small` via OpenRouter |
 | Embedding dim | `1024` — locked to `VECTOR(1024)` column; `dimensions=1024` required in every request |
-| Default LLM | `google/gemini-2.5-flash` — NOT `gemini-2.0-flash` (OpenRouter rejects it) |
+| Default LLM | `google/gemini-3-flash-preview` — NOT `gemini-2.0-flash` (OpenRouter rejects it) |
 | Embedding response access | `response["data"][i]["embedding"]` — top-level has extra `provider` + `id` keys vs OpenAI, do not assert on key set |
 | BYOK resolution order | `resolve_llm_credentials(db)` → user `user_settings.openrouter_api_key` if set, else `settings.openrouter_api_key` env var |
 | Async embed method patch | `new=async_fn` not `side_effect=lambda` — `side_effect` adds `self` as extra arg on instance method patches |
@@ -188,8 +188,8 @@ Source of truth: `~/.cursor/agent-memory/fastapi-backend/project_ai_seams.md` (v
 
 ## Migration safety
 
-- `RUN_MIGRATIONS=1` env var must only be set on the **backend** service in `docker-compose.prod.yml` and `docker-compose.dev.yml`. The `mcp-server` and `embedding-worker` share the same image but must NOT set this flag (they'd race the backend on startup). See `devops/deploy_migration_entrypoint.md`.
-- `apps/marrow/backend/docker-entrypoint.sh` runs `alembic upgrade head` before `exec "$@"` when `RUN_MIGRATIONS=1`. New migrations land automatically on next deploy — no manual `docker exec` needed since PR #96.
+- Fly deploy runs migrations via `[deploy] release_command` in `fly.toml` / `fly.prod.toml` (`alembic upgrade head` as `MIGRATION_DATABASE_URL`). See `.cursor/rules/infra.mdc`.
+- `RUN_MIGRATIONS=1` + `docker-entrypoint.sh` is optional for **local Docker image** builds only — do not set on MCP or embedding-worker containers.
 - After `alembic revision --autogenerate -m "..."`, always audit the generated file. Autogenerate misses: index renames, `server_default` changes, `CHECK` constraint adds/drops, and extension-level DDL. Hand-write those `op.execute()` calls.
 - Migration 004 introduced `HEALTHTRACKER_RO_PASSWORD` env var requirement. Any new migration that references Postgres roles must document the required env var in the migration file's docstring and in `apps/marrow/backend/.env.example`. See `project_mcp_migrations.md`.
 
@@ -197,10 +197,9 @@ Source of truth: `~/.cursor/agent-memory/fastapi-backend/project_ai_seams.md` (v
 
 ## What NOT to flag (false-positive suppression)
 
-- **Pre-existing fat routers** — `entries.py`, `food_analysis.py`, `photos.upload_photo`, `supplement_catalog.py` contain known violations. Do not block a PR for touching them without worsening the violation. File a follow-up issue instead.
-- **`ruff format --check`** is NOT enforced in CI. Unformatted code is a nit at most.
+- **Pre-existing redirect branches** — `photos.serve_photo` and `account.serve_avatar` contain `if` for presigned URL redirects. Do not block a PR for touching them without worsening the violation.
+- **`ruff format --check`** is enforced in CI via `nx run-many -t format-check`. Flag format regressions on touched files.
 - **Narrow ruff rule set** — CI runs `ruff check` with `E/F/W` rules, `E501`/`F821` excluded. Don't flag line-length violations or forward-reference resolution issues unless they indicate a real semantic problem.
-- **`SessionLocal` shim** — `database.py` exports `SessionLocal = async_session_maker` as a backward-compat alias while the async migration completes. Warn as a follow-up, not a block, unless the PR introduces a new callsite.
 - **`lazy="selectin"` on models added before the async migration** — pre-existing models may be missing this. Don't block; open a follow-up. BLOCK only on new `relationship()` calls.
 - **`lab_extraction.py` BYOK bypass** — pre-existing tracked follow-up. Don't block PRs that don't touch `lab_extraction.py` for this.
 

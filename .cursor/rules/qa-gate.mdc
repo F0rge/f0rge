@@ -58,9 +58,9 @@ Curl + build-passes is **not enough** for user-facing features. Drive the golden
 **Health Tracker auth bypass (required for e2e):**
 
 1. Start backend on port 8000 and frontend on port 3000.
-2. Insert an `auth_sessions` row directly via Python + `SessionLocal()` — avoids needing the user's PIN.
+2. `POST /api/v1/auth/signup` or `/auth/login` with valid credentials (see `tests/conftest.py` `authed_client` fixture).
 3. Set the `ht_session` cookie via `browser_evaluate` / Playwright `addCookies` (`httpOnly: true`). `document.cookie = ...` from `browser_evaluate` does **not** stick for httpOnly cookies.
-4. If today's entry is required for the test, create it the same way.
+4. If today's entry is required for the test, create it via the API or test fixture.
 
 **Live-server walkthrough is mandatory** per project `AGENTS.md` — pytest passing alone is not the gate.
 

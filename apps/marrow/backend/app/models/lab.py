@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import Date, Float, ForeignKey, String, Text
+from sqlalchemy import Date, Float, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,20 +13,24 @@ from app.models.user import default_user_id
 
 class Lab(Base):
     __tablename__ = "labs"
+    __table_args__ = (
+        Index("ix_labs_user_id", "user_id"),
+        Index("ix_labs_lab_date", "lab_date"),
+        Index("ix_labs_source_path", "source_path"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
-    lab_date: Mapped[datetime.date] = mapped_column(Date, nullable=False, index=True)
+    lab_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     type: Mapped[str] = mapped_column(String, nullable=False)
     lab_location: Mapped[str | None] = mapped_column(String, nullable=True)
-    source_path: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    source_path: Mapped[str | None] = mapped_column(String, nullable=True)
     source_kind: Mapped[str] = mapped_column(String, nullable=False)
     attachment_path: Mapped[str | None] = mapped_column(String, nullable=True)
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -111,6 +111,7 @@ export function buildCheckinCardRenderers({
     ),
     notes: () => (
       <NotesCard
+        entryKey={date}
         value={state.notes}
         onChange={state.setNotesValue}
         onEditStart={state.markDirty}

@@ -3,7 +3,9 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, ForeignKeyConstraint, Index, String, UniqueConstraint
+import datetime
+
+from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +37,9 @@ class IngredientAlias(Base):
     alias: Mapped[str] = mapped_column(String, nullable=False)
     canonical_name: Mapped[str] = mapped_column(String, nullable=False)
     language: Mapped[str] = mapped_column(String, default="en")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
 
     ingredient: Mapped["DietaryIngredient"] = relationship(
         "DietaryIngredient", back_populates="aliases", lazy="selectin"

@@ -56,7 +56,7 @@ cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload   # :
 cd apps/marrow/frontend && npm run dev                                      # :3000, proxies /api/* → :8000
 ```
 
-No root-level `start.sh` — use `docker compose` when a compose file is added for full-stack local dev.
+No root-level `start.sh` — local dev is the Postgres container plus separate backend and frontend processes (see Running locally above).
 
 ## Key Paths
 
@@ -161,7 +161,7 @@ References:
 The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and frontend `node_modules`. The startup update script only refreshes deps (`uv sync --frozen --project apps/marrow/backend`, `uv tool install ruff@latest`, `npm ci` at repo root). Services and the database are NOT auto-started — bring them up as below. Standard run/lint/test commands live in this file, `.cursor/rules/backend.mdc`, and `.cursor/rules/qa-gate.mdc`.
 
 ### Database + Docker (must start manually each session)
-- There is **no local dev docker-compose**; the `docker-compose*.yml` files are Coolify/Fly deploy stacks, not local dev.
+- There is **no local dev docker-compose**; deploy is Fly.io (`fly.toml` + GitHub Actions workflows).
 - The Docker daemon is not auto-started. Start it once per session: `sudo dockerd > /tmp/dockerd.log 2>&1 &` then `sudo chmod 666 /var/run/docker.sock` (lets `uv run pytest`'s testcontainers reach the socket as the `ubuntu` user). `/etc/docker/daemon.json` is pre-set to `fuse-overlayfs` + `containerd-snapshotter: false` (required for Docker 29 in this VM) — do not change it.
 - Backend + tests need a **pgvector** Postgres on `localhost:5432` with user/pass/db all `health`. Start/reuse it:
   `docker start ht-postgres 2>/dev/null || docker run -d --name ht-postgres -e POSTGRES_USER=health -e POSTGRES_PASSWORD=health -e POSTGRES_DB=health -p 5432:5432 pgvector/pgvector:pg16`

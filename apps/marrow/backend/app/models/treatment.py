@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import Date, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,17 +13,20 @@ from app.models.user import default_user_id
 
 class Treatment(Base):
     __tablename__ = "treatments"
+    __table_args__ = (
+        Index("ix_treatments_user_id", "user_id"),
+        Index("ix_treatments_normalized_name", "normalized_name"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         default=default_user_id,
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
-    normalized_name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    normalized_name: Mapped[str] = mapped_column(String, nullable=False)
     group_name: Mapped[str | None] = mapped_column(String, nullable=True)
     type: Mapped[str] = mapped_column(String, nullable=False)
     start_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)

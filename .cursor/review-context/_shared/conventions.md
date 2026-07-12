@@ -43,7 +43,7 @@ Common patterns that warrant an audit:
 
 Automated checks (lint, pytest, build, typecheck) are NOT a complete gate. The PR is not done until:
 
-- A human has driven the new feature in a live dev server (`./start.sh` locally OR `app-dev.marrow-health.com`).
+- A human has driven the new feature in a live dev server (`uvicorn` + `npm run dev` locally OR `app-dev.marrow-health.com`).
 - The golden path works end-to-end through the UI.
 - At least one error path was driven and the UI failed gracefully.
 - Backend logs were tailed during the test for hidden 500s.
