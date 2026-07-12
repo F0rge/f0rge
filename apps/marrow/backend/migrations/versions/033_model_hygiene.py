@@ -9,6 +9,17 @@ Model-layer hygiene from guidelines audit #287:
 - Add ``created_at`` to alias/marker/log tables missing it
 - Convert ``embedding_queue`` timestamp columns from TIMESTAMPTZ to tz-naive UTC
   (``enqueued_at`` is the semantic create timestamp for this table)
+
+``tracker_log`` / ``treatment_log`` note: the previous version of this migration
+tried to backfill ``created_at`` via ``DEFAULT updated_at`` DDL, on the theory
+that a DDL default avoids the RLS-gated UPDATE problem from migration 031. That
+reasoning doesn't apply here for a simpler reason: a column DEFAULT can never
+reference another column of the same row (``FeatureNotSupportedError: cannot
+use column reference in DEFAULT expression``) — that's a hard SQL rule, not an
+RLS issue. The fix backfills with a real per-user UPDATE, using the same
+``set_config('app.user_id', ...)`` tenant-scoping pattern as migration 031,
+since ``tracker_log`` / ``treatment_log`` are both in USER_OWNED_TABLES under
+FORCE ROW LEVEL SECURITY and prod runs as a NOBYPASSRLS role.
 """
 
 from __future__ import annotations
@@ -53,18 +64,36 @@ def upgrade() -> None:
         )
         op.alter_column(table, "created_at", server_default=None)
 
-    # DDL DEFAULT from source_column backfills existing rows without RLS-gated UPDATE.
-    for table, source_column in _CREATED_AT_FROM_COLUMN:
-        op.add_column(
-            table,
-            sa.Column(
-                "created_at",
-                sa.DateTime(),
-                nullable=False,
-                server_default=sa.text(source_column),
-            ),
-        )
-        op.alter_column(table, "created_at", server_default=None)
+    # A column DEFAULT can never reference another column of the same row, so
+    # created_at must be backfilled with a real UPDATE. Both tables are FORCE
+    # RLS (USER_OWNED_TABLES) and prod runs alembic as a NOBYPASSRLS role, so —
+    # same pattern as migration 031 — scope each UPDATE to one tenant at a time
+    # via set_config('app.user_id', ...); a cross-tenant UPDATE would otherwise
+    # match 0 rows for every tenant except whichever one happens to be current.
+    for table, _source_column in _CREATED_AT_FROM_COLUMN:
+        op.add_column(table, sa.Column("created_at", sa.DateTime(), nullable=True))
+
+    # ponytail: per-user loop (handful of users); batch by user if the table ever grows
+    user_ids = [r[0] for r in bind.execute(sa.text("SELECT id::text FROM users")).fetchall()]
+    for uid in user_ids:
+        bind.execute(sa.text("SELECT set_config('app.user_id', :uid, true)"), {"uid": uid})
+        for table, source_column in _CREATED_AT_FROM_COLUMN:
+            bind.execute(
+                sa.text(
+                    f"""
+                    UPDATE {table}
+                    SET created_at = {source_column}
+                    WHERE user_id = CAST(:uid AS uuid) AND created_at IS NULL
+                    """
+                ),
+                {"uid": uid},
+            )
+
+    for table, _source_column in _CREATED_AT_FROM_COLUMN:
+        # SET NOT NULL is a full-table constraint check done by the owner via
+        # ALTER TABLE — it's DDL, not a per-row DML statement gated by RLS
+        # USING/WITH CHECK, so it isn't subject to the same tenant-scoping.
+        op.alter_column(table, "created_at", nullable=False)
 
     bind.execute(
         sa.text(
