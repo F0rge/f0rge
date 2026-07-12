@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import delete, event, func, insert, select
+from sqlalchemy import event, insert, select
 
 from app.models.meal import Meal
 from app.models.photo import Photo
@@ -32,17 +32,6 @@ def _create_meal_for_photo(_mapper, connection, target: Photo) -> None:
         .returning(Meal.__table__.c.id)
     ).scalar_one()
     target.meal_id = meal_id
-
-
-@event.listens_for(Photo, "after_delete")
-def _cleanup_orphan_meal(_mapper, connection, target: Photo) -> None:
-    remaining = connection.execute(
-        select(func.count())
-        .select_from(Photo.__table__)
-        .where(Photo.__table__.c.meal_id == target.meal_id)
-    ).scalar_one()
-    if remaining == 0:
-        connection.execute(delete(Meal.__table__).where(Meal.__table__.c.id == target.meal_id))
 
 
 @event.listens_for(PhotoAnalysis, "before_insert")

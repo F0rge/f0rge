@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import BaseCRUD
 from app.models.meal import Meal
+from app.models.meal_tag import MealTag
 from app.models.photo import Photo
 
 
@@ -30,6 +31,18 @@ class MealCRUD(BaseCRUD):
             )
         ).scalar_one()
         if count > 0:
+            return False
+        delivered_tags = (
+            await self.db.execute(
+                select(func.count())
+                .select_from(MealTag)
+                .where(
+                    MealTag.source_meal_id == meal_id,
+                    MealTag.status == "delivered",
+                )
+            )
+        ).scalar_one()
+        if delivered_tags > 0:
             return False
         meal = await self.get_by_id(meal_id)
         if meal is None:

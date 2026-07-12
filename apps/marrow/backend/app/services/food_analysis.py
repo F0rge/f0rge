@@ -17,6 +17,7 @@ from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, In
 from app.services.ingredient_lookup import IngredientLookupService
 from app.services.tag_delivery import TagDeliveryService
 from app.services.vision_prompt import VisionResult
+from f0rge_db.tenant import current_user_id
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
@@ -64,9 +65,7 @@ class FoodAnalysisService:
         await self.analysis_crud.flush()
         photo = await PhotoCRUD(self.db).get_by_id_owned(photo_id)
         if photo is not None and photo.source_photo_id is None:
-            await TagDeliveryService().deliver_for_source_in_transaction(
-                self.db, photo_id, user_id
-            )
+            await TagDeliveryService().deliver_for_source_in_transaction(self.db, photo_id, user_id)
         return await self.analysis_crud.commit_refresh(analysis)
 
     async def set_dietary_confirmations(
@@ -113,7 +112,7 @@ class FoodAnalysisService:
 
     async def add_ingredient(self, analysis_id: int, data: IngredientCreate) -> PhotoIngredient:
         """Add a manually-entered ingredient to an analysis."""
-        analysis = await self.analysis_crud.get_by_id(analysis_id)
+        analysis = await self.analysis_crud.get_by_id_for_editing(analysis_id)
         if not analysis:
             raise NotFoundError("Analysis not found")
 
@@ -121,7 +120,7 @@ class FoodAnalysisService:
         match = await lookup.lookup(data.name)
 
         ingredient = PhotoIngredient(
-            user_id=analysis.user_id,
+            user_id=current_user_id(),
             analysis_id=analysis_id,
             name=data.name,
             canonical_name=match.canonical_name if match else data.canonical_name,
@@ -141,7 +140,7 @@ class FoodAnalysisService:
 
     async def delete_analysis(self, analysis_id: int) -> None:
         """Delete an analysis and its ingredients (cascade)."""
-        analysis = await self.analysis_crud.get_by_id(analysis_id)
+        analysis = await self.analysis_crud.get_by_id_for_editing(analysis_id)
         if analysis:
             await self.analysis_crud.delete_and_commit(analysis)
 

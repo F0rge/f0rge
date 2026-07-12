@@ -144,6 +144,16 @@ PHOTO_ANALYSES_MEAL_RLS_STATEMENTS: tuple[str, ...] = (
         )
     """,
     """
+    CREATE POLICY photo_analyses_meal_participant_delete ON photo_analyses FOR DELETE
+        USING (
+            EXISTS (
+                SELECT 1 FROM photos p
+                WHERE p.meal_id = photo_analyses.meal_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+    """,
+    """
     CREATE POLICY photo_ingredients_meal_participant_select ON photo_ingredients FOR SELECT
         USING (
             EXISTS (
@@ -165,6 +175,17 @@ PHOTO_ANALYSES_MEAL_RLS_STATEMENTS: tuple[str, ...] = (
             )
         )
         WITH CHECK (
+            EXISTS (
+                SELECT 1 FROM photo_analyses pa
+                JOIN photos p ON p.meal_id = pa.meal_id
+                WHERE pa.id = photo_ingredients.analysis_id
+                  AND p.user_id = current_setting('app.user_id', true)::uuid
+            )
+        )
+    """,
+    """
+    CREATE POLICY photo_ingredients_meal_participant_delete ON photo_ingredients FOR DELETE
+        USING (
             EXISTS (
                 SELECT 1 FROM photo_analyses pa
                 JOIN photos p ON p.meal_id = pa.meal_id

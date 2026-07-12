@@ -42,12 +42,12 @@ class MealService:
         rows = await self.analysis_crud.list_confirmed_with_entry_dates()
 
         dates_per_dish: dict[str, set[datetime.date]] = {}
-        for analysis, entry_date in rows:
+        for analysis, entry_date, _photo_id in rows:
             dates_per_dish.setdefault(analysis.dish_name, set()).add(entry_date)
 
         seen: set[str] = set()
         out: list[RecentMealResponse] = []
-        for analysis, entry_date in rows:
+        for analysis, entry_date, photo_id in rows:
             dish = analysis.dish_name
             if dish in seen:
                 continue
@@ -56,7 +56,7 @@ class MealService:
             out.append(
                 RecentMealResponse(
                     dish_name=dish,
-                    source_photo_id=analysis.photo_id or 0,
+                    source_photo_id=photo_id,
                     times_logged=len(dates_per_dish[dish]),
                     last_logged=entry_date,
                     diet_flags=sorted(signal.flags),

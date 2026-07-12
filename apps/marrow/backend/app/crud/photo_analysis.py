@@ -24,6 +24,21 @@ class PhotoAnalysisCRUD(BaseCRUD):
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
+    async def get_by_id_for_editing(self, analysis_id: int) -> Optional[PhotoAnalysis]:
+        """Owner access, or participant on a shared meal placement."""
+        owned = await self.get_by_id(analysis_id)
+        if owned is not None:
+            return owned
+        stmt = (
+            select(PhotoAnalysis)
+            .join(Photo, Photo.meal_id == PhotoAnalysis.meal_id)
+            .where(
+                PhotoAnalysis.id == analysis_id,
+                owned_by_user(Photo.user_id),
+            )
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
     async def get_by_id_with_ingredients(self, analysis_id: int) -> Optional[PhotoAnalysis]:
         stmt = (
             select(PhotoAnalysis)
@@ -84,10 +99,10 @@ class PhotoAnalysisCRUD(BaseCRUD):
 
     async def list_confirmed_with_entry_dates(
         self,
-    ) -> list[tuple[PhotoAnalysis, datetime.date]]:
+    ) -> list[tuple[PhotoAnalysis, datetime.date, int]]:
         """Confirmed, named analyses joined to their entry date, most-recent first."""
         stmt = (
-            select(PhotoAnalysis, Entry.date)
+            select(PhotoAnalysis, Entry.date, Photo.id)
             .join(Photo, PhotoAnalysis.meal_id == Photo.meal_id)
             .join(Entry, Photo.entry_id == Entry.id)
             .options(selectinload(PhotoAnalysis.ingredients))
