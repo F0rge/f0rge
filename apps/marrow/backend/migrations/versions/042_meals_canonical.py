@@ -49,7 +49,7 @@ def upgrade() -> None:
     op.create_index("ix_photos_meal_id", "photos", ["meal_id"])
 
     bind = op.get_bind()
-    with migration_bypass(bind, ["photos", "photo_analyses", "meal_tags"]):
+    with migration_bypass(bind, ["photos"]):
         bind.execute(
             sa.text(
                 """
@@ -84,6 +84,19 @@ def upgrade() -> None:
             )
         )
 
+    op.alter_column("photos", "meal_id", nullable=False)
+    op.create_foreign_key(
+        "photos_meal_id_fkey",
+        "photos",
+        "meals",
+        ["meal_id"],
+        ["id"],
+        ondelete="RESTRICT",
+    )
+
+    op.add_column("photo_analyses", sa.Column("meal_id", sa.Integer(), nullable=True))
+
+    with migration_bypass(bind, ["photo_analyses"]):
         bind.execute(
             sa.text(
                 """
@@ -108,29 +121,6 @@ def upgrade() -> None:
                 """
             )
         )
-
-        bind.execute(
-            sa.text(
-                """
-                UPDATE meal_tags mt
-                SET source_meal_id = p.meal_id
-                FROM photos p
-                WHERE p.id = mt.source_photo_id
-                """
-            )
-        )
-
-    op.alter_column("photos", "meal_id", nullable=False)
-    op.create_foreign_key(
-        "photos_meal_id_fkey",
-        "photos",
-        "meals",
-        ["meal_id"],
-        ["id"],
-        ondelete="RESTRICT",
-    )
-
-    op.add_column("photo_analyses", sa.Column("meal_id", sa.Integer(), nullable=True))
 
     op.alter_column("photo_analyses", "meal_id", nullable=False)
     op.create_unique_constraint("uq_photo_analyses_meal_id", "photo_analyses", ["meal_id"])
@@ -157,6 +147,19 @@ def upgrade() -> None:
     op.alter_column("photo_analyses", "photo_id", nullable=True)
 
     op.add_column("meal_tags", sa.Column("source_meal_id", sa.Integer(), nullable=True))
+
+    with migration_bypass(bind, ["meal_tags"]):
+        bind.execute(
+            sa.text(
+                """
+                UPDATE meal_tags mt
+                SET source_meal_id = p.meal_id
+                FROM photos p
+                WHERE p.id = mt.source_photo_id
+                """
+            )
+        )
+
     op.alter_column("meal_tags", "source_meal_id", nullable=False)
     op.create_foreign_key(
         "meal_tags_source_meal_id_fkey",
