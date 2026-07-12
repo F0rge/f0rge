@@ -27,6 +27,7 @@ from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
 from app.models.notification import Notification
 from app.models.connection import Connection
+from app.models.group import Group, GroupMember
 
 __all__ = [
     "User",
@@ -56,4 +57,6 @@ __all__ = [
     "TrackerLog",
     "Notification",
     "Connection",
+    "Group",
+    "GroupMember",
 ]

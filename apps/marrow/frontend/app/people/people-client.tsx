@@ -14,42 +14,19 @@ import { Button, Card, Input, Label } from '@f0rge/ui'
 import { HubRow } from '@/components/customize/hub-row'
 import { PageHeader } from '@/components/layout/page-header'
 import { PageShell } from '@/components/layout/page-shell'
-import { useAccount, useHandleAvailable, useUpdateAccount, useConnections } from '@/lib/api/hooks'
+import { useAccount, useHandleAvailable, useUpdateAccount } from '@/lib/api/hooks'
+import { useConnections, useGroups } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { toast } from 'sonner'
 
-export default function PeopleClient() {
-  const connections = useConnections()
-  const pendingIncoming = connections.data?.pending_incoming.length ?? 0
-
-  const hubItems = [
-    {
-      href: '/people/connections',
-      icon: <UserPlus className="size-4" />,
-      title: pendingIncoming > 0 ? `Connections (${pendingIncoming} pending)` : 'Connections',
-      description: 'Send requests and manage people you can tag on meals.',
-    },
-    {
-      href: '/people/groups',
-      icon: <UsersRound className="size-4" />,
-      title: 'Groups',
-      description: 'Organize connected people into named groups.',
-      comingSoon: true,
-    },
-    {
-      href: '/people/tags',
-      icon: <Tag className="size-4" />,
-      title: 'Tagged meals',
-      description: 'Review meal tags waiting for your approval.',
-      comingSoon: true,
-    },
-    {
-      href: '/people/notifications',
-      icon: <Bell className="size-4" />,
-      title: 'Notifications',
-      description: 'Connection requests, invites, and tag activity.',
-    },
-  ]
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delayMs)
+    return () => window.clearTimeout(timer)
+  }, [value, delayMs])
+  return debounced
+}
 
 function ClaimHandleCard() {
   const account = useAccount()
@@ -120,16 +97,43 @@ function ClaimHandleCard() {
   )
 }
 
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delayMs)
-    return () => window.clearTimeout(timer)
-  }, [value, delayMs])
-  return debounced
-}
-
 export default function PeopleClient() {
+  const connections = useConnections()
+  const groups = useGroups()
+  const pendingIncoming = connections.data?.pending_incoming.length ?? 0
+  const pendingGroupInvites = groups.data?.filter((g) => g.my_status === 'invited').length ?? 0
+
+  const hubItems = [
+    {
+      href: '/people/connections',
+      icon: <UserPlus className="size-4" />,
+      title: pendingIncoming > 0 ? `Connections (${pendingIncoming} pending)` : 'Connections',
+      description: 'Send requests and manage people you can tag on meals.',
+    },
+    {
+      href: '/people/groups',
+      icon: <UsersRound className="size-4" />,
+      title:
+        pendingGroupInvites > 0
+          ? `Groups (${pendingGroupInvites} invite${pendingGroupInvites === 1 ? '' : 's'})`
+          : 'Groups',
+      description: 'Organize connected people into named groups.',
+    },
+    {
+      href: '/people/tags',
+      icon: <Tag className="size-4" />,
+      title: 'Tagged meals',
+      description: 'Review meal tags waiting for your approval.',
+      comingSoon: true,
+    },
+    {
+      href: '/people/notifications',
+      icon: <Bell className="size-4" />,
+      title: 'Notifications',
+      description: 'Connection requests, invites, and tag activity.',
+    },
+  ]
+
   return (
     <PageShell>
       <PageHeader

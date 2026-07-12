@@ -56,3 +56,47 @@ class HandleField(BaseModel):
     @classmethod
     def check_handle(cls, value: str) -> str:
         return validate_handle_format(value)
+
+
+class GroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
+class GroupRename(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
+class GroupInviteRequest(HandleField):
+    pass
+
+
+class GroupListItem(BaseModel):
+    id: uuid.UUID
+    name: str
+    owner: PublicUserCard
+    member_count: int
+    my_status: str
+    my_role: str
+
+
+class GroupListResponse(BaseModel):
+    groups: list[GroupListItem]
+
+
+class GroupMemberItem(BaseModel):
+    handle: str
+    display_name: str | None = None
+    avatar_default_index: int
+    role: str
+    status: str
+    joined_at: datetime.datetime | None = None
+
+
+class GroupDetailResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    owner: PublicUserCard
+    member_count: int
+    my_status: str
+    my_role: str
+    members: list[GroupMemberItem]

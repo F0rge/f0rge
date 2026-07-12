@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from f0rge_db.rls import create_service_role_policy, enable_tenant_isolation
-from app.sql.social_functions import CREATE_NOTIFICATION_SQL
+from app.sql.social_functions import (
+    CREATE_NOTIFICATION_SQL,
+    IS_GROUP_MEMBER_SQL,
+    IS_GROUP_OWNER_SQL,
+)
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 # Frozen import surface: migrations/versions/021_row_level_security.py does
@@ -110,4 +114,63 @@ async def enable_social_security(conn: AsyncConnection) -> None:
         """,
     ]
     for stmt in connection_policies:
+        await conn.execute(sa.text(stmt))
+
+    await conn.execute(sa.text(IS_GROUP_MEMBER_SQL))
+    await conn.execute(sa.text(IS_GROUP_OWNER_SQL))
+
+    group_policies = [
+        "ALTER TABLE groups ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE groups FORCE ROW LEVEL SECURITY",
+        """
+        CREATE POLICY groups_select ON groups FOR SELECT
+            USING (
+                owner_id = current_setting('app.user_id', true)::uuid
+                OR is_group_member(id, current_setting('app.user_id', true)::uuid)
+            )
+        """,
+        """
+        CREATE POLICY groups_insert ON groups FOR INSERT
+            WITH CHECK (owner_id = current_setting('app.user_id', true)::uuid)
+        """,
+        """
+        CREATE POLICY groups_update ON groups FOR UPDATE
+            USING (owner_id = current_setting('app.user_id', true)::uuid)
+            WITH CHECK (owner_id = current_setting('app.user_id', true)::uuid)
+        """,
+        """
+        CREATE POLICY groups_delete ON groups FOR DELETE
+            USING (owner_id = current_setting('app.user_id', true)::uuid)
+        """,
+        "ALTER TABLE group_members ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE group_members FORCE ROW LEVEL SECURITY",
+        # ponytail: invitees can read the member roster pre-join — acceptable at family scale.
+        """
+        CREATE POLICY group_members_select ON group_members FOR SELECT
+            USING (
+                user_id = current_setting('app.user_id', true)::uuid
+                OR is_group_member(group_id, current_setting('app.user_id', true)::uuid)
+            )
+        """,
+        """
+        CREATE POLICY group_members_insert ON group_members FOR INSERT
+            WITH CHECK (
+                user_id = current_setting('app.user_id', true)::uuid
+                OR is_group_member(group_id, current_setting('app.user_id', true)::uuid)
+            )
+        """,
+        """
+        CREATE POLICY group_members_update ON group_members FOR UPDATE
+            USING (user_id = current_setting('app.user_id', true)::uuid)
+            WITH CHECK (user_id = current_setting('app.user_id', true)::uuid)
+        """,
+        """
+        CREATE POLICY group_members_delete ON group_members FOR DELETE
+            USING (
+                user_id = current_setting('app.user_id', true)::uuid
+                OR is_group_owner(group_id, current_setting('app.user_id', true)::uuid)
+            )
+        """,
+    ]
+    for stmt in group_policies:
         await conn.execute(sa.text(stmt))

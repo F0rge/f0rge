@@ -4,6 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Query, status
 
+from app.dependencies.groups import get_group_service
 from app.dependencies.notifications import get_notification_service
 from app.dependencies.social import get_social_service
 from app.middleware.auth import get_current_session
@@ -11,9 +12,17 @@ from app.schemas.social import (
     ConnectionItem,
     ConnectionListResponse,
     ConnectionRequest,
+    GroupCreate,
+    GroupDetailResponse,
+    GroupInviteRequest,
+    GroupListItem,
+    GroupListResponse,
+    GroupMemberItem,
+    GroupRename,
     HandleAvailableResponse,
     PublicUserCard,
 )
+from app.services.groups import GroupService
 from app.services.notifications import NotificationService
 from app.services.social import SocialService
 
@@ -90,3 +99,104 @@ async def delete_connection(
     service: SocialService = Depends(get_social_service),
 ):
     await service.delete_connection(connection_id)
+
+
+@router.post(
+    "/groups",
+    response_model=GroupListItem,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(get_current_session)],
+)
+async def create_group(
+    body: GroupCreate,
+    service: GroupService = Depends(get_group_service),
+):
+    return await service.create_group(body)
+
+
+@router.get(
+    "/groups",
+    response_model=GroupListResponse,
+    dependencies=[Depends(get_current_session)],
+)
+async def list_groups(service: GroupService = Depends(get_group_service)):
+    return await service.list_groups()
+
+
+@router.get(
+    "/groups/{group_id}",
+    response_model=GroupDetailResponse,
+    dependencies=[Depends(get_current_session)],
+)
+async def get_group(
+    group_id: uuid.UUID,
+    service: GroupService = Depends(get_group_service),
+):
+    return await service.get_group(group_id)
+
+
+@router.patch(
+    "/groups/{group_id}",
+    response_model=GroupListItem,
+    dependencies=[Depends(get_current_session)],
+)
+async def rename_group(
+    group_id: uuid.UUID,
+    body: GroupRename,
+    service: GroupService = Depends(get_group_service),
+):
+    return await service.rename_group(group_id, body)
+
+
+@router.delete(
+    "/groups/{group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_session)],
+)
+async def delete_group(
+    group_id: uuid.UUID,
+    service: GroupService = Depends(get_group_service),
+):
+    await service.delete_group(group_id)
+
+
+@router.post(
+    "/groups/{group_id}/invite",
+    response_model=GroupMemberItem,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(get_current_session)],
+)
+async def invite_to_group(
+    group_id: uuid.UUID,
+    body: GroupInviteRequest,
+    service: GroupService = Depends(get_group_service),
+    social: SocialService = Depends(get_social_service),
+    notifications: NotificationService = Depends(get_notification_service),
+):
+    return await service.invite_to_group(group_id, body, social, notifications)
+
+
+@router.post(
+    "/groups/{group_id}/accept",
+    response_model=GroupMemberItem,
+    dependencies=[Depends(get_current_session)],
+)
+async def accept_group_invite(
+    group_id: uuid.UUID,
+    service: GroupService = Depends(get_group_service),
+    notifications: NotificationService = Depends(get_notification_service),
+):
+    return await service.accept_group_invite(group_id, notifications)
+
+
+@router.delete(
+    "/groups/{group_id}/members/{handle}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_session)],
+)
+async def remove_group_member(
+    group_id: uuid.UUID,
+    handle: str,
+    service: GroupService = Depends(get_group_service),
+):
+    await service.remove_member(group_id, handle)

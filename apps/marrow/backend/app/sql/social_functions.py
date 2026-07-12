@@ -27,3 +27,33 @@ CREATE POLICY notifications_owner ON notifications
     USING (user_id = current_setting('app.user_id', true)::uuid)
     WITH CHECK (user_id = current_setting('app.user_id', true)::uuid);
 """
+
+IS_GROUP_MEMBER_SQL = """
+CREATE OR REPLACE FUNCTION is_group_member(gid uuid, uid uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET row_security = off
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM group_members WHERE group_id = gid AND user_id = uid
+    );
+$$;
+"""
+
+IS_GROUP_OWNER_SQL = """
+CREATE OR REPLACE FUNCTION is_group_owner(gid uuid, uid uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET row_security = off
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM groups WHERE id = gid AND owner_id = uid
+    );
+$$;
+"""
