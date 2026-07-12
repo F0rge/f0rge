@@ -53,6 +53,7 @@ def upgrade() -> None:
         )
         op.alter_column(table, "created_at", server_default=None)
 
+    # DDL DEFAULT from source_column backfills existing rows without RLS-gated UPDATE.
     for table, source_column in _CREATED_AT_FROM_COLUMN:
         op.add_column(
             table,
@@ -60,10 +61,9 @@ def upgrade() -> None:
                 "created_at",
                 sa.DateTime(),
                 nullable=False,
-                server_default=sa.text("now()"),
+                server_default=sa.text(source_column),
             ),
         )
-        bind.execute(sa.text(f"UPDATE {table} SET created_at = {source_column}"))
         op.alter_column(table, "created_at", server_default=None)
 
     bind.execute(
