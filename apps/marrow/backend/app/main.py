@@ -27,6 +27,7 @@ from app.routers import (
     labs,
     meals,
     medication_catalog,
+    notifications,
     onboarding,
     photos,
     settings as settings_router,
@@ -170,6 +171,7 @@ app.include_router(settings_router.router)
 app.include_router(lab_markers.router)
 app.include_router(trackers.router)
 app.include_router(social.router)
+app.include_router(notifications.router)
 
 
 @app.get("/api/v1/health")

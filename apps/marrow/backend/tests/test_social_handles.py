@@ -129,7 +129,9 @@ async def test_lookup_unauthenticated_401(async_client: AsyncClient):
     assert resp.status_code == 401
 
 
-async def test_handle_available_taken_and_free(async_client: AsyncClient, authed_client: AsyncClient):
+async def test_handle_available_taken_and_free(
+    async_client: AsyncClient, authed_client: AsyncClient
+):
     handle = f"avail_{uuid.uuid4().hex[:8]}"
     free = await async_client.get(f"/api/v1/social/handle-available?handle={handle}")
     assert free.status_code == 200

@@ -25,6 +25,7 @@ from app.models.embedding import Embedding
 from app.models.embedding_queue import EmbeddingQueue
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
+from app.models.notification import Notification
 
 __all__ = [
     "User",
@@ -52,4 +53,5 @@ __all__ = [
     "EmbeddingQueue",
     "Tracker",
     "TrackerLog",
+    "Notification",
 ]

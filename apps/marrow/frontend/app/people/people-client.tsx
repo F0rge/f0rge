@@ -45,7 +45,6 @@ const HUB_ITEMS = [
     icon: <Bell className="size-4" />,
     title: 'Notifications',
     description: 'Connection requests, invites, and tag activity.',
-    comingSoon: true,
   },
 ]
 

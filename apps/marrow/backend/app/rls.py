@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import sqlalchemy as sa
 from f0rge_db.rls import create_service_role_policy, enable_tenant_isolation
+from app.sql.social_functions import CREATE_NOTIFICATION_SQL
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 # Frozen import surface: migrations/versions/021_row_level_security.py does
@@ -64,3 +66,21 @@ async def enable_row_level_security(conn: AsyncConnection) -> None:
         tables=PROVISIONER_COPY_TABLES,
         role="provisioner",
     )
+
+
+async def enable_social_security(conn: AsyncConnection) -> None:
+    """Mirror social-layer migration DDL for test schema bootstrap."""
+    statements = [
+        "ALTER TABLE notifications ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE notifications FORCE ROW LEVEL SECURITY",
+        "DROP POLICY IF EXISTS notifications_owner ON notifications",
+        """
+        CREATE POLICY notifications_owner ON notifications
+            FOR ALL
+            USING (user_id = current_setting('app.user_id', true)::uuid)
+            WITH CHECK (user_id = current_setting('app.user_id', true)::uuid)
+        """,
+    ]
+    for stmt in statements:
+        await conn.execute(sa.text(stmt))
+    await conn.execute(sa.text(CREATE_NOTIFICATION_SQL))

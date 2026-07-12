@@ -58,7 +58,7 @@ from app.config import settings
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH  # noqa: E402
-from app.rls import enable_row_level_security
+from app.rls import enable_row_level_security, enable_social_security
 from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL
 from tests.helpers import signup_payload  # noqa: E402
 
@@ -88,6 +88,7 @@ async def async_engine(
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS citext"))
         await conn.run_sync(Base.metadata.create_all)
         await enable_row_level_security(conn)
+        await enable_social_security(conn)
         await conn.execute(sa.text(COPY_USER_CATALOG_FROM_REFERENCE_SQL))
         await conn.execute(
             sa.text(
