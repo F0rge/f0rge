@@ -180,10 +180,8 @@ jobs:
 
   deploy-frontend:
     name: deploy frontend
-    needs: [plan, deploy-api]
-    if: >-
-      needs.plan.outputs.deploy_frontend == 'true' &&
-      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
+    needs: plan
+    if: needs.plan.outputs.deploy_frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
