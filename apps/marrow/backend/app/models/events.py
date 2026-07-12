@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import event, insert, select
+from sqlalchemy import delete, event, func, insert, select
 
 from app.models.meal import Meal
+from app.models.meal_tag import MealTag
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
-
-
 from app.models.user import default_user_id
 
 
@@ -32,6 +31,32 @@ def _create_meal_for_photo(_mapper, connection, target: Photo) -> None:
         .returning(Meal.__table__.c.id)
     ).scalar_one()
     target.meal_id = meal_id
+
+
+@event.listens_for(Photo, "after_delete")
+def _cleanup_orphan_meal(_mapper, connection, target: Photo) -> None:
+    """Remove the canonical meal when the last placement is deleted."""
+    remaining = connection.execute(
+        select(func.count())
+        .select_from(Photo.__table__)
+        .where(
+            Photo.__table__.c.meal_id == target.meal_id,
+            Photo.__table__.c.id != target.id,
+        )
+    ).scalar_one()
+    if remaining > 0:
+        return
+    delivered_tags = connection.execute(
+        select(func.count())
+        .select_from(MealTag.__table__)
+        .where(
+            MealTag.__table__.c.source_meal_id == target.meal_id,
+            MealTag.__table__.c.status == "delivered",
+        )
+    ).scalar_one()
+    if delivered_tags > 0:
+        return
+    connection.execute(delete(Meal.__table__).where(Meal.__table__.c.id == target.meal_id))
 
 
 @event.listens_for(PhotoAnalysis, "before_insert")
