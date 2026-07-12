@@ -37,6 +37,32 @@ _CREATED_AT_FROM_COLUMN: tuple[tuple[str, str], ...] = (
 )
 
 
+def _backfill_created_at_from_column(bind: sa.Connection, table: str, source_column: str) -> None:
+    """Backfill ``created_at`` from another column under FORCE RLS.
+
+      Postgres rejects ``DEFAULT updated_at`` (column refs in DEFAULT), and a
+    blind ``UPDATE`` as ``schema_admin`` touches 0 rows under tenant policies.
+      Loop per user via ``set_config('app.user_id', ...)`` — same as migration 031.
+    """
+    op.add_column(
+        table,
+        sa.Column("created_at", sa.DateTime(), nullable=True),
+    )
+    user_ids = [r[0] for r in bind.execute(sa.text("SELECT id::text FROM users")).fetchall()]
+    for uid in user_ids:
+        bind.execute(sa.text("SELECT set_config('app.user_id', :uid, true)"), {"uid": uid})
+        bind.execute(
+            sa.text(
+                f"""
+                UPDATE {table}
+                SET created_at = {source_column}
+                WHERE created_at IS NULL
+                """
+            )
+        )
+    op.alter_column(table, "created_at", nullable=False)
+
+
 def upgrade() -> None:
     bind = op.get_bind()
 
@@ -53,18 +79,8 @@ def upgrade() -> None:
         )
         op.alter_column(table, "created_at", server_default=None)
 
-    # DDL DEFAULT from source_column backfills existing rows without RLS-gated UPDATE.
     for table, source_column in _CREATED_AT_FROM_COLUMN:
-        op.add_column(
-            table,
-            sa.Column(
-                "created_at",
-                sa.DateTime(),
-                nullable=False,
-                server_default=sa.text(source_column),
-            ),
-        )
-        op.alter_column(table, "created_at", server_default=None)
+        _backfill_created_at_from_column(bind, table, source_column)
 
     bind.execute(
         sa.text(
