@@ -169,6 +169,7 @@ The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and 
 
 ### Migrations gotcha
 - Alembic migrations 004/019 read `HEALTHTRACKER_RO_PASSWORD` / `HEALTHTRACKER_APP_PASSWORD` from **`os.environ`, not** from `.env` via pydantic. Export the `.env` before migrating: `cd apps/marrow/backend && set -a && . ./.env && set +a && uv run alembic upgrade head`. Running the backend itself does not need this (pydantic loads `.env`), only the migration step does.
+- **Cross-tenant data migrations under FORCE RLS:** use `f0rge_db.rls.migration_bypass` (transient `app.service_role = 'migrator'` policy). Do not loop per user with `set_config('app.user_id', ...)`. Single-tenant reference-user seeds may still use `app.user_id`. Full convention: `.cursor/rules/backend.mdc` § Alembic migrations under FORCE RLS.
 
 ### Running
 - Backend `:8000` + frontend `:3000` (frontend proxies `/api/*` → `:8000`): run `uv run uvicorn app.main:app --port 8000 --reload` in `apps/marrow/backend` and `npm run dev` in `apps/marrow/frontend` (from repo root: `npx nx run marrow-frontend:dev`). Install deps with `npm ci` at repo root (workspaces).

@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 from f0rge_db.db_url import asyncpg_connect_args, resolve_database_url
-from f0rge_db.rls import create_service_role_policy, enable_tenant_isolation
+from f0rge_db.rls import (
+    MIGRATION_DUMMY_USER_ID,
+    MIGRATION_SERVICE_ROLE,
+    create_service_role_policy,
+    enable_tenant_isolation,
+    install_migration_bypass,
+    migration_bypass,
+    remove_migration_bypass,
+)
 
 # ---------------------------------------------------------------------------
 # db_url — pure string normalization (lifted from marrow's test_db_url.py)
@@ -84,3 +92,58 @@ async def test_service_role_policy_select_has_no_with_check() -> None:
         "CREATE POLICY mcp_auth_lookup ON user_settings FOR SELECT "
         "USING (current_setting('app.service_role', true) = 'mcp_auth')",
     ]
+
+
+class _RecordingSyncConn:
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    def execute(self, clause, params=None) -> None:  # type: ignore[no-untyped-def]
+        text = " ".join(str(clause).split())
+        if params:
+            text = f"{text} params={params}"
+        self.statements.append(text)
+
+
+def test_install_migration_bypass_sql() -> None:
+    conn = _RecordingSyncConn()
+    install_migration_bypass(conn, ["tracker_log", "entries"])
+    assert conn.statements == [
+        "CREATE POLICY migration_bypass ON tracker_log FOR ALL "
+        "USING (current_setting('app.service_role', true) = 'migrator') "
+        "WITH CHECK (current_setting('app.service_role', true) = 'migrator')",
+        "CREATE POLICY migration_bypass ON entries FOR ALL "
+        "USING (current_setting('app.service_role', true) = 'migrator') "
+        "WITH CHECK (current_setting('app.service_role', true) = 'migrator')",
+        f"SELECT set_config('app.user_id', :user_id, true) params={{'user_id': '{MIGRATION_DUMMY_USER_ID}'}}",
+        f"SELECT set_config('app.service_role', :role, true) params={{'role': '{MIGRATION_SERVICE_ROLE}'}}",
+    ]
+
+
+def test_remove_migration_bypass_sql() -> None:
+    conn = _RecordingSyncConn()
+    remove_migration_bypass(conn, ["tracker_log"])
+    assert conn.statements == [
+        "SELECT set_config('app.user_id', '', true)",
+        "SELECT set_config('app.service_role', '', true)",
+        "DROP POLICY IF EXISTS migration_bypass ON tracker_log",
+    ]
+
+
+def test_migration_bypass_context_manager_success() -> None:
+    conn = _RecordingSyncConn()
+    with migration_bypass(conn, ["entries"]):
+        conn.execute("UPDATE entries SET symptoms_json = '{}'")
+    assert conn.statements[0].startswith("CREATE POLICY migration_bypass ON entries")
+    assert any("UPDATE entries" in stmt for stmt in conn.statements)
+    assert conn.statements[-1] == "DROP POLICY IF EXISTS migration_bypass ON entries"
+
+
+def test_migration_bypass_context_manager_skips_teardown_on_error() -> None:
+    conn = _RecordingSyncConn()
+    try:
+        with migration_bypass(conn, ["entries"]):
+            raise RuntimeError("migration failed")
+    except RuntimeError:
+        pass
+    assert not any("DROP POLICY" in stmt for stmt in conn.statements)
