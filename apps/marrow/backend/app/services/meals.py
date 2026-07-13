@@ -73,14 +73,15 @@ class MealService:
         meal_time: Optional[datetime.datetime] = None,
     ) -> Photo:
         """Copy a confirmed source meal onto ``target_date`` as new, decoupled rows."""
-        src = await self.analysis_crud.get_by_photo_id_with_ingredients_and_photo(source_photo_id)
+        src_photo = await self.photo_crud.get_by_id_owned(source_photo_id)
+        if src_photo is None:
+            raise NotFoundError(f"No photo for analysis on photo {source_photo_id}")
+
+        src = await self.analysis_crud.get_for_photo_with_ingredients(source_photo_id)
         if src is None:
             raise NotFoundError(f"No analysis for photo {source_photo_id}")
         if src.status != "confirmed":
             raise ValidationError("Source meal is not confirmed")
-        src_photo = src.photo
-        if src_photo is None:
-            raise NotFoundError(f"No photo for analysis on photo {source_photo_id}")
         user_id = current_user_id()
         user_id_str = str(user_id)
         if not photo_exists(src_photo.filename, user_id=user_id_str):
