@@ -163,6 +163,20 @@ class MealTagService:
     ) -> None:
         me = current_user_id()
         for recipient_id in recipients:
+            existing = await self.crud.get_for_source_and_recipient(photo.id, recipient_id)
+            if existing is not None:
+                if existing.status == "cancelled":
+                    existing.status = "pending_analysis"
+                    existing.resolved_at = None
+                    existing.source_meal_id = photo.meal_id
+                    existing.source_label = photo.label
+                    existing.source_date = entry_date
+                    await self.crud.flush()
+                    continue
+                if existing.status == "declined":
+                    raise ConflictError("This user declined the meal tag")
+                raise ConflictError("This meal was already tagged for that user")
+
             tag = MealTag(
                 source_photo_id=photo.id,
                 source_meal_id=photo.meal_id,
