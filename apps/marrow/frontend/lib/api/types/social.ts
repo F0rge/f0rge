@@ -4,6 +4,16 @@ export interface PublicUserCard {
   avatar_default_index: number
 }
 
+export type ConnectionStatus = 'none' | 'pending_outgoing' | 'pending_incoming' | 'connected'
+
+export interface UserSearchItem extends PublicUserCard {
+  connection_status: ConnectionStatus
+}
+
+export interface UserSearchResponse {
+  users: UserSearchItem[]
+}
+
 export interface HandleAvailableResponse {
   available: boolean
   reason?: 'available' | 'taken' | 'invalid' | null

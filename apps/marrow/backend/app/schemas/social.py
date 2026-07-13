@@ -30,6 +30,14 @@ class PublicUserCard(BaseModel):
     avatar_default_index: int
 
 
+class UserSearchItem(PublicUserCard):
+    connection_status: Literal["none", "pending_outgoing", "pending_incoming", "connected"]
+
+
+class UserSearchResponse(BaseModel):
+    users: list[UserSearchItem]
+
+
 class HandleAvailableResponse(BaseModel):
     available: bool
     reason: Literal["available", "taken", "invalid"] | None = None

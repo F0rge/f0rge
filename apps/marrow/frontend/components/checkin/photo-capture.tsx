@@ -257,6 +257,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
               </div>
               {((acceptedConnections.length > 0) || joinedGroups.length > 0) && (
                 <TagPeoplePicker
+                  mode="local"
                   connections={acceptedConnections}
                   groups={joinedGroups}
                   selectedHandles={photo.taggedHandles}

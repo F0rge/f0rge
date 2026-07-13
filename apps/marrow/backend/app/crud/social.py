@@ -27,6 +27,23 @@ class SocialCRUD(UserCRUD):
             await self.db.execute(select(User).where(User.handle == normalized))
         ).scalar_one_or_none()
 
+    async def search_users_by_handle_prefix(
+        self, query: str, *, limit: int
+    ) -> list[User]:
+        me = current_user_id()
+        prefix = normalize_handle(query)
+        if len(prefix) < 3:
+            return []
+        stmt = (
+            select(User)
+            .where(User.handle.is_not(None))
+            .where(User.handle.like(f"{prefix}%"))
+            .where(User.id != me)
+            .order_by(User.handle.asc())
+            .limit(limit)
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
     async def is_handle_taken(self, handle: str) -> bool:
         user = await self.get_by_handle(handle)
         return user is not None

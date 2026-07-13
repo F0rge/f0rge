@@ -23,6 +23,7 @@ from app.schemas.social import (
     HandleAvailableResponse,
     MealTagListResponse,
     PublicUserCard,
+    UserSearchResponse,
 )
 from app.services.groups import GroupService
 from app.services.meal_tags import MealTagService
@@ -53,6 +54,19 @@ async def lookup_user(
     service: SocialService = Depends(get_social_service),
 ):
     return await service.lookup_by_handle(handle)
+
+
+@router.get(
+    "/users/search",
+    response_model=UserSearchResponse,
+    dependencies=[Depends(get_current_session)],
+)
+async def search_users(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(10, ge=1, le=20),
+    service: SocialService = Depends(get_social_service),
+):
+    return await service.search_users(q, limit)
 
 
 @router.get(

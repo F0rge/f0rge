@@ -10,6 +10,7 @@ import type {
   HandleAvailableResponse,
   MealTagsResponse,
   PublicUserCard,
+  UserSearchResponse,
 } from '../types/social'
 
 function invalidateGroups(queryClient: QueryClient, groupId?: string) {
@@ -44,8 +45,21 @@ export function useUserLookup(handle: string) {
   })
 }
 
+export function useUserSearch(query: string) {
+  const normalized = query.trim().toLowerCase().replace(/^@/, '')
+  const enabled = normalized.length >= 3
+
+  return useQuery<UserSearchResponse>({
+    queryKey: ['social', 'users', 'search', normalized],
+    queryFn: () => apiGet(`/social/users/search?q=${encodeURIComponent(normalized)}`),
+    enabled,
+    staleTime: 10_000,
+  })
+}
+
 function invalidateMealTags(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['social', 'meal-tags'] })
+  queryClient.invalidateQueries({ queryKey: ['photo-tags'] })
   queryClient.invalidateQueries({ queryKey: ['entry'] })
   queryClient.invalidateQueries({ queryKey: ['entries'] })
   queryClient.invalidateQueries({ queryKey: ['notifications'] })
@@ -95,6 +109,7 @@ export function useSendConnectionRequest() {
     mutationFn: (handle: string) => apiPost('/social/connections', { handle }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['social', 'connections'] })
+      queryClient.invalidateQueries({ queryKey: ['social', 'users', 'search'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
@@ -106,6 +121,7 @@ export function useAcceptConnection() {
     mutationFn: (id: string) => apiPost(`/social/connections/${id}/accept`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['social', 'connections'] })
+      queryClient.invalidateQueries({ queryKey: ['social', 'users', 'search'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
@@ -117,6 +133,7 @@ export function useDeleteConnection() {
     mutationFn: (id: string) => apiDelete(`/social/connections/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['social', 'connections'] })
+      queryClient.invalidateQueries({ queryKey: ['social', 'users', 'search'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
