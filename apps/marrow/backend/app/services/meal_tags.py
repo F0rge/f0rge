@@ -244,7 +244,8 @@ class MealTagService:
             raise ValidationError("Tag is not awaiting approval")
         await self.delivery.deliver_one(tag_id, me)
         notifications = NotificationService(self.db)
-        await notifications.mark_resolved("meal_tag_request", "tag_id", str(tag_id))
+        async with unit_of_work(self.db):
+            await notifications.mark_resolved("meal_tag_request", "tag_id", str(tag_id))
 
     async def decline(self, tag_id: uuid.UUID) -> None:
         me = current_user_id()
