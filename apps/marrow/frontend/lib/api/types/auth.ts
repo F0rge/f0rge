@@ -1,6 +1,7 @@
 export interface AuthUser {
   authenticated: boolean
   email?: string
+  handle?: string | null
 }
 
 export interface LoginCredentials {
@@ -11,4 +12,5 @@ export interface LoginCredentials {
 export interface SignupCredentials {
   email: string
   password: string
+  handle: string
 }

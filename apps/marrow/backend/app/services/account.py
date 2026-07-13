@@ -22,6 +22,7 @@ from app.schemas.account import (
     AccountUpdate,
     PasswordChangeRequest,
 )
+from app.schemas.social import validate_handle_format
 from app.services import object_storage
 from app.services.auth import (
     clear_session_cookie,
@@ -29,6 +30,7 @@ from app.services.auth import (
     validate_password,
     verify_password,
 )
+from app.services.social import SocialService
 from app.services.avatar_storage import (
     avatar_exists,
     delete_avatar,
@@ -63,6 +65,7 @@ class AccountService:
             user_id=str(user.id),
             email=user.email,
             display_name=user.display_name,
+            handle=user.handle,
             avatar_default_index=user.avatar_default_index,
             has_custom_avatar=user.avatar_custom_filename is not None,
             created_at=user.created_at,
@@ -80,8 +83,20 @@ class AccountService:
 
     async def update(self, data: AccountUpdate) -> AccountResponse:
         user = await self._get_current_user()
+        dirty = False
         if "display_name" in data.model_fields_set:
             user.display_name = (data.display_name or "").strip() or None
+            dirty = True
+        if "handle" in data.model_fields_set and data.handle is not None:
+            if user.handle is not None:
+                normalized = validate_handle_format(data.handle)
+                if normalized != user.handle:
+                    raise ValidationError("Handle cannot be changed once set")
+            else:
+                social = SocialService(self.db)
+                user = await social.set_user_handle(user, data.handle)
+                dirty = False
+        if dirty:
             user = await self.crud.commit_refresh(user)
         return self._to_response(user)
 

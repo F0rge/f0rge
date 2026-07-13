@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+import uuid
+
+from fastapi import APIRouter, Depends, status
 
 from app.dependencies.food_analysis import get_food_analysis_service
-from app.middleware.auth import get_current_session
+from app.middleware.auth import get_current_session, get_current_user_id
 from app.schemas.food_analysis import (
     DietaryConfirmUpdate,
     IngredientCreate,
@@ -32,8 +34,9 @@ async def get_analysis(
 async def confirm_analysis(
     photo_id: int,
     service: FoodAnalysisService = Depends(get_food_analysis_service),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> PhotoAnalysisResponse:
-    return await service.confirm_analysis_by_photo_id(photo_id)
+    return await service.confirm_analysis_by_photo_id(photo_id, user_id)
 
 
 @router.put("/photos/{photo_id}/analysis/dietary-confirm", response_model=PhotoAnalysisResponse)

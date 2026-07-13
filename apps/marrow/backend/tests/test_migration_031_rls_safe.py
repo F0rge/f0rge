@@ -1,16 +1,19 @@
-"""Regression test for migration 031's symptom_catalog seed under FORCE RLS.
+"""Regression test for cross-tenant Alembic writes under FORCE RLS.
 
 Prod (f0rge-db) runs ``alembic upgrade`` as ``schema_admin`` — a NOSUPERUSER,
-NOBYPASSRLS role — and symptom_catalog uses FORCE ROW LEVEL SECURITY with the
-``tenant_isolation`` policy (USING / WITH CHECK ``user_id = app.user_id``). The
-original migration 031 did a single cross-tenant ``INSERT ... SELECT FROM users``
-that no single ``app.user_id`` can satisfy, so it raised InsufficientPrivilege
-and aborted every release. The fix loops per user, scoping each single-row insert
-to that tenant via ``set_config('app.user_id', ...)``.
+NOBYPASSRLS role — and user-owned tables use FORCE ROW LEVEL SECURITY with the
+``tenant_isolation`` policy. Cross-tenant statements without a bypass raise
+InsufficientPrivilege (migration 031's original bug) or fail silently (0 rows).
+
+The standard fix is a transient ``migration_bypass`` policy from ``f0rge_db.rls``
+(see backend.mdc § Alembic migrations under FORCE RLS). This test exercises that
+pattern against ``symptom_catalog`` using the same bulk INSERT shape migration 031
+needed.
 
 The normal suite can't see this bug: conftest connects as the postgres SUPERUSER,
 which bypasses RLS. This test reproduces the prod condition by creating a
-NOSUPERUSER / NOBYPASSRLS role and running under ``SET ROLE``.
+NOSUPERUSER / NOBYPASSRLS role that owns the table (like ``schema_admin``) and
+running under ``SET ROLE``.
 
 The negative (raising) case and the positive case run on separate connections:
 the raising INSERT aborts its transaction, and a top-level ROLLBACK is the clean
@@ -29,6 +32,7 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from app.config import settings
+from f0rge_db.rls import install_migration_bypass, remove_migration_bypass
 
 
 async def _seed_prod_condition(
@@ -61,6 +65,8 @@ async def _seed_prod_condition(
             {"u": uid},
         )
     await conn.execute(sa.text("CREATE ROLE rls_probe NOSUPERUSER NOBYPASSRLS"))
+    await conn.execute(sa.text("ALTER TABLE symptom_catalog OWNER TO rls_probe"))
+    await conn.execute(sa.text("ALTER TABLE entries OWNER TO rls_probe"))
     await conn.execute(
         sa.text("GRANT SELECT, INSERT, UPDATE ON symptom_catalog, entries TO rls_probe")
     )
@@ -68,13 +74,12 @@ async def _seed_prod_condition(
     await conn.execute(sa.text("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO rls_probe"))
 
 
-async def test_migration_031_seed_is_rls_safe(async_engine: AsyncEngine) -> None:
+async def test_migration_031_seed_is_rls_safe(superuser_engine: AsyncEngine) -> None:
     leo_id = uuid.UUID(settings.default_storage_user_id)
     other_id = uuid.uuid4()
 
-    # --- negative (documents the bug): the OLD cross-tenant INSERT ... SELECT FROM
-    # users RAISES under RLS. ---
-    async with async_engine.connect() as conn:
+    # --- negative (documents the bug): cross-tenant INSERT without bypass RAISES. ---
+    async with superuser_engine.connect() as conn:
         trans = await conn.begin()
         try:
             await _seed_prod_condition(conn, leo_id, other_id)
@@ -97,15 +102,15 @@ async def test_migration_031_seed_is_rls_safe(async_engine: AsyncEngine) -> None
         finally:
             # Top-level ROLLBACK clears the aborted txn + undoes the CREATE ROLE.
             await trans.rollback()
+            await conn.execute(sa.text("RESET ALL"))
 
-    # --- positive (proves the fix): the per-user loop succeeds under RLS, and
-    # archived follows the CASE (false for Leo, true for the non-ref user). ---
-    async with async_engine.connect() as conn:
+    # --- positive (proves the fix): transient migration_bypass succeeds under RLS. ---
+    async with superuser_engine.connect() as conn:
         trans = await conn.begin()
         try:
             await _seed_prod_condition(conn, leo_id, other_id)
-            # Migration 029 bulk-seeds Leo's catalog rows archived; 031's per-user
-            # INSERTs no-op on conflict, so the post-loop un-archive is required.
+            # Migration 029 bulk-seeds Leo's catalog rows archived; 031's INSERT
+            # no-ops on conflict, so the post-insert un-archive is required.
             await conn.execute(
                 sa.text(
                     """
@@ -127,47 +132,47 @@ async def test_migration_031_seed_is_rls_safe(async_engine: AsyncEngine) -> None
                 {"u": leo_id},
             )
             await conn.execute(sa.text("SET ROLE rls_probe"))
-            for uid in (leo_id, other_id):
-                await conn.execute(
-                    sa.text("SELECT set_config('app.user_id', :u, true)"),
-                    {"u": str(uid)},
-                )
-                await conn.execute(
-                    sa.text(
-                        """
-                        INSERT INTO symptom_catalog (
-                            user_id, key, label, archived, sort_order, created_at, updated_at
-                        )
-                        VALUES (
-                            CAST(:uid AS uuid), 'neuro_symptoms', 'Neuro symptoms',
-                            CASE WHEN CAST(:uid AS uuid) = CAST(:leo_id AS uuid)
-                                 THEN false ELSE true END,
-                            COALESCE(
-                                (SELECT MAX(sort_order) FROM symptom_catalog
-                                 WHERE user_id = CAST(:uid AS uuid)),
-                                -1
-                            ) + 1,
-                            now(), now()
-                        )
-                        ON CONFLICT ON CONSTRAINT uq_symptom_catalog_user_id_key DO NOTHING
-                        """
-                    ),
-                    {"uid": str(uid), "leo_id": str(leo_id)},
-                )
-            # Leo-only un-archive from migration 031 (lines 159–173).
+
+            await conn.run_sync(
+                lambda sync_conn: install_migration_bypass(sync_conn, ["symptom_catalog"])
+            )
             await conn.execute(
-                sa.text("SELECT set_config('app.user_id', :u, true)"),
-                {"u": str(leo_id)},
+                sa.text(
+                    """
+                    INSERT INTO symptom_catalog (
+                        user_id, key, label, archived, sort_order, created_at, updated_at
+                    )
+                    SELECT
+                        u.id,
+                        'neuro_symptoms',
+                        'Neuro symptoms',
+                        CASE WHEN u.id = CAST(:leo_id AS uuid) THEN false ELSE true END,
+                        COALESCE(
+                            (SELECT MAX(sort_order) FROM symptom_catalog sc
+                             WHERE sc.user_id = u.id),
+                            -1
+                        ) + 1,
+                        now(),
+                        now()
+                    FROM users u
+                    ON CONFLICT ON CONSTRAINT uq_symptom_catalog_user_id_key DO NOTHING
+                    """
+                ),
+                {"leo_id": str(leo_id)},
             )
             await conn.execute(
                 sa.text(
                     """
                     UPDATE symptom_catalog
                     SET archived = false, updated_at = now()
-                    WHERE key = ANY(:keys)
+                    WHERE user_id = CAST(:leo_id AS uuid)
+                      AND key = ANY(:keys)
                     """
                 ),
-                {"keys": ["joint_pain", "neuro_symptoms"]},
+                {"leo_id": str(leo_id), "keys": ["joint_pain", "neuro_symptoms"]},
+            )
+            await conn.run_sync(
+                lambda sync_conn: remove_migration_bypass(sync_conn, ["symptom_catalog"])
             )
             await conn.execute(sa.text("RESET ROLE"))
 
@@ -185,3 +190,4 @@ async def test_migration_031_seed_is_rls_safe(async_engine: AsyncEngine) -> None
             assert by_user_key[(leo_id, "neuro_symptoms")] is False
         finally:
             await trans.rollback()
+            await conn.execute(sa.text("RESET ALL"))

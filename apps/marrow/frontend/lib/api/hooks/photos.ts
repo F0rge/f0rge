@@ -4,6 +4,50 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, ApiError } from '@f0rge/ui/api'
 import type { PhotoAnalysis } from '../types'
 
+export interface PhotoMealTagItem {
+  id: string
+  user: {
+    handle: string
+    display_name: string | null
+    avatar_default_index: number
+  }
+  status: string
+}
+
+export interface PhotoMealTagListResponse {
+  tags: PhotoMealTagItem[]
+}
+
+export function usePhotoTags(photoId: number, enabled = true) {
+  return useQuery<PhotoMealTagListResponse>({
+    queryKey: ['photo-tags', photoId],
+    queryFn: () => apiGet(`/photos/${photoId}/tags`),
+    enabled: enabled && photoId > 0,
+  })
+}
+
+export function useAddPhotoTags() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      photoId,
+      handles,
+      groupIds = [],
+    }: {
+      photoId: number
+      handles: string[]
+      groupIds?: string[]
+    }) => apiPost(`/photos/${photoId}/tags`, { handles, group_ids: groupIds }),
+    onSuccess: (_data, { photoId }) => {
+      queryClient.invalidateQueries({ queryKey: ['photo-tags', photoId] })
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['social', 'meal-tags'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
 export function useUploadPhoto() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -12,16 +56,26 @@ export function useUploadPhoto() {
       file,
       label,
       mealTime,
+      taggedHandles,
+      taggedGroupIds,
     }: {
       date: string
       file: File
       label?: string
       mealTime?: Date | null
+      taggedHandles?: string[]
+      taggedGroupIds?: string[]
     }) => {
       const formData = new FormData()
       formData.append('file', file)
       if (label) formData.append('label', label)
       if (mealTime) formData.append('meal_time', mealTime.toISOString())
+      if (taggedHandles && taggedHandles.length > 0) {
+        formData.append('tagged_handles', JSON.stringify(taggedHandles))
+      }
+      if (taggedGroupIds && taggedGroupIds.length > 0) {
+        formData.append('tagged_group_ids', JSON.stringify(taggedGroupIds))
+      }
       return apiPostForm(`/entries/${date}/photos`, formData)
     },
     onSuccess: () => {
@@ -42,7 +96,11 @@ export function useDeletePhoto() {
   })
 }
 
-export function usePhotoAnalysis(photoId: number | null) {
+export function usePhotoAnalysis(
+  photoId: number | null,
+  options?: { sharedMeal?: boolean },
+) {
+  const sharedMeal = options?.sharedMeal ?? false
   return useQuery<PhotoAnalysis | null>({
     queryKey: ['photo-analysis', photoId],
     queryFn: async () => {
@@ -60,6 +118,9 @@ export function usePhotoAnalysis(photoId: number | null) {
       const status = query.state.data?.status
       if (status === 'pending' || status === 'analyzing') {
         return 2000
+      }
+      if (sharedMeal && query.state.data === null) {
+        return 3000
       }
       return false
     },

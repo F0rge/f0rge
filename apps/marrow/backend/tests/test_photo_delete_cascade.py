@@ -1,9 +1,4 @@
-"""Regression test for the production bug where deleting a Photo failed with
-an integrity error on the photo_analyses.photo_id FK.
-
-Caused by missing cascade on Photo.analysis — SQLAlchemy tried to NULL the
-FK on photo delete instead of deleting the orphaned analysis row.
-"""
+"""Regression test for photo delete with meal-scoped analysis."""
 
 from __future__ import annotations
 
@@ -12,6 +7,7 @@ import datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.meals import MealCRUD
 from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
@@ -21,7 +17,7 @@ from app.models.photo_ingredient import PhotoIngredient
 async def _make_entry_with_analyzed_photo(
     db: AsyncSession,
 ) -> tuple[Entry, Photo]:
-    """Build a realistic graph: entry -> photo -> analysis -> ingredients."""
+    """Build a realistic graph: entry -> photo -> meal analysis -> ingredients."""
     entry = Entry(
         date=datetime.date.today(),
         overall=2,
@@ -84,59 +80,36 @@ async def _make_entry_with_analyzed_photo(
 
 
 async def test_delete_photo_with_analysis_cascades(async_db: AsyncSession) -> None:
-    """The exact production failure: deleting a Photo that has a
-    PhotoAnalysis must NOT raise IntegrityError. The analysis row should
-    be deleted along with the photo."""
+    """Deleting the sole placement removes the orphaned meal and its analysis."""
     _, photo = await _make_entry_with_analyzed_photo(async_db)
     photo_id = photo.id
-    # Expire then re-fetch the photo so the ORM hydrates `analysis` and
-    # knows to issue the dependent DELETE before the FK check fires.
+    meal_id = photo.meal_id
     async_db.expire_all()
     photo = (await async_db.execute(select(Photo).where(Photo.id == photo_id))).scalar_one()
-    _ = photo.analysis  # ensure the relationship is materialised
 
-    # Sanity: analysis + ingredients exist before delete
     assert (
         await async_db.execute(
-            select(func.count())
-            .select_from(PhotoAnalysis)
-            .where(PhotoAnalysis.photo_id == photo_id)
+            select(func.count()).select_from(PhotoAnalysis).where(PhotoAnalysis.meal_id == meal_id)
         )
     ).scalar_one() == 1
-    assert (
-        await async_db.execute(
-            select(func.count())
-            .select_from(PhotoIngredient)
-            .join(PhotoAnalysis)
-            .where(PhotoAnalysis.photo_id == photo_id)
-        )
-    ).scalar_one() == 2
 
     await async_db.delete(photo)
-    await async_db.commit()  # would raise IntegrityError without the cascade
+    await async_db.commit()
 
-    # Photo gone
     assert (
         await async_db.execute(select(Photo).where(Photo.id == photo_id))
     ).scalar_one_or_none() is None
-    # Analysis cascaded
     assert (
         await async_db.execute(
-            select(func.count())
-            .select_from(PhotoAnalysis)
-            .where(PhotoAnalysis.photo_id == photo_id)
+            select(func.count()).select_from(PhotoAnalysis).where(PhotoAnalysis.meal_id == meal_id)
         )
     ).scalar_one() == 0
-    # Ingredients cascaded through the analysis
     assert (
         await async_db.execute(select(func.count()).select_from(PhotoIngredient))
     ).scalar_one() == 0
 
 
-async def test_delete_photo_without_analysis_still_works(
-    async_db: AsyncSession,
-) -> None:
-    """Photos that were never analyzed should also delete cleanly."""
+async def test_delete_photo_without_analysis_still_works(async_db: AsyncSession) -> None:
     entry = Entry(
         date=datetime.date.today(),
         overall=2,
@@ -172,21 +145,12 @@ async def test_delete_photo_without_analysis_still_works(
     ).scalar_one_or_none() is None
 
 
-async def test_delete_entry_cascades_to_photo_and_analysis(
-    async_db: AsyncSession,
-) -> None:
-    """Deleting an Entry should also wipe its photos and their analyses
-    (Entry.photos already has cascade='all, delete-orphan')."""
+async def test_delete_entry_cascades_to_photo_and_analysis(async_db: AsyncSession) -> None:
     entry, _ = await _make_entry_with_analyzed_photo(async_db)
     entry_id = entry.id
 
-    # Expire then re-fetch so the cascade traversal sees photos + their
-    # analysis rows (the SQLite tests passed because SQLite didn't enforce
-    # FK constraints; Postgres does).
     async_db.expire_all()
     entry = (await async_db.execute(select(Entry).where(Entry.id == entry_id))).scalar_one()
-    for photo in entry.photos:
-        _ = photo.analysis
 
     await async_db.delete(entry)
     await async_db.commit()
@@ -201,3 +165,29 @@ async def test_delete_entry_cascades_to_photo_and_analysis(
     assert (
         await async_db.execute(select(func.count()).select_from(PhotoIngredient))
     ).scalar_one() == 0
+
+
+async def test_delete_photo_leaves_shared_meal_analysis(async_db: AsyncSession) -> None:
+    """Deleting one placement must not remove analysis while another placement exists."""
+    _, source = await _make_entry_with_analyzed_photo(async_db)
+    meal_id = source.meal_id
+    copy = Photo(
+        entry_id=source.entry_id,
+        meal_id=meal_id,
+        filename="2026-05-15_photo-2.jpg",
+        source_photo_id=source.id,
+        created_at=datetime.datetime.utcnow(),
+    )
+    async_db.add(copy)
+    await async_db.commit()
+    await async_db.refresh(copy)
+
+    await async_db.delete(copy)
+    await MealCRUD(async_db).delete_if_orphaned(meal_id)
+    await async_db.commit()
+
+    assert (
+        await async_db.execute(
+            select(func.count()).select_from(PhotoAnalysis).where(PhotoAnalysis.meal_id == meal_id)
+        )
+    ).scalar_one() == 1

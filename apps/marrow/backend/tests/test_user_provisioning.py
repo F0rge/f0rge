@@ -25,6 +25,7 @@ from app.services.user_provisioning import (
     repair_infrastructure_catalogs,
 )
 from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL
+from tests.helpers import signup_payload
 
 
 async def _set_session_user_id(async_db: AsyncSession, user_id: uuid.UUID) -> None:
@@ -41,7 +42,7 @@ TEST_PASSWORD = "test-password-12"
 async def _signup_user(async_client: AsyncClient, email: str = TEST_EMAIL) -> uuid.UUID:
     resp = await async_client.post(
         "/api/v1/auth/signup",
-        json={"email": email, "password": TEST_PASSWORD},
+        json=signup_payload(email, TEST_PASSWORD),
     )
     assert resp.status_code == 200
     return uuid.UUID(resp.json()["user_id"])

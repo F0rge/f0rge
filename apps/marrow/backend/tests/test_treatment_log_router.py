@@ -30,6 +30,8 @@ async def test_empty_user_id_guc_breaks_uuid_cast(async_db: AsyncSession) -> Non
     await async_db.execute(sa.text("SELECT set_config('app.user_id', '', false)"))
     with pytest.raises(DBAPIError):
         await async_db.execute(sa.text("SELECT current_setting('app.user_id', true)::uuid"))
+    await async_db.rollback()
+    await clear_tenant_session(async_db)
 
 
 @pytest.mark.asyncio

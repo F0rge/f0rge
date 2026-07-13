@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.models.user import User
 from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
+from app.models.meal import Meal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
@@ -25,10 +26,16 @@ from app.models.embedding import Embedding
 from app.models.embedding_queue import EmbeddingQueue
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
+from app.models.notification import Notification
+from app.models.connection import Connection
+from app.models.group import Group, GroupMember
+from app.models.meal_tag import MealTag
+import app.models.events  # noqa: F401 — register ORM insert hooks
 
 __all__ = [
     "User",
     "Entry",
+    "Meal",
     "Photo",
     "PhotoAnalysis",
     "PhotoIngredient",
@@ -52,4 +59,9 @@ __all__ = [
     "EmbeddingQueue",
     "Tracker",
     "TrackerLog",
+    "Notification",
+    "Connection",
+    "Group",
+    "GroupMember",
+    "MealTag",
 ]

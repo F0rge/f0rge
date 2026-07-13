@@ -51,11 +51,11 @@ class EntryOrchestrator:
         # asyncpg greenlet bridge -> ``MissingGreenlet``. ``refresh()`` reloads
         # it safely because it's awaited (#225 6.5's "keep it when in doubt").
         await self.db.refresh(entry)
-        return _build_response(entry)
+        return await _build_response(self.db, entry)
 
     async def update_entry(self, date: datetime.date, body: EntryUpdate) -> EntryResponse:
         async with unit_of_work(self.db):
             entry = await self.entry_service.stage_update(date, body)
             await self._touch_catalogs(entry)
             await sync_seed_tracker_log_from_entry(self.db, entry)
-        return _build_response(entry)
+        return await _build_response(self.db, entry)

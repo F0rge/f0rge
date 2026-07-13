@@ -152,7 +152,7 @@ async def test_entry_omitted_symptoms_defaults_to_empty_dict(
     entry = await _make_entry(async_db, _DATE)
     assert entry.symptoms_json == {}
 
-    response = entries_service._build_response(entry)
+    response = await entries_service._build_response(async_db, entry)
     assert response.symptoms_json == {}
 
 

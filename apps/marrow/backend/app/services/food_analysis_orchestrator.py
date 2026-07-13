@@ -58,6 +58,11 @@ async def _load_photo_context(
     user_id_str = str(user_id)
     await apply_session_user_id(db, user_id)
 
+    photo = await photo_crud.get_by_id(photo_id)
+    if not photo:
+        logger.warning("Skipping analysis for missing photo %d", photo_id)
+        return None
+
     from app.services.llm.factory import resolve_llm_credentials
 
     api_key, model = await resolve_llm_credentials(db, user_id=user_id)
@@ -68,11 +73,12 @@ async def _load_photo_context(
             "feature with FOOD_ANALYSIS_ENABLED=false.",
             photo_id,
         )
-        existing = await analysis_crud.get_by_photo_id(photo_id)
+        existing = await analysis_crud.get_by_meal_id(photo.meal_id)
         if existing is None:
             analysis_crud.add(
                 PhotoAnalysis(
                     user_id=user_id,
+                    meal_id=photo.meal_id,
                     photo_id=photo_id,
                     status="failed",
                     model_id=model,
@@ -87,7 +93,7 @@ async def _load_photo_context(
         return None
 
     # Reuse a pending record or skip if already running/finished.
-    existing = await analysis_crud.get_by_photo_id(photo_id)
+    existing = await analysis_crud.get_by_meal_id(photo.meal_id)
 
     if existing and existing.status not in ("pending", "failed"):
         logger.info(
@@ -102,19 +108,18 @@ async def _load_photo_context(
         analysis.status = "analyzing"
         analysis.error_message = None
         analysis.model_id = model
+        if analysis.photo_id is None:
+            analysis.photo_id = photo_id
     else:
         analysis = PhotoAnalysis(
             user_id=user_id,
+            meal_id=photo.meal_id,
             photo_id=photo_id,
             status="analyzing",
             model_id=model,
         )
         analysis_crud.add(analysis)
     analysis = await analysis_crud.commit_refresh(analysis)
-
-    photo = await photo_crud.get_by_id(photo_id)
-    if not photo:
-        raise NotFoundError(f"Photo {photo_id} not found in database")
 
     return _PhotoContext(
         analysis=analysis,

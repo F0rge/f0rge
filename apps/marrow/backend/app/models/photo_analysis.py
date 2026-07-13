@@ -13,7 +13,10 @@ from app.models.user import default_user_id
 
 class PhotoAnalysis(Base):
     __tablename__ = "photo_analyses"
-    __table_args__ = (Index("ix_photo_analyses_user_id", "user_id"),)
+    __table_args__ = (
+        Index("ix_photo_analyses_user_id", "user_id"),
+        Index("ix_photo_analyses_meal_id", "meal_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -22,11 +25,16 @@ class PhotoAnalysis(Base):
         nullable=False,
         default=default_user_id,
     )
-    photo_id: Mapped[int] = mapped_column(
+    meal_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("photos.id", ondelete="CASCADE"),
+        ForeignKey("meals.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
+    )
+    photo_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("photos.id", ondelete="SET NULL"),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
     dish_name: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -51,7 +59,8 @@ class PhotoAnalysis(Base):
         onupdate=datetime.datetime.utcnow,
     )
 
-    photo: Mapped[Photo] = relationship("Photo", back_populates="analysis", lazy="selectin")
+    meal: Mapped[Meal] = relationship("Meal", back_populates="analysis", lazy="selectin")
+    photo: Mapped[Photo | None] = relationship("Photo", lazy="selectin")
     ingredients: Mapped[list[PhotoIngredient]] = relationship(
         "PhotoIngredient",
         back_populates="analysis",

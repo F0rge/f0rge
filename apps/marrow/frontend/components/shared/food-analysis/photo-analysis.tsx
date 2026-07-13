@@ -21,6 +21,8 @@ interface PhotoAnalysisProps {
   photoId: number
   mode?: PhotoAnalysisMode
   hideConfirmButton?: boolean
+  /** Shared meal placement (delivered tag copy) — show waiting state instead of empty body. */
+  isSharedMeal?: boolean
   /** Hide the dish-name/confidence header row — used by PhotoFocusOverlay,
    * which already shows the title in its own header. */
   hideTitle?: boolean
@@ -137,9 +139,10 @@ export function PhotoAnalysis({
   photoId,
   mode = 'edit',
   hideConfirmButton = false,
+  isSharedMeal = false,
   hideTitle = false,
 }: PhotoAnalysisProps) {
-  const { data: analysis, isLoading } = usePhotoAnalysis(photoId)
+  const { data: analysis, isLoading } = usePhotoAnalysis(photoId, { sharedMeal: isSharedMeal })
   const confirmAnalysis = useConfirmAnalysis()
   const retryAnalysis = useRetryAnalysis()
   const updateDietaryConfirm = useUpdateDietaryConfirm()
@@ -147,10 +150,27 @@ export function PhotoAnalysis({
   const canEdit = mode === 'edit'
 
   if (isLoading) {
-    return null
+    return (
+      <div className="mt-2 rounded-lg border border-border p-2.5">
+        <div className="flex items-center gap-2">
+          <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Loading meal analysis…</span>
+        </div>
+      </div>
+    )
   }
 
   if (!analysis) {
+    if (isSharedMeal) {
+      return (
+        <div className="mt-2 rounded-lg border border-border p-2.5">
+          <div className="flex items-center gap-2">
+            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Waiting for meal analysis…</span>
+          </div>
+        </div>
+      )
+    }
     return null
   }
 

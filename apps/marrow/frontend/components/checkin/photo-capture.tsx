@@ -3,7 +3,9 @@
 import { useRef, useState, useCallback } from 'react'
 import { Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
 import { MealTimeChips } from './meal-time-chips'
+import { TagPeoplePicker } from './tag-people-picker'
 import { useUploadPhoto } from '@/lib/api/hooks'
+import { useConnections, useGroups } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 
 interface StagedPhoto {
@@ -11,6 +13,8 @@ interface StagedPhoto {
   file: File
   label: string
   mealTime: Date
+  taggedHandles: string[]
+  taggedGroupIds: string[]
   status: 'staged' | 'uploading' | 'error'
   errorMessage?: string
 }
@@ -29,6 +33,10 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const uploadPhoto = useUploadPhoto()
+  const connections = useConnections()
+  const groups = useGroups()
+  const acceptedConnections = connections.data?.accepted ?? []
+  const joinedGroups = (groups.data ?? []).filter((g) => g.my_status === 'joined')
 
   const [photos, setPhotos] = useState<StagedPhoto[]>([])
 
@@ -44,6 +52,8 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
       file,
       label: '',
       mealTime: new Date(now),
+      taggedHandles: [],
+      taggedGroupIds: [],
       status: 'staged',
     }))
     setPhotos((prev) => [...prev, ...staged])
@@ -70,6 +80,8 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         file: photo.file,
         label: photo.label || undefined,
         mealTime: photo.mealTime,
+        taggedHandles: photo.taggedHandles,
+        taggedGroupIds: photo.taggedGroupIds,
       })
 
       setPhotos((prev) => prev.filter((p) => p.id !== id))
@@ -102,6 +114,8 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         file: photo.file,
         label: photo.label || undefined,
         mealTime: photo.mealTime,
+        taggedHandles: photo.taggedHandles,
+        taggedGroupIds: photo.taggedGroupIds,
       })
 
       setPhotos((prev) => prev.filter((p) => p.id !== id))
@@ -241,6 +255,26 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                   }}
                 />
               </div>
+              {((acceptedConnections.length > 0) || joinedGroups.length > 0) && (
+                <TagPeoplePicker
+                  mode="local"
+                  connections={acceptedConnections}
+                  groups={joinedGroups}
+                  selectedHandles={photo.taggedHandles}
+                  selectedGroupIds={photo.taggedGroupIds}
+                  onChangeHandles={(taggedHandles) => {
+                    setPhotos((prev) =>
+                      prev.map((p) => p.id === photo.id ? { ...p, taggedHandles } : p),
+                    )
+                  }}
+                  onChangeGroupIds={(taggedGroupIds) => {
+                    setPhotos((prev) =>
+                      prev.map((p) => p.id === photo.id ? { ...p, taggedGroupIds } : p),
+                    )
+                  }}
+                  disabled={photo.status === 'uploading'}
+                />
+              )}
             </div>
           ))}
         </div>

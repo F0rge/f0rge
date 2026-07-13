@@ -24,12 +24,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.config import settings
 
 
-async def test_copy_catalog_under_non_superuser_role(async_engine: AsyncEngine) -> None:
+async def test_copy_catalog_under_non_superuser_role(superuser_engine: AsyncEngine) -> None:
     ref_id = uuid.UUID(settings.default_storage_user_id)
     new_id_provisioner = uuid.uuid4()
     new_id_plain = uuid.uuid4()
 
-    async with async_engine.connect() as conn:
+    async with superuser_engine.connect() as conn:
         trans = await conn.begin()
         try:
             # --- superuser setup (RLS bypassed) ---

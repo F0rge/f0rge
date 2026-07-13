@@ -9,10 +9,14 @@ from pydantic import BaseModel, ConfigDict, field_validator
 class PhotoResponse(BaseModel):
     id: int
     entry_id: int
+    meal_id: int | None = None
     filename: str
     label: Optional[str] = None
     meal_time: Optional[datetime.datetime] = None
     created_at: datetime.datetime
+    source_photo_id: Optional[int] = None
+    tagged_by_handle: Optional[str] = None
+    tagged_with_handles: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 

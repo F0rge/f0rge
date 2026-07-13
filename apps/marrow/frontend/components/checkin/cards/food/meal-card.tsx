@@ -1,6 +1,7 @@
 'use client'
 
 import { Loader2, X } from 'lucide-react'
+import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
 import { buildAggregateBadges } from '@/components/shared/food-analysis/dietary-badges'
 import type { Photo } from '@/lib/api/types'
 import { usePhotoAnalysis } from '@/lib/api/hooks'
@@ -67,6 +68,7 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
                   </span>
                 )}
               </div>
+              <MealCompanionsSection photo={photo} variant="compact" />
               {badges.length > 0 && (
                 <span className="mt-1 inline-flex flex-wrap gap-0.5">
                   {badges.map((b, i) => (

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING, Optional
 
 from fastapi import BackgroundTasks
@@ -14,7 +15,9 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, IngredientUpdate
 from app.services.ingredient_lookup import IngredientLookupService
+from app.services.tag_delivery import TagDeliveryService
 from app.services.vision_prompt import VisionResult
+from f0rge_db.tenant import current_user_id
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
@@ -42,8 +45,8 @@ class FoodAnalysisService:
         self.orchestrator = orchestrator
 
     async def get_analysis(self, photo_id: int) -> Optional[PhotoAnalysis]:
-        """Get analysis for a photo, with eagerly loaded ingredients."""
-        return await self.analysis_crud.get_by_photo_id_with_ingredients(photo_id)
+        """Get canonical meal analysis for a photo placement."""
+        return await self.analysis_crud.get_for_photo_with_ingredients(photo_id)
 
     async def confirm_analysis(self, analysis_id: int) -> PhotoAnalysis:
         """Set analysis status to confirmed."""
@@ -53,10 +56,17 @@ class FoodAnalysisService:
         analysis.status = "confirmed"
         return await self.analysis_crud.commit_refresh(analysis)
 
-    async def confirm_analysis_by_photo_id(self, photo_id: int) -> PhotoAnalysis:
-        """Resolve the analysis for a photo and confirm it; raises NotFoundError if absent."""
+    async def confirm_analysis_by_photo_id(
+        self, photo_id: int, user_id: uuid.UUID
+    ) -> PhotoAnalysis:
+        """Confirm the shared meal analysis; tagger or recipient."""
         analysis = await self.get_analysis_or_404(photo_id)
-        return await self.confirm_analysis(analysis.id)
+        analysis.status = "confirmed"
+        await self.analysis_crud.flush()
+        photo = await PhotoCRUD(self.db).get_by_id_owned(photo_id)
+        if photo is not None and photo.source_photo_id is None:
+            await TagDeliveryService().deliver_for_source_in_transaction(self.db, photo_id, user_id)
+        return await self.analysis_crud.commit_refresh(analysis)
 
     async def set_dietary_confirmations(
         self, photo_id: int, updates: DietaryConfirmUpdate
@@ -75,7 +85,7 @@ class FoodAnalysisService:
         self, ingredient_id: int, updates: IngredientUpdate
     ) -> PhotoIngredient:
         """Update an ingredient and set user_edited flag."""
-        ingredient = await self.ingredient_crud.get_by_id(ingredient_id)
+        ingredient = await self.ingredient_crud.get_by_id_for_editing(ingredient_id)
         if not ingredient:
             raise NotFoundError("Ingredient not found")
 
@@ -102,7 +112,7 @@ class FoodAnalysisService:
 
     async def add_ingredient(self, analysis_id: int, data: IngredientCreate) -> PhotoIngredient:
         """Add a manually-entered ingredient to an analysis."""
-        analysis = await self.analysis_crud.get_by_id(analysis_id)
+        analysis = await self.analysis_crud.get_by_id_for_editing(analysis_id)
         if not analysis:
             raise NotFoundError("Analysis not found")
 
@@ -110,7 +120,7 @@ class FoodAnalysisService:
         match = await lookup.lookup(data.name)
 
         ingredient = PhotoIngredient(
-            user_id=analysis.user_id,
+            user_id=current_user_id(),
             analysis_id=analysis_id,
             name=data.name,
             canonical_name=match.canonical_name if match else data.canonical_name,
@@ -130,7 +140,7 @@ class FoodAnalysisService:
 
     async def delete_analysis(self, analysis_id: int) -> None:
         """Delete an analysis and its ingredients (cascade)."""
-        analysis = await self.analysis_crud.get_by_id(analysis_id)
+        analysis = await self.analysis_crud.get_by_id_for_editing(analysis_id)
         if analysis:
             await self.analysis_crud.delete_and_commit(analysis)
 
@@ -141,6 +151,7 @@ class FoodAnalysisService:
             raise NotFoundError(f"Photo {photo_id} not found")
         analysis = PhotoAnalysis(
             user_id=photo.user_id,
+            meal_id=photo.meal_id,
             photo_id=photo_id,
             status="pending",
             model_id=settings.openrouter_model,
@@ -150,7 +161,7 @@ class FoodAnalysisService:
 
     async def delete_ingredient(self, ingredient_id: int) -> None:
         """Delete an ingredient by id."""
-        ingredient = await self.ingredient_crud.get_by_id(ingredient_id)
+        ingredient = await self.ingredient_crud.get_by_id_for_editing(ingredient_id)
         if not ingredient:
             raise NotFoundError("Ingredient not found")
         await self.ingredient_crud.delete_and_commit(ingredient)

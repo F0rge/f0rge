@@ -6,10 +6,12 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.meals import MealCRUD
 from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
 from f0rge_core.exceptions import NotFoundError, ValidationError
+from app.models.meal import Meal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
@@ -24,15 +26,14 @@ from f0rge_db.tenant import current_user_id
 class MealService:
     """Re-log a previously-analyzed meal without re-shooting or re-running the AI.
 
-    A "meal" is one Photo + its confirmed PhotoAnalysis + that analysis's
-    PhotoIngredient rows. ``clone`` copies those onto a target day as brand-new
-    rows (decoupled from the source), with the analysis pre-``confirmed`` so it
-    counts toward the diet signal immediately. The vision AI is never invoked.
+    ``clone`` copies a confirmed meal onto a target day as a **new** canonical
+    meal (decoupled from the source), with analysis pre-``confirmed``.
     """
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.photo_crud = PhotoCRUD(db)
+        self.meal_crud = MealCRUD(db)
         self.analysis_crud = PhotoAnalysisCRUD(db)
         self.ingredient_crud = PhotoIngredientCRUD(db)
 
@@ -40,17 +41,13 @@ class MealService:
         """Distinct recently-logged meals, most-recent first, deduped by dish name."""
         rows = await self.analysis_crud.list_confirmed_with_entry_dates()
 
-        # times_logged counts DISTINCT dates a dish appears on, so two photos of
-        # the same dish on one day count once.
         dates_per_dish: dict[str, set[datetime.date]] = {}
-        for analysis, entry_date in rows:
+        for analysis, entry_date, _photo_id in rows:
             dates_per_dish.setdefault(analysis.dish_name, set()).add(entry_date)
 
-        # Rows are date-desc, so the first occurrence of each dish is its
-        # most-recent instance = the representative we offer for cloning.
         seen: set[str] = set()
         out: list[RecentMealResponse] = []
-        for analysis, entry_date in rows:
+        for analysis, entry_date, photo_id in rows:
             dish = analysis.dish_name
             if dish in seen:
                 continue
@@ -59,7 +56,7 @@ class MealService:
             out.append(
                 RecentMealResponse(
                     dish_name=dish,
-                    source_photo_id=analysis.photo_id,
+                    source_photo_id=photo_id,
                     times_logged=len(dates_per_dish[dish]),
                     last_logged=entry_date,
                     diet_flags=sorted(signal.flags),
@@ -76,13 +73,15 @@ class MealService:
         meal_time: Optional[datetime.datetime] = None,
     ) -> Photo:
         """Copy a confirmed source meal onto ``target_date`` as new, decoupled rows."""
-        # 1. Load + validate the source before writing anything.
-        src = await self.analysis_crud.get_by_photo_id_with_ingredients_and_photo(source_photo_id)
+        src_photo = await self.photo_crud.get_by_id_owned(source_photo_id)
+        if src_photo is None:
+            raise NotFoundError(f"No photo for analysis on photo {source_photo_id}")
+
+        src = await self.analysis_crud.get_for_photo_with_ingredients(source_photo_id)
         if src is None:
             raise NotFoundError(f"No analysis for photo {source_photo_id}")
         if src.status != "confirmed":
             raise ValidationError("Source meal is not confirmed")
-        src_photo = src.photo
         user_id = current_user_id()
         user_id_str = str(user_id)
         if not photo_exists(src_photo.filename, user_id=user_id_str):
@@ -90,33 +89,45 @@ class MealService:
 
         src_bytes = await asyncio.to_thread(read_photo, src_photo.filename, user_id=user_id_str)
 
-        # 2. Target entry (get-or-create, flush-only) + a fresh filename.
         entry = await get_or_create_entry(self.db, target_date)
         new_filename = await next_photo_filename(self.db, entry)
         now = datetime.datetime.utcnow()
+        effective_meal_time = meal_time if meal_time is not None else now
 
-        # 3. Stage all rows; a single commit below keeps photo + analysis +
-        #    ingredients atomic.
-        new_photo = Photo(
-            user_id=user_id,
-            entry_id=entry.id,
+        meal = Meal(
+            owner_user_id=user_id,
             filename=new_filename,
             label=src_photo.label,
             original_filename=src_photo.original_filename,
-            meal_time=meal_time if meal_time is not None else now,
+            meal_time=effective_meal_time,
+            created_at=now,
+        )
+        await self.meal_crud.add_and_flush(meal)
+
+        new_photo = Photo(
+            user_id=user_id,
+            entry_id=entry.id,
+            meal_id=meal.id,
+            filename=new_filename,
+            label=src_photo.label,
+            original_filename=src_photo.original_filename,
+            meal_time=effective_meal_time,
             created_at=now,
         )
         await self.photo_crud.add_and_flush(new_photo)
 
         new_analysis = PhotoAnalysis(
             user_id=user_id,
+            meal_id=meal.id,
             photo_id=new_photo.id,
-            status="confirmed",  # skip pending/analyzing — counts toward the signal now
+            status="confirmed",
             dish_name=src.dish_name,
             cuisine=src.cuisine,
             dish_confidence=src.dish_confidence,
             model_id=src.model_id,
             raw_response=src.raw_response,
+            gluten_free_confirmed=src.gluten_free_confirmed,
+            lactose_free_confirmed=src.lactose_free_confirmed,
         )
         await self.analysis_crud.add_and_flush(new_analysis)
 
@@ -140,13 +151,8 @@ class MealService:
                 )
             )
 
-        # 4. Copy the image file BEFORE commit — mirrors upload's invariant that a
-        #    file on disk implies a committed row. No resize: the source on disk is
-        #    already a processed JPEG.
         await asyncio.to_thread(save_photo, src_bytes, new_filename, user_id=user_id_str)
 
-        # 5. Commit; on failure remove the just-copied file so the next filename
-        #    scan doesn't collide with an orphan (mirrors upload's cleanup).
         try:
             await self.photo_crud.save()
         except Exception:
