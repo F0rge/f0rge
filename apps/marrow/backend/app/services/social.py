@@ -15,6 +15,8 @@ from app.schemas.social import (
     ConnectionListResponse,
     HandleAvailableResponse,
     PublicUserCard,
+    UserSearchItem,
+    UserSearchResponse,
     validate_handle_format,
 )
 from app.services.notifications import NotificationService
@@ -51,6 +53,32 @@ class SocialService:
         if user is None or user.handle is None:
             raise NotFoundError("No user with that handle")
         return self.to_public_card(user)
+
+    async def search_users(self, query: str, limit: int = 10) -> UserSearchResponse:
+        me = current_user_id()
+        capped = min(max(limit, 1), 20)
+        users = await self.crud.search_users_by_handle_prefix(query, limit=capped)
+        items: list[UserSearchItem] = []
+        for user in users:
+            connection = await self.crud.get_connection_by_pair(me, user.id)
+            if connection is None:
+                status: str = "none"
+            elif connection.status == "accepted":
+                status = "connected"
+            elif connection.requester_id == me:
+                status = "pending_outgoing"
+            else:
+                status = "pending_incoming"
+            items.append(
+                UserSearchItem(
+                    handle=user.handle or "",
+                    display_name=user.display_name,
+                    avatar_default_index=user.avatar_default_index,
+                    connection_status=status,
+                    connection_id=connection.id if connection is not None else None,
+                )
+            )
+        return UserSearchResponse(users=items)
 
     async def assert_handle_available(
         self, handle: str, exclude_user_id: uuid.UUID | None = None
