@@ -28,9 +28,11 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
+from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH, User
 from app.services.diet_flags import compute_photo_signal
 from app.services.meals import MealService
 from app.services.photo_storage import delete_photo, save_photo
+from f0rge_db.tenant import apply_session_user_id
 from tests.conftest import authed_user_id
 
 
@@ -195,6 +197,52 @@ async def test_clone_returns_photo_on_target_day(async_db: AsyncSession, storage
     assert target is not None
     assert cloned.entry_id == target.id
     assert cloned.id != src.id
+
+
+async def test_clone_shared_meal_copy_uses_recipient_placement(
+    async_db: AsyncSession, storage
+) -> None:
+    """Tagged meal copies share meal_id; analysis.photo_id still points at tagger row."""
+    tagger = User(
+        email=f"tagger_{uuid.uuid4().hex[:8]}@example.com",
+        password_hash=LEO_PLACEHOLDER_PASSWORD_HASH,
+        handle=f"t_{uuid.uuid4().hex[:8]}",
+    )
+    recipient = User(
+        email=f"recipient_{uuid.uuid4().hex[:8]}@example.com",
+        password_hash=LEO_PLACEHOLDER_PASSWORD_HASH,
+        handle=f"r_{uuid.uuid4().hex[:8]}",
+    )
+    async_db.add_all([tagger, recipient])
+    await async_db.flush()
+    tagger_id = tagger.id
+    recipient_id = recipient.id
+    tagger_entry = await _ensure_entry(async_db, SRC_DAY, user_id=tagger_id)
+    recipient_entry = await _ensure_entry(async_db, SRC_DAY, user_id=recipient_id)
+    tagger_photo = await _add_meal(async_db, tagger_entry, f"{SRC_DAY}_tagger.jpg")
+
+    copy_filename = f"{SRC_DAY}_recipient-copy.jpg"
+    save_photo(_jpg_bytes("green"), copy_filename, user_id=str(recipient_id))
+    copy_photo = Photo(
+        user_id=recipient_id,
+        entry_id=recipient_entry.id,
+        meal_id=tagger_photo.meal_id,
+        filename=copy_filename,
+        label=tagger_photo.label,
+        original_filename="copy.jpg",
+        source_photo_id=tagger_photo.id,
+        tagged_by_user_id=tagger_id,
+    )
+    async_db.add(copy_photo)
+    await async_db.commit()
+    await async_db.refresh(copy_photo)
+
+    await apply_session_user_id(async_db, recipient_id)
+    cloned = await MealService(async_db).clone(TARGET_DAY, copy_photo.id)
+
+    assert cloned.user_id == recipient_id
+    assert cloned.id != copy_photo.id
+    assert cloned.meal_id != copy_photo.meal_id
 
 
 async def test_clone_analysis_confirmed_and_metadata_copied(
