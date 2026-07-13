@@ -415,6 +415,29 @@ async def test_cancel_by_tagger(async_db: AsyncSession, storage: None):
     assert (await a.get("/api/v1/social/meal-tags")).json()["outgoing"][0]["status"] == "cancelled"
 
 
+async def test_retag_after_cancel(async_db: AsyncSession, storage: None):
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    await _connect_users(a, b)
+    b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
+    photo_id = await _upload_tagged(a, handles=[b_handle])
+
+    tag_id = (await a.get("/api/v1/social/meal-tags")).json()["outgoing"][0]["id"]
+    cancelled = await a.delete(f"/api/v1/social/meal-tags/{tag_id}")
+    assert cancelled.status_code == 204
+
+    listed = await a.get(f"/api/v1/photos/{photo_id}/tags")
+    assert listed.status_code == 200
+    assert listed.json()["tags"] == []
+
+    retagged = await a.post(f"/api/v1/photos/{photo_id}/tags", json={"handles": [b_handle]})
+    assert retagged.status_code == 200, retagged.text
+    assert len(retagged.json()["tags"]) == 1
+    assert retagged.json()["tags"][0]["user"]["handle"] == b_handle
+    assert retagged.json()["tags"][0]["id"] == tag_id
+    assert retagged.json()["tags"][0]["status"] in ("pending_analysis", "pending_approval")
+
+
 async def test_connection_removal_cancels_pending(
     async_db: AsyncSession, deferred_tag_storage: None
 ):

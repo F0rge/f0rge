@@ -70,6 +70,17 @@ class MealTagCRUD(BaseCRUD):
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
+    async def get_for_source_and_recipient(
+        self, source_photo_id: int, tagged_user_id: uuid.UUID
+    ) -> Optional[MealTag]:
+        me = current_user_id()
+        stmt = select(MealTag).where(
+            MealTag.source_photo_id == source_photo_id,
+            MealTag.tagger_id == me,
+            MealTag.tagged_user_id == tagged_user_id,
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
     async def companion_handles_by_photo_ids(self, photo_ids: list[int]) -> dict[int, list[str]]:
         if not photo_ids:
             return {}
