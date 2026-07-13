@@ -83,8 +83,10 @@ class AccountService:
 
     async def update(self, data: AccountUpdate) -> AccountResponse:
         user = await self._get_current_user()
+        dirty = False
         if "display_name" in data.model_fields_set:
             user.display_name = (data.display_name or "").strip() or None
+            dirty = True
         if "handle" in data.model_fields_set and data.handle is not None:
             if user.handle is not None:
                 normalized = validate_handle_format(data.handle)
@@ -93,7 +95,8 @@ class AccountService:
             else:
                 social = SocialService(self.db)
                 user = await social.set_user_handle(user, data.handle)
-        elif "display_name" in data.model_fields_set:
+                dirty = False
+        if dirty:
             user = await self.crud.commit_refresh(user)
         return self._to_response(user)
 
