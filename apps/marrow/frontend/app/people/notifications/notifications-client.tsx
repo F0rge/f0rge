@@ -1,9 +1,8 @@
 'use client'
 
-import { useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Bell } from 'lucide-react'
-import { Button, Card } from '@f0rge/ui'
+import { Button, Card, cn } from '@f0rge/ui'
 import { PageHeader } from '@/components/layout/page-header'
 import { PageShell } from '@/components/layout/page-shell'
 import {
@@ -16,10 +15,6 @@ import { formatDisplayDateTime } from '@f0rge/ui'
 export default function NotificationsClient() {
   const notifications = useNotifications()
   const markRead = useMarkRead()
-
-  useEffect(() => {
-    markRead.mutate({ all: true })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <PageShell>
@@ -61,17 +56,36 @@ export default function NotificationsClient() {
         {!notifications.isLoading && (notifications.data?.length ?? 0) === 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground">No notifications yet.</p>
         )}
-        {notifications.data?.map((item) => (
-          <div
-            key={item.id}
-            className="border-t border-muted px-4 py-3.5 first:border-t-0"
-          >
-            <p className="text-sm">{notificationCopy(item)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {formatDisplayDateTime(item.created_at)}
-            </p>
-          </div>
-        ))}
+        {notifications.data?.map((item) => {
+          const isUnread = item.read_at == null
+          return (
+            <div
+              key={item.id}
+              className={cn(
+                'border-t border-muted px-4 py-3.5 first:border-t-0',
+                isUnread ? 'bg-muted/40' : 'opacity-80',
+              )}
+            >
+              <div className="flex items-start gap-2">
+                {isUnread && (
+                  <span
+                    className="mt-1.5 size-2 shrink-0 rounded-full bg-primary"
+                    aria-hidden
+                  />
+                )}
+                <div className={cn(!isUnread && 'pl-4')}>
+                  <p className={cn('text-sm', isUnread && 'font-medium')}>
+                    {notificationCopy(item)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatDisplayDateTime(item.created_at)}
+                    {!isUnread && ' · Read'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </Card>
     </PageShell>
   )
