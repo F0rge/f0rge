@@ -8,6 +8,7 @@ export type ConnectionStatus = 'none' | 'pending_outgoing' | 'pending_incoming' 
 
 export interface UserSearchItem extends PublicUserCard {
   connection_status: ConnectionStatus
+  connection_id?: string | null
 }
 
 export interface UserSearchResponse {

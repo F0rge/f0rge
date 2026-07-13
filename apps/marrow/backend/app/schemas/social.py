@@ -32,6 +32,7 @@ class PublicUserCard(BaseModel):
 
 class UserSearchItem(PublicUserCard):
     connection_status: Literal["none", "pending_outgoing", "pending_incoming", "connected"]
+    connection_id: uuid.UUID | None = None
 
 
 class UserSearchResponse(BaseModel):

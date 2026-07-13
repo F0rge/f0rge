@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, UserPlus } from 'lucide-react'
 import { Button, Card, Input, Label, useDebouncedValue } from '@f0rge/ui'
@@ -27,22 +27,6 @@ export default function ConnectionsClient() {
   const send = useSendConnectionRequest()
   const accept = useAcceptConnection()
   const remove = useDeleteConnection()
-
-  const incomingByHandle = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const item of connections.data?.pending_incoming ?? []) {
-      map.set(item.user.handle, item.id)
-    }
-    return map
-  }, [connections.data?.pending_incoming])
-
-  const outgoingByHandle = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const item of connections.data?.pending_outgoing ?? []) {
-      map.set(item.user.handle, item.id)
-    }
-    return map
-  }, [connections.data?.pending_outgoing])
 
   const onSend = async (targetHandle: string) => {
     setError(null)
@@ -106,12 +90,10 @@ export default function ConnectionsClient() {
                 removePending={remove.isPending}
                 onSend={() => void onSend(user.handle)}
                 onAccept={() => {
-                  const id = incomingByHandle.get(user.handle)
-                  if (id) accept.mutate(id)
+                  if (user.connection_id) accept.mutate(user.connection_id)
                 }}
                 onCancelOutgoing={() => {
-                  const id = outgoingByHandle.get(user.handle)
-                  if (id) remove.mutate(id)
+                  if (user.connection_id) remove.mutate(user.connection_id)
                 }}
               />
             ))}

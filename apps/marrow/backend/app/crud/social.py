@@ -17,6 +17,14 @@ def _pair_ids(a: uuid.UUID, b: uuid.UUID) -> tuple[uuid.UUID, uuid.UUID]:
     return (a, b) if a < b else (b, a)
 
 
+def _escape_like_literal(value: str, escape: str = "\\") -> str:
+    return (
+        value.replace(escape, escape + escape)
+        .replace("%", escape + "%")
+        .replace("_", escape + "_")
+    )
+
+
 class SocialCRUD(UserCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
@@ -34,10 +42,11 @@ class SocialCRUD(UserCRUD):
         prefix = normalize_handle(query)
         if len(prefix) < 3:
             return []
+        escaped = _escape_like_literal(prefix)
         stmt = (
             select(User)
             .where(User.handle.is_not(None))
-            .where(User.handle.like(f"{prefix}%"))
+            .where(User.handle.like(f"{escaped}%", escape="\\"))
             .where(User.id != me)
             .order_by(User.handle.asc())
             .limit(limit)

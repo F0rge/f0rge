@@ -75,6 +75,7 @@ class SocialService:
                     display_name=user.display_name,
                     avatar_default_index=user.avatar_default_index,
                     connection_status=status,
+                    connection_id=connection.id if connection is not None else None,
                 )
             )
         return UserSearchResponse(users=items)
