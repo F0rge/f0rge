@@ -70,9 +70,7 @@ class MealTagCRUD(BaseCRUD):
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
-    async def companion_handles_by_photo_ids(
-        self, photo_ids: list[int]
-    ) -> dict[int, list[str]]:
+    async def companion_handles_by_photo_ids(self, photo_ids: list[int]) -> dict[int, list[str]]:
         if not photo_ids:
             return {}
         me = current_user_id()

@@ -35,6 +35,7 @@ def _photo_response(photo: Photo, companion_handles: list[str] | None = None) ->
     return PhotoResponse(
         id=photo.id,
         entry_id=photo.entry_id,
+        meal_id=photo.meal_id,
         filename=photo.filename,
         label=photo.label,
         meal_time=photo.meal_time,
@@ -55,9 +56,7 @@ async def _build_response(db: AsyncSession, entry: Entry) -> EntryResponse:
         {
             **{c.name: getattr(entry, c.name) for c in entry.__table__.columns},
             "medications": entry.medications_json or [],
-            "photos": [
-                _photo_response(p, companions.get(p.id, [])) for p in entry.photos
-            ],
+            "photos": [_photo_response(p, companions.get(p.id, [])) for p in entry.photos],
             "photo_signal": signal,
             "photo_derived_flags": sorted(signal.flags),
             "user_added_flags": sorted(user_added),

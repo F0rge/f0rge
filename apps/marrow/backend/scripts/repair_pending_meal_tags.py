@@ -1,4 +1,5 @@
 """One-off repair: transition meal tags stuck in pending_analysis."""
+
 from __future__ import annotations
 
 import asyncio

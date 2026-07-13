@@ -6,6 +6,7 @@ export interface PublicUserCard {
 
 export interface HandleAvailableResponse {
   available: boolean
+  reason?: 'available' | 'taken' | 'invalid' | null
 }
 
 export interface ConnectionItem {

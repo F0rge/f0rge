@@ -4,6 +4,8 @@ import re
 import uuid
 import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from f0rge_core.exceptions import ValidationError
@@ -30,10 +32,16 @@ class PublicUserCard(BaseModel):
 
 class HandleAvailableResponse(BaseModel):
     available: bool
+    reason: Literal["available", "taken", "invalid"] | None = None
 
 
 class ConnectionRequest(BaseModel):
-    handle: str = Field(min_length=3, max_length=30)
+    handle: str
+
+    @field_validator("handle")
+    @classmethod
+    def check_handle(cls, value: str) -> str:
+        return validate_handle_format(value)
 
 
 class ConnectionItem(BaseModel):
@@ -50,7 +58,7 @@ class ConnectionListResponse(BaseModel):
 
 
 class HandleField(BaseModel):
-    handle: str = Field(min_length=3, max_length=30)
+    handle: str
 
     @field_validator("handle")
     @classmethod

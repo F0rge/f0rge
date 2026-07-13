@@ -40,8 +40,7 @@ async def handle_available(
     handle: str = Query(..., min_length=1),
     service: SocialService = Depends(get_social_service),
 ):
-    available = await service.check_handle_available(handle)
-    return HandleAvailableResponse(available=available)
+    return await service.describe_handle_available(handle)
 
 
 @router.get(

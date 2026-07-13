@@ -3,7 +3,9 @@ from __future__ import annotations
 import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.social import validate_handle_format
 
 
 class AccountResponse(BaseModel):
@@ -18,7 +20,14 @@ class AccountResponse(BaseModel):
 
 class AccountUpdate(BaseModel):
     display_name: Optional[str] = Field(default=None, max_length=100)
-    handle: Optional[str] = Field(default=None, min_length=3, max_length=30)
+    handle: Optional[str] = None
+
+    @field_validator("handle")
+    @classmethod
+    def check_handle(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return validate_handle_format(value)
 
 
 class PasswordChangeRequest(BaseModel):

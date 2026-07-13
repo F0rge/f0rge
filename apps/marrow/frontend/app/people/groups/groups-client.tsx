@@ -7,7 +7,6 @@ import { Badge, Button, Card, Input, Label } from '@f0rge/ui'
 import { FetchError } from '@f0rge/ui'
 import { PageHeader } from '@/components/layout/page-header'
 import { PageShell } from '@/components/layout/page-shell'
-import { useAccount } from '@/lib/api/hooks/account'
 import {
   useAcceptGroupInvite,
   useCreateGroup,
@@ -19,15 +18,12 @@ import { toast } from 'sonner'
 import type { GroupListItem } from '@/lib/api/types/social'
 
 export default function GroupsClient() {
-  const account = useAccount()
   const groups = useGroups()
   const createGroup = useCreateGroup()
   const acceptInvite = useAcceptGroupInvite()
   const declineInvite = useDeclineGroupInvite()
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
-
-  const myHandle = account.data?.handle ?? ''
 
   const onCreate = async () => {
     const trimmed = name.trim()

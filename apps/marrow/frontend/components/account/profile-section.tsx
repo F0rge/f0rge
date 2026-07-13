@@ -55,6 +55,8 @@ function ProfileForm({ account }: { account: Account }) {
         ? 'checking'
         : availability.data?.available
           ? 'available'
+        : availability.data?.reason === 'invalid'
+          ? 'invalid'
           : 'taken'
 
   const handleSave = async () => {
@@ -170,6 +172,9 @@ function ProfileForm({ account }: { account: Account }) {
             )}
             {handleStatus === 'taken' && (
               <p className="text-xs text-destructive">Already taken</p>
+            )}
+            {handleStatus === 'invalid' && (
+              <p className="text-xs text-destructive">Use 3–30 characters: a-z, 0-9, _</p>
             )}
             {handleError && <p className="text-xs text-destructive">{handleError}</p>}
           </>

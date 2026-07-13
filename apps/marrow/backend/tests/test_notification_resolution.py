@@ -77,13 +77,21 @@ async def _unread(client: AsyncClient) -> int:
     return (await client.get("/api/v1/notifications/unread-count")).json()["count"]
 
 
-async def _invite_notifications(async_db: AsyncSession, user_client: AsyncClient) -> list[Notification]:
+async def _invite_notifications(
+    async_db: AsyncSession, user_client: AsyncClient
+) -> list[Notification]:
     me_id = uuid.UUID((await user_client.get("/api/v1/auth/me")).json()["user_id"])
     rows = (
-        await async_db.execute(
-            select(Notification).where(Notification.user_id == me_id).order_by(Notification.created_at)
+        (
+            await async_db.execute(
+                select(Notification)
+                .where(Notification.user_id == me_id)
+                .order_by(Notification.created_at)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -140,7 +148,9 @@ async def test_accept_group_invite_clears_group_invite_notification(async_db: As
     await _connect_users(owner, member)
     member_handle = (await member.get("/api/v1/auth/me")).json()["handle"]
 
-    group_id = (await owner.post("/api/v1/social/groups", json={"name": "dinner club"})).json()["id"]
+    group_id = (await owner.post("/api/v1/social/groups", json={"name": "dinner club"})).json()[
+        "id"
+    ]
     await owner.post(f"/api/v1/social/groups/{group_id}/invite", json={"handle": member_handle})
 
     before = await _unread(member)
@@ -189,7 +199,6 @@ async def test_approve_meal_tag_clears_meal_tag_request(
         data={"tagged_handles": json.dumps([tagged_handle])},
     )
     assert uploaded.status_code == 201
-    photo_id = uploaded.json()["id"]
 
     tag_id = (await tagged.get("/api/v1/social/meal-tags")).json()["incoming_pending"][0]["id"]
 

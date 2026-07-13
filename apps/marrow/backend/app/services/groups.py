@@ -238,7 +238,6 @@ class GroupService:
         group_id: uuid.UUID,
         notifications: NotificationService,
     ) -> None:
-        me = current_user_id()
         group = await self.crud.get_group_by_id(group_id)
         if group is None:
             raise NotFoundError("Group not found")

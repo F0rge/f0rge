@@ -13,12 +13,14 @@ from app.config import settings
 from app.crud.base import unit_of_work
 from app.crud.entries import EntryCRUD
 from app.crud.meals import MealCRUD
+from app.crud.meal_tags import MealTagCRUD
 from app.crud.photos import PhotoCRUD
 from f0rge_core.exceptions import NotFoundError
 from app.models.entry import Entry
 from app.models.meal import Meal
 from app.models.photo import Photo
-from app.schemas.photo import PhotoUpdate
+from app.schemas.photo import PhotoResponse, PhotoUpdate
+from app.services.entries import _photo_response
 from app.services import object_storage
 from app.services.photo_storage import delete_photo, resize_image, save_photo
 from f0rge_db.tenant import current_user_id
@@ -97,7 +99,7 @@ class PhotoService:
         background_tasks: BackgroundTasks,
         tagged_handles: Optional[str] = None,
         tagged_group_ids: Optional[str] = None,
-    ) -> Photo:
+    ) -> PhotoResponse:
         entry = await self.entry_crud.get_by_date(entry_date)
         if entry is None:
             raise NotFoundError(f"No entry for {entry_date}")
@@ -178,7 +180,8 @@ class PhotoService:
         if analysis_will_run:
             background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
 
-        return photo
+        companions = await MealTagCRUD(self.db).companion_handles_by_photo_ids([photo.id])
+        return _photo_response(photo, companions.get(photo.id, []))
 
     async def get_file_path(self, photo_id: int) -> str:
         photo = await self.crud.get_by_id_owned(photo_id)

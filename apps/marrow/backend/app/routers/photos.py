@@ -44,7 +44,7 @@ async def upload_photo(
     tagged_handles: Optional[str] = Form(None),
     tagged_group_ids: Optional[str] = Form(None),
     service: PhotoService = Depends(get_photo_service),
-) -> Photo:
+) -> PhotoResponse:
     return await service.upload(
         date, file, label, meal_time, background_tasks, tagged_handles, tagged_group_ids
     )
