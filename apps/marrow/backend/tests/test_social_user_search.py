@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 
 import pytest
 from httpx import AsyncClient
@@ -18,7 +17,9 @@ PASSWORD = "secure-pass-12"
 
 async def _signup_client(async_db: AsyncSession, suffix: str) -> AsyncClient:
     app.dependency_overrides[get_db] = make_tenant_get_db_override(async_db)
-    client = AsyncClient(transport=__import__("httpx").ASGITransport(app=app), base_url="http://test")
+    client = AsyncClient(
+        transport=__import__("httpx").ASGITransport(app=app), base_url="http://test"
+    )
     handle = f"srch_{suffix}"
     resp = await client.post(
         "/api/v1/auth/signup",

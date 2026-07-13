@@ -19,9 +19,7 @@ def _pair_ids(a: uuid.UUID, b: uuid.UUID) -> tuple[uuid.UUID, uuid.UUID]:
 
 def _escape_like_literal(value: str, escape: str = "\\") -> str:
     return (
-        value.replace(escape, escape + escape)
-        .replace("%", escape + "%")
-        .replace("_", escape + "_")
+        value.replace(escape, escape + escape).replace("%", escape + "%").replace("_", escape + "_")
     )
 
 
@@ -35,9 +33,7 @@ class SocialCRUD(UserCRUD):
             await self.db.execute(select(User).where(User.handle == normalized))
         ).scalar_one_or_none()
 
-    async def search_users_by_handle_prefix(
-        self, query: str, *, limit: int
-    ) -> list[User]:
+    async def search_users_by_handle_prefix(self, query: str, *, limit: int) -> list[User]:
         me = current_user_id()
         prefix = normalize_handle(query)
         if len(prefix) < 3:
