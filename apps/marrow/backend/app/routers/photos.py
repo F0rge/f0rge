@@ -42,9 +42,12 @@ async def upload_photo(
     label: Optional[str] = Form(None),
     meal_time: Optional[datetime.datetime] = Form(None),
     tagged_handles: Optional[str] = Form(None),
+    tagged_group_ids: Optional[str] = Form(None),
     service: PhotoService = Depends(get_photo_service),
 ) -> Photo:
-    return await service.upload(date, file, label, meal_time, background_tasks, tagged_handles)
+    return await service.upload(
+        date, file, label, meal_time, background_tasks, tagged_handles, tagged_group_ids
+    )
 
 
 @router.get("/photos/{photo_id}/file", response_model=None)
@@ -86,4 +89,4 @@ async def add_photo_tags(
     body: PhotoTagRequest,
     service: MealTagService = Depends(get_meal_tag_service),
 ):
-    return await service.add_tags_to_photo(photo_id, body.handles)
+    return await service.add_tags_to_photo(photo_id, body.handles, body.group_ids)

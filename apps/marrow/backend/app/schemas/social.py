@@ -4,7 +4,7 @@ import re
 import uuid
 import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from f0rge_core.exceptions import ValidationError
 
@@ -137,9 +137,16 @@ class PhotoMealTagListResponse(BaseModel):
 
 
 class PhotoTagRequest(BaseModel):
-    handles: list[str] = Field(min_length=1, max_length=10)
+    handles: list[str] = Field(default_factory=list, max_length=10)
+    group_ids: list[uuid.UUID] = Field(default_factory=list, max_length=5)
 
     @field_validator("handles")
     @classmethod
     def check_handles(cls, values: list[str]) -> list[str]:
         return [validate_handle_format(v) for v in values]
+
+    @model_validator(mode="after")
+    def require_targets(self) -> PhotoTagRequest:
+        if not self.handles and not self.group_ids:
+            raise ValueError("At least one handle or group_id is required")
+        return self

@@ -96,12 +96,15 @@ class PhotoService:
         meal_time: Optional[datetime.datetime],
         background_tasks: BackgroundTasks,
         tagged_handles: Optional[str] = None,
+        tagged_group_ids: Optional[str] = None,
     ) -> Photo:
         entry = await self.entry_crud.get_by_date(entry_date)
         if entry is None:
             raise NotFoundError(f"No entry for {entry_date}")
 
-        recipients = await self.meal_tags.resolve_tagged_recipients(tagged_handles)
+        recipients = await self.meal_tags.resolve_tagged_recipients(
+            tagged_handles, tagged_group_ids
+        )
 
         filename = await next_photo_filename(self.db, entry)
 

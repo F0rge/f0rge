@@ -5,7 +5,7 @@ import { Button } from '@f0rge/ui'
 import { TagPeoplePicker } from '@/components/checkin/tag-people-picker'
 import { PeerAvatar } from '@/components/people/peer-avatar'
 import { useAddPhotoTags, usePhotoTags } from '@/lib/api/hooks/photos'
-import { useConnections } from '@/lib/api/hooks/social'
+import { useConnections, useGroups } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { toast } from 'sonner'
 import type { Photo } from '@/lib/api/types'
@@ -27,8 +27,10 @@ export function MealCompanionsSection({ photo, variant = 'editor' }: MealCompani
   const isSharedCopy = photo.source_photo_id != null || Boolean(photo.tagged_by_handle)
   const tags = usePhotoTags(photo.id, !isSharedCopy)
   const connections = useConnections()
+  const groups = useGroups()
   const addTags = useAddPhotoTags()
   const [pendingHandles, setPendingHandles] = useState<string[]>([])
+  const [pendingGroupIds, setPendingGroupIds] = useState<string[]>([])
 
   const taggedHandles = useMemo(() => {
     const fromApi = tags.data?.tags.map((t) => t.user.handle).filter(Boolean) ?? []
@@ -44,7 +46,14 @@ export function MealCompanionsSection({ photo, variant = 'editor' }: MealCompani
     [connections.data?.accepted, taggedSet],
   )
 
-  const canTag = !isSharedCopy && (connections.data?.accepted.length ?? 0) > 0
+  const availableGroups = useMemo(
+    () => (groups.data ?? []).filter((g) => g.my_status === 'joined'),
+    [groups.data],
+  )
+
+  const canTag =
+    !isSharedCopy &&
+    ((connections.data?.accepted.length ?? 0) > 0 || availableGroups.length > 0)
 
   if (variant === 'compact') {
     if (taggedHandles.length === 0 && !photo.tagged_by_handle) return null
@@ -60,15 +69,22 @@ export function MealCompanionsSection({ photo, variant = 'editor' }: MealCompani
   }
 
   const onSaveTags = async () => {
-    if (pendingHandles.length === 0) return
+    if (pendingHandles.length === 0 && pendingGroupIds.length === 0) return
     try {
-      await addTags.mutateAsync({ photoId: photo.id, handles: pendingHandles })
+      await addTags.mutateAsync({
+        photoId: photo.id,
+        handles: pendingHandles,
+        groupIds: pendingGroupIds,
+      })
       setPendingHandles([])
+      setPendingGroupIds([])
       toast.success('People tagged')
     } catch (err) {
       toast.error(getErrorDetail(err, 'Could not tag people'))
     }
   }
+
+  const pendingCount = pendingHandles.length + pendingGroupIds.length
 
   return (
     <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
@@ -106,11 +122,14 @@ export function MealCompanionsSection({ photo, variant = 'editor' }: MealCompani
         <>
           <TagPeoplePicker
             connections={availableConnections}
+            groups={availableGroups}
             selectedHandles={pendingHandles}
-            onChange={setPendingHandles}
+            selectedGroupIds={pendingGroupIds}
+            onChangeHandles={setPendingHandles}
+            onChangeGroupIds={setPendingGroupIds}
             disabled={addTags.isPending}
           />
-          {pendingHandles.length > 0 && (
+          {pendingCount > 0 && (
             <Button
               type="button"
               size="sm"
@@ -118,7 +137,7 @@ export function MealCompanionsSection({ photo, variant = 'editor' }: MealCompani
               disabled={addTags.isPending}
               className="w-full sm:w-auto"
             >
-              {addTags.isPending ? 'Tagging...' : `Tag ${pendingHandles.length}`}
+              {addTags.isPending ? 'Tagging...' : `Tag ${pendingCount}`}
             </Button>
           )}
         </>
