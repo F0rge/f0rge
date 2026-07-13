@@ -29,8 +29,15 @@ export function usePhotoTags(photoId: number, enabled = true) {
 export function useAddPhotoTags() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ photoId, handles }: { photoId: number; handles: string[] }) =>
-      apiPost(`/photos/${photoId}/tags`, { handles }),
+    mutationFn: ({
+      photoId,
+      handles,
+      groupIds = [],
+    }: {
+      photoId: number
+      handles: string[]
+      groupIds?: string[]
+    }) => apiPost(`/photos/${photoId}/tags`, { handles, group_ids: groupIds }),
     onSuccess: (_data, { photoId }) => {
       queryClient.invalidateQueries({ queryKey: ['photo-tags', photoId] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
@@ -50,12 +57,14 @@ export function useUploadPhoto() {
       label,
       mealTime,
       taggedHandles,
+      taggedGroupIds,
     }: {
       date: string
       file: File
       label?: string
       mealTime?: Date | null
       taggedHandles?: string[]
+      taggedGroupIds?: string[]
     }) => {
       const formData = new FormData()
       formData.append('file', file)
@@ -63,6 +72,9 @@ export function useUploadPhoto() {
       if (mealTime) formData.append('meal_time', mealTime.toISOString())
       if (taggedHandles && taggedHandles.length > 0) {
         formData.append('tagged_handles', JSON.stringify(taggedHandles))
+      }
+      if (taggedGroupIds && taggedGroupIds.length > 0) {
+        formData.append('tagged_group_ids', JSON.stringify(taggedGroupIds))
       }
       return apiPostForm(`/entries/${date}/photos`, formData)
     },

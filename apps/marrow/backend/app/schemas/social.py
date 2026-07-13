@@ -4,7 +4,9 @@ import re
 import uuid
 import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from f0rge_core.exceptions import ValidationError
 
@@ -30,10 +32,16 @@ class PublicUserCard(BaseModel):
 
 class HandleAvailableResponse(BaseModel):
     available: bool
+    reason: Literal["available", "taken", "invalid"] | None = None
 
 
 class ConnectionRequest(BaseModel):
-    handle: str = Field(min_length=3, max_length=30)
+    handle: str
+
+    @field_validator("handle")
+    @classmethod
+    def check_handle(cls, value: str) -> str:
+        return validate_handle_format(value)
 
 
 class ConnectionItem(BaseModel):
@@ -50,7 +58,7 @@ class ConnectionListResponse(BaseModel):
 
 
 class HandleField(BaseModel):
-    handle: str = Field(min_length=3, max_length=30)
+    handle: str
 
     @field_validator("handle")
     @classmethod
@@ -137,9 +145,16 @@ class PhotoMealTagListResponse(BaseModel):
 
 
 class PhotoTagRequest(BaseModel):
-    handles: list[str] = Field(min_length=1, max_length=10)
+    handles: list[str] = Field(default_factory=list, max_length=10)
+    group_ids: list[uuid.UUID] = Field(default_factory=list, max_length=5)
 
     @field_validator("handles")
     @classmethod
     def check_handles(cls, values: list[str]) -> list[str]:
         return [validate_handle_format(v) for v in values]
+
+    @model_validator(mode="after")
+    def require_targets(self) -> PhotoTagRequest:
+        if not self.handles and not self.group_ids:
+            raise ValueError("At least one handle or group_id is required")
+        return self

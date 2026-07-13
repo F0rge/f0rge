@@ -47,6 +47,19 @@ class NotificationCRUD(BaseCRUD):
             stmt = stmt.where(Notification.id.in_(ids))
         await self.db.execute(stmt.values(read_at=now))
 
+    async def mark_resolved_by_payload(
+        self, notification_type: str, payload_key: str, payload_value: str
+    ) -> None:
+        now = datetime.datetime.utcnow()
+        stmt = (
+            update(Notification)
+            .where(owned_by_user(Notification.user_id))
+            .where(Notification.type == notification_type)
+            .where(Notification.read_at.is_(None))
+            .where(Notification.payload[payload_key].as_string() == payload_value)
+        )
+        await self.db.execute(stmt.values(read_at=now))
+
     async def get_by_id(self, notification_id: uuid.UUID) -> Optional[Notification]:
         stmt = select(Notification).where(
             Notification.id == notification_id,

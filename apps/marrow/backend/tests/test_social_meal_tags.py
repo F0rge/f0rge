@@ -630,9 +630,7 @@ async def test_approve_mode_placement_shares_meal_id(
     await apply_session_user_id(async_db, tagger_id)
     source = await async_db.get(Photo, photo_id)
     copy = (
-        await async_db.execute(
-            select(Photo).where(Photo.source_photo_id == photo_id)
-        )
+        await async_db.execute(select(Photo).where(Photo.source_photo_id == photo_id))
     ).scalar_one()
     assert copy.meal_id == source.meal_id
 

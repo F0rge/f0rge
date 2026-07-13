@@ -75,7 +75,7 @@ async def test_invalid_handle_format_rejected(async_client: AsyncClient, handle:
         "/api/v1/auth/signup",
         json={"email": email, "password": "secure-pass-12", "handle": handle},
     )
-    assert resp.status_code in (400, 422)
+    assert resp.status_code == 400
 
 
 async def test_uppercase_handle_stored_lowercase(async_client: AsyncClient):
@@ -145,7 +145,7 @@ async def test_handle_available_taken_and_free(
     handle = f"avail_{uuid.uuid4().hex[:8]}"
     free = await async_client.get(f"/api/v1/social/handle-available?handle={handle}")
     assert free.status_code == 200
-    assert free.json()["available"] is True
+    assert free.json() == {"available": True, "reason": "available"}
 
     claimed = await async_client.post(
         "/api/v1/auth/signup",
@@ -153,10 +153,13 @@ async def test_handle_available_taken_and_free(
     )
     assert claimed.status_code == 200
     taken = await async_client.get(f"/api/v1/social/handle-available?handle={handle}")
-    assert taken.json()["available"] is False
+    assert taken.json() == {"available": False, "reason": "taken"}
 
 
 async def test_handle_available_invalid_format_false(async_client: AsyncClient):
     resp = await async_client.get("/api/v1/social/handle-available?handle=!!")
     assert resp.status_code == 200
-    assert resp.json()["available"] is False
+    assert resp.json() == {"available": False, "reason": "invalid"}
+
+    short = await async_client.get("/api/v1/social/handle-available?handle=ab")
+    assert short.json() == {"available": False, "reason": "invalid"}

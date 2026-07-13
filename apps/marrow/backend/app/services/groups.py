@@ -220,6 +220,7 @@ class GroupService:
 
         async with unit_of_work(self.db):
             await self.crud.flush()
+            await notifications.mark_resolved("group_invite", "group_id", str(group_id))
             await notifications.notify(
                 group.owner_id,
                 "group_invite_accepted",
@@ -232,7 +233,26 @@ class GroupService:
 
         return self._to_member_item(membership, me_user)
 
-    async def remove_member(self, group_id: uuid.UUID, handle: str) -> None:
+    async def decline_group_invite(
+        self,
+        group_id: uuid.UUID,
+        notifications: NotificationService,
+    ) -> None:
+        group = await self.crud.get_group_by_id(group_id)
+        if group is None:
+            raise NotFoundError("Group not found")
+
+        membership = await self.crud.get_my_membership(group_id)
+        if membership is None or membership.status != "invited":
+            raise ValidationError("No pending invite for this group")
+
+        async with unit_of_work(self.db):
+            await self.crud.delete_member(membership)
+            await notifications.mark_resolved("group_invite", "group_id", str(group_id))
+
+    async def remove_member(
+        self, group_id: uuid.UUID, handle: str, notifications: NotificationService | None = None
+    ) -> None:
         me = current_user_id()
         group = await self.crud.get_group_by_id(group_id)
         if group is None:
@@ -254,6 +274,8 @@ class GroupService:
             if my_membership.role == "owner":
                 raise ValidationError("Transfer or delete the group instead")
             async with unit_of_work(self.db):
+                if my_membership.status == "invited" and notifications is not None:
+                    await notifications.mark_resolved("group_invite", "group_id", str(group_id))
                 await self.crud.delete_member(target_membership)
             return
 

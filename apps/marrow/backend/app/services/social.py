@@ -13,6 +13,7 @@ from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.schemas.social import (
     ConnectionItem,
     ConnectionListResponse,
+    HandleAvailableResponse,
     PublicUserCard,
     validate_handle_format,
 )
@@ -33,12 +34,17 @@ class SocialService:
             avatar_default_index=user.avatar_default_index,
         )
 
-    async def check_handle_available(self, handle: str) -> bool:
+    async def describe_handle_available(self, handle: str) -> HandleAvailableResponse:
         try:
             normalized = validate_handle_format(handle)
-        except Exception:
-            return False
-        return not await self.crud.is_handle_taken(normalized)
+        except ValidationError:
+            return HandleAvailableResponse(available=False, reason="invalid")
+        if await self.crud.is_handle_taken(normalized):
+            return HandleAvailableResponse(available=False, reason="taken")
+        return HandleAvailableResponse(available=True, reason="available")
+
+    async def check_handle_available(self, handle: str) -> bool:
+        return (await self.describe_handle_available(handle)).available
 
     async def lookup_by_handle(self, handle: str) -> PublicUserCard:
         user = await self.crud.get_by_handle(handle)
@@ -159,6 +165,9 @@ class SocialService:
 
         async with unit_of_work(self.db):
             await self.crud.flush()
+            await notifications.mark_resolved(
+                "connection_request", "connection_id", str(connection.id)
+            )
             await notifications.notify(
                 connection.requester_id,
                 "connection_accepted",

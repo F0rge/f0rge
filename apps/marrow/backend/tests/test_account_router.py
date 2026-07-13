@@ -92,6 +92,25 @@ async def test_patch_account_empty_string_normalizes_to_null(
     assert get_resp.json()["display_name"] is None
 
 
+async def test_patch_account_persists_display_name_with_unchanged_handle(
+    authed_client: AsyncClient,
+) -> None:
+    account = await authed_client.get("/api/v1/account")
+    current_handle = account.json()["handle"]
+    assert current_handle
+
+    resp = await authed_client.patch(
+        "/api/v1/account",
+        json={"display_name": "Bob", "handle": current_handle},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["display_name"] == "Bob"
+
+    get_resp = await authed_client.get("/api/v1/account")
+    assert get_resp.json()["display_name"] == "Bob"
+    assert get_resp.json()["handle"] == current_handle
+
+
 async def test_patch_account_rejects_handle_change_once_set(
     authed_client: AsyncClient,
 ) -> None:

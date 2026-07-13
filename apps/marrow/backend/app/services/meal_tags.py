@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import unit_of_work
+from app.crud.groups import GroupCRUD
 from app.crud.meal_tags import MealTagCRUD
 from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photos import PhotoCRUD
@@ -26,6 +27,7 @@ from app.schemas.social import (
     validate_handle_format,
 )
 from app.services.social import SocialService
+from app.services.notifications import NotificationService
 from app.services.tag_delivery import TagDeliveryService
 from f0rge_db.tenant import apply_session_user_id, current_user_id
 
@@ -37,6 +39,7 @@ class MealTagService:
         self.db = db
         self.crud = MealTagCRUD(db)
         self.social_crud = SocialCRUD(db)
+        self.group_crud = GroupCRUD(db)
         self.delivery = TagDeliveryService()
 
     @staticmethod
@@ -55,14 +58,33 @@ class MealTagService:
             raise ValidationError(f"At most {MAX_TAGS_PER_MEAL} tags per meal")
         return [validate_handle_format(h) for h in parsed]
 
-    async def resolve_tagged_recipients(self, tagged_handles_raw: Optional[str]) -> list[uuid.UUID]:
-        handles = self.parse_tagged_handles(tagged_handles_raw)
+    @staticmethod
+    def parse_tagged_group_ids(raw: Optional[str]) -> list[uuid.UUID]:
+        if raw is None or raw.strip() == "":
+            return []
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValidationError("tagged_group_ids must be a JSON array string") from exc
+        if not isinstance(parsed, list):
+            raise ValidationError("tagged_group_ids must be a JSON array")
+        if not all(isinstance(item, str) for item in parsed):
+            raise ValidationError("tagged_group_ids must contain only UUID strings")
+        if len(parsed) > MAX_TAGS_PER_MEAL:
+            raise ValidationError(f"At most {MAX_TAGS_PER_MEAL} groups per meal")
+        try:
+            return [uuid.UUID(item) for item in parsed]
+        except ValueError as exc:
+            raise ValidationError("tagged_group_ids must contain valid UUIDs") from exc
+
+    async def _recipients_for_handles(self, handles: list[str]) -> list[uuid.UUID]:
         if not handles:
             return []
 
         me = current_user_id()
         seen: set[str] = set()
         recipients: list[uuid.UUID] = []
+        social = SocialService(self.db)
 
         for handle in handles:
             if handle in seen:
@@ -73,12 +95,65 @@ class MealTagService:
                 raise NotFoundError(f"No user with handle @{handle}")
             if user.id == me:
                 raise ValidationError("You cannot tag yourself")
-            await SocialService(self.db).assert_connected(user.id)
+            await social.assert_connected(user.id)
             recipients.append(user.id)
 
-        if len(recipients) > MAX_TAGS_PER_MEAL:
-            raise ValidationError(f"At most {MAX_TAGS_PER_MEAL} tags per meal")
         return recipients
+
+    async def _recipients_for_groups(self, group_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+        if not group_ids:
+            return []
+
+        me = current_user_id()
+        seen: set[uuid.UUID] = set()
+        recipients: list[uuid.UUID] = []
+        social = SocialService(self.db)
+
+        for group_id in group_ids:
+            membership = await self.group_crud.get_my_membership(group_id)
+            if membership is None or membership.status != "joined":
+                raise NotFoundError("Group not found")
+
+            for member, user in await self.group_crud.list_members_with_users(group_id):
+                if member.status != "joined" or user.id == me:
+                    continue
+                if user.id in seen:
+                    continue
+                try:
+                    await social.assert_connected(user.id)
+                except ValidationError:
+                    continue
+                seen.add(user.id)
+                recipients.append(user.id)
+
+        return recipients
+
+    async def _merge_recipients(
+        self,
+        handle_recipients: list[uuid.UUID],
+        group_recipients: list[uuid.UUID],
+    ) -> list[uuid.UUID]:
+        merged: list[uuid.UUID] = []
+        seen: set[uuid.UUID] = set()
+        for recipient_id in [*handle_recipients, *group_recipients]:
+            if recipient_id in seen:
+                continue
+            seen.add(recipient_id)
+            merged.append(recipient_id)
+        if len(merged) > MAX_TAGS_PER_MEAL:
+            raise ValidationError(f"At most {MAX_TAGS_PER_MEAL} tags per meal")
+        return merged
+
+    async def resolve_tagged_recipients(
+        self,
+        tagged_handles_raw: Optional[str] = None,
+        tagged_group_ids_raw: Optional[str] = None,
+    ) -> list[uuid.UUID]:
+        handles = self.parse_tagged_handles(tagged_handles_raw)
+        group_ids = self.parse_tagged_group_ids(tagged_group_ids_raw)
+        handle_recipients = await self._recipients_for_handles(handles)
+        group_recipients = await self._recipients_for_groups(group_ids)
+        return await self._merge_recipients(handle_recipients, group_recipients)
 
     async def insert_tags_for_photo(
         self,
@@ -108,9 +183,10 @@ class MealTagService:
         entry_date: datetime.date,
         tagged_handles_raw: Optional[str],
         *,
+        tagged_group_ids_raw: Optional[str] = None,
         analysis_will_run: bool,
     ) -> None:
-        recipients = await self.resolve_tagged_recipients(tagged_handles_raw)
+        recipients = await self.resolve_tagged_recipients(tagged_handles_raw, tagged_group_ids_raw)
         if not recipients:
             return
 
@@ -167,6 +243,9 @@ class MealTagService:
         if tag.status != "pending_approval":
             raise ValidationError("Tag is not awaiting approval")
         await self.delivery.deliver_one(tag_id, me)
+        notifications = NotificationService(self.db)
+        async with unit_of_work(self.db):
+            await notifications.mark_resolved("meal_tag_request", "tag_id", str(tag_id))
 
     async def decline(self, tag_id: uuid.UUID) -> None:
         me = current_user_id()
@@ -179,8 +258,10 @@ class MealTagService:
             raise ValidationError("Tag is not awaiting approval")
         tag.status = "declined"
         tag.resolved_at = datetime.datetime.utcnow()
+        notifications = NotificationService(self.db)
         async with unit_of_work(self.db):
             await self.crud.flush()
+            await notifications.mark_resolved("meal_tag_request", "tag_id", str(tag_id))
 
     async def cancel(self, tag_id: uuid.UUID) -> None:
         me = current_user_id()
@@ -207,7 +288,12 @@ class MealTagService:
         await apply_session_user_id(self.db, me)
         return await self._tags_response_for_photo(photo_id)
 
-    async def add_tags_to_photo(self, photo_id: int, handles: list[str]) -> PhotoMealTagListResponse:
+    async def add_tags_to_photo(
+        self,
+        photo_id: int,
+        handles: list[str],
+        group_ids: list[uuid.UUID] | None = None,
+    ) -> PhotoMealTagListResponse:
         photo_crud = PhotoCRUD(self.db)
         photo = await photo_crud.get_by_id_owned(photo_id)
         if photo is None:
@@ -215,29 +301,17 @@ class MealTagService:
         if photo.source_photo_id is not None:
             raise ValidationError("You can only tag people on meals you logged yourself")
 
-        normalized = self._normalize_handle_list(handles)
-        if not normalized:
-            raise ValidationError("At least one handle is required")
+        normalized_handles = self._normalize_handle_list(handles)
+        normalized_groups = list(group_ids or [])
+        if not normalized_handles and not normalized_groups:
+            raise ValidationError("At least one handle or group_id is required")
 
         me = current_user_id()
         existing_ids = set(await self.crud.list_tagged_user_ids_for_source(photo_id))
-        new_recipients: list[uuid.UUID] = []
-        seen: set[str] = set()
-        social = SocialService(self.db)
-
-        for handle in normalized:
-            if handle in seen:
-                continue
-            seen.add(handle)
-            user = await self.social_crud.get_by_handle(handle)
-            if user is None or user.handle is None:
-                raise NotFoundError(f"No user with handle @{handle}")
-            if user.id == me:
-                raise ValidationError("You cannot tag yourself")
-            if user.id in existing_ids:
-                continue
-            await social.assert_connected(user.id)
-            new_recipients.append(user.id)
+        handle_recipients = await self._recipients_for_handles(normalized_handles)
+        group_recipients = await self._recipients_for_groups(normalized_groups)
+        merged = await self._merge_recipients(handle_recipients, group_recipients)
+        new_recipients = [uid for uid in merged if uid not in existing_ids]
 
         if len(existing_ids) + len(new_recipients) > MAX_TAGS_PER_MEAL:
             raise ValidationError(f"At most {MAX_TAGS_PER_MEAL} tags per meal")

@@ -50,8 +50,9 @@ export function AuthCredentialsForm({
     if (isLogin || debouncedHandle.length < 3) return null
     if (availability.isLoading) return 'checking'
     if (availability.data?.available) return 'available'
+    if (availability.data?.reason === 'invalid') return 'invalid'
     return 'taken'
-  }, [availability.data?.available, availability.isLoading, debouncedHandle.length, isLogin])
+  }, [availability.data?.available, availability.data?.reason, availability.isLoading, debouncedHandle.length, isLogin])
 
   return (
     <form onSubmit={onSubmit} className="flex w-full max-w-sm flex-col gap-4">
@@ -98,6 +99,9 @@ export function AuthCredentialsForm({
           )}
           {handleStatus === 'taken' && (
             <p className="text-xs text-destructive">Already taken</p>
+          )}
+          {handleStatus === 'invalid' && (
+            <p className="text-xs text-destructive">Use 3–30 characters: a-z, 0-9, _</p>
           )}
         </div>
       )}

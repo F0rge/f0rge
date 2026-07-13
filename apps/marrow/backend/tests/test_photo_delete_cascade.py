@@ -89,9 +89,7 @@ async def test_delete_photo_with_analysis_cascades(async_db: AsyncSession) -> No
 
     assert (
         await async_db.execute(
-            select(func.count())
-            .select_from(PhotoAnalysis)
-            .where(PhotoAnalysis.meal_id == meal_id)
+            select(func.count()).select_from(PhotoAnalysis).where(PhotoAnalysis.meal_id == meal_id)
         )
     ).scalar_one() == 1
 
