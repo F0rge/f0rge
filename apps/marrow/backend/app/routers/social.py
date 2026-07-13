@@ -192,6 +192,19 @@ async def accept_group_invite(
     return await service.accept_group_invite(group_id, notifications)
 
 
+@router.post(
+    "/groups/{group_id}/decline",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_session)],
+)
+async def decline_group_invite(
+    group_id: uuid.UUID,
+    service: GroupService = Depends(get_group_service),
+    notifications: NotificationService = Depends(get_notification_service),
+):
+    await service.decline_group_invite(group_id, notifications)
+
+
 @router.delete(
     "/groups/{group_id}/members/{handle}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -201,8 +214,9 @@ async def remove_group_member(
     group_id: uuid.UUID,
     handle: str,
     service: GroupService = Depends(get_group_service),
+    notifications: NotificationService = Depends(get_notification_service),
 ):
-    await service.remove_member(group_id, handle)
+    await service.remove_member(group_id, handle, notifications)
 
 
 @router.get(

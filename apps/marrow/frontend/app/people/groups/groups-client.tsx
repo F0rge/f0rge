@@ -11,8 +11,8 @@ import { useAccount } from '@/lib/api/hooks/account'
 import {
   useAcceptGroupInvite,
   useCreateGroup,
+  useDeclineGroupInvite,
   useGroups,
-  useRemoveGroupMember,
 } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { toast } from 'sonner'
@@ -23,7 +23,7 @@ export default function GroupsClient() {
   const groups = useGroups()
   const createGroup = useCreateGroup()
   const acceptInvite = useAcceptGroupInvite()
-  const removeMember = useRemoveGroupMember()
+  const declineInvite = useDeclineGroupInvite()
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -52,9 +52,8 @@ export default function GroupsClient() {
   }
 
   const onDecline = async (groupId: string) => {
-    if (!myHandle) return
     try {
-      await removeMember.mutateAsync({ id: groupId, handle: myHandle })
+      await declineInvite.mutateAsync(groupId)
       toast.success('Invite declined')
     } catch (err) {
       toast.error(getErrorDetail(err, 'Could not decline invite'))
@@ -131,7 +130,7 @@ export default function GroupsClient() {
                     size="sm"
                     variant="outline"
                     onClick={() => onDecline(group.id)}
-                    disabled={removeMember.isPending}
+                    disabled={declineInvite.isPending}
                   >
                     Decline
                   </Button>

@@ -28,6 +28,10 @@ class NotificationService:
         await self.crud.mark_read(ids, mark_all)
         await self.crud.save()
 
+    async def mark_resolved(self, type: str, payload_key: str, payload_value: str) -> None:
+        """Mark the current user's unread notification matching type + payload field."""
+        await self.crud.mark_resolved_by_payload(type, payload_key, payload_value)
+
     async def notify(self, recipient_id: uuid.UUID, type: str, payload: dict) -> None:
         """Insert a notification for ANY user via create_notification SECURITY DEFINER."""
         await self.db.execute(

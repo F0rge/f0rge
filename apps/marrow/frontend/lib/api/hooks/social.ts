@@ -182,6 +182,14 @@ export function useAcceptGroupInvite() {
   })
 }
 
+export function useDeclineGroupInvite() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => apiPost(`/social/groups/${id}/decline`, {}),
+    onSuccess: (_data, id) => invalidateGroups(queryClient, id),
+  })
+}
+
 export function useRemoveGroupMember() {
   const queryClient = useQueryClient()
   return useMutation({

@@ -159,6 +159,9 @@ class SocialService:
 
         async with unit_of_work(self.db):
             await self.crud.flush()
+            await notifications.mark_resolved(
+                "connection_request", "connection_id", str(connection.id)
+            )
             await notifications.notify(
                 connection.requester_id,
                 "connection_accepted",

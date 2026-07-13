@@ -26,6 +26,7 @@ from app.schemas.social import (
     validate_handle_format,
 )
 from app.services.social import SocialService
+from app.services.notifications import NotificationService
 from app.services.tag_delivery import TagDeliveryService
 from f0rge_db.tenant import apply_session_user_id, current_user_id
 
@@ -167,6 +168,8 @@ class MealTagService:
         if tag.status != "pending_approval":
             raise ValidationError("Tag is not awaiting approval")
         await self.delivery.deliver_one(tag_id, me)
+        notifications = NotificationService(self.db)
+        await notifications.mark_resolved("meal_tag_request", "tag_id", str(tag_id))
 
     async def decline(self, tag_id: uuid.UUID) -> None:
         me = current_user_id()
@@ -179,8 +182,10 @@ class MealTagService:
             raise ValidationError("Tag is not awaiting approval")
         tag.status = "declined"
         tag.resolved_at = datetime.datetime.utcnow()
+        notifications = NotificationService(self.db)
         async with unit_of_work(self.db):
             await self.crud.flush()
+            await notifications.mark_resolved("meal_tag_request", "tag_id", str(tag_id))
 
     async def cancel(self, tag_id: uuid.UUID) -> None:
         me = current_user_id()
