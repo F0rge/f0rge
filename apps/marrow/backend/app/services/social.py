@@ -64,9 +64,7 @@ class SocialService:
             raise NotFoundError("No user with that handle")
         return self.to_public_card(user)
 
-    async def serve_peer_avatar_response(
-        self, handle: str
-    ) -> FileResponse | RedirectResponse:
+    async def serve_peer_avatar_response(self, handle: str) -> FileResponse | RedirectResponse:
         """Serve another user's custom avatar by handle.
 
         Mirrors AccountService.serve_avatar_response but for a user resolved by

@@ -104,7 +104,7 @@ export function usePhotoAnalysis(
 ) {
   const sharedMeal = options?.sharedMeal ?? false
   const queryClient = useQueryClient()
-  const prevStatusRef = useRef<string | undefined>()
+  const prevStatusRef = useRef<string | undefined>(undefined)
   const query = useQuery<PhotoAnalysis | null>({
     queryKey: ['photo-analysis', photoId],
     queryFn: async () => {
