@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.symptom_catalog import SymptomCatalogCRUD
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.symptom_catalog import SymptomCatalogItem
+from f0rge_db.tenant import current_user_id
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
 RESERVED_KEYS = frozenset({"reorder"})
@@ -45,7 +46,9 @@ class SymptomCatalogService:
         max_item = await self.crud.get_max_sort_order_item()
         next_sort = (max_item.sort_order + 1) if max_item else 0
 
-        item = SymptomCatalogItem(key=normalized, label=label, sort_order=next_sort)
+        item = SymptomCatalogItem(
+            user_id=current_user_id(), key=normalized, label=label, sort_order=next_sort
+        )
         self.crud.add(item)
         return await self.crud.commit_refresh(item)
 
