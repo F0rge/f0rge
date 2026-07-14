@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Loader2, X, RefreshCw, Check } from 'lucide-react'
 import {
   usePhotoAnalysis,
-  useConfirmAnalysis,
   useRetryAnalysis,
   useDeleteIngredient,
   useUpdateIngredient,
@@ -20,7 +19,6 @@ type PhotoAnalysisMode = 'view' | 'edit'
 interface PhotoAnalysisProps {
   photoId: number
   mode?: PhotoAnalysisMode
-  hideConfirmButton?: boolean
   /** Shared meal placement (delivered tag copy) — show waiting state instead of empty body. */
   isSharedMeal?: boolean
   /** Hide the dish-name/confidence header row — used by PhotoFocusOverlay,
@@ -138,12 +136,10 @@ function IngredientRow({
 export function PhotoAnalysis({
   photoId,
   mode = 'edit',
-  hideConfirmButton = false,
   isSharedMeal = false,
   hideTitle = false,
 }: PhotoAnalysisProps) {
   const { data: analysis, isLoading } = usePhotoAnalysis(photoId, { sharedMeal: isSharedMeal })
-  const confirmAnalysis = useConfirmAnalysis()
   const retryAnalysis = useRetryAnalysis()
   const updateDietaryConfirm = useUpdateDietaryConfirm()
 
@@ -324,19 +320,6 @@ export function PhotoAnalysis({
             existingNames={analysis.ingredients.map((ing) => ing.name)}
             onAdded={() => {}}
           />
-          {!hideConfirmButton && !isConfirmed && (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => confirmAnalysis.mutate(photoId)}
-                disabled={confirmAnalysis.isPending}
-                className="flex min-h-[44px] items-center gap-1.5 rounded-md bg-green-600 px-4 text-sm font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50"
-              >
-                <Check className="size-4" />
-                Confirm
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>

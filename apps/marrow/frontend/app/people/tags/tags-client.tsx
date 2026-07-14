@@ -60,7 +60,11 @@ function IncomingCard({ tag }: { tag: IncomingMealTag }) {
   return (
     <div className="space-y-3 rounded-lg border border-border p-4">
       <div className="flex items-start gap-3">
-        <PeerAvatar avatarDefaultIndex={tag.tagger.avatar_default_index} />
+        <PeerAvatar
+          handle={tag.tagger.handle}
+          avatarDefaultIndex={tag.tagger.avatar_default_index}
+          hasCustomAvatar={tag.tagger.has_custom_avatar}
+        />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">@{tag.tagger.handle}</p>
           {tag.tagger.display_name && (
@@ -111,7 +115,11 @@ function OutgoingRow({ tag }: { tag: OutgoingMealTag }) {
   return (
     <div className="border-t border-muted px-4 py-3.5 first:border-t-0">
       <div className="flex items-start gap-3">
-        <PeerAvatar avatarDefaultIndex={tag.tagged_user.avatar_default_index} />
+        <PeerAvatar
+          handle={tag.tagged_user.handle}
+          avatarDefaultIndex={tag.tagged_user.avatar_default_index}
+          hasCustomAvatar={tag.tagged_user.has_custom_avatar}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium">@{tag.tagged_user.handle}</p>

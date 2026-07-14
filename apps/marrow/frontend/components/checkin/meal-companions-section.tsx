@@ -131,7 +131,13 @@ export function MealCompanionsSection({ photo, variant = 'editor' }: MealCompani
                     key={tag.id}
                     className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-xs font-medium"
                   >
-                    <PeerAvatar avatarDefaultIndex={tag.user.avatar_default_index} size="sm" className="size-4" />
+                    <PeerAvatar
+                      handle={tag.user.handle}
+                      avatarDefaultIndex={tag.user.avatar_default_index}
+                      hasCustomAvatar={tag.user.has_custom_avatar}
+                      size="sm"
+                      className="size-4"
+                    />
                     @{tag.user.handle}
                   </span>
                 ))

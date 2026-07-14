@@ -98,11 +98,7 @@ export function PhotoAnalysisDisclosure({ photoId, photoLabel }: PhotoAnalysisDi
 
       {isExpanded && (
         <div id={bodyId} className="border-t border-border px-2.5 pb-2.5 pt-2">
-          <PhotoAnalysis
-            photoId={photoId}
-            mode={isEditing ? 'edit' : 'view'}
-            hideConfirmButton
-          />
+          <PhotoAnalysis photoId={photoId} mode={isEditing ? 'edit' : 'view'} />
           <div className="mt-2 flex justify-end">
             {isEditing ? (
               <button

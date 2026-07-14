@@ -194,7 +194,11 @@ function SearchResultRow({
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-muted px-3 py-2">
-      <PeerAvatar avatarDefaultIndex={user.avatar_default_index} />
+      <PeerAvatar
+        handle={user.handle}
+        avatarDefaultIndex={user.avatar_default_index}
+        hasCustomAvatar={user.has_custom_avatar}
+      />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">@{user.handle}</p>
         {user.display_name && (
@@ -259,7 +263,11 @@ function ConnectionRow({
 }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-muted px-3 py-2">
-      <PeerAvatar avatarDefaultIndex={item.user.avatar_default_index} />
+      <PeerAvatar
+        handle={item.user.handle}
+        avatarDefaultIndex={item.user.avatar_default_index}
+        hasCustomAvatar={item.user.has_custom_avatar}
+      />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">@{item.user.handle}</p>
         {item.user.display_name && (
