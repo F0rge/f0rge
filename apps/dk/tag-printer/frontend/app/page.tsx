@@ -87,9 +87,7 @@ export default function Home() {
       setCsvData(response.data.data);
       setPriceColumns(response.data.price_columns);
       setProductCodes(response.data.product_codes);
-      setSelectedPriceColumn(
-        response.data.price_columns[4] || response.data.price_columns[0] || ''
-      );
+      setSelectedPriceColumn(response.data.price_columns[0] || '');
       setSelectedProducts([]);
     } catch (error) {
       console.error('Error uploading CSV:', error);

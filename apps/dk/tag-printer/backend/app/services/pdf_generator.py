@@ -47,6 +47,7 @@ class PDFGenerator:
             # Spill to a new page when the row would overrun the usable height
             if y + tag_height > page_h - bottom + 0.5:
                 pdf.add_page(orientation)
+                x = left_margin
                 y = top_margin
 
             self._draw_tag(pdf, df, i, price_column, x, y, tag_width, tag_height, inner_padding)
@@ -62,9 +63,9 @@ class PDFGenerator:
         row = tag_height / 3
 
         pdf.set_xy(inner_x, y)
-        pdf.cell(w=inner_w, h=row, txt=str(df.iloc[i, 0]), border=0)
+        pdf.cell(w=inner_w, h=row, txt=str(df.at[i, "ProductCode"]), border=0)
         pdf.set_xy(inner_x, y + row)
-        pdf.cell(w=inner_w, h=row, txt=str(df.iloc[i, 1]), border=0)
+        pdf.cell(w=inner_w, h=row, txt=str(df.at[i, "Name"]), border=0)
         pdf.set_xy(inner_x, y + 2 * row)
         pdf.cell(w=inner_w, h=row, txt="R" + f"{df.at[i, price_column] * 1.15:0.2f}", border=0)
 
