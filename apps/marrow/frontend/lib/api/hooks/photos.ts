@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, ApiError } from '@f0rge/ui/api'
 import type { PhotoAnalysis } from '../types'
@@ -102,7 +103,9 @@ export function usePhotoAnalysis(
   options?: { sharedMeal?: boolean },
 ) {
   const sharedMeal = options?.sharedMeal ?? false
-  return useQuery<PhotoAnalysis | null>({
+  const queryClient = useQueryClient()
+  const prevStatusRef = useRef<string | undefined>()
+  const query = useQuery<PhotoAnalysis | null>({
     queryKey: ['photo-analysis', photoId],
     queryFn: async () => {
       try {
@@ -126,6 +129,18 @@ export function usePhotoAnalysis(
       return false
     },
   })
+
+  // Auto-confirm in the background no longer goes through useConfirmAnalysis, so
+  // refresh the entry (photo_signal) when analysis first reaches confirmed.
+  useEffect(() => {
+    const status = query.data?.status
+    if (status === 'confirmed' && prevStatusRef.current !== 'confirmed') {
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+    }
+    prevStatusRef.current = status
+  }, [query.data?.status, queryClient])
+
+  return query
 }
 
 export function useConfirmAnalysis() {

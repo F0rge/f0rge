@@ -232,7 +232,13 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
             if context.photo.source_photo_id is None:
                 from app.services.tag_delivery import TagDeliveryService
 
-                await TagDeliveryService().deliver_for_source(photo_id, context.user_id)
+                try:
+                    await TagDeliveryService().deliver_for_source(photo_id, context.user_id)
+                except Exception:
+                    logger.exception(
+                        "Tag delivery failed for photo %d after confirmed analysis",
+                        photo_id,
+                    )
 
     except Exception as e:
         logger.exception("Food analysis failed for photo %d", photo_id)
