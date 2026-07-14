@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -112,3 +113,22 @@ async def test_list_include_archived(async_db: AsyncSession) -> None:
     keys = [i.key for i in all_items]
     assert "gluten" in keys
     assert "dairy" in keys
+
+
+async def test_create_via_api_owned_by_authed_user(authed_client: AsyncClient) -> None:
+    """Regression: a real (non-default) user must be able to add a custom diet tag.
+
+    Same class of bug as symptom_catalog — create_item omitted user_id, so the
+    row defaulted to default_storage_user_id and was invisible to (or rejected
+    for) every other user. Service-level tests run as the default user and mask
+    it; this exercises the authed API path.
+    """
+    resp = await authed_client.post(
+        "/api/v1/diet-tags/catalog", json={"key": "keto", "label": "Keto"}
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["key"] == "keto"
+
+    listed = await authed_client.get("/api/v1/diet-tags/catalog")
+    assert listed.status_code == 200
+    assert any(item["key"] == "keto" for item in listed.json())

@@ -1,7 +1,6 @@
 name: Fly Deploy (reusable)
 
-# Called by the deploy job in ci-develop.yml and ci-main.yml.
-# plan → deploy-api → deploy-mcp (serial after API); deploy-frontend parallel with MCP.
+# Called by deploy-reusable.yml (preplanned) or directly for backward compatibility.
 
 on:
   workflow_call:
@@ -15,18 +14,49 @@ on:
         required: true
         type: string
       base_branch:
-        description: Branch used for nx-set-shas base
-        required: true
+        description: Branch used for nx-set-shas base (legacy plan mode)
+        required: false
         type: string
+        default: develop
       workflow_id:
-        description: Caller workflow filename for nx-set-shas
-        required: true
+        description: Caller workflow filename for nx-set-shas (legacy plan mode)
+        required: false
         type: string
+        default: ci-develop.yml
       component:
-        description: auto (nx affected) or all/api/mcp/frontend (manual dispatch)
+        description: auto or all/api/mcp/frontend (legacy plan mode)
         required: false
         type: string
         default: auto
+      preplanned:
+        description: When true, use deploy_* and health URL inputs from orchestrator
+        required: false
+        type: boolean
+        default: false
+      deploy_api:
+        required: false
+        type: boolean
+        default: false
+      deploy_mcp:
+        required: false
+        type: boolean
+        default: false
+      deploy_frontend:
+        required: false
+        type: boolean
+        default: false
+      api_health_url:
+        required: false
+        type: string
+        default: ""
+      frontend_health_url:
+        required: false
+        type: string
+        default: ""
+      mcp_health_url:
+        required: false
+        type: string
+        default: ""
     secrets:
       FLY_API_TOKEN:
         required: true
@@ -36,52 +66,67 @@ permissions:
   actions: read
 
 jobs:
-  plan:
-    name: plan
+  resolve:
+    name: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      deploy_api: ${{ steps.flags.outputs.deploy_api }}
-      deploy_mcp: ${{ steps.flags.outputs.deploy_mcp }}
-      deploy_frontend: ${{ steps.flags.outputs.deploy_frontend }}
-      api_health_url: ${{ steps.urls.outputs.api_health_url }}
-      frontend_health_url: ${{ steps.urls.outputs.frontend_health_url }}
-      mcp_health_url: ${{ steps.urls.outputs.mcp_health_url }}
+      deploy_api: ${{ steps.out.outputs.deploy_api }}
+      deploy_mcp: ${{ steps.out.outputs.deploy_mcp }}
+      deploy_frontend: ${{ steps.out.outputs.deploy_frontend }}
+      api_health_url: ${{ steps.out.outputs.api_health_url }}
+      frontend_health_url: ${{ steps.out.outputs.frontend_health_url }}
+      mcp_health_url: ${{ steps.out.outputs.mcp_health_url }}
     steps:
+      - name: Use preplanned flags
+        if: inputs.preplanned == true
+        id: preplanned
+        run: |
+          echo "deploy_api=${{ inputs.deploy_api && 'true' || 'false' }}" >> "$GITHUB_OUTPUT"
+          echo "deploy_mcp=${{ inputs.deploy_mcp && 'true' || 'false' }}" >> "$GITHUB_OUTPUT"
+          echo "deploy_frontend=${{ inputs.deploy_frontend && 'true' || 'false' }}" >> "$GITHUB_OUTPUT"
+          echo "api_health_url=${{ inputs.api_health_url }}" >> "$GITHUB_OUTPUT"
+          echo "frontend_health_url=${{ inputs.frontend_health_url }}" >> "$GITHUB_OUTPUT"
+          echo "mcp_health_url=${{ inputs.mcp_health_url }}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        if: inputs.preplanned != true
         with:
           fetch-depth: 0
           ref: ${{ inputs.sha }}
 
       - uses: actions/setup-node@v4
+        if: inputs.preplanned != true
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Install root deps
+        if: inputs.preplanned != true
         run: npm ci
 
       - uses: nrwl/nx-set-shas@v4
-        if: inputs.component == 'auto'
+        if: inputs.preplanned != true && inputs.component == 'auto'
         with:
           main-branch-name: ${{ inputs.base_branch }}
           workflow-id: ${{ inputs.workflow_id }}
 
       - name: Resolve affected projects
         id: affected
-        if: inputs.component == 'auto'
-        # nx 22.7 ignores --sep and emits a JSON array; pipefail so nx failures fail the step.
+        if: inputs.preplanned != true && inputs.component == 'auto'
         run: |
           set -o pipefail
           PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(" ")')
           echo "projects=$PROJECTS" >> "$GITHUB_OUTPUT"
 
-      - name: Set deploy flags
-        id: flags
+      - name: Legacy deploy flags
+        id: legacy
+        if: inputs.preplanned != true
         env:
           COMPONENT: ${{ inputs.component }}
           PROJECTS: ${{ steps.affected.outputs.projects }}
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           backend_affected=false
           frontend_affected=false
@@ -97,6 +142,15 @@ jobs:
             echo "deploy_api=false" >> "$GITHUB_OUTPUT"
             echo "deploy_mcp=true" >> "$GITHUB_OUTPUT"
             echo "deploy_frontend=false" >> "$GITHUB_OUTPUT"
+            if [ "$ENVIRONMENT" = "main" ]; then
+              echo "api_health_url=https://api.marrow-health.com/api/v1/health" >> "$GITHUB_OUTPUT"
+              echo "frontend_health_url=https://marrow-health.com/" >> "$GITHUB_OUTPUT"
+              echo "mcp_health_url=https://marrow-mcp.fly.dev/mcp" >> "$GITHUB_OUTPUT"
+            else
+              echo "api_health_url=https://api-dev.marrow-health.com/api/v1/health" >> "$GITHUB_OUTPUT"
+              echo "frontend_health_url=https://app-dev.marrow-health.com/" >> "$GITHUB_OUTPUT"
+              echo "mcp_health_url=https://marrow-mcp-dev.fly.dev/mcp" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           elif [ "$COMPONENT" = "frontend" ]; then
             frontend_affected=true
@@ -116,12 +170,6 @@ jobs:
           echo "deploy_api=$deploy_api" >> "$GITHUB_OUTPUT"
           echo "deploy_mcp=$deploy_mcp" >> "$GITHUB_OUTPUT"
           echo "deploy_frontend=$frontend_affected" >> "$GITHUB_OUTPUT"
-
-      - name: Set health URLs
-        id: urls
-        env:
-          ENVIRONMENT: ${{ inputs.environment }}
-        run: |
           if [ "$ENVIRONMENT" = "main" ]; then
             echo "api_health_url=https://api.marrow-health.com/api/v1/health" >> "$GITHUB_OUTPUT"
             echo "frontend_health_url=https://marrow-health.com/" >> "$GITHUB_OUTPUT"
@@ -132,10 +180,29 @@ jobs:
             echo "mcp_health_url=https://marrow-mcp-dev.fly.dev/mcp" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Publish resolve outputs
+        id: out
+        run: |
+          if [ "${{ inputs.preplanned }}" = "true" ]; then
+            echo "deploy_api=${{ steps.preplanned.outputs.deploy_api }}" >> "$GITHUB_OUTPUT"
+            echo "deploy_mcp=${{ steps.preplanned.outputs.deploy_mcp }}" >> "$GITHUB_OUTPUT"
+            echo "deploy_frontend=${{ steps.preplanned.outputs.deploy_frontend }}" >> "$GITHUB_OUTPUT"
+            echo "api_health_url=${{ steps.preplanned.outputs.api_health_url }}" >> "$GITHUB_OUTPUT"
+            echo "frontend_health_url=${{ steps.preplanned.outputs.frontend_health_url }}" >> "$GITHUB_OUTPUT"
+            echo "mcp_health_url=${{ steps.preplanned.outputs.mcp_health_url }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_api=${{ steps.legacy.outputs.deploy_api }}" >> "$GITHUB_OUTPUT"
+            echo "deploy_mcp=${{ steps.legacy.outputs.deploy_mcp }}" >> "$GITHUB_OUTPUT"
+            echo "deploy_frontend=${{ steps.legacy.outputs.deploy_frontend }}" >> "$GITHUB_OUTPUT"
+            echo "api_health_url=${{ steps.legacy.outputs.api_health_url }}" >> "$GITHUB_OUTPUT"
+            echo "frontend_health_url=${{ steps.legacy.outputs.frontend_health_url }}" >> "$GITHUB_OUTPUT"
+            echo "mcp_health_url=${{ steps.legacy.outputs.mcp_health_url }}" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy-api:
     name: deploy api
-    needs: plan
-    if: needs.plan.outputs.deploy_api == 'true'
+    needs: resolve
+    if: needs.resolve.outputs.deploy_api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -156,9 +223,9 @@ jobs:
 
   deploy-mcp:
     name: deploy mcp
-    needs: [plan, deploy-api]
+    needs: [resolve, deploy-api]
     if: >-
-      needs.plan.outputs.deploy_mcp == 'true' &&
+      needs.resolve.outputs.deploy_mcp == 'true' &&
       (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -180,8 +247,10 @@ jobs:
 
   deploy-frontend:
     name: deploy frontend
-    needs: plan
-    if: needs.plan.outputs.deploy_frontend == 'true'
+    needs: [resolve, deploy-api]
+    if: >-
+      needs.resolve.outputs.deploy_frontend == 'true' &&
+      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
@@ -202,7 +271,7 @@ jobs:
 
   smoke:
     name: smoke
-    needs: [plan, deploy-api, deploy-mcp, deploy-frontend]
+    needs: [resolve, deploy-api, deploy-mcp, deploy-frontend]
     if: >-
       always() &&
       (
@@ -216,36 +285,39 @@ jobs:
       - name: Smoke API health
         if: needs.deploy-api.result == 'success'
         run: |
+          URL="${{ needs.resolve.outputs.api_health_url }}"
           for i in $(seq 1 12); do
-            if curl -sf "${{ needs.plan.outputs.api_health_url }}"; then
+            if curl -sf "$URL"; then
               exit 0
             fi
             sleep 10
           done
-          echo "API health check failed: ${{ needs.plan.outputs.api_health_url }}"
+          echo "API health check failed: $URL"
           exit 1
 
       - name: Smoke frontend
         if: needs.deploy-frontend.result == 'success'
         run: |
+          URL="${{ needs.resolve.outputs.frontend_health_url }}"
           for i in $(seq 1 12); do
-            if curl -sf "${{ needs.plan.outputs.frontend_health_url }}" >/dev/null; then
+            if curl -sf "$URL" >/dev/null; then
               exit 0
             fi
             sleep 10
           done
-          echo "Frontend health check failed: ${{ needs.plan.outputs.frontend_health_url }}"
+          echo "Frontend health check failed: $URL"
           exit 1
 
       - name: Smoke MCP
         if: needs.deploy-mcp.result == 'success'
         run: |
+          URL="${{ needs.resolve.outputs.mcp_health_url }}"
           for i in $(seq 1 12); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.plan.outputs.mcp_health_url }}")
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
             if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
               exit 0
             fi
             sleep 10
           done
-          echo "MCP health check failed: ${{ needs.plan.outputs.mcp_health_url }}"
+          echo "MCP health check failed: $URL"
           exit 1

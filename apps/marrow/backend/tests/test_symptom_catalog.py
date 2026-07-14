@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -96,3 +97,31 @@ async def test_list_include_archived(async_db: AsyncSession) -> None:
     keys = [i.key for i in all_items]
     assert "vss" in keys
     assert "tinnitus" in keys
+
+
+# ---------------------------------------------------------------------------
+# Regression: create as a real (non-default) user
+# ---------------------------------------------------------------------------
+
+
+async def test_create_via_api_owned_by_authed_user(authed_client: AsyncClient) -> None:
+    """A real signed-up (non-default) user must be able to add a custom symptom.
+
+    Regression for the prod failure where a non-default user could not add
+    "Diziness": create_item omitted user_id, so the row defaulted to
+    default_storage_user_id and the RLS WITH CHECK policy rejected the insert
+    for everyone else. The service-level tests above run as the default user,
+    which masked it — this goes through the authed API path so the request runs
+    under the signed-up user's app.user_id.
+    """
+    resp = await authed_client.post(
+        "/api/v1/symptoms/catalog", json={"key": "diziness", "label": "Diziness"}
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["key"] == "diziness"
+
+    # Ownership guard: the catalog list is scoped to the current user, so the
+    # new symptom only appears if it was created with the right user_id.
+    listed = await authed_client.get("/api/v1/symptoms/catalog")
+    assert listed.status_code == 200
+    assert any(item["key"] == "diziness" for item in listed.json())

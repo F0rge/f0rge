@@ -52,6 +52,13 @@ ALLOWED_AVATAR_CONTENT_TYPES = frozenset(
     }
 )
 MAX_AVATAR_BYTES = 5 * 1024 * 1024
+# Browsers re-mount the avatar on every screen navigation; without this the
+# image refetches through the API→object-storage redirect each time. 240s stays
+# under the 300s presigned-URL expiry so a cached redirect never goes stale.
+AVATAR_CACHE_CONTROL = "private, max-age=240"
+# 240s < the 300s presigned-URL expiry so a cached redirect never points at an
+# expired URL.
+AVATAR_CACHE_CONTROL = "private, max-age=240"
 
 
 class AccountService:
@@ -160,8 +167,12 @@ class AccountService:
     async def serve_avatar_response(self) -> FileResponse | RedirectResponse:
         target = await self.get_avatar_file_target()
         if target.startswith("http://") or target.startswith("https://"):
-            return RedirectResponse(target)
-        return FileResponse(target, media_type="image/jpeg")
+            return RedirectResponse(target, headers={"Cache-Control": AVATAR_CACHE_CONTROL})
+        return FileResponse(
+            target,
+            media_type="image/jpeg",
+            headers={"Cache-Control": AVATAR_CACHE_CONTROL},
+        )
 
     async def change_password(self, data: PasswordChangeRequest) -> None:
         user = await self._get_current_user()

@@ -172,5 +172,5 @@ async def test_trigger_with_byok_only_calls_openrouter(
             await verify.execute(select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id))
         ).scalar_one_or_none()
     assert analysis is not None
-    assert analysis.status == "complete"
+    assert analysis.status == "confirmed"
     assert analysis.dish_name == "Test Dish"

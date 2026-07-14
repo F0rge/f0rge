@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import FileResponse, RedirectResponse
 
 from app.dependencies.groups import get_group_service
 from app.dependencies.meal_tags import get_meal_tag_service
@@ -54,6 +55,18 @@ async def lookup_user(
     service: SocialService = Depends(get_social_service),
 ):
     return await service.lookup_by_handle(handle)
+
+
+@router.get(
+    "/users/{handle}/avatar",
+    response_model=None,
+    dependencies=[Depends(get_current_session)],
+)
+async def peer_avatar(
+    handle: str,
+    service: SocialService = Depends(get_social_service),
+) -> FileResponse | RedirectResponse:
+    return await service.serve_peer_avatar_response(handle)
 
 
 @router.get(

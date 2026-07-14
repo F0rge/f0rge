@@ -1,0 +1,22 @@
+# Repo-root build context. Whitelist only this app.
+*
+!apps
+apps/*
+!apps/dk
+apps/dk/*
+!apps/dk/tag-printer
+apps/dk/tag-printer/*
+!apps/dk/tag-printer/frontend
+
+apps/dk/tag-printer/frontend/node_modules
+apps/dk/tag-printer/frontend/.next
+apps/dk/tag-printer/frontend/out
+apps/dk/tag-printer/frontend/build
+apps/dk/tag-printer/frontend/dist
+**/.env
+**/.env.local
+**/.env.*.local
+**/.DS_Store
+**/npm-debug.log*
+**/.eslintcache
+**/coverage

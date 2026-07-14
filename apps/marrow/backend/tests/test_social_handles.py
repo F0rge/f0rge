@@ -122,7 +122,12 @@ async def test_lookup_returns_whitelisted_fields_only(authed_client: AsyncClient
     resp = await authed_client.get(f"/api/v1/social/users/lookup?handle={handle}")
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body.keys()) == {"handle", "display_name", "avatar_default_index"}
+    assert set(body.keys()) == {
+        "handle",
+        "display_name",
+        "avatar_default_index",
+        "has_custom_avatar",
+    }
     assert body["handle"] == handle
     assert "email" not in body
     assert "id" not in body

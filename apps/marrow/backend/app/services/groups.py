@@ -54,6 +54,7 @@ class GroupService:
             handle=user.handle or "",
             display_name=user.display_name,
             avatar_default_index=user.avatar_default_index,
+            has_custom_avatar=user.avatar_custom_filename is not None,
             role=member.role,
             status=member.status,
             joined_at=member.joined_at,

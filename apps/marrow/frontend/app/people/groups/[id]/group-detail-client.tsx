@@ -238,7 +238,11 @@ export default function GroupDetailClient() {
           </div>
           {connectedPreview && (
             <div className="flex items-center gap-3 rounded-lg border border-muted px-3 py-2">
-              <PeerAvatar avatarDefaultIndex={connectedPreview.avatar_default_index} />
+              <PeerAvatar
+                handle={connectedPreview.handle}
+                avatarDefaultIndex={connectedPreview.avatar_default_index}
+                hasCustomAvatar={connectedPreview.has_custom_avatar}
+              />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">@{connectedPreview.handle}</p>
                 {connectedPreview.display_name && (
@@ -323,7 +327,11 @@ function MemberRow({
 }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-muted px-3 py-2">
-      <PeerAvatar avatarDefaultIndex={member.avatar_default_index} />
+      <PeerAvatar
+        handle={member.handle}
+        avatarDefaultIndex={member.avatar_default_index}
+        hasCustomAvatar={member.has_custom_avatar}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium">@{member.handle}</p>

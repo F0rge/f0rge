@@ -45,7 +45,7 @@ export function useUpdateTaggedMealMode() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (data: TaggedMealModeUpdate) =>
-      apiPut('/settings/tagged-meal', data) as Promise<UserSettings>,
+      apiPut('/settings/tagged-meal-mode', data) as Promise<UserSettings>,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },

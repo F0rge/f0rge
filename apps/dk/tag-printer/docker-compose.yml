@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: ../../..
+      dockerfile: apps/dk/tag-printer/backend/Dockerfile
+    container_name: dk-tag-printer-backend
+    ports:
+      - "8002:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CORS_ORIGINS=http://localhost:3002
+    networks:
+      - dk-tag-printer
+
+  frontend:
+    build:
+      context: ../../..
+      dockerfile: apps/dk/tag-printer/frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8002
+    container_name: dk-tag-printer-frontend
+    ports:
+      - "3002:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    networks:
+      - dk-tag-printer
+
+networks:
+  dk-tag-printer:
+    driver: bridge
