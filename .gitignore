@@ -44,3 +44,4 @@ qa-screenshots/
 
 # Nx
 .nx/
+*.tsbuildinfo
