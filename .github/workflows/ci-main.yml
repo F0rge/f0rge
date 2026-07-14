@@ -74,20 +74,8 @@ jobs:
     needs: detect
     if: github.event_name != 'workflow_dispatch' && needs.detect.outputs.backend == 'true'
     concurrency:
-      group: ci-main-${{ github.ref }}
+      group: ci-main-backend-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: nrwl/nx-set-shas@v4
-        with:
-          main-branch-name: main
-
-      - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
 
@@ -125,20 +113,8 @@ jobs:
     needs: detect
     if: github.event_name != 'workflow_dispatch' && needs.detect.outputs.frontend == 'true'
     concurrency:
-      group: ci-main-${{ github.ref }}
+      group: ci-main-frontend-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: nrwl/nx-set-shas@v4
-        with:
-          main-branch-name: main
-
-      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
