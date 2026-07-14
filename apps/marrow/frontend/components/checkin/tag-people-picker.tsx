@@ -211,6 +211,9 @@ export function TagPeoplePicker(props: TagPeoplePickerProps) {
           {filteredRecent.map((recent) => {
             const conn = connectionByHandle.get(recent.handle)
             const avatarIndex = conn?.user.avatar_default_index ?? recent.avatar_default_index
+            // ponytail: RecentTagHandle has no custom-avatar flag; use the matching
+            // connection's when present, else fall back to the default avatar.
+            const hasCustomAvatar = conn?.user.has_custom_avatar ?? false
             const selected = isHandleSelected(recent.handle)
             const tag = taggedByHandle.get(recent.handle)
             const rowDisabled =
@@ -220,7 +223,14 @@ export function TagPeoplePicker(props: TagPeoplePickerProps) {
                 key={recent.handle}
                 label={`@${recent.handle}`}
                 sublabel={conn?.user.display_name ?? recent.display_name}
-                avatar={<PeerAvatar avatarDefaultIndex={avatarIndex} size="sm" />}
+                avatar={
+                  <PeerAvatar
+                    handle={recent.handle}
+                    avatarDefaultIndex={avatarIndex}
+                    hasCustomAvatar={hasCustomAvatar}
+                    size="sm"
+                  />
+                }
                 selected={selected}
                 disabled={disabled || rowDisabled}
                 busy={busyHandle === recent.handle}
@@ -244,7 +254,14 @@ export function TagPeoplePicker(props: TagPeoplePickerProps) {
                 key={item.id}
                 label={`@${handle}`}
                 sublabel={item.user.display_name}
-                avatar={<PeerAvatar avatarDefaultIndex={item.user.avatar_default_index} size="sm" />}
+                avatar={
+                  <PeerAvatar
+                    handle={item.user.handle}
+                    avatarDefaultIndex={item.user.avatar_default_index}
+                    hasCustomAvatar={item.user.has_custom_avatar}
+                    size="sm"
+                  />
+                }
                 selected={isHandleSelected(handle)}
                 disabled={disabled || rowDisabled}
                 busy={busyHandle === handle}

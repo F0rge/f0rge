@@ -2,6 +2,7 @@ export interface PublicUserCard {
   handle: string
   display_name: string | null
   avatar_default_index: number
+  has_custom_avatar: boolean
 }
 
 export type ConnectionStatus = 'none' | 'pending_outgoing' | 'pending_incoming' | 'connected'
@@ -53,6 +54,7 @@ export interface GroupMember {
   handle: string
   display_name: string | null
   avatar_default_index: number
+  has_custom_avatar: boolean
   role: GroupMemberRole
   status: GroupMemberStatus
   joined_at: string | null

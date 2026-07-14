@@ -28,6 +28,7 @@ class PublicUserCard(BaseModel):
     handle: str
     display_name: str | None = None
     avatar_default_index: int
+    has_custom_avatar: bool = False
 
 
 class UserSearchItem(PublicUserCard):
@@ -104,6 +105,7 @@ class GroupMemberItem(BaseModel):
     handle: str
     display_name: str | None = None
     avatar_default_index: int
+    has_custom_avatar: bool = False
     role: str
     status: str
     joined_at: datetime.datetime | None = None

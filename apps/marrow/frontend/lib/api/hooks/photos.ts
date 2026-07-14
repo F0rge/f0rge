@@ -10,6 +10,7 @@ export interface PhotoMealTagItem {
     handle: string
     display_name: string | null
     avatar_default_index: number
+    has_custom_avatar: boolean
   }
   status: string
 }

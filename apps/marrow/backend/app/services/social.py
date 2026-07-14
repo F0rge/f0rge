@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import datetime
+import os
 import uuid
 
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.crud.base import unit_of_work
 from app.crud.social import SocialCRUD, _pair_ids
 from app.models.connection import Connection
@@ -19,8 +22,14 @@ from app.schemas.social import (
     UserSearchResponse,
     validate_handle_format,
 )
+from app.services import object_storage
+from app.services.avatar_storage import avatar_exists
 from app.services.notifications import NotificationService
 from f0rge_db.tenant import current_user_id
+
+# Matches AccountService.AVATAR_CACHE_CONTROL — peers' avatars re-mount on every
+# screen just like the current user's, so they need the same browser caching.
+AVATAR_CACHE_CONTROL = "private, max-age=240"
 
 
 class SocialService:
@@ -34,6 +43,7 @@ class SocialService:
             handle=user.handle or "",
             display_name=user.display_name,
             avatar_default_index=user.avatar_default_index,
+            has_custom_avatar=user.avatar_custom_filename is not None,
         )
 
     async def describe_handle_available(self, handle: str) -> HandleAvailableResponse:
@@ -53,6 +63,33 @@ class SocialService:
         if user is None or user.handle is None:
             raise NotFoundError("No user with that handle")
         return self.to_public_card(user)
+
+    async def serve_peer_avatar_response(
+        self, handle: str
+    ) -> FileResponse | RedirectResponse:
+        """Serve another user's custom avatar by handle.
+
+        Mirrors AccountService.serve_avatar_response but for a user resolved by
+        handle. Reading a peer row by handle is already permitted (see
+        lookup_by_handle); the object-storage read is keyed by the peer's id.
+        """
+        user = await self.crud.get_by_handle(handle)
+        if user is None or user.avatar_custom_filename is None:
+            raise NotFoundError("No avatar")
+        if not avatar_exists(user_id=str(user.id)):
+            raise NotFoundError("Avatar file not found")
+
+        presigned = object_storage.presigned_url_for_relative(
+            user.avatar_custom_filename, user_id=str(user.id)
+        )
+        headers = {"Cache-Control": AVATAR_CACHE_CONTROL}
+        if presigned:
+            return RedirectResponse(presigned, headers=headers)
+        return FileResponse(
+            os.path.join(os.path.abspath(settings.photo_dir), user.avatar_custom_filename),
+            media_type="image/jpeg",
+            headers=headers,
+        )
 
     async def search_users(self, query: str, limit: int = 10) -> UserSearchResponse:
         me = current_user_id()
@@ -74,6 +111,7 @@ class SocialService:
                     handle=user.handle or "",
                     display_name=user.display_name,
                     avatar_default_index=user.avatar_default_index,
+                    has_custom_avatar=user.avatar_custom_filename is not None,
                     connection_status=status,
                     connection_id=connection.id if connection is not None else None,
                 )
