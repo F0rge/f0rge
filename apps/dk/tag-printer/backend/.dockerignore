@@ -1,0 +1,21 @@
+# Repo-root build context. Whitelist only this app — sibling apps never ship.
+*
+!apps
+apps/*
+!apps/dk
+apps/dk/*
+!apps/dk/tag-printer
+apps/dk/tag-printer/*
+!apps/dk/tag-printer/backend
+
+**/.venv
+apps/dk/tag-printer/backend/tests
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.env
+**/.env.local

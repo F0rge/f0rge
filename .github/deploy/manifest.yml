@@ -1,0 +1,48 @@
+version: 1
+
+# Maps Nx projects to deploy targets. The orchestrator (deploy-reusable.yml)
+# filters by branch/environment and nx affected before calling executors.
+
+components:
+  marrow-backend:
+    nx: marrow-backend
+    target: fly
+    branches: [develop, main]
+    fly:
+      role: api
+      config:
+        develop: apps/marrow/backend/fly.toml
+        main: apps/marrow/backend/fly.prod.toml
+    also_deploys:
+      - role: mcp
+        config:
+          develop: apps/marrow/backend/fly.mcp.toml
+          main: apps/marrow/backend/fly.mcp.prod.toml
+
+  marrow-frontend:
+    nx: marrow-frontend
+    target: fly
+    branches: [develop, main]
+    fly:
+      role: frontend
+      config:
+        develop: apps/marrow/frontend/fly.toml
+        main: apps/marrow/frontend/fly.prod.toml
+
+  dk-tag-printer-backend:
+    nx: dk-tag-printer-backend
+    target: coolify
+    branches: [main]
+    coolify:
+      app_uuid: pskswsc8c0044ggo40go4og0
+      webhook_secret_env: COOLIFY_WEBHOOK_DK_BACKEND
+    health_url: https://tags-api.leo-figueiredo.com/health
+
+  dk-tag-printer-frontend:
+    nx: dk-tag-printer-frontend
+    target: coolify
+    branches: [main]
+    coolify:
+      app_uuid: f080ossg88ows8k8csw40c4s
+      webhook_secret_env: COOLIFY_WEBHOOK_DK_FRONTEND
+    health_url: https://tags.leo-figueiredo.com/

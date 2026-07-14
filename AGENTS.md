@@ -37,11 +37,27 @@ All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`f0rge-
 
 Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.toml`, `apps/marrow/frontend/fly.toml` (dev) and `*.prod.toml` (prod). CI/CD and deploy job layout: [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc).
 
+## apps/dk (tag printer)
+
+DasKasas price tag tool — stateless FastAPI + Next.js, **no auth, no DB**.
+
+| Env | Host | URLs |
+|-----|------|------|
+| Production (`main`) | Pi Coolify | https://tags.leo-figueiredo.com, https://tags-api.leo-figueiredo.com |
+
+Local dev:
+
+```bash
+cd apps/dk/tag-printer && docker compose up --build   # :3002 / :8002
+```
+
+Infra: [`apps/dk/tag-printer/.cursor/rules/infra.mdc`](apps/dk/tag-printer/.cursor/rules/infra.mdc). Coolify repoint after first `main` merge: `apps/dk/tag-printer/scripts/repoint-coolify.sh`.
+
 ## Branch workflow
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).
-- After CI green on push, Fly deploy workflows run per-component jobs (API → MCP serial, frontend parallel) with post-deploy smoke checks.
+- After CI green on push, the manifest-driven deploy workflow routes marrow to Fly and dk tag printer to Coolify (main only).
 
 ## Running locally
 

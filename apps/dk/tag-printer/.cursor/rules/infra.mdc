@@ -1,0 +1,53 @@
+---
+description: dk tag printer Coolify deploy on Pi — domains, build args, CORS
+globs: apps/dk/tag-printer/**/*
+alwaysApply: false
+---
+
+# dk tag printer — Infrastructure (Pi Coolify)
+
+Extends `~/.cursor/rules/leo-system-wide.mdc`. Deploy target: **Coolify on Pi**
+(prod only). No Fly apps.
+
+## Local dev
+
+```bash
+cd apps/dk/tag-printer && docker compose up --build
+# Frontend http://localhost:3002, Backend http://localhost:8002
+```
+
+Or separately:
+
+```bash
+cd apps/dk/tag-printer/backend && uv run uvicorn app.main:app --port 8002 --reload
+cd apps/dk/tag-printer/frontend && npm run dev -- --port 3002
+```
+
+## Production (Coolify on Pi)
+
+| App | UUID | Port | Domain |
+|-----|------|------|--------|
+| daskasas-frontend | `f080ossg88ows8k8csw40c4s` | 3002:3000 | https://tags.leo-figueiredo.com |
+| daskasas-backend | `pskswsc8c0044ggo40go4og0` | 8002:8000 | https://tags-api.leo-figueiredo.com |
+
+- Repo: `F0rge/f0rge`, branch `main`
+- Build context: **repo root**; Dockerfiles under `apps/dk/tag-printer/{backend,frontend}/`
+- cloudflared: `tags.` → localhost:3002, `tags-api.` → localhost:8002
+
+## Critical gotchas
+
+1. **`NEXT_PUBLIC_API_URL` is build-time** — Coolify must pass it as build-arg
+   (`is_buildtime=true`). Value: `https://tags-api.leo-figueiredo.com`
+2. **Backend CORS** — runtime env `CORS_ORIGINS=https://tags.leo-figueiredo.com`
+3. **Pi OOM** — frontend Dockerfile sets `NODE_OPTIONS=--max-old-space-size=1536`
+4. **CF WAF** — synthetic smoke tests need a browser User-Agent on POST
+   `/api/generate-pdf`; GET `/health` is fine with curl
+
+## CI deploy
+
+Manifest entry in `.github/deploy/manifest.yml`. On `main` push after CI green,
+`deploy-reusable.yml` fires Coolify manual webhooks (secrets
+`COOLIFY_WEBHOOK_DK_*`). `watch_paths` prevent marrow-only merges from
+rebuilding dk containers.
+
+Memory: `~/.cursor/agent-memory/devops/project_dk_tag_printer_deploy.md`

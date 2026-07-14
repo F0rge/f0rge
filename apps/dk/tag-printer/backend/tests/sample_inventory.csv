@@ -1,0 +1,6 @@
+ProductCode,Name,Default Price Tier,Retail Price,Wholesale Price,Trade Price,Standard Price,Price Regime
+PROD001,Premium Coffee Beans - 500g Arabica,Standard,45.99,35.99,32.99,45.99,Standard
+PROD002,Organic Green Tea - 100 Bags,Standard,28.50,22.00,19.50,28.50,Standard
+PROD003,Dark Chocolate Bar - 85% Cocoa,Premium,12.99,9.99,8.99,12.99,Premium
+PROD004,Natural Honey - 500ml Raw,Standard,38.75,30.00,27.50,38.75,Standard
+PROD005,Gourmet Pasta - Artisan Penne,Premium,15.50,12.00,10.50,15.50,Premium
