@@ -31,7 +31,7 @@ async def upload_csv(file: UploadFile = File(...)):
     """
     Upload CSV file and return parsed data with available price columns
     """
-    if not file.filename.endswith(".csv"):
+    if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
 
     try:
@@ -64,6 +64,13 @@ async def generate_pdf(request: PDFGenerateRequest):
         # Convert data to DataFrame
         df = pd.DataFrame(request.csv_data)
 
+        missing = [c for c in ("ProductCode", "Name") if c not in df.columns]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required columns: {', '.join(missing)}",
+            )
+
         # Filter by selected products
         if request.selected_products:
             df = df[df["ProductCode"].isin(request.selected_products)]
@@ -79,10 +86,10 @@ async def generate_pdf(request: PDFGenerateRequest):
                 detail=f"Price column '{request.price_column}' not found",
             )
         prices = pd.to_numeric(df[request.price_column], errors="coerce")
-        if prices.isna().all():
+        if prices.isna().any():
             raise HTTPException(
                 status_code=400,
-                detail=f"Price column '{request.price_column}' isn't numeric",
+                detail=f"Price column '{request.price_column}' contains non-numeric values",
             )
         df[request.price_column] = prices
 

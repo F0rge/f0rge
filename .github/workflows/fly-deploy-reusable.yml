@@ -247,8 +247,10 @@ jobs:
 
   deploy-frontend:
     name: deploy frontend
-    needs: resolve
-    if: needs.resolve.outputs.deploy_frontend == 'true'
+    needs: [resolve, deploy-api]
+    if: >-
+      needs.resolve.outputs.deploy_frontend == 'true' &&
+      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
