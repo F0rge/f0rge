@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.diet_tag_catalog import DietTagCatalogCRUD
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.diet_tag_catalog import DietTagCatalogItem
+from f0rge_db.tenant import current_user_id
 
 _KEY_RE = re.compile(r"^[a-z0-9-]+$")
 
@@ -45,7 +46,9 @@ class DietTagCatalogService:
         max_item = await self.crud.get_max_sort_order_item()
         next_sort = (max_item.sort_order + 1) if max_item else 0
 
-        item = DietTagCatalogItem(key=normalized, label=label, sort_order=next_sort)
+        item = DietTagCatalogItem(
+            user_id=current_user_id(), key=normalized, label=label, sort_order=next_sort
+        )
         self.crud.add(item)
         return await self.crud.commit_refresh(item)
 
