@@ -350,8 +350,9 @@ export function PhotoFocusOverlay({
           <div className="h-1 w-10 rounded-full bg-border" />
         </div>
 
-        {/* Header */}
-        <div data-sheet-top-region className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+        {/* Header — no explicit close button: the sheet dismisses via swipe-down
+            (mobile), backdrop click, or Esc (Dialog onOpenChange). */}
+        <div data-sheet-top-region className="flex items-center gap-2 border-b border-border px-4 py-3">
           <div className="min-w-0 flex-1">
             {photoId !== null && (
               <TitleEditor
@@ -373,14 +374,6 @@ export function PhotoFocusOverlay({
                 .join(' · ') || 'Tap an ingredient to edit'}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background hover:bg-foreground/90"
-            aria-label="Done editing"
-          >
-            Done
-          </button>
         </div>
 
         {/* Hero image + meal tabs */}
@@ -434,7 +427,6 @@ export function PhotoFocusOverlay({
               key={photoId}
               photoId={photoId}
               mode={mode}
-              hideConfirmButton={false}
               hideTitle
               isSharedMeal={isSharedMeal}
             />

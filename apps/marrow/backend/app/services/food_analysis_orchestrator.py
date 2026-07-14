@@ -15,7 +15,6 @@ from f0rge_core.exceptions import NotFoundError
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
-from app.services.food_analysis import analysis_needs_review
 from app.services.ingredient_lookup import IngredientLookupService
 from app.services.vision_prompt import VisionResult, build_messages, parse_vision_response
 from f0rge_db.tenant import apply_session_user_id
@@ -193,7 +192,10 @@ async def _persist_analysis(
             )
         )
 
-    analysis.status = "needs_review" if analysis_needs_review(vision_result) else "complete"
+    # Auto-confirm on completion: the manual "Confirm" step was removed from the
+    # UI, and "confirmed" is what gates diet-flags, insights, meals, and tagged-
+    # meal delivery. Ingredients stay fully editable afterward.
+    analysis.status = "confirmed"
     await analysis_crud.save()
 
 
@@ -222,6 +224,15 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
                 vision_result.dish_name,
                 len(vision_result.ingredients),
             )
+
+            # The analysis just auto-confirmed, which is what used to trigger
+            # tagged-meal delivery via the manual confirm endpoint. Fire it here
+            # instead (fresh session; safe no-op when there are no pending tags).
+            # Canonical photos only — delivered copies are never re-delivered.
+            if context.photo.source_photo_id is None:
+                from app.services.tag_delivery import TagDeliveryService
+
+                await TagDeliveryService().deliver_for_source(photo_id, context.user_id)
 
     except Exception as e:
         logger.exception("Food analysis failed for photo %d", photo_id)
