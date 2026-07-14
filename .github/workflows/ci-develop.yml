@@ -200,7 +200,7 @@ jobs:
     concurrency:
       group: fly-deploy-develop
       cancel-in-progress: false
-    uses: ./.github/workflows/fly-deploy-reusable.yml
+    uses: ./.github/workflows/deploy-reusable.yml
     with:
       environment: develop
       sha: ${{ github.sha }}
@@ -209,3 +209,6 @@ jobs:
       component: ${{ github.event_name == 'workflow_dispatch' && inputs.component || 'auto' }}
     secrets:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
+      COOLIFY_WEBHOOK_DK_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DK_BACKEND }}
+      COOLIFY_WEBHOOK_DK_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DK_FRONTEND }}

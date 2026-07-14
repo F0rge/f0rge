@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": [
     "apps/marrow/frontend",
+    "apps/dk/tag-printer/frontend",
     "libs/ui"
   ],
   "overrides": {

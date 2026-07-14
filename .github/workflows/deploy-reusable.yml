@@ -1,0 +1,167 @@
+name: Deploy (reusable)
+
+# Manifest-driven orchestrator: routes affected components to Fly or Coolify executors.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: develop or main
+        required: true
+        type: string
+      sha:
+        description: Commit SHA to deploy
+        required: true
+        type: string
+      base_branch:
+        description: Branch used for nx-set-shas base
+        required: true
+        type: string
+      workflow_id:
+        description: Caller workflow filename for nx-set-shas
+        required: true
+        type: string
+      component:
+        description: auto (nx affected + manifest) or all/api/mcp/frontend (manual marrow fly)
+        required: false
+        type: string
+        default: auto
+    secrets:
+      FLY_API_TOKEN:
+        required: true
+      COOLIFY_BASE_URL:
+        required: false
+      COOLIFY_WEBHOOK_DK_BACKEND:
+        required: false
+      COOLIFY_WEBHOOK_DK_FRONTEND:
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      deploy_api: ${{ steps.plan.outputs.deploy_api }}
+      deploy_mcp: ${{ steps.plan.outputs.deploy_mcp }}
+      deploy_frontend: ${{ steps.plan.outputs.deploy_frontend }}
+      coolify_matrix: ${{ steps.plan.outputs.coolify_matrix }}
+      api_health_url: ${{ steps.plan.outputs.api_health_url }}
+      frontend_health_url: ${{ steps.plan.outputs.frontend_health_url }}
+      mcp_health_url: ${{ steps.plan.outputs.mcp_health_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root deps
+        run: npm ci
+
+      - uses: nrwl/nx-set-shas@v4
+        if: inputs.component == 'auto'
+        with:
+          main-branch-name: ${{ inputs.base_branch }}
+          workflow-id: ${{ inputs.workflow_id }}
+
+      - name: Resolve deploy plan from manifest
+        id: plan
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          COMPONENT: ${{ inputs.component }}
+          NX_BASE: ${{ env.NX_BASE }}
+          NX_HEAD: ${{ env.NX_HEAD }}
+        run: python3 .github/deploy/plan_deploy.py
+
+  deploy-fly:
+    name: deploy fly
+    needs: plan
+    if: >-
+      needs.plan.outputs.deploy_api == 'true' ||
+      needs.plan.outputs.deploy_mcp == 'true' ||
+      needs.plan.outputs.deploy_frontend == 'true'
+    uses: ./.github/workflows/fly-deploy-reusable.yml
+    with:
+      environment: ${{ inputs.environment }}
+      sha: ${{ inputs.sha }}
+      preplanned: true
+      deploy_api: ${{ needs.plan.outputs.deploy_api == 'true' }}
+      deploy_mcp: ${{ needs.plan.outputs.deploy_mcp == 'true' }}
+      deploy_frontend: ${{ needs.plan.outputs.deploy_frontend == 'true' }}
+      api_health_url: ${{ needs.plan.outputs.api_health_url }}
+      frontend_health_url: ${{ needs.plan.outputs.frontend_health_url }}
+      mcp_health_url: ${{ needs.plan.outputs.mcp_health_url }}
+    secrets:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  deploy-coolify:
+    name: deploy coolify
+    needs: plan
+    if: needs.plan.outputs.coolify_matrix != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJson(needs.plan.outputs.coolify_matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: coolify-${{ matrix.component.app_uuid }}
+      cancel-in-progress: false
+    steps:
+      - name: Trigger Coolify deploy webhook
+        env:
+          COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
+          WEBHOOK_SECRET_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DK_BACKEND }}
+          WEBHOOK_SECRET_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DK_FRONTEND }}
+          SECRET_ENV: ${{ matrix.component.webhook_secret_env }}
+          SHA: ${{ inputs.sha }}
+          BRANCH: ${{ inputs.environment == 'main' && 'main' || 'develop' }}
+        run: |
+          set -euo pipefail
+          case "$SECRET_ENV" in
+            COOLIFY_WEBHOOK_DK_BACKEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_BACKEND" ;;
+            COOLIFY_WEBHOOK_DK_FRONTEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_FRONTEND" ;;
+            *) echo "Unknown webhook secret env: $SECRET_ENV"; exit 1 ;;
+          esac
+          if [ -z "${COOLIFY_BASE_URL:-}" ] || [ -z "${WEBHOOK_SECRET:-}" ]; then
+            echo "COOLIFY_BASE_URL and matching webhook secret must be configured in repo secrets"
+            exit 1
+          fi
+          PAYLOAD=$(jq -nc \
+            --arg ref "refs/heads/${BRANCH}" \
+            --arg sha "$SHA" \
+            '{ref: $ref, after: $sha, repository: {full_name: "F0rge/f0rge", name: "f0rge"}}')
+          SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')
+          curl -sf -X POST "${COOLIFY_BASE_URL%/}/webhooks/source/github/events/manual" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: push" \
+            -H "X-Hub-Signature-256: sha256=${SIG}" \
+            -d "$PAYLOAD"
+          echo "Triggered Coolify deploy for ${{ matrix.component.name }}"
+
+      - name: Smoke health
+        env:
+          HEALTH_URL: ${{ matrix.component.health_url }}
+        run: |
+          UA='Mozilla/5.0 (compatible; f0rge-deploy-smoke/1.0)'
+          for i in $(seq 1 24); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -A "$UA" "$HEALTH_URL" || true)
+            if [ "$code" = "200" ]; then
+              echo "Health OK: $HEALTH_URL"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $code — waiting…"
+            sleep 15
+          done
+          echo "Health check failed: $HEALTH_URL"
+          exit 1
