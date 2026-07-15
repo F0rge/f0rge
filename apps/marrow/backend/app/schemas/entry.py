@@ -187,3 +187,8 @@ class EntryResponse(BaseModel):
     photo_signal: PhotoSignal
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class EntryStatsResponse(BaseModel):
+    total_checkins: int
+    current_streak_days: int

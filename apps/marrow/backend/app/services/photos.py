@@ -75,6 +75,16 @@ class PhotoService:
         self.orchestrator = orchestrator
         self.meal_tags = meal_tags
 
+    async def list_photos(self, scope: str, limit: int, offset: int) -> list[PhotoResponse]:
+        """Profile-grid feed: the user's photos, optionally only tagged copies."""
+        photos = await self.crud.list_owned(
+            tagged_only=scope == "tagged", limit=limit, offset=offset
+        )
+        companions = await MealTagCRUD(self.db).companion_handles_by_photo_ids(
+            [p.id for p in photos]
+        )
+        return [_photo_response(p, companions.get(p.id, [])) for p in photos]
+
     async def update_photo(self, photo_id: int, data: PhotoUpdate) -> Photo:
         photo = await self.crud.get_by_id_owned(photo_id)
         if photo is None:

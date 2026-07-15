@@ -147,11 +147,11 @@ export const TOUR_STEPS: TourStepDefinition[] = [
   {
     id: 'profile',
     route: '/checkin',
-    target: '[data-tour="profile-menu"]',
-    title: 'Profile menu',
+    target: '[data-tour="profile-tab"]',
+    title: 'Your profile',
     content:
-      'Your avatar in the page header opens Account settings and Customize — where you reorder cards, edit catalogs, and add custom trackers.',
-    placement: 'bottom',
+      'The Profile tab shows your stats, weekly highlights, and meal grids. Its ☰ menu opens Settings and activity — account, connections, customize, and log out all live there.',
+    placement: 'top',
   },
   {
     id: 'customize',

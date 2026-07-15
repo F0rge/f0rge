@@ -26,6 +26,20 @@ class PhotoCRUD(BaseCRUD):
         stmt = select(Photo.user_id).where(owned_by_user(Photo.user_id), Photo.id == photo_id)
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
+    async def list_owned(
+        self, tagged_only: bool = False, limit: int = 24, offset: int = 0
+    ) -> list[Photo]:
+        """Current user's photos, newest first (meal_time desc, nulls last)."""
+        stmt = select(Photo).where(owned_by_user(Photo.user_id))
+        if tagged_only:
+            stmt = stmt.where(Photo.tagged_by_user_id.is_not(None))
+        stmt = (
+            stmt.order_by(Photo.meal_time.desc().nulls_last(), Photo.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
     async def list_filenames_for_entry(self, entry_id: int) -> list[str]:
         stmt = select(Photo.filename).where(
             owned_by_user(Photo.user_id), Photo.entry_id == entry_id
