@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import (
     APIRouter,
@@ -9,6 +9,7 @@ from fastapi import (
     Depends,
     File,
     Form,
+    Query,
     UploadFile,
     status,
 )
@@ -48,6 +49,16 @@ async def upload_photo(
     return await service.upload(
         date, file, label, meal_time, background_tasks, tagged_handles, tagged_group_ids
     )
+
+
+@router.get("/photos", response_model=list[PhotoResponse])
+async def list_photos(
+    scope: Literal["all", "tagged"] = Query("all"),
+    limit: int = Query(24, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    service: PhotoService = Depends(get_photo_service),
+) -> list[PhotoResponse]:
+    return await service.list_photos(scope, limit, offset)
 
 
 @router.get("/photos/{photo_id}/file", response_model=None)

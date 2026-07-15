@@ -681,3 +681,60 @@ async def test_retroactive_photo_tags(async_db: AsyncSession, storage: None):
     duplicate = await a.post(f"/api/v1/photos/{photo_id}/tags", json={"handles": [b_handle]})
     assert duplicate.status_code == 200
     assert len(duplicate.json()["tags"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/photos — profile-grid list endpoint (issue #363)
+# ---------------------------------------------------------------------------
+
+
+async def test_photos_list_order_pagination_and_isolation(async_db: AsyncSession, storage: None):
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    first = await _upload_plain(a)
+    second = await _upload_plain(a)
+    intruder = await _upload_plain(b)
+
+    listed = (await a.get("/api/v1/photos")).json()
+    assert [p["id"] for p in listed] == [second, first]
+    assert intruder not in {p["id"] for p in listed}
+
+    limited = (await a.get("/api/v1/photos?limit=1")).json()
+    assert [p["id"] for p in limited] == [second]
+    shifted = (await a.get("/api/v1/photos?limit=1&offset=1")).json()
+    assert [p["id"] for p in shifted] == [first]
+
+
+async def test_photos_list_tagged_scope(async_db: AsyncSession, storage: None):
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    await _connect_users(a, b)
+    a_handle = (await a.get("/api/v1/auth/me")).json()["handle"]
+    b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
+    await b.put("/api/v1/settings/tagged-meal-mode", json={"tagged_meal_mode": "auto"})
+
+    await _upload_plain(b)
+    source_id = await _upload_tagged(a, handles=[b_handle])
+
+    all_scope = (await b.get("/api/v1/photos")).json()
+    assert len(all_scope) == 2
+
+    tagged = (await b.get("/api/v1/photos?scope=tagged")).json()
+    assert len(tagged) == 1
+    assert tagged[0]["tagged_by_handle"] == a_handle
+    assert tagged[0]["source_photo_id"] == source_id
+
+    # The tagger's own photos are never "tagged" copies...
+    assert (await a.get("/api/v1/photos?scope=tagged")).json() == []
+    # ...but the source photo carries the companion handles.
+    a_all = (await a.get("/api/v1/photos")).json()
+    source = next(p for p in a_all if p["id"] == source_id)
+    assert source["tagged_with_handles"] == [b_handle]
+
+
+async def test_photos_list_rejects_bad_params(
+    async_db: AsyncSession, patch_tag_delivery_maker: None
+):
+    client = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    assert (await client.get("/api/v1/photos?scope=mine")).status_code == 422
+    assert (await client.get("/api/v1/photos?limit=0")).status_code == 422
