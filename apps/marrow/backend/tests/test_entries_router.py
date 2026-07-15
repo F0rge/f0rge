@@ -10,6 +10,7 @@ import datetime
 from httpx import AsyncClient
 
 from app.services.entries import _period_of_day
+from app.utils.dates import local_today
 
 _VALID_PAYLOAD = {
     "date": "2026-02-01",
@@ -342,7 +343,7 @@ async def test_delete_entry_removes_from_list(authed_client: AsyncClient) -> Non
 
 async def _create_entry_days_ago(client: AsyncClient, days_ago: int) -> None:
     payload = dict(_VALID_PAYLOAD)
-    payload["date"] = (datetime.date.today() - datetime.timedelta(days=days_ago)).isoformat()
+    payload["date"] = (local_today() - datetime.timedelta(days=days_ago)).isoformat()
     resp = await client.post("/api/v1/entries", json=payload)
     assert resp.status_code == 201
 

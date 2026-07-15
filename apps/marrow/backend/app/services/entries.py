@@ -223,12 +223,15 @@ class EntryService:
         Streak = consecutive-calendar-day run walking backwards from the most
         recent entry date, counted only if that date is today or yesterday (a
         user who logged through yesterday hasn't lost their streak yet).
+        Entry dates are stored in the client's local calendar day (see
+        formatLocalDate), which may differ by ±1 day from local_today() when
+        the device timezone does not match app_timezone.
         Python-side math over just the date column is deliberate — personal-scale
         data, no gaps-and-islands SQL needed.
         """
         dates = await self.crud.list_dates()
         streak = 0
-        if dates and (local_today() - dates[0]).days in (0, 1):
+        if dates and (local_today() - dates[0]).days in (-1, 0, 1):
             streak = 1
             for prev, cur in zip(dates, dates[1:]):
                 if (prev - cur).days != 1:

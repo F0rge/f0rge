@@ -62,6 +62,7 @@ function invalidateMealTags(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['photo-tags'] })
   queryClient.invalidateQueries({ queryKey: ['entry'] })
   queryClient.invalidateQueries({ queryKey: ['entries'] })
+  queryClient.invalidateQueries({ queryKey: ['photos'] })
   queryClient.invalidateQueries({ queryKey: ['notifications'] })
 }
 
