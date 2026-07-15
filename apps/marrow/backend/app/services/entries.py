@@ -15,6 +15,7 @@ from app.schemas.entry import EntryCreate, EntryResponse, EntryStatsResponse, En
 from app.schemas.photo import PhotoResponse
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
 from app.services.photo_storage import delete_photo
+from app.utils.dates import local_today
 from f0rge_db.tenant import current_user_id
 
 # Bump whenever Entry's column shape changes; both entry-creation paths below
@@ -227,7 +228,7 @@ class EntryService:
         """
         dates = await self.crud.list_dates()
         streak = 0
-        if dates and (datetime.date.today() - dates[0]).days in (0, 1):
+        if dates and (local_today() - dates[0]).days in (0, 1):
             streak = 1
             for prev, cur in zip(dates, dates[1:]):
                 if (prev - cur).days != 1:

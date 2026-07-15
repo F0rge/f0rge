@@ -90,6 +90,7 @@ export function useUploadPhoto() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
 }
@@ -101,6 +102,7 @@ export function useDeletePhoto() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
 }

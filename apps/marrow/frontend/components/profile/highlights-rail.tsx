@@ -1,6 +1,7 @@
 'use client'
 
 import { Activity, Heart, Moon, Wind, Zap, type LucideIcon } from 'lucide-react'
+import { formatLocalDate } from '@f0rge/ui'
 import { useInsightsTrends } from '@/lib/api/hooks'
 
 // Fixed subset of the trends series keys (services/insights.py) worth a
@@ -13,14 +14,14 @@ const HIGHLIGHT_KEYS: { key: string; icon: LucideIcon }[] = [
   { key: 'hm_resting_hr', icon: Heart },
 ]
 
-function isoDaysAgo(days: number): string {
+function localDaysAgo(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() - days)
-  return d.toISOString().slice(0, 10)
+  return formatLocalDate(d)
 }
 
 export function HighlightsRail() {
-  const trends = useInsightsTrends(isoDaysAgo(6), isoDaysAgo(0))
+  const trends = useInsightsTrends(localDaysAgo(6), localDaysAgo(0))
   const series = trends.data?.series ?? []
 
   const items = HIGHLIGHT_KEYS.flatMap(({ key, icon }) => {
