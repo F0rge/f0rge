@@ -1,7 +1,6 @@
 'use client'
 
 import type { ReactNode, Ref } from 'react'
-import { ProfileMenu } from '@/components/layout/profile-menu'
 import { cn } from '@f0rge/ui'
 
 interface PageHeaderProps {
@@ -56,7 +55,6 @@ export function PageHeader({
           )}
         >
           {actions}
-          <ProfileMenu />
         </div>
       </div>
     </div>

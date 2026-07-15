@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { apiGet, apiPost } from '@f0rge/ui/api'
 import type { NotificationItem, UnreadCountResponse } from '../types/notifications'
 
-export function useUnreadCount() {
+export function useUnreadCount(enabled = true) {
   const previous = useRef<number | null>(null)
 
   const query = useQuery<UnreadCountResponse>({
@@ -15,6 +15,7 @@ export function useUnreadCount() {
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
     staleTime: 0,
+    enabled,
   })
 
   useEffect(() => {

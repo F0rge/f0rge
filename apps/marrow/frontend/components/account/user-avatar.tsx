@@ -5,17 +5,19 @@ import { useAccount, useAvatarCacheBust } from '@/lib/api/hooks'
 import { cn } from '@f0rge/ui'
 
 interface UserAvatarProps {
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   className?: string
 }
 
 const SIZE_CLASS = {
+  xs: 'size-6',
   sm: 'size-9',
   md: 'size-16',
   lg: 'size-[72px]',
 } as const
 
 const SIZE_PX = {
+  xs: 24,
   sm: 36,
   md: 64,
   lg: 72,
