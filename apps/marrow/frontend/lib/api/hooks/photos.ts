@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, ApiError } from '@f0rge/ui/api'
-import type { PhotoAnalysis } from '../types'
+import type { Photo, PhotoAnalysis } from '../types'
 
 export interface PhotoMealTagItem {
   id: string
@@ -18,6 +18,13 @@ export interface PhotoMealTagItem {
 
 export interface PhotoMealTagListResponse {
   tags: PhotoMealTagItem[]
+}
+
+export function usePhotos(scope: 'all' | 'tagged', limit = 24) {
+  return useQuery<Photo[]>({
+    queryKey: ['photos', scope, limit],
+    queryFn: () => apiGet(`/photos?scope=${scope}&limit=${limit}`),
+  })
 }
 
 export function usePhotoTags(photoId: number, enabled = true) {
@@ -44,6 +51,7 @@ export function useAddPhotoTags() {
       queryClient.invalidateQueries({ queryKey: ['photo-tags', photoId] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
       queryClient.invalidateQueries({ queryKey: ['social', 'meal-tags'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
@@ -83,6 +91,7 @@ export function useUploadPhoto() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
 }
@@ -94,6 +103,7 @@ export function useDeletePhoto() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
 }

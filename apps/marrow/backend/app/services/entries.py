@@ -11,10 +11,11 @@ from app.crud.meal_tags import MealTagCRUD
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
-from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
+from app.schemas.entry import EntryCreate, EntryResponse, EntryStatsResponse, EntryUpdate
 from app.schemas.photo import PhotoResponse
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
 from app.services.photo_storage import delete_photo
+from app.utils.dates import local_today
 from f0rge_db.tenant import current_user_id
 
 # Bump whenever Entry's column shape changes; both entry-creation paths below
@@ -215,6 +216,28 @@ class EntryService:
                 end = datetime.date(int(year), int(mon) + 1, 1)
         entries = await self.crud.list(start, end)
         return [await _build_response(self.db, e) for e in entries]
+
+    async def stats(self) -> EntryStatsResponse:
+        """Total check-ins + current daily streak for the authenticated user.
+
+        Streak = consecutive-calendar-day run walking backwards from the most
+        recent entry date, counted only if that date is today or yesterday (a
+        user who logged through yesterday hasn't lost their streak yet).
+        Entry dates are stored in the client's local calendar day (see
+        formatLocalDate), which may differ by ±1 day from local_today() when
+        the device timezone does not match app_timezone.
+        Python-side math over just the date column is deliberate — personal-scale
+        data, no gaps-and-islands SQL needed.
+        """
+        dates = await self.crud.list_dates()
+        streak = 0
+        if dates and (local_today() - dates[0]).days in (-1, 0, 1):
+            streak = 1
+            for prev, cur in zip(dates, dates[1:]):
+                if (prev - cur).days != 1:
+                    break
+                streak += 1
+        return EntryStatsResponse(total_checkins=len(dates), current_streak_days=streak)
 
     async def get_entry(self, date: datetime.date) -> EntryResponse:
         entry = await self.crud.get_by_date(date)

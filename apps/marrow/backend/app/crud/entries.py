@@ -28,6 +28,11 @@ class EntryCRUD(BaseCRUD):
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
+    async def list_dates(self) -> list[datetime.date]:
+        """All entry dates for the current user, newest first."""
+        stmt = select(Entry.date).where(owned_by_user(Entry.user_id)).order_by(Entry.date.desc())
+        return list((await self.db.execute(stmt)).scalars().all())
+
     async def list(
         self,
         start: Optional[datetime.date] = None,

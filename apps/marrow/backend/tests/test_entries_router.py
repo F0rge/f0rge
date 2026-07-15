@@ -10,6 +10,7 @@ import datetime
 from httpx import AsyncClient
 
 from app.services.entries import _period_of_day
+from app.utils.dates import local_today
 
 _VALID_PAYLOAD = {
     "date": "2026-02-01",
@@ -333,3 +334,60 @@ async def test_delete_entry_removes_from_list(authed_client: AsyncClient) -> Non
 
     resp = await authed_client.get("/api/v1/entries")
     assert resp.json() == []
+
+
+# ---------------------------------------------------------------------------
+# Stats
+# ---------------------------------------------------------------------------
+
+
+async def _create_entry_days_ago(client: AsyncClient, days_ago: int) -> None:
+    payload = dict(_VALID_PAYLOAD)
+    payload["date"] = (local_today() - datetime.timedelta(days=days_ago)).isoformat()
+    resp = await client.post("/api/v1/entries", json=payload)
+    assert resp.status_code == 201
+
+
+async def test_stats_empty_user_zeroes(authed_client: AsyncClient) -> None:
+    resp = await authed_client.get("/api/v1/entries/stats")
+    assert resp.status_code == 200
+    assert resp.json() == {"total_checkins": 0, "current_streak_days": 0}
+
+
+async def test_stats_streak_ending_today_stops_at_gap(authed_client: AsyncClient) -> None:
+    # today + yesterday are consecutive; the 4-days-ago entry is past a gap and
+    # counts toward the total but not the streak.
+    for days_ago in (4, 1, 0):
+        await _create_entry_days_ago(authed_client, days_ago)
+
+    resp = await authed_client.get("/api/v1/entries/stats")
+    assert resp.status_code == 200
+    assert resp.json() == {"total_checkins": 3, "current_streak_days": 2}
+
+
+async def test_stats_streak_ending_yesterday_still_counts(authed_client: AsyncClient) -> None:
+    # Logged daily through yesterday but not yet today -- streak is not lost.
+    for days_ago in (3, 2, 1):
+        await _create_entry_days_ago(authed_client, days_ago)
+
+    resp = await authed_client.get("/api/v1/entries/stats")
+    assert resp.status_code == 200
+    assert resp.json() == {"total_checkins": 3, "current_streak_days": 3}
+
+
+async def test_stats_streak_zero_when_last_entry_two_days_ago(authed_client: AsyncClient) -> None:
+    for days_ago in (3, 2):
+        await _create_entry_days_ago(authed_client, days_ago)
+
+    resp = await authed_client.get("/api/v1/entries/stats")
+    assert resp.status_code == 200
+    assert resp.json() == {"total_checkins": 2, "current_streak_days": 0}
+
+
+async def test_stats_route_declared_above_date_route(authed_client: AsyncClient) -> None:
+    """Regression guard: /stats must be declared above /{date} in the router,
+    or FastAPI 422s trying to parse "stats" as a date.
+    """
+    resp = await authed_client.get("/api/v1/entries/stats")
+    assert resp.status_code != 422
+    assert resp.status_code == 200

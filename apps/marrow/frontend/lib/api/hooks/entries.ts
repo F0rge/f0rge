@@ -10,7 +10,14 @@ import {
   handleMutationError,
   ApiError,
 } from '@f0rge/ui/api'
-import type { Entry, EntryCreate } from '../types'
+import type { Entry, EntryCreate, EntryStats } from '../types'
+
+export function useEntryStats() {
+  return useQuery<EntryStats>({
+    queryKey: ['entries', 'stats'],
+    queryFn: () => apiGet('/entries/stats'),
+  })
+}
 
 export function useEntries(month?: string) {
   const params = month ? `?month=${month}` : ''

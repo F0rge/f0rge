@@ -10,6 +10,11 @@ export interface Photo {
   tagged_with_handles?: string[]
 }
 
+export interface EntryStats {
+  total_checkins: number
+  current_streak_days: number
+}
+
 export interface PhotoScores {
   histamine_load: number
   fodmap_count: number

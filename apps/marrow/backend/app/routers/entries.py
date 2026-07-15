@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.dependencies.entries import get_entry_orchestrator, get_entry_service
 from app.middleware.auth import get_current_session
-from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
+from app.schemas.entry import EntryCreate, EntryResponse, EntryStatsResponse, EntryUpdate
 from app.services.entries import EntryService
 from app.services.entry_orchestrator import EntryOrchestrator
 
@@ -32,6 +32,13 @@ async def list_entries(
     service: EntryService = Depends(get_entry_service),
 ):
     return await service.list_entries(month)
+
+
+# Must stay above GET /{date} — FastAPI matches in declaration order, and
+# /{date} would otherwise 422 trying to parse "stats" as a date.
+@router.get("/stats", response_model=EntryStatsResponse)
+async def entry_stats(service: EntryService = Depends(get_entry_service)):
+    return await service.stats()
 
 
 @router.get("/{date}", response_model=EntryResponse)
