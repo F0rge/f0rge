@@ -361,6 +361,40 @@ async def test_read_sql_rejects_pg_sleep(async_db: AsyncSession) -> None:
     assert "guardrails" in result["error"]
 
 
+async def test_read_sql_allows_forbidden_substrings_inside_literals() -> None:
+    """Comment markers / 'copy' inside quoted strings must not trip guardrails."""
+    from app.mcp.tools.sql import _validate_read_sql
+
+    assert _validate_read_sql("SELECT id FROM entries WHERE notes = 'see -- notes'") is None
+    assert _validate_read_sql("SELECT id FROM entries WHERE notes = 'a /* b */ c'") is None
+    assert _validate_read_sql("SELECT id FROM entries WHERE notes = 'please copy this'") is None
+    assert _validate_read_sql("SELECT 1 -- comment") is not None
+    assert _validate_read_sql("SELECT * FROM entries /* block */") is not None
+    assert _validate_read_sql("COPY entries TO STDOUT") is not None
+
+
+async def test_read_sql_allows_literals_then_executes(async_db: AsyncSession) -> None:
+    await _seed_entry(async_db)
+    from app.mcp import tools as t_mod
+
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
+        mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
+        mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        from mcp.server.fastmcp import FastMCP
+
+        server = FastMCP("test")
+        t_mod.register_tools(server)
+
+        tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "read_sql").fn
+        result = await tool_fn(
+            query="SELECT id FROM entries WHERE notes = 'Test -- entry' OR notes LIKE '%copy%'"
+        )
+
+    assert "error" not in result
+    assert "columns" in result
+
+
 async def test_tool_invocation_emits_log_line(
     async_db: AsyncSession, caplog: pytest.LogCaptureFixture
 ) -> None:

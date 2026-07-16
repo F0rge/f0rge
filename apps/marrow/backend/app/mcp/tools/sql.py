@@ -24,7 +24,9 @@ _FORBIDDEN_PATTERNS = (
 )
 
 
-def _has_semicolon_outside_strings(query: str) -> bool:
+def _strip_sql_string_literals(query: str) -> str:
+    """Replace quoted string contents with spaces so guards ignore literals."""
+    out: list[str] = []
     in_single = False
     in_double = False
     i = 0
@@ -32,23 +34,38 @@ def _has_semicolon_outside_strings(query: str) -> bool:
         ch = query[i]
         if ch == "'" and not in_double:
             if in_single and i + 1 < len(query) and query[i + 1] == "'":
+                out.append("  ")
                 i += 2
                 continue
             in_single = not in_single
+            out.append(" ")
         elif ch == '"' and not in_single:
             in_double = not in_double
-        elif ch == ";" and not in_single and not in_double:
-            if query[i + 1 :].strip():
-                return True
+            out.append(" ")
+        elif in_single or in_double:
+            out.append(" ")
+        else:
+            out.append(ch)
         i += 1
-    return False
+    return "".join(out)
+
+
+def _has_semicolon_outside_strings(query: str) -> bool:
+    stripped = _strip_sql_string_literals(query)
+    idx = stripped.find(";")
+    if idx < 0:
+        return False
+    return bool(stripped[idx + 1 :].strip())
 
 
 def _validate_read_sql(query: str) -> str | None:
-    if "--" in query or "/*" in query:
+    # Guards run on a version with string literals blanked so '--', '/*', and
+    # words like "copy" inside quoted text do not false-positive.
+    outside = _strip_sql_string_literals(query)
+    if "--" in outside or "/*" in outside:
         return _GUARD_ERROR
     for pattern in _FORBIDDEN_PATTERNS:
-        if pattern.search(query):
+        if pattern.search(outside):
             return _GUARD_ERROR
     if _has_semicolon_outside_strings(query):
         return _GUARD_ERROR
