@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, Index, LargeBinary, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, LargeBinary, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,12 @@ class UserSettings(Base):
     __table_args__ = (
         UniqueConstraint("user_id", name="uq_user_settings_user_id"),
         Index("ix_user_settings_user_id", "user_id"),
+        Index(
+            "uq_user_settings_external_api_token_hash",
+            "external_api_token_hash",
+            unique=True,
+            postgresql_where=text("external_api_token_hash IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -31,6 +37,7 @@ class UserSettings(Base):
     embedding_provider: Mapped[str] = mapped_column(String, nullable=False, default="openrouter")
     embedding_model: Mapped[str | None] = mapped_column(String, nullable=True)
     external_api_token_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    external_api_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     onboarding_completed_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime, nullable=True
     )

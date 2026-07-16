@@ -323,6 +323,68 @@ async def test_read_sql_dml_returns_error_structure(async_db: AsyncSession) -> N
     assert "error" in result
 
 
+async def test_read_sql_rejects_multi_statement(async_db: AsyncSession) -> None:
+    from app.mcp import tools as t_mod
+
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
+        mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
+        mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        from mcp.server.fastmcp import FastMCP
+
+        server = FastMCP("test")
+        t_mod.register_tools(server)
+
+        tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "read_sql").fn
+        result = await tool_fn(query="SELECT 1; DROP TABLE entries")
+
+    assert "error" in result
+    assert "guardrails" in result["error"]
+
+
+async def test_read_sql_rejects_pg_sleep(async_db: AsyncSession) -> None:
+    from app.mcp import tools as t_mod
+
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
+        mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
+        mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        from mcp.server.fastmcp import FastMCP
+
+        server = FastMCP("test")
+        t_mod.register_tools(server)
+
+        tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "read_sql").fn
+        result = await tool_fn(query="SELECT pg_sleep(1)")
+
+    assert "error" in result
+    assert "guardrails" in result["error"]
+
+
+async def test_tool_invocation_emits_log_line(
+    async_db: AsyncSession, caplog: pytest.LogCaptureFixture
+) -> None:
+    await _seed_entry(async_db)
+
+    from app.mcp import tools as t_mod
+
+    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
+        mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
+        mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        from mcp.server.fastmcp import FastMCP
+
+        server = FastMCP("test")
+        t_mod.register_tools(server)
+
+        tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "get_entry").fn
+        with caplog.at_level("INFO"):
+            await tool_fn(date="2025-01-15")
+
+    assert any("mcp_invocation" in record.message for record in caplog.records)
+    assert any("name=get_entry" in record.message for record in caplog.records)
+
+
 async def test_search_health_data_empty_table(
     async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:

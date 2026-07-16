@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from cryptography.fernet import Fernet
 
 from app.config import settings
@@ -23,3 +25,8 @@ def encrypt(plaintext: str) -> bytes:
 def decrypt(ciphertext: bytes) -> str:
     """Decrypt a Fernet token and return the plaintext string."""
     return _get_fernet().decrypt(ciphertext).decode()
+
+
+def hash_external_api_token(plaintext: str) -> str:
+    """Return the sha256 hex digest of an external API token."""
+    return hashlib.sha256(plaintext.encode()).hexdigest()

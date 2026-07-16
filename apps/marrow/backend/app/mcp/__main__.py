@@ -7,8 +7,7 @@ import asyncio
 import logging
 import sys
 
-from app.mcp.server import create_server
-from app.mcp.tools import register_tools
+from app.mcp.server import create_server, register_all
 
 
 def _configure_logging() -> None:
@@ -24,7 +23,7 @@ def _configure_logging() -> None:
 
 async def _run() -> None:
     server = create_server()
-    register_tools(server)
+    register_all(server)
     await server.run_streamable_http_async()
 
 

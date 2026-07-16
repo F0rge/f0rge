@@ -39,6 +39,7 @@ async def test_valid_token_passes_verification(async_db: AsyncSession) -> None:
         select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
     )
     row = result.scalar_one()
+    assert row.external_api_token_hash is not None
 
     verifier = BearerTokenVerifier()
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
@@ -71,6 +72,12 @@ async def test_revoked_token_returns_none(async_db: AsyncSession) -> None:
     resp = await svc.regenerate_external_token()
     await svc.revoke_external_token()
 
+    result = await async_db.execute(
+        select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
+    )
+    row = result.scalar_one()
+    assert row.external_api_token_hash is None
+
     verifier = BearerTokenVerifier()
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
@@ -85,9 +92,7 @@ async def test_no_settings_row_returns_none() -> None:
 
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: []))
-        )
+        mock_db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -96,21 +101,24 @@ async def test_no_settings_row_returns_none() -> None:
     assert access_token is None
 
 
-async def test_corrupt_ciphertext_returns_none() -> None:
-    """If decryption fails (bad ciphertext), verify_token should return None, not raise."""
+async def test_verify_uses_hash_lookup_not_decrypt(async_db: AsyncSession) -> None:
+    """Verifier matches via external_api_token_hash, not ciphertext decryption."""
+    svc = SettingsService(async_db)
+    resp = await svc.regenerate_external_token()
+
+    result = await async_db.execute(
+        select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
+    )
+    row = result.scalar_one()
+    assert row.external_api_token_hash is not None
+    row.external_api_token_encrypted = b"corrupt-ciphertext"
+    await async_db.flush()
+
     verifier = BearerTokenVerifier()
-
-    mock_row = MagicMock()
-    mock_row.external_api_token_encrypted = b"corrupt-data-that-cannot-decrypt"
-
     with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
-        mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(
-            return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [mock_row]))
-        )
-        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+        access_token = await verifier.verify_token(resp.token)
 
-        access_token = await verifier.verify_token("some-token")
-
-    assert access_token is None
+    assert access_token is not None
+    assert access_token.client_id == str(row.user_id)
