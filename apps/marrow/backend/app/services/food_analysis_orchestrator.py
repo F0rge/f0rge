@@ -15,6 +15,7 @@ from f0rge_core.exceptions import NotFoundError
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
+from app.services.catalog_context import build_catalog_context
 from app.services.ingredient_lookup import IngredientLookupService
 from app.services.vision_prompt import VisionResult, build_messages, parse_vision_response
 from f0rge_db.tenant import apply_session_user_id
@@ -131,7 +132,11 @@ async def _load_photo_context(
 
 
 async def _run_vision(
-    photo: Photo, user_id_str: str, api_key: str, model: str
+    photo: Photo,
+    user_id_str: str,
+    api_key: str,
+    model: str,
+    catalog_context: str = "",
 ) -> tuple[str, VisionResult]:
     """Read the photo off disk and get the vision model's structured read on it.
 
@@ -144,7 +149,7 @@ async def _run_vision(
         raise NotFoundError(f"Photo file not found: {photo.filename}")
 
     image_bytes = await asyncio.to_thread(read_photo, photo.filename, user_id=user_id_str)
-    messages = build_messages(image_bytes)
+    messages = build_messages(image_bytes, catalog_context=catalog_context or None)
 
     from app.services.llm.openrouter import OpenRouterClient
 
@@ -213,8 +218,22 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
                 return
             analysis = context.analysis
 
+            catalog_context = ""
+            try:
+                catalog_context = await build_catalog_context(db)
+            except Exception:
+                logger.warning(
+                    "Failed to load catalog context for photo %d; continuing without catalog",
+                    photo_id,
+                    exc_info=True,
+                )
+
             raw_content, vision_result = await _run_vision(
-                context.photo, context.user_id_str, context.api_key, context.model
+                context.photo,
+                context.user_id_str,
+                context.api_key,
+                context.model,
+                catalog_context,
             )
             await _persist_analysis(db, analysis, context.user_id, raw_content, vision_result)
 
