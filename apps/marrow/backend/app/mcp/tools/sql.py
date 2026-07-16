@@ -11,7 +11,9 @@ from app.mcp.tools._common import _MAX_READ_SQL, _mcp_user_id
 
 _GUARD_ERROR = (
     "Query rejected by read_sql guardrails. "
-    "Use typed tools (get_entry, list_entries, list_labs, get_lab_history, list_treatments) "
+    "Use typed tools (get_entry, list_entries, list_labs, get_lab_history, get_lab_markers, "
+    "list_treatments, get_photo_analysis, list_photos_for_entry, list_trackers, "
+    "get_tracker_logs, list_health_metrics, get_weather_for_entry, search_health_data) "
     "for common lookups."
 )
 
@@ -59,7 +61,8 @@ def register_sql_tools(server: FastMCP) -> None:
     async def read_sql(query: str, ctx: Context = None) -> dict[str, Any]:
         """Execute an arbitrary SELECT query via the read-only connection.
 
-        Prefer the typed tools above (get_entry, list_labs, etc.) for common lookups.
+        Prefer the typed tools above (get_entry, list_labs, get_photo_analysis, etc.)
+        for common lookups.
         Use this only for queries requiring joins or aggregations not covered by them.
         DML/DDL (INSERT, UPDATE, DELETE, DROP, etc.) will fail with a permission error
         because the connection uses the healthtracker_ro role which has SELECT-only access.

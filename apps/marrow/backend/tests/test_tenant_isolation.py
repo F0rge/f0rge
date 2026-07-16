@@ -261,6 +261,92 @@ async def test_user_b_cannot_read_user_a_enriched_day(async_db: AsyncSession) ->
         app.dependency_overrides.pop(get_db, None)
 
 
+async def test_mcp_get_photo_analysis_scoped_to_authenticated_user(async_db: AsyncSession) -> None:
+    from f0rge_db.auth_context import user_id_ctx
+    from f0rge_db.tenant import apply_session_user_id
+    from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH, User
+
+    user_a = uuid.uuid4()
+    user_b = uuid.uuid4()
+    async_db.add_all(
+        [
+            User(
+                id=user_a,
+                email="mcp-photo-a@example.com",
+                password_hash=LEO_PLACEHOLDER_PASSWORD_HASH,
+            ),
+            User(
+                id=user_b,
+                email="mcp-photo-b@example.com",
+                password_hash=LEO_PLACEHOLDER_PASSWORD_HASH,
+            ),
+        ]
+    )
+    await async_db.flush()
+
+    token_a = user_id_ctx.set(user_a)
+    try:
+        await apply_session_user_id(async_db, user_a)
+        entry = Entry(
+            user_id=user_a,
+            date=datetime.date(2026, 6, 1),
+            overall=2,
+            bloating=0,
+            stool_normal=True,
+            joint_pain=0,
+            neuro=0,
+            sleep_quality=2,
+            stress=1,
+            diet_risk="",
+            supplements="",
+            sick=False,
+            hot_shower=False,
+        )
+        async_db.add(entry)
+        await async_db.flush()
+        photo = Photo(
+            user_id=user_a,
+            entry_id=entry.id,
+            filename="2026-06-01_meal.jpg",
+            label="Lunch",
+        )
+        async_db.add(photo)
+        await async_db.flush()
+        analysis = PhotoAnalysis(
+            user_id=user_a,
+            photo_id=photo.id,
+            status="confirmed",
+            dish_name="Secret meal",
+        )
+        async_db.add(analysis)
+        await async_db.flush()
+        photo_id = photo.id
+    finally:
+        user_id_ctx.reset(token_a)
+
+    class _Ctx:
+        client_id = str(user_b)
+
+    scoped_session = AsyncMock()
+    scoped_session.__aenter__ = AsyncMock(return_value=async_db)
+    scoped_session.__aexit__ = AsyncMock(return_value=False)
+
+    token = user_id_ctx.set(user_b)
+    await apply_session_user_id(async_db, user_b)
+    try:
+        with patch("app.mcp.tools.scoped_ro_session", return_value=scoped_session):
+            server = FastMCP("test")
+            t_mod.register_tools(server)
+            tool_fn = next(
+                t for t in server._tool_manager.list_tools() if t.name == "get_photo_analysis"
+            ).fn
+            result = await tool_fn(photo_id=photo_id, ctx=_Ctx())
+    finally:
+        user_id_ctx.reset(token)
+
+    assert result is None
+
+
 async def test_user_b_cannot_mutate_user_a_ingredient(async_db: AsyncSession) -> None:
     client_a = await _signup_client(async_db, "tenant-ingredient-a@example.com")
     client_b = await _signup_client(async_db, "tenant-ingredient-b@example.com")

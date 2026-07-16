@@ -13,7 +13,26 @@ from f0rge_db.tenant import current_user_id
 _MAX_ENTRIES = 200
 _MAX_LABS = 200
 _MAX_LAB_HISTORY = 200
+_MAX_LIST_ROWS = 200
 _MAX_READ_SQL = 500
+
+_HEALTH_METRIC_TYPE_FIELDS: dict[str, tuple[str, ...]] = {
+    "sleep": (
+        "sleep_hours",
+        "sleep_deep_min",
+        "sleep_rem_min",
+        "sleep_core_min",
+        "sleep_awake_min",
+        "sleep_deep_pct",
+        "sleep_rem_pct",
+        "sleep_efficiency",
+        "sleep_start",
+        "sleep_end",
+    ),
+    "hrv": ("hrv_mean", "hrv_std"),
+    "activity": ("steps", "active_minutes"),
+    "vitals": ("resting_hr", "spo2", "wrist_temp_deviation"),
+}
 
 
 def _validate_date(value: str, field: str) -> datetime.date:
