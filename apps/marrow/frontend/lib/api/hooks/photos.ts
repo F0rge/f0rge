@@ -146,6 +146,7 @@ export function usePhotoAnalysis(
     const status = query.data?.status
     if (status === 'confirmed' && prevStatusRef.current !== 'confirmed') {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
     }
     prevStatusRef.current = status
   }, [query.data?.status, queryClient])
@@ -160,6 +161,7 @@ export function useConfirmAnalysis() {
     onSuccess: (_data, photoId) => {
       queryClient.invalidateQueries({ queryKey: ['photo-analysis', photoId] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
 }

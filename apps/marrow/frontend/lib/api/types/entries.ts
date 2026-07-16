@@ -8,11 +8,14 @@ export interface Photo {
   source_photo_id?: number | null
   tagged_by_handle?: string | null
   tagged_with_handles?: string[]
+  dish_name?: string | null
 }
 
 export interface EntryStats {
   total_checkins: number
   current_streak_days: number
+  week_days: boolean[] // 7 items, Mon→Sun; true = checked in that day
+  week_today_index: number // Mon=0 .. Sun=6, app-timezone today
 }
 
 export interface PhotoScores {
