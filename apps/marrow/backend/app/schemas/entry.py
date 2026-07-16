@@ -192,3 +192,5 @@ class EntryResponse(BaseModel):
 class EntryStatsResponse(BaseModel):
     total_checkins: int
     current_streak_days: int
+    # Mon..Sun of the current local week; True = a check-in exists that day.
+    week_days: list[bool]

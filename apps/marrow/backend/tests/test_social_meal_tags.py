@@ -732,6 +732,30 @@ async def test_photos_list_tagged_scope(async_db: AsyncSession, storage: None):
     assert source["tagged_with_handles"] == [b_handle]
 
 
+async def test_photos_list_carries_dish_name(async_db: AsyncSession, storage: None):
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    await _connect_users(a, b)
+    b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
+    await b.put("/api/v1/settings/tagged-meal-mode", json={"tagged_meal_mode": "auto"})
+
+    unanalyzed_id = await _upload_plain(a)
+    source_id = await _upload_tagged(a, handles=[b_handle])
+    await _seed_confirmed_analysis(
+        async_db, source_id, await _user_id(a), dish_name="Spinach omelette"
+    )
+
+    listed = {p["id"]: p for p in (await a.get("/api/v1/photos")).json()}
+    assert listed[source_id]["dish_name"] == "Spinach omelette"
+    assert listed[unanalyzed_id]["dish_name"] is None
+
+    # The delivered copy shares the source's meal_id, which is what
+    # Photo.analysis joins on -- so it reads the tagger's dish name.
+    copy = (await b.get("/api/v1/photos?scope=tagged")).json()[0]
+    assert copy["source_photo_id"] == source_id
+    assert copy["dish_name"] == "Spinach omelette"
+
+
 async def test_photos_list_rejects_bad_params(
     async_db: AsyncSession, patch_tag_delivery_maker: None
 ):

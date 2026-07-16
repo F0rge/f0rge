@@ -348,10 +348,22 @@ async def _create_entry_days_ago(client: AsyncClient, days_ago: int) -> None:
     assert resp.status_code == 201
 
 
+def _expected_week_days(*days_ago: int) -> list[bool]:
+    """Mon..Sun flags for the current local week, from entry offsets in days."""
+    today = local_today()
+    monday = today - datetime.timedelta(days=today.weekday())
+    dates = {today - datetime.timedelta(days=d) for d in days_ago}
+    return [(monday + datetime.timedelta(days=i)) in dates for i in range(7)]
+
+
 async def test_stats_empty_user_zeroes(authed_client: AsyncClient) -> None:
     resp = await authed_client.get("/api/v1/entries/stats")
     assert resp.status_code == 200
-    assert resp.json() == {"total_checkins": 0, "current_streak_days": 0}
+    assert resp.json() == {
+        "total_checkins": 0,
+        "current_streak_days": 0,
+        "week_days": [False] * 7,
+    }
 
 
 async def test_stats_streak_ending_today_stops_at_gap(authed_client: AsyncClient) -> None:
@@ -362,7 +374,11 @@ async def test_stats_streak_ending_today_stops_at_gap(authed_client: AsyncClient
 
     resp = await authed_client.get("/api/v1/entries/stats")
     assert resp.status_code == 200
-    assert resp.json() == {"total_checkins": 3, "current_streak_days": 2}
+    assert resp.json() == {
+        "total_checkins": 3,
+        "current_streak_days": 2,
+        "week_days": _expected_week_days(4, 1, 0),
+    }
 
 
 async def test_stats_streak_ending_yesterday_still_counts(authed_client: AsyncClient) -> None:
@@ -372,7 +388,11 @@ async def test_stats_streak_ending_yesterday_still_counts(authed_client: AsyncCl
 
     resp = await authed_client.get("/api/v1/entries/stats")
     assert resp.status_code == 200
-    assert resp.json() == {"total_checkins": 3, "current_streak_days": 3}
+    assert resp.json() == {
+        "total_checkins": 3,
+        "current_streak_days": 3,
+        "week_days": _expected_week_days(3, 2, 1),
+    }
 
 
 async def test_stats_streak_zero_when_last_entry_two_days_ago(authed_client: AsyncClient) -> None:
@@ -381,7 +401,39 @@ async def test_stats_streak_zero_when_last_entry_two_days_ago(authed_client: Asy
 
     resp = await authed_client.get("/api/v1/entries/stats")
     assert resp.status_code == 200
-    assert resp.json() == {"total_checkins": 2, "current_streak_days": 0}
+    assert resp.json() == {
+        "total_checkins": 2,
+        "current_streak_days": 0,
+        "week_days": _expected_week_days(3, 2),
+    }
+
+
+async def test_stats_week_days_shape_and_marked_positions(authed_client: AsyncClient) -> None:
+    await _create_entry_days_ago(authed_client, 0)
+    await _create_entry_days_ago(authed_client, 1)
+
+    week_days = (await authed_client.get("/api/v1/entries/stats")).json()["week_days"]
+    assert len(week_days) == 7
+    assert all(isinstance(day, bool) for day in week_days)
+
+    # Positions are Mon=0..Sun=6, so weekday() is the index directly. On a Monday
+    # "yesterday" is last week's Sunday and must stay unmarked -- hence no
+    # hardcoded indices here.
+    today = local_today()
+    expected = {today.weekday()}
+    if today.weekday() != 0:
+        expected.add((today - datetime.timedelta(days=1)).weekday())
+    assert {i for i, marked in enumerate(week_days) if marked} == expected
+
+
+async def test_stats_week_days_excludes_last_week(authed_client: AsyncClient) -> None:
+    # Exactly 7 days back is the same weekday one week earlier -- always outside
+    # the current week, whatever day the suite runs on.
+    await _create_entry_days_ago(authed_client, 7)
+
+    resp = await authed_client.get("/api/v1/entries/stats")
+    assert resp.json()["total_checkins"] == 1
+    assert resp.json()["week_days"] == [False] * 7
 
 
 async def test_stats_route_declared_above_date_route(authed_client: AsyncClient) -> None:
