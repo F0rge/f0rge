@@ -1,0 +1,49 @@
+# Lockfiles / dependency graphs (huge, low signal for Agent)
+package-lock.json
+**/uv.lock
+**/pnpm-lock.yaml
+**/yarn.lock
+
+# Dependency and build outputs
+node_modules/
+.venv/
+venv/
+.next/
+.nx/
+dist/
+build/
+out/
+*.tsbuildinfo
+*.egg-info/
+
+# Caches and test runners
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.eslintcache/
+.parcel-cache/
+.turbo/
+.playwright*/
+coverage/
+htmlcov/
+.nyc_output/
+
+# Binary / media / local artifacts (expensive if inlined)
+apps/marrow/backend/photos/
+apps/marrow/backend/lab_attachments/
+qa-screenshots/
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.webp
+**/*.gif
+**/*.pdf
+**/*.zip
+**/*.tar
+**/*.gz
+
+# Runtime logs / dumps
+**/*.log
+apps/marrow/backend/scripts/extraction_audit.jsonl
+apps/marrow/backend/scripts/import_labs.log
