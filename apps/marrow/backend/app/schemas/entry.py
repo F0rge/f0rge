@@ -194,3 +194,5 @@ class EntryStatsResponse(BaseModel):
     current_streak_days: int
     # Mon..Sun of the current local week; True = a check-in exists that day.
     week_days: list[bool]
+    # Index into week_days for app-timezone today (Mon=0 .. Sun=6).
+    week_today_index: int

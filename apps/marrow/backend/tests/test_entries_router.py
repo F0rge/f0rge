@@ -363,6 +363,7 @@ async def test_stats_empty_user_zeroes(authed_client: AsyncClient) -> None:
         "total_checkins": 0,
         "current_streak_days": 0,
         "week_days": [False] * 7,
+        "week_today_index": local_today().weekday(),
     }
 
 
@@ -378,6 +379,7 @@ async def test_stats_streak_ending_today_stops_at_gap(authed_client: AsyncClient
         "total_checkins": 3,
         "current_streak_days": 2,
         "week_days": _expected_week_days(4, 1, 0),
+        "week_today_index": local_today().weekday(),
     }
 
 
@@ -392,6 +394,7 @@ async def test_stats_streak_ending_yesterday_still_counts(authed_client: AsyncCl
         "total_checkins": 3,
         "current_streak_days": 3,
         "week_days": _expected_week_days(3, 2, 1),
+        "week_today_index": local_today().weekday(),
     }
 
 
@@ -405,6 +408,7 @@ async def test_stats_streak_zero_when_last_entry_two_days_ago(authed_client: Asy
         "total_checkins": 2,
         "current_streak_days": 0,
         "week_days": _expected_week_days(3, 2),
+        "week_today_index": local_today().weekday(),
     }
 
 

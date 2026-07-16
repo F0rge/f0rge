@@ -249,6 +249,7 @@ class EntryService:
             total_checkins=len(dates),
             current_streak_days=streak,
             week_days=week_days,
+            week_today_index=today.weekday(),
         )
 
     async def get_entry(self, date: datetime.date) -> EntryResponse:
