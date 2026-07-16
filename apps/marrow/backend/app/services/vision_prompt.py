@@ -72,6 +72,25 @@ you can identify with reasonable certainty.
 dish_name if relevant.\
 """
 
+# Appended when catalog_context is provided. ~2–4k tokens for a typical seed
+# catalog (~287 entries); soft cap at 500 entries keeps worst case bounded.
+CATALOG_PROMPT_ADDENDUM = """\
+
+## User ingredient catalog
+The user maintains a personal ingredient catalog below. Use it to align \
+ingredient names with their tracked vocabulary.
+
+Rules:
+- When a visible or inferred ingredient plausibly matches a catalog entry, \
+emit the exact canonical_name from the list in ingredients[].name.
+- Treat listed aliases as recognition aids only — never emit an alias as \
+the ingredient name; always output the canonical_name.
+- If nothing in the catalog fits what you see, use the best free-form \
+visual name (lowercase, singular) and apply normal confidence rules.
+
+Catalog (alphabetical, canonical names):
+"""
+
 USER_PROMPT = (
     "Analyze this food photo. Return a JSON object with dish_name, "
     "cuisine, confidence, and ingredients array."
@@ -83,17 +102,28 @@ USER_PROMPT = (
 # ---------------------------------------------------------------------------
 
 
-def build_messages(image_bytes: bytes) -> list[dict]:
+def build_messages(
+    image_bytes: bytes,
+    *,
+    catalog_context: Optional[str] = None,
+) -> list[dict]:
     """Build OpenRouter-compatible chat messages with an embedded image.
 
     Encodes the image as a base64 data URL and returns messages in
     the OpenAI vision chat-completions format.
+
+    When catalog_context is a non-empty string, appends the user ingredient
+    catalog instructions and list to the system prompt.
     """
     b64 = base64.b64encode(image_bytes).decode("ascii")
     data_url = "data:image/jpeg;base64," + b64
 
+    system_content = SYSTEM_PROMPT
+    if catalog_context:
+        system_content = system_content + CATALOG_PROMPT_ADDENDUM + catalog_context
+
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_content},
         {
             "role": "user",
             "content": [

@@ -16,7 +16,7 @@ from app.schemas.settings import (
     TestConnectionResponse,
 )
 from app.services.llm.base import EmbeddingClient, LLMClient
-from app.services.llm.encryption import encrypt
+from app.services.llm.encryption import encrypt, hash_external_api_token
 from f0rge_db.tenant import current_user_id
 
 
@@ -41,7 +41,9 @@ class SettingsService:
             embedding_provider=row.embedding_provider,
             embedding_model=row.embedding_model,
             has_api_key=row.llm_api_key_encrypted is not None,
-            has_external_api_token=row.external_api_token_encrypted is not None,
+            # Auth uses hash lookup; report presence from hash so a failed
+            # migration backfill cannot show "active" while MCP rejects the token.
+            has_external_api_token=row.external_api_token_hash is not None,
             onboarding_completed=row.onboarding_completed_at is not None,
             tagged_meal_mode=row.tagged_meal_mode,
         )
@@ -86,6 +88,7 @@ class SettingsService:
         row = await self._get_or_create_row()
         plaintext = secrets.token_urlsafe(32)
         row.external_api_token_encrypted = encrypt(plaintext)
+        row.external_api_token_hash = hash_external_api_token(plaintext)
         await self.crud.commit_refresh(row)
         return ExternalTokenResponse(token=plaintext)
 
@@ -93,6 +96,7 @@ class SettingsService:
         """Clear the external API token, disabling all Bearer-token access."""
         row = await self._get_or_create_row()
         row.external_api_token_encrypted = None
+        row.external_api_token_hash = None
         row = await self.crud.commit_refresh(row)
         return self._to_response(row)
 

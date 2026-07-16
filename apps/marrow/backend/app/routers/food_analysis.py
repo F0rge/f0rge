@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 
 from app.dependencies.food_analysis import get_food_analysis_service
 from app.middleware.auth import get_current_session, get_current_user_id
