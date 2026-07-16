@@ -7,9 +7,10 @@ const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 /** "This week" strip: one dot per day, Mon→Sun, today ringed. */
 export function ConsistencyRow() {
   const stats = useEntryStats().data
-  const weekDays = stats?.week_days
-  if (weekDays == null) return null
+  // Guard the whole payload: narrowing week_days alone leaves `stats` optional.
+  if (stats == null) return null
 
+  const weekDays = stats.week_days
   const done = weekDays.filter(Boolean).length
   const todayIdx = stats.week_today_index
 
