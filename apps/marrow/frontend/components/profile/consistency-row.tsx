@@ -12,7 +12,8 @@ export function ConsistencyRow() {
 
   const weekDays = stats.week_days
   const done = weekDays.filter(Boolean).length
-  const todayIdx = stats.week_today_index
+  // Device calendar — entry dates use formatLocalDate, not app_timezone.
+  const todayIdx = (new Date().getDay() + 6) % 7
 
   return (
     <section>

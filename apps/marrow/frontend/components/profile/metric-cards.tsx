@@ -10,7 +10,7 @@ const METRICS: { key: string; unit: string; downIsGood: boolean }[] = [
   { key: 'overall', unit: '/ 5', downIsGood: false },
   { key: 'sleep_quality', unit: '/ 5', downIsGood: false },
   { key: 'stress', unit: '/ 5', downIsGood: true },
-  { key: 'bloating', unit: '/ 5', downIsGood: true },
+  { key: 'bloating', unit: '/ 3', downIsGood: true },
   { key: 'hm_resting_hr', unit: 'bpm', downIsGood: true },
 ]
 
