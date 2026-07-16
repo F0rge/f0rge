@@ -16,7 +16,7 @@ from app.schemas.settings import (
     TestConnectionResponse,
 )
 from app.services.llm.base import EmbeddingClient, LLMClient
-from app.services.llm.encryption import encrypt
+from app.services.llm.encryption import encrypt, hash_external_api_token
 from f0rge_db.tenant import current_user_id
 
 
@@ -86,6 +86,7 @@ class SettingsService:
         row = await self._get_or_create_row()
         plaintext = secrets.token_urlsafe(32)
         row.external_api_token_encrypted = encrypt(plaintext)
+        row.external_api_token_hash = hash_external_api_token(plaintext)
         await self.crud.commit_refresh(row)
         return ExternalTokenResponse(token=plaintext)
 
@@ -93,6 +94,7 @@ class SettingsService:
         """Clear the external API token, disabling all Bearer-token access."""
         row = await self._get_or_create_row()
         row.external_api_token_encrypted = None
+        row.external_api_token_hash = None
         row = await self.crud.commit_refresh(row)
         return self._to_response(row)
 

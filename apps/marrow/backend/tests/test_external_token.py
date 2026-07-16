@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import select
@@ -8,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.user_settings import UserSettings
 from app.schemas.settings import ExternalTokenResponse, SettingsResponse
-from app.services.llm.encryption import decrypt
+from app.services.llm.encryption import decrypt, hash_external_api_token
 from app.services.settings_service import SettingsService
 
 
@@ -34,6 +36,13 @@ async def test_regenerate_returns_43_char_urlsafe_token(async_db: AsyncSession) 
     assert all(
         c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" for c in resp.token
     )
+
+    result = await async_db.execute(
+        select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
+    )
+    row = result.scalar_one()
+    assert row.external_api_token_hash == hash_external_api_token(resp.token)
+    assert row.external_api_token_hash == hashlib.sha256(resp.token.encode()).hexdigest()
 
 
 async def test_regenerate_second_call_produces_different_token(
@@ -86,6 +95,7 @@ async def test_revoke_clears_token_column(async_db: AsyncSession) -> None:
     )
     row = result.scalar_one()
     assert row.external_api_token_encrypted is None
+    assert row.external_api_token_hash is None
 
 
 async def test_revoke_without_prior_token_is_safe(async_db: AsyncSession) -> None:

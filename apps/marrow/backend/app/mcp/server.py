@@ -6,6 +6,9 @@ from pydantic import AnyHttpUrl
 
 from app.config import settings
 from app.mcp.auth import BearerTokenVerifier
+from app.mcp.prompts import register_prompts
+from app.mcp.resources import register_resources
+from app.mcp.tools import register_tools
 
 
 def create_server() -> FastMCP:
@@ -24,3 +27,10 @@ def create_server() -> FastMCP:
         token_verifier=BearerTokenVerifier(),
         auth=AuthSettings(issuer_url=base, resource_server_url=base),
     )
+
+
+def register_all(server: FastMCP) -> None:
+    """Register tools, resources, and prompts on the server."""
+    register_tools(server)
+    register_resources(server)
+    register_prompts(server)
