@@ -117,3 +117,19 @@ async def test_plaintext_not_stored_in_db(async_db: AsyncSession) -> None:
     # The ciphertext bytes must not equal the plaintext token bytes.
     assert row.external_api_token_encrypted is not None
     assert resp.token.encode() not in row.external_api_token_encrypted
+
+
+async def test_has_external_api_token_false_when_hash_missing(
+    async_db: AsyncSession,
+) -> None:
+    """Ciphertext without hash (failed backfill) must not report an active token."""
+    from app.services.llm.encryption import encrypt
+
+    svc = SettingsService(async_db)
+    row = await svc._get_or_create_row()
+    row.external_api_token_encrypted = encrypt("orphan-token-without-hash")
+    row.external_api_token_hash = None
+    await svc.crud.commit_refresh(row)
+
+    resp = await svc.get()
+    assert resp.has_external_api_token is False

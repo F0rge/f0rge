@@ -41,7 +41,9 @@ class SettingsService:
             embedding_provider=row.embedding_provider,
             embedding_model=row.embedding_model,
             has_api_key=row.llm_api_key_encrypted is not None,
-            has_external_api_token=row.external_api_token_encrypted is not None,
+            # Auth uses hash lookup; report presence from hash so a failed
+            # migration backfill cannot show "active" while MCP rejects the token.
+            has_external_api_token=row.external_api_token_hash is not None,
             onboarding_completed=row.onboarding_completed_at is not None,
             tagged_meal_mode=row.tagged_meal_mode,
         )
