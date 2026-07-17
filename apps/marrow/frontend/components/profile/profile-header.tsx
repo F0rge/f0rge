@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, Flame, Menu } from 'lucide-react'
+import { Bell, ClipboardCheck, Menu, Share, Users, UsersRound, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { UserAvatar } from '@/components/account/user-avatar'
+import { StreakRing } from '@/components/profile/streak-ring'
 import {
   useAccount,
   useConnections,
@@ -12,11 +12,25 @@ import {
   useUnreadCount,
 } from '@/lib/api/hooks'
 
-function StatLink({ href, value, label }: { href: string; value: number; label: string }) {
+function StatChip({
+  href,
+  icon: Icon,
+  value,
+  label,
+}: {
+  href: string
+  icon: LucideIcon
+  value: number
+  label: string
+}) {
   return (
-    <Link href={href} className="flex-1 text-center">
-      <span className="block text-[17px] font-bold tabular-nums">{value}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/80"
+    >
+      <Icon className="size-[11px]" aria-hidden />
+      <b className="font-bold tabular-nums text-foreground">{value}</b>
+      {label}
     </Link>
   )
 }
@@ -30,10 +44,14 @@ export function ProfileHeader() {
 
   const data = account.data
   const handle = data?.handle
-  const streak = stats.data?.current_streak_days ?? 0
+  const name = data?.display_name ?? handle
   const since = data?.created_at
     ? new Date(data.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
     : null
+  // Missing segments drop out instead of printing "null"; the separator goes with them.
+  const subline = [handle && `@${handle}`, since && `tracking since ${since}`]
+    .filter(Boolean)
+    .join(' · ')
 
   const handleShare = async () => {
     const text = handle ? `@${handle} on Marrow` : 'Find me on Marrow'
@@ -53,6 +71,14 @@ export function ProfileHeader() {
           {handle ? `@${handle}` : (data?.display_name ?? 'Profile')}
         </h1>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleShare}
+            aria-label="Share profile"
+            className="flex size-9 items-center justify-center rounded-lg transition-colors hover:bg-muted"
+          >
+            <Share className="size-[22px]" />
+          </button>
           <Link
             href="/people/notifications"
             aria-label={
@@ -77,52 +103,45 @@ export function ProfileHeader() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-5">
-        <UserAvatar size="lg" />
-        <div className="flex flex-1">
-          <StatLink href="/history" value={stats.data?.total_checkins ?? 0} label="Check-ins" />
-          <StatLink
-            href="/people/connections"
-            value={connections.data?.accepted.length ?? 0}
-            label="Connections"
+      <div className="mt-4 flex items-center gap-4">
+        {stats.data?.week_days != null && (
+          <StreakRing
+            weekDays={stats.data.week_days}
+            streak={stats.data.current_streak_days}
           />
-          <StatLink
-            href="/people/groups"
-            value={groups.data?.filter((g) => g.my_status === 'joined').length ?? 0}
-            label="Groups"
-          />
+        )}
+        <div className="min-w-0 flex-1">
+          {name && <p className="truncate text-base font-bold">{name}</p>}
+          {subline && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subline}</p>}
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <StatChip
+              href="/history"
+              icon={ClipboardCheck}
+              value={stats.data?.total_checkins ?? 0}
+              label="Check-ins"
+            />
+            <StatChip
+              href="/people/connections"
+              icon={Users}
+              value={connections.data?.accepted.length ?? 0}
+              label="Connections"
+            />
+            <StatChip
+              href="/people/groups"
+              icon={UsersRound}
+              value={groups.data?.filter((g) => g.my_status === 'joined').length ?? 0}
+              label="Groups"
+            />
+          </div>
         </div>
       </div>
 
-      <div className="mt-3">
-        {data?.display_name && <p className="text-sm font-semibold">{data.display_name}</p>}
-        <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-muted-foreground">
-          {streak > 0 && (
-            <>
-              <Flame className="size-[13px]" aria-hidden />
-              {streak}-day streak
-              {since && <span aria-hidden>·</span>}
-            </>
-          )}
-          {since && <>tracking since {since}</>}
-        </p>
-      </div>
-
-      <div className="mt-4 flex gap-2">
-        <Link
-          href="/account"
-          className="flex-1 rounded-lg bg-muted py-2 text-center text-[13px] font-semibold transition-colors hover:bg-muted/80"
-        >
-          Edit profile
-        </Link>
-        <button
-          type="button"
-          onClick={handleShare}
-          className="flex-1 rounded-lg bg-muted py-2 text-center text-[13px] font-semibold transition-colors hover:bg-muted/80"
-        >
-          Share profile
-        </button>
-      </div>
+      <Link
+        href="/account"
+        className="mt-4 block rounded-lg bg-muted py-2 text-center text-[13px] font-semibold transition-colors hover:bg-muted/80"
+      >
+        Edit profile
+      </Link>
     </header>
   )
 }

@@ -150,7 +150,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="profile-tab"]',
     title: 'Your profile',
     content:
-      'The Profile tab shows your stats, weekly highlights, and meal grids. Its ☰ menu opens Settings and activity — account, connections, customize, and log out all live there.',
+      'The Profile tab shows your check-in streak, this week at a glance, how your metrics are trending, and your meal log. Its ☰ menu opens Settings and activity — account, connections, customize, and log out all live there.',
     placement: 'top',
   },
   {

@@ -83,7 +83,17 @@ class PhotoService:
         companions = await MealTagCRUD(self.db).companion_handles_by_photo_ids(
             [p.id for p in photos]
         )
-        return [_photo_response(p, companions.get(p.id, [])) for p in photos]
+        # dish_name is set here rather than inside _photo_response because that
+        # helper also serves the upload path, whose Photo is constructed in
+        # Python: lazy="selectin" only fires at query time, so touching
+        # .analysis on it would be implicit async IO (MissingGreenlet). These
+        # photos come from a select(), so .analysis is already eager-loaded.
+        responses: list[PhotoResponse] = []
+        for p in photos:
+            resp = _photo_response(p, companions.get(p.id, []))
+            resp.dish_name = p.analysis.dish_name if p.analysis else None
+            responses.append(resp)
+        return responses
 
     async def update_photo(self, photo_id: int, data: PhotoUpdate) -> Photo:
         photo = await self.crud.get_by_id_owned(photo_id)

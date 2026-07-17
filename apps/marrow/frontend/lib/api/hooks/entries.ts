@@ -88,6 +88,7 @@ export function useUpdatePhotoMealTime() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
 }
@@ -102,6 +103,7 @@ export function useUpdatePhotoLabel() {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
 }

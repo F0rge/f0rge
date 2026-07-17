@@ -3,9 +3,34 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { LayoutGrid, Tag } from 'lucide-react'
-import { cn } from '@f0rge/ui'
+import { cn, formatDisplayDate, formatLocalDate } from '@f0rge/ui'
 import { usePhotos } from '@/lib/api/hooks'
 import type { Photo } from '@/lib/api/types'
+
+/**
+ * `Today · 19:30` / `Yesterday` / `Tuesday` (<7 days) / `2 Jun 2026`.
+ *
+ * Mirrors `formatMealTime` in components/shared/food-analysis/photo-focus-overlay.tsx:
+ * backend timestamps are tz-naive UTC and `new Date(iso)` reads them as local
+ * wall-clock everywhere in the app — keep these semantics identical.
+ */
+function mealDay(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const that = new Date(d)
+  that.setHours(0, 0, 0, 0)
+  const diff = Math.round((today.getTime() - that.getTime()) / 86_400_000)
+  if (diff === 0) {
+    return `Today · ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+  }
+  if (diff === 1) return 'Yesterday'
+  if (diff < 7) return d.toLocaleDateString('en-GB', { weekday: 'long' })
+  // formatDisplayDate parses `YYYY-MM-DD`, not a datetime — handing it the raw
+  // ISO string yields "Invalid Date", so narrow to the local calendar day first.
+  return formatDisplayDate(formatLocalDate(d))
+}
 
 function Grid({ photos, tagged, empty }: { photos: Photo[]; tagged?: boolean; empty: string }) {
   if (photos.length === 0) {
@@ -16,24 +41,41 @@ function Grid({ photos, tagged, empty }: { photos: Photo[]; tagged?: boolean; em
     )
   }
   return (
-    <div className="grid grid-cols-3 gap-[3px] overflow-hidden rounded-xl">
-      {photos.map((photo) => (
-        <div key={photo.id} className="relative aspect-square bg-muted">
-          <Image
-            src={`/api/v1/photos/${photo.id}/file`}
-            alt={photo.label ?? 'Meal photo'}
-            fill
-            unoptimized
-            sizes="(max-width: 672px) 33vw, 224px"
-            className="object-cover"
-          />
-          {tagged && photo.tagged_by_handle && (
-            <span className="absolute bottom-1.5 left-1.5 rounded-full bg-background/85 px-1.5 py-0.5 text-[10px] font-semibold">
-              @{photo.tagged_by_handle}
-            </span>
-          )}
-        </div>
-      ))}
+    <div className="grid grid-cols-3 gap-1.5">
+      {photos.map((photo) => {
+        // User label wins, AI dish name is the fallback; `||` (not `??`) so a
+        // cleared label ('') falls through to the AI guess instead of rendering blank.
+        const name = photo.label || photo.dish_name
+        const when = mealDay(photo.meal_time ?? photo.created_at)
+        return (
+          <div
+            key={photo.id}
+            className="relative aspect-square overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10"
+          >
+            <Image
+              src={`/api/v1/photos/${photo.id}/file`}
+              alt={photo.label ?? 'Meal photo'}
+              fill
+              unoptimized
+              sizes="(max-width: 672px) 33vw, 224px"
+              className="object-cover"
+            />
+            {tagged && photo.tagged_by_handle && (
+              <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-card px-1.5 text-[8.5px] font-bold leading-4 ring-1 ring-border">
+                @{photo.tagged_by_handle}
+              </span>
+            )}
+            {(name || when) && (
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 pb-1 pt-3.5 text-left">
+                {name && (
+                  <span className="block truncate text-[9.5px] font-semibold text-white">{name}</span>
+                )}
+                {when && <span className="block truncate text-[8.5px] text-white/75">{when}</span>}
+              </span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -65,7 +107,7 @@ export function MealGrids() {
             ) : (
               <Tag className="size-4" aria-hidden />
             )}
-            {key === 'all' ? 'Meals' : 'Tagged'}
+            {key === 'all' ? 'My meals' : 'Shared with me'}
           </button>
         ))}
       </div>
@@ -75,7 +117,7 @@ export function MealGrids() {
         <Grid
           photos={taggedPhotos.data ?? []}
           tagged
-          empty="No tagged meals yet — connections can tag you on meal photos."
+          empty="Nothing shared with you yet — connections can tag you on meal photos."
         />
       )}
     </section>

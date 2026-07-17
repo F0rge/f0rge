@@ -218,11 +218,13 @@ class EntryService:
         return [await _build_response(self.db, e) for e in entries]
 
     async def stats(self) -> EntryStatsResponse:
-        """Total check-ins + current daily streak for the authenticated user.
+        """Total check-ins, current daily streak, and this week's check-in days.
 
         Streak = consecutive-calendar-day run walking backwards from the most
         recent entry date, counted only if that date is today or yesterday (a
         user who logged through yesterday hasn't lost their streak yet).
+        week_days = Mon..Sun flags for the current local week; future days of
+        the week are naturally False.
         Entry dates are stored in the client's local calendar day (see
         formatLocalDate), which may differ by ±1 day from local_today() when
         the device timezone does not match app_timezone.
@@ -230,14 +232,25 @@ class EntryService:
         data, no gaps-and-islands SQL needed.
         """
         dates = await self.crud.list_dates()
+        # One `today` for both computations below, so a call spanning local
+        # midnight can't report a streak and a week that disagree.
+        today = local_today()
         streak = 0
-        if dates and (local_today() - dates[0]).days in (-1, 0, 1):
+        if dates and (today - dates[0]).days in (-1, 0, 1):
             streak = 1
             for prev, cur in zip(dates, dates[1:]):
                 if (prev - cur).days != 1:
                     break
                 streak += 1
-        return EntryStatsResponse(total_checkins=len(dates), current_streak_days=streak)
+        monday = today - datetime.timedelta(days=today.weekday())
+        date_set = set(dates)
+        week_days = [(monday + datetime.timedelta(days=i)) in date_set for i in range(7)]
+        return EntryStatsResponse(
+            total_checkins=len(dates),
+            current_streak_days=streak,
+            week_days=week_days,
+            week_today_index=today.weekday(),
+        )
 
     async def get_entry(self, date: datetime.date) -> EntryResponse:
         entry = await self.crud.get_by_date(date)
