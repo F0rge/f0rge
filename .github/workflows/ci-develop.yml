@@ -119,6 +119,20 @@ jobs:
             uv sync --frozen --project "$ROOT"
           done
 
+      - name: Assert no root uv.lock
+        run: test ! -f uv.lock
+
+      - name: Python lib boundary guard
+        run: |
+          ! grep -rn "from apps\.\|import apps\." libs/backend/ --include='*.py'
+
+      - name: uv pip audit (high severity)
+        if: contains(needs.detect.outputs.py_projects, 'marrow-backend')
+        run: |
+          cd apps/marrow/backend
+          uv export --frozen --no-dev -o /tmp/marrow-req.txt
+          uvx pip-audit -r /tmp/marrow-req.txt
+
       - name: nx run (backend)
         env:
           PY_PROJECTS: ${{ needs.detect.outputs.py_projects }}
@@ -150,6 +164,9 @@ jobs:
 
       - name: Install root deps
         run: npm ci
+
+      - name: npm audit (high severity)
+        run: npm audit --audit-level=high
 
       - name: Boundary guard (libs must not import apps)
         run: |
@@ -221,3 +238,5 @@ jobs:
       COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
       COOLIFY_WEBHOOK_DK_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DK_BACKEND }}
       COOLIFY_WEBHOOK_DK_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DK_FRONTEND }}
+      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}

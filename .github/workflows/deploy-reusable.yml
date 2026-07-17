@@ -103,6 +103,8 @@ jobs:
       mcp_health_url: ${{ needs.plan.outputs.mcp_health_url }}
     secrets:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
 
   deploy-coolify:
     name: deploy coolify
