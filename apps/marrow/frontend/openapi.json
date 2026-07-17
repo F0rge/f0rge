@@ -1612,9 +1612,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": true,
-                "title": "Body"
+                "$ref": "#/components/schemas/HealthAutoExportPayload"
               }
             }
           }
@@ -1624,7 +1622,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/HealthImportResponse"
+                }
               }
             }
           },
@@ -10173,6 +10173,78 @@
           "available"
         ],
         "title": "HandleAvailableResponse"
+      },
+      "HealthAutoExportData": {
+        "properties": {
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/HealthAutoExportMetric"
+            },
+            "type": "array",
+            "title": "Metrics"
+          }
+        },
+        "type": "object",
+        "title": "HealthAutoExportData"
+      },
+      "HealthAutoExportMetric": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "units": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Units"
+          },
+          "data": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "HealthAutoExportMetric"
+      },
+      "HealthAutoExportPayload": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/HealthAutoExportData"
+          }
+        },
+        "type": "object",
+        "title": "HealthAutoExportPayload",
+        "description": "Validated body for POST /health-metrics/import (Health Auto Export JSON)."
+      },
+      "HealthImportResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "dates_upserted": {
+            "type": "integer",
+            "title": "Dates Upserted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "dates_upserted"
+        ],
+        "title": "HealthImportResponse"
       },
       "HealthMetricResponse": {
         "properties": {

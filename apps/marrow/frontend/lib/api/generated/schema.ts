@@ -2476,6 +2476,41 @@ export interface components {
             /** Reason */
             reason?: ("available" | "taken" | "invalid") | null;
         };
+        /** HealthAutoExportData */
+        HealthAutoExportData: {
+            /** Metrics */
+            metrics?: components["schemas"]["HealthAutoExportMetric"][];
+        };
+        /** HealthAutoExportMetric */
+        HealthAutoExportMetric: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Units */
+            units?: string | null;
+            /** Data */
+            data?: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * HealthAutoExportPayload
+         * @description Validated body for POST /health-metrics/import (Health Auto Export JSON).
+         */
+        HealthAutoExportPayload: {
+            data?: components["schemas"]["HealthAutoExportData"];
+        };
+        /** HealthImportResponse */
+        HealthImportResponse: {
+            /** Status */
+            status: string;
+            /** Dates Upserted */
+            dates_upserted: number;
+        };
         /** HealthMetricResponse */
         HealthMetricResponse: {
             /** Id */
@@ -4676,9 +4711,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["HealthAutoExportPayload"];
             };
         };
         responses: {
@@ -4688,7 +4721,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HealthImportResponse"];
                 };
             };
             /** @description Validation Error */
