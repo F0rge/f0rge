@@ -17,6 +17,13 @@
         "cwd": "apps/marrow/frontend",
         "command": "npm run typecheck"
       }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/marrow/frontend",
+        "command": "npm run test"
+      }
     }
   },
   "tags": ["platform:ts", "scope:marrow"]

@@ -174,7 +174,7 @@ jobs:
           API_URL: http://backend:8000
           NODE_ENV: production
           TS_PROJECTS: ${{ needs.detect.outputs.ts_projects }}
-        run: npx nx run-many -t lint typecheck build --projects "$TS_PROJECTS"
+        run: npx nx run-many -t lint typecheck test build --projects "$TS_PROJECTS"
 
   ci:
     name: ci
