@@ -11,7 +11,9 @@ from f0rge_core.handlers import register_exception_handlers
 
 from app.config import settings
 from app.database import async_session_maker
+from app.logging_config import JsonFormatter
 from app.middleware.auth import AuthContextMiddleware
+from app.middleware.request_id import RequestIdFilter, RequestIdMiddleware
 from app.routers import (
     account,
     auth,
@@ -41,6 +43,35 @@ from app.routers import (
 from app.services.weather import weather_background_loop
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    root = logging.getLogger()
+    if any(isinstance(h.formatter, JsonFormatter) for h in root.handlers):
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    handler.addFilter(RequestIdFilter())
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+
+
+def _maybe_init_sentry() -> None:
+    dsn = getattr(settings, "sentry_dsn", "") or ""
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+        sentry_sdk.init(dsn=dsn, integrations=[FastApiIntegration()], traces_sample_rate=0.0)
+        logger.info("Sentry initialized")
+    except Exception:
+        logger.exception("Sentry init failed — continuing without error tracking")
+
+
+_configure_logging()
+_maybe_init_sentry()
 
 _weather_task = None
 
@@ -137,6 +168,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Marrow", lifespan=lifespan)
 
+app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
