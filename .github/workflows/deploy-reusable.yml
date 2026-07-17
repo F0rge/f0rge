@@ -35,6 +35,10 @@ on:
         required: false
       COOLIFY_WEBHOOK_DK_FRONTEND:
         required: false
+      SMOKE_EMAIL:
+        required: false
+      SMOKE_PASSWORD:
+        required: false
 
 permissions:
   contents: read
