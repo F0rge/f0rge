@@ -129,8 +129,9 @@ jobs:
         if: contains(needs.detect.outputs.py_projects, 'marrow-backend')
         run: |
           cd apps/marrow/backend
-          uv export --frozen --no-dev -o /tmp/marrow-req.txt
-          uvx pip-audit -r /tmp/marrow-req.txt
+          uv export --frozen --no-dev --no-hashes --no-editable -o /tmp/marrow-req.txt
+          python3 -m pip install --user pip-audit
+          python3 -m pip_audit -r /tmp/marrow-req.txt
 
       - name: nx run (backend)
         env:
