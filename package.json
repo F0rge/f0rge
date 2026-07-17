@@ -13,6 +13,7 @@
     "eslint-plugin-react-hooks": "7.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@nx/next": "~22.7.0",
     "@nxlv/python": "~22.2.1",
     "@types/react": "^19",
