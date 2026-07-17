@@ -182,7 +182,7 @@ jobs:
       - name: OpenAPI codegen drift check
         run: |
           uv sync --frozen --project apps/marrow/backend
-          uv run --project apps/marrow/backend python scripts/export_openapi.py
+          uv run --project apps/marrow/backend python apps/marrow/backend/scripts/export_openapi.py
           npm run codegen:api -w frontend
           git diff --exit-code apps/marrow/backend/openapi.json apps/marrow/frontend/openapi.json apps/marrow/frontend/lib/api/generated/schema.ts
 
