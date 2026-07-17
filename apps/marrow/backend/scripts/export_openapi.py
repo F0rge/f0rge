@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
-# Backend package root (apps/marrow/backend).
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BACKEND_ROOT))
-
-# Avoid loading a real DB engine at import time during export.
-import os
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://health:health@localhost:5432/health")
 os.environ.setdefault("JWT_SECRET", "openapi-export-only-secret-32b")

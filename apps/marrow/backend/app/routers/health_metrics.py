@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, status
 
 from app.dependencies.health_metrics import get_health_metrics_service, require_health_import_auth
 from app.middleware.auth import get_current_session
-from app.schemas.health_metrics import HealthAutoExportPayload, HealthImportResponse, HealthMetricResponse
+from app.schemas.health_metrics import (
+    HealthAutoExportPayload,
+    HealthImportResponse,
+    HealthMetricResponse,
+)
 from app.services.health_metrics import HealthMetricsService
 
 router = APIRouter(
