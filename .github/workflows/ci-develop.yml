@@ -172,6 +172,13 @@ jobs:
         run: |
           ! grep -rn "from ['\"].*apps/" libs/ --include='*.ts' --include='*.tsx'
 
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Pin Python 3.10
+        run: uv python install 3.10
+
       - name: OpenAPI codegen drift check
         run: |
           uv sync --frozen --project apps/marrow/backend

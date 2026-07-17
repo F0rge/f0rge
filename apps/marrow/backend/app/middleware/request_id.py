@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextvars import ContextVar
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
 REQUEST_ID_HEADER = "X-Request-ID"
+_request_id_ctx: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
@@ -18,9 +20,13 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request_id = incoming or str(uuid.uuid4())
         request.state.request_id = request_id
 
-        response = await call_next(request)
-        response.headers[REQUEST_ID_HEADER] = request_id
-        return response
+        token = _request_id_ctx.set(request_id)
+        try:
+            response = await call_next(request)
+            response.headers[REQUEST_ID_HEADER] = request_id
+            return response
+        finally:
+            _request_id_ctx.reset(token)
 
 
 class RequestIdFilter(logging.Filter):
@@ -28,5 +34,5 @@ class RequestIdFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         if not hasattr(record, "request_id"):
-            record.request_id = "-"
+            record.request_id = _request_id_ctx.get() or "-"
         return True
