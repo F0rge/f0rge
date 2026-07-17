@@ -1,7 +1,7 @@
 name: CI (main)
 
-# PR + push to main: detect → backend/frontend → ci gate → deploy (push only).
-# workflow_dispatch: deploy only (no CI). Branch protection requires the `ci` job.
+# PR + push + workflow_dispatch: detect → backend/frontend → ci gate → deploy.
+# Manual deploy cannot skip lint/test/build — workflow_dispatch runs CI first.
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: Component to deploy (skips CI)
+        description: Component to deploy (runs CI first)
         type: choice
         options: [all, api, mcp, frontend]
         default: all
@@ -23,7 +23,6 @@ permissions:
 jobs:
   detect:
     name: detect
-    if: github.event_name != 'workflow_dispatch'
     concurrency:
       group: ci-main-${{ github.ref }}
       cancel-in-progress: true
@@ -56,8 +55,13 @@ jobs:
         id: affected
         run: |
           set -o pipefail
-          PY=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
-          TS=$(npx nx show projects --affected --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PY=$(npx nx show projects --projects tag:platform:py --json | jq -r 'join(",")')
+            TS=$(npx nx show projects --projects tag:platform:ts --json | jq -r 'join(",")')
+          else
+            PY=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
+            TS=$(npx nx show projects --affected --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
+          fi
           backend=false
           frontend=false
           [ -n "$PY" ] && backend=true
@@ -72,7 +76,7 @@ jobs:
   backend:
     name: backend
     needs: detect
-    if: github.event_name != 'workflow_dispatch' && needs.detect.outputs.backend == 'true'
+    if: needs.detect.outputs.backend == 'true'
     concurrency:
       group: ci-main-backend-${{ github.ref }}
       cancel-in-progress: true
@@ -123,7 +127,7 @@ jobs:
   frontend:
     name: frontend
     needs: detect
-    if: github.event_name != 'workflow_dispatch' && needs.detect.outputs.frontend == 'true'
+    if: needs.detect.outputs.frontend == 'true'
     concurrency:
       group: ci-main-frontend-${{ github.ref }}
       cancel-in-progress: true
@@ -161,7 +165,7 @@ jobs:
   ci:
     name: ci
     needs: [detect, backend, frontend]
-    if: github.event_name != 'workflow_dispatch' && always()
+    if: always()
     concurrency:
       group: ci-main-${{ github.ref }}
       cancel-in-progress: true
@@ -195,10 +199,8 @@ jobs:
     needs: [ci]
     if: >-
       always() &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'push' && needs.ci.result == 'success')
-      )
+      needs.ci.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     concurrency:
       group: fly-deploy-main
       cancel-in-progress: false
