@@ -1,0 +1,62 @@
+name: CI (nightly)
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-matrix:
+    name: full nx matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Pin Python 3.10
+        run: uv python install 3.10
+
+      - name: Install ruff
+        run: uv tool install ruff@latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install deps
+        run: |
+          npm ci
+          for p in marrow-backend f0rge-core f0rge-db f0rge-storage f0rge-testing dk-tag-printer-backend; do
+            ROOT=$(npx nx show project "$p" --json | jq -r '.root')
+            uv sync --frozen --project "$ROOT"
+          done
+
+      - name: Assert no root uv.lock
+        run: test ! -f uv.lock
+
+      - name: Python lib boundary guard
+        run: |
+          ! grep -rn "from apps\.\|import apps\." libs/backend/ --include='*.py'
+
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high
+
+      - name: uv pip audit (marrow backend)
+        run: |
+          cd apps/marrow/backend
+          uv export --frozen --no-dev -o /tmp/marrow-req.txt
+          uvx pip-audit -r /tmp/marrow-req.txt
+
+      - name: nx run-many (all platform projects)
+        run: |
+          npx nx run-many -t lint format-check test --projects tag:platform:py
+          npx nx run-many -t lint typecheck test build --projects tag:platform:ts
