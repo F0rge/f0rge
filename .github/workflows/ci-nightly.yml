@@ -41,11 +41,10 @@ jobs:
           done
 
       - name: Assert no root uv.lock
-        run: test ! -f uv.lock
+        run: bash .github/scripts/assert-no-root-uv-lock.sh
 
       - name: Python lib boundary guard
-        run: |
-          ! grep -rn "from apps\.\|import apps\." libs/backend/ --include='*.py'
+        run: bash .github/scripts/check-lib-boundary.sh
 
       - name: npm audit (high+)
         run: npm audit --audit-level=high
