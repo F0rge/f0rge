@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var todaySummary = "Loading…"
     @State private var errorMessage: String?
     private var health = HealthSyncService.shared
+    @Bindable private var router = PushRouter.shared
 
     init(onLogout: @escaping () -> Void) {
         self.onLogout = onLogout
@@ -60,6 +61,9 @@ struct HomeView: View {
             }
             .navigationTitle("Marrow")
             .task { await load() }
+            .sheet(item: $router.pendingTreatment) { route in
+                TreatmentDetailView(treatmentID: route.id)
+            }
         }
     }
 
@@ -100,7 +104,9 @@ struct HomeView: View {
     }
 
     private func logout() async {
-        // Best-effort server logout; local token removal is what matters.
+        // Best-effort: drop this device's push token while we're still authed,
+        // then server logout; local token removal is what matters.
+        await Push.unregisterDevice()
         _ = try? await API.client.logoutApiV1AuthLogoutPost()
         Keychain.delete()
         onLogout()

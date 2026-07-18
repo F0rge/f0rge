@@ -15,4 +15,5 @@ filter:
     - /api/v1/health-metrics/samples
     - /api/v1/devices
     - /api/v1/devices/{token}
+    - /api/v1/treatments/protocol
     - /api/v1/treatments/{treatment_id}/log

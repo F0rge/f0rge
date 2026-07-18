@@ -757,6 +757,95 @@ internal struct Client: APIProtocol {
             }
         )
     }
+    /// Get Protocol
+    ///
+    /// - Remark: HTTP `GET /api/v1/treatments/protocol`.
+    /// - Remark: Generated from `#/paths//api/v1/treatments/protocol/get(get_protocol_api_v1_treatments_protocol_get)`.
+    internal func getProtocolApiV1TreatmentsProtocolGet(_ input: Operations.GetProtocolApiV1TreatmentsProtocolGet.Input) async throws -> Operations.GetProtocolApiV1TreatmentsProtocolGet.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetProtocolApiV1TreatmentsProtocolGet.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/api/v1/treatments/protocol",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "date",
+                    value: input.query.date
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ProtocolResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.UnprocessableContent.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.HTTPValidationError.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
+                default:
+                    return .undocumented(
+                        statusCode: response.status.code,
+                        .init(
+                            headerFields: response.headerFields,
+                            body: responseBody
+                        )
+                    )
+                }
+            }
+        )
+    }
     /// Log Treatment Dose
     ///
     /// - Remark: HTTP `PUT /api/v1/treatments/{treatment_id}/log`.

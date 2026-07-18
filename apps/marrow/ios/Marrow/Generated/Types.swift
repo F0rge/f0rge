@@ -56,6 +56,11 @@ internal protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/health-metrics/samples`.
     /// - Remark: Generated from `#/paths//api/v1/health-metrics/samples/post(ingest_health_samples_api_v1_health_metrics_samples_post)`.
     func ingestHealthSamplesApiV1HealthMetricsSamplesPost(_ input: Operations.IngestHealthSamplesApiV1HealthMetricsSamplesPost.Input) async throws -> Operations.IngestHealthSamplesApiV1HealthMetricsSamplesPost.Output
+    /// Get Protocol
+    ///
+    /// - Remark: HTTP `GET /api/v1/treatments/protocol`.
+    /// - Remark: Generated from `#/paths//api/v1/treatments/protocol/get(get_protocol_api_v1_treatments_protocol_get)`.
+    func getProtocolApiV1TreatmentsProtocolGet(_ input: Operations.GetProtocolApiV1TreatmentsProtocolGet.Input) async throws -> Operations.GetProtocolApiV1TreatmentsProtocolGet.Output
     /// Log Treatment Dose
     ///
     /// - Remark: HTTP `PUT /api/v1/treatments/{treatment_id}/log`.
@@ -170,6 +175,19 @@ extension APIProtocol {
         try await ingestHealthSamplesApiV1HealthMetricsSamplesPost(Operations.IngestHealthSamplesApiV1HealthMetricsSamplesPost.Input(
             headers: headers,
             body: body
+        ))
+    }
+    /// Get Protocol
+    ///
+    /// - Remark: HTTP `GET /api/v1/treatments/protocol`.
+    /// - Remark: Generated from `#/paths//api/v1/treatments/protocol/get(get_protocol_api_v1_treatments_protocol_get)`.
+    internal func getProtocolApiV1TreatmentsProtocolGet(
+        query: Operations.GetProtocolApiV1TreatmentsProtocolGet.Input.Query = .init(),
+        headers: Operations.GetProtocolApiV1TreatmentsProtocolGet.Input.Headers = .init()
+    ) async throws -> Operations.GetProtocolApiV1TreatmentsProtocolGet.Output {
+        try await getProtocolApiV1TreatmentsProtocolGet(Operations.GetProtocolApiV1TreatmentsProtocolGet.Input(
+            query: query,
+            headers: headers
         ))
     }
     /// Log Treatment Dose
@@ -1072,6 +1090,88 @@ internal enum Components {
                 case flags
                 case scores
                 case sources
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProtocolItem`.
+        internal struct ProtocolItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProtocolItem/id`.
+            internal var id: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ProtocolItem/name`.
+            internal var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProtocolItem/dose`.
+            internal var dose: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ProtocolItem/doses_per_day`.
+            internal var dosesPerDay: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/ProtocolItem/doses_taken`.
+            internal var dosesTaken: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ProtocolItem/day_num`.
+            internal var dayNum: Swift.Int
+            /// Creates a new `ProtocolItem`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - dose:
+            ///   - dosesPerDay:
+            ///   - dosesTaken:
+            ///   - dayNum:
+            internal init(
+                id: Swift.Int,
+                name: Swift.String,
+                dose: Swift.String? = nil,
+                dosesPerDay: Swift.Int? = nil,
+                dosesTaken: Swift.Int,
+                dayNum: Swift.Int
+            ) {
+                self.id = id
+                self.name = name
+                self.dose = dose
+                self.dosesPerDay = dosesPerDay
+                self.dosesTaken = dosesTaken
+                self.dayNum = dayNum
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case dose
+                case dosesPerDay = "doses_per_day"
+                case dosesTaken = "doses_taken"
+                case dayNum = "day_num"
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProtocolResponse`.
+        internal struct ProtocolResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProtocolResponse/items`.
+            internal var items: [Components.Schemas.ProtocolItem]
+            /// - Remark: Generated from `#/components/schemas/ProtocolResponse/today`.
+            internal var today: Components.Schemas.ProtocolToday
+            /// - Remark: Generated from `#/components/schemas/ProtocolResponse/streak`.
+            internal var streak: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ProtocolResponse/best_streak`.
+            internal var bestStreak: Swift.Int
+            /// Creates a new `ProtocolResponse`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - today:
+            ///   - streak:
+            ///   - bestStreak:
+            internal init(
+                items: [Components.Schemas.ProtocolItem],
+                today: Components.Schemas.ProtocolToday,
+                streak: Swift.Int,
+                bestStreak: Swift.Int
+            ) {
+                self.items = items
+                self.today = today
+                self.streak = streak
+                self.bestStreak = bestStreak
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case items
+                case today
+                case streak
+                case bestStreak = "best_streak"
             }
         }
         /// - Remark: Generated from `#/components/schemas/ProtocolToday`.
@@ -2738,6 +2838,185 @@ internal enum Operations {
             /// - Throws: An error if `self` is not `.unprocessableContent`.
             /// - SeeAlso: `.unprocessableContent`.
             internal var unprocessableContent: Operations.IngestHealthSamplesApiV1HealthMetricsSamplesPost.Output.UnprocessableContent {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Get Protocol
+    ///
+    /// - Remark: HTTP `GET /api/v1/treatments/protocol`.
+    /// - Remark: Generated from `#/paths//api/v1/treatments/protocol/get(get_protocol_api_v1_treatments_protocol_get)`.
+    internal enum GetProtocolApiV1TreatmentsProtocolGet {
+        internal static let id: Swift.String = "get_protocol_api_v1_treatments_protocol_get"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/treatments/protocol/GET/query`.
+            internal struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/treatments/protocol/GET/query/date`.
+                internal var date: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - date:
+                internal init(date: Swift.String? = nil) {
+                    self.date = date
+                }
+            }
+            internal var query: Operations.GetProtocolApiV1TreatmentsProtocolGet.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/treatments/protocol/GET/header`.
+            internal struct Headers: Sendable, Hashable {
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetProtocolApiV1TreatmentsProtocolGet.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                internal init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetProtocolApiV1TreatmentsProtocolGet.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.GetProtocolApiV1TreatmentsProtocolGet.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            internal init(
+                query: Operations.GetProtocolApiV1TreatmentsProtocolGet.Input.Query = .init(),
+                headers: Operations.GetProtocolApiV1TreatmentsProtocolGet.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/treatments/protocol/GET/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/treatments/protocol/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ProtocolResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.ProtocolResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Successful Response
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/treatments/protocol/get(get_protocol_api_v1_treatments_protocol_get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct UnprocessableContent: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/treatments/protocol/GET/responses/422/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/treatments/protocol/GET/responses/422/content/application\/json`.
+                    case json(Components.Schemas.HTTPValidationError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.HTTPValidationError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.UnprocessableContent.Body
+                /// Creates a new `UnprocessableContent`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.UnprocessableContent.Body) {
+                    self.body = body
+                }
+            }
+            /// Validation Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/treatments/protocol/get(get_protocol_api_v1_treatments_protocol_get)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.UnprocessableContent)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            internal var unprocessableContent: Operations.GetProtocolApiV1TreatmentsProtocolGet.Output.UnprocessableContent {
                 get throws {
                     switch self {
                     case let .unprocessableContent(response):

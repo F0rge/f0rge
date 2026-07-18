@@ -6,5 +6,9 @@
 	<true/>
 	<key>com.apple.developer.healthkit.background-delivery</key>
 	<true/>
+	<!-- "development" is correct for local builds; Xcode automatically flips this
+	     to "production" when signing for TestFlight/App Store distribution. -->
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>
