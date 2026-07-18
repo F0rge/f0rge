@@ -40,6 +40,7 @@ from app.routers import (
     treatments,
     weather,
 )
+from app.services.reminders import reminder_background_loop
 from app.services.weather import weather_background_loop
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ _configure_logging()
 _maybe_init_sentry()
 
 _weather_task = None
+_reminder_task = None
 
 
 def _warn_misconfigured_features() -> None:
@@ -156,14 +158,18 @@ async def _seed_dietary_db_if_empty() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _weather_task
+    global _weather_task, _reminder_task
     await _seed_dietary_db_if_empty()
     _warn_misconfigured_features()
     if settings.weather_fetch_enabled and settings.openweathermap_api_key:
         _weather_task = asyncio.create_task(weather_background_loop())
+    if settings.dose_reminders_enabled:
+        _reminder_task = asyncio.create_task(reminder_background_loop())
     yield
     if _weather_task:
         _weather_task.cancel()
+    if _reminder_task:
+        _reminder_task.cancel()
 
 
 app = FastAPI(title="Marrow", lifespan=lifespan)

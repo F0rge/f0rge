@@ -42,6 +42,13 @@ class UserSettings(Base):
         DateTime, nullable=True
     )
     tagged_meal_mode: Mapped[str] = mapped_column(String, nullable=False, default="approve")
+    # IANA timezone for dose reminder slots (migration 045).
+    timezone: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default="Europe/Luxembourg",
+        server_default="Europe/Luxembourg",
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )
