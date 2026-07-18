@@ -16,13 +16,15 @@ class TagConfig(BaseModel):
 
 
 class CSVUploadResponse(BaseModel):
+    session_id: str
     data: list[dict]
     price_columns: list[str]
     product_codes: list[str]
 
 
 class PDFGenerateRequest(BaseModel):
-    csv_data: list[dict]
+    session_id: str | None = None
+    csv_data: list[dict] | None = None
     selected_products: list[str]
     price_column: str
     config: TagConfig

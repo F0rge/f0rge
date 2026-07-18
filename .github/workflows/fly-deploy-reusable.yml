@@ -60,6 +60,10 @@ on:
     secrets:
       FLY_API_TOKEN:
         required: true
+      SMOKE_EMAIL:
+        required: false
+      SMOKE_PASSWORD:
+        required: false
 
 permissions:
   contents: read
@@ -294,6 +298,39 @@ jobs:
           done
           echo "API health check failed: $URL"
           exit 1
+
+      - name: Smoke authenticated entries (skip if SMOKE_* unset)
+        if: needs.deploy-api.result == 'success'
+        env:
+          API_BASE: ${{ needs.resolve.outputs.api_health_url }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: |
+          if [ -z "${SMOKE_EMAIL:-}" ] || [ -z "${SMOKE_PASSWORD:-}" ]; then
+            echo "SMOKE_EMAIL/SMOKE_PASSWORD not configured — skipping auth smoke"
+            exit 0
+          fi
+          API_ROOT="${API_BASE%/health}"
+          COOKIE_JAR=$(mktemp)
+          LOGIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$SMOKE_EMAIL\",\"password\":\"$SMOKE_PASSWORD\"}" \
+            "$API_ROOT/auth/login")
+          if [ "$LOGIN_CODE" != "200" ]; then
+            echo "Login smoke failed with HTTP $LOGIN_CODE"
+            exit 1
+          fi
+          TODAY=$(date -u +%F)
+          ENTRY_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -b "$COOKIE_JAR" \
+            "$API_ROOT/entries/$TODAY")
+          if [ "$ENTRY_CODE" != "200" ] && [ "$ENTRY_CODE" != "404" ]; then
+            echo "GET /entries/$TODAY failed with HTTP $ENTRY_CODE"
+            exit 1
+          fi
+          echo "Auth smoke OK (entries/$TODAY → $ENTRY_CODE)"
+          rm -f "$COOKIE_JAR"
 
       - name: Smoke frontend
         if: needs.deploy-frontend.result == 'success'

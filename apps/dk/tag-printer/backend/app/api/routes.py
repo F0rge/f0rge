@@ -7,6 +7,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.models.schemas import CSVUploadResponse, PDFGenerateRequest
+from app.services.csv_sessions import MAX_UPLOAD_BYTES, create_session, delete_session, get_session
 from app.services.pdf_generator import PDFGenerator
 
 router = APIRouter()
@@ -29,28 +30,32 @@ def numeric_price_columns(df: pd.DataFrame) -> list[str]:
 @router.post("/upload-csv", response_model=CSVUploadResponse)
 async def upload_csv(file: UploadFile = File(...)):
     """
-    Upload CSV file and return parsed data with available price columns
+    Upload CSV file and return parsed data with available price columns.
+    Max upload size: 5 MB.
     """
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
 
     try:
-        # Read CSV file
         contents = await file.read()
+        if len(contents) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="CSV exceeds 5 MB upload limit")
+
         df = pd.read_csv(StringIO(contents.decode("utf-8")))
 
-        # Get price columns (numeric only — a text column would 500 the PDF step)
         price_columns = numeric_price_columns(df)
-
-        # Get unique product codes
         product_codes = df["ProductCode"].unique().tolist() if "ProductCode" in df.columns else []
-
-        # Convert dataframe to list of dicts
         data = df.to_dict("records")
+        session_id = create_session(data, price_columns, product_codes)
 
         return CSVUploadResponse(
-            data=data, price_columns=price_columns, product_codes=product_codes
+            session_id=session_id,
+            data=data,
+            price_columns=price_columns,
+            product_codes=product_codes,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing CSV: {str(e)}")
 
@@ -58,11 +63,24 @@ async def upload_csv(file: UploadFile = File(...)):
 @router.post("/generate-pdf")
 async def generate_pdf(request: PDFGenerateRequest):
     """
-    Generate PDF with price tags based on configuration and selected products
+    Generate PDF with price tags based on configuration and selected products.
+    Prefer session_id from upload to avoid re-posting the full CSV payload.
     """
     try:
-        # Convert data to DataFrame
-        df = pd.DataFrame(request.csv_data)
+        if request.session_id:
+            session = get_session(request.session_id)
+            if session is not None:
+                records = session.data
+            elif request.csv_data:
+                records = request.csv_data
+            else:
+                raise HTTPException(status_code=404, detail="CSV session not found or expired")
+        elif request.csv_data:
+            records = request.csv_data
+        else:
+            raise HTTPException(status_code=400, detail="session_id or csv_data is required")
+
+        df = pd.DataFrame(records)
 
         missing = [c for c in ("ProductCode", "Name") if c not in df.columns]
         if missing:
@@ -71,15 +89,12 @@ async def generate_pdf(request: PDFGenerateRequest):
                 detail=f"Missing required columns: {', '.join(missing)}",
             )
 
-        # Filter by selected products
         if request.selected_products:
             df = df[df["ProductCode"].isin(request.selected_products)]
 
         if df.empty:
             raise HTTPException(status_code=400, detail="No products selected or found")
 
-        # Validate the chosen price column is present and numeric, else the
-        # markup multiply in generate_tags would raise and surface as a 500.
         if request.price_column not in df.columns:
             raise HTTPException(
                 status_code=400,
@@ -93,20 +108,20 @@ async def generate_pdf(request: PDFGenerateRequest):
             )
         df[request.price_column] = prices
 
-        # Reset index
         df = df.reset_index(drop=True)
 
-        # Generate PDF
         generator = PDFGenerator(request.config)
         pdf_bytes = generator.generate_tags(df, request.price_column)
 
-        # Return PDF as streaming response
+        if request.session_id:
+            delete_session(request.session_id)
+
         return StreamingResponse(
             BytesIO(pdf_bytes),
             media_type="application/pdf",
             headers={"Content-Disposition": "attachment; filename=PriceTags.pdf"},
         )
     except HTTPException:
-        raise  # don't let the 400s above get swallowed into a 500
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")

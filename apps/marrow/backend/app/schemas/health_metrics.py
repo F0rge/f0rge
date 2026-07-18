@@ -1,9 +1,39 @@
 from __future__ import annotations
 
 import datetime
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class HealthMetricSample(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    qty: Optional[float] = None
+    date: Optional[str] = None
+
+
+class HealthAutoExportMetric(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    name: str = ""
+    units: Optional[str] = None
+    data: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class HealthAutoExportData(BaseModel):
+    metrics: list[HealthAutoExportMetric] = Field(default_factory=list)
+
+
+class HealthAutoExportPayload(BaseModel):
+    """Validated body for POST /health-metrics/import (Health Auto Export JSON)."""
+
+    data: HealthAutoExportData = Field(default_factory=HealthAutoExportData)
+
+
+class HealthImportResponse(BaseModel):
+    status: str
+    dates_upserted: int
 
 
 class HealthMetricCreate(BaseModel):

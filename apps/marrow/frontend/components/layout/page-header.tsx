@@ -12,6 +12,7 @@ interface PageHeaderProps {
   className?: string
   headerRef?: Ref<HTMLDivElement>
   'data-tour'?: string
+  'data-testid'?: string
 }
 
 const TITLE_CLASS = 'text-xl font-semibold tracking-tight'
@@ -25,11 +26,17 @@ export function PageHeader({
   className,
   headerRef,
   'data-tour': dataTour,
+  'data-testid': dataTestId,
 }: PageHeaderProps) {
   const isResponsive = layout === 'responsive'
 
   return (
-    <div ref={headerRef} className={cn('mb-6', className)} data-tour={dataTour}>
+    <div
+      ref={headerRef}
+      className={cn('mb-6', className)}
+      data-tour={dataTour}
+      data-testid={dataTestId}
+    >
       {leading ? <div className="mb-3">{leading}</div> : null}
       <div
         className={cn(

@@ -53,6 +53,7 @@ type CsvRow = Record<string, unknown>;
 
 export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [csvData, setCsvData] = useState<CsvRow[]>([]);
   const [priceColumns, setPriceColumns] = useState<string[]>([]);
   const [productCodes, setProductCodes] = useState<string[]>([]);
@@ -85,6 +86,7 @@ export default function Home() {
       });
 
       setCsvData(response.data.data);
+      setSessionId(response.data.session_id);
       setPriceColumns(response.data.price_columns);
       setProductCodes(response.data.product_codes);
       setSelectedPriceColumn(response.data.price_columns[0] || '');
@@ -140,6 +142,7 @@ export default function Home() {
 
               {selectedProducts.length > 0 && (
                 <PDFGenerator
+                  sessionId={sessionId}
                   csvData={csvData}
                   selectedProducts={selectedProducts}
                   priceColumn={selectedPriceColumn}

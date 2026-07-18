@@ -81,6 +81,7 @@ export default function CheckinPage() {
       <PageHeader
         headerRef={headerRef}
         data-tour="checkin-header"
+        data-testid="checkin-header"
         title="Check-in"
         subtitle={formatDisplayDate(today)}
       />

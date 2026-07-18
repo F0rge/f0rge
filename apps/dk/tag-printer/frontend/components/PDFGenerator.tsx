@@ -19,6 +19,7 @@ interface TagConfig {
 }
 
 interface PDFGeneratorProps {
+  sessionId: string | null;
   csvData: Record<string, unknown>[];
   selectedProducts: string[];
   priceColumn: string;
@@ -26,6 +27,7 @@ interface PDFGeneratorProps {
 }
 
 export default function PDFGenerator({
+  sessionId,
   csvData,
   selectedProducts,
   priceColumn,
@@ -46,6 +48,7 @@ export default function PDFGenerator({
       const response = await axios.post(
         `${apiUrl}/api/generate-pdf`,
         {
+          session_id: sessionId,
           csv_data: csvData,
           selected_products: selectedProducts,
           price_column: priceColumn,
