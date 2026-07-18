@@ -1,0 +1,18 @@
+# Config for swift-openapi-generator (run via scripts/generate-client.sh).
+generate:
+  - types
+  - client
+accessModifier: internal
+namingStrategy: idiomatic
+# Only the endpoints the iOS app uses (epic #387). Keeps generated code small and
+# avoids the multipart/binary upload endpoints the app never calls.
+filter:
+  paths:
+    - /api/v1/auth/login
+    - /api/v1/auth/me
+    - /api/v1/auth/logout
+    - /api/v1/entries/{date}
+    - /api/v1/health-metrics/samples
+    - /api/v1/devices
+    - /api/v1/devices/{token}
+    - /api/v1/treatments/{treatment_id}/log
