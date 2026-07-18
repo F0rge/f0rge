@@ -10,6 +10,7 @@ from app.schemas.health_metrics import (
     HealthAutoExportPayload,
     HealthImportResponse,
     HealthMetricResponse,
+    HealthSamplesPayload,
 )
 from app.services.health_metrics import HealthMetricsService
 
@@ -26,6 +27,19 @@ async def import_health_data(
     service: HealthMetricsService = Depends(get_health_metrics_service),
 ):
     return await service.import_health_data(body)
+
+
+@router.post(
+    "/samples",
+    status_code=status.HTTP_200_OK,
+    response_model=HealthImportResponse,
+    dependencies=[Depends(get_current_session)],
+)
+async def ingest_health_samples(
+    body: HealthSamplesPayload,
+    service: HealthMetricsService = Depends(get_health_metrics_service),
+):
+    return await service.ingest_samples(body.samples)
 
 
 @router.get(

@@ -1641,6 +1641,65 @@
         }
       }
     },
+    "/api/v1/health-metrics/samples": {
+      "post": {
+        "tags": [
+          "health-metrics"
+        ],
+        "summary": "Ingest Health Samples",
+        "operationId": "ingest_health_samples_api_v1_health_metrics_samples_post",
+        "parameters": [
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HealthSamplesPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health-metrics/{date}": {
       "get": {
         "tags": [
@@ -10257,6 +10316,207 @@
         ],
         "title": "HealthImportResponse"
       },
+      "HealthMetricCreate": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "hrv_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hrv Mean"
+          },
+          "hrv_std": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hrv Std"
+          },
+          "resting_hr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resting Hr"
+          },
+          "sleep_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Hours"
+          },
+          "sleep_deep_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Deep Min"
+          },
+          "sleep_rem_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Rem Min"
+          },
+          "sleep_core_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Core Min"
+          },
+          "sleep_awake_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Awake Min"
+          },
+          "sleep_deep_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Deep Pct"
+          },
+          "sleep_rem_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Rem Pct"
+          },
+          "sleep_efficiency": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Efficiency"
+          },
+          "sleep_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Start"
+          },
+          "sleep_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep End"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "active_minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Minutes"
+          },
+          "spo2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spo2"
+          },
+          "wrist_temp_deviation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wrist Temp Deviation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date"
+        ],
+        "title": "HealthMetricCreate"
+      },
       "HealthMetricResponse": {
         "properties": {
           "id": {
@@ -10479,6 +10739,24 @@
           "updated_at"
         ],
         "title": "HealthMetricResponse"
+      },
+      "HealthSamplesPayload": {
+        "properties": {
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/HealthMetricCreate"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Samples"
+          }
+        },
+        "type": "object",
+        "required": [
+          "samples"
+        ],
+        "title": "HealthSamplesPayload",
+        "description": "Validated body for POST /health-metrics/samples (iOS HealthKit sync)."
       },
       "IncomingMealTagItem": {
         "properties": {

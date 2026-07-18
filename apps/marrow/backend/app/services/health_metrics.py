@@ -6,14 +6,20 @@ import logging
 import uuid
 from typing import Optional
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from f0rge_db.auth_context import user_id_ctx
 from app.config import settings
+from app.crud.base import unit_of_work
 from app.crud.health_metrics import HealthMetricsCRUD
 from f0rge_core.exceptions import NotFoundError, UnauthorizedError
 from app.models.health_metrics import HealthMetric
-from app.schemas.health_metrics import HealthAutoExportPayload, HealthImportResponse
+from app.schemas.health_metrics import (
+    HealthAutoExportPayload,
+    HealthImportResponse,
+    HealthMetricCreate,
+)
 from app.services.auth import decode_access_token
 from app.services.health_import import parse_health_auto_export
 from f0rge_db.tenant import apply_session_user_id, current_user_id
@@ -89,6 +95,34 @@ class HealthMetricsService:
 
         await self.crud.save()
         return HealthImportResponse(status="ok", dates_upserted=upserted)
+
+    async def ingest_samples(self, samples: list[HealthMetricCreate]) -> HealthImportResponse:
+        """Upsert per-user daily HealthKit aggregates posted by the iOS app.
+
+        Each sample only updates the columns it actually provides, so partial
+        batches never null out previously synced fields.
+        """
+        user_id = current_user_id()
+        now = datetime.datetime.utcnow()
+        async with unit_of_work(self.db):
+            for sample in samples:
+                fields = sample.model_dump(exclude={"date"}, exclude_unset=True, exclude_none=True)
+                stmt = pg_insert(HealthMetric).values(
+                    user_id=user_id,
+                    date=sample.date,
+                    source="ios_healthkit",
+                    **fields,
+                )
+                set_ = {name: getattr(stmt.excluded, name) for name in fields}
+                set_["source"] = stmt.excluded.source
+                set_["updated_at"] = now
+                stmt = stmt.on_conflict_do_update(
+                    constraint="uq_health_metrics_user_id_date", set_=set_
+                )
+                await self.db.execute(stmt)
+        return HealthImportResponse(
+            status="ok", dates_upserted=len({sample.date for sample in samples})
+        )
 
     async def get_health_metric(self, date: datetime.date) -> HealthMetric:
         metric = await self.crud.get_by_date(date)

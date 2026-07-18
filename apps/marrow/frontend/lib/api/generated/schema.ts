@@ -353,6 +353,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/health-metrics/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest Health Samples */
+        post: operations["ingest_health_samples_api_v1_health_metrics_samples_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health-metrics/{date}": {
         parameters: {
             query?: never;
@@ -2513,6 +2530,48 @@ export interface components {
             /** Dates Upserted */
             dates_upserted: number;
         };
+        /** HealthMetricCreate */
+        HealthMetricCreate: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hrv Mean */
+            hrv_mean?: number | null;
+            /** Hrv Std */
+            hrv_std?: number | null;
+            /** Resting Hr */
+            resting_hr?: number | null;
+            /** Sleep Hours */
+            sleep_hours?: number | null;
+            /** Sleep Deep Min */
+            sleep_deep_min?: number | null;
+            /** Sleep Rem Min */
+            sleep_rem_min?: number | null;
+            /** Sleep Core Min */
+            sleep_core_min?: number | null;
+            /** Sleep Awake Min */
+            sleep_awake_min?: number | null;
+            /** Sleep Deep Pct */
+            sleep_deep_pct?: number | null;
+            /** Sleep Rem Pct */
+            sleep_rem_pct?: number | null;
+            /** Sleep Efficiency */
+            sleep_efficiency?: number | null;
+            /** Sleep Start */
+            sleep_start?: string | null;
+            /** Sleep End */
+            sleep_end?: string | null;
+            /** Steps */
+            steps?: number | null;
+            /** Active Minutes */
+            active_minutes?: number | null;
+            /** Spo2 */
+            spo2?: number | null;
+            /** Wrist Temp Deviation */
+            wrist_temp_deviation?: number | null;
+        };
         /** HealthMetricResponse */
         HealthMetricResponse: {
             /** Id */
@@ -2568,6 +2627,14 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * HealthSamplesPayload
+         * @description Validated body for POST /health-metrics/samples (iOS HealthKit sync).
+         */
+        HealthSamplesPayload: {
+            /** Samples */
+            samples: components["schemas"]["HealthMetricCreate"][];
         };
         /** IncomingMealTagItem */
         IncomingMealTagItem: {
@@ -4714,6 +4781,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["HealthAutoExportPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_health_samples_api_v1_health_metrics_samples_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HealthSamplesPayload"];
             };
         };
         responses: {
