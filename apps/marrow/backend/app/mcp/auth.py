@@ -20,12 +20,11 @@ class BearerTokenVerifier(TokenVerifier):
             try:
                 await apply_service_role(db, "mcp_auth")
                 result = await db.execute(
-                    select(UserSettings).where(
-                        UserSettings.external_api_token_hash == token_hash
-                    )
+                    select(UserSettings).where(UserSettings.external_api_token_hash == token_hash)
                 )
                 row = result.scalar_one_or_none()
             finally:
+                await db.rollback()
                 await clear_tenant_session(db)
 
         if row is None:
