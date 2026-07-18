@@ -13,6 +13,7 @@ from app.config import settings
 from app.crud.health_metrics import HealthMetricsCRUD
 from f0rge_core.exceptions import NotFoundError, UnauthorizedError
 from app.models.health_metrics import HealthMetric
+from app.schemas.health_metrics import HealthAutoExportPayload, HealthImportResponse
 from app.services.auth import decode_access_token
 from app.services.health_import import parse_health_auto_export
 from f0rge_db.tenant import apply_session_user_id, current_user_id
@@ -56,10 +57,11 @@ class HealthMetricsService:
         self.db = db
         self.crud = HealthMetricsCRUD(db)
 
-    async def import_health_data(self, body: dict) -> dict:
+    async def import_health_data(self, body: HealthAutoExportPayload) -> HealthImportResponse:
         """Parse and upsert Health Auto Export metrics. Returns upserted count."""
+        payload = body.model_dump()
         # Log raw sleep metrics for debugging
-        for m in body.get("data", {}).get("metrics", []):
+        for m in payload.get("data", {}).get("metrics", []):
             name = m.get("name", "")
             samples = m.get("data", [])
             if "sleep" in name.lower() and samples:
@@ -70,7 +72,7 @@ class HealthMetricsService:
                     json.dumps(samples[0], default=str)[:500],
                 )
 
-        parsed = parse_health_auto_export(body)
+        parsed = parse_health_auto_export(payload)
         upserted = 0
         user_id = current_user_id()
 
@@ -86,7 +88,7 @@ class HealthMetricsService:
             upserted += 1
 
         await self.crud.save()
-        return {"status": "ok", "dates_upserted": upserted}
+        return HealthImportResponse(status="ok", dates_upserted=upserted)
 
     async def get_health_metric(self, date: datetime.date) -> HealthMetric:
         metric = await self.crud.get_by_date(date)

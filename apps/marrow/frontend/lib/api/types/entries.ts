@@ -133,3 +133,7 @@ export interface PhotoAnalysis {
   created_at: string
   updated_at: string
 }
+
+// OpenAPI codegen types live in lib/api/generated/schema.ts — drift-checked in CI.
+// Entry hooks still use hand-written types above until nullable/enum gaps are closed.
+export type { components } from '../generated/schema'

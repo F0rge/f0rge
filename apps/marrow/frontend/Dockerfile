@@ -24,6 +24,7 @@ ENV API_URL=$API_URL
 # ponytail: cap the build heap so `next build` GCs instead of getting OOM-killed
 # on the remote Fly builder when it races the backend build. Raise if needed.
 ENV NODE_OPTIONS=--max-old-space-size=1536
+RUN npm run typecheck -w frontend
 RUN npm run build -w frontend
 
 FROM node:22-alpine AS runner

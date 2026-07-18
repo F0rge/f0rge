@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, status
 
 from app.dependencies.health_metrics import get_health_metrics_service, require_health_import_auth
 from app.middleware.auth import get_current_session
-from app.schemas.health_metrics import HealthMetricResponse
+from app.schemas.health_metrics import (
+    HealthAutoExportPayload,
+    HealthImportResponse,
+    HealthMetricResponse,
+)
 from app.services.health_metrics import HealthMetricsService
 
 router = APIRouter(
@@ -15,9 +19,9 @@ router = APIRouter(
 )
 
 
-@router.post("/import", status_code=status.HTTP_200_OK)
+@router.post("/import", status_code=status.HTTP_200_OK, response_model=HealthImportResponse)
 async def import_health_data(
-    body: dict,
+    body: HealthAutoExportPayload,
     _auth: None = Depends(require_health_import_auth),
     service: HealthMetricsService = Depends(get_health_metrics_service),
 ):

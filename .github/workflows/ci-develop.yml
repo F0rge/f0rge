@@ -1,7 +1,7 @@
 name: CI (develop)
 
-# PR + push to develop: detect → backend/frontend → ci gate → deploy (push only).
-# workflow_dispatch: deploy only (no CI). Branch protection requires the `ci` job.
+# PR + push + workflow_dispatch: detect → backend/frontend → ci gate → deploy.
+# Manual deploy cannot skip lint/test/build — workflow_dispatch runs CI first.
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: Component to deploy (skips CI)
+        description: Component to deploy (runs CI first)
         type: choice
         options: [all, api, mcp, frontend]
         default: all
@@ -23,7 +23,6 @@ permissions:
 jobs:
   detect:
     name: detect
-    if: github.event_name != 'workflow_dispatch'
     concurrency:
       group: ci-develop-${{ github.ref }}
       cancel-in-progress: true
@@ -56,8 +55,13 @@ jobs:
         id: affected
         run: |
           set -o pipefail
-          PY=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
-          TS=$(npx nx show projects --affected --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PY=$(npx nx show projects --projects tag:platform:py --json | jq -r 'join(",")')
+            TS=$(npx nx show projects --projects tag:platform:ts --json | jq -r 'join(",")')
+          else
+            PY=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
+            TS=$(npx nx show projects --affected --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
+          fi
           backend=false
           frontend=false
           [ -n "$PY" ] && backend=true
@@ -72,7 +76,7 @@ jobs:
   backend:
     name: backend
     needs: detect
-    if: github.event_name != 'workflow_dispatch' && needs.detect.outputs.backend == 'true'
+    if: needs.detect.outputs.backend == 'true'
     concurrency:
       group: ci-develop-backend-${{ github.ref }}
       cancel-in-progress: true
@@ -115,6 +119,20 @@ jobs:
             uv sync --frozen --project "$ROOT"
           done
 
+      - name: Assert no root uv.lock
+        run: bash .github/scripts/assert-no-root-uv-lock.sh
+
+      - name: Python lib boundary guard
+        run: bash .github/scripts/check-lib-boundary.sh
+
+      - name: uv pip audit (high severity)
+        if: contains(needs.detect.outputs.py_projects, 'marrow-backend')
+        run: |
+          cd apps/marrow/backend
+          uv export --frozen --no-dev --no-hashes --no-editable -o /tmp/marrow-req.txt
+          python3 -m pip install --user pip-audit
+          python3 -m pip_audit -r /tmp/marrow-req.txt
+
       - name: nx run (backend)
         env:
           PY_PROJECTS: ${{ needs.detect.outputs.py_projects }}
@@ -123,7 +141,7 @@ jobs:
   frontend:
     name: frontend
     needs: detect
-    if: github.event_name != 'workflow_dispatch' && needs.detect.outputs.frontend == 'true'
+    if: needs.detect.outputs.frontend == 'true'
     concurrency:
       group: ci-develop-frontend-${{ github.ref }}
       cancel-in-progress: true
@@ -147,19 +165,36 @@ jobs:
       - name: Install root deps
         run: npm ci
 
+      - name: npm audit (high severity)
+        run: npm audit --audit-level=high
+
       - name: Boundary guard (libs must not import apps)
         run: |
           ! grep -rn "from ['\"].*apps/" libs/ --include='*.ts' --include='*.tsx'
 
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Pin Python 3.10
+        run: uv python install 3.10
+
+      - name: OpenAPI codegen drift check
+        run: |
+          uv sync --frozen --project apps/marrow/backend
+          uv run --project apps/marrow/backend python apps/marrow/backend/scripts/export_openapi.py
+          npm run codegen:api -w frontend
+          git diff --exit-code apps/marrow/backend/openapi.json apps/marrow/frontend/openapi.json apps/marrow/frontend/lib/api/generated/schema.ts
+
       - name: nx run (frontend)
         env:
           TS_PROJECTS: ${{ needs.detect.outputs.ts_projects }}
-        run: npx nx run-many -t lint typecheck build --projects "$TS_PROJECTS"
+        run: npx nx run-many -t lint typecheck test build --projects "$TS_PROJECTS"
 
   ci:
     name: ci
     needs: [detect, backend, frontend]
-    if: github.event_name != 'workflow_dispatch' && always()
+    if: always()
     concurrency:
       group: ci-develop-${{ github.ref }}
       cancel-in-progress: true
@@ -193,10 +228,8 @@ jobs:
     needs: [ci]
     if: >-
       always() &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'push' && needs.ci.result == 'success')
-      )
+      needs.ci.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     concurrency:
       group: fly-deploy-develop
       cancel-in-progress: false
@@ -212,3 +245,5 @@ jobs:
       COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
       COOLIFY_WEBHOOK_DK_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DK_BACKEND }}
       COOLIFY_WEBHOOK_DK_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DK_FRONTEND }}
+      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}

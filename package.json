@@ -7,12 +7,13 @@
     "libs/ui"
   ],
   "overrides": {
-    "next": "16.2.1",
+    "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "eslint-plugin-react-hooks": "7.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@nx/next": "~22.7.0",
     "@nxlv/python": "~22.2.1",
     "@types/react": "^19",
