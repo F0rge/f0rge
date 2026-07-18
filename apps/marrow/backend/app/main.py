@@ -17,6 +17,7 @@ from app.middleware.request_id import RequestIdFilter, RequestIdMiddleware
 from app.routers import (
     account,
     auth,
+    devices,
     diet_tag_catalog,
     dietary_ingredient_catalog,
     enriched,
@@ -40,6 +41,7 @@ from app.routers import (
     treatments,
     weather,
 )
+from app.services.push import apns_configured
 from app.services.reminders import reminder_background_loop
 from app.services.weather import weather_background_loop
 
@@ -92,6 +94,12 @@ def _warn_misconfigured_features() -> None:
         logger.warning(
             "WEATHER_FETCH_ENABLED=true but OPENWEATHERMAP_API_KEY is empty. "
             "Weather background loop will not start."
+        )
+    if settings.dose_reminders_enabled and not apns_configured():
+        logger.warning(
+            "DOSE_REMINDERS_ENABLED=true but APNS_KEY_ID/APNS_TEAM_ID/APNS_PRIVATE_KEY "
+            "are not all set. Push delivery is disabled; in-app reminder "
+            "notifications still work."
         )
 
 
@@ -188,6 +196,7 @@ register_exception_handlers(app)
 
 app.include_router(auth.router)
 app.include_router(account.router)
+app.include_router(devices.router)
 app.include_router(entries.router)
 app.include_router(photos.router)
 app.include_router(meals.router)

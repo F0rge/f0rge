@@ -26,6 +26,7 @@ from app.database import async_session_maker
 from app.models.notification import Notification
 from app.models.user import User
 from app.models.user_settings import UserSettings
+from app.services.push import send_dose_reminder
 from f0rge_db.tenant import apply_session_user_id
 
 logger = logging.getLogger(__name__)
@@ -84,22 +85,30 @@ async def _tick_user(db: AsyncSession, user_id: uuid.UUID, now: datetime.datetim
                 continue
             if taken >= k:
                 continue
+            payload = {
+                "treatment_id": str(treatment.id),
+                "treatment_name": treatment.name,
+                "slot": k,
+                "date": today.isoformat(),
+            }
             result = await db.execute(
                 pg_insert(Notification)
                 .values(
                     user_id=user_id,
                     type="dose_reminder",
-                    payload={
-                        "treatment_id": str(treatment.id),
-                        "treatment_name": treatment.name,
-                        "slot": k,
-                        "date": today.isoformat(),
-                    },
+                    payload=payload,
                     dedupe_key=f"dose:{user_id}:{treatment.id}:{today.isoformat()}:{k}",
                 )
                 .on_conflict_do_nothing()
             )
             fired += result.rowcount
+            # Push only from the instance that won the dedupe insert, and
+            # never let APNs trouble break the loop.
+            if result.rowcount == 1:
+                try:
+                    await send_dose_reminder(db, user_id, payload)
+                except Exception:
+                    logger.exception("APNs delivery failed for user %s", user_id)
     return fired
 
 

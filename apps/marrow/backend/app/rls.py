@@ -47,6 +47,7 @@ USER_OWNED_TABLES: tuple[str, ...] = (
     "lab_marker_aliases",
     "dietary_ingredients",
     "ingredient_aliases",
+    "device_tokens",
 )
 
 # The four catalog tables the signup copy touches (mirrors migration 032).
@@ -73,6 +74,14 @@ async def enable_row_level_security(conn: AsyncConnection) -> None:
         name="worker_queue",
         tables=("embedding_queue",),
         role="worker",
+    )
+    # Mirrors migration 046: device registration deletes another user's stale
+    # row for the same token (phone changed owners) under this role.
+    await create_service_role_policy(
+        conn,
+        name="device_registrar",
+        tables=("device_tokens",),
+        role="device_registrar",
     )
     # Mirrors migration 032: lets copy_user_catalog_from_reference cross tenants
     # under FORCE RLS when the caller sets app.service_role='provisioner'.
