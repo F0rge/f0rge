@@ -163,10 +163,18 @@ jobs:
           echo "$RESPONSE"
           # Coolify answers 200 even when it queues nothing (per-app failures land in the
           # body), so a 2xx is not proof of a deploy — assert this app was actually queued.
-          echo "$RESPONSE" | grep -q '"status":"queued"' || {
-            echo "::error::Coolify accepted the webhook but queued no deploy for ${{ matrix.component.name }}"
+          BODY=$(printf '%s\n' "$RESPONSE" | sed '$d')
+          APP_UUID="${{ matrix.component.app_uuid }}"
+          if ! echo "$BODY" | jq -e --arg uuid "$APP_UUID" '
+            [.. | objects
+              | select((.uuid? // .id? // .application_id? // .application_uuid? // "") == $uuid)
+              | .status?
+            ] | any(. == "queued")
+          ' >/dev/null 2>&1 \
+            && ! echo "$BODY" | jq -e '.status == "queued"' >/dev/null 2>&1; then
+            echo "::error::Coolify accepted the webhook but queued no deploy for ${{ matrix.component.name }} ($APP_UUID)"
             exit 1
-          }
+          fi
           echo "Triggered Coolify deploy for ${{ matrix.component.name }}"
 
       - name: Smoke health

@@ -68,18 +68,34 @@ jobs:
         working-directory: apps/marrow/backend
         run: |
           uv run uvicorn app.main:app --port 8000 --host 127.0.0.1 &
+          ready=false
           for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:8000/api/v1/health && break
+            if curl -sf http://127.0.0.1:8000/api/v1/health; then
+              ready=true
+              break
+            fi
             sleep 2
           done
+          if [ "$ready" != "true" ]; then
+            echo "Backend failed to become healthy"
+            exit 1
+          fi
 
       - name: Start frontend
         run: |
           npm run dev -w frontend &
+          ready=false
           for i in $(seq 1 60); do
-            curl -sf http://127.0.0.1:3000/login && break
+            if curl -sf http://127.0.0.1:3000/login; then
+              ready=true
+              break
+            fi
             sleep 2
           done
+          if [ "$ready" != "true" ]; then
+            echo "Frontend failed to become healthy"
+            exit 1
+          fi
 
       - name: Run Playwright smoke
         working-directory: apps/marrow/frontend

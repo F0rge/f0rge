@@ -133,6 +133,14 @@ jobs:
           python3 -m pip install --user pip-audit
           python3 -m pip_audit -r /tmp/marrow-req.txt
 
+      - name: OpenAPI codegen drift check
+        if: contains(needs.detect.outputs.py_projects, 'marrow-backend')
+        run: |
+          uv sync --frozen --project apps/marrow/backend
+          uv run --project apps/marrow/backend python apps/marrow/backend/scripts/export_openapi.py
+          npm run codegen:api -w frontend
+          git diff --exit-code apps/marrow/backend/openapi.json apps/marrow/frontend/openapi.json apps/marrow/frontend/lib/api/generated/schema.ts
+
       - name: nx run (backend)
         env:
           PY_PROJECTS: ${{ needs.detect.outputs.py_projects }}
@@ -178,13 +186,6 @@ jobs:
 
       - name: Pin Python 3.10
         run: uv python install 3.10
-
-      - name: OpenAPI codegen drift check
-        run: |
-          uv sync --frozen --project apps/marrow/backend
-          uv run --project apps/marrow/backend python apps/marrow/backend/scripts/export_openapi.py
-          npm run codegen:api -w frontend
-          git diff --exit-code apps/marrow/backend/openapi.json apps/marrow/frontend/openapi.json apps/marrow/frontend/lib/api/generated/schema.ts
 
       - name: nx run (frontend, prod-shaped build)
         env:

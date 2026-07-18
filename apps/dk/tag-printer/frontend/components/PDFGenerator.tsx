@@ -49,7 +49,7 @@ export default function PDFGenerator({
         `${apiUrl}/api/generate-pdf`,
         {
           session_id: sessionId,
-          csv_data: sessionId ? undefined : csvData,
+          csv_data: csvData,
           selected_products: selectedProducts,
           price_column: priceColumn,
           config: config,

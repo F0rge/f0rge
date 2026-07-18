@@ -7,7 +7,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.models.schemas import CSVUploadResponse, PDFGenerateRequest
-from app.services.csv_sessions import MAX_UPLOAD_BYTES, create_session, get_session
+from app.services.csv_sessions import MAX_UPLOAD_BYTES, create_session, delete_session, get_session
 from app.services.pdf_generator import PDFGenerator
 
 router = APIRouter()
@@ -69,9 +69,12 @@ async def generate_pdf(request: PDFGenerateRequest):
     try:
         if request.session_id:
             session = get_session(request.session_id)
-            if session is None:
+            if session is not None:
+                records = session.data
+            elif request.csv_data:
+                records = request.csv_data
+            else:
                 raise HTTPException(status_code=404, detail="CSV session not found or expired")
-            records = session.data
         elif request.csv_data:
             records = request.csv_data
         else:
@@ -109,6 +112,9 @@ async def generate_pdf(request: PDFGenerateRequest):
 
         generator = PDFGenerator(request.config)
         pdf_bytes = generator.generate_tags(df, request.price_column)
+
+        if request.session_id:
+            delete_session(request.session_id)
 
         return StreamingResponse(
             BytesIO(pdf_bytes),
