@@ -155,6 +155,8 @@ export function useUpdateDietaryConfirm() {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
+      // Confirmation changes derived_diet_tags and profile tag-filter matches.
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
       // The recent-meals "Log again" strip carries backend-computed diet_flags
       // that also honour the confirmation gate — refresh it so it doesn't show
       // a stale Gluten/lactose flag next to the freshly confirmed-free meal.

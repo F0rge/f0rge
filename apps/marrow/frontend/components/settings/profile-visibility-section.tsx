@@ -41,6 +41,8 @@ export function ProfileVisibilitySection() {
   const handleModeChange = (value: number | string) => {
     const next = value as ProfileTagFilterMode
     if (next === mode) return
+    // Show only with no tags would hide every photo — require a tag first.
+    if (next === 'show_only' && selected.length === 0) return
     void persist(next, selected)
   }
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { cn } from '@f0rge/ui'
 import { handleMutationError } from '@f0rge/ui/api'
 import { useDietTagCatalog } from '@/lib/api/hooks/catalogs'
@@ -20,18 +21,25 @@ export function PhotoDietTagsSection({ photo }: PhotoDietTagsSectionProps) {
   const catalog = useDietTagCatalog()
   const updateTags = useUpdatePhotoDietTags()
 
-  const explicit = photo.diet_tags ?? []
+  const [explicit, setExplicit] = useState(() => photo.diet_tags ?? [])
+  useEffect(() => {
+    setExplicit(photo.diet_tags ?? [])
+  }, [photo.id, photo.diet_tags])
+
   const derived = photo.derived_diet_tags ?? []
   const items = catalog.data ?? []
   const labelFor = (key: string) => items.find((t) => t.key === key)?.label ?? key
 
   const toggle = async (key: string) => {
-    const next = explicit.includes(key)
-      ? explicit.filter((k) => k !== key)
-      : [...explicit, key]
+    const previous = explicit
+    const next = previous.includes(key)
+      ? previous.filter((k) => k !== key)
+      : [...previous, key]
+    setExplicit(next)
     try {
       await updateTags.mutateAsync({ photoId: photo.id, dietTags: next })
     } catch (err) {
+      setExplicit(previous)
       handleMutationError(err, 'Could not update diet tags')
     }
   }

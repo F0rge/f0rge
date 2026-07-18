@@ -113,6 +113,10 @@ class PhotoService:
             # ponytail: in-Python tag filter + slice; move to SQL EXISTS if the
             # photo count ever makes this slow
             wanted = set(settings_row.profile_filter_tags_list)
+            # show_only with no tags would filter everything; treat as off (hide
+            # with an empty list is already a no-op).
+            if mode == "show_only" and not wanted:
+                return responses[offset : offset + limit]
 
             def _matches(r: PhotoResponse) -> bool:
                 return bool((set(r.diet_tags) | set(r.derived_diet_tags)) & wanted)

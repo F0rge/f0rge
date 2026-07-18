@@ -155,7 +155,7 @@ class MealService:
         await asyncio.to_thread(save_photo, src_bytes, new_filename, user_id=user_id_str)
 
         try:
-            await self.photo_crud.save()
+            new_photo = await self.photo_crud.commit_refresh(new_photo)
         except Exception:
             await asyncio.to_thread(delete_photo, new_filename, user_id=user_id_str)
             raise
