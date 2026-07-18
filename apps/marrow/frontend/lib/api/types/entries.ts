@@ -9,6 +9,9 @@ export interface Photo {
   tagged_by_handle?: string | null
   tagged_with_handles?: string[]
   dish_name?: string | null
+  hidden_at?: string | null
+  diet_tags?: string[]
+  derived_diet_tags?: string[]
 }
 
 export interface EntryStats {

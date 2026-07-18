@@ -27,17 +27,28 @@ class PhotoCRUD(BaseCRUD):
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_owned(
-        self, tagged_only: bool = False, limit: int = 24, offset: int = 0
+        self,
+        tagged_only: bool = False,
+        visibility: str = "visible",
+        limit: Optional[int] = 24,
+        offset: int = 0,
     ) -> list[Photo]:
-        """Current user's photos, newest first (meal_time desc, nulls last)."""
+        """Current user's photos, newest first (meal_time desc, nulls last).
+
+        ``visibility``: "visible" (default) filters to ``hidden_at IS NULL``,
+        "hidden" to ``IS NOT NULL``, "all" applies no filter. ``limit=None``
+        returns everything unpaginated (service-side tag filtering).
+        """
         stmt = select(Photo).where(owned_by_user(Photo.user_id))
         if tagged_only:
             stmt = stmt.where(Photo.tagged_by_user_id.is_not(None))
-        stmt = (
-            stmt.order_by(Photo.meal_time.desc().nulls_last(), Photo.id.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        if visibility == "visible":
+            stmt = stmt.where(Photo.hidden_at.is_(None))
+        elif visibility == "hidden":
+            stmt = stmt.where(Photo.hidden_at.is_not(None))
+        stmt = stmt.order_by(Photo.meal_time.desc().nulls_last(), Photo.id.desc())
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_filenames_for_entry(self, entry_id: int) -> list[str]:

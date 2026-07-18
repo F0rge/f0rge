@@ -20,10 +20,15 @@ export interface PhotoMealTagListResponse {
   tags: PhotoMealTagItem[]
 }
 
-export function usePhotos(scope: 'all' | 'tagged', limit = 24) {
+export function usePhotos(
+  scope: 'all' | 'tagged',
+  options?: { visibility?: 'visible' | 'hidden'; limit?: number },
+) {
+  const visibility = options?.visibility ?? 'visible'
+  const limit = options?.limit ?? 24
   return useQuery<Photo[]>({
-    queryKey: ['photos', scope, limit],
-    queryFn: () => apiGet(`/photos?scope=${scope}&limit=${limit}`),
+    queryKey: ['photos', scope, visibility, limit],
+    queryFn: () => apiGet(`/photos?scope=${scope}&limit=${limit}&visibility=${visibility}`),
   })
 }
 

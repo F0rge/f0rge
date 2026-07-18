@@ -17,6 +17,11 @@ class PhotoResponse(BaseModel):
     dish_name: Optional[str] = None
     meal_time: Optional[datetime.datetime] = None
     created_at: datetime.datetime
+    hidden_at: Optional[datetime.datetime] = None
+    # Explicit per-photo tags (photo_diet_tags keys) vs server-derived flags
+    # computed from the confirmed analysis (diet_flags.compute_signal_from_analyses).
+    diet_tags: list[str] = []
+    derived_diet_tags: list[str] = []
     source_photo_id: Optional[int] = None
     tagged_by_handle: Optional[str] = None
     tagged_with_handles: list[str] = []
@@ -27,6 +32,8 @@ class PhotoResponse(BaseModel):
 class PhotoUpdate(BaseModel):
     label: Optional[str] = None
     meal_time: Optional[datetime.datetime] = None
+    hidden: Optional[bool] = None
+    diet_tags: Optional[list[str]] = None
 
     @field_validator("meal_time", mode="after")
     @classmethod

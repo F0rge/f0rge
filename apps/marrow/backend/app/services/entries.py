@@ -4,6 +4,7 @@ import asyncio
 import datetime
 from typing import Optional
 
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.entries import EntryCRUD
@@ -13,7 +14,11 @@ from app.models.entry import Entry
 from app.models.photo import Photo
 from app.schemas.entry import EntryCreate, EntryResponse, EntryStatsResponse, EntryUpdate
 from app.schemas.photo import PhotoResponse
-from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
+from app.services.diet_flags import (
+    compute_photo_signal,
+    compute_signal_from_analyses,
+    parse_diet_risk_csv,
+)
 from app.services.photo_storage import delete_photo
 from app.utils.dates import local_today
 from f0rge_db.tenant import current_user_id
@@ -33,6 +38,17 @@ def _photo_response(photo: Photo, companion_handles: list[str] | None = None) ->
     handle = None
     if photo.tagged_by_user is not None:
         handle = photo.tagged_by_user.handle
+    # The upload path passes a Photo constructed in Python, where .diet_tags /
+    # .analysis were never eager-loaded (lazy="selectin" only fires at query
+    # time); touching them there would trigger implicit async IO
+    # (MissingGreenlet). A fresh upload has no tags and no analysis, so
+    # treating unloaded as empty is also the correct value.
+    unloaded = sa_inspect(photo).unloaded
+    diet_tags = [] if "diet_tags" in unloaded else sorted(t.key for t in photo.diet_tags)
+    analysis = None if "analysis" in unloaded else photo.analysis
+    derived_diet_tags: list[str] = []
+    if analysis is not None and analysis.status == "confirmed":
+        derived_diet_tags = sorted(compute_signal_from_analyses([analysis]).flags)
     return PhotoResponse(
         id=photo.id,
         entry_id=photo.entry_id,
@@ -41,6 +57,9 @@ def _photo_response(photo: Photo, companion_handles: list[str] | None = None) ->
         label=photo.label,
         meal_time=photo.meal_time,
         created_at=photo.created_at,
+        hidden_at=photo.hidden_at,
+        diet_tags=diet_tags,
+        derived_diet_tags=derived_diet_tags,
         source_photo_id=photo.source_photo_id,
         tagged_by_handle=handle,
         tagged_with_handles=companion_handles or [],

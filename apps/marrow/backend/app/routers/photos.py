@@ -18,7 +18,6 @@ from fastapi.responses import FileResponse, RedirectResponse
 from app.dependencies.photos import get_photo_service
 from app.dependencies.meal_tags import get_meal_tag_service
 from app.middleware.auth import get_current_session
-from app.models.photo import Photo
 from app.schemas.photo import PhotoResponse, PhotoUpdate
 from app.schemas.social import PhotoMealTagListResponse, PhotoTagRequest
 from app.services.meal_tags import MealTagService
@@ -54,11 +53,12 @@ async def upload_photo(
 @router.get("/photos", response_model=list[PhotoResponse])
 async def list_photos(
     scope: Literal["all", "tagged"] = Query("all"),
+    visibility: Literal["visible", "hidden", "all"] = Query("visible"),
     limit: int = Query(24, ge=1, le=100),
     offset: int = Query(0, ge=0),
     service: PhotoService = Depends(get_photo_service),
 ) -> list[PhotoResponse]:
-    return await service.list_photos(scope, limit, offset)
+    return await service.list_photos(scope, visibility, limit, offset)
 
 
 @router.get("/photos/{photo_id}/file", response_model=None)
@@ -82,7 +82,7 @@ async def update_photo(
     photo_id: int,
     data: PhotoUpdate,
     service: PhotoService = Depends(get_photo_service),
-) -> Photo:
+) -> PhotoResponse:
     return await service.update_photo(photo_id, data)
 
 

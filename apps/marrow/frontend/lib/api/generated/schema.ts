@@ -1198,6 +1198,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/profile-tag-filter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Profile Tag Filter */
+        put: operations["update_profile_tag_filter_api_v1_settings_profile_tag_filter_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab-markers/catalog": {
         parameters: {
             query?: never;
@@ -3108,6 +3125,18 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Hidden At */
+            hidden_at?: string | null;
+            /**
+             * Diet Tags
+             * @default []
+             */
+            diet_tags: string[];
+            /**
+             * Derived Diet Tags
+             * @default []
+             */
+            derived_diet_tags: string[];
             /** Source Photo Id */
             source_photo_id?: number | null;
             /** Tagged By Handle */
@@ -3152,6 +3181,23 @@ export interface components {
             label?: string | null;
             /** Meal Time */
             meal_time?: string | null;
+            /** Hidden */
+            hidden?: boolean | null;
+            /** Diet Tags */
+            diet_tags?: string[] | null;
+        };
+        /** ProfileTagFilterUpdate */
+        ProfileTagFilterUpdate: {
+            /**
+             * Profile Tag Filter Mode
+             * @enum {string}
+             */
+            profile_tag_filter_mode: "off" | "hide" | "show_only";
+            /**
+             * Profile Filter Tags
+             * @default []
+             */
+            profile_filter_tags: string[];
         };
         /** ProtocolItem */
         ProtocolItem: {
@@ -3250,6 +3296,16 @@ export interface components {
              * @default approve
              */
             tagged_meal_mode: string;
+            /**
+             * Profile Tag Filter Mode
+             * @default off
+             */
+            profile_tag_filter_mode: string;
+            /**
+             * Profile Filter Tags
+             * @default []
+             */
+            profile_filter_tags: string[];
         };
         /** SignupRequest */
         SignupRequest: {
@@ -4362,6 +4418,7 @@ export interface operations {
         parameters: {
             query?: {
                 scope?: "all" | "tagged";
+                visibility?: "visible" | "hidden" | "all";
                 limit?: number;
                 offset?: number;
             };
@@ -6803,6 +6860,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TaggedMealModeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_profile_tag_filter_api_v1_settings_profile_tag_filter_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileTagFilterUpdate"];
             };
         };
         responses: {

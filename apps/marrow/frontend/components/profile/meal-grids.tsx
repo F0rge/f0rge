@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { LayoutGrid, Tag } from 'lucide-react'
 import { cn, formatDisplayDate, formatLocalDate } from '@f0rge/ui'
+import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { usePhotos } from '@/lib/api/hooks'
 import type { Photo } from '@/lib/api/types'
 
@@ -14,7 +15,7 @@ import type { Photo } from '@/lib/api/types'
  * backend timestamps are tz-naive UTC and `new Date(iso)` reads them as local
  * wall-clock everywhere in the app — keep these semantics identical.
  */
-function mealDay(iso: string): string {
+export function mealDay(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
   const today = new Date()
@@ -32,7 +33,17 @@ function mealDay(iso: string): string {
   return formatDisplayDate(formatLocalDate(d))
 }
 
-function Grid({ photos, tagged, empty }: { photos: Photo[]; tagged?: boolean; empty: string }) {
+function Grid({
+  photos,
+  tagged,
+  empty,
+  onOpen,
+}: {
+  photos: Photo[]
+  tagged?: boolean
+  empty: string
+  onOpen: (photoId: number) => void
+}) {
   if (photos.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -50,7 +61,17 @@ function Grid({ photos, tagged, empty }: { photos: Photo[]; tagged?: boolean; em
         return (
           <div
             key={photo.id}
-            className="relative aspect-square overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10"
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(photo.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onOpen(photo.id)
+              }
+            }}
+            aria-label={`Open ${name || 'meal photo'}`}
+            className="relative aspect-square cursor-pointer overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Image
               src={`/api/v1/photos/${photo.id}/file`}
@@ -82,8 +103,15 @@ function Grid({ photos, tagged, empty }: { photos: Photo[]; tagged?: boolean; em
 
 export function MealGrids() {
   const [tab, setTab] = useState<'all' | 'tagged'>('all')
+  const [focusedPhotoId, setFocusedPhotoId] = useState<number | null>(null)
   const allPhotos = usePhotos('all')
   const taggedPhotos = usePhotos('tagged')
+  const activePhotos = (tab === 'all' ? allPhotos.data : taggedPhotos.data) ?? []
+  // Hiding (or rule-hiding) the focused photo removes it from the feed — close the overlay with it.
+  const focusedPhoto =
+    focusedPhotoId !== null && activePhotos.some((p) => p.id === focusedPhotoId)
+      ? focusedPhotoId
+      : null
 
   return (
     <section className="space-y-3">
@@ -112,14 +140,21 @@ export function MealGrids() {
         ))}
       </div>
       {tab === 'all' ? (
-        <Grid photos={allPhotos.data ?? []} empty="No meals logged yet." />
+        <Grid photos={allPhotos.data ?? []} empty="No meals logged yet." onOpen={setFocusedPhotoId} />
       ) : (
         <Grid
           photos={taggedPhotos.data ?? []}
           tagged
           empty="Nothing shared with you yet — connections can tag you on meal photos."
+          onOpen={setFocusedPhotoId}
         />
       )}
+      <PhotoFocusOverlay
+        photoId={focusedPhoto}
+        photos={activePhotos}
+        onClose={() => setFocusedPhotoId(null)}
+        onSelectPhoto={setFocusedPhotoId}
+      />
     </section>
   )
 }

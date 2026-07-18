@@ -12,6 +12,7 @@ from app.schemas.settings import (
     EmbeddingSettingsUpdate,
     ExternalTokenResponse,
     LLMSettingsUpdate,
+    ProfileTagFilterUpdate,
     SettingsResponse,
     TestConnectionResponse,
 )
@@ -46,6 +47,8 @@ class SettingsService:
             has_external_api_token=row.external_api_token_hash is not None,
             onboarding_completed=row.onboarding_completed_at is not None,
             tagged_meal_mode=row.tagged_meal_mode,
+            profile_tag_filter_mode=row.profile_tag_filter_mode,
+            profile_filter_tags=row.profile_filter_tags_list,
         )
 
     async def get(self) -> SettingsResponse:
@@ -60,6 +63,8 @@ class SettingsService:
                 has_external_api_token=False,
                 onboarding_completed=False,
                 tagged_meal_mode="approve",
+                profile_tag_filter_mode="off",
+                profile_filter_tags=[],
             )
         return self._to_response(row)
 
@@ -124,5 +129,12 @@ class SettingsService:
     async def update_tagged_meal_mode(self, mode: str) -> SettingsResponse:
         row = await self._get_or_create_row()
         row.tagged_meal_mode = mode
+        row = await self.crud.commit_refresh(row)
+        return self._to_response(row)
+
+    async def update_profile_tag_filter(self, data: ProfileTagFilterUpdate) -> SettingsResponse:
+        row = await self._get_or_create_row()
+        row.profile_tag_filter_mode = data.profile_tag_filter_mode
+        row.profile_filter_tags = ",".join(data.profile_filter_tags)
         row = await self.crud.commit_refresh(row)
         return self._to_response(row)

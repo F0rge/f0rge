@@ -7,6 +7,7 @@ import type {
   LLMSettingsUpdate,
   EmbeddingSettingsUpdate,
   TaggedMealModeUpdate,
+  ProfileTagFilterUpdate,
   TestConnectionResponse,
   ExternalTokenResponse,
 } from '../types'
@@ -48,6 +49,19 @@ export function useUpdateTaggedMealMode() {
       apiPut('/settings/tagged-meal-mode', data) as Promise<UserSettings>,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+}
+
+export function useUpdateProfileTagFilter() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: ProfileTagFilterUpdate) =>
+      apiPut('/settings/profile-tag-filter', data) as Promise<UserSettings>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      // The profile feed is filtered by this rule server-side.
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
 }
