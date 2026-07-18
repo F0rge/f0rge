@@ -322,6 +322,14 @@ async def test_filter_rule_matrix(
     )
     assert await _photo_ids(authed_client) == []
 
+    # show_only with no tags selected matches nothing, which would blank the
+    # profile — treated as off instead.
+    await authed_client.put(
+        "/api/v1/settings/profile-tag-filter",
+        json={"profile_tag_filter_mode": "show_only", "profile_filter_tags": []},
+    )
+    assert set(await _photo_ids(authed_client)) == all_ids
+
 
 async def test_hidden_listing_is_never_tag_filtered(
     authed_client: AsyncClient,

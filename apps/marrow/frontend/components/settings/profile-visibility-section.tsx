@@ -41,8 +41,11 @@ export function ProfileVisibilitySection() {
   const handleModeChange = (value: number | string) => {
     const next = value as ProfileTagFilterMode
     if (next === mode) return
-    // Show only with no tags would hide every photo — require a tag first.
-    if (next === 'show_only' && selected.length === 0) return
+    // Show only with no tags matches nothing; the server treats that as off.
+    // Persist anyway so the control doesn't dead-click — just say why.
+    if (next === 'show_only' && selected.length === 0) {
+      toast.info('Pick at least one tag for "Show only" to filter anything.')
+    }
     void persist(next, selected)
   }
 

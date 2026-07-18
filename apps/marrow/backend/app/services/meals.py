@@ -155,7 +155,10 @@ class MealService:
         await asyncio.to_thread(save_photo, src_bytes, new_filename, user_id=user_id_str)
 
         try:
-            new_photo = await self.photo_crud.commit_refresh(new_photo)
+            # save(), not commit_refresh(): refresh expires .analysis/.diet_tags,
+            # and _photo_response's unloaded-guard then triggers lazy IO
+            # (MissingGreenlet). A fresh clone has no diet tags either way.
+            await self.photo_crud.save()
         except Exception:
             await asyncio.to_thread(delete_photo, new_filename, user_id=user_id_str)
             raise
