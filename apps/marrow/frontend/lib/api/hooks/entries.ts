@@ -108,6 +108,38 @@ export function useUpdatePhotoLabel() {
   })
 }
 
+export function useUpdatePhotoVisibility() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    // hidden=true stamps hidden_at; false clears it. Hidden photos stay
+    // visible in check-in — only the profile feed filters them.
+    mutationFn: ({ photoId, hidden }: { photoId: number; hidden: boolean }) =>
+      apiPatch(`/photos/${photoId}`, { hidden }),
+    // No photo-analysis invalidation: the analysis payload carries neither
+    // hidden_at nor diet tags.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
+    },
+  })
+}
+
+export function useUpdatePhotoDietTags() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    // Full replacement of the photo's explicit diet-tag set.
+    mutationFn: ({ photoId, dietTags }: { photoId: number; dietTags: string[] }) =>
+      apiPatch(`/photos/${photoId}`, { diet_tags: dietTags }),
+    // No photo-analysis invalidation: explicit tags live outside the analysis.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entry'] })
+      queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['photos'] })
+    },
+  })
+}
+
 export function useUpdateDietaryConfirm() {
   const queryClient = useQueryClient()
   return useMutation({

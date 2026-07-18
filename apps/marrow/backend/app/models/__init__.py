@@ -6,6 +6,7 @@ from app.models.health_metrics import HealthMetric
 from app.models.meal import Meal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
+from app.models.photo_diet_tag import PhotoDietTag
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.dietary_ingredient import DietaryIngredient
 from app.models.ingredient_alias import IngredientAlias
@@ -38,6 +39,7 @@ __all__ = [
     "Meal",
     "Photo",
     "PhotoAnalysis",
+    "PhotoDietTag",
     "PhotoIngredient",
     "DietaryIngredient",
     "IngredientAlias",

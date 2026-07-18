@@ -11,14 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crud.base import unit_of_work
+from app.crud.diet_tag_catalog import DietTagCatalogCRUD
 from app.crud.entries import EntryCRUD
 from app.crud.meals import MealCRUD
 from app.crud.meal_tags import MealTagCRUD
 from app.crud.photos import PhotoCRUD
-from f0rge_core.exceptions import NotFoundError
+from app.crud.settings import UserSettingsCRUD
+from f0rge_core.exceptions import NotFoundError, ValidationError
 from app.models.entry import Entry
 from app.models.meal import Meal
 from app.models.photo import Photo
+from app.models.photo_diet_tag import PhotoDietTag
 from app.schemas.photo import PhotoResponse, PhotoUpdate
 from app.services.entries import _photo_response
 from app.services import object_storage
@@ -72,13 +75,26 @@ class PhotoService:
         self.crud = PhotoCRUD(db)
         self.meal_crud = MealCRUD(db)
         self.entry_crud = EntryCRUD(db)
+        self.settings_crud = UserSettingsCRUD(db)
         self.orchestrator = orchestrator
         self.meal_tags = meal_tags
 
-    async def list_photos(self, scope: str, limit: int, offset: int) -> list[PhotoResponse]:
-        """Profile-grid feed: the user's photos, optionally only tagged copies."""
+    async def list_photos(
+        self, scope: str, visibility: str, limit: int, offset: int
+    ) -> list[PhotoResponse]:
+        """Profile-grid feed: the user's photos, optionally only tagged copies.
+
+        The profile tag-filter rule (settings) applies only to
+        ``visibility="visible"``; hidden/all listings are never tag-filtered.
+        """
+        settings_row = await self.settings_crud.get() if visibility == "visible" else None
+        mode = settings_row.profile_tag_filter_mode if settings_row else "off"
+        filtering = mode != "off"
         photos = await self.crud.list_owned(
-            tagged_only=scope == "tagged", limit=limit, offset=offset
+            tagged_only=scope == "tagged",
+            visibility=visibility,
+            limit=None if filtering else limit,
+            offset=0 if filtering else offset,
         )
         companions = await MealTagCRUD(self.db).companion_handles_by_photo_ids(
             [p.id for p in photos]
@@ -93,22 +109,60 @@ class PhotoService:
             resp = _photo_response(p, companions.get(p.id, []))
             resp.dish_name = p.analysis.dish_name if p.analysis else None
             responses.append(resp)
+        if filtering:
+            # ponytail: in-Python tag filter + slice; move to SQL EXISTS if the
+            # photo count ever makes this slow
+            wanted = set(settings_row.profile_filter_tags_list)
+
+            def _matches(r: PhotoResponse) -> bool:
+                return bool((set(r.diet_tags) | set(r.derived_diet_tags)) & wanted)
+
+            if mode == "hide":
+                responses = [r for r in responses if not _matches(r)]
+            else:  # show_only
+                responses = [r for r in responses if _matches(r)]
+            responses = responses[offset : offset + limit]
         return responses
 
-    async def update_photo(self, photo_id: int, data: PhotoUpdate) -> Photo:
+    async def update_photo(self, photo_id: int, data: PhotoUpdate) -> PhotoResponse:
         photo = await self.crud.get_by_id_owned(photo_id)
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
 
         fields = data.model_fields_set
+        new_tags: Optional[list[str]] = None
+        if data.diet_tags is not None:
+            new_tags = sorted(set(data.diet_tags))
+            known = {
+                item.key for item in await DietTagCatalogCRUD(self.db).list(include_archived=True)
+            }
+            unknown = [key for key in new_tags if key not in known]
+            if unknown:
+                raise ValidationError(f"Unknown diet tag keys: {', '.join(unknown)}")
+
         if "label" in fields:
             # ""/whitespace clears the label so the UI falls back to the AI dish_name.
             stripped = data.label.strip() if data.label is not None else None
             photo.label = stripped or None
         if "meal_time" in fields:
             photo.meal_time = data.meal_time
+        if data.hidden is not None:
+            photo.hidden_at = datetime.datetime.utcnow() if data.hidden else None
+        if new_tags is not None:
+            # Replace the explicit tag set. user_id must be set explicitly —
+            # the model default silently mis-owns rows for non-default users
+            # under RLS (PR #359).
+            # ponytail: replace-all delete+insert per PATCH; diff old vs new
+            # keys if tag counts ever make this chatty
+            photo.diet_tags = [
+                PhotoDietTag(user_id=current_user_id(), photo_id=photo.id, key=key)
+                for key in new_tags
+            ]
 
-        return await self.crud.commit_refresh(photo)
+        photo = await self.crud.commit_refresh(photo)
+        # No companions lookup: mutation clients invalidate and refetch, so the
+        # PATCH response keeps the pre-#403 tagged_with_handles=[] shape.
+        return _photo_response(photo)
 
     async def upload(
         self,

@@ -1,5 +1,7 @@
 export type TaggedMealMode = 'approve' | 'auto'
 
+export type ProfileTagFilterMode = 'off' | 'hide' | 'show_only'
+
 export interface UserSettings {
   llm_provider: string
   llm_model: string | null
@@ -9,6 +11,8 @@ export interface UserSettings {
   has_external_api_token: boolean
   onboarding_completed: boolean
   tagged_meal_mode: TaggedMealMode
+  profile_tag_filter_mode: ProfileTagFilterMode
+  profile_filter_tags: string[]
 }
 
 export interface LLMSettingsUpdate {
@@ -24,6 +28,11 @@ export interface EmbeddingSettingsUpdate {
 
 export interface TaggedMealModeUpdate {
   tagged_meal_mode: TaggedMealMode
+}
+
+export interface ProfileTagFilterUpdate {
+  profile_tag_filter_mode: ProfileTagFilterMode
+  profile_filter_tags: string[]
 }
 
 export interface TestConnectionResponse {

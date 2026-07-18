@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.dependencies.meals import get_meal_service
 from app.middleware.auth import get_current_session
-from app.models.photo import Photo
 from app.schemas.meal import MealCloneCreate, RecentMealResponse
 from app.schemas.photo import PhotoResponse
 from app.services.meals import MealService
@@ -35,5 +34,5 @@ async def clone_meal(
     date: datetime.date,
     body: MealCloneCreate,
     service: MealService = Depends(get_meal_service),
-) -> Photo:
+) -> PhotoResponse:
     return await service.clone(date, body.source_photo_id, body.meal_time)

@@ -16,8 +16,9 @@ from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.meal import RecentMealResponse
+from app.schemas.photo import PhotoResponse
 from app.services.diet_flags import compute_signal_from_analyses
-from app.services.entries import get_or_create_entry
+from app.services.entries import _photo_response, get_or_create_entry
 from app.services.photo_storage import delete_photo, photo_exists, read_photo, save_photo
 from app.services.photos import next_photo_filename
 from f0rge_db.tenant import current_user_id
@@ -71,7 +72,7 @@ class MealService:
         target_date: datetime.date,
         source_photo_id: int,
         meal_time: Optional[datetime.datetime] = None,
-    ) -> Photo:
+    ) -> PhotoResponse:
         """Copy a confirmed source meal onto ``target_date`` as new, decoupled rows."""
         src_photo = await self.photo_crud.get_by_id_owned(source_photo_id)
         if src_photo is None:
@@ -158,4 +159,6 @@ class MealService:
         except Exception:
             await asyncio.to_thread(delete_photo, new_filename, user_id=user_id_str)
             raise
-        return new_photo
+        # Serialize via _photo_response: raw ORM return would make the response
+        # model touch the unloaded diet_tags relationship (MissingGreenlet).
+        return _photo_response(new_photo)

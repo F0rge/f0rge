@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Bell, Cloud, Database, GraduationCap, Heart, Lock, LogOut, Search,
+  ArrowLeft, Bell, Cloud, Database, Eye, EyeOff, GraduationCap, Heart, Lock, LogOut, Search,
   SlidersHorizontal, Sparkles, SunMoon, Tag, UserPlus, UserRound, UsersRound,
   UtensilsCrossed, type LucideIcon,
 } from 'lucide-react'
@@ -22,6 +22,8 @@ import { AppleHealthSection } from '@/components/settings/apple-health-section'
 import { DataSourcesSection } from '@/components/settings/data-sources-section'
 import { OnboardingSection } from '@/components/settings/onboarding-section'
 import { TaggedMealsSection } from '@/components/settings/tagged-meals-section'
+import { ProfileVisibilitySection } from '@/components/settings/profile-visibility-section'
+import { HiddenMealsSection } from '@/components/settings/hidden-meals-section'
 import { useConnections, useGroups, useLogout, useMealTags, useUnreadCount } from '@/lib/api/hooks'
 
 interface RowEntry {
@@ -139,6 +141,8 @@ export default function SettingsPage() {
       title: 'Social',
       rows: [
         accordion('Tagged meals defaults', 'Approve tags manually or add them automatically', UtensilsCrossed, <TaggedMealsSection />),
+        accordion('Profile visibility', 'Auto-hide meals from your profile by diet tag', Eye, <ProfileVisibilitySection />),
+        accordion('Hidden meals', 'Meals you removed from your profile grids', EyeOff, <HiddenMealsSection />),
       ],
     },
     {
