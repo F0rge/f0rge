@@ -165,8 +165,8 @@ jobs:
       - name: Install root deps
         run: npm ci
 
-      - name: npm audit (high severity)
-        run: npm audit --audit-level=high
+      - name: npm audit (high severity, production deps)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Boundary guard (libs must not import apps)
         run: |

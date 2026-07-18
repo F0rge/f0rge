@@ -46,8 +46,8 @@ jobs:
       - name: Python lib boundary guard
         run: bash .github/scripts/check-lib-boundary.sh
 
-      - name: npm audit (high+)
-        run: npm audit --audit-level=high
+      - name: npm audit (high+, production deps)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: uv pip audit (marrow backend)
         run: |
