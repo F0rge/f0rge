@@ -1764,6 +1764,8 @@ export interface components {
             email?: string | null;
             /** Handle */
             handle?: string | null;
+            /** Token */
+            token?: string | null;
         };
         /** Body_extract_lab_upload_api_v1_labs_extract_upload_post */
         Body_extract_lab_upload_api_v1_labs_extract_upload_post: {

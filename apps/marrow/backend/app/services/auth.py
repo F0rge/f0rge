@@ -145,6 +145,7 @@ class AuthService:
             "user_id": str(user.id),
             "email": user.email,
             "handle": user.handle,
+            "token": token,
         }
 
     async def logout(self, response: Response) -> dict[str, bool]:

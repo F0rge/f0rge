@@ -138,6 +138,7 @@ async def test_logout_clears_cookie_and_subsequent_call_401s(async_client: Async
         "user_id": None,
         "email": None,
         "handle": None,
+        "token": None,
     }
 
     me_resp = await async_client.get("/api/v1/auth/me")
