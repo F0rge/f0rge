@@ -6,6 +6,11 @@ struct HomeView: View {
     @State private var status: Components.Schemas.AuthStatus?
     @State private var todaySummary = "Loading…"
     @State private var errorMessage: String?
+    private var health = HealthSyncService.shared
+
+    init(onLogout: @escaping () -> Void) {
+        self.onLogout = onLogout
+    }
 
     var body: some View {
         NavigationStack {
@@ -22,6 +27,30 @@ struct HomeView: View {
                 }
                 Section("Today") {
                     Text(todaySummary)
+                }
+                Section("Health") {
+                    if !health.available {
+                        Text("Health data isn't available on this device.")
+                    } else if health.enabled {
+                        LabeledContent(
+                            "Last sync",
+                            value: health.lastSync?.formatted(date: .abbreviated, time: .shortened) ?? "Never"
+                        )
+                        if !health.lastResult.isEmpty {
+                            LabeledContent("Status", value: health.lastResult)
+                        }
+                        Button("Sync now") {
+                            Task { await health.syncNow() }
+                        }
+                        .disabled(health.isSyncing)
+                    } else {
+                        Button("Enable Health sync") {
+                            Task { await health.enable() }
+                        }
+                        if let authError = health.authError {
+                            Text(authError).foregroundStyle(.red)
+                        }
+                    }
                 }
                 Section {
                     Button("Log out", role: .destructive) {

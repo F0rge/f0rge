@@ -17,6 +17,7 @@
 		C10000000000000000000002 /* Prod.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Prod.xcconfig; sourceTree = "<group>"; };
 		C10000000000000000000003 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 		C10000000000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C10000000000000000000006 /* Marrow.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Marrow.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -68,6 +69,7 @@
 				C10000000000000000000002 /* Prod.xcconfig */,
 				C10000000000000000000003 /* Shared.xcconfig */,
 				C10000000000000000000004 /* Info.plist */,
+				C10000000000000000000006 /* Marrow.entitlements */,
 			);
 			path = Config;
 			sourceTree = "<group>";

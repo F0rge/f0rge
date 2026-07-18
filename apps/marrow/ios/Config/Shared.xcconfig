@@ -1,5 +1,6 @@
 // Shared build settings for all configurations.
 PRODUCT_BUNDLE_IDENTIFIER = com.f0rge.marrow
 CODE_SIGN_STYLE = Automatic
+CODE_SIGN_ENTITLEMENTS = Config/Marrow.entitlements
 // Fill in after Apple Developer Program enrollment (see #395).
 DEVELOPMENT_TEAM =

@@ -4,5 +4,7 @@
 <dict>
 	<key>APIBaseURL</key>
 	<string>$(API_BASE_URL)</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Marrow reads your heart rate variability, resting heart rate, and sleep to sync daily health metrics to your Marrow account.</string>
 </dict>
 </plist>
