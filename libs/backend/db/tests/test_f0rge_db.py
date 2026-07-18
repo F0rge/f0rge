@@ -10,6 +10,32 @@ from f0rge_db.rls import (
     migration_bypass,
     remove_migration_bypass,
 )
+from f0rge_db.tenant import apply_service_role
+
+
+class _AsyncRecordingSession:
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    async def execute(self, clause, params=None) -> None:  # type: ignore[no-untyped-def]
+        text = " ".join(str(clause).split())
+        if params:
+            text = f"{text} params={params}"
+        self.statements.append(text)
+
+
+async def test_apply_service_role_sets_nil_user_id_sentinel() -> None:
+    """Service-role paths must stamp nil UUID so tenant_isolation never sees ''."""
+    session = _AsyncRecordingSession()
+    await apply_service_role(session, "mcp_auth")  # type: ignore[arg-type]
+    assert session.statements == [
+        "SELECT set_config('app.service_role', :role, false) params={'role': 'mcp_auth'}",
+        (
+            "SELECT set_config('app.user_id', :user_id, false) "
+            f"params={{'user_id': '{MIGRATION_DUMMY_USER_ID}'}}"
+        ),
+    ]
+
 
 # ---------------------------------------------------------------------------
 # db_url — pure string normalization (lifted from marrow's test_db_url.py)

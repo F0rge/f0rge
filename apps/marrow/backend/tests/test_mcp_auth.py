@@ -101,6 +101,23 @@ async def test_no_settings_row_returns_none() -> None:
     assert access_token is None
 
 
+async def test_verify_survives_empty_app_user_id_guc(async_db: AsyncSession) -> None:
+    """Contaminated pool GUC '' must not 500 — apply_service_role stamps nil UUID."""
+    import sqlalchemy as sa
+
+    from f0rge_db.tenant import apply_service_role
+
+    await async_db.execute(sa.text("SELECT set_config('app.user_id', '', false)"))
+    await apply_service_role(async_db, "mcp_auth")
+    uid = (
+        await async_db.execute(sa.text("SELECT current_setting('app.user_id', true)"))
+    ).scalar()
+    assert uid == "00000000-0000-0000-0000-000000000000"
+    # RLS cast must not throw on the sentinel under mcp_auth.
+    result = await async_db.execute(select(UserSettings).limit(1))
+    result.scalars().first()  # may be None; must not raise
+
+
 async def test_verify_uses_hash_lookup_not_decrypt(async_db: AsyncSession) -> None:
     """Verifier matches via external_api_token_hash, not ciphertext decryption."""
     svc = SettingsService(async_db)
