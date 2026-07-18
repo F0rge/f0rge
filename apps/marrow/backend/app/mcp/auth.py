@@ -23,15 +23,15 @@ class BearerTokenVerifier(TokenVerifier):
                     select(UserSettings).where(UserSettings.external_api_token_hash == token_hash)
                 )
                 row = result.scalar_one_or_none()
+                if row is None:
+                    return None
+                user_id = row.user_id
             finally:
                 await db.rollback()
                 await clear_tenant_session(db)
 
-        if row is None:
-            return None
-
         return AccessToken(
             token=token,
-            client_id=str(row.user_id),
+            client_id=str(user_id),
             scopes=[],
         )
