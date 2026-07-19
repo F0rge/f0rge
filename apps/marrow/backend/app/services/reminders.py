@@ -122,9 +122,13 @@ async def run_reminder_tick(now: datetime.datetime | None = None) -> int:
         # users is not RLS-user-owned, so listing ids needs no tenant GUC.
         user_ids = (await db.execute(sa.select(User.id))).scalars().all()
         for user_id in user_ids:
-            payloads = await _tick_user(db, user_id, now)
-            if payloads:
-                wins.append((user_id, payloads))
+            try:
+                async with db.begin_nested():
+                    payloads = await _tick_user(db, user_id, now)
+                    if payloads:
+                        wins.append((user_id, payloads))
+            except Exception:
+                logger.exception("Reminder tick failed for user %s", user_id)
         await db.commit()
         # APNs I/O strictly after the commit — push only from the instance
         # that won the dedupe insert, and never let APNs trouble break the loop.
