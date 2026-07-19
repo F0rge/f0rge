@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -16,6 +16,8 @@ class SettingsResponse(BaseModel):
     has_external_api_token: bool
     onboarding_completed: bool
     tagged_meal_mode: str = "approve"
+    profile_tag_filter_mode: str = "off"
+    profile_filter_tags: list[str] = []
 
 
 class LLMSettingsUpdate(BaseModel):
@@ -58,6 +60,11 @@ class TaggedMealModeUpdate(BaseModel):
         if value not in ("approve", "auto"):
             raise ValueError("tagged_meal_mode must be 'approve' or 'auto'")
         return value
+
+
+class ProfileTagFilterUpdate(BaseModel):
+    profile_tag_filter_mode: Literal["off", "hide", "show_only"]
+    profile_filter_tags: list[str] = []
 
 
 class TokenRevokedResponse(BaseModel):

@@ -10,6 +10,7 @@ from app.schemas.settings import (
     EmbeddingSettingsUpdate,
     ExternalTokenResponse,
     LLMSettingsUpdate,
+    ProfileTagFilterUpdate,
     SettingsResponse,
     TaggedMealModeUpdate,
     TestConnectionResponse,
@@ -96,3 +97,12 @@ async def update_tagged_meal_mode(
     _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> SettingsResponse:
     return await service.update_tagged_meal_mode(body.tagged_meal_mode)
+
+
+@router.put("/profile-tag-filter", response_model=SettingsResponse)
+async def update_profile_tag_filter(
+    body: ProfileTagFilterUpdate,
+    service: SettingsService = Depends(get_settings_service),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
+) -> SettingsResponse:
+    return await service.update_profile_tag_filter(body)

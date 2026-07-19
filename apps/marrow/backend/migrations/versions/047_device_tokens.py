@@ -20,8 +20,8 @@ from sqlalchemy.dialects import postgresql
 
 from f0rge_db.rls import create_service_role_policy_sync
 
-revision: str = "046"
-down_revision: Union[str, None] = "045"
+revision: str = "047"
+down_revision: Union[str, None] = "046"
 branch_labels: Union[Sequence[str], None] = None
 depends_on: Union[Sequence[str], None] = None
 

@@ -1070,6 +1070,21 @@
             }
           },
           {
+            "name": "visibility",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "visible",
+                "hidden",
+                "all"
+              ],
+              "type": "string",
+              "default": "visible",
+              "title": "Visibility"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -5683,6 +5698,65 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TaggedMealModeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/profile-tag-filter": {
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Profile Tag Filter",
+        "operationId": "update_profile_tag_filter_api_v1_settings_profile_tag_filter_put",
+        "parameters": [
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileTagFilterUpdate"
               }
             }
           }
@@ -12651,6 +12725,34 @@
             "format": "date-time",
             "title": "Created At"
           },
+          "hidden_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden At"
+          },
+          "diet_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Diet Tags",
+            "default": []
+          },
+          "derived_diet_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Derived Diet Tags",
+            "default": []
+          },
           "source_photo_id": {
             "anyOf": [
               {
@@ -12798,10 +12900,61 @@
               }
             ],
             "title": "Meal Time"
+          },
+          "hidden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden"
+          },
+          "diet_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diet Tags"
           }
         },
         "type": "object",
         "title": "PhotoUpdate"
+      },
+      "ProfileTagFilterUpdate": {
+        "properties": {
+          "profile_tag_filter_mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "hide",
+              "show_only"
+            ],
+            "title": "Profile Tag Filter Mode"
+          },
+          "profile_filter_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Profile Filter Tags",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile_tag_filter_mode"
+        ],
+        "title": "ProfileTagFilterUpdate"
       },
       "ProtocolItem": {
         "properties": {
@@ -13026,6 +13179,19 @@
             "type": "string",
             "title": "Tagged Meal Mode",
             "default": "approve"
+          },
+          "profile_tag_filter_mode": {
+            "type": "string",
+            "title": "Profile Tag Filter Mode",
+            "default": "off"
+          },
+          "profile_filter_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Profile Filter Tags",
+            "default": []
           }
         },
         "type": "object",
