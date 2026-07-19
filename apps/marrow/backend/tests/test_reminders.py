@@ -18,6 +18,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user_settings import UserSettings
+from app.services import reminders
 from app.services.reminders import derive_slots, run_reminder_tick
 from f0rge_db.tenant import apply_session_user_id
 from tests.conftest import authed_user_id
@@ -159,3 +160,34 @@ async def test_timezone_honored(async_db: AsyncSession):
     assert auckland_notes[0]["payload"]["date"] == "2026-07-19"
 
     assert await _notifications(lux_client) == []
+
+
+@pytest.mark.usefixtures("patch_reminder_session_maker")
+async def test_one_users_failure_does_not_stop_other_users(
+    async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+):
+    """A per-user savepoint isolates a failing tick from everyone else's reminders."""
+    client_a = await signup_client(async_db, f"rem_{uuid.uuid4().hex[:8]}@example.com")
+    client_b = await signup_client(async_db, f"rem_{uuid.uuid4().hex[:8]}@example.com")
+    await create_treatment(client_a, doses_per_day=2)
+    await create_treatment(client_b, doses_per_day=2)
+
+    # Poison whichever user is ticked first; the other must still be reminded.
+    calls = {"n": 0}
+    real_derive_slots = reminders.derive_slots
+
+    def flaky_derive_slots(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("boom")
+        return real_derive_slots(*args, **kwargs)
+
+    monkeypatch.setattr(reminders, "derive_slots", flaky_derive_slots)
+
+    fired = await run_reminder_tick(now=IN_WINDOW)
+
+    assert calls["n"] == 2  # both users were attempted
+    assert fired == 1
+    notes_a = await _notifications(client_a)
+    notes_b = await _notifications(client_b)
+    assert sorted([len(notes_a), len(notes_b)]) == [0, 1]
