@@ -951,6 +951,12 @@ internal enum Components {
             internal var mealTime: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/PhotoResponse/created_at`.
             internal var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/PhotoResponse/hidden_at`.
+            internal var hiddenAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/PhotoResponse/diet_tags`.
+            internal var dietTags: [Swift.String]?
+            /// - Remark: Generated from `#/components/schemas/PhotoResponse/derived_diet_tags`.
+            internal var derivedDietTags: [Swift.String]?
             /// - Remark: Generated from `#/components/schemas/PhotoResponse/source_photo_id`.
             internal var sourcePhotoId: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/PhotoResponse/tagged_by_handle`.
@@ -968,6 +974,9 @@ internal enum Components {
             ///   - dishName:
             ///   - mealTime:
             ///   - createdAt:
+            ///   - hiddenAt:
+            ///   - dietTags:
+            ///   - derivedDietTags:
             ///   - sourcePhotoId:
             ///   - taggedByHandle:
             ///   - taggedWithHandles:
@@ -980,6 +989,9 @@ internal enum Components {
                 dishName: Swift.String? = nil,
                 mealTime: Foundation.Date? = nil,
                 createdAt: Foundation.Date,
+                hiddenAt: Foundation.Date? = nil,
+                dietTags: [Swift.String]? = nil,
+                derivedDietTags: [Swift.String]? = nil,
                 sourcePhotoId: Swift.Int? = nil,
                 taggedByHandle: Swift.String? = nil,
                 taggedWithHandles: [Swift.String]? = nil
@@ -992,6 +1004,9 @@ internal enum Components {
                 self.dishName = dishName
                 self.mealTime = mealTime
                 self.createdAt = createdAt
+                self.hiddenAt = hiddenAt
+                self.dietTags = dietTags
+                self.derivedDietTags = derivedDietTags
                 self.sourcePhotoId = sourcePhotoId
                 self.taggedByHandle = taggedByHandle
                 self.taggedWithHandles = taggedWithHandles
@@ -1005,6 +1020,9 @@ internal enum Components {
                 case dishName = "dish_name"
                 case mealTime = "meal_time"
                 case createdAt = "created_at"
+                case hiddenAt = "hidden_at"
+                case dietTags = "diet_tags"
+                case derivedDietTags = "derived_diet_tags"
                 case sourcePhotoId = "source_photo_id"
                 case taggedByHandle = "tagged_by_handle"
                 case taggedWithHandles = "tagged_with_handles"
