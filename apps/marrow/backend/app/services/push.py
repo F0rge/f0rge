@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.device_token import DeviceToken
 from f0rge_core.exceptions import NotFoundError
-from f0rge_db.tenant import current_user_id
+from f0rge_db.tenant import apply_session_user_id, current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -68,14 +68,15 @@ async def register_device(db: AsyncSession, token: str, platform: str) -> Device
         )
     finally:
         await db.execute(sa.text("SELECT set_config('app.service_role', '', true)"))
-    await db.execute(
-        pg_insert(DeviceToken)
-        .values(user_id=user_id, token=token, platform=platform)
-        .on_conflict_do_nothing(constraint="uq_device_tokens_token")
-    )
+    stmt = pg_insert(DeviceToken).values(user_id=user_id, token=token, platform=platform)
+    # After the takeover delete any conflicting row is the caller's own, so
+    # the tenant_isolation policy covers the DO UPDATE path.
     row = (
         await db.execute(
-            sa.select(DeviceToken).where(DeviceToken.token == token, DeviceToken.user_id == user_id)
+            stmt.on_conflict_do_update(
+                constraint="uq_device_tokens_token",
+                set_={"platform": stmt.excluded.platform},
+            ).returning(DeviceToken)
         )
     ).scalar_one()
     await db.commit()
@@ -100,51 +101,66 @@ async def unregister_device(db: AsyncSession, token: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def send_dose_reminder(db: AsyncSession, user_id: uuid.UUID, payload: dict) -> None:
-    """Push a dose reminder to every device of ``user_id``. Best-effort.
+async def send_dose_reminder(db: AsyncSession, user_id: uuid.UUID, payloads: list[dict]) -> None:
+    """Push dose reminders to every device of ``user_id``. Best-effort.
 
-    Caller must hold the user's RLS GUC on ``db`` (the reminder tick does).
-    ``payload`` is the in-app notification payload
+    Called by the reminder tick after its transaction commits: the token read
+    and any dead-token prune each run as their own short transaction on ``db``,
+    re-applying the user's RLS GUC first, so APNs network I/O never holds a
+    transaction open. Each ``payloads`` entry is an in-app notification payload
     (treatment_id/treatment_name/slot/date).
     """
     client = _get_client()
     if client is None:
         return
+    await apply_session_user_id(db, user_id)
     tokens = (
         (await db.execute(sa.select(DeviceToken.token).where(DeviceToken.user_id == user_id)))
         .scalars()
         .all()
     )
+    await db.commit()  # close the read transaction before network I/O
     if not tokens:
         return
 
     from aioapns import NotificationRequest, PushType
 
-    message = {
-        "aps": {
-            "alert": {
-                "title": "Dose reminder",
-                "body": f"{payload['treatment_name']} — dose {payload['slot']}",
+    dead: set[str] = set()
+    for payload in payloads:
+        message = {
+            "aps": {
+                "alert": {
+                    "title": "Dose reminder",
+                    "body": f"{payload['treatment_name']} — dose {payload['slot']}",
+                },
+                "sound": "default",
+                "category": "DOSE_REMINDER",
             },
-            "sound": "default",
-            "category": "DOSE_REMINDER",
-        },
-        "treatment_id": payload["treatment_id"],
-        "slot": payload["slot"],
-        "date": payload["date"],
-    }
-    for token in tokens:
-        try:
-            result = await client.send_notification(
-                NotificationRequest(device_token=token, message=message, push_type=PushType.ALERT)
-            )
-        except Exception:
-            logger.exception("APNs send failed for token %s…", token[:8])
-            continue
-        if result.status == "410" or result.description in _PRUNE_DESCRIPTIONS:
-            await db.execute(
-                sa.delete(DeviceToken).where(
-                    DeviceToken.token == token, DeviceToken.user_id == user_id
+            "treatment_id": payload["treatment_id"],
+            "slot": payload["slot"],
+            "date": payload["date"],
+        }
+        for token in tokens:
+            if token in dead:
+                continue
+            try:
+                result = await client.send_notification(
+                    NotificationRequest(
+                        device_token=token, message=message, push_type=PushType.ALERT
+                    )
                 )
+            except Exception:
+                logger.exception("APNs send failed for token %s…", token[:8])
+                continue
+            if result.status == "410" or result.description in _PRUNE_DESCRIPTIONS:
+                dead.add(token)
+                logger.info("Pruning dead device token %s… (%s)", token[:8], result.description)
+    if dead:
+        # Short follow-up transaction; the session-scoped GUC set above still
+        # holds, so RLS scopes the delete to this user's rows.
+        await db.execute(
+            sa.delete(DeviceToken).where(
+                DeviceToken.token.in_(dead), DeviceToken.user_id == user_id
             )
-            logger.info("Pruned dead device token %s… (%s)", token[:8], result.description)
+        )
+        await db.commit()

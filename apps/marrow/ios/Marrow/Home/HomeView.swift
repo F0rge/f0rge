@@ -68,6 +68,8 @@ struct HomeView: View {
     }
 
     private func load() async {
+        // The two GETs are independent — run them concurrently.
+        async let todayEntry: Void = loadTodayEntry()
         do {
             let output = try await API.client.meApiV1AuthMeGet()
             let me = try output.ok.body.json
@@ -82,11 +84,11 @@ struct HomeView: View {
         } catch {
             errorMessage = "Could not load account: \(error.localizedDescription)"
         }
-        await loadTodayEntry()
+        await todayEntry
     }
 
     private func loadTodayEntry() async {
-        let today = Date().formatted(.iso8601.year().month().day().dateSeparator(.dash))
+        let today = Date().apiDay
         do {
             let output = try await API.client.getEntryApiV1EntriesDateGet(path: .init(date: today))
             switch output {

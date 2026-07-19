@@ -9,7 +9,7 @@ struct TreatmentDetailView: View {
     @State private var errorMessage: String?
     @State private var busy = false
 
-    private let today = Date().formatted(.iso8601.year().month().day().dateSeparator(.dash))
+    private let today = Date().apiDay
 
     var body: some View {
         NavigationStack {
@@ -42,10 +42,7 @@ struct TreatmentDetailView: View {
 
     private func load() async {
         do {
-            let items = try await API.client
-                .getProtocolApiV1TreatmentsProtocolGet(query: .init(date: today))
-                .ok.body.json.items
-            guard let found = items.first(where: { $0.id == treatmentID }) else {
+            guard let found = try await Push.protocolItem(id: treatmentID, date: today) else {
                 errorMessage = "This treatment isn't in today's protocol."
                 return
             }

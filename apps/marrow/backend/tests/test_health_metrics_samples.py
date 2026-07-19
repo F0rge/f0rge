@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,21 +15,10 @@ from app.main import app
 from app.models.health_metrics import HealthMetric
 from f0rge_db.tenant import apply_session_user_id
 from tests.conftest import authed_user_id
-from tests.helpers import make_tenant_get_db_override, signup_payload
+from tests.helpers import signup_client, signup_payload
 
 PASSWORD = "samples-test-pass-12"
 SAMPLES_URL = "/api/v1/health-metrics/samples"
-
-
-async def _signup_client(async_db: AsyncSession, email: str) -> AsyncClient:
-    app.dependency_overrides[get_db] = make_tenant_get_db_override(async_db)
-    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    resp = await client.post(
-        "/api/v1/auth/signup",
-        json=signup_payload(email, PASSWORD),
-    )
-    assert resp.status_code == 200
-    return client
 
 
 async def _rows_for_user(
@@ -93,8 +82,8 @@ async def test_empty_samples_rejected(authed_client: AsyncClient) -> None:
 
 
 async def test_two_users_see_only_their_own_samples(async_db: AsyncSession) -> None:
-    client_a = await _signup_client(async_db, "samples-a@example.com")
-    client_b = await _signup_client(async_db, "samples-b@example.com")
+    client_a = await signup_client(async_db, "samples-a@example.com", PASSWORD)
+    client_b = await signup_client(async_db, "samples-b@example.com", PASSWORD)
     try:
         posted_a = await client_a.post(
             SAMPLES_URL, json={"samples": [{"date": "2026-07-04", "hrv_mean": 41.0}]}

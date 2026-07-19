@@ -178,9 +178,12 @@ final class HealthSyncService {
 
         // 2. Anchored results alone can't produce day-level means — refetch
         //    every touched day in full and re-aggregate. ±1 day margin covers
-        //    sleep sessions spanning midnight.
+        //    sleep sessions spanning midnight. The end bound (max touched day
+        //    + 2 covers through the end of its +1 emit day) keeps one stray
+        //    old backfill sample from re-reading everything since it.
         let fetchStart = max(backfillStart, calendar.date(byAdding: .day, value: -1, to: earliest)!)
-        let fetchScope = HKQuery.predicateForSamples(withStart: fetchStart, end: nil)
+        let fetchEnd = calendar.date(byAdding: .day, value: 2, to: touched.max()!)!
+        let fetchScope = HKQuery.predicateForSamples(withStart: fetchStart, end: fetchEnd)
         let hrvSamples = try await fullFetch(.quantitySample(type: Self.hrvType, predicate: fetchScope))
         let rhrSamples = try await fullFetch(.quantitySample(type: Self.restingHRType, predicate: fetchScope))
         let sleepSamples = try await fullFetch(.categorySample(type: Self.sleepType, predicate: fetchScope))

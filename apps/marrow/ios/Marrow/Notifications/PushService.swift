@@ -36,16 +36,22 @@ enum Push {
         _ = try? await API.client.unregisterDeviceApiV1DevicesTokenDelete(path: .init(token: token))
     }
 
+    /// That date's protocol row for a treatment, or nil when it isn't in the
+    /// protocol. Shared by the LOG_DOSE read-before-write and TreatmentDetailView.
+    static func protocolItem(id: Int, date: String) async throws -> Components.Schemas.ProtocolItem? {
+        try await API.client
+            .getProtocolApiV1TreatmentsProtocolGet(query: .init(date: date))
+            .ok.body.json.items
+            .first { $0.id == id }
+    }
+
     /// Log a dose from the reminder's LOG_DOSE action. The PUT takes an
     /// absolute count and slot k means "after taking, you're at k today", so
     /// read the current count first: a late or duplicate tap never lowers a
     /// count the user already pushed higher manually, and a satisfied slot is
     /// a no-op. If the read fails we still PUT the slot value (best effort).
     static func logDose(treatmentID: Int, date: String, slot: Int) async {
-        if let items = try? await API.client
-            .getProtocolApiV1TreatmentsProtocolGet(query: .init(date: date))
-            .ok.body.json.items,
-            let current = items.first(where: { $0.id == treatmentID })?.dosesTaken,
+        if let current = try? await protocolItem(id: treatmentID, date: date)?.dosesTaken,
             current >= slot
         {
             return
@@ -125,8 +131,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let content = response.notification.request.content
+        // The backend serializes treatment_id as a JSON string (str(treatment.id)),
+        // so it arrives as NSString — read it as String, then parse the Int the
+        // generated client expects.
         guard content.categoryIdentifier == "DOSE_REMINDER",
-              let treatmentID = content.userInfo["treatment_id"] as? Int
+              let treatmentID = (content.userInfo["treatment_id"] as? String).flatMap(Int.init)
         else {
             completionHandler()
             return

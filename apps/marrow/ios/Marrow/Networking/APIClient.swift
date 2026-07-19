@@ -44,3 +44,10 @@ enum API {
         return (try? JSONDecoder().decode([String: String].self, from: data))?["detail"]
     }
 }
+
+extension Date {
+    /// `yyyy-MM-dd`, the wire format for the API's day-keyed endpoints.
+    var apiDay: String {
+        formatted(.iso8601.year().month().day().dateSeparator(.dash))
+    }
+}

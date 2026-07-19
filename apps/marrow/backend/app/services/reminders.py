@@ -5,7 +5,8 @@ minute, checks every user's active dose-tracked treatments against their
 local-time reminder slots and inserts a ``dose_reminder`` notification per
 missed slot. The partial unique index on ``notifications.dedupe_key`` plus
 ON CONFLICT DO NOTHING is the multi-instance lock — Fly can run several
-machines and exactly one insert wins.
+machines and exactly one insert wins. APNs delivery runs only after the
+tick's transaction commits so network I/O never holds it open.
 """
 
 from __future__ import annotations
@@ -21,11 +22,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.crud.settings import UserSettingsCRUD
 from app.crud.treatment_log import TreatmentLogCRUD
 from app.database import async_session_maker
 from app.models.notification import Notification
+from app.models.treatment import Treatment
 from app.models.user import User
-from app.models.user_settings import UserSettings
 from app.services.push import send_dose_reminder
 from f0rge_db.tenant import apply_session_user_id
 
@@ -47,11 +49,10 @@ def derive_slots(
         return sorted(datetime.time.fromisoformat(t) for t in reminder_times)
     if doses_per_day == 1:
         return [datetime.time(9, 0)]
-    if doses_per_day == 2:
-        return [datetime.time(9, 0), datetime.time(21, 0)]
     if doses_per_day == 3:
+        # Meal-aligned, deliberately not evenly spaced.
         return [datetime.time(9, 0), datetime.time(14, 0), datetime.time(21, 0)]
-    # >3: evenly spaced between 09:00 and 21:00 inclusive.
+    # Evenly spaced between 09:00 and 21:00 inclusive (n=2 → 09:00/21:00).
     step = _DAY_SPAN_MINUTES / (doses_per_day - 1)
     base = datetime.datetime.combine(datetime.date.min, _DAY_START)
     return [
@@ -59,70 +60,80 @@ def derive_slots(
     ]
 
 
-async def _tick_user(db: AsyncSession, user_id: uuid.UUID, now: datetime.datetime) -> int:
-    """Fire due reminder notifications for one user. Returns rows inserted."""
+async def _tick_user(db: AsyncSession, user_id: uuid.UUID, now: datetime.datetime) -> list[dict]:
+    """Insert due reminder notifications for one user.
+
+    Returns the payloads whose dedupe insert won (this instance must push them
+    once the caller commits).
+    """
     await apply_session_user_id(db, user_id)
-    tz_name = (
-        await db.execute(sa.select(UserSettings.timezone).where(UserSettings.user_id == user_id))
-    ).scalar_one_or_none() or settings.app_timezone
+    user_settings = await UserSettingsCRUD(db).get()
+    tz_name = (user_settings.timezone if user_settings else None) or settings.app_timezone
     now_local = now.astimezone(ZoneInfo(tz_name))
     today = now_local.date()
 
     crud = TreatmentLogCRUD(db)
     treatments = [t for t in await crud.list_active_treatments(today) if t.doses_per_day]
-    if not treatments:
-        return 0
-    logs = await crud.list_logs_for_date(today, [t.id for t in treatments])
-    taken_by_treatment = {log.treatment_id: log.doses_taken for log in logs}
-
-    fired = 0
+    # (treatment, slot number) pairs inside their window right now.
+    due: list[tuple[Treatment, int]] = []
     for treatment in treatments:
-        taken = taken_by_treatment.get(treatment.id, 0)
         slots = derive_slots(treatment.doses_per_day, treatment.reminder_times)
         for k, slot in enumerate(slots, start=1):
             slot_dt = datetime.datetime.combine(today, slot, tzinfo=now_local.tzinfo)
-            if not (slot_dt <= now_local < slot_dt + SLOT_WINDOW):
-                continue
-            if taken >= k:
-                continue
-            payload = {
-                "treatment_id": str(treatment.id),
-                "treatment_name": treatment.name,
-                "slot": k,
-                "date": today.isoformat(),
-            }
-            result = await db.execute(
-                pg_insert(Notification)
-                .values(
-                    user_id=user_id,
-                    type="dose_reminder",
-                    payload=payload,
-                    dedupe_key=f"dose:{user_id}:{treatment.id}:{today.isoformat()}:{k}",
-                )
-                .on_conflict_do_nothing()
+            if slot_dt <= now_local < slot_dt + SLOT_WINDOW:
+                due.append((treatment, k))
+    if not due:
+        return []
+
+    logs = await crud.list_logs_for_date(today, list({t.id for t, _ in due}))
+    taken_by_treatment = {log.treatment_id: log.doses_taken for log in logs}
+
+    wins: list[dict] = []
+    for treatment, k in due:
+        if taken_by_treatment.get(treatment.id, 0) >= k:
+            continue
+        payload = {
+            "treatment_id": str(treatment.id),
+            "treatment_name": treatment.name,
+            "slot": k,
+            "date": today.isoformat(),
+        }
+        result = await db.execute(
+            pg_insert(Notification)
+            .values(
+                user_id=user_id,
+                type="dose_reminder",
+                payload=payload,
+                dedupe_key=f"dose:{user_id}:{treatment.id}:{today.isoformat()}:{k}",
             )
-            fired += result.rowcount
-            # Push only from the instance that won the dedupe insert, and
-            # never let APNs trouble break the loop.
-            if result.rowcount == 1:
-                try:
-                    await send_dose_reminder(db, user_id, payload)
-                except Exception:
-                    logger.exception("APNs delivery failed for user %s", user_id)
-    return fired
+            .on_conflict_do_nothing()
+        )
+        if result.rowcount == 1:
+            wins.append(payload)
+    return wins
 
 
 async def run_reminder_tick(now: datetime.datetime | None = None) -> int:
     """One scheduler pass over all users. Returns notifications inserted."""
     if now is None:
         now = datetime.datetime.now(datetime.timezone.utc)
-    fired = 0
+    wins: list[tuple[uuid.UUID, list[dict]]] = []
     async with async_session_maker() as db:
         # users is not RLS-user-owned, so listing ids needs no tenant GUC.
         user_ids = (await db.execute(sa.select(User.id))).scalars().all()
         for user_id in user_ids:
-            fired += await _tick_user(db, user_id, now)
+            payloads = await _tick_user(db, user_id, now)
+            if payloads:
+                wins.append((user_id, payloads))
         await db.commit()
+        # APNs I/O strictly after the commit — push only from the instance
+        # that won the dedupe insert, and never let APNs trouble break the loop.
+        for user_id, payloads in wins:
+            try:
+                await send_dose_reminder(db, user_id, payloads)
+            except Exception:
+                logger.exception("APNs delivery failed for user %s", user_id)
+    fired = sum(len(payloads) for _, payloads in wins)
     if fired:
         logger.info("Dose reminder tick inserted %d notification(s)", fired)
     return fired

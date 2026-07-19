@@ -69,6 +69,10 @@ def upgrade() -> None:
             """
         )
     )
+    # The takeover path only deletes, but the policy must stay ALL: a DELETE
+    # whose WHERE references table columns also needs the row visible via a
+    # SELECT or ALL policy, so a DELETE-only policy matches zero cross-tenant
+    # rows.
     create_service_role_policy_sync(
         bind,
         name="device_registrar",

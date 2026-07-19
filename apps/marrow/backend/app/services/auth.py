@@ -123,6 +123,7 @@ class AuthService:
             "user_id": str(user.id),
             "email": user.email,
             "handle": user.handle,
+            "token": token,
         }
 
     async def login(

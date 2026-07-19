@@ -18,17 +18,15 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 import app.services.push as push
 from app.config import settings
-from app.database import get_db
-from app.main import app
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH
 from app.services.reminders import run_reminder_tick
 from tests.conftest import TEST_APP_ROLE
-from tests.helpers import make_tenant_get_db_override, signup_payload
+from tests.helpers import create_treatment, signup_client
 
 UTC = datetime.timezone.utc
 # Europe/Luxembourg is UTC+2 (CEST) on this date: 09:05 local — slot 1 in window.
@@ -58,54 +56,15 @@ def fake_apns(monkeypatch: pytest.MonkeyPatch) -> FakeAPNs:
     return fake
 
 
-@pytest.fixture
-def patch_reminder_session_maker(async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Route the tick's own session onto the test savepoint session."""
-
-    class _SessionCtx:
-        async def __aenter__(self) -> AsyncSession:
-            return async_db
-
-        async def __aexit__(self, *args: object) -> None:
-            return None
-
-    monkeypatch.setattr("app.services.reminders.async_session_maker", lambda: _SessionCtx())
-
-
-async def _signup_client(async_db: AsyncSession, suffix: str) -> AsyncClient:
-    app.dependency_overrides[get_db] = make_tenant_get_db_override(async_db)
-    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    resp = await client.post(
-        "/api/v1/auth/signup",
-        json=signup_payload(f"dev_{suffix}@example.com", "secure-pass-12", f"dev_{suffix}"),
-    )
-    assert resp.status_code == 200
-    return client
-
-
 @pytest_asyncio.fixture
 async def signed_up_client(async_db: AsyncSession) -> AsyncClient:
-    return await _signup_client(async_db, uuid.uuid4().hex[:8])
+    return await signup_client(async_db, f"dev_{uuid.uuid4().hex[:8]}@example.com")
 
 
 async def _register(client: AsyncClient, token: str, **extra) -> dict:
     resp = await client.post("/api/v1/devices", json={"token": token, **extra})
     assert resp.status_code == 200
     return resp.json()
-
-
-async def _create_treatment(client: AsyncClient, doses_per_day: int = 2) -> int:
-    resp = await client.post(
-        "/api/v1/treatments",
-        json={
-            "name": "Rifaximin",
-            "type": "prescription",
-            "start_date": "2026-07-01",
-            "doses_per_day": doses_per_day,
-        },
-    )
-    assert resp.status_code == 201
-    return resp.json()["id"]
 
 
 # ---------------------------------------------------------------------------
@@ -133,8 +92,8 @@ async def test_unregister_own_token(signed_up_client: AsyncClient):
 
 
 async def test_cannot_delete_other_users_token(async_db: AsyncSession):
-    client_a = await _signup_client(async_db, uuid.uuid4().hex[:8])
-    client_b = await _signup_client(async_db, uuid.uuid4().hex[:8])
+    client_a = await signup_client(async_db, f"dev_{uuid.uuid4().hex[:8]}@example.com")
+    client_b = await signup_client(async_db, f"dev_{uuid.uuid4().hex[:8]}@example.com")
     await _register(client_a, TOKEN_A)
 
     # B cannot delete A's token — 404, and A's row survives.
@@ -190,8 +149,8 @@ async def test_device_tokens_rls_policies(superuser_engine: AsyncEngine):
 
 async def test_token_takeover_moves_row_to_new_user(async_db: AsyncSession):
     """Beatriz signs in on a phone previously registered to Leo."""
-    client_a = await _signup_client(async_db, uuid.uuid4().hex[:8])
-    client_b = await _signup_client(async_db, uuid.uuid4().hex[:8])
+    client_a = await signup_client(async_db, f"dev_{uuid.uuid4().hex[:8]}@example.com")
+    client_b = await signup_client(async_db, f"dev_{uuid.uuid4().hex[:8]}@example.com")
     await _register(client_a, TOKEN_A)
 
     taken_over = await _register(client_b, TOKEN_A)
@@ -213,7 +172,7 @@ async def test_token_takeover_moves_row_to_new_user(async_db: AsyncSession):
 async def test_fired_reminder_pushes_to_registered_device(
     signed_up_client: AsyncClient, fake_apns: FakeAPNs
 ):
-    treatment_id = await _create_treatment(signed_up_client)
+    treatment_id = await create_treatment(signed_up_client)
     await _register(signed_up_client, TOKEN_A)
 
     assert await run_reminder_tick(now=IN_WINDOW) == 1
@@ -238,7 +197,7 @@ async def test_fired_reminder_pushes_to_registered_device(
 async def test_gone_result_prunes_token(signed_up_client: AsyncClient, fake_apns: FakeAPNs):
     fake_apns.status = "410"
     fake_apns.description = "Unregistered"
-    await _create_treatment(signed_up_client)
+    await create_treatment(signed_up_client)
     await _register(signed_up_client, TOKEN_B)
 
     assert await run_reminder_tick(now=IN_WINDOW) == 1
@@ -253,7 +212,7 @@ async def test_gone_result_prunes_token(signed_up_client: AsyncClient, fake_apns
 async def test_user_without_tokens_still_gets_in_app_row(
     signed_up_client: AsyncClient, fake_apns: FakeAPNs
 ):
-    await _create_treatment(signed_up_client)
+    await create_treatment(signed_up_client)
 
     assert await run_reminder_tick(now=IN_WINDOW) == 1
     assert fake_apns.sent == []
@@ -277,5 +236,5 @@ async def test_unconfigured_apns_builds_no_client(
     monkeypatch.setattr(aioapns, "APNs", _fail)
 
     # No-op, no client, no crash.
-    await push.send_dose_reminder(async_db, uuid.uuid4(), {"treatment_name": "x", "slot": 1})
+    await push.send_dose_reminder(async_db, uuid.uuid4(), [{"treatment_name": "x", "slot": 1}])
     assert push._client is None

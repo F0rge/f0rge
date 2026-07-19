@@ -63,6 +63,8 @@ export function notificationCopy(item: NotificationItem): string {
       return `@${p.handle ?? 'someone'} tagged you on a meal — approval needed`
     case 'meal_tag_delivered':
       return `@${p.handle ?? 'someone'} shared a meal with you`
+    case 'dose_reminder':
+      return `Dose reminder: ${p.treatment_name ?? 'treatment'} — dose ${p.slot ?? 1}`
     default:
       return 'New activity'
   }

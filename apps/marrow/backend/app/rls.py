@@ -76,7 +76,10 @@ async def enable_row_level_security(conn: AsyncConnection) -> None:
         role="worker",
     )
     # Mirrors migration 046: device registration deletes another user's stale
-    # row for the same token (phone changed owners) under this role.
+    # row for the same token (phone changed owners) under this role. The
+    # takeover path only deletes, but the policy must stay ALL: a DELETE whose
+    # WHERE references table columns also needs the row visible via a SELECT
+    # or ALL policy, so a DELETE-only policy matches zero cross-tenant rows.
     await create_service_role_policy(
         conn,
         name="device_registrar",

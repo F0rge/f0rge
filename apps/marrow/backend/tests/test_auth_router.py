@@ -33,6 +33,7 @@ async def test_signup_creates_user_and_sets_cookie(async_client: AsyncClient) ->
     assert body["authenticated"] is True
     assert body["email"] == TEST_EMAIL
     assert uuid.UUID(body["user_id"])
+    assert body["token"]
     assert JWT_COOKIE_NAME in resp.cookies
     assert resp.cookies[JWT_COOKIE_NAME]
 
