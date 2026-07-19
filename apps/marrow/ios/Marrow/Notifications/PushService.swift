@@ -146,7 +146,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 completionHandler()
                 return
             }
-            let slot = content.userInfo["slot"] as? Int ?? 1
+            let slot = (content.userInfo["slot"] as? NSNumber)?.intValue
+                ?? (content.userInfo["slot"] as? Int)
+                ?? 1
             Task { @MainActor in
                 var bgTask = UIBackgroundTaskIdentifier.invalid
                 bgTask = UIApplication.shared.beginBackgroundTask(withName: "log-dose") {
