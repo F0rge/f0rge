@@ -4,7 +4,7 @@ import datetime
 import uuid
 
 from sqlalchemy import Date, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -39,6 +39,9 @@ class Treatment(Base):
     dose: Mapped[str | None] = mapped_column(String, nullable=True)
     # Null = not dose-tracked (e.g. "Low FODMAP diet"). 1..12 when set.
     doses_per_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Optional list of "HH:MM" strings overriding the derived reminder slots
+    # (services.reminders.derive_slots). Null = derive from doses_per_day.
+    reminder_times: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
     updated_at: Mapped[datetime.datetime] = mapped_column(

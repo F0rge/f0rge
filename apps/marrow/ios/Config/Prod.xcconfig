@@ -1,0 +1,4 @@
+// Release builds talk to the production API.
+#include "Shared.xcconfig"
+
+API_BASE_URL = https:/$()/api.marrow-health.com

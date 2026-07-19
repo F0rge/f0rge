@@ -45,6 +45,13 @@ class UserSettings(Base):
     profile_tag_filter_mode: Mapped[str] = mapped_column(String, nullable=False, default="off")
     # CSV of diet-tag keys (entry.diet_risk convention); "" = no tags selected.
     profile_filter_tags: Mapped[str] = mapped_column(String, nullable=False, default="")
+    # IANA timezone for dose reminder slots (migration 046).
+    timezone: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default="Europe/Luxembourg",
+        server_default="Europe/Luxembourg",
+    )
 
     @property
     def profile_filter_tags_list(self) -> list[str]:

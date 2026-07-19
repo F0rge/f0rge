@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     openweathermap_city: str = "Luxembourg"
     weather_fetch_enabled: bool = True
     health_import_token: str = ""
+    dose_reminders_enabled: bool = True
+    apns_key_id: str = ""
+    apns_team_id: str = ""
+    apns_private_key: str = ""  # .p8 PEM content, not a path
+    apns_topic: str = "com.f0rge.marrow"
+    apns_use_sandbox: bool = True
     openrouter_api_key: str = ""
     openrouter_model: str = "google/gemini-3-flash-preview"
     food_analysis_enabled: bool = True

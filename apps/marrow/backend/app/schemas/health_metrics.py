@@ -57,6 +57,12 @@ class HealthMetricCreate(BaseModel):
     wrist_temp_deviation: Optional[float] = None
 
 
+class HealthSamplesPayload(BaseModel):
+    """Validated body for POST /health-metrics/samples (iOS HealthKit sync)."""
+
+    samples: list[HealthMetricCreate] = Field(min_length=1)
+
+
 class HealthMetricResponse(BaseModel):
     id: int
     date: datetime.date

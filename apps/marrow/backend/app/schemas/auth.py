@@ -20,3 +20,4 @@ class AuthStatus(BaseModel):
     user_id: str | None = None
     email: str | None = None
     handle: str | None = None
+    token: str | None = None
