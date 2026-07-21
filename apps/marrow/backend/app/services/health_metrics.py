@@ -108,11 +108,15 @@ class HealthMetricsService:
             for sample in samples:
                 fields = sample.model_dump(exclude={"date"}, exclude_unset=True, exclude_none=True)
                 if not fields:
-                    stmt = pg_insert(HealthMetric).values(
-                        user_id=user_id,
-                        date=sample.date,
-                        source="ios_healthkit",
-                    ).on_conflict_do_nothing(constraint="uq_health_metrics_user_id_date")
+                    stmt = (
+                        pg_insert(HealthMetric)
+                        .values(
+                            user_id=user_id,
+                            date=sample.date,
+                            source="ios_healthkit",
+                        )
+                        .on_conflict_do_nothing(constraint="uq_health_metrics_user_id_date")
+                    )
                 else:
                     stmt = pg_insert(HealthMetric).values(
                         user_id=user_id,
