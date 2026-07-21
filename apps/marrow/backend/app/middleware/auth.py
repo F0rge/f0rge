@@ -20,9 +20,9 @@ def _resolve_user_id(
     cookie: str | None,
     authorization: str | None,
 ) -> uuid.UUID | None:
-    """Decode the first valid credential; try bearer when cookie JWT is stale."""
+    """Decode the first valid credential; prefer bearer over cookie when both work."""
     bearer = _bearer_token(authorization)
-    for token in (cookie, bearer):
+    for token in (bearer, cookie):
         if not token:
             continue
         try:

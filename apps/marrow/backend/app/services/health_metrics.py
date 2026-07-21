@@ -107,18 +107,25 @@ class HealthMetricsService:
         async with unit_of_work(self.db):
             for sample in samples:
                 fields = sample.model_dump(exclude={"date"}, exclude_unset=True, exclude_none=True)
-                stmt = pg_insert(HealthMetric).values(
-                    user_id=user_id,
-                    date=sample.date,
-                    source="ios_healthkit",
-                    **fields,
-                )
-                set_ = {name: getattr(stmt.excluded, name) for name in fields}
-                set_["source"] = stmt.excluded.source
-                set_["updated_at"] = now
-                stmt = stmt.on_conflict_do_update(
-                    constraint="uq_health_metrics_user_id_date", set_=set_
-                )
+                if not fields:
+                    stmt = pg_insert(HealthMetric).values(
+                        user_id=user_id,
+                        date=sample.date,
+                        source="ios_healthkit",
+                    ).on_conflict_do_nothing(constraint="uq_health_metrics_user_id_date")
+                else:
+                    stmt = pg_insert(HealthMetric).values(
+                        user_id=user_id,
+                        date=sample.date,
+                        source="ios_healthkit",
+                        **fields,
+                    )
+                    set_ = {name: getattr(stmt.excluded, name) for name in fields}
+                    set_["source"] = stmt.excluded.source
+                    set_["updated_at"] = now
+                    stmt = stmt.on_conflict_do_update(
+                        constraint="uq_health_metrics_user_id_date", set_=set_
+                    )
                 await self.db.execute(stmt)
         return HealthImportResponse(
             status="ok", dates_upserted=len({sample.date for sample in samples})
