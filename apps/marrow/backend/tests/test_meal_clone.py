@@ -240,7 +240,9 @@ async def test_clone_shared_meal_copy_uses_recipient_placement(
     await apply_session_user_id(async_db, recipient_id)
     cloned = await MealService(async_db).clone(TARGET_DAY, copy_photo.id)
 
-    assert cloned.user_id == recipient_id
+    # clone returns a PhotoResponse (no user_id); assert ownership on the row.
+    cloned_row = await async_db.get(Photo, cloned.id)
+    assert cloned_row is not None and cloned_row.user_id == recipient_id
     assert cloned.id != copy_photo.id
     assert cloned.meal_id != copy_photo.meal_id
 

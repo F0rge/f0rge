@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { Pencil } from 'lucide-react'
+import { Eye, EyeOff, Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { usePhotoAnalysis, useUpdatePhotoLabel } from '@/lib/api/hooks'
+import { usePhotoAnalysis, useUpdatePhotoLabel, useUpdatePhotoVisibility } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import { PhotoAnalysis } from './photo-analysis'
+import { PhotoDietTagsSection } from './photo-diet-tags-section'
 import type { Photo } from '@/lib/api/types'
 
 // ---------------------------------------------------------------------------
@@ -309,6 +310,7 @@ export function PhotoFocusOverlay({
 }: PhotoFocusOverlayProps) {
   const open = photoId !== null
   const { data: analysis } = usePhotoAnalysis(photoId)
+  const updateVisibility = useUpdatePhotoVisibility()
   const reducedMotion = useReducedMotion()
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
@@ -322,6 +324,16 @@ export function PhotoFocusOverlay({
   const isSharedMeal =
     currentPhoto?.source_photo_id != null || currentPhoto?.tagged_by_handle != null
   const mealTime = formatMealTime(currentPhoto?.meal_time ?? null)
+  const isHidden = currentPhoto?.hidden_at != null
+
+  const toggleHidden = async () => {
+    if (!currentPhoto) return
+    try {
+      await updateVisibility.mutateAsync({ photoId: currentPhoto.id, hidden: !isHidden })
+    } catch (err) {
+      handleMutationError(err, 'Could not update profile visibility')
+    }
+  }
 
   const { style: gestureStyle, handlers } = useSheetGestures({
     photoId,
@@ -374,6 +386,21 @@ export function PhotoFocusOverlay({
                 .join(' · ') || 'Tap an ingredient to edit'}
             </div>
           </div>
+          {currentPhoto && (
+            <button
+              type="button"
+              onClick={() => void toggleHidden()}
+              disabled={updateVisibility.isPending}
+              className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              {isHidden ? (
+                <Eye className="size-3.5" aria-hidden />
+              ) : (
+                <EyeOff className="size-3.5" aria-hidden />
+              )}
+              {isHidden ? 'Show on profile' : 'Hide from profile'}
+            </button>
+          )}
         </div>
 
         {/* Hero image + meal tabs */}
@@ -422,6 +449,7 @@ export function PhotoFocusOverlay({
               <MealCompanionsSection photo={currentPhoto} variant="editor" />
             </div>
           )}
+          {currentPhoto && <PhotoDietTagsSection photo={currentPhoto} />}
           {photoId !== null && (
             <PhotoAnalysis
               key={photoId}

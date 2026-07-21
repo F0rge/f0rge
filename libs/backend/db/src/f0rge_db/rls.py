@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 MIGRATION_SERVICE_ROLE = "migrator"
 DEFAULT_MIGRATION_POLICY = "migration_bypass"
-# Sentinel so ``tenant_isolation``'s ``app.user_id::uuid`` cast never errors when unset.
+# Nil UUID sentinel so ``tenant_isolation``'s ``app.user_id::uuid`` cast never
+# errors on ``''``. Used by migration_bypass and ``apply_service_role``.
 MIGRATION_DUMMY_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 

@@ -126,7 +126,11 @@ Seeding one reference user (migration 029 pattern): `set_config('app.user_id', .
 
 ### Standing service-role policies
 
-Long-lived policies (`provisioner`, `worker`, `mcp_auth`) are created in dedicated migrations (e.g. 032) and wired by app code. Transient `migration_bypass` is only for one-off data backfills inside a migration file.
+Long-lived policies (`provisioner`, `worker`, `mcp_auth`) are created in dedicated migrations (e.g. 032) and wired by app code via `apply_service_role`. Transient `migration_bypass` is only for one-off data backfills inside a migration file.
+
+**Never leave `app.user_id` as `''`.** FORCE RLS evaluates every PERMISSIVE policy; `tenant_isolation` does `current_setting('app.user_id')::uuid` and throws `invalid input syntax for type uuid: ""` even when a service-role policy would allow the row. `apply_service_role` stamps the nil UUID sentinel (`MIGRATION_DUMMY_USER_ID`). Teardown must `RESET app.user_id` (`clear_tenant_session`) — never `set_config('app.user_id', '', ...)`.
+
+**MCP Fly secrets:** `DATABASE_URL` = `healthtracker-app` (token auth / main engine); `MCP_READONLY_DATABASE_URL` = `healthtracker-ro` (tools). Do not point both at the RO role. MCP VMs need ≥512 MB (`fly.mcp*.toml`) — 256 MB OOMs under light load.
 
 ### Regression coverage
 

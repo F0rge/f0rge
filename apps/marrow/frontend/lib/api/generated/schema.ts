@@ -127,6 +127,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register Device */
+        post: operations["register_device_api_v1_devices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unregister Device */
+        delete: operations["unregister_device_api_v1_devices__token__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entries": {
         parameters: {
             query?: never;
@@ -347,6 +381,23 @@ export interface paths {
         put?: never;
         /** Import Health Data */
         post: operations["import_health_data_api_v1_health_metrics_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/health-metrics/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingest Health Samples */
+        post: operations["ingest_health_samples_api_v1_health_metrics_samples_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1198,6 +1249,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/profile-tag-filter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Profile Tag Filter */
+        put: operations["update_profile_tag_filter_api_v1_settings_profile_tag_filter_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab-markers/catalog": {
         parameters: {
             query?: never;
@@ -1764,6 +1832,8 @@ export interface components {
             email?: string | null;
             /** Handle */
             handle?: string | null;
+            /** Token */
+            token?: string | null;
         };
         /** Body_extract_lab_upload_api_v1_labs_extract_upload_post */
         Body_extract_lab_upload_api_v1_labs_extract_upload_post: {
@@ -1896,6 +1966,33 @@ export interface components {
             positive: components["schemas"]["CorrelateRow"][];
             /** Negative */
             negative: components["schemas"]["CorrelateRow"][];
+        };
+        /** DeviceRegisterRequest */
+        DeviceRegisterRequest: {
+            /** Token */
+            token: string;
+            /**
+             * Platform
+             * @default ios
+             */
+            platform: string;
+        };
+        /** DeviceTokenResponse */
+        DeviceTokenResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Token */
+            token: string;
+            /** Platform */
+            platform: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** DietTagCatalogItemCreate */
         DietTagCatalogItemCreate: {
@@ -2511,6 +2608,48 @@ export interface components {
             /** Dates Upserted */
             dates_upserted: number;
         };
+        /** HealthMetricCreate */
+        HealthMetricCreate: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Hrv Mean */
+            hrv_mean?: number | null;
+            /** Hrv Std */
+            hrv_std?: number | null;
+            /** Resting Hr */
+            resting_hr?: number | null;
+            /** Sleep Hours */
+            sleep_hours?: number | null;
+            /** Sleep Deep Min */
+            sleep_deep_min?: number | null;
+            /** Sleep Rem Min */
+            sleep_rem_min?: number | null;
+            /** Sleep Core Min */
+            sleep_core_min?: number | null;
+            /** Sleep Awake Min */
+            sleep_awake_min?: number | null;
+            /** Sleep Deep Pct */
+            sleep_deep_pct?: number | null;
+            /** Sleep Rem Pct */
+            sleep_rem_pct?: number | null;
+            /** Sleep Efficiency */
+            sleep_efficiency?: number | null;
+            /** Sleep Start */
+            sleep_start?: string | null;
+            /** Sleep End */
+            sleep_end?: string | null;
+            /** Steps */
+            steps?: number | null;
+            /** Active Minutes */
+            active_minutes?: number | null;
+            /** Spo2 */
+            spo2?: number | null;
+            /** Wrist Temp Deviation */
+            wrist_temp_deviation?: number | null;
+        };
         /** HealthMetricResponse */
         HealthMetricResponse: {
             /** Id */
@@ -2566,6 +2705,14 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * HealthSamplesPayload
+         * @description Validated body for POST /health-metrics/samples (iOS HealthKit sync).
+         */
+        HealthSamplesPayload: {
+            /** Samples */
+            samples: components["schemas"]["HealthMetricCreate"][];
         };
         /** IncomingMealTagItem */
         IncomingMealTagItem: {
@@ -3108,6 +3255,18 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Hidden At */
+            hidden_at?: string | null;
+            /**
+             * Diet Tags
+             * @default []
+             */
+            diet_tags: string[];
+            /**
+             * Derived Diet Tags
+             * @default []
+             */
+            derived_diet_tags: string[];
             /** Source Photo Id */
             source_photo_id?: number | null;
             /** Tagged By Handle */
@@ -3152,6 +3311,23 @@ export interface components {
             label?: string | null;
             /** Meal Time */
             meal_time?: string | null;
+            /** Hidden */
+            hidden?: boolean | null;
+            /** Diet Tags */
+            diet_tags?: string[] | null;
+        };
+        /** ProfileTagFilterUpdate */
+        ProfileTagFilterUpdate: {
+            /**
+             * Profile Tag Filter Mode
+             * @enum {string}
+             */
+            profile_tag_filter_mode: "off" | "hide" | "show_only";
+            /**
+             * Profile Filter Tags
+             * @default []
+             */
+            profile_filter_tags: string[];
         };
         /** ProtocolItem */
         ProtocolItem: {
@@ -3250,6 +3426,16 @@ export interface components {
              * @default approve
              */
             tagged_meal_mode: string;
+            /**
+             * Profile Tag Filter Mode
+             * @default off
+             */
+            profile_tag_filter_mode: string;
+            /**
+             * Profile Filter Tags
+             * @default []
+             */
+            profile_filter_tags: string[];
         };
         /** SignupRequest */
         SignupRequest: {
@@ -4121,6 +4307,72 @@ export interface operations {
             };
         };
     };
+    register_device_api_v1_devices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unregister_device_api_v1_devices__token__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_entries_api_v1_entries_get: {
         parameters: {
             query?: {
@@ -4362,6 +4614,7 @@ export interface operations {
         parameters: {
             query?: {
                 scope?: "all" | "tagged";
+                visibility?: "visible" | "hidden" | "all";
                 limit?: number;
                 offset?: number;
             };
@@ -4712,6 +4965,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["HealthAutoExportPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_health_samples_api_v1_health_metrics_samples_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HealthSamplesPayload"];
             };
         };
         responses: {
@@ -6803,6 +7091,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TaggedMealModeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_profile_tag_filter_api_v1_settings_profile_tag_filter_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileTagFilterUpdate"];
             };
         };
         responses: {

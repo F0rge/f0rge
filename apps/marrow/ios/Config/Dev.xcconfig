@@ -1,0 +1,5 @@
+// Debug builds talk to the dev API.
+#include "Shared.xcconfig"
+
+// xcconfig gotcha: // starts a comment, so the URL is split with an empty $() substitution.
+API_BASE_URL = https:/$()/api-dev.marrow-health.com

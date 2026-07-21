@@ -23,6 +23,7 @@ import app.models.lab_marker_alias  # noqa: F401
 import app.models.lab_marker_catalog  # noqa: F401
 import app.models.photo  # noqa: F401
 import app.models.photo_analysis  # noqa: F401
+import app.models.photo_diet_tag  # noqa: F401
 import app.models.photo_ingredient  # noqa: F401
 import app.models.session  # noqa: F401
 import app.models.supplement_catalog  # noqa: F401

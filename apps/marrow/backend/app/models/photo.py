@@ -49,6 +49,7 @@ class Photo(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    hidden_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         default=datetime.datetime.utcnow,
     )
@@ -66,5 +67,10 @@ class Photo(Base):
         foreign_keys="PhotoAnalysis.meal_id",
         viewonly=True,
         uselist=False,
+        lazy="selectin",
+    )
+    diet_tags: Mapped[list["PhotoDietTag"]] = relationship(
+        "PhotoDietTag",
+        cascade="all, delete-orphan",
         lazy="selectin",
     )

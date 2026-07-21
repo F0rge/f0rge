@@ -1,0 +1,13 @@
+// Shared build settings for all configurations.
+PRODUCT_BUNDLE_IDENTIFIER = com.f0rge.marrow
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_ENTITLEMENTS = Config/Marrow.entitlements
+// set after Apple Developer enrollment (see #395); the 10-char Team ID from
+// developer.apple.com → Membership. Empty is fine for simulator builds.
+DEVELOPMENT_TEAM =
+
+// Version bumping lives here — edit these two lines, nowhere else.
+// MARKETING_VERSION: user-facing version (e.g. 0.1.0).
+// CURRENT_PROJECT_VERSION: build number; increment on EVERY TestFlight upload.
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1

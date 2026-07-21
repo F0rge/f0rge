@@ -6,6 +6,7 @@ from app.models.health_metrics import HealthMetric
 from app.models.meal import Meal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
+from app.models.photo_diet_tag import PhotoDietTag
 from app.models.photo_ingredient import PhotoIngredient
 from app.models.dietary_ingredient import DietaryIngredient
 from app.models.ingredient_alias import IngredientAlias
@@ -30,6 +31,7 @@ from app.models.notification import Notification
 from app.models.connection import Connection
 from app.models.group import Group, GroupMember
 from app.models.meal_tag import MealTag
+from app.models.device_token import DeviceToken
 import app.models.events  # noqa: F401 — register ORM insert hooks
 
 __all__ = [
@@ -38,6 +40,7 @@ __all__ = [
     "Meal",
     "Photo",
     "PhotoAnalysis",
+    "PhotoDietTag",
     "PhotoIngredient",
     "DietaryIngredient",
     "IngredientAlias",
@@ -64,4 +67,5 @@ __all__ = [
     "Group",
     "GroupMember",
     "MealTag",
+    "DeviceToken",
 ]

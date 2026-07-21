@@ -39,6 +39,7 @@ os.environ.setdefault(
     "postgresql+asyncpg://postgres:postgres@localhost:5432/test",
 )
 
+import contextlib
 import uuid
 from typing import AsyncIterator  # noqa: E402
 
@@ -213,6 +214,19 @@ async def async_db(async_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
             yield session
         finally:
             user_id_ctx.reset(user_token)
+
+
+@pytest.fixture
+def patch_reminder_session_maker(async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Route the reminder tick's own session onto the test savepoint session.
+
+    ``nullcontext`` is an async context manager since 3.10, so it stands in for
+    ``async_session_maker()`` without closing ``async_db`` on exit.
+    """
+    monkeypatch.setattr(
+        "app.services.reminders.async_session_maker",
+        lambda: contextlib.nullcontext(async_db),
+    )
 
 
 # ---------------------------------------------------------------------------

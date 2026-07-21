@@ -21,8 +21,9 @@ from app.sql.social_rls import (
 )
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-# Frozen import surface: migrations/versions/021_row_level_security.py does
-# `from app.rls import USER_OWNED_TABLES` — this name must stay here forever.
+# Live bootstrap list (runtime + tests). Migrations 020/021 hold their own
+# frozen copies and do NOT import this; new user-owned tables are appended
+# here and get their RLS DDL inline in their own migration (cf. 045).
 USER_OWNED_TABLES: tuple[str, ...] = (
     "entries",
     "photos",
@@ -47,6 +48,8 @@ USER_OWNED_TABLES: tuple[str, ...] = (
     "lab_marker_aliases",
     "dietary_ingredients",
     "ingredient_aliases",
+    "photo_diet_tags",
+    "device_tokens",
 )
 
 # The four catalog tables the signup copy touches (mirrors migration 032).
@@ -59,7 +62,7 @@ PROVISIONER_COPY_TABLES: tuple[str, ...] = (
 
 
 async def enable_row_level_security(conn: AsyncConnection) -> None:
-    """Apply tenant RLS policies (mirrors migrations 021 + 032)."""
+    """Apply tenant RLS policies (mirrors migrations 021 + 032 + 045)."""
     await enable_tenant_isolation(conn, USER_OWNED_TABLES)
     await create_service_role_policy(
         conn,
@@ -73,6 +76,17 @@ async def enable_row_level_security(conn: AsyncConnection) -> None:
         name="worker_queue",
         tables=("embedding_queue",),
         role="worker",
+    )
+    # Mirrors migration 047: device registration deletes another user's stale
+    # row for the same token (phone changed owners) under this role. The
+    # takeover path only deletes, but the policy must stay ALL: a DELETE whose
+    # WHERE references table columns also needs the row visible via a SELECT
+    # or ALL policy, so a DELETE-only policy matches zero cross-tenant rows.
+    await create_service_role_policy(
+        conn,
+        name="device_registrar",
+        tables=("device_tokens",),
+        role="device_registrar",
     )
     # Mirrors migration 032: lets copy_user_catalog_from_reference cross tenants
     # under FORCE RLS when the caller sets app.service_role='provisioner'.

@@ -42,6 +42,22 @@ class UserSettings(Base):
         DateTime, nullable=True
     )
     tagged_meal_mode: Mapped[str] = mapped_column(String, nullable=False, default="approve")
+    profile_tag_filter_mode: Mapped[str] = mapped_column(String, nullable=False, default="off")
+    # CSV of diet-tag keys (entry.diet_risk convention); "" = no tags selected.
+    profile_filter_tags: Mapped[str] = mapped_column(String, nullable=False, default="")
+    # IANA timezone for dose reminder slots (migration 046).
+    timezone: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default="Europe/Luxembourg",
+        server_default="Europe/Luxembourg",
+    )
+
+    @property
+    def profile_filter_tags_list(self) -> list[str]:
+        """Decoded CSV — the single owner of the storage convention above."""
+        return [t for t in self.profile_filter_tags.split(",") if t]
+
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )
