@@ -110,13 +110,13 @@ class PhotoService:
             resp.dish_name = p.analysis.dish_name if p.analysis else None
             responses.append(resp)
         if filtering:
-            # ponytail: in-Python tag filter; move to SQL EXISTS if the photo
-            # count ever makes this slow
+            # ponytail: in-Python tag filter + slice; move to SQL EXISTS if the
+            # photo count ever makes this slow
             wanted = set(settings_row.profile_filter_tags_list)
             # show_only with no tags would filter everything; treat as off (hide
             # with an empty list is already a no-op).
             if mode == "show_only" and not wanted:
-                return responses
+                return responses[offset : offset + limit]
 
             def _matches(r: PhotoResponse) -> bool:
                 return bool((set(r.diet_tags) | set(r.derived_diet_tags)) & wanted)
@@ -125,6 +125,7 @@ class PhotoService:
                 responses = [r for r in responses if not _matches(r)]
             else:  # show_only
                 responses = [r for r in responses if _matches(r)]
+            responses = responses[offset : offset + limit]
         return responses
 
     async def update_photo(self, photo_id: int, data: PhotoUpdate) -> PhotoResponse:
