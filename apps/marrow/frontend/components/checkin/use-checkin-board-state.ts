@@ -196,7 +196,7 @@ export function useCheckinBoardState({
   }, [markDirty])
 
   useEffect(() => {
-    if (existingEntry || supplementsTouched || symptomsTouched || !defaultsReady) return
+    if (existingEntry || isDirty || supplementsTouched || symptomsTouched || !defaultsReady) return
     setSupplements(defaultSupplementsCsv)
     setSymptomsJson(defaultSymptoms)
   }, [
@@ -204,6 +204,7 @@ export function useCheckinBoardState({
     defaultSymptoms,
     defaultsReady,
     existingEntry,
+    isDirty,
     supplementsTouched,
     symptomsTouched,
   ])
