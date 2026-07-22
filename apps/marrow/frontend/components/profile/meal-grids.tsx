@@ -112,6 +112,12 @@ export function MealGrids() {
     focusedPhotoId !== null && activePhotos.some((p) => p.id === focusedPhotoId)
       ? focusedPhotoId
       : null
+  const overlayPhotos =
+    focusedPhoto === null
+      ? []
+      : activePhotos.filter(
+          (p) => p.entry_id === activePhotos.find((x) => x.id === focusedPhoto)?.entry_id,
+        )
 
   return (
     <section className="space-y-3">
@@ -151,7 +157,7 @@ export function MealGrids() {
       )}
       <PhotoFocusOverlay
         photoId={focusedPhoto}
-        photos={activePhotos}
+        photos={overlayPhotos}
         onClose={() => setFocusedPhotoId(null)}
         onSelectPhoto={setFocusedPhotoId}
       />
