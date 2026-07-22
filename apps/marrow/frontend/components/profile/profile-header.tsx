@@ -104,12 +104,7 @@ export function ProfileHeader() {
       </div>
 
       <div className="mt-4 flex items-center gap-4">
-        {stats.data?.week_days != null && (
-          <StreakRing
-            weekDays={stats.data.week_days}
-            streak={stats.data.current_streak_days}
-          />
-        )}
+        <StreakRing streak={stats.data?.current_streak_days ?? 0} />
         <div className="min-w-0 flex-1">
           {name && <p className="truncate text-base font-bold">{name}</p>}
           {subline && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subline}</p>}
