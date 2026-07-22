@@ -1283,6 +1283,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/checkin-defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Checkin Defaults */
+        put: operations["update_checkin_defaults_api_v1_settings_checkin_defaults_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab-markers/catalog": {
         parameters: {
             query?: never;
@@ -1932,6 +1949,21 @@ export interface components {
             bulk_medications: components["schemas"]["CatalogSuggestionItem"][];
             /** Bulk Trackers */
             bulk_trackers: components["schemas"]["TrackerSuggestionItem"][];
+        };
+        /** CheckinDefaultsUpdate */
+        CheckinDefaultsUpdate: {
+            /**
+             * Default Supplements
+             * @default []
+             */
+            default_supplements: string[];
+            /**
+             * Default Symptoms
+             * @default {}
+             */
+            default_symptoms: {
+                [key: string]: number;
+            };
         };
         /** ConnectionItem */
         ConnectionItem: {
@@ -3453,6 +3485,18 @@ export interface components {
              * @default []
              */
             profile_filter_tags: string[];
+            /**
+             * Default Supplements
+             * @default []
+             */
+            default_supplements: string[];
+            /**
+             * Default Symptoms
+             * @default {}
+             */
+            default_symptoms: {
+                [key: string]: number;
+            };
         };
         /** SignupRequest */
         SignupRequest: {
@@ -7172,6 +7216,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProfileTagFilterUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_checkin_defaults_api_v1_settings_checkin_defaults_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckinDefaultsUpdate"];
             };
         };
         responses: {

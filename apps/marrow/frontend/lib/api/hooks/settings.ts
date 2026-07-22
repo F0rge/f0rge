@@ -8,6 +8,7 @@ import type {
   EmbeddingSettingsUpdate,
   TaggedMealModeUpdate,
   ProfileTagFilterUpdate,
+  CheckinDefaultsUpdate,
   TestConnectionResponse,
   ExternalTokenResponse,
 } from '../types'
@@ -62,6 +63,17 @@ export function useUpdateProfileTagFilter() {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
       // The profile feed is filtered by this rule server-side.
       queryClient.invalidateQueries({ queryKey: ['photos'] })
+    },
+  })
+}
+
+export function useUpdateCheckinDefaults() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CheckinDefaultsUpdate) =>
+      apiPut('/settings/checkin-defaults', data) as Promise<UserSettings>,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
   })
 }

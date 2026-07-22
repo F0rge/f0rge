@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from app.dependencies.settings import get_settings_service
 from app.middleware.auth import get_current_user_id
 from app.schemas.settings import (
+    CheckinDefaultsUpdate,
     EmbeddingSettingsUpdate,
     ExternalTokenResponse,
     LLMSettingsUpdate,
@@ -106,3 +107,12 @@ async def update_profile_tag_filter(
     _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> SettingsResponse:
     return await service.update_profile_tag_filter(body)
+
+
+@router.put("/checkin-defaults", response_model=SettingsResponse)
+async def update_checkin_defaults(
+    body: CheckinDefaultsUpdate,
+    service: SettingsService = Depends(get_settings_service),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
+) -> SettingsResponse:
+    return await service.update_checkin_defaults(body)

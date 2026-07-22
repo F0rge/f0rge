@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowLeft, Activity, BookOpen, Carrot, Layers, Pill, Settings2, Zap } from 'lucide-react'
+import { ArrowLeft, Activity, BookOpen, Carrot, ClipboardList, Layers, Pill, Settings2, Zap } from 'lucide-react'
 import { Card } from '@f0rge/ui'
 import { HubRow } from '@/components/customize/hub-row'
 import { PageShell } from '@/components/layout/page-shell'
@@ -13,6 +13,12 @@ const HUB_ITEMS = [
     icon: <Layers className="size-4" />,
     title: 'Reorder & visibility',
     description: 'Drag to reorder sections. Toggle which ones show on your daily check-in.',
+  },
+  {
+    href: '/customize/defaults',
+    icon: <ClipboardList className="size-4" />,
+    title: 'Check-in defaults',
+    description: 'Usual supplements and symptom severities for empty days.',
   },
   {
     href: '/customize/core-scales',
