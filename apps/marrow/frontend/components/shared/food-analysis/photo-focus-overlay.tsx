@@ -313,6 +313,11 @@ export function PhotoFocusOverlay({
   const updateVisibility = useUpdatePhotoVisibility()
   const reducedMotion = useReducedMotion()
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const activeTabRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' })
+  }, [photoId])
 
   const dishName = analysis?.dish_name ?? null
   const confidence =
@@ -415,21 +420,22 @@ export function PhotoFocusOverlay({
           )}
 
           {photos.length > 1 && (
-            <div className="absolute inset-x-0 bottom-2 flex justify-center">
-              <div className="flex items-center gap-1 rounded-full border border-border bg-background/95 p-1 shadow-sm backdrop-blur">
+            <div className="absolute inset-x-0 bottom-2 flex justify-center px-2">
+              <div className="flex max-w-full snap-x snap-mandatory items-center gap-1 overflow-x-auto rounded-full border border-border bg-background/95 p-1 shadow-sm backdrop-blur [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {photos.map((p, i) => {
                   const isActive = p.id === photoId
                   return (
                     <button
                       key={p.id}
+                      ref={isActive ? activeTabRef : undefined}
                       type="button"
                       onClick={() => onSelectPhoto(p.id)}
                       aria-label={`Switch to photo ${i + 1}`}
                       aria-current={isActive ? 'true' : undefined}
                       className={
                         isActive
-                          ? 'size-7 rounded-full bg-foreground text-xs font-semibold text-background'
-                          : 'size-7 rounded-full text-xs text-muted-foreground hover:bg-muted'
+                          ? 'size-7 shrink-0 snap-center rounded-full bg-foreground text-xs font-semibold text-background'
+                          : 'size-7 shrink-0 snap-center rounded-full text-xs text-muted-foreground hover:bg-muted'
                       }
                     >
                       {i + 1}
