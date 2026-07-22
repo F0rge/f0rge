@@ -5,8 +5,10 @@ import re
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.diet_tag_catalog import DietTagCatalogCRUD
+from app.cache.catalog import get_cached_catalog_list, invalidate_catalog
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.diet_tag_catalog import DietTagCatalogItem
+from app.schemas.diet_tag_catalog import DietTagCatalogItemResponse
 from f0rge_db.tenant import current_user_id
 
 _KEY_RE = re.compile(r"^[a-z0-9-]+$")
@@ -28,7 +30,13 @@ class DietTagCatalogService:
         self.crud = DietTagCatalogCRUD(db)
 
     async def list_items(self, include_archived: bool = False) -> list[DietTagCatalogItem]:
-        return await self.crud.list(include_archived=include_archived)
+        return await get_cached_catalog_list(
+            current_user_id(),
+            "diet_tags",
+            include_archived,
+            lambda: self.crud.list(include_archived=include_archived),
+            DietTagCatalogItemResponse,
+        )
 
     async def create_item(self, key: str, label: str) -> DietTagCatalogItem:
         normalized = normalize_key(key)
@@ -40,7 +48,9 @@ class DietTagCatalogService:
             if existing.archived:
                 existing.archived = False
                 existing.label = label
-                return await self.crud.commit_refresh(existing)
+                item = await self.crud.commit_refresh(existing)
+                await invalidate_catalog(current_user_id(), "diet_tags")
+                return item
             raise ConflictError(f"Catalog item '{normalized}' already exists.")
 
         max_item = await self.crud.get_max_sort_order_item()
@@ -50,7 +60,9 @@ class DietTagCatalogService:
             user_id=current_user_id(), key=normalized, label=label, sort_order=next_sort
         )
         self.crud.add(item)
-        return await self.crud.commit_refresh(item)
+        created = await self.crud.commit_refresh(item)
+        await invalidate_catalog(current_user_id(), "diet_tags")
+        return created
 
     async def update_item(self, key: str, data: dict) -> DietTagCatalogItem:
         item = await self.crud.get_by_key(key)
@@ -59,4 +71,6 @@ class DietTagCatalogService:
 
         for field, value in data.items():
             setattr(item, field, value)
-        return await self.crud.commit_refresh(item)
+        updated = await self.crud.commit_refresh(item)
+        await invalidate_catalog(current_user_id(), "diet_tags")
+        return updated
