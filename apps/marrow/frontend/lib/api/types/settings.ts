@@ -13,6 +13,8 @@ export interface UserSettings {
   tagged_meal_mode: TaggedMealMode
   profile_tag_filter_mode: ProfileTagFilterMode
   profile_filter_tags: string[]
+  default_supplements: string[]
+  default_symptoms: Record<string, number>
 }
 
 export interface LLMSettingsUpdate {
@@ -33,6 +35,11 @@ export interface TaggedMealModeUpdate {
 export interface ProfileTagFilterUpdate {
   profile_tag_filter_mode: ProfileTagFilterMode
   profile_filter_tags: string[]
+}
+
+export interface CheckinDefaultsUpdate {
+  default_supplements: string[]
+  default_symptoms: Record<string, number>
 }
 
 export interface TestConnectionResponse {

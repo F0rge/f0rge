@@ -4,7 +4,8 @@ import datetime
 import uuid
 
 from sqlalchemy import DateTime, ForeignKey, Index, LargeBinary, String, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -45,6 +46,13 @@ class UserSettings(Base):
     profile_tag_filter_mode: Mapped[str] = mapped_column(String, nullable=False, default="off")
     # CSV of diet-tag keys (entry.diet_risk convention); "" = no tags selected.
     profile_filter_tags: Mapped[str] = mapped_column(String, nullable=False, default="")
+    # CSV of supplement catalog keys toggled on by default each check-in.
+    default_supplements: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default=""
+    )
+    default_symptoms_json: Mapped[dict] = mapped_column(
+        MutableDict.as_mutable(JSONB), nullable=False, default=dict, server_default="{}"
+    )
     # IANA timezone for dose reminder slots (migration 046).
     timezone: Mapped[str] = mapped_column(
         String,
@@ -57,6 +65,11 @@ class UserSettings(Base):
     def profile_filter_tags_list(self) -> list[str]:
         """Decoded CSV — the single owner of the storage convention above."""
         return [t for t in self.profile_filter_tags.split(",") if t]
+
+    @property
+    def default_supplements_list(self) -> list[str]:
+        """Decoded CSV — the single owner of the default_supplements storage convention."""
+        return [k for k in self.default_supplements.split(",") if k]
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow

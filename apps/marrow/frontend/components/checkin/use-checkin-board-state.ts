@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { useSupplementCatalog } from '@/lib/api/hooks'
+import { useSupplementCatalog, useSymptomCatalog, useUserSettings } from '@/lib/api/hooks'
 import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, MedicationIntake, StoolStatus } from '@/lib/api/types'
@@ -28,12 +28,29 @@ export function useCheckinBoardState({
   onAutosaveStateChange,
   onAutosaveFnsReady,
 }: UseCheckinBoardStateOptions) {
-  const { data: catalog } = useSupplementCatalog(false)
+  const { data: catalog, isLoading: supplementsCatalogLoading } = useSupplementCatalog(false)
+  const { data: symptomCatalog, isLoading: symptomsCatalogLoading } = useSymptomCatalog(false)
+  const { data: settings, isLoading: settingsLoading } = useUserSettings()
 
-  const defaultSupplements = (catalog ?? [])
-    .filter((c) => !c.archived)
-    .map((c) => c.key)
-    .join(',')
+  const defaultSupplementsCsv = useMemo(() => {
+    const activeKeys = new Set(
+      (catalog ?? []).filter((c) => !c.archived).map((c) => c.key),
+    )
+    return (settings?.default_supplements ?? [])
+      .filter((key) => activeKeys.has(key))
+      .join(',')
+  }, [catalog, settings?.default_supplements])
+
+  const defaultSymptoms = useMemo(() => {
+    const activeKeys = new Set(
+      (symptomCatalog ?? []).filter((c) => !c.archived).map((c) => c.key),
+    )
+    return Object.fromEntries(
+      Object.entries(settings?.default_symptoms ?? {}).filter(([key]) => activeKeys.has(key)),
+    )
+  }, [symptomCatalog, settings?.default_symptoms])
+
+  const defaultsReady = !settingsLoading && !supplementsCatalogLoading && !symptomsCatalogLoading
 
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => [...DEFAULT_CARD_ORDER])
   useEffect(() => {
@@ -109,6 +126,7 @@ export function useCheckinBoardState({
   const [dietRisk, setDietRisk] = useState<string>('')
   const [supplements, setSupplements] = useState<string>('')
   const [supplementsTouched, setSupplementsTouched] = useState(false)
+  const [symptomsTouched, setSymptomsTouched] = useState(false)
   const [medications, setMedications] = useState<MedicationIntake[]>([])
   const [symptomsJson, setSymptomsJson] = useState<Record<string, number>>({})
   const [sick, setSick] = useState(false)
@@ -141,7 +159,11 @@ export function useCheckinBoardState({
   const setSickDirty = useCallback((v: boolean) => { markDirty(); setSick(v) }, [markDirty])
   const setHotShowerDirty = useCallback((v: boolean) => { markDirty(); setHotShower(v) }, [markDirty])
   const setSymptomsJsonDirty = useCallback(
-    (v: Record<string, number>) => { markDirty(); setSymptomsJson(v) },
+    (v: Record<string, number>) => {
+      markDirty()
+      setSymptomsJson(v)
+      setSymptomsTouched(true)
+    },
     [markDirty],
   )
   const setMedicationsDirty = useCallback(
@@ -174,10 +196,17 @@ export function useCheckinBoardState({
   }, [markDirty])
 
   useEffect(() => {
-    if (!existingEntry && !supplementsTouched && defaultSupplements) {
-      setSupplements(defaultSupplements)
-    }
-  }, [defaultSupplements, existingEntry, supplementsTouched])
+    if (existingEntry || supplementsTouched || symptomsTouched || !defaultsReady) return
+    setSupplements(defaultSupplementsCsv)
+    setSymptomsJson(defaultSymptoms)
+  }, [
+    defaultSupplementsCsv,
+    defaultSymptoms,
+    defaultsReady,
+    existingEntry,
+    supplementsTouched,
+    symptomsTouched,
+  ])
 
   useEffect(() => {
     if (existingEntry) {
@@ -207,6 +236,7 @@ export function useCheckinBoardState({
       setSupplementsTouched(true)
       setMedications(existingEntry.medications ?? [])
       setSymptomsJson(existingEntry.symptoms_json ?? {})
+      setSymptomsTouched(true)
       setSick(existingEntry.sick)
       setHotShower(existingEntry.hot_shower ?? false)
       setNotes(existingEntry.notes || '')

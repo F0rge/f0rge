@@ -9,6 +9,7 @@ from app.crud.settings import UserSettingsCRUD
 from f0rge_core.exceptions import ExternalServiceError
 from app.models.user_settings import UserSettings
 from app.schemas.settings import (
+    CheckinDefaultsUpdate,
     EmbeddingSettingsUpdate,
     ExternalTokenResponse,
     LLMSettingsUpdate,
@@ -49,6 +50,8 @@ class SettingsService:
             tagged_meal_mode=row.tagged_meal_mode,
             profile_tag_filter_mode=row.profile_tag_filter_mode,
             profile_filter_tags=row.profile_filter_tags_list,
+            default_supplements=row.default_supplements_list,
+            default_symptoms=dict(row.default_symptoms_json or {}),
         )
 
     async def get(self) -> SettingsResponse:
@@ -65,6 +68,8 @@ class SettingsService:
                 tagged_meal_mode="approve",
                 profile_tag_filter_mode="off",
                 profile_filter_tags=[],
+                default_supplements=[],
+                default_symptoms={},
             )
         return self._to_response(row)
 
@@ -136,5 +141,13 @@ class SettingsService:
         row = await self._get_or_create_row()
         row.profile_tag_filter_mode = data.profile_tag_filter_mode
         row.profile_filter_tags = ",".join(data.profile_filter_tags)
+        row = await self.crud.commit_refresh(row)
+        return self._to_response(row)
+
+    async def update_checkin_defaults(self, data: CheckinDefaultsUpdate) -> SettingsResponse:
+        row = await self._get_or_create_row()
+        supplements = [k for k in data.default_supplements if k]
+        row.default_supplements = ",".join(supplements)
+        row.default_symptoms_json = dict(data.default_symptoms)
         row = await self.crud.commit_refresh(row)
         return self._to_response(row)
