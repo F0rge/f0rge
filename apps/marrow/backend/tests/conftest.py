@@ -43,6 +43,8 @@ import contextlib
 import uuid
 from typing import AsyncIterator  # noqa: E402
 
+pytest_plugins = ["tests.cache_helpers"]
+
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
@@ -63,12 +65,12 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 # Import models so Base.metadata knows every table before create_all runs.
 import app.models  # noqa: F401, E402
 
-from app.config import settings
+from app.config import settings  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH  # noqa: E402
-from app.rls import enable_row_level_security, enable_social_security
-from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL
+from app.rls import enable_row_level_security, enable_social_security  # noqa: E402
+from app.sql.copy_reference_catalogs import COPY_USER_CATALOG_FROM_REFERENCE_SQL  # noqa: E402
 from tests.helpers import signup_payload  # noqa: E402
 
 TEST_JWT_SECRET = "test-jwt-secret-for-pytest-only-32b"

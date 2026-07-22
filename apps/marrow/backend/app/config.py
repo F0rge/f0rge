@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     embedding_worker_poll_interval_seconds: int = 5
     embedding_worker_batch_size: int = 10
     embedding_worker_max_attempts: int = 5
+    redis_url: str = ""
+    cache_ttl_catalog_seconds: int = 3600
+    cache_ttl_entry_seconds: int = 300
+    cache_ttl_feature_matrix_seconds: int = 600
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

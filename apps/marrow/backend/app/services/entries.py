@@ -9,6 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.entries import EntryCRUD
 from app.crud.meal_tags import MealTagCRUD
+from app.cache import redis_client
+from app.cache.invalidation import invalidate_user_insights_cache
+from app.cache.keys import entry_key
+from app.config import settings
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from app.models.entry import Entry
 from app.models.photo import Photo
@@ -272,10 +276,22 @@ class EntryService:
         )
 
     async def get_entry(self, date: datetime.date) -> EntryResponse:
+        user_id = current_user_id()
+        cache_key = entry_key(user_id, date)
+        cached = await redis_client.get(cache_key)
+        if cached is not None:
+            return EntryResponse.model_validate_json(cached)
+
         entry = await self.crud.get_by_date(date)
         if not entry:
             raise NotFoundError(f"No entry for {date}")
-        return await _build_response(self.db, entry)
+        response = await _build_response(self.db, entry)
+        await redis_client.set(
+            cache_key,
+            response.model_dump_json(),
+            settings.cache_ttl_entry_seconds,
+        )
+        return response
 
     async def delete_entry(self, date: datetime.date) -> None:
         entry = await self.crud.get_by_date_with_photos(date)
@@ -283,8 +299,11 @@ class EntryService:
             raise NotFoundError(f"No entry for {date}")
 
         photos: list[Photo] = list(entry.photos)
+        entry_date = entry.date
+        user_id = entry.user_id
 
         await self.crud.delete_and_commit(entry)
+        await invalidate_user_insights_cache(user_id, entry_date)
 
         for photo in photos:
             await asyncio.to_thread(delete_photo, photo.filename, user_id=str(photo.user_id))

@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.base import unit_of_work
 from app.crud.entries import EntryCRUD
 from app.crud.trackers import TrackerCRUD
+from app.cache.catalog import get_cached_catalog_list, invalidate_catalog
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
-from app.schemas.tracker import TrackerCreate, TrackerUpdate
+from app.schemas.tracker import TrackerCreate, TrackerResponse, TrackerUpdate
 from f0rge_db.tenant import current_user_id
 
 # Maps seeded tracker names to the corresponding column on the Entry model.
@@ -95,7 +96,13 @@ class TrackerService:
         self.crud = TrackerCRUD(db)
 
     async def list_trackers(self, include_archived: bool = False) -> list[Tracker]:
-        return await self.crud.list(include_archived=include_archived)
+        return await get_cached_catalog_list(
+            current_user_id(),
+            "trackers",
+            include_archived,
+            lambda: self.crud.list(include_archived=include_archived),
+            TrackerResponse,
+        )
 
     async def create_tracker(self, body: TrackerCreate) -> Tracker:
         existing = await self.crud.get_by_name(body.name)
@@ -118,7 +125,9 @@ class TrackerService:
             is_seed=False,
         )
         self.crud.add(tracker)
-        return await self.crud.commit_refresh(tracker)
+        created = await self.crud.commit_refresh(tracker)
+        await invalidate_catalog(current_user_id(), "trackers")
+        return created
 
     async def update_tracker(self, tracker_id: int, body: TrackerUpdate) -> Tracker:
         tracker = await self.crud.get_by_id(tracker_id)
@@ -134,7 +143,9 @@ class TrackerService:
         for field, value in update_data.items():
             setattr(tracker, field, value)
 
-        return await self.crud.commit_refresh(tracker)
+        updated = await self.crud.commit_refresh(tracker)
+        await invalidate_catalog(current_user_id(), "trackers")
+        return updated
 
     async def reorder_trackers(self, order: list[int]) -> list[Tracker]:
         # Only non-seed, non-archived trackers are reorderable.
@@ -150,6 +161,7 @@ class TrackerService:
         seed_count = await self.crud.count_active_seeds()
 
         await self.crud.bulk_set_positions(order, seed_count)
+        await invalidate_catalog(current_user_id(), "trackers")
         return await self.crud.list(include_archived=False)
 
     async def list_tracker_values(self, date: datetime.date) -> list[TrackerLog]:

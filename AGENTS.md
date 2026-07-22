@@ -23,6 +23,7 @@ All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`f0rge-
 | MCP | `marrow-mcp` | https://marrow-mcp.fly.dev |
 | Frontend | `marrow-ui` | https://marrow-health.com |
 | Postgres | MPG `f0rge-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow` | via secrets |
+| Redis | Upstash `marrow-redis` (`fra`, Pay-as-you-go, eviction) | via `REDIS_URL` on `marrow` |
 | Tigris | `f0rge-marrow-prod-photos` | via secrets on `marrow` |
 
 ### Develop (`develop`)
@@ -33,6 +34,7 @@ All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`f0rge-
 | MCP | `marrow-mcp-dev` | https://marrow-mcp-dev.fly.dev |
 | Frontend | `marrow-ui-dev` | https://app-dev.marrow-health.com |
 | Postgres | MPG `f0rge-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow_dev` | via secrets |
+| Redis | Upstash `marrow-redis-dev` (`fra`, Pay-as-you-go, eviction) | via `REDIS_URL` on `marrow-dev` |
 | Tigris | `f0rge-marrow-dev-photos` | via secrets on `marrow-dev` |
 
 Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.toml`, `apps/marrow/frontend/fly.toml` (dev) and `*.prod.toml` (prod). CI/CD and deploy job layout: [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc).

@@ -30,10 +30,10 @@ export function MedicationsCard({
 }: MedicationsCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [presetKey, setPresetKey] = useState<string | null>(null)
-  const { data: activeCatalog = [], isLoading } = useMedicationCatalog(false)
-  const { data: fullCatalog = [] } = useMedicationCatalog(true)
+  const { data: catalog = [], isLoading } = useMedicationCatalog(true)
+  const activeCatalog = catalog.filter((m) => !m.archived)
 
-  const labelFor = (key: string) => fullCatalog.find((m) => m.key === key)?.label ?? key
+  const labelFor = (key: string) => catalog.find((m) => m.key === key)?.label ?? key
 
   function handleAdd(intake: MedicationIntake) {
     onChange([...value, intake])
