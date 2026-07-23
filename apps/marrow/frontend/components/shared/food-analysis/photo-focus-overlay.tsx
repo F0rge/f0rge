@@ -5,7 +5,13 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Eye, EyeOff, Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { usePhotoAnalysis, useUpdatePhotoLabel, useUpdatePhotoVisibility } from '@/lib/api/hooks'
+import { MealTimeChips } from '@/components/checkin/meal-time-chips'
+import {
+  usePhotoAnalysis,
+  useUpdatePhotoLabel,
+  useUpdatePhotoMealTime,
+  useUpdatePhotoVisibility,
+} from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import { PhotoAnalysis } from './photo-analysis'
 import { PhotoDietTagsSection } from './photo-diet-tags-section'
@@ -199,18 +205,6 @@ interface PhotoFocusOverlayProps {
   onSelectPhoto: (id: number) => void
 }
 
-function formatMealTime(iso: string | null): string {
-  if (!iso) return ''
-  try {
-    const d = new Date(iso)
-    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    // Intentional swallow: date formatting, not an API call — an unparsable
-    // meal_time just hides the timestamp instead of erroring the overlay.
-    return ''
-  }
-}
-
 interface TitleEditorProps {
   photoId: number
   label: string | null
@@ -311,6 +305,7 @@ export function PhotoFocusOverlay({
   const open = photoId !== null
   const { data: analysis } = usePhotoAnalysis(photoId)
   const updateVisibility = useUpdatePhotoVisibility()
+  const updateMealTime = useUpdatePhotoMealTime()
   const reducedMotion = useReducedMotion()
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const activeTabRef = useRef<HTMLButtonElement | null>(null)
@@ -328,8 +323,24 @@ export function PhotoFocusOverlay({
   const currentPhoto = photoId !== null ? photos.find((p) => p.id === photoId) ?? null : null
   const isSharedMeal =
     currentPhoto?.source_photo_id != null || currentPhoto?.tagged_by_handle != null
-  const mealTime = formatMealTime(currentPhoto?.meal_time ?? null)
   const isHidden = currentPhoto?.hidden_at != null
+
+  const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(
+    currentPhoto?.meal_time ?? null,
+  )
+
+  useEffect(() => {
+    setOptimisticMealTime(currentPhoto?.meal_time ?? null)
+  }, [photoId, currentPhoto?.meal_time])
+
+  const handleMealTimeChange = (d: Date) => {
+    if (photoId === null) return
+    const iso = d.toISOString()
+    setOptimisticMealTime(iso)
+    updateMealTime.mutate({ photoId, mealTime: iso })
+  }
+
+  const mealTimeChipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
 
   const toggleHidden = async () => {
     if (!currentPhoto) return
@@ -384,7 +395,6 @@ export function PhotoFocusOverlay({
                 currentPhoto?.tagged_by_handle
                   ? `Shared by @${currentPhoto.tagged_by_handle}`
                   : null,
-                mealTime,
                 confidence != null ? `${confidence}% confident` : null,
               ]
                 .filter(Boolean)
@@ -450,6 +460,12 @@ export function PhotoFocusOverlay({
         {/* Body: existing PhotoAnalysis, reused unchanged. The surrounding wrapper
             gives it the breathing room the inline placement lacks. */}
         <div ref={scrollRef} data-sheet-scroll className="overflow-y-auto px-4 pb-4 pt-2">
+          {currentPhoto && (
+            <div className="mb-3">
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
+              <MealTimeChips value={mealTimeChipValue} onChange={handleMealTimeChange} />
+            </div>
+          )}
           {currentPhoto && (
             <div className="mb-3">
               <MealCompanionsSection photo={currentPhoto} variant="editor" />
