@@ -8,6 +8,7 @@ from app.crud.base import unit_of_work
 from app.crud.entries import EntryCRUD
 from app.crud.trackers import TrackerCRUD
 from app.cache.catalog import get_cached_catalog_list, invalidate_catalog
+from app.cache.invalidation import invalidate_user_insights_cache
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
@@ -201,6 +202,9 @@ class TrackerService:
             entry_col = _SEED_NAME_TO_ENTRY_COL.get(tracker.name)
             if tracker.is_seed and entry_col:
                 await self._stage_mirror_value_to_entry(date, entry_col, tracker.kind, value)
+
+        if tracker.is_seed and _SEED_NAME_TO_ENTRY_COL.get(tracker.name):
+            await invalidate_user_insights_cache(current_user_id(), date)
 
         return log
 

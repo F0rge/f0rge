@@ -211,8 +211,23 @@ interface TitleEditorProps {
   dishName: string | null
 }
 
+/** Entry calendar day encoded in photo filenames: `{YYYY-MM-DD}_photo-N.jpg`. */
+function entryDateFromFilename(filename: string): Date | null {
+  const match = /^(\d{4}-\d{2}-\d{2})_photo-/.exec(filename)
+  if (!match) return null
+  return new Date(`${match[1]}T00:00:00`)
+}
+
 /** Optimistic meal-time chips; remount via key={photoId} to reset without setState-in-effect. */
-function MealTimeEditor({ photoId, mealTime }: { photoId: number; mealTime: string | null }) {
+function MealTimeEditor({
+  photoId,
+  mealTime,
+  filename,
+}: {
+  photoId: number
+  mealTime: string | null
+  filename: string
+}) {
   const updateMealTime = useUpdatePhotoMealTime()
   const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(mealTime)
 
@@ -228,11 +243,13 @@ function MealTimeEditor({ photoId, mealTime }: { photoId: number; mealTime: stri
   }
 
   const chipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
+  const referenceDate =
+    entryDateFromFilename(filename) ?? (mealTime ? new Date(mealTime) : new Date())
 
   return (
     <div className="mb-3">
       <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
-      <MealTimeChips value={chipValue} onChange={handleChange} />
+      <MealTimeChips value={chipValue} onChange={handleChange} referenceDate={referenceDate} />
     </div>
   )
 }
@@ -473,6 +490,7 @@ export function PhotoFocusOverlay({
               key={currentPhoto.id}
               photoId={currentPhoto.id}
               mealTime={currentPhoto.meal_time}
+              filename={currentPhoto.filename}
             />
           )}
           {currentPhoto && (
