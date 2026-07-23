@@ -18,7 +18,6 @@ function invalidateGroups(queryClient: QueryClient, groupId?: string) {
   if (groupId) {
     queryClient.invalidateQueries({ queryKey: ['social', 'groups', groupId] })
   }
-  queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
 }
 
 export function useHandleAvailable(handle: string) {
@@ -63,7 +62,6 @@ function invalidateMealTags(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['entry'] })
   queryClient.invalidateQueries({ queryKey: ['entries'] })
   queryClient.invalidateQueries({ queryKey: ['photos'] })
-  queryClient.invalidateQueries({ queryKey: ['notifications'] })
 }
 
 export function useMealTags() {
@@ -111,7 +109,6 @@ export function useSendConnectionRequest() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['social', 'connections'] })
       queryClient.invalidateQueries({ queryKey: ['social', 'users', 'search'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 }
@@ -123,7 +120,6 @@ export function useAcceptConnection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['social', 'connections'] })
       queryClient.invalidateQueries({ queryKey: ['social', 'users', 'search'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 }
@@ -135,7 +131,6 @@ export function useDeleteConnection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['social', 'connections'] })
       queryClient.invalidateQueries({ queryKey: ['social', 'users', 'search'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 }

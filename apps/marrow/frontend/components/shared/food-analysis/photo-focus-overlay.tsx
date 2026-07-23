@@ -5,7 +5,13 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Eye, EyeOff, Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { usePhotoAnalysis, useUpdatePhotoLabel, useUpdatePhotoVisibility } from '@/lib/api/hooks'
+import { MealTimeChips } from '@/components/checkin/meal-time-chips'
+import {
+  usePhotoAnalysis,
+  useUpdatePhotoLabel,
+  useUpdatePhotoMealTime,
+  useUpdatePhotoVisibility,
+} from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import { PhotoAnalysis } from './photo-analysis'
 import { PhotoDietTagsSection } from './photo-diet-tags-section'
@@ -199,22 +205,36 @@ interface PhotoFocusOverlayProps {
   onSelectPhoto: (id: number) => void
 }
 
-function formatMealTime(iso: string | null): string {
-  if (!iso) return ''
-  try {
-    const d = new Date(iso)
-    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    // Intentional swallow: date formatting, not an API call — an unparsable
-    // meal_time just hides the timestamp instead of erroring the overlay.
-    return ''
-  }
-}
-
 interface TitleEditorProps {
   photoId: number
   label: string | null
   dishName: string | null
+}
+
+/** Optimistic meal-time chips; remount via key={photoId} to reset without setState-in-effect. */
+function MealTimeEditor({ photoId, mealTime }: { photoId: number; mealTime: string | null }) {
+  const updateMealTime = useUpdatePhotoMealTime()
+  const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(mealTime)
+
+  const handleChange = async (d: Date) => {
+    const iso = d.toISOString()
+    setOptimisticMealTime(iso)
+    try {
+      await updateMealTime.mutateAsync({ photoId, mealTime: iso })
+    } catch (err) {
+      setOptimisticMealTime(mealTime)
+      handleMutationError(err, 'Failed to update meal time')
+    }
+  }
+
+  const chipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
+
+  return (
+    <div className="mb-3">
+      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
+      <MealTimeChips value={chipValue} onChange={handleChange} />
+    </div>
+  )
 }
 
 /**
@@ -328,7 +348,6 @@ export function PhotoFocusOverlay({
   const currentPhoto = photoId !== null ? photos.find((p) => p.id === photoId) ?? null : null
   const isSharedMeal =
     currentPhoto?.source_photo_id != null || currentPhoto?.tagged_by_handle != null
-  const mealTime = formatMealTime(currentPhoto?.meal_time ?? null)
   const isHidden = currentPhoto?.hidden_at != null
 
   const toggleHidden = async () => {
@@ -384,7 +403,6 @@ export function PhotoFocusOverlay({
                 currentPhoto?.tagged_by_handle
                   ? `Shared by @${currentPhoto.tagged_by_handle}`
                   : null,
-                mealTime,
                 confidence != null ? `${confidence}% confident` : null,
               ]
                 .filter(Boolean)
@@ -450,6 +468,13 @@ export function PhotoFocusOverlay({
         {/* Body: existing PhotoAnalysis, reused unchanged. The surrounding wrapper
             gives it the breathing room the inline placement lacks. */}
         <div ref={scrollRef} data-sheet-scroll className="overflow-y-auto px-4 pb-4 pt-2">
+          {currentPhoto && (
+            <MealTimeEditor
+              key={currentPhoto.id}
+              photoId={currentPhoto.id}
+              mealTime={currentPhoto.meal_time}
+            />
+          )}
           {currentPhoto && (
             <div className="mb-3">
               <MealCompanionsSection photo={currentPhoto} variant="editor" />
