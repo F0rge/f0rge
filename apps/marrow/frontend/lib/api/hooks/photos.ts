@@ -58,7 +58,6 @@ export function useAddPhotoTags() {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['photos'] })
       queryClient.invalidateQueries({ queryKey: ['social', 'meal-tags'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 }

@@ -6,7 +6,6 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { ClipboardCheck, Pill, CalendarDays, TrendingUp, Microscope } from 'lucide-react'
 import { cn } from '@f0rge/ui'
 import { UserAvatar } from '@/components/account/user-avatar'
-import { useUnreadCount } from '@/lib/api/hooks'
 
 const NAV_ITEMS = [
   { href: '/checkin', label: 'Today', icon: ClipboardCheck },
@@ -39,9 +38,6 @@ const INK_BASE_TRANSITION = 'background-color .25s'
 export function BottomNav() {
   const pathname = usePathname()
   const navHidden = pathname.startsWith('/login') || pathname.startsWith('/signup')
-  // The nav mounts in the root layout, so gate the unread poll off auth pages
-  // (the retired ProfileMenu never mounted there — keep that behavior).
-  const unreadCount = useUnreadCount(!navHidden).data?.count ?? 0
   const barRef = useRef<HTMLElement>(null)
   const inkRef = useRef<HTMLDivElement>(null)
   const labelRefs = useRef<(HTMLSpanElement | null)[]>([])
@@ -291,12 +287,6 @@ export function BottomNav() {
                 style={{ transition: 'transform .34s cubic-bezier(.34,1.55,.5,1)' }}
               >
                 <UserAvatar size="xs" />
-                {unreadCount > 0 && (
-                  <span
-                    className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-destructive ring-2 ring-background"
-                    aria-hidden
-                  />
-                )}
               </span>
             )}
             <span
