@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
 from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator
+
+_CATALOG_KEY_RE = re.compile(r"^[a-z0-9_]+$")
 
 
 class SettingsResponse(BaseModel):
@@ -18,6 +21,8 @@ class SettingsResponse(BaseModel):
     tagged_meal_mode: str = "approve"
     profile_tag_filter_mode: str = "off"
     profile_filter_tags: list[str] = []
+    default_supplements: list[str] = []
+    default_symptoms: dict[str, int] = {}
 
 
 class LLMSettingsUpdate(BaseModel):
@@ -65,6 +70,33 @@ class TaggedMealModeUpdate(BaseModel):
 class ProfileTagFilterUpdate(BaseModel):
     profile_tag_filter_mode: Literal["off", "hide", "show_only"]
     profile_filter_tags: list[str] = []
+
+
+class CheckinDefaultsUpdate(BaseModel):
+    default_supplements: list[str] = []
+    default_symptoms: dict[str, int] = {}
+
+    @field_validator("default_supplements", mode="after")
+    @classmethod
+    def validate_default_supplements(cls, v: list[str]) -> list[str]:
+        for key in v:
+            if not key:
+                continue
+            if not _CATALOG_KEY_RE.match(key):
+                raise ValueError("supplement key must match ^[a-z0-9_]+$")
+        return v
+
+    @field_validator("default_symptoms", mode="after")
+    @classmethod
+    def validate_default_symptoms(cls, v: dict[str, int]) -> dict[str, int]:
+        for key, value in v.items():
+            if not _CATALOG_KEY_RE.match(key):
+                raise ValueError("symptom key must match ^[a-z0-9_]+$")
+            if not isinstance(value, int):
+                raise ValueError("severity must be integer 0-10")
+            if not 0 <= value <= 10:
+                raise ValueError("severity must be integer 0-10")
+        return v
 
 
 class TokenRevokedResponse(BaseModel):

@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import { AppWarmup } from '@/components/auth/app-warmup'
 import { useAuth } from '@/lib/api/hooks'
 
 const PUBLIC_ROUTES = ['/login', '/signup']
@@ -54,5 +55,10 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     )
   }
 
-  return children
+  return (
+    <>
+      <AppWarmup />
+      {children}
+    </>
+  )
 }

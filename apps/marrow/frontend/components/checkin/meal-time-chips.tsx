@@ -6,6 +6,8 @@ import { cn } from '@f0rge/ui'
 interface MealTimeChipsProps {
   value: Date | null
   onChange: (d: Date) => void
+  /** Calendar day to anchor preset/custom times on (defaults to today). */
+  referenceDate?: Date
 }
 
 type Preset = { label: string; offsetHours: number } | { label: 'Custom' }
@@ -28,8 +30,15 @@ function toTimeInputValue(d: Date): string {
   return `${hh}:${mm}`
 }
 
-export function MealTimeChips({ value, onChange }: MealTimeChipsProps) {
+function applyTimeOntoDay(day: Date, source: Date): Date {
+  const d = new Date(day)
+  d.setHours(source.getHours(), source.getMinutes(), source.getSeconds(), source.getMilliseconds())
+  return d
+}
+
+export function MealTimeChips({ value, onChange, referenceDate }: MealTimeChipsProps) {
   const [showCustom, setShowCustom] = useState(false)
+  const dayAnchor = referenceDate ?? new Date()
 
   const handlePreset = (preset: Preset) => {
     if ('label' in preset && preset.label === 'Custom') {
@@ -38,15 +47,16 @@ export function MealTimeChips({ value, onChange }: MealTimeChipsProps) {
     }
     const p = preset as { label: string; offsetHours: number }
     setShowCustom(false)
-    const d = new Date()
-    d.setMinutes(d.getMinutes() - p.offsetHours * 60)
+    const now = new Date()
+    now.setMinutes(now.getMinutes() - p.offsetHours * 60)
+    const d = referenceDate ? applyTimeOntoDay(referenceDate, now) : now
     onChange(d)
   }
 
   const handleCustomTime = (timeStr: string) => {
     if (!timeStr) return
     const [hh, mm] = timeStr.split(':').map(Number)
-    const d = new Date()
+    const d = new Date(dayAnchor)
     d.setHours(hh, mm, 0, 0)
     onChange(d)
   }

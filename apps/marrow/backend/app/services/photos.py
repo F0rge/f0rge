@@ -9,6 +9,7 @@ from fastapi import BackgroundTasks, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache.invalidation import invalidate_user_insights_cache
 from app.config import settings
 from app.crud.base import unit_of_work
 from app.crud.diet_tag_catalog import DietTagCatalogCRUD
@@ -164,6 +165,7 @@ class PhotoService:
             ]
 
         photo = await self.crud.commit_refresh(photo)
+        await invalidate_user_insights_cache(photo.user_id, photo.entry.date)
         # No companions lookup: mutation clients invalidate and refetch, so the
         # PATCH response keeps the pre-#403 tagged_with_handles=[] shape.
         return _photo_response(photo)
@@ -258,6 +260,7 @@ class PhotoService:
         if analysis_will_run:
             background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
 
+        await invalidate_user_insights_cache(user_id, entry.date)
         companions = await MealTagCRUD(self.db).companion_handles_by_photo_ids([photo.id])
         return _photo_response(photo, companions.get(photo.id, []))
 
@@ -286,11 +289,14 @@ class PhotoService:
             raise NotFoundError("Photo not found")
         filename = photo.filename
         meal_id = photo.meal_id
-        user_id_str = str(photo.user_id)
+        user_id = photo.user_id
+        entry_date = photo.entry.date
+        user_id_str = str(user_id)
 
         # Commit DB delete before touching the filesystem. If the commit fails,
         # no files are removed and the DB row remains — consistent state.
         await self.crud.delete_and_commit(photo)
+        await invalidate_user_insights_cache(user_id, entry_date)
         await self.meal_crud.delete_if_orphaned(meal_id)
 
         # File cleanup happens after the successful commit.

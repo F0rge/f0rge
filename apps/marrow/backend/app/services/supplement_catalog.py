@@ -6,8 +6,10 @@ from typing import Iterable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.supplement_catalog import SupplementCatalogCRUD
+from app.cache.catalog import get_cached_catalog_list, invalidate_catalog
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.supplement_catalog import SupplementCatalogItem
+from app.schemas.supplement_catalog import SupplementCatalogItemResponse
 from f0rge_db.tenant import current_user_id
 
 _KEY_RE = re.compile(r"^[a-z0-9_]+$")
@@ -25,7 +27,13 @@ class SupplementCatalogService:
         self.crud = SupplementCatalogCRUD(db)
 
     async def list_items(self, include_archived: bool = False) -> list[SupplementCatalogItem]:
-        return await self.crud.list(include_archived=include_archived)
+        return await get_cached_catalog_list(
+            current_user_id(),
+            "supplements",
+            include_archived,
+            lambda: self.crud.list(include_archived=include_archived),
+            SupplementCatalogItemResponse,
+        )
 
     async def create_item(self, key: str, label: str) -> SupplementCatalogItem:
         normalized = normalize_key(key)
@@ -37,7 +45,9 @@ class SupplementCatalogService:
             if existing.archived:
                 existing.archived = False
                 existing.label = label
-                return await self.crud.commit_refresh(existing)
+                item = await self.crud.commit_refresh(existing)
+                await invalidate_catalog(current_user_id(), "supplements")
+                return item
             raise ConflictError(f"Catalog item '{normalized}' already exists.")
 
         max_item = await self.crud.get_max_sort_order_item()
@@ -47,7 +57,9 @@ class SupplementCatalogService:
             user_id=current_user_id(), key=normalized, label=label, sort_order=next_sort
         )
         self.crud.add(item)
-        return await self.crud.commit_refresh(item)
+        created = await self.crud.commit_refresh(item)
+        await invalidate_catalog(current_user_id(), "supplements")
+        return created
 
     async def update_item(self, key: str, data: dict) -> SupplementCatalogItem:
         item = await self.crud.get_by_key(key)
@@ -56,7 +68,9 @@ class SupplementCatalogService:
 
         for field, value in data.items():
             setattr(item, field, value)
-        return await self.crud.commit_refresh(item)
+        updated = await self.crud.commit_refresh(item)
+        await invalidate_catalog(current_user_id(), "supplements")
+        return updated
 
     async def touch(self, keys: Iterable[str]) -> None:
         return await self.crud.touch(keys)

@@ -9,6 +9,7 @@ export function useTrackers(includeArchived = false) {
   return useQuery<Tracker[]>({
     queryKey: ['trackers', includeArchived],
     queryFn: () => apiGet(`/trackers${params}`),
+    staleTime: Infinity,
   })
 }
 

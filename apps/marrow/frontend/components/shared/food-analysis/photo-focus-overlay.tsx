@@ -5,7 +5,13 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Eye, EyeOff, Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { usePhotoAnalysis, useUpdatePhotoLabel, useUpdatePhotoVisibility } from '@/lib/api/hooks'
+import { MealTimeChips } from '@/components/checkin/meal-time-chips'
+import {
+  usePhotoAnalysis,
+  useUpdatePhotoLabel,
+  useUpdatePhotoMealTime,
+  useUpdatePhotoVisibility,
+} from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import { PhotoAnalysis } from './photo-analysis'
 import { PhotoDietTagsSection } from './photo-diet-tags-section'
@@ -199,22 +205,53 @@ interface PhotoFocusOverlayProps {
   onSelectPhoto: (id: number) => void
 }
 
-function formatMealTime(iso: string | null): string {
-  if (!iso) return ''
-  try {
-    const d = new Date(iso)
-    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    // Intentional swallow: date formatting, not an API call — an unparsable
-    // meal_time just hides the timestamp instead of erroring the overlay.
-    return ''
-  }
-}
-
 interface TitleEditorProps {
   photoId: number
   label: string | null
   dishName: string | null
+}
+
+/** Entry calendar day encoded in photo filenames: `{YYYY-MM-DD}_photo-N.jpg`. */
+function entryDateFromFilename(filename: string): Date | null {
+  const match = /^(\d{4}-\d{2}-\d{2})_photo-/.exec(filename)
+  if (!match) return null
+  return new Date(`${match[1]}T00:00:00`)
+}
+
+/** Optimistic meal-time chips; remount via key={photoId} to reset without setState-in-effect. */
+function MealTimeEditor({
+  photoId,
+  mealTime,
+  filename,
+}: {
+  photoId: number
+  mealTime: string | null
+  filename: string
+}) {
+  const updateMealTime = useUpdatePhotoMealTime()
+  const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(mealTime)
+
+  const handleChange = async (d: Date) => {
+    const iso = d.toISOString()
+    setOptimisticMealTime(iso)
+    try {
+      await updateMealTime.mutateAsync({ photoId, mealTime: iso })
+    } catch (err) {
+      setOptimisticMealTime(mealTime)
+      handleMutationError(err, 'Failed to update meal time')
+    }
+  }
+
+  const chipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
+  const referenceDate =
+    entryDateFromFilename(filename) ?? (mealTime ? new Date(mealTime) : new Date())
+
+  return (
+    <div className="mb-3">
+      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
+      <MealTimeChips value={chipValue} onChange={handleChange} referenceDate={referenceDate} />
+    </div>
+  )
 }
 
 /**
@@ -313,6 +350,11 @@ export function PhotoFocusOverlay({
   const updateVisibility = useUpdatePhotoVisibility()
   const reducedMotion = useReducedMotion()
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const activeTabRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' })
+  }, [photoId])
 
   const dishName = analysis?.dish_name ?? null
   const confidence =
@@ -323,7 +365,6 @@ export function PhotoFocusOverlay({
   const currentPhoto = photoId !== null ? photos.find((p) => p.id === photoId) ?? null : null
   const isSharedMeal =
     currentPhoto?.source_photo_id != null || currentPhoto?.tagged_by_handle != null
-  const mealTime = formatMealTime(currentPhoto?.meal_time ?? null)
   const isHidden = currentPhoto?.hidden_at != null
 
   const toggleHidden = async () => {
@@ -379,7 +420,6 @@ export function PhotoFocusOverlay({
                 currentPhoto?.tagged_by_handle
                   ? `Shared by @${currentPhoto.tagged_by_handle}`
                   : null,
-                mealTime,
                 confidence != null ? `${confidence}% confident` : null,
               ]
                 .filter(Boolean)
@@ -415,21 +455,22 @@ export function PhotoFocusOverlay({
           )}
 
           {photos.length > 1 && (
-            <div className="absolute inset-x-0 bottom-2 flex justify-center">
-              <div className="flex items-center gap-1 rounded-full border border-border bg-background/95 p-1 shadow-sm backdrop-blur">
+            <div className="absolute inset-x-0 bottom-2 flex justify-center px-2">
+              <div className="flex max-w-full snap-x snap-mandatory items-center gap-1 overflow-x-auto rounded-full border border-border bg-background/95 p-1 shadow-sm backdrop-blur [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {photos.map((p, i) => {
                   const isActive = p.id === photoId
                   return (
                     <button
                       key={p.id}
+                      ref={isActive ? activeTabRef : undefined}
                       type="button"
                       onClick={() => onSelectPhoto(p.id)}
                       aria-label={`Switch to photo ${i + 1}`}
                       aria-current={isActive ? 'true' : undefined}
                       className={
                         isActive
-                          ? 'size-7 rounded-full bg-foreground text-xs font-semibold text-background'
-                          : 'size-7 rounded-full text-xs text-muted-foreground hover:bg-muted'
+                          ? 'size-7 shrink-0 snap-center rounded-full bg-foreground text-xs font-semibold text-background'
+                          : 'size-7 shrink-0 snap-center rounded-full text-xs text-muted-foreground hover:bg-muted'
                       }
                     >
                       {i + 1}
@@ -444,6 +485,14 @@ export function PhotoFocusOverlay({
         {/* Body: existing PhotoAnalysis, reused unchanged. The surrounding wrapper
             gives it the breathing room the inline placement lacks. */}
         <div ref={scrollRef} data-sheet-scroll className="overflow-y-auto px-4 pb-4 pt-2">
+          {currentPhoto && (
+            <MealTimeEditor
+              key={currentPhoto.id}
+              photoId={currentPhoto.id}
+              mealTime={currentPhoto.meal_time}
+              filename={currentPhoto.filename}
+            />
+          )}
           {currentPhoto && (
             <div className="mb-3">
               <MealCompanionsSection photo={currentPhoto} variant="editor" />

@@ -17,6 +17,7 @@ from app.middleware.request_id import RequestIdFilter, RequestIdMiddleware
 from app.routers import (
     account,
     auth,
+    cache,
     devices,
     diet_tag_catalog,
     dietary_ingredient_catalog,
@@ -195,6 +196,7 @@ app.add_middleware(AuthContextMiddleware)
 register_exception_handlers(app)
 
 app.include_router(auth.router)
+app.include_router(cache.router)
 app.include_router(account.router)
 app.include_router(devices.router)
 app.include_router(entries.router)

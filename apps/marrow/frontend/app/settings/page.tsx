@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Bell, Cloud, Database, Eye, EyeOff, GraduationCap, Heart, Lock, LogOut, Search,
+  ArrowLeft, Cloud, Database, Eye, EyeOff, GraduationCap, Heart, Lock, LogOut, Search,
   SlidersHorizontal, Sparkles, SunMoon, Tag, UserPlus, UserRound, UsersRound,
   UtensilsCrossed, type LucideIcon,
 } from 'lucide-react'
@@ -24,7 +24,7 @@ import { OnboardingSection } from '@/components/settings/onboarding-section'
 import { TaggedMealsSection } from '@/components/settings/tagged-meals-section'
 import { ProfileVisibilitySection } from '@/components/settings/profile-visibility-section'
 import { HiddenMealsSection } from '@/components/settings/hidden-meals-section'
-import { useConnections, useGroups, useLogout, useMealTags, useUnreadCount } from '@/lib/api/hooks'
+import { useConnections, useGroups, useLogout, useMealTags } from '@/lib/api/hooks'
 
 interface RowEntry {
   title: string
@@ -73,7 +73,6 @@ export default function SettingsPage() {
   const pendingConnections = useConnections().data?.pending_incoming.length ?? 0
   const pendingInvites = useGroups().data?.filter((g) => g.my_status === 'invited').length ?? 0
   const pendingTags = useMealTags().data?.incoming_pending.length ?? 0
-  const unreadCount = useUnreadCount().data?.count ?? 0
 
   const handleLogout = async () => {
     try {
@@ -98,7 +97,6 @@ export default function SettingsPage() {
         link('Connections', 'Requests and people you can tag on meals', '/people/connections', UserPlus, pendingConnections),
         link('Groups', 'Organize connected people into named groups', '/people/groups', UsersRound, pendingInvites),
         link('Tagged meals', 'Meal tags waiting for your approval', '/people/tags', Tag, pendingTags),
-        link('Notifications', 'Connection requests, invites, and tag activity', '/people/notifications', Bell, unreadCount),
       ],
     },
     {

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, ClipboardCheck, Menu, Share, Users, UsersRound, type LucideIcon } from 'lucide-react'
+import { ClipboardCheck, Menu, Share, Users, UsersRound, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { StreakRing } from '@/components/profile/streak-ring'
 import {
@@ -9,7 +9,6 @@ import {
   useConnections,
   useEntryStats,
   useGroups,
-  useUnreadCount,
 } from '@/lib/api/hooks'
 
 function StatChip({
@@ -40,7 +39,6 @@ export function ProfileHeader() {
   const stats = useEntryStats()
   const connections = useConnections()
   const groups = useGroups()
-  const unreadCount = useUnreadCount().data?.count ?? 0
 
   const data = account.data
   const handle = data?.handle
@@ -80,20 +78,6 @@ export function ProfileHeader() {
             <Share className="size-[22px]" />
           </button>
           <Link
-            href="/people/notifications"
-            aria-label={
-              unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'
-            }
-            className="relative flex size-9 items-center justify-center rounded-lg transition-colors hover:bg-muted"
-          >
-            <Bell className="size-[22px]" />
-            {unreadCount > 0 && (
-              <span className="absolute right-0 top-0 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-background">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </Link>
-          <Link
             href="/settings"
             aria-label="Settings and activity"
             className="flex size-9 items-center justify-center rounded-lg transition-colors hover:bg-muted"
@@ -104,12 +88,7 @@ export function ProfileHeader() {
       </div>
 
       <div className="mt-4 flex items-center gap-4">
-        {stats.data?.week_days != null && (
-          <StreakRing
-            weekDays={stats.data.week_days}
-            streak={stats.data.current_streak_days}
-          />
-        )}
+        <StreakRing streak={stats.data?.current_streak_days ?? 0} />
         <div className="min-w-0 flex-1">
           {name && <p className="truncate text-base font-bold">{name}</p>}
           {subline && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subline}</p>}

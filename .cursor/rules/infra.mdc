@@ -55,6 +55,13 @@ Migrations: `[deploy] release_command` in `fly.toml` runs `alembic upgrade head`
 
 `apps/marrow/backend/docker-entrypoint.sh` still supports `RUN_MIGRATIONS=1` for local Docker builds; Fly uses `release_command` instead.
 
+## Redis (Upstash)
+
+- Dev: `marrow-redis-dev` — prod: `marrow-redis` (org `f0rge`, region `fra`, Pay-as-you-go, eviction enabled)
+- `REDIS_URL` secret on API apps only (`marrow-dev`, `marrow`) — **not** on MCP apps
+- Private URL from `fly redis status <name>`; set via `fly secrets set REDIS_URL=... -a <app>`
+- Local: `REDIS_URL` optional in `.env`; empty/unset = cache no-op (no local Redis container required)
+
 ## Local development
 
 Postgres via Docker; backend and frontend in separate terminals (no root `start.sh`):

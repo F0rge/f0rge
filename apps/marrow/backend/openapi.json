@@ -157,6 +157,48 @@
         }
       }
     },
+    "/api/v1/cache/warm": {
+      "post": {
+        "tags": [
+          "cache"
+        ],
+        "summary": "Warm Cache",
+        "operationId": "warm_cache_api_v1_cache_warm_post",
+        "parameters": [
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/account": {
       "get": {
         "tags": [
@@ -5785,6 +5827,65 @@
         }
       }
     },
+    "/api/v1/settings/checkin-defaults": {
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Checkin Defaults",
+        "operationId": "update_checkin_defaults_api_v1_settings_checkin_defaults_put",
+        "parameters": [
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckinDefaultsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/lab-markers/catalog": {
       "get": {
         "tags": [
@@ -8281,6 +8382,28 @@
           "bulk_trackers"
         ],
         "title": "CatalogSuggestionsResponse"
+      },
+      "CheckinDefaultsUpdate": {
+        "properties": {
+          "default_supplements": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Default Supplements",
+            "default": []
+          },
+          "default_symptoms": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Default Symptoms",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "title": "CheckinDefaultsUpdate"
       },
       "ConnectionItem": {
         "properties": {
@@ -13192,6 +13315,22 @@
             "type": "array",
             "title": "Profile Filter Tags",
             "default": []
+          },
+          "default_supplements": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Default Supplements",
+            "default": []
+          },
+          "default_symptoms": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Default Symptoms",
+            "default": {}
           }
         },
         "type": "object",

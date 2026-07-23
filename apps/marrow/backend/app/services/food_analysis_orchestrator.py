@@ -7,6 +7,7 @@ from typing import NamedTuple, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache.invalidation import invalidate_user_insights_cache
 from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
@@ -236,6 +237,7 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
                 catalog_context,
             )
             await _persist_analysis(db, analysis, context.user_id, raw_content, vision_result)
+            await invalidate_user_insights_cache(context.user_id, context.photo.entry.date)
 
             logger.info(
                 "Analysis complete for photo %d: %s (%d ingredients)",

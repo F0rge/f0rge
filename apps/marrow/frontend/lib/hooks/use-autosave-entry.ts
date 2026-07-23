@@ -197,31 +197,21 @@ export function useAutosaveEntry({
     const serialized = JSON.stringify(payload)
     if (serialized === lastSerializedRef.current) return
 
-    // Not dirty yet (no real user edit this session) on an entry that already
-    // exists server-side: this payload change is hydration settling into its
-    // final shape (checkin-board.tsx's existingEntry effect runs across two
-    // renders — defaults, then hydrated — before the caller flips `enabled`).
-    // Track it in lastSerializedRef instead of staging it as pending, so
-    // flush()/flushBeacon() (which both compare against lastSerializedRef)
-    // see nothing to send. Without this, opening a past-date editor and
-    // merely blurring a field or backgrounding the tab fired a no-op PUT that
-    // only re-stamped entry_time. Once `enabled` flips true (a real edit),
-    // this branch is skipped and staging resumes normally with the payload
-    // that reflects the edit.
-    //
-    // A brand-new date (hasExistingEntry: false) must still stage even while
-    // not dirty, so forceFlush can create the row (photo-first upload).
-    if (!enabled && hasExistingEntry) {
+    // Not dirty yet: hydration / check-in defaults are settling into form state.
+    // Stage the payload so forceFlush (photo-first) can still create a row, but
+    // also baseline lastSerializedRef so flush()/flushBeacon() (pagehide) do
+    // not persist an empty-day visit just because defaults prefilled the form.
+    // Once `enabled` flips true (a real edit), staging resumes for autosave.
+    if (!enabled) {
+      pendingPayloadRef.current = payload
       lastSerializedRef.current = serialized
+      clearDebounce()
       return
     }
 
-    // Stage the payload regardless of enabled so forceFlush always has something
-    // to send (e.g. photo-first on a new date before the form is dirty).
+    // Stage the payload and debounce-save when dirty.
     pendingPayloadRef.current = payload
     clearDebounce()
-
-    if (!enabled) return
 
     // setStatus is called inside the timer callback (not synchronously in the
     // effect body) to satisfy react-hooks/set-state-in-effect.
@@ -231,7 +221,7 @@ export function useAutosaveEntry({
         void fireRef.current()
       }
     }, DEBOUNCE_MS)
-  }, [payload, enabled, clearDebounce, hasExistingEntry])
+  }, [payload, enabled, clearDebounce])
 
   // Cleanup on unmount.
   useEffect(() => {

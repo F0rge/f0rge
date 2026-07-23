@@ -14,6 +14,7 @@ export function useSupplementCatalog(includeArchived = false) {
   return useQuery<SupplementCatalogItem[]>({
     queryKey: ['supplement-catalog', includeArchived],
     queryFn: () => apiGet(`/supplements/catalog${params}`),
+    staleTime: Infinity,
   })
 }
 
@@ -49,6 +50,7 @@ export function useMedicationCatalog(includeArchived = false) {
   return useQuery<MedicationCatalogItem[]>({
     queryKey: ['medication-catalog', includeArchived],
     queryFn: () => apiGet(`/medications/catalog${params}`),
+    staleTime: Infinity,
   })
 }
 
@@ -84,6 +86,7 @@ export function useDietTagCatalog(includeArchived = false) {
   return useQuery<DietTagCatalogItem[]>({
     queryKey: ['diet-tag-catalog', includeArchived],
     queryFn: () => apiGet(`/diet-tags/catalog${params}`),
+    staleTime: Infinity,
   })
 }
 
@@ -108,6 +111,7 @@ export function useSymptomCatalog(includeArchived = false) {
   return useQuery<SymptomCatalogItem[]>({
     queryKey: ['symptom-catalog', includeArchived],
     queryFn: () => apiGet(`/symptoms/catalog${params}`),
+    staleTime: Infinity,
   })
 }
 

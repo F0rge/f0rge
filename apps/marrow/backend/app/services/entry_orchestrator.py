@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import unit_of_work
 from app.models.entry import Entry
+from app.cache.invalidation import invalidate_user_insights_cache
 from app.schemas.entry import EntryCreate, EntryResponse, EntryUpdate
 from app.services.entries import EntryService, _build_response
 from app.services.medication_catalog import MedicationCatalogService
@@ -43,6 +44,7 @@ class EntryOrchestrator:
             entry = await self.entry_service.stage_create(body)
             await self._touch_catalogs(entry)
             await sync_seed_tracker_log_from_entry(self.db, entry)
+        await invalidate_user_insights_cache(entry.user_id, entry.date)
         # Unlike every other write path, this one genuinely needs a refresh:
         # ``entry`` was *constructed*, never loaded via a SELECT, so the
         # mapper's ``lazy="selectin"`` companion query for ``photos`` (which
@@ -58,4 +60,5 @@ class EntryOrchestrator:
             entry = await self.entry_service.stage_update(date, body)
             await self._touch_catalogs(entry)
             await sync_seed_tracker_log_from_entry(self.db, entry)
+        await invalidate_user_insights_cache(entry.user_id, entry.date)
         return await _build_response(self.db, entry)

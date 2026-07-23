@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft,
-  Bell,
   Tag,
   UserPlus,
   Users,
@@ -130,12 +129,6 @@ export default function PeopleClient() {
           : 'Tagged meals',
       description: 'Review meal tags waiting for your approval.',
     },
-    {
-      href: '/people/notifications',
-      icon: <Bell className="size-4" />,
-      title: 'Notifications',
-      description: 'Connection requests, invites, and tag activity.',
-    },
   ]
 
   return (
@@ -157,7 +150,7 @@ export default function PeopleClient() {
             <h1 className="text-xl font-semibold tracking-tight">People</h1>
           </div>
         }
-        subtitle="Connections, groups, meal tags, and notifications."
+        subtitle="Connections, groups, and meal tags."
       />
 
       <div className="space-y-4">

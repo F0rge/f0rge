@@ -17,7 +17,10 @@ from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.models.weather import WeatherReading
 from app.services.diet_flags import compute_photo_signal, parse_diet_risk_csv
-from f0rge_db.tenant import owned_by_user
+from app.cache import redis_client
+from app.cache.keys import feature_matrix_key
+from app.config import settings
+from f0rge_db.tenant import current_user_id, owned_by_user
 from app.utils.dates import local_today
 
 FEATURE_SCHEMA_VERSION = 4
@@ -176,6 +179,28 @@ def _aggregate_weather(
 
 
 async def build_feature_matrix(
+    db: AsyncSession,
+    start_date: Optional[datetime.date],
+    end_date: Optional[datetime.date],
+) -> tuple[list[dict], list[str]]:
+    """Return (rows, column_order). Uses Redis read-through cache when configured."""
+    user_id = current_user_id()
+    cache_key = feature_matrix_key(user_id, start_date, end_date)
+    cached = await redis_client.get(cache_key)
+    if cached is not None:
+        payload = redis_client.loads_json(cached)
+        return payload["rows"], payload["columns"]
+
+    rows, columns = await _build_feature_matrix_uncached(db, start_date, end_date)
+    await redis_client.set(
+        cache_key,
+        redis_client.dumps_json({"rows": rows, "columns": columns}),
+        settings.cache_ttl_feature_matrix_seconds,
+    )
+    return rows, columns
+
+
+async def _build_feature_matrix_uncached(
     db: AsyncSession,
     start_date: Optional[datetime.date],
     end_date: Optional[datetime.date],
