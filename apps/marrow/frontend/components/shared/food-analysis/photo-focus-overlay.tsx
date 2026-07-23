@@ -211,6 +211,27 @@ interface TitleEditorProps {
   dishName: string | null
 }
 
+/** Optimistic meal-time chips; remount via key={photoId} to reset without setState-in-effect. */
+function MealTimeEditor({ photoId, mealTime }: { photoId: number; mealTime: string | null }) {
+  const updateMealTime = useUpdatePhotoMealTime()
+  const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(mealTime)
+
+  const handleChange = (d: Date) => {
+    const iso = d.toISOString()
+    setOptimisticMealTime(iso)
+    updateMealTime.mutate({ photoId, mealTime: iso })
+  }
+
+  const chipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
+
+  return (
+    <div className="mb-3">
+      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
+      <MealTimeChips value={chipValue} onChange={handleChange} />
+    </div>
+  )
+}
+
 /**
  * Editable header title. Click the title or the pencil icon to reveal an
  * inline text input; Enter or blur commits via PATCH /photos/{id}. Clearing
@@ -305,7 +326,6 @@ export function PhotoFocusOverlay({
   const open = photoId !== null
   const { data: analysis } = usePhotoAnalysis(photoId)
   const updateVisibility = useUpdatePhotoVisibility()
-  const updateMealTime = useUpdatePhotoMealTime()
   const reducedMotion = useReducedMotion()
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const activeTabRef = useRef<HTMLButtonElement | null>(null)
@@ -324,23 +344,6 @@ export function PhotoFocusOverlay({
   const isSharedMeal =
     currentPhoto?.source_photo_id != null || currentPhoto?.tagged_by_handle != null
   const isHidden = currentPhoto?.hidden_at != null
-
-  const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(
-    currentPhoto?.meal_time ?? null,
-  )
-
-  useEffect(() => {
-    setOptimisticMealTime(currentPhoto?.meal_time ?? null)
-  }, [photoId, currentPhoto?.meal_time])
-
-  const handleMealTimeChange = (d: Date) => {
-    if (photoId === null) return
-    const iso = d.toISOString()
-    setOptimisticMealTime(iso)
-    updateMealTime.mutate({ photoId, mealTime: iso })
-  }
-
-  const mealTimeChipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
 
   const toggleHidden = async () => {
     if (!currentPhoto) return
@@ -461,10 +464,11 @@ export function PhotoFocusOverlay({
             gives it the breathing room the inline placement lacks. */}
         <div ref={scrollRef} data-sheet-scroll className="overflow-y-auto px-4 pb-4 pt-2">
           {currentPhoto && (
-            <div className="mb-3">
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
-              <MealTimeChips value={mealTimeChipValue} onChange={handleMealTimeChange} />
-            </div>
+            <MealTimeEditor
+              key={currentPhoto.id}
+              photoId={currentPhoto.id}
+              mealTime={currentPhoto.meal_time}
+            />
           )}
           {currentPhoto && (
             <div className="mb-3">
