@@ -216,10 +216,15 @@ function MealTimeEditor({ photoId, mealTime }: { photoId: number; mealTime: stri
   const updateMealTime = useUpdatePhotoMealTime()
   const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(mealTime)
 
-  const handleChange = (d: Date) => {
+  const handleChange = async (d: Date) => {
     const iso = d.toISOString()
     setOptimisticMealTime(iso)
-    updateMealTime.mutate({ photoId, mealTime: iso })
+    try {
+      await updateMealTime.mutateAsync({ photoId, mealTime: iso })
+    } catch (err) {
+      setOptimisticMealTime(mealTime)
+      handleMutationError(err, 'Failed to update meal time')
+    }
   }
 
   const chipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
