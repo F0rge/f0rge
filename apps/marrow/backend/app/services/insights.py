@@ -8,10 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.insights import InsightsCRUD
 from f0rge_core.exceptions import ValidationError
 from app.schemas.insights import (
-    CorrelateRow,
-    CorrelatesResponse,
-    SleepNextDayPoint,
-    SleepNextDayResponse,
     TrendPoint,
     TrendSeries,
     TreatmentResponseList,
@@ -19,7 +15,7 @@ from app.schemas.insights import (
     TrendsResponse,
 )
 from app.services.feature_matrix import build_feature_matrix
-from app.services.stats import categorize_feature, spearmanr
+from app.services.stats import categorize_feature
 from app.utils.dates import local_today
 
 # ── private helpers ────────────────────────────────────────────────────────────
@@ -31,28 +27,6 @@ _CORE_OUTCOMES: frozenset[str] = frozenset(
         "sleep_quality",
         "stress",
         "sick",
-    }
-)
-
-# Columns that are never useful as correlation features
-_EXCLUDE_FROM_CORRELATES: frozenset[str] = frozenset(
-    {
-        "date",
-        "schema_version",
-        "period_of_day",
-        "stool_status",
-        "wx_condition",
-        "bristol_type",
-        "hm_sleep_start",
-        "hm_sleep_end",
-    }
-)
-
-_VALID_SLEEP_METRICS: frozenset[str] = frozenset(
-    {
-        "hm_sleep_rem_min",
-        "hm_sleep_deep_min",
-        "hm_sleep_efficiency",
     }
 )
 
@@ -183,81 +157,6 @@ class InsightsService:
 
         return TrendsResponse(series=series_out)
 
-    async def compute_correlates(
-        self,
-        start: Optional[datetime.date],
-        end: Optional[datetime.date],
-        outcome: str,
-        category: Optional[str],
-        min_n: int = 10,
-    ) -> CorrelatesResponse:
-        rows, columns = await build_feature_matrix(self.db, start, end)
-        allowed = await self._allowed_outcomes(columns)
-
-        if outcome not in allowed:
-            raise ValidationError(f"unknown outcome: {outcome!r}")
-
-        y: list[Optional[float]] = [_coerce_numeric(row.get(outcome)) for row in rows]
-
-        skip = _EXCLUDE_FROM_CORRELATES | {outcome}
-        candidate_cols = [c for c in columns if c not in skip]
-
-        results: list[CorrelateRow] = []
-        for col in candidate_cols:
-            cat = categorize_feature(col)
-            if category is not None and cat != category:
-                continue
-
-            best_rho: Optional[float] = None
-            best_n: int = 0
-            best_lag: int = 0
-
-            for lag in range(3):
-                if lag == 0:
-                    x_aligned: list[Optional[float]] = [
-                        _coerce_numeric(row.get(col)) for row in rows
-                    ]
-                    y_aligned = y
-                else:
-                    # feature at t-lag aligned with outcome at t
-                    # x[i-lag] → y[i] means x values start lag earlier
-                    x_raw = [_coerce_numeric(row.get(col)) for row in rows]
-                    x_aligned = x_raw[:-lag]
-                    y_aligned = y[lag:]
-
-                rho, n = spearmanr(x_aligned, y_aligned)
-
-                if rho is None or n < min_n:
-                    continue
-
-                if best_rho is None or abs(rho) > abs(best_rho):
-                    best_rho = rho
-                    best_n = n
-                    best_lag = lag
-
-            if best_rho is None:
-                continue
-
-            results.append(
-                CorrelateRow(
-                    feature=col,
-                    label=_humanize(col),
-                    category=cat,
-                    rho=best_rho,
-                    n=best_n,
-                    best_lag=best_lag,
-                )
-            )
-
-        positive = sorted(
-            [r for r in results if r.rho > 0], key=lambda r: abs(r.rho), reverse=True
-        )[:15]
-        negative = sorted(
-            [r for r in results if r.rho < 0], key=lambda r: abs(r.rho), reverse=True
-        )[:15]
-
-        return CorrelatesResponse(outcome=outcome, positive=positive, negative=negative)
-
     async def compute_treatment_response(
         self,
         outcome: str,
@@ -336,49 +235,3 @@ class InsightsService:
             )
 
         return TreatmentResponseList(outcome=outcome, rows=rows_out)
-
-    async def compute_sleep_next_day(
-        self,
-        start: Optional[datetime.date],
-        end: Optional[datetime.date],
-        outcome: str,
-        metric: str,
-    ) -> SleepNextDayResponse:
-        rows, columns = await build_feature_matrix(self.db, start, end)
-        allowed = await self._allowed_outcomes(columns)
-
-        if outcome not in allowed:
-            raise ValidationError(f"unknown outcome: {outcome!r}")
-
-        if metric not in _VALID_SLEEP_METRICS:
-            raise ValidationError(
-                f"unknown sleep metric: {metric!r}. Choose from: {sorted(_VALID_SLEEP_METRICS)}"
-            )
-
-        n = len(rows)
-        points: list[SleepNextDayPoint] = []
-
-        for i in range(n - 1):
-            sleep_val = _coerce_numeric(rows[i].get(metric))
-            next_outcome = _coerce_numeric(rows[i + 1].get(outcome))
-            if sleep_val is None or next_outcome is None:
-                continue
-            points.append(
-                SleepNextDayPoint(
-                    date=rows[i]["date"],
-                    sleep_value=sleep_val,
-                    next_day_outcome=next_outcome,
-                )
-            )
-
-        x_vals: list[Optional[float]] = [p.sleep_value for p in points]
-        y_vals: list[Optional[float]] = [p.next_day_outcome for p in points]
-        rho, pair_n = spearmanr(x_vals, y_vals)
-
-        return SleepNextDayResponse(
-            outcome=outcome,
-            metric=metric,
-            points=points,
-            rho=rho,
-            n=pair_n,
-        )

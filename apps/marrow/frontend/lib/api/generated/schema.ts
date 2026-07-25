@@ -835,23 +835,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/insights/correlates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Correlates */
-        get: operations["get_correlates_api_v1_insights_correlates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/insights/treatment-response": {
         parameters: {
             query?: never;
@@ -861,23 +844,6 @@ export interface paths {
         };
         /** Get Treatment Response */
         get: operations["get_treatment_response_api_v1_insights_treatment_response_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/insights/sleep-next-day": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Sleep Next Day */
-        get: operations["get_sleep_next_day_api_v1_insights_sleep_next_day_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2008,30 +1974,6 @@ export interface components {
         ConnectionRequest: {
             /** Handle */
             handle: string;
-        };
-        /** CorrelateRow */
-        CorrelateRow: {
-            /** Feature */
-            feature: string;
-            /** Label */
-            label: string;
-            /** Category */
-            category: string;
-            /** Rho */
-            rho: number;
-            /** N */
-            n: number;
-            /** Best Lag */
-            best_lag: number;
-        };
-        /** CorrelatesResponse */
-        CorrelatesResponse: {
-            /** Outcome */
-            outcome: string;
-            /** Positive */
-            positive: components["schemas"]["CorrelateRow"][];
-            /** Negative */
-            negative: components["schemas"]["CorrelateRow"][];
         };
         /** DayStripsResponse */
         DayStripsResponse: {
@@ -3710,28 +3652,6 @@ export interface components {
             email: string;
             /** Password */
             password: string;
-        };
-        /** SleepNextDayPoint */
-        SleepNextDayPoint: {
-            /** Date */
-            date: string;
-            /** Sleep Value */
-            sleep_value: number;
-            /** Next Day Outcome */
-            next_day_outcome: number;
-        };
-        /** SleepNextDayResponse */
-        SleepNextDayResponse: {
-            /** Outcome */
-            outcome: string;
-            /** Metric */
-            metric: string;
-            /** Points */
-            points: components["schemas"]["SleepNextDayPoint"][];
-            /** Rho */
-            rho: number | null;
-            /** N */
-            n: number;
         };
         /** SupplementCatalogItemCreate */
         SupplementCatalogItemCreate: {
@@ -6393,43 +6313,6 @@ export interface operations {
             };
         };
     };
-    get_correlates_api_v1_insights_correlates_get: {
-        parameters: {
-            query: {
-                outcome: string;
-                start?: string | null;
-                end?: string | null;
-                category?: string | null;
-                min_n?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                ht_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CorrelatesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_treatment_response_api_v1_insights_treatment_response_get: {
         parameters: {
             query: {
@@ -6450,42 +6333,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TreatmentResponseList"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_sleep_next_day_api_v1_insights_sleep_next_day_get: {
-        parameters: {
-            query: {
-                outcome: string;
-                metric: string;
-                start?: string | null;
-                end?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                ht_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SleepNextDayResponse"];
                 };
             };
             /** @description Validation Error */
