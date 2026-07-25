@@ -48,6 +48,7 @@ from app.services.signals.taxonomy import TaxonomyError, resolve_class
 from app.services.signals.unexplained import UnexplainedResult, detect_unexplained
 from app.services.stats import spearmanr
 from app.utils.scales import SCALE_DIRECTION
+from app.utils.dates import local_today
 from f0rge_core.exceptions import ValidationError
 from f0rge_db.tenant import current_user_id
 
@@ -135,6 +136,11 @@ def _usable_overall_values(
     residuals, exposure, valid = _extract_exposure_series(rows, baseline, effect.column, lag)
     exposed_vals: list[float] = []
     unexposed_vals: list[float] = []
+    bottom_cut: float | None = None
+    if effect.shape == "linear":
+        usable_x = [float(exposure[i]) for i in range(len(exposure)) if valid[i]]
+        if len(usable_x) >= 6:
+            bottom_cut = float(np.percentile(usable_x, 33.33))
     for local_i in range(len(baseline.dates) - WARMUP_DAYS):
         idx = WARMUP_DAYS + local_i
         overall = baseline.overall[idx]
@@ -142,6 +148,9 @@ def _usable_overall_values(
             continue
         if effect.exposed_mask is not None and effect.exposed_mask[local_i]:
             exposed_vals.append(float(overall))
+        elif effect.shape == "linear":
+            if bottom_cut is not None and float(exposure[local_i]) <= bottom_cut:
+                unexposed_vals.append(float(overall))
         else:
             unexposed_vals.append(float(overall))
     mask = (
@@ -365,13 +374,14 @@ def _build_mirrors(
     rows: list[dict],
     columns: list[str],
     baseline: BaselineResult,
+    outcome: str,
 ) -> list[SignalsMirrorResponse]:
     date_to_row = {str(r["date"]): r for r in rows}
     y_vals: list[Optional[float]] = []
     x_by_col: dict[str, list[Optional[float]]] = {col: [] for col in _mirror_columns(columns)}
     for date_str in baseline.dates[WARMUP_DAYS:]:
         row = date_to_row.get(date_str, {})
-        y_vals.append(_coerce_numeric(row.get("overall")))
+        y_vals.append(_coerce_numeric(row.get(outcome)))
         for col in x_by_col:
             x_by_col[col].append(_coerce_numeric(row.get(col)))
 
@@ -422,6 +432,8 @@ def _today_block(
     quality: Optional[ModelQuality],
 ) -> SignalsTodayResponse:
     if not baseline.dates:
+        return SignalsTodayResponse()
+    if baseline.dates[-1] != local_today().isoformat():
         return SignalsTodayResponse()
     day_index = len(baseline.dates) - 1
     day = compute_day_attribution(day_index, baseline, ctx)
@@ -554,7 +566,7 @@ class SignalsService:
         rows, columns = await build_feature_matrix(self.db, start, end)
         await self._validate_outcome(outcome, columns)
 
-        baseline = compute_baseline_residuals(rows, columns)
+        baseline = compute_baseline_residuals(rows, columns, outcome=outcome)
         diag = baseline.diagnostics
         insufficient = diag.days_usable < MIN_OBSERVED_DAYS
         start_str = start.isoformat() if start is not None else None
@@ -575,7 +587,7 @@ class SignalsService:
         )
 
         trends = _trends_block(await self.insights.compute_trends(start, end))
-        mirrors = _build_mirrors(rows, columns, baseline)
+        mirrors = _build_mirrors(rows, columns, baseline, outcome)
 
         if insufficient:
             unexplained = _empty_unexplained()

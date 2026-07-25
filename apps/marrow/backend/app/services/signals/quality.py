@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 import numpy as np
@@ -12,7 +12,13 @@ from app.services.signals.attribution import (
     compute_day_attribution,
 )
 from app.services.signals.baseline import WARMUP_DAYS, BaselineResult, compute_baseline_residuals
-from app.services.signals.effects import EffectResult
+from app.services.signals.effects import (
+    CV_FOLDS,
+    EffectResult,
+    _contiguous_folds,
+    estimate_all_effects,
+)
+from app.services.signals.interactions import compute_interactions
 
 MAE_FROM_SD = float(np.sqrt(2.0 / np.pi))  # §The noise floor — noise_floor_mae = σ_noise·√(2/π)
 DISAGREE_THRESHOLD = 0.1  # §The noise floor — take larger when estimators disagree
@@ -174,7 +180,87 @@ def estimate_noise_floor(
     )
 
 
+def _masked_baseline(baseline: BaselineResult, masked_positions: set[int]) -> BaselineResult:
+    residuals = list(baseline.residuals)
+    for pos in masked_positions:
+        residuals[pos] = None
+    return replace(baseline, residuals=residuals)
+
+
+def _train_only_context(
+    ctx: AttributionContext,
+    train_local: np.ndarray,
+) -> AttributionContext:
+    exposure_means: dict[str, float] = {}
+    for effect in ctx.effects:
+        if effect.exposed_mask is None:
+            continue
+        mask = np.asarray(effect.exposed_mask, dtype=float)
+        train_vals = mask[train_local]
+        exposure_means[effect.column] = float(np.mean(train_vals)) if train_vals.size else 0.0
+
+    interaction_both_means: dict[tuple[str, str], float] = {}
+    for key, mask in ctx.interaction_masks.items():
+        train_vals = mask[train_local].astype(float)
+        interaction_both_means[key] = float(np.mean(train_vals)) if train_vals.size else 0.0
+
+    return replace(
+        ctx,
+        exposure_means=exposure_means,
+        interaction_both_means=interaction_both_means,
+    )
+
+
 def _model_predictions(
+    rows: list[dict],
+    columns: list[str],
+    baseline: BaselineResult,
+    ctx: AttributionContext,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Out-of-fold full-model predictions for holdout RMSE/R²."""
+    usable = ctx.usable_indices
+    n_usable = len(usable)
+    if n_usable == 0:
+        return np.asarray([], dtype=float), np.asarray([], dtype=float)
+
+    folds = _contiguous_folds(n_usable, CV_FOLDS)
+    actuals: list[float] = []
+    predicted: list[float] = []
+
+    for fold_id in range(CV_FOLDS):
+        test_local = folds == fold_id
+        train_local = ~test_local
+        test_global = [usable[i] for i in range(n_usable) if test_local[i]]
+        train_base = _masked_baseline(baseline, set(test_global))
+
+        effects = estimate_all_effects(rows, columns, train_base)
+        eligible = [e.column for e in effects if e.tier in ("established", "emerging")]
+        interactions = compute_interactions(
+            rows,
+            columns,
+            train_base,
+            eligible_columns=eligible or None,
+        )
+        fold_ctx = build_attribution_context(
+            rows,
+            columns,
+            train_base,
+            effects=effects,
+            interactions=interactions,
+        )
+        fold_ctx = _train_only_context(fold_ctx, train_local)
+
+        for global_idx in test_global:
+            day = compute_day_attribution(global_idx, baseline, fold_ctx)
+            if day.actual is None:
+                continue
+            actuals.append(float(day.actual))
+            predicted.append(day.predicted)
+
+    return np.asarray(actuals, dtype=float), np.asarray(predicted, dtype=float)
+
+
+def _in_sample_predictions(
     baseline: BaselineResult,
     ctx: AttributionContext,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -202,19 +288,22 @@ def compute_model_quality(
     context = ctx if ctx is not None else build_attribution_context(rows, columns, base)
     floor = noise if noise is not None else estimate_noise_floor(rows, columns, base, effects)
 
-    actuals, predicted = _model_predictions(base, context)
+    actuals, predicted = _in_sample_predictions(base, context)
     errors = actuals - predicted
     mae = float(np.mean(np.abs(errors))) if errors.size else 0.0
-    holdout_rmse = float(np.sqrt(np.mean(errors**2))) if errors.size else 0.0
+
+    holdout_actuals, holdout_predicted = _model_predictions(rows, columns, base, context)
+    holdout_errors = holdout_actuals - holdout_predicted
+    holdout_rmse = float(np.sqrt(np.mean(holdout_errors**2))) if holdout_errors.size else 0.0
 
     usable_residuals = [
         float(base.residuals[i]) for i in context.usable_indices if base.residuals[i] is not None
     ]
     baseline_mae = float(np.mean(np.abs(usable_residuals))) if usable_residuals else 0.0
 
-    var_y = float(np.var(actuals, ddof=1)) if actuals.size > 1 else 0.0
+    var_y = float(np.var(holdout_actuals, ddof=1)) if holdout_actuals.size > 1 else 0.0
     if var_y > 0.0:
-        holdout_r2 = float(1.0 - np.mean(errors**2) / var_y)
+        holdout_r2 = float(1.0 - np.mean(holdout_errors**2) / var_y)
     else:
         holdout_r2 = 0.0
 

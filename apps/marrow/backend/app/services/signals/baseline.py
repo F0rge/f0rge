@@ -168,6 +168,8 @@ def _compute_lwt(
 def compute_baseline_residuals(
     rows: list[dict],
     columns: list[str],
+    *,
+    outcome: str = "overall",
 ) -> BaselineResult:
     """Personal-baseline residualisation (Layer 1); no leakage — day t uses only days < t."""
     sorted_rows = sorted(rows, key=lambda r: _parse_date(r["date"]))
@@ -184,16 +186,16 @@ def compute_baseline_residuals(
     for row in sorted_rows:
         schema = row.get("schema_version")
         if schema is None or schema < MIN_SCHEMA_VERSION:
-            if row.get("overall") is not None:
+            if row.get(outcome) is not None:
                 drop_reasons["legacy_schema"] += 1
             continue
-        overall = row.get("overall")
+        overall = row.get(outcome)
         if overall is None:
             drop_reasons["missing_overall"] += 1
             continue
         v4_rows.append(row)
 
-    v4_overalls = [float(r["overall"]) for r in v4_rows]
+    v4_overalls = [float(r[outcome]) for r in v4_rows]
     init_level = float(np.mean(v4_overalls[:WARMUP_DAYS])) if v4_overalls else 0.0
 
     dates: list[str] = []
@@ -213,7 +215,7 @@ def compute_baseline_residuals(
     history_t: list[float] = []
 
     for v4_pos, row in enumerate(v4_rows):
-        overall = float(row["overall"])
+        overall = float(row[outcome])
         date_obj = _parse_date(row["date"])
         dow = date_obj.weekday()
 
@@ -222,7 +224,7 @@ def compute_baseline_residuals(
         prior_adjusted: list[float] = []
         prior_design: list[list[float]] = []
         for p_idx, p_row in enumerate(v4_rows[:v4_pos]):
-            p_adj = float(p_row["overall"]) - history_l[p_idx] - history_w[p_idx] - history_t[p_idx]
+            p_adj = float(p_row[outcome]) - history_l[p_idx] - history_w[p_idx] - history_t[p_idx]
             prior_adjusted.append(p_adj)
             prior_design.append(
                 [_coerce_bool(p_row.get("sick"))]
