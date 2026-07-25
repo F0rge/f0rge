@@ -8,10 +8,54 @@ on:
 
 permissions:
   contents: read
+  actions: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  # This suite only exercises marrow backend + frontend; skip it for everything else.
+  detect:
+    name: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run: ${{ steps.affected.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: ${{ github.base_ref || github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Resolve affected projects
+        id: affected
+        run: |
+          set -o pipefail
+          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(" ")')
+          run=false
+          case " $PROJECTS " in
+            *" marrow-backend "*|*" marrow-frontend "*) run=true ;;
+          esac
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "affected: $PROJECTS (e2e: $run)"
+
   playwright:
     name: playwright smoke
+    needs: detect
+    if: needs.detect.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
