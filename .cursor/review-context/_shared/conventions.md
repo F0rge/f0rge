@@ -48,7 +48,7 @@ Automated checks (lint, pytest, build, typecheck) are NOT a complete gate. The P
 - At least one error path was driven and the UI failed gracefully.
 - Backend logs were tailed during the test for hidden 500s.
 
-The PR-review bot CANNOT do this. Its job is to produce a "Verification ticket" — a bulleted checklist the human must run before clicking Merge. See `feedback_qa_e2e_live_server.md`.
+A diff-only reviewer CANNOT do this. Its job is to produce a "Verification ticket" — a bulleted checklist the human must run before clicking Merge. See `feedback_qa_e2e_live_server.md`.
 
 ## No mocks at the seam under test
 

@@ -12,7 +12,7 @@ Extends `~/.cursor/rules/leo-system-wide.mdc` § Sub-Agent Delegation. Project-s
 When producing an implementation plan (Plan mode, issue spec, or ad-hoc scope), **do not implement in the same step**. The plan MUST include:
 
 1. **Sub-agent map** — one row per work chunk: `Chunk | Owner (sub-agent) | Deliverable | Depends on`
-2. **Owner = a named sub-agent** from `~/.cursor/agents/` or the built-in `Explore` / `Plan` agents — not "main agent" or "me"
+2. **Owner = a named sub-agent** from `~/.cursor/agents/` or a built-in (`explore`, `bash`, `browser`) — not "main agent" or "me". Plan is a *mode*, not a sub-agent; don't assign chunks to it.
 3. **Right-sized delegation** — match scope to agent count (see table)
 4. **Verification plan** — ends with live-server E2E when UI/API changes; dev-env smoke when shipping via `ship-feature` skill
 5. **Explicit sign-off** — unresolved decisions listed before execution
@@ -26,7 +26,7 @@ Solo plans where the orchestrator implements every chunk are **not acceptable**.
 | Backend + frontend + tests | Specialist per layer; parallel when independent |
 | New subsystem, 5+ files | data, services, routers, frontend, qa separately |
 
-## Sub-agent routing (health-tracker)
+## Sub-agent routing (f0rge)
 
 | Touch area | Sub-agent |
 | --- | --- |
@@ -39,8 +39,8 @@ Solo plans where the orchestrator implements every chunk are **not acceptable**.
 | ML prompts, classification, vision analysis | `data-scientist` |
 | Docker, `.github/`, Fly deploy | `devops` |
 | QA gate, test matrix, e2e evidence | `qa-engineer` |
-| Read-only codebase recon | `Explore` |
-| Architecture / plan-only pass | `Plan` |
+| Read-only codebase recon | `explore` |
+| Architecture / plan-only pass | Plan **mode** (not a sub-agent) |
 
 **Model policy:** every sub-agent runs on `composer-2.5` only.
 

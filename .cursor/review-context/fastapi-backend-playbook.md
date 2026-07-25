@@ -2,7 +2,7 @@
 
 ## What this is
 
-Authoritative review checklist for the Claude PR review bot operating on health-tracker backend diffs. Every rule is grounded in a memory file written from a real production incident or architectural decision — not generic FastAPI best practice.
+Authoritative review checklist for backend diffs in this repo. Every rule is grounded in a memory file written from a real production incident or architectural decision — not generic FastAPI best practice.
 
 ---
 

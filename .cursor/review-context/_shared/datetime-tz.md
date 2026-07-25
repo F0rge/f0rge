@@ -1,8 +1,6 @@
 # Datetime / Timezone Convention
 
-Source of truth: `~/.claude/projects/-Users-leo-development-health-tracker/memory/project_datetime_tz_convention.md`.
-
-This file is the committed-to-repo subset for the PR-review bot.
+This committed file is the source of truth for reviewers. It is self-contained by design — reviewers (bot or human) may have no access to any machine-local agent memory.
 
 ## The rule
 

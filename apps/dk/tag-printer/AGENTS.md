@@ -1,13 +1,7 @@
----
-description: dk tag printer Coolify deploy on Pi — domains, build args, CORS
-globs: apps/dk/tag-printer/**/*
-alwaysApply: false
----
+# dk tag printer — Agent Instructions
 
-# dk tag printer — Infrastructure (Pi Coolify)
-
-Extends `~/.cursor/rules/leo-system-wide.mdc`. Deploy target: **Coolify on Pi**
-(prod only). No Fly apps.
+DasKasas price tag tool. Deploy target: **Coolify on Pi** (prod only). No Fly apps.
+Delegate deploy/infra work to the `devops` sub-agent.
 
 ## Local dev
 

@@ -2,7 +2,7 @@
 
 ## What this is
 
-Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker, Fly deploy, or migrations. Scan the diff, apply the rules below, return JSON findings.
+Review checklist for infrastructure diffs. Load this when reviewing a PR that touches infrastructure, CI, Docker, Fly deploy, or migrations. Scan the diff, apply the rules below, return JSON findings.
 
 ## Scope — files YOU review
 

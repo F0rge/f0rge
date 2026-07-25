@@ -1,6 +1,6 @@
 ---
 description: Fly.io + Coolify deploy, CI/CD, and Docker build conventions. Use proactively for fly.toml, Dockerfiles, GitHub Actions, and env configuration.
-globs: "**/fly*.toml, .github/**, apps/marrow/backend/Dockerfile, apps/marrow/backend/docker-entrypoint.sh, apps/marrow/frontend/Dockerfile, apps/dk/**/Dockerfile"
+globs: **/fly*.toml, .github/**, **/Dockerfile, **/docker-entrypoint.sh, **/docker-compose*.yml
 alwaysApply: false
 ---
 
