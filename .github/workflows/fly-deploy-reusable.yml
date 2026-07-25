@@ -67,9 +67,9 @@ jobs:
       - name: Publish resolve outputs
         id: out
         run: |
-          echo "deploy_api=${{ inputs.deploy_api }}" >> "$GITHUB_OUTPUT"
-          echo "deploy_mcp=${{ inputs.deploy_mcp }}" >> "$GITHUB_OUTPUT"
-          echo "deploy_frontend=${{ inputs.deploy_frontend }}" >> "$GITHUB_OUTPUT"
+          echo "deploy_api=${{ inputs.deploy_api && 'true' || 'false' }}" >> "$GITHUB_OUTPUT"
+          echo "deploy_mcp=${{ inputs.deploy_mcp && 'true' || 'false' }}" >> "$GITHUB_OUTPUT"
+          echo "deploy_frontend=${{ inputs.deploy_frontend && 'true' || 'false' }}" >> "$GITHUB_OUTPUT"
           echo "api_health_url=${{ inputs.api_health_url }}" >> "$GITHUB_OUTPUT"
           echo "frontend_health_url=${{ inputs.frontend_health_url }}" >> "$GITHUB_OUTPUT"
           echo "mcp_health_url=${{ inputs.mcp_health_url }}" >> "$GITHUB_OUTPUT"

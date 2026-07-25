@@ -30,6 +30,7 @@ jobs:
       - uses: nrwl/nx-set-shas@v4
         with:
           main-branch-name: ${{ github.base_ref || github.ref_name }}
+          workflow-id: ci.yml
 
       - uses: actions/setup-node@v4
         with:
