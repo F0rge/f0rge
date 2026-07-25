@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     cache_ttl_catalog_seconds: int = 3600
     cache_ttl_entry_seconds: int = 300
     cache_ttl_feature_matrix_seconds: int = 600
+    cache_ttl_signals_seconds: int = 1800
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

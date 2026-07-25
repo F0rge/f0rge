@@ -5,6 +5,8 @@ from app.cache.keys import (
     entry_key,
     feature_matrix_key,
     feature_matrix_prefix,
+    signals_key,
+    signals_prefix,
 )
 from app.cache.redis_client import close, delete, delete_pattern, get, set
 
@@ -16,6 +18,8 @@ __all__ = [
     "entry_key",
     "feature_matrix_key",
     "feature_matrix_prefix",
+    "signals_key",
+    "signals_prefix",
     "get",
     "set",
 ]

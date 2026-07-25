@@ -10,7 +10,7 @@ from app.services.signals.attribution import (
     largest_remainder_round,
 )
 from app.services.signals.baseline import BaselineResult, compute_baseline_residuals
-from app.services.signals.effects import EffectResult, estimate_all_effects
+from app.services.signals.effects import EffectResult, estimate_all_effects, estimate_effect
 from app.services.signals.interactions import InteractionResult, compute_interactions
 from app.services.signals.quality import (
     ModelQuality,

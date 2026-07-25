@@ -35,6 +35,7 @@ from app.routers import (
     onboarding,
     photos,
     settings as settings_router,
+    signals,
     social,
     supplement_catalog,
     symptom_catalog,
@@ -213,6 +214,7 @@ app.include_router(onboarding.router)
 app.include_router(symptom_catalog.router)
 app.include_router(food_analysis.router)
 app.include_router(insights.router)
+app.include_router(signals.router)
 app.include_router(treatments.router)
 app.include_router(export.router)
 app.include_router(labs.router)
