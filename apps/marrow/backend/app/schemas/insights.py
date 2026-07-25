@@ -25,21 +25,6 @@ class TrendsResponse(BaseModel):
     series: list[TrendSeries]
 
 
-class CorrelateRow(BaseModel):
-    feature: str
-    label: str
-    category: str
-    rho: float
-    n: int
-    best_lag: int
-
-
-class CorrelatesResponse(BaseModel):
-    outcome: str
-    positive: list[CorrelateRow]
-    negative: list[CorrelateRow]
-
-
 class TreatmentResponseRow(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -60,17 +45,3 @@ class TreatmentResponseRow(BaseModel):
 class TreatmentResponseList(BaseModel):
     outcome: str
     rows: list[TreatmentResponseRow]
-
-
-class SleepNextDayPoint(BaseModel):
-    date: str
-    sleep_value: float
-    next_day_outcome: float
-
-
-class SleepNextDayResponse(BaseModel):
-    outcome: str
-    metric: str
-    points: list[SleepNextDayPoint]
-    rho: Optional[float]
-    n: int

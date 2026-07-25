@@ -27,6 +27,7 @@ dependencies = [
     "f0rge-storage",
     "aioapns>=4.0",
     "redis>=5.0",
+    "numpy>=2.0",
 ]
 
 [dependency-groups]

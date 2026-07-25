@@ -1,39 +1,45 @@
 'use client'
 
 import { useState } from 'react'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import {
-  LineChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  cn,
 } from '@f0rge/ui'
-import { cn } from '@f0rge/ui'
-import type { TrendSeries } from '@/lib/api/types'
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import type { SignalsTrendSeries } from '@/lib/api/types/signals'
+import { polarityTone } from './polarity'
 
 interface Props {
-  series: TrendSeries
+  series: SignalsTrendSeries
 }
 
-function DeltaArrow({ delta }: { delta: number | null }) {
+function DeltaArrow({
+  delta,
+  goodDirection,
+}: {
+  delta: number | null
+  goodDirection: SignalsTrendSeries['good_direction']
+}) {
   if (delta === null) return <Minus className="size-3 text-muted-foreground" />
-  if (delta > 0)
-    return <TrendingUp className="size-3 text-green-600 dark:text-green-400" />
-  if (delta < 0)
-    return <TrendingDown className="size-3 text-red-600 dark:text-red-400" />
+  const tone = polarityTone(delta, goodDirection)
+  if (delta > 0) return <TrendingUp className={cn('size-3', tone)} />
+  if (delta < 0) return <TrendingDown className={cn('size-3', tone)} />
   return <Minus className="size-3 text-muted-foreground" />
 }
 
-function Sparkline({ points }: { points: TrendSeries['points'] }) {
+function Sparkline({ points }: { points: SignalsTrendSeries['points'] }) {
   const data = points
     .filter((p) => p.value !== null)
     .slice(-30)
@@ -63,11 +69,11 @@ function Sparkline({ points }: { points: TrendSeries['points'] }) {
   )
 }
 
-function FullChart({ series }: { series: TrendSeries }) {
+function FullChart({ series }: { series: SignalsTrendSeries }) {
   const data = series.points
     .filter((p) => p.value !== null || p.rolling_avg_7 !== null)
     .map((p) => ({
-      date: p.date.slice(5), // MM-DD
+      date: p.date.slice(5),
       value: p.value,
       avg7: p.rolling_avg_7,
     }))
@@ -75,16 +81,9 @@ function FullChart({ series }: { series: TrendSeries }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <LineChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-        <XAxis
-          dataKey="date"
-          tick={{ fontSize: 10 }}
-          interval="preserveStartEnd"
-        />
+        <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
         <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip
-          contentStyle={{ fontSize: 12 }}
-          labelStyle={{ fontSize: 11 }}
-        />
+        <Tooltip contentStyle={{ fontSize: 12 }} labelStyle={{ fontSize: 11 }} />
         <Line
           type="monotone"
           dataKey="value"
@@ -107,9 +106,8 @@ function FullChart({ series }: { series: TrendSeries }) {
   )
 }
 
-export function TrendCard({ series }: Props) {
+export function SignalsTrendCard({ series }: Props) {
   const [open, setOpen] = useState(false)
-
   const currentDisplay =
     series.current !== null ? series.current.toFixed(1) : '—'
   const avgDisplay =
@@ -127,14 +125,12 @@ export function TrendCard({ series }: Props) {
           <span className="truncate text-xs font-medium text-card-foreground">
             {series.label}
           </span>
-          <DeltaArrow delta={series.delta_30d} />
+          <DeltaArrow delta={series.delta_30d} goodDirection={series.good_direction} />
         </div>
         <Sparkline points={series.points} />
         <div className="mt-1 flex items-baseline gap-2">
           <span className="text-sm font-semibold tabular-nums">{currentDisplay}</span>
-          <span className="text-xs text-muted-foreground">
-            7d avg {avgDisplay}
-          </span>
+          <span className="text-xs text-muted-foreground">7d avg {avgDisplay}</span>
         </div>
       </DialogTrigger>
 
@@ -145,7 +141,7 @@ export function TrendCard({ series }: Props) {
         <div className="mt-2">
           <FullChart series={series} />
         </div>
-        <div className="flex gap-4 text-xs text-muted-foreground">
+        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
           <span>
             Current: <strong className="text-foreground">{currentDisplay}</strong>
           </span>
@@ -158,8 +154,7 @@ export function TrendCard({ series }: Props) {
               <strong
                 className={cn(
                   'text-foreground',
-                  series.delta_30d > 0 && 'text-green-600',
-                  series.delta_30d < 0 && 'text-red-600',
+                  polarityTone(series.delta_30d, series.good_direction),
                 )}
               >
                 {series.delta_30d > 0 ? '+' : ''}

@@ -86,7 +86,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="bottom-nav"]',
     title: 'Main navigation',
     content:
-      'Six tabs at the bottom: Today, History, Treatments, Labs, Insights, and Settings. You will visit each in this tour.',
+      'Six tabs at the bottom: Today, History, Treatments, Labs, Signals, and Profile. You will visit each in this tour.',
     placement: 'top',
     isFixed: true,
   },
@@ -190,12 +190,12 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     placement: 'bottom',
   },
   {
-    id: 'insights',
-    route: '/insights',
-    target: '[data-tour="insights-header"]',
-    title: 'Insights',
+    id: 'signals',
+    route: '/signals',
+    target: '[data-tour="signals-header"]',
+    title: 'Signals',
     content:
-      'Trends and correlations unlock after you build a few weeks of check-ins. Adjust the date range and outcome above.',
+      'See what drives your outcomes — today\'s prediction, ranked drivers, and trends. Unlocks after a few weeks of check-ins.',
     placement: 'bottom',
   },
   {

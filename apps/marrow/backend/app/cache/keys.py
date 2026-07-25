@@ -31,3 +31,21 @@ def feature_matrix_key(
 
 def feature_matrix_prefix(user_id: uuid.UUID) -> str:
     return f"u:{user_id}:fm:"
+
+
+def signals_key(
+    user_id: uuid.UUID,
+    outcome: str,
+    start: datetime.date | None,
+    end: datetime.date | None,
+) -> str:
+    from app.services.signals.service import SIGNALS_SCHEMA_VERSION
+
+    return (
+        f"u:{user_id}:signals:v{SIGNALS_SCHEMA_VERSION}:"
+        f"{outcome}:{_bound_token(start)}:{_bound_token(end)}"
+    )
+
+
+def signals_prefix(user_id: uuid.UUID) -> str:
+    return f"u:{user_id}:signals:"

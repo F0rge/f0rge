@@ -3759,126 +3759,6 @@
         }
       }
     },
-    "/api/v1/insights/correlates": {
-      "get": {
-        "tags": [
-          "insights"
-        ],
-        "summary": "Get Correlates",
-        "operationId": "get_correlates_api_v1_insights_correlates_get",
-        "parameters": [
-          {
-            "name": "outcome",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Outcome"
-            }
-          },
-          {
-            "name": "start",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Start"
-            }
-          },
-          {
-            "name": "end",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "End"
-            }
-          },
-          {
-            "name": "category",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Category"
-            }
-          },
-          {
-            "name": "min_n",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 365,
-              "minimum": 3,
-              "default": 10,
-              "title": "Min N"
-            }
-          },
-          {
-            "name": "ht_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Ht Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CorrelatesResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/insights/treatment-response": {
       "get": {
         "tags": [
@@ -3937,13 +3817,13 @@
         }
       }
     },
-    "/api/v1/insights/sleep-next-day": {
+    "/api/v1/signals": {
       "get": {
         "tags": [
-          "insights"
+          "signals"
         ],
-        "summary": "Get Sleep Next Day",
-        "operationId": "get_sleep_next_day_api_v1_insights_sleep_next_day_get",
+        "summary": "Get Signals",
+        "operationId": "get_signals_api_v1_signals_get",
         "parameters": [
           {
             "name": "outcome",
@@ -3952,15 +3832,6 @@
             "schema": {
               "type": "string",
               "title": "Outcome"
-            }
-          },
-          {
-            "name": "metric",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Metric"
             }
           },
           {
@@ -4020,7 +3891,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SleepNextDayResponse"
+                  "$ref": "#/components/schemas/SignalsResponse"
                 }
               }
             }
@@ -8492,72 +8363,43 @@
         ],
         "title": "ConnectionRequest"
       },
-      "CorrelateRow": {
+      "DayStripsResponse": {
         "properties": {
-          "feature": {
-            "type": "string",
-            "title": "Feature"
+          "exposed": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Exposed"
           },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "category": {
-            "type": "string",
-            "title": "Category"
-          },
-          "rho": {
-            "type": "number",
-            "title": "Rho"
-          },
-          "n": {
-            "type": "integer",
-            "title": "N"
-          },
-          "best_lag": {
-            "type": "integer",
-            "title": "Best Lag"
+          "unexposed": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Unexposed"
           }
         },
         "type": "object",
         "required": [
-          "feature",
-          "label",
-          "category",
-          "rho",
-          "n",
-          "best_lag"
+          "exposed",
+          "unexposed"
         ],
-        "title": "CorrelateRow"
-      },
-      "CorrelatesResponse": {
-        "properties": {
-          "outcome": {
-            "type": "string",
-            "title": "Outcome"
-          },
-          "positive": {
-            "items": {
-              "$ref": "#/components/schemas/CorrelateRow"
-            },
-            "type": "array",
-            "title": "Positive"
-          },
-          "negative": {
-            "items": {
-              "$ref": "#/components/schemas/CorrelateRow"
-            },
-            "type": "array",
-            "title": "Negative"
-          }
-        },
-        "type": "object",
-        "required": [
-          "outcome",
-          "positive",
-          "negative"
-        ],
-        "title": "CorrelatesResponse"
+        "title": "DayStripsResponse"
       },
       "DeviceRegisterRequest": {
         "properties": {
@@ -9121,6 +8963,36 @@
         },
         "type": "object",
         "title": "DietaryIngredientUpdate"
+      },
+      "DoseBinResponse": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "n",
+          "mean"
+        ],
+        "title": "DoseBinResponse"
       },
       "EmbeddingSettingsUpdate": {
         "properties": {
@@ -13346,6 +13218,641 @@
         "title": "SettingsResponse",
         "description": "Public view of user settings. Never exposes plaintext keys or encrypted bytes."
       },
+      "SignalsDriverResponse": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "class": {
+            "type": "string",
+            "title": "Class"
+          },
+          "shape": {
+            "type": "string",
+            "title": "Shape"
+          },
+          "theta_hat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theta Hat"
+          },
+          "ci_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Low"
+          },
+          "ci_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci High"
+          },
+          "tier": {
+            "type": "string",
+            "title": "Tier"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "exposed_days": {
+            "type": "integer",
+            "title": "Exposed Days"
+          },
+          "unexposed_days": {
+            "type": "integer",
+            "title": "Unexposed Days"
+          },
+          "exposed_runs": {
+            "type": "integer",
+            "title": "Exposed Runs"
+          },
+          "dose_table": {
+            "items": {
+              "$ref": "#/components/schemas/DoseBinResponse"
+            },
+            "type": "array",
+            "title": "Dose Table"
+          },
+          "day_strips": {
+            "$ref": "#/components/schemas/DayStripsResponse"
+          },
+          "good_direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Good Direction"
+          },
+          "se_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Se Ratio"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "label",
+          "class",
+          "shape",
+          "theta_hat",
+          "ci_low",
+          "ci_high",
+          "tier",
+          "reason",
+          "exposed_days",
+          "unexposed_days",
+          "exposed_runs",
+          "dose_table",
+          "day_strips",
+          "good_direction",
+          "se_ratio"
+        ],
+        "title": "SignalsDriverResponse"
+      },
+      "SignalsMetaResponse": {
+        "properties": {
+          "days_total": {
+            "type": "integer",
+            "title": "Days Total"
+          },
+          "days_usable": {
+            "type": "integer",
+            "title": "Days Usable"
+          },
+          "warmup": {
+            "type": "integer",
+            "title": "Warmup"
+          },
+          "drop_reasons": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Drop Reasons"
+          },
+          "insufficient_data": {
+            "type": "boolean",
+            "title": "Insufficient Data"
+          },
+          "insufficient_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insufficient Reason"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days_total",
+          "days_usable",
+          "warmup",
+          "drop_reasons",
+          "insufficient_data",
+          "outcome"
+        ],
+        "title": "SignalsMetaResponse"
+      },
+      "SignalsMirrorResponse": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "rho": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rho"
+          },
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "label",
+          "rho",
+          "n",
+          "reason"
+        ],
+        "title": "SignalsMirrorResponse"
+      },
+      "SignalsModelResponse": {
+        "properties": {
+          "mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mae"
+          },
+          "baseline_mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Mae"
+          },
+          "noise_floor_mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise Floor Mae"
+          },
+          "noise_sd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise Sd"
+          },
+          "skill": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill"
+          },
+          "holdout_rmse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdout Rmse"
+          },
+          "holdout_r2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdout R2"
+          },
+          "r2_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R2 Basis"
+          },
+          "relearning": {
+            "type": "boolean",
+            "title": "Relearning",
+            "default": false
+          },
+          "relearning_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relearning Message"
+          }
+        },
+        "type": "object",
+        "title": "SignalsModelResponse"
+      },
+      "SignalsResponse": {
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/SignalsMetaResponse"
+          },
+          "model": {
+            "$ref": "#/components/schemas/SignalsModelResponse"
+          },
+          "today": {
+            "$ref": "#/components/schemas/SignalsTodayResponse"
+          },
+          "drivers": {
+            "items": {
+              "$ref": "#/components/schemas/SignalsDriverResponse"
+            },
+            "type": "array",
+            "title": "Drivers"
+          },
+          "mirrors": {
+            "items": {
+              "$ref": "#/components/schemas/SignalsMirrorResponse"
+            },
+            "type": "array",
+            "title": "Mirrors"
+          },
+          "unexplained": {
+            "$ref": "#/components/schemas/SignalsUnexplainedResponse"
+          },
+          "trends": {
+            "$ref": "#/components/schemas/SignalsTrendsResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meta",
+          "model",
+          "today",
+          "drivers",
+          "mirrors",
+          "unexplained",
+          "trends"
+        ],
+        "title": "SignalsResponse"
+      },
+      "SignalsTodayResponse": {
+        "properties": {
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/TodayContributionResponse"
+            },
+            "type": "array",
+            "title": "Contributions"
+          },
+          "predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted"
+          },
+          "band_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Low"
+          },
+          "band_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band High"
+          },
+          "band_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Level"
+          },
+          "actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          },
+          "residual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Residual"
+          },
+          "calibration_series": {
+            "items": {
+              "$ref": "#/components/schemas/TodayCalibrationPointResponse"
+            },
+            "type": "array",
+            "title": "Calibration Series"
+          }
+        },
+        "type": "object",
+        "title": "SignalsTodayResponse"
+      },
+      "SignalsTrendSeriesResponse": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/TrendPoint"
+            },
+            "type": "array",
+            "title": "Points"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "rolling_avg_7": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rolling Avg 7"
+          },
+          "delta_30d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta 30D"
+          },
+          "good_direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Good Direction"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "category",
+          "points",
+          "current",
+          "rolling_avg_7",
+          "delta_30d",
+          "good_direction"
+        ],
+        "title": "SignalsTrendSeriesResponse"
+      },
+      "SignalsTrendsResponse": {
+        "properties": {
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/SignalsTrendSeriesResponse"
+            },
+            "type": "array",
+            "title": "Series"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series"
+        ],
+        "title": "SignalsTrendsResponse"
+      },
+      "SignalsUnexplainedResponse": {
+        "properties": {
+          "unexplained_bad": {
+            "items": {
+              "$ref": "#/components/schemas/UnexplainedEpisodeResponse"
+            },
+            "type": "array",
+            "title": "Unexplained Bad"
+          },
+          "unexplained_good": {
+            "items": {
+              "$ref": "#/components/schemas/UnexplainedEpisodeResponse"
+            },
+            "type": "array",
+            "title": "Unexplained Good"
+          },
+          "couldnt_score": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Couldnt Score"
+          },
+          "relearning": {
+            "type": "boolean",
+            "title": "Relearning"
+          },
+          "relearning_message": {
+            "type": "string",
+            "title": "Relearning Message"
+          },
+          "tracker_proposals": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerProposalResponse"
+            },
+            "type": "array",
+            "title": "Tracker Proposals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "unexplained_bad",
+          "unexplained_good",
+          "couldnt_score",
+          "relearning",
+          "relearning_message",
+          "tracker_proposals"
+        ],
+        "title": "SignalsUnexplainedResponse"
+      },
       "SignupRequest": {
         "properties": {
           "handle": {
@@ -13370,72 +13877,6 @@
           "password"
         ],
         "title": "SignupRequest"
-      },
-      "SleepNextDayPoint": {
-        "properties": {
-          "date": {
-            "type": "string",
-            "title": "Date"
-          },
-          "sleep_value": {
-            "type": "number",
-            "title": "Sleep Value"
-          },
-          "next_day_outcome": {
-            "type": "number",
-            "title": "Next Day Outcome"
-          }
-        },
-        "type": "object",
-        "required": [
-          "date",
-          "sleep_value",
-          "next_day_outcome"
-        ],
-        "title": "SleepNextDayPoint"
-      },
-      "SleepNextDayResponse": {
-        "properties": {
-          "outcome": {
-            "type": "string",
-            "title": "Outcome"
-          },
-          "metric": {
-            "type": "string",
-            "title": "Metric"
-          },
-          "points": {
-            "items": {
-              "$ref": "#/components/schemas/SleepNextDayPoint"
-            },
-            "type": "array",
-            "title": "Points"
-          },
-          "rho": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rho"
-          },
-          "n": {
-            "type": "integer",
-            "title": "N"
-          }
-        },
-        "type": "object",
-        "required": [
-          "outcome",
-          "metric",
-          "points",
-          "rho",
-          "n"
-        ],
-        "title": "SleepNextDayResponse"
       },
       "SupplementCatalogItemCreate": {
         "properties": {
@@ -13730,6 +14171,70 @@
         ],
         "title": "TestConnectionResponse"
       },
+      "TodayCalibrationPointResponse": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "predicted": {
+            "type": "number",
+            "title": "Predicted"
+          },
+          "actual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "predicted",
+          "actual"
+        ],
+        "title": "TodayCalibrationPointResponse"
+      },
+      "TodayContributionResponse": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "display_value": {
+            "type": "number",
+            "title": "Display Value"
+          },
+          "driver_id": {
+            "type": "string",
+            "title": "Driver Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "display_value",
+          "driver_id"
+        ],
+        "title": "TodayContributionResponse"
+      },
       "TrackerCreate": {
         "properties": {
           "name": {
@@ -13778,6 +14283,29 @@
           "kind"
         ],
         "title": "TrackerCreate"
+      },
+      "TrackerProposalResponse": {
+        "properties": {
+          "tracker_id": {
+            "type": "string",
+            "title": "Tracker Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "days_covered": {
+            "type": "integer",
+            "title": "Days Covered"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tracker_id",
+          "label",
+          "days_covered"
+        ],
+        "title": "TrackerProposalResponse"
       },
       "TrackerResponse": {
         "properties": {
@@ -14730,6 +15258,42 @@
           "series"
         ],
         "title": "TrendsResponse"
+      },
+      "UnexplainedEpisodeResponse": {
+        "properties": {
+          "dates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dates"
+          },
+          "start_date": {
+            "type": "string",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "max_abs_residual": {
+            "type": "number",
+            "title": "Max Abs Residual"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dates",
+          "start_date",
+          "end_date",
+          "direction",
+          "max_abs_residual"
+        ],
+        "title": "UnexplainedEpisodeResponse"
       },
       "UnreadCountResponse": {
         "properties": {

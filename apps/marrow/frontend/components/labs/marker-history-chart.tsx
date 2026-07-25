@@ -148,10 +148,10 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
           type="button"
           onClick={togglePin}
           className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
-          aria-label={pinned ? 'Unpin from insights' : 'Pin to insights'}
+          aria-label={pinned ? 'Unpin from Signals' : 'Pin to Signals'}
         >
           {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-          {pinned ? 'Unpin' : 'Pin to insights'}
+          {pinned ? 'Unpin' : 'Pin to Signals'}
         </button>
       </div>
 
