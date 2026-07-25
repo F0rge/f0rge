@@ -46,9 +46,7 @@ def test_recovery_planted_effect() -> None:
     exposed = rng.random(92) < 0.30
     residuals[exposed] += 0.6
     x = exposed.astype(float)
-    result = estimate_effect_from_arrays(
-        residuals, x, shape="binary", bootstrap_n=400, rng=rng
-    )
+    result = estimate_effect_from_arrays(residuals, x, shape="binary", bootstrap_n=400, rng=rng)
     assert result.theta_hat is not None
     assert abs(result.theta_hat - 0.6) < 0.1
     assert result.ci_lower is not None and result.ci_upper is not None
@@ -144,9 +142,7 @@ def test_u_shape_threshold_visible() -> None:
         x[start + 9 : start + 13] = 0.92
         residuals[start + 9 : start + 13] = 0.65
     residuals += rng.normal(0, 0.04, n)
-    result = estimate_effect_from_arrays(
-        residuals, x, shape="threshold", bootstrap_n=200, rng=rng
-    )
+    result = estimate_effect_from_arrays(residuals, x, shape="threshold", bootstrap_n=200, rng=rng)
     assert result.theta_hat is not None
     assert abs(result.theta_hat) >= 0.25
     assert result.tier != "insufficient"

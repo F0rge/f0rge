@@ -66,7 +66,9 @@ def _synthetic_null_rows(n_days: int, rng: np.random.Generator) -> tuple[list[di
     return rows, columns
 
 
-def _circular_shift_exposures(rows: list[dict], columns: list[str], rng: np.random.Generator) -> list[dict]:
+def _circular_shift_exposures(
+    rows: list[dict], columns: list[str], rng: np.random.Generator
+) -> list[dict]:
     """Shift exposure columns; overall/residual relationship destroyed, autocorrelation preserved."""
     exposure_cols = [
         c

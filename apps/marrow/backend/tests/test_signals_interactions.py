@@ -17,12 +17,7 @@ def _plant_2x2(
     rng: np.random.Generator,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     n = n_neither + n_a_only + n_b_only + n_both
-    labels = (
-        [0] * n_neither
-        + [1] * n_a_only
-        + [2] * n_b_only
-        + [3] * n_both
-    )
+    labels = [0] * n_neither + [1] * n_a_only + [2] * n_b_only + [3] * n_both
     rng.shuffle(labels)
     mask_a = np.zeros(n, dtype=bool)
     mask_b = np.zeros(n, dtype=bool)
@@ -56,8 +51,6 @@ def test_interaction_never_established_below_20_coexposed() -> None:
     residuals, mask_a, mask_b = _plant_2x2(60, 10, 10, 11, rng)
     co = int((mask_a & mask_b).sum())
     assert co < ESTABLISHED_CO_EXPOSED
-    result = compute_excess_from_masks(
-        residuals, mask_a, mask_b, bootstrap_n=200, rng=rng
-    )
+    result = compute_excess_from_masks(residuals, mask_a, mask_b, bootstrap_n=200, rng=rng)
     assert result.tier != "established"
     assert result.co_exposed_days < ESTABLISHED_CO_EXPOSED

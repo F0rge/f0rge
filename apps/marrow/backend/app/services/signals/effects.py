@@ -278,9 +278,7 @@ def _build_exposure(
     raise ValueError(f"unsupported shape for single-feature effect: {shape}")
 
 
-def _contrast_linear(
-    residuals: np.ndarray, top: np.ndarray, bottom: np.ndarray
-) -> float:
+def _contrast_linear(residuals: np.ndarray, top: np.ndarray, bottom: np.ndarray) -> float:
     if top.sum() == 0 or bottom.sum() == 0:
         return 0.0
     return float(np.mean(residuals[top]) - np.mean(residuals[bottom]))
@@ -332,7 +330,9 @@ def _fold_theta(
     return _contrast(residuals[test_mask], exposed[test_mask])
 
 
-def _block_bootstrap_indices(n: int, block_len: int, n_boot: int, rng: np.random.Generator) -> np.ndarray:
+def _block_bootstrap_indices(
+    n: int, block_len: int, n_boot: int, rng: np.random.Generator
+) -> np.ndarray:
     n_blocks = int(np.ceil(n / block_len))
     out = np.empty((n_boot, n), dtype=int)
     for b in range(n_boot):
