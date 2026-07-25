@@ -2,9 +2,9 @@
 
 ## What this is
 
-Review checklist distilled from the qa-engineer's accumulated memory at `~/.claude/projects/-Users-leo-development-health-tracker/memory/` as of 2026-05-25. Loaded by the GitHub Actions PR-review bot (`anthropics/claude-code-action@v1`) on every PR. A fresh Claude reads this and the diff — that's the review.
+Review checklist for QA-relevant diffs in this repo, distilled from real incidents.
 
-The bot **cannot** run servers, click UIs, or talk to OpenRouter. Anything that requires those goes into the "Verification ticket for the human" section as a checklist for the qa-engineer locally.
+A reviewer reading only the diff **cannot** run servers, click UIs, or talk to OpenRouter. Anything that requires those goes into the "Verification ticket for the human" section as a checklist for the qa-engineer locally.
 
 ---
 

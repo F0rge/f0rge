@@ -2,7 +2,7 @@
 
 ## What this is
 
-Repo-specific checklist for the Claude PR review bot when reviewing frontend diffs in `health-tracker`. Contains hard rules derived from real incidents and post-mortems in this codebase — not generic React advice.
+Repo-specific checklist for reviewing frontend diffs in this repo. Contains hard rules derived from real incidents and post-mortems in this codebase — not generic React advice.
 
 ---
 

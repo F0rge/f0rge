@@ -60,7 +60,7 @@ alwaysApply: false
 
 Controlled components, inline validation errors, disable submit during submission, clear success/error feedback.
 
-## Customize-Hub UX Contract (health-tracker)
+## Customize-Hub UX Contract (marrow)
 
 Daily check-in (`/checkin/[date]`) is **data-entry only**. Structural changes live in `/customize`.
 
