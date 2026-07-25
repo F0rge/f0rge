@@ -9,8 +9,8 @@ affected`, and delegates to Fly or Coolify executors.
 1. Land code under `apps/<name>/` with `project.json` tags `platform:py` or
    `platform:ts` (and optional `deploy-target:*`).
 2. Add a `components.<id>` block below.
-3. For **Fly**: set `target: fly`, `fly.role` (`api` | `frontend`), and per-env
-   config paths.
+3. For **Fly**: set `target: fly`, `fly.role` (`api` | `frontend`), per-env
+   config paths, and a per-env `fly.health_url` (smoke target).
 4. For **Coolify (Pi)**: set `target: coolify`, `coolify.app_uuid`, and
    `webhook_secret_env` (name of a GitHub Actions secret holding the app's
    `manual_webhook_secret_github` value).

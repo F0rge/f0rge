@@ -17,10 +17,6 @@ on:
         description: Branch used for nx-set-shas base
         required: true
         type: string
-      workflow_id:
-        description: Caller workflow filename for nx-set-shas
-        required: true
-        type: string
       component:
         description: auto (nx affected + manifest) or all/api/mcp/frontend (manual marrow fly)
         required: false
@@ -76,7 +72,9 @@ jobs:
         if: inputs.component == 'auto'
         with:
           main-branch-name: ${{ inputs.base_branch }}
-          workflow-id: ${{ inputs.workflow_id }}
+          # ci.yml is the only caller — it is the workflow whose last successful
+          # run defines the nx-affected base.
+          workflow-id: ci.yml
 
       - name: Resolve deploy plan from manifest
         id: plan
@@ -98,7 +96,6 @@ jobs:
     with:
       environment: ${{ inputs.environment }}
       sha: ${{ inputs.sha }}
-      preplanned: true
       deploy_api: ${{ needs.plan.outputs.deploy_api == 'true' }}
       deploy_mcp: ${{ needs.plan.outputs.deploy_mcp == 'true' }}
       deploy_frontend: ${{ needs.plan.outputs.deploy_frontend == 'true' }}

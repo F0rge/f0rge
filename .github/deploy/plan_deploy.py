@@ -71,14 +71,15 @@ def main() -> None:
                 )
 
     github_output = os.environ.get("GITHUB_OUTPUT")
+    health = _health_urls(manifest, environment)
     outputs = {
         "deploy_api": str(deploy_api).lower(),
         "deploy_mcp": str(deploy_mcp).lower(),
         "deploy_frontend": str(deploy_frontend).lower(),
         "coolify_matrix": json.dumps(coolify),
-        "api_health_url": _health_url(manifest, environment, "api"),
-        "frontend_health_url": _health_url(manifest, environment, "frontend"),
-        "mcp_health_url": _health_url(manifest, environment, "mcp"),
+        "api_health_url": health["api"],
+        "frontend_health_url": health["frontend"],
+        "mcp_health_url": health["mcp"],
     }
     if github_output:
         with open(github_output, "a", encoding="utf-8") as fh:
@@ -88,20 +89,16 @@ def main() -> None:
         print(json.dumps(outputs, indent=2))
 
 
-def _health_url(manifest: dict, environment: str, role: str) -> str:
-    if environment == "main":
-        urls = {
-            "api": "https://api.marrow-health.com/api/v1/health",
-            "frontend": "https://marrow-health.com/",
-            "mcp": "https://marrow-mcp.fly.dev/mcp",
-        }
-    else:
-        urls = {
-            "api": "https://api-dev.marrow-health.com/api/v1/health",
-            "frontend": "https://app-dev.marrow-health.com/",
-            "mcp": "https://marrow-mcp-dev.fly.dev/mcp",
-        }
-    return urls[role]
+def _health_urls(manifest: dict, environment: str) -> dict[str, str]:
+    """Fly role -> health URL for this environment, from the manifest."""
+    urls = {}
+    for spec in manifest["components"].values():
+        if spec.get("target") != "fly":
+            continue
+        for fly in [spec["fly"], *spec.get("also_deploys", [])]:
+            if "health_url" in fly:
+                urls[fly["role"]] = fly["health_url"][environment]
+    return urls
 
 
 if __name__ == "__main__":

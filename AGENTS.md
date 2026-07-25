@@ -57,8 +57,8 @@ Infra: [`apps/dk/tag-printer/.cursor/rules/infra.mdc`](apps/dk/tag-printer/.curs
 
 ## Branch workflow
 
-- `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).
+- `develop` is the integration branch; PRs land there, run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
+- Promotion to prod is a PR `develop` → `main`, gated by the same `.github/workflows/ci.yml` (same checks + prod-shaped frontend build).
 - After CI green on push, the manifest-driven deploy workflow routes marrow to Fly and dk tag printer to Coolify (main only).
 
 ## Running locally
