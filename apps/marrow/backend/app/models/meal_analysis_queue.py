@@ -31,11 +31,9 @@ class MealAnalysisQueue(Base):
     __table_args__ = (
         UniqueConstraint("meal_id", name="uq_meal_analysis_queue_meal_id"),
         Index("ix_meal_analysis_queue_user_id", "user_id"),
-        Index(
-            "ix_meal_analysis_queue_enqueued",
-            "enqueued_at",
-            postgresql_where=text("attempts < 5"),
-        ),
+        # Non-partial: meal_analysis_worker_max_attempts is configurable, so a
+        # hardcoded ``attempts < N`` predicate would miss claimable rows.
+        Index("ix_meal_analysis_queue_enqueued", "enqueued_at"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, autoincrement=True, primary_key=True)

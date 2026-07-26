@@ -60,11 +60,11 @@ def upgrade() -> None:
         sa.UniqueConstraint("meal_id", name="uq_meal_analysis_queue_meal_id"),
     )
     op.create_index("ix_meal_analysis_queue_user_id", "meal_analysis_queue", ["user_id"])
+    # Non-partial so the index stays valid if meal_analysis_worker_max_attempts changes.
     op.create_index(
         "ix_meal_analysis_queue_enqueued",
         "meal_analysis_queue",
         ["enqueued_at"],
-        postgresql_where=sa.text("attempts < 5"),
     )
 
     bind = op.get_bind()
