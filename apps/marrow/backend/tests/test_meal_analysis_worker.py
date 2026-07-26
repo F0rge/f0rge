@@ -232,3 +232,81 @@ async def test_upload_enqueues_pending_analysis(
     ).scalar_one()
     assert queue_row.meal_id == photo.meal_id
     assert queue_row.user_id == uuid.UUID(settings.default_storage_user_id)
+
+
+async def test_queue_path_reclaims_fresh_analyzing(
+    async_engine, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Crash mid-LLM leaves analyzing; queue claim must rerun, not skip+drop."""
+    import os
+
+    import app.config as cfg_mod
+    from app.services import food_analysis_orchestrator as fa
+
+    real_maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr(fa, "async_session_maker", real_maker)
+
+    photo_dir = tmp_path / "photos"
+    photo_dir.mkdir()
+    monkeypatch.setattr(cfg_mod.settings, "photo_dir", str(photo_dir))
+    monkeypatch.setattr(cfg_mod.settings, "openrouter_api_key", "test-key")
+    monkeypatch.setattr(cfg_mod.settings, "food_analysis_enabled", True)
+    monkeypatch.setattr(cfg_mod.settings, "meal_analysis_queue_enabled", True)
+
+    user_id = uuid.UUID(settings.default_storage_user_id)
+    async with real_maker() as setup:
+        await apply_session_user_id(setup, user_id)
+        photo = await _seed_photo(setup)
+        setup.add(
+            PhotoAnalysis(
+                user_id=photo.user_id,
+                meal_id=photo.meal_id,
+                photo_id=photo.id,
+                status="analyzing",
+                model_id="test-model",
+                updated_at=datetime.datetime.utcnow(),
+            )
+        )
+        await setup.commit()
+        photo_id = photo.id
+        meal_id = photo.meal_id
+        entry_id = photo.entry_id
+        filename = photo.filename
+
+    with open(os.path.join(str(photo_dir), filename), "wb") as f:
+        f.write(b"\xff\xd8\xff\xd9")
+
+    class _FakeClient:
+        def __init__(self, api_key: str, default_model: str) -> None:
+            pass
+
+        async def complete_with_image(self, *args, **kwargs) -> str:
+            return (
+                '{"dish_name":"Rice","confidence":0.9,'
+                '"ingredients":[{"name":"rice","visible":true,"confidence":0.9}]}'
+            )
+
+    monkeypatch.setattr("app.services.llm.openrouter.OpenRouterClient", _FakeClient)
+
+    try:
+        status = await fa.run_staged_pipeline(photo_id, user_id)
+        assert status == "confirmed"
+
+        async with real_maker() as verify:
+            await apply_session_user_id(verify, user_id)
+            analysis = (
+                await verify.execute(
+                    select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id)
+                )
+            ).scalar_one()
+        assert analysis.status == "confirmed"
+    finally:
+        async with real_maker() as cleanup:
+            await apply_session_user_id(cleanup, user_id)
+            await cleanup.execute(
+                PhotoAnalysis.__table__.delete().where(PhotoAnalysis.meal_id == meal_id)
+            )
+            await cleanup.execute(Photo.__table__.delete().where(Photo.id == photo_id))
+            await cleanup.execute(text("DELETE FROM meals WHERE id = :mid"), {"mid": meal_id})
+            await cleanup.execute(Entry.__table__.delete().where(Entry.id == entry_id))
+            await cleanup.commit()

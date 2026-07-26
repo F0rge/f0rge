@@ -44,7 +44,10 @@ async def _load_photo_context(
 
     Returns None when there's nothing left to do: missing photo, no API key
     (marks failed), or an analysis already finished (confirmed/needs_review).
-    Stale ``analyzing`` rows older than the reclaim window are allowed to rerun.
+
+    Queue workers always reclaim ``analyzing`` rows (SKIP LOCKED is the lease).
+    The legacy BackgroundTasks path still skips a fresh concurrent duplicate
+    within ``meal_analysis_stale_analyzing_minutes``.
     """
     analysis_crud = PhotoAnalysisCRUD(db)
     photo_crud = PhotoCRUD(db)
@@ -102,9 +105,15 @@ async def _load_photo_context(
         )
         return None
 
-    if existing and existing.status == "analyzing":
-        # Skip a fresh concurrent run; reclaim if stuck past the stale window
-        # (worker crash mid-LLM). Queue SKIP LOCKED still serializes workers.
+    if (
+        existing
+        and existing.status == "analyzing"
+        and not settings.meal_analysis_queue_enabled
+    ):
+        # Legacy BackgroundTasks only: skip a fresh concurrent duplicate.
+        # Queue workers must reclaim — a crash mid-LLM leaves analyzing + a
+        # claimable queue row; returning None would delete the queue and stick
+        # the analysis forever.
         from datetime import datetime, timedelta
 
         stale_after = timedelta(minutes=settings.meal_analysis_stale_analyzing_minutes)
