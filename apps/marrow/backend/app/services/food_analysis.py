@@ -217,18 +217,28 @@ class FoodAnalysisService:
         existing = await self.get_analysis(photo_id)
         if existing:
             await self.delete_analysis(existing.id)
-        new_analysis = await self.create_pending_analysis(photo_id)
         photo = await PhotoCRUD(self.db).get_by_id(photo_id)
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
+        analysis = PhotoAnalysis(
+            user_id=photo.user_id,
+            meal_id=photo.meal_id,
+            photo_id=photo_id,
+            status="pending",
+            model_id=settings.openrouter_model,
+        )
+        self.analysis_crud.add(analysis)
         if settings.meal_analysis_queue_enabled:
+            await self.db.flush()
             await MealAnalysisQueueService(self.db).enqueue(
                 user_id=photo.user_id,
                 meal_id=photo.meal_id,
                 photo_id=photo_id,
             )
-        else:
-            background_tasks.add_task(self.orchestrator.run, photo_id, photo.user_id)
+            await self.db.refresh(analysis)
+            return analysis
+        new_analysis = await self.analysis_crud.commit_refresh(analysis)
+        background_tasks.add_task(self.orchestrator.run, photo_id, photo.user_id)
         return new_analysis
 
     async def add_ingredient_to_photo(

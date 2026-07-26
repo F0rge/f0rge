@@ -140,16 +140,22 @@ async def process_pending_once() -> int:
 
     for row in rows:
         try:
-            await run_staged_pipeline(row.photo_id, row.user_id)
-            await _delete_queue_row(row.id)
-            logger.info(
-                {
-                    "event": "meal_analysis_queue_done",
-                    "row_id": row.id,
-                    "photo_id": row.photo_id,
-                    "meal_id": row.meal_id,
-                }
+            result = await run_staged_pipeline(
+                row.photo_id, row.user_id, meal_id=row.meal_id
             )
+            if result is not None:
+                await _delete_queue_row(row.id)
+                logger.info(
+                    {
+                        "event": "meal_analysis_queue_done",
+                        "row_id": row.id,
+                        "photo_id": row.photo_id,
+                        "meal_id": row.meal_id,
+                        "status": result,
+                    }
+                )
+            else:
+                await _mark_failed(row.id, "pipeline skipped without terminal status")
         except Exception as exc:
             if _is_non_retryable(exc):
                 logger.error(
