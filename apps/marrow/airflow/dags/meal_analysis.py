@@ -7,8 +7,7 @@ from typing import Any
 
 import httpx
 from airflow.exceptions import AirflowException, AirflowSkipException
-from airflow.providers.common.compat.sdk import dag, task
-from airflow.sdk import get_current_context
+from airflow.sdk import dag, get_current_context, task
 
 MARROW_API_URL = os.environ.get("MARROW_API_URL", "http://host.docker.internal:8000").rstrip("/")
 INTERNAL_TOKEN = os.environ.get("MEAL_ANALYSIS_INTERNAL_TOKEN", "")
