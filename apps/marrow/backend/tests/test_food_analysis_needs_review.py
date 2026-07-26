@@ -141,19 +141,17 @@ async def _run_trigger_with_response(
     return analysis
 
 
-async def test_trigger_low_dish_confidence_still_confirms(
+async def test_trigger_low_dish_confidence_sets_needs_review(
     db_with_photo: tuple[AsyncSession, int],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The manual review/confirm gate was removed: analyses auto-confirm on
-    # completion regardless of confidence (ingredients stay editable).
     analysis = await _run_trigger_with_response(
         db_with_photo,
         monkeypatch,
         '{"dish_name":"Soup","confidence":0.5,'
         '"ingredients":[{"name":"carrot","visible":true,"confidence":0.9}]}',
     )
-    assert analysis.status == "confirmed"
+    assert analysis.status == "needs_review"
 
 
 async def test_trigger_high_confidence_sets_confirmed(

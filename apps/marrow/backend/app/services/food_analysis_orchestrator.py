@@ -8,17 +8,19 @@ from typing import NamedTuple, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache.invalidation import invalidate_user_insights_cache
+from app.config import settings
 from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
 from app.database import async_session_maker
-from f0rge_core.exceptions import NotFoundError
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.services.catalog_context import build_catalog_context
+from app.services.food_analysis import analysis_needs_review
 from app.services.ingredient_lookup import IngredientLookupService
 from app.services.vision_prompt import VisionResult, build_messages, parse_vision_response
+from f0rge_core.exceptions import NotFoundError
 from f0rge_db.tenant import apply_session_user_id
 
 logger = logging.getLogger(__name__)
@@ -38,14 +40,11 @@ class _PhotoContext(NamedTuple):
 async def _load_photo_context(
     db: AsyncSession, photo_id: int, user_id: Optional[uuid.UUID]
 ) -> Optional[_PhotoContext]:
-    """Resolve the owner + LLM credentials and flip the analysis row to "analyzing".
+    """Resolve owner + LLM credentials and flip the analysis row to analyzing.
 
     Returns None when there's nothing left to do: missing photo, no API key
-    configured (marks the analysis "failed" and commits before returning), or
-    an analysis already running/finished for this photo. The "analyzing"
-    status flip is committed here on its own, before the slow LLM call --
-    that's what lets a later invocation see "analyzing" and skip a duplicate
-    run instead of racing it (Rule 6.6, issue #225).
+    (marks failed), or an analysis already finished (confirmed/needs_review).
+    Stale ``analyzing`` rows older than the reclaim window are allowed to rerun.
     """
     analysis_crud = PhotoAnalysisCRUD(db)
     photo_crud = PhotoCRUD(db)
@@ -93,16 +92,29 @@ async def _load_photo_context(
         await analysis_crud.save()
         return None
 
-    # Reuse a pending record or skip if already running/finished.
     existing = await analysis_crud.get_by_meal_id(photo.meal_id)
 
-    if existing and existing.status not in ("pending", "failed"):
+    if existing and existing.status in ("confirmed", "needs_review"):
         logger.info(
-            "Analysis already exists for photo %d (status=%s), skipping",
+            "Analysis already finished for photo %d (status=%s), skipping",
             photo_id,
             existing.status,
         )
         return None
+
+    if existing and existing.status == "analyzing":
+        # Skip a fresh concurrent run; reclaim if stuck past the stale window
+        # (worker crash mid-LLM). Queue SKIP LOCKED still serializes workers.
+        from datetime import datetime, timedelta
+
+        stale_after = timedelta(minutes=settings.meal_analysis_stale_analyzing_minutes)
+        stamp = existing.updated_at or existing.created_at
+        if stamp is not None and datetime.utcnow() - stamp.replace(tzinfo=None) < stale_after:
+            logger.info(
+                "Analysis already running for photo %d, skipping duplicate",
+                photo_id,
+            )
+            return None
 
     if existing:
         analysis = existing
@@ -132,18 +144,14 @@ async def _load_photo_context(
     )
 
 
-async def _run_vision(
+async def extract_vision(
     photo: Photo,
     user_id_str: str,
     api_key: str,
     model: str,
     catalog_context: str = "",
 ) -> tuple[str, VisionResult]:
-    """Read the photo off disk and get the vision model's structured read on it.
-
-    Pure I/O, no DB access: a disk read (blocking, wrapped in a thread) plus
-    the OpenRouter call. Raises NotFoundError if the file is missing on disk.
-    """
+    """Stage: read image + OpenRouter vision → structured VisionResult."""
     from app.services.photo_storage import photo_exists, read_photo
 
     if not photo_exists(photo.filename, user_id=user_id_str):
@@ -156,33 +164,23 @@ async def _run_vision(
 
     llm_client = OpenRouterClient(api_key=api_key, default_model=model)
     raw_content = await llm_client.complete_with_image(messages)
-
     return raw_content, parse_vision_response(raw_content)
 
 
-async def _persist_analysis(
+async def enrich_ingredients(
     db: AsyncSession,
-    analysis: PhotoAnalysis,
     user_id: uuid.UUID,
-    raw_content: str,
     vision_result: VisionResult,
-) -> None:
-    """Write the vision result and its ingredients onto the analysis row."""
-    analysis_crud = PhotoAnalysisCRUD(db)
-    ingredient_crud = PhotoIngredientCRUD(db)
-
-    analysis.raw_response = raw_content
-    analysis.dish_name = vision_result.dish_name
-    analysis.cuisine = vision_result.cuisine
-    analysis.dish_confidence = vision_result.confidence
-
+) -> list[PhotoIngredient]:
+    """Stage: map vision ingredients → dietary lookup rows (not yet persisted)."""
     lookup = IngredientLookupService(db)
+    rows: list[PhotoIngredient] = []
     for vi in vision_result.ingredients:
         match = await lookup.lookup(vi.name)
-        ingredient_crud.add(
+        rows.append(
             PhotoIngredient(
                 user_id=user_id,
-                analysis_id=analysis.id,
+                analysis_id=0,  # set in persist
                 name=vi.name,
                 canonical_name=match.canonical_name if match else None,
                 visible=vi.visible,
@@ -197,26 +195,56 @@ async def _persist_analysis(
                 contains_dairy=match.contains_dairy if match else None,
             )
         )
+    return rows
 
-    # Auto-confirm on completion: the manual "Confirm" step was removed from the
-    # UI, and "confirmed" is what gates diet-flags, insights, meals, and tagged-
-    # meal delivery. Ingredients stay fully editable afterward.
-    analysis.status = "confirmed"
+
+def gate_status(vision_result: VisionResult) -> str:
+    """Stage: confirmed vs needs_review."""
+    return "needs_review" if analysis_needs_review(vision_result) else "confirmed"
+
+
+async def persist_analysis(
+    db: AsyncSession,
+    analysis: PhotoAnalysis,
+    user_id: uuid.UUID,
+    raw_content: str,
+    vision_result: VisionResult,
+    ingredients: list[PhotoIngredient],
+    status: str,
+) -> None:
+    """Stage: write analysis + ingredients and set terminal status."""
+    analysis_crud = PhotoAnalysisCRUD(db)
+    ingredient_crud = PhotoIngredientCRUD(db)
+
+    # Replace prior ingredients on retry/reclaim (relationship is selectin-loaded).
+    for ing in list(analysis.ingredients):
+        await db.delete(ing)
+    await db.flush()
+
+    analysis.raw_response = raw_content
+    analysis.dish_name = vision_result.dish_name
+    analysis.cuisine = vision_result.cuisine
+    analysis.dish_confidence = vision_result.confidence
+    analysis.status = status
+
+    for row in ingredients:
+        row.analysis_id = analysis.id
+        ingredient_crud.add(row)
+
     await analysis_crud.save()
 
 
-async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID] = None) -> None:
-    """Run food photo analysis in a background task.
+async def run_staged_pipeline(photo_id: int, user_id: Optional[uuid.UUID] = None) -> Optional[str]:
+    """Run extract → enrich → gate → persist → tag delivery.
 
-    Opens its own DB session because FastAPI BackgroundTasks execute
-    after the response is sent and the request session is closed.
+    Returns terminal status string, or None if skipped.
     """
     analysis: Optional[PhotoAnalysis] = None
     try:
         async with async_session_maker() as db:
             context = await _load_photo_context(db, photo_id, user_id)
             if context is None:
-                return
+                return None
             analysis = context.analysis
 
             catalog_context = ""
@@ -229,28 +257,35 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
                     exc_info=True,
                 )
 
-            raw_content, vision_result = await _run_vision(
+            raw_content, vision_result = await extract_vision(
                 context.photo,
                 context.user_id_str,
                 context.api_key,
                 context.model,
                 catalog_context,
             )
-            await _persist_analysis(db, analysis, context.user_id, raw_content, vision_result)
+            ingredients = await enrich_ingredients(db, context.user_id, vision_result)
+            status = gate_status(vision_result)
+            await persist_analysis(
+                db,
+                analysis,
+                context.user_id,
+                raw_content,
+                vision_result,
+                ingredients,
+                status,
+            )
             await invalidate_user_insights_cache(context.user_id, context.photo.entry.date)
 
             logger.info(
-                "Analysis complete for photo %d: %s (%d ingredients)",
+                "Analysis complete for photo %d: %s status=%s (%d ingredients)",
                 photo_id,
                 vision_result.dish_name,
-                len(vision_result.ingredients),
+                status,
+                len(ingredients),
             )
 
-            # The analysis just auto-confirmed, which is what used to trigger
-            # tagged-meal delivery via the manual confirm endpoint. Fire it here
-            # instead (fresh session; safe no-op when there are no pending tags).
-            # Canonical photos only — delivered copies are never re-delivered.
-            if context.photo.source_photo_id is None:
+            if status == "confirmed" and context.photo.source_photo_id is None:
                 from app.services.tag_delivery import TagDeliveryService
 
                 try:
@@ -260,6 +295,7 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
                         "Tag delivery failed for photo %d after confirmed analysis",
                         photo_id,
                     )
+            return status
 
     except Exception as e:
         logger.exception("Food analysis failed for photo %d", photo_id)
@@ -271,22 +307,26 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
                     fresh = await crud.get_by_id(analysis.id)
                     if fresh:
                         fresh.status = "failed"
-                        # Full traceback is already in logs via logger.exception above.
-                        # Store only a short human-readable summary so the UI doesn't
-                        # display a raw multi-line stack trace.
                         fresh.error_message = f"{type(e).__name__}: {str(e)[:200]}"
                         await crud.save()
             except Exception:
                 logger.exception("Failed to update analysis status for photo %d", photo_id)
+        raise
+
+
+async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID] = None) -> None:
+    """Legacy BackgroundTasks entry point — runs the staged pipeline inline."""
+    try:
+        await run_staged_pipeline(photo_id, user_id)
+    except Exception:
+        pass  # status already marked failed inside run_staged_pipeline
 
 
 class FoodAnalysisOrchestrator:
-    """Coordinates the background analysis pipeline (Rule 9.4): photo storage
-    read, vision LLM call, and PhotoAnalysis/PhotoIngredient persistence.
+    """Coordinates the meal analysis pipeline.
 
-    Stateless -- takes no DB session at construction time, because it's invoked
-    via FastAPI BackgroundTasks after the request session has already closed
-    and must open its own session per run (see ``trigger_analysis_background``).
+    Prefer enqueue → worker. ``run`` remains for the legacy BackgroundTasks path
+    and for tests that call the orchestrator directly.
     """
 
     async def run(self, photo_id: int, user_id: Optional[uuid.UUID] = None) -> None:

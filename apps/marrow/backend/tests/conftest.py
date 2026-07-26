@@ -185,6 +185,7 @@ _BACKGROUND_SESSION_MODULES = (
     "app.services.food_analysis_orchestrator",
     "app.embedding_pipeline.worker",
     "app.embedding_pipeline.backfill",
+    "app.meal_analysis_pipeline.worker",
 )
 
 

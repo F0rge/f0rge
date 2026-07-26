@@ -70,6 +70,8 @@ async def deferred_tag_storage(
     monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
     monkeypatch.setattr(settings, "food_analysis_enabled", True)
     monkeypatch.setattr(settings, "openrouter_api_key", "sk-test-key")
+    # Legacy BackgroundTasks path so the orchestrator.run mock below still applies.
+    monkeypatch.setattr(settings, "meal_analysis_queue_enabled", False)
 
     async def _fake_resolve_llm_credentials(_db):  # noqa: ANN001
         return "sk-test-key", "test-model"

@@ -258,7 +258,29 @@ class PhotoService:
             raise
 
         if analysis_will_run:
-            background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
+            if settings.meal_analysis_queue_enabled:
+                from app.crud.photo_analysis import PhotoAnalysisCRUD
+                from app.models.photo_analysis import PhotoAnalysis
+                from app.services.meal_analysis_enqueue import enqueue_meal_analysis
+
+                PhotoAnalysisCRUD(self.db).add(
+                    PhotoAnalysis(
+                        user_id=user_id,
+                        meal_id=meal.id,
+                        photo_id=photo.id,
+                        status="pending",
+                        model_id=settings.openrouter_model,
+                    )
+                )
+                await self.db.flush()
+                await enqueue_meal_analysis(
+                    self.db,
+                    user_id=user_id,
+                    meal_id=meal.id,
+                    photo_id=photo.id,
+                )
+            else:
+                background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
 
         await invalidate_user_insights_cache(user_id, entry.date)
         companions = await MealTagCRUD(self.db).companion_handles_by_photo_ids([photo.id])
