@@ -183,7 +183,6 @@ async def async_engine(
 _BACKGROUND_SESSION_MODULES = (
     "app.services.tag_delivery",
     "app.services.food_analysis_orchestrator",
-    "app.services.meal_analysis_stages",
     "app.embedding_pipeline.worker",
     "app.embedding_pipeline.backfill",
 )

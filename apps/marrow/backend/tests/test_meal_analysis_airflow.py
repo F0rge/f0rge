@@ -402,12 +402,10 @@ async def test_inline_path_reclaims_fresh_analyzing(
             await cleanup.commit()
 
 
-async def test_fail_stage_marks_analysis(async_engine, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_fail_stage_marks_analysis(async_engine) -> None:
     from app.services.meal_analysis_stages import MealAnalysisStageService
 
     real_maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
-    monkeypatch.setattr("app.services.meal_analysis_stages.async_session_maker", real_maker)
-
     user_id = uuid.UUID(settings.default_storage_user_id)
     async with real_maker() as setup:
         await apply_session_user_id(setup, user_id)
@@ -427,11 +425,12 @@ async def test_fail_stage_marks_analysis(async_engine, monkeypatch: pytest.Monke
         entry_id = photo.entry_id
 
     try:
-        await MealAnalysisStageService().fail(
-            user_id=user_id,
-            analysis_id=analysis_id,
-            error_message="boom",
-        )
+        async with real_maker() as db:
+            await MealAnalysisStageService(db).fail(
+                user_id=user_id,
+                analysis_id=analysis_id,
+                error_message="boom",
+            )
 
         async with real_maker() as verify:
             await apply_session_user_id(verify, user_id)

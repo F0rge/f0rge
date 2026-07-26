@@ -4,10 +4,11 @@ import logging
 import uuid
 from typing import Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.cache.invalidation import invalidate_user_insights_cache
 from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photos import PhotoCRUD
-from app.database import async_session_maker
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.meal_analysis_stages import (
     EnrichResponse,
@@ -35,72 +36,73 @@ logger = logging.getLogger(__name__)
 class MealAnalysisStageService:
     """HTTP-callable stage handlers for the Airflow meal_analysis DAG."""
 
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
     async def extract(self, photo_id: int, user_id: uuid.UUID) -> ExtractResponse:
         try:
-            async with async_session_maker() as db:
-                loaded = await _load_photo_context(db, photo_id, user_id)
-                if loaded.context is None:
-                    return ExtractResponse(
-                        analysis_id=0,
-                        photo_id=photo_id,
-                        user_id=user_id,
-                        raw_content="",
-                        vision=VisionResult(dish_name="skipped", confidence=0.0, ingredients=[]),
-                        skipped=True,
-                        skip_reason=loaded.terminal_status or "nothing_to_do",
-                    )
-                context = loaded.context
-
-                catalog_context = ""
-                try:
-                    catalog_context = await build_catalog_context(db)
-                except Exception:
-                    logger.warning(
-                        "Failed to load catalog context for photo %d",
-                        photo_id,
-                        exc_info=True,
-                    )
-
-                raw_content, vision = await extract_vision(
-                    context.photo,
-                    context.user_id_str,
-                    context.api_key,
-                    context.model,
-                    catalog_context,
-                )
+            loaded = await _load_photo_context(self.db, photo_id, user_id)
+            if loaded.context is None:
                 return ExtractResponse(
-                    analysis_id=context.analysis.id,
+                    analysis_id=0,
                     photo_id=photo_id,
-                    user_id=context.user_id,
-                    raw_content=raw_content,
-                    vision=vision,
+                    user_id=user_id,
+                    raw_content="",
+                    vision=VisionResult(dish_name="skipped", confidence=0.0, ingredients=[]),
+                    skipped=True,
+                    skip_reason=loaded.terminal_status or "nothing_to_do",
                 )
+            context = loaded.context
+
+            catalog_context = ""
+            try:
+                catalog_context = await build_catalog_context(self.db)
+            except Exception:
+                logger.warning(
+                    "Failed to load catalog context for photo %d",
+                    photo_id,
+                    exc_info=True,
+                )
+
+            raw_content, vision = await extract_vision(
+                context.photo,
+                context.user_id_str,
+                context.api_key,
+                context.model,
+                catalog_context,
+            )
+            return ExtractResponse(
+                analysis_id=context.analysis.id,
+                photo_id=photo_id,
+                user_id=context.user_id,
+                raw_content=raw_content,
+                vision=vision,
+            )
         except Exception as exc:
             await self._mark_failed_by_photo(photo_id, user_id, exc)
             raise
 
     async def enrich(self, user_id: uuid.UUID, vision: VisionResult) -> EnrichResponse:
-        async with async_session_maker() as db:
-            await apply_session_user_id(db, user_id)
-            rows = await enrich_ingredients(db, user_id, vision)
-            return EnrichResponse(
-                ingredients=[
-                    IngredientPayload(
-                        name=r.name,
-                        canonical_name=r.canonical_name,
-                        visible=r.visible,
-                        confidence=r.confidence,
-                        histamine_score=r.histamine_score,
-                        fodmap_oligos=r.fodmap_oligos,
-                        fodmap_fructose=r.fodmap_fructose,
-                        fodmap_polyols=r.fodmap_polyols,
-                        fodmap_lactose=r.fodmap_lactose,
-                        contains_gluten=r.contains_gluten,
-                        contains_dairy=r.contains_dairy,
-                    )
-                    for r in rows
-                ]
-            )
+        await apply_session_user_id(self.db, user_id)
+        rows = await enrich_ingredients(self.db, user_id, vision)
+        return EnrichResponse(
+            ingredients=[
+                IngredientPayload(
+                    name=r.name,
+                    canonical_name=r.canonical_name,
+                    visible=r.visible,
+                    confidence=r.confidence,
+                    histamine_score=r.histamine_score,
+                    fodmap_oligos=r.fodmap_oligos,
+                    fodmap_fructose=r.fodmap_fructose,
+                    fodmap_polyols=r.fodmap_polyols,
+                    fodmap_lactose=r.fodmap_lactose,
+                    contains_gluten=r.contains_gluten,
+                    contains_dairy=r.contains_dairy,
+                )
+                for r in rows
+            ]
+        )
 
     def gate(self, vision: VisionResult) -> GateResponse:
         return GateResponse(status=gate_status(vision))
@@ -117,61 +119,65 @@ class MealAnalysisStageService:
         status: str,
     ) -> PersistResponse:
         try:
-            async with async_session_maker() as db:
-                await apply_session_user_id(db, user_id)
-                analysis_crud = PhotoAnalysisCRUD(db)
-                analysis = await analysis_crud.get_by_id(analysis_id)
-                if analysis is None:
-                    raise NotFoundError(f"Analysis {analysis_id} not found")
+            await apply_session_user_id(self.db, user_id)
+            analysis_crud = PhotoAnalysisCRUD(self.db)
+            analysis = await analysis_crud.get_by_id(analysis_id)
+            if analysis is None:
+                raise NotFoundError(f"Analysis {analysis_id} not found")
 
-                photo = await PhotoCRUD(db).get_by_id(photo_id)
-                if photo is None:
-                    raise NotFoundError(f"Photo {photo_id} not found")
+            photo = await PhotoCRUD(self.db).get_by_id(photo_id)
+            if photo is None:
+                raise NotFoundError(f"Photo {photo_id} not found")
 
-                orm_ingredients = [
-                    PhotoIngredient(
-                        user_id=user_id,
-                        analysis_id=analysis_id,
-                        name=ing.name,
-                        canonical_name=ing.canonical_name,
-                        visible=ing.visible,
-                        confidence=ing.confidence,
-                        user_edited=False,
-                        histamine_score=ing.histamine_score,
-                        fodmap_oligos=ing.fodmap_oligos,
-                        fodmap_fructose=ing.fodmap_fructose,
-                        fodmap_polyols=ing.fodmap_polyols,
-                        fodmap_lactose=ing.fodmap_lactose,
-                        contains_gluten=ing.contains_gluten,
-                        contains_dairy=ing.contains_dairy,
-                    )
-                    for ing in ingredients
-                ]
-                await persist_analysis(
-                    db,
-                    analysis,
-                    user_id,
-                    raw_content,
-                    vision,
-                    orm_ingredients,
-                    status,
+            orm_ingredients = [
+                PhotoIngredient(
+                    user_id=user_id,
+                    analysis_id=analysis_id,
+                    name=ing.name,
+                    canonical_name=ing.canonical_name,
+                    visible=ing.visible,
+                    confidence=ing.confidence,
+                    user_edited=False,
+                    histamine_score=ing.histamine_score,
+                    fodmap_oligos=ing.fodmap_oligos,
+                    fodmap_fructose=ing.fodmap_fructose,
+                    fodmap_polyols=ing.fodmap_polyols,
+                    fodmap_lactose=ing.fodmap_lactose,
+                    contains_gluten=ing.contains_gluten,
+                    contains_dairy=ing.contains_dairy,
                 )
-                await invalidate_user_insights_cache(user_id, photo.entry.date)
+                for ing in ingredients
+            ]
+            await persist_analysis(
+                self.db,
+                analysis,
+                user_id,
+                raw_content,
+                vision,
+                orm_ingredients,
+                status,
+            )
+            await invalidate_user_insights_cache(user_id, photo.entry.date)
 
-                if status == "confirmed" and photo.source_photo_id is None:
-                    from app.services.tag_delivery import TagDeliveryService
+            if status == "confirmed" and photo.source_photo_id is None:
+                from app.services.tag_delivery import TagDeliveryService
 
-                    try:
-                        await TagDeliveryService().deliver_for_source(photo_id, user_id)
-                    except Exception:
-                        logger.exception(
-                            "Tag delivery failed for photo %d after confirmed analysis",
-                            photo_id,
-                        )
+                try:
+                    await TagDeliveryService().deliver_for_source(photo_id, user_id)
+                except Exception:
+                    logger.exception(
+                        "Tag delivery failed for photo %d after confirmed analysis",
+                        photo_id,
+                    )
 
-                return PersistResponse(status=status, analysis_id=analysis_id)
+            return PersistResponse(status=status, analysis_id=analysis_id)
         except Exception as exc:
-            await self.fail(user_id=user_id, analysis_id=analysis_id, error_message=str(exc))
+            await self.db.rollback()
+            await self.fail(
+                user_id=user_id,
+                analysis_id=analysis_id,
+                error_message=str(exc),
+            )
             raise
 
     async def fail(
@@ -181,15 +187,14 @@ class MealAnalysisStageService:
         analysis_id: int,
         error_message: str,
     ) -> FailResponse:
-        async with async_session_maker() as db:
-            await apply_session_user_id(db, user_id)
-            crud = PhotoAnalysisCRUD(db)
-            analysis = await crud.get_by_id(analysis_id)
-            if analysis is None:
-                raise NotFoundError(f"Analysis {analysis_id} not found")
-            analysis.status = "failed"
-            analysis.error_message = error_message[:500]
-            await crud.save()
+        await apply_session_user_id(self.db, user_id)
+        crud = PhotoAnalysisCRUD(self.db)
+        analysis = await crud.get_by_id(analysis_id)
+        if analysis is None:
+            raise NotFoundError(f"Analysis {analysis_id} not found")
+        analysis.status = "failed"
+        analysis.error_message = error_message[:500]
+        await crud.save()
         return FailResponse()
 
     async def _mark_failed_by_photo(
@@ -199,18 +204,18 @@ class MealAnalysisStageService:
         exc: BaseException,
     ) -> None:
         try:
-            async with async_session_maker() as db:
-                await apply_session_user_id(db, user_id)
-                photo = await PhotoCRUD(db).get_by_id(photo_id)
-                if photo is None:
-                    return
-                crud = PhotoAnalysisCRUD(db)
-                analysis = await crud.get_by_meal_id(photo.meal_id)
-                if analysis is None:
-                    return
-                analysis.status = "failed"
-                analysis.error_message = f"{type(exc).__name__}: {str(exc)[:200]}"
-                await crud.save()
+            await self.db.rollback()
+            await apply_session_user_id(self.db, user_id)
+            photo = await PhotoCRUD(self.db).get_by_id(photo_id)
+            if photo is None:
+                return
+            crud = PhotoAnalysisCRUD(self.db)
+            analysis = await crud.get_by_meal_id(photo.meal_id)
+            if analysis is None:
+                return
+            analysis.status = "failed"
+            analysis.error_message = f"{type(exc).__name__}: {str(exc)[:200]}"
+            await crud.save()
         except Exception:
             logger.exception("Failed to mark analysis failed for photo %d", photo_id)
 
