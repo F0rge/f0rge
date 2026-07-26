@@ -51,6 +51,18 @@ async def _seed_photo(db: AsyncSession) -> Photo:
     return photo
 
 
+def test_is_non_retryable_classifies_auth_and_not_found() -> None:
+    from f0rge_core.exceptions import ExternalServiceError, NotFoundError
+
+    from app.meal_analysis_pipeline.worker import _is_non_retryable
+
+    assert _is_non_retryable(NotFoundError("Photo file not found: x.jpg")) is True
+    assert _is_non_retryable(ExternalServiceError('Upstream LLM error: 401 {"error":{}}')) is True
+    assert _is_non_retryable(ExternalServiceError("Upstream LLM error: 403 forbidden")) is True
+    assert _is_non_retryable(ExternalServiceError("Upstream LLM error: 500 boom")) is False
+    assert _is_non_retryable(RuntimeError("transient")) is False
+
+
 async def test_claim_batch_returns_pending_rows(async_db: AsyncSession) -> None:
     photo = await _seed_photo(async_db)
     async_db.add(

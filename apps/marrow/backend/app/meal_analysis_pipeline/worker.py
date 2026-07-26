@@ -20,6 +20,19 @@ from f0rge_db.tenant import apply_service_role
 logger = logging.getLogger(__name__)
 
 
+def _is_non_retryable(exc: BaseException) -> bool:
+    """Auth / missing-resource failures will not succeed on retry."""
+    from f0rge_core.exceptions import ExternalServiceError, NotFoundError
+
+    if isinstance(exc, NotFoundError):
+        return True
+    if isinstance(exc, ExternalServiceError):
+        msg = str(exc)
+        # OpenRouterClient: "Upstream LLM error: {status} {body}"
+        return "error: 401" in msg or "error: 403" in msg
+    return False
+
+
 async def _claim_and_lease_batch(db: AsyncSession) -> list[Any]:
     """Claim rows with SKIP LOCKED, set a short lease, then caller commits.
 
@@ -137,15 +150,26 @@ async def process_pending_once() -> int:
                 }
             )
         except Exception as exc:
-            logger.error(
-                {
-                    "event": "meal_analysis_queue_failed",
-                    "row_id": row.id,
-                    "photo_id": row.photo_id,
-                    "error": str(exc)[:500],
-                }
-            )
-            await _mark_failed(row.id, str(exc))
+            if _is_non_retryable(exc):
+                logger.error(
+                    {
+                        "event": "meal_analysis_queue_non_retryable",
+                        "row_id": row.id,
+                        "photo_id": row.photo_id,
+                        "error": str(exc)[:500],
+                    }
+                )
+                await _delete_queue_row(row.id)
+            else:
+                logger.error(
+                    {
+                        "event": "meal_analysis_queue_failed",
+                        "row_id": row.id,
+                        "photo_id": row.photo_id,
+                        "error": str(exc)[:500],
+                    }
+                )
+                await _mark_failed(row.id, str(exc))
     return len(rows)
 
 
