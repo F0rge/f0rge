@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import async_session_maker
 from app.models.meal_analysis_queue import MealAnalysisQueue
+from app.crud.meal_analysis_queue import LISTEN_CHANNEL
 from app.services.food_analysis_orchestrator import run_staged_pipeline
-from app.services.meal_analysis_enqueue import LISTEN_CHANNEL
 from f0rge_db.tenant import apply_service_role
 
 logger = logging.getLogger(__name__)

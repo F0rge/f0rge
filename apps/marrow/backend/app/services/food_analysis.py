@@ -8,8 +8,6 @@ from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.crud.base import unit_of_work
-from app.crud.meal_analysis_queue import MealAnalysisQueueCRUD
 from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
@@ -18,6 +16,7 @@ from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, IngredientUpdate
 from app.services.ingredient_lookup import IngredientLookupService
+from app.services.meal_analysis_queue import MealAnalysisQueueService
 from app.services.tag_delivery import TagDeliveryService
 from app.services.vision_prompt import VisionResult
 from f0rge_db.tenant import current_user_id
@@ -173,36 +172,25 @@ class FoodAnalysisService:
     ) -> None:
         """Create pending analysis + queue row after a successful photo upload.
 
-        Failures are logged and swallowed so upload still succeeds. Uses
-        ``unit_of_work`` so a failed enqueue never leaves orphan pending rows.
+        Failures are logged and swallowed so upload still succeeds. Enqueue
+        commits via ``unit_of_work`` so a failure never leaves orphan pending.
         """
         try:
-            async with unit_of_work(self.db):
-                self.analysis_crud.add(
-                    PhotoAnalysis(
-                        user_id=user_id,
-                        meal_id=meal_id,
-                        photo_id=photo_id,
-                        status="pending",
-                        model_id=settings.openrouter_model,
-                    )
-                )
-                await MealAnalysisQueueCRUD(self.db).upsert_pending(
+            self.analysis_crud.add(
+                PhotoAnalysis(
                     user_id=user_id,
                     meal_id=meal_id,
                     photo_id=photo_id,
+                    status="pending",
+                    model_id=settings.openrouter_model,
                 )
-            logger.info(
-                {
-                    "event": "meal_analysis_enqueued",
-                    "meal_id": meal_id,
-                    "photo_id": photo_id,
-                }
             )
-            if settings.meal_analysis_inline:
-                from app.meal_analysis_pipeline.worker import process_pending_once
-
-                await process_pending_once()
+            await self.db.flush()
+            await MealAnalysisQueueService(self.db).enqueue(
+                user_id=user_id,
+                meal_id=meal_id,
+                photo_id=photo_id,
+            )
         except Exception:
             logger.exception(
                 "Failed to enqueue meal analysis for photo %s — upload kept",
@@ -234,10 +222,7 @@ class FoodAnalysisService:
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
         if settings.meal_analysis_queue_enabled:
-            from app.services.meal_analysis_enqueue import enqueue_meal_analysis
-
-            await enqueue_meal_analysis(
-                self.db,
+            await MealAnalysisQueueService(self.db).enqueue(
                 user_id=photo.user_id,
                 meal_id=photo.meal_id,
                 photo_id=photo_id,

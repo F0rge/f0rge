@@ -275,7 +275,7 @@ async def test_process_pending_once_runs_pipeline_and_deletes(
 
 
 async def test_enqueue_upserts_and_resets_attempts(async_db: AsyncSession) -> None:
-    from app.services.meal_analysis_enqueue import enqueue_meal_analysis
+    from app.services.meal_analysis_queue import MealAnalysisQueueService
 
     photo = await _seed_photo(async_db)
     async_db.add(
@@ -289,8 +289,7 @@ async def test_enqueue_upserts_and_resets_attempts(async_db: AsyncSession) -> No
     )
     await async_db.flush()
 
-    await enqueue_meal_analysis(
-        async_db,
+    await MealAnalysisQueueService(async_db).enqueue(
         user_id=photo.user_id,
         meal_id=photo.meal_id,
         photo_id=photo.id,
