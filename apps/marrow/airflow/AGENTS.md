@@ -2,6 +2,16 @@
 
 Airflow 3 LocalExecutor stack that runs `meal_analysis` (extract → enrich → gate → persist) by calling Marrow internal stage APIs.
 
+## Sub-agent map (shipping this stack)
+
+| Chunk | Owner | Deliverable |
+|---|---|---|
+| Internal stage API + token auth | `fastapi-backend` | `/api/v1/internal/meal-analysis/*` |
+| Airflow client + upload/retry trigger | `fastapi-backend` | `AirflowClient`, inline/BackgroundTasks fallback |
+| This compose/DAG project | `devops` | LocalExecutor + Pi overlay |
+| Queue teardown + Fly worker | `fastapi-backend` + `devops` | migration `050`, embedding-only worker |
+| Tests + live-server gate | `qa-engineer` | pytest + curl walkthrough |
+
 ## Boot
 
 ```bash
