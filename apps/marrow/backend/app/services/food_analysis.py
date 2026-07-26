@@ -234,15 +234,26 @@ class FoodAnalysisService:
         existing = await self.get_analysis(photo_id)
         if existing:
             await self.delete_analysis(existing.id)
-        new_analysis = await self.create_pending_analysis(photo_id)
         photo = await PhotoCRUD(self.db).get_by_id(photo_id)
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
+        analysis = PhotoAnalysis(
+            user_id=photo.user_id,
+            meal_id=photo.meal_id,
+            photo_id=photo_id,
+            status="pending",
+            model_id=settings.openrouter_model,
+        )
         client = AirflowClient()
         if client.configured or settings.meal_analysis_inline:
+            async with unit_of_work(self.db):
+                self.analysis_crud.add(analysis)
             await self._trigger_or_run_inline(photo_id=photo_id, user_id=photo.user_id)
-        else:
-            background_tasks.add_task(self.orchestrator.run, photo_id, photo.user_id)
+            await self.db.refresh(analysis)
+            return analysis
+        self.analysis_crud.add(analysis)
+        new_analysis = await self.analysis_crud.commit_refresh(analysis)
+        background_tasks.add_task(self.orchestrator.run, photo_id, photo.user_id)
         return new_analysis
 
     async def add_ingredient_to_photo(
