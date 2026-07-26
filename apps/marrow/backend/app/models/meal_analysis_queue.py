@@ -19,6 +19,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from app.models.user import default_user_id
 
+# Worker lease marker — claim sets this; stale leases are reclaimable.
+STAGE_RUNNING = "running"
+
 
 class MealAnalysisQueue(Base):
     """Durable outbox for the meal analysis worker.

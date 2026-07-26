@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import settings
 from app.models.entry import Entry
-from app.models.meal_analysis_queue import MealAnalysisQueue
+from app.models.meal_analysis_queue import STAGE_RUNNING, MealAnalysisQueue
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from f0rge_db.tenant import apply_service_role, apply_session_user_id
@@ -85,7 +85,7 @@ async def test_claim_batch_returns_pending_rows(async_db: AsyncSession) -> None:
             select(MealAnalysisQueue).where(MealAnalysisQueue.photo_id == photo.id)
         )
     ).scalar_one()
-    assert leased.stage == "running"
+    assert leased.stage == STAGE_RUNNING
     assert leased.last_attempt_at is not None
 
 

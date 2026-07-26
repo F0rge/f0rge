@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import async_session_maker
-from app.models.meal_analysis_queue import MealAnalysisQueue
 from app.crud.meal_analysis_queue import LISTEN_CHANNEL
+from app.models.meal_analysis_queue import STAGE_RUNNING, MealAnalysisQueue
 from app.services.food_analysis_orchestrator import run_staged_pipeline
 from f0rge_db.tenant import apply_service_role
 
@@ -36,7 +36,7 @@ def _is_non_retryable(exc: BaseException) -> bool:
 async def _claim_and_lease_batch(db: AsyncSession) -> list[Any]:
     """Claim rows with SKIP LOCKED, set a short lease, then caller commits.
 
-    Lease uses ``stage='running'`` + ``last_attempt_at`` so the FOR UPDATE lock
+    Lease uses ``STAGE_RUNNING`` + ``last_attempt_at`` so the FOR UPDATE lock
     is not held across the LLM call. Stale leases older than
     ``meal_analysis_stale_analyzing_minutes`` are reclaimable.
     """
@@ -47,12 +47,12 @@ async def _claim_and_lease_batch(db: AsyncSession) -> list[Any]:
         FROM meal_analysis_queue
         WHERE attempts < :max_attempts
           AND (
-            stage IS DISTINCT FROM 'running'
+            stage IS DISTINCT FROM :stage_running
             OR last_attempt_at IS NULL
             OR last_attempt_at < NOW() - make_interval(mins => :lease_minutes)
           )
           AND (
-            stage = 'running'
+            stage = :stage_running
             OR last_attempt_at IS NULL
             OR last_attempt_at + (INTERVAL '1 second' * POWER(2, attempts)) < NOW()
           )
@@ -67,6 +67,7 @@ async def _claim_and_lease_batch(db: AsyncSession) -> list[Any]:
             "max_attempts": settings.meal_analysis_worker_max_attempts,
             "batch_size": settings.meal_analysis_worker_batch_size,
             "lease_minutes": lease_minutes,
+            "stage_running": STAGE_RUNNING,
         },
     )
     rows = result.fetchall()
@@ -79,12 +80,12 @@ async def _claim_and_lease_batch(db: AsyncSession) -> list[Any]:
             text(
                 """
                 UPDATE meal_analysis_queue
-                SET stage = 'running',
+                SET stage = :stage_running,
                     last_attempt_at = :now
                 WHERE id = :id
                 """
             ),
-            {"id": row.id, "now": now},
+            {"id": row.id, "now": now, "stage_running": STAGE_RUNNING},
         )
     return rows
 
