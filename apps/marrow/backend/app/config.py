@@ -30,15 +30,16 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "google/gemini-3-flash-preview"
     food_analysis_enabled: bool = True
-    # When True (default), upload/retry enqueue meal_analysis_queue for the worker.
-    # When False, fall back to FastAPI BackgroundTasks (legacy path).
-    meal_analysis_queue_enabled: bool = True
-    # When True with queue enabled, process one job inline after enqueue (local smoke).
+    # Airflow 3 API (empty = no DAG trigger; use inline or BackgroundTasks).
+    airflow_api_url: str = ""
+    airflow_username: str = "airflow"
+    airflow_password: str = "airflow"
+    meal_analysis_dag_id: str = "meal_analysis"
+    # Shared secret for Airflow → Marrow internal stage HTTP calls.
+    meal_analysis_internal_token: str = ""
+    # Run extract→enrich→gate→persist in-process after schedule (local without Airflow).
     meal_analysis_inline: bool = False
-    meal_analysis_worker_poll_interval_seconds: int = 5
-    meal_analysis_worker_batch_size: int = 5
-    meal_analysis_worker_max_attempts: int = 5
-    # Reclaim analyses stuck in "analyzing" longer than this (minutes).
+    # Reclaim analyses stuck in "analyzing" longer than this (minutes) on BackgroundTasks path.
     meal_analysis_stale_analyzing_minutes: int = 15
     mcp_readonly_database_url: str = ""
     mcp_server_host: str = "0.0.0.0"

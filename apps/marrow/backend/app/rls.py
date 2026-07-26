@@ -39,7 +39,6 @@ USER_OWNED_TABLES: tuple[str, ...] = (
     "weather_readings",
     "embedding",
     "embedding_queue",
-    "meal_analysis_queue",
     "user_settings",
     "diet_tag_catalog",
     "supplement_catalog",
@@ -75,7 +74,7 @@ async def enable_row_level_security(conn: AsyncConnection) -> None:
     await create_service_role_policy(
         conn,
         name="worker_queue",
-        tables=("embedding_queue", "meal_analysis_queue"),
+        tables=("embedding_queue",),
         role="worker",
     )
     # Mirrors migration 047: device registration deletes another user's stale

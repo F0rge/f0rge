@@ -25,7 +25,6 @@ from app.models.lab_marker import LabMarker
 from app.models.user_settings import UserSettings
 from app.models.embedding import Embedding
 from app.models.embedding_queue import EmbeddingQueue
-from app.models.meal_analysis_queue import MealAnalysisQueue
 from app.models.tracker import Tracker
 from app.models.tracker_log import TrackerLog
 from app.models.notification import Notification
@@ -61,7 +60,6 @@ __all__ = [
     "UserSettings",
     "Embedding",
     "EmbeddingQueue",
-    "MealAnalysisQueue",
     "Tracker",
     "TrackerLog",
     "Notification",

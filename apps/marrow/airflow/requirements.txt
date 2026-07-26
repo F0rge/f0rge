@@ -1,0 +1,2 @@
+apache-airflow-providers-common-compat
+httpx>=0.27

@@ -37,17 +37,41 @@ class _PhotoContext(NamedTuple):
     api_key: str
 
 
+class _LoadContextResult(NamedTuple):
+    context: Optional[_PhotoContext]
+    terminal_status: Optional[str] = None
+
+
+async def _fail_stuck_analysis(
+    analysis_crud: PhotoAnalysisCRUD,
+    *,
+    meal_id: Optional[int],
+    message: str,
+) -> None:
+    if meal_id is None:
+        return
+    existing = await analysis_crud.get_by_meal_id(meal_id)
+    if existing and existing.status in ("pending", "analyzing"):
+        existing.status = "failed"
+        existing.error_message = message
+        await analysis_crud.save()
+
+
 async def _load_photo_context(
-    db: AsyncSession, photo_id: int, user_id: Optional[uuid.UUID]
-) -> Optional[_PhotoContext]:
+    db: AsyncSession,
+    photo_id: int,
+    user_id: Optional[uuid.UUID],
+    *,
+    meal_id: Optional[int] = None,
+) -> _LoadContextResult:
     """Resolve owner + LLM credentials and flip the analysis row to analyzing.
 
-    Returns None when there's nothing left to do: missing photo, no API key
-    (marks failed), or an analysis already finished (confirmed/needs_review).
+    ``terminal_status`` is set when the pipeline should stop without running
+    vision (missing photo, no API key, already finished).
 
-    Queue workers always reclaim ``analyzing`` rows (SKIP LOCKED is the lease).
-    The legacy BackgroundTasks path still skips a fresh concurrent duplicate
-    within ``meal_analysis_stale_analyzing_minutes``.
+    Airflow / inline paths always reclaim ``analyzing`` rows. The legacy
+    BackgroundTasks path still skips a fresh concurrent duplicate within
+    ``meal_analysis_stale_analyzing_minutes``.
     """
     analysis_crud = PhotoAnalysisCRUD(db)
     photo_crud = PhotoCRUD(db)
@@ -56,7 +80,12 @@ async def _load_photo_context(
         resolved = await photo_crud.get_user_id(photo_id)
         if resolved is None:
             logger.warning("Skipping analysis for missing photo %d", photo_id)
-            return None
+            await _fail_stuck_analysis(
+                analysis_crud,
+                meal_id=meal_id,
+                message="Photo no longer available",
+            )
+            return _LoadContextResult(None, "failed")
         user_id = resolved
     user_id_str = str(user_id)
     await apply_session_user_id(db, user_id)
@@ -64,7 +93,12 @@ async def _load_photo_context(
     photo = await photo_crud.get_by_id(photo_id)
     if not photo:
         logger.warning("Skipping analysis for missing photo %d", photo_id)
-        return None
+        await _fail_stuck_analysis(
+            analysis_crud,
+            meal_id=meal_id,
+            message="Photo no longer available",
+        )
+        return _LoadContextResult(None, "failed")
 
     from app.services.llm.factory import resolve_llm_credentials
 
@@ -93,7 +127,7 @@ async def _load_photo_context(
             existing.error_message = "LLM API key not configured"
             existing.model_id = model
         await analysis_crud.save()
-        return None
+        return _LoadContextResult(None, "failed")
 
     existing = await analysis_crud.get_by_meal_id(photo.meal_id)
 
@@ -103,17 +137,15 @@ async def _load_photo_context(
             photo_id,
             existing.status,
         )
-        return None
+        return _LoadContextResult(None, existing.status)
 
     if (
         existing
         and existing.status == "analyzing"
-        and not settings.meal_analysis_queue_enabled
+        and not settings.airflow_api_url
+        and not settings.meal_analysis_inline
     ):
         # Legacy BackgroundTasks only: skip a fresh concurrent duplicate.
-        # Queue workers must reclaim — a crash mid-LLM leaves analyzing + a
-        # claimable queue row; returning None would delete the queue and stick
-        # the analysis forever.
         from datetime import datetime, timedelta
 
         stale_after = timedelta(minutes=settings.meal_analysis_stale_analyzing_minutes)
@@ -123,7 +155,7 @@ async def _load_photo_context(
                 "Analysis already running for photo %d, skipping duplicate",
                 photo_id,
             )
-            return None
+            return _LoadContextResult(None)
 
     if existing:
         analysis = existing
@@ -143,13 +175,15 @@ async def _load_photo_context(
         analysis_crud.add(analysis)
     analysis = await analysis_crud.commit_refresh(analysis)
 
-    return _PhotoContext(
-        analysis=analysis,
-        photo=photo,
-        user_id=user_id,
-        user_id_str=user_id_str,
-        model=model,
-        api_key=api_key,
+    return _LoadContextResult(
+        _PhotoContext(
+            analysis=analysis,
+            photo=photo,
+            user_id=user_id,
+            user_id_str=user_id_str,
+            model=model,
+            api_key=api_key,
+        )
     )
 
 
@@ -243,17 +277,23 @@ async def persist_analysis(
     await analysis_crud.save()
 
 
-async def run_staged_pipeline(photo_id: int, user_id: Optional[uuid.UUID] = None) -> Optional[str]:
+async def run_staged_pipeline(
+    photo_id: int,
+    user_id: Optional[uuid.UUID] = None,
+    *,
+    meal_id: Optional[int] = None,
+) -> Optional[str]:
     """Run extract → enrich → gate → persist → tag delivery.
 
-    Returns terminal status string, or None if skipped.
+    Returns terminal status string, or None if skipped without a terminal state.
     """
     analysis: Optional[PhotoAnalysis] = None
     try:
         async with async_session_maker() as db:
-            context = await _load_photo_context(db, photo_id, user_id)
-            if context is None:
-                return None
+            loaded = await _load_photo_context(db, photo_id, user_id, meal_id=meal_id)
+            if loaded.context is None:
+                return loaded.terminal_status
+            context = loaded.context
             analysis = context.analysis
 
             catalog_context = ""
@@ -334,8 +374,8 @@ async def trigger_analysis_background(photo_id: int, user_id: Optional[uuid.UUID
 class FoodAnalysisOrchestrator:
     """Coordinates the meal analysis pipeline.
 
-    Prefer enqueue → worker. ``run`` remains for the legacy BackgroundTasks path
-    and for tests that call the orchestrator directly.
+    Prefer Airflow DAG trigger. ``run`` remains for BackgroundTasks / inline
+    fallback and for tests that call the orchestrator directly.
     """
 
     async def run(self, photo_id: int, user_id: Optional[uuid.UUID] = None) -> None:

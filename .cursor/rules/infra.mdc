@@ -40,7 +40,7 @@ Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-
 
 | Role | Dev app | Prod app | Config |
 |---|---|---|---|
-| API + worker (`python -m app.worker`: embedding + meal analysis) | `marrow-dev` | `marrow` | `apps/marrow/backend/fly.toml` / `fly.prod.toml` |
+| API + embedding worker (`python -m app.embedding_pipeline`; meal analysis via Airflow) | `marrow-dev` | `marrow` | `apps/marrow/backend/fly.toml` / `fly.prod.toml` |
 | MCP | `marrow-mcp-dev` | `marrow-mcp` | `apps/marrow/backend/fly.mcp.toml` / `fly.mcp.prod.toml` |
 | Frontend | `marrow-ui-dev` | `marrow-ui` | `apps/marrow/frontend/fly.toml` / `fly.prod.toml` |
 

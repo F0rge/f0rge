@@ -45,3 +45,12 @@ qa-screenshots/
 # Nx
 .nx/
 *.tsbuildinfo
+
+# Demo orchestrator
+apps/demo/orchestrator/.env
+apps/demo/orchestrator/airflow/logs/
+
+# Marrow Airflow
+apps/marrow/airflow/.env
+apps/marrow/airflow/logs/*
+!apps/marrow/airflow/logs/.gitkeep

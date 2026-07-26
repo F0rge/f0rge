@@ -1,0 +1,7 @@
+# Pi port override — Coolify uses 8080; demo orchestrator may use 8082.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.pi.yml up --build -d
+
+services:
+  airflow-apiserver:
+    ports: !override
+      - "8083:8080"

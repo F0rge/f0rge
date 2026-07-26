@@ -194,4 +194,4 @@ The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and 
 ### Running
 - Backend `:8000` + frontend `:3000` (frontend proxies `/api/*` → `:8000`): run `uv run uvicorn app.main:app --port 8000 --reload` in `apps/marrow/backend` and `npm run dev` in `apps/marrow/frontend` (from repo root: `npx nx run marrow-frontend:dev`). Install deps with `npm ci` at repo root (workspaces).
 - Signup rejects non-routable email TLDs (e.g. `.local`); use a normal domain like `demo@example.com` when testing auth.
-- Optional services (not needed for the core check-in app): combined Fly worker (`uv run python -m app.worker` — embedding + meal analysis; solo: `python -m app.embedding_pipeline` / `python -m app.meal_analysis_pipeline`; needs `OPENROUTER_API_KEY`) and MCP server (`uv run python -m app.mcp ...`).
+- Optional services (not needed for the core check-in app): Fly embedding worker (`uv run python -m app.embedding_pipeline`; needs `OPENROUTER_API_KEY`), meal-analysis Airflow (`apps/marrow/airflow` — see that folder’s `AGENTS.md`), and MCP server (`uv run python -m app.mcp ...`).

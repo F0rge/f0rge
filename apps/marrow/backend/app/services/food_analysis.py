@@ -15,8 +15,9 @@ from f0rge_core.exceptions import NotFoundError
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.food_analysis import DietaryConfirmUpdate, IngredientCreate, IngredientUpdate
+from app.crud.base import unit_of_work
+from app.services.airflow_client import AirflowClient
 from app.services.ingredient_lookup import IngredientLookupService
-from app.services.meal_analysis_queue import MealAnalysisQueueService
 from app.services.tag_delivery import TagDeliveryService
 from app.services.vision_prompt import VisionResult
 from f0rge_db.tenant import current_user_id
@@ -170,32 +171,48 @@ class FoodAnalysisService:
         meal_id: int,
         photo_id: int,
     ) -> None:
-        """Create pending analysis + queue row after a successful photo upload.
+        """Create pending analysis and trigger the Airflow meal_analysis DAG.
 
-        Failures are logged and swallowed so upload still succeeds. Enqueue
-        commits via ``unit_of_work`` so a failure never leaves orphan pending.
+        Failures are logged and swallowed so upload still succeeds.
         """
         try:
-            self.analysis_crud.add(
-                PhotoAnalysis(
-                    user_id=user_id,
-                    meal_id=meal_id,
-                    photo_id=photo_id,
-                    status="pending",
-                    model_id=settings.openrouter_model,
+            async with unit_of_work(self.db):
+                self.analysis_crud.add(
+                    PhotoAnalysis(
+                        user_id=user_id,
+                        meal_id=meal_id,
+                        photo_id=photo_id,
+                        status="pending",
+                        model_id=settings.openrouter_model,
+                    )
                 )
-            )
-            await self.db.flush()
-            await MealAnalysisQueueService(self.db).enqueue(
-                user_id=user_id,
-                meal_id=meal_id,
-                photo_id=photo_id,
-            )
+            await self._trigger_or_run_inline(photo_id=photo_id, user_id=user_id)
         except Exception:
             logger.exception(
-                "Failed to enqueue meal analysis for photo %s — upload kept",
+                "Failed to schedule meal analysis for photo %s — upload kept",
                 photo_id,
             )
+
+    async def _trigger_or_run_inline(
+        self, *, photo_id: int, user_id: uuid.UUID
+    ) -> None:
+        client = AirflowClient()
+        if client.configured:
+            result = await client.trigger_meal_analysis(photo_id=photo_id, user_id=user_id)
+            if result.get("error"):
+                raise RuntimeError(
+                    f"Airflow trigger failed: {result.get('status_code')} {result.get('error')}"
+                )
+            return
+        if settings.meal_analysis_inline:
+            from app.services.food_analysis_orchestrator import run_staged_pipeline
+
+            await run_staged_pipeline(photo_id, user_id)
+            return
+        raise RuntimeError(
+            "AIRFLOW_API_URL is not set and MEAL_ANALYSIS_INLINE is false — "
+            "cannot schedule meal analysis"
+        )
 
     async def delete_ingredient(self, ingredient_id: int) -> None:
         """Delete an ingredient by id."""
@@ -221,12 +238,9 @@ class FoodAnalysisService:
         photo = await PhotoCRUD(self.db).get_by_id(photo_id)
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
-        if settings.meal_analysis_queue_enabled:
-            await MealAnalysisQueueService(self.db).enqueue(
-                user_id=photo.user_id,
-                meal_id=photo.meal_id,
-                photo_id=photo_id,
-            )
+        client = AirflowClient()
+        if client.configured or settings.meal_analysis_inline:
+            await self._trigger_or_run_inline(photo_id=photo_id, user_id=photo.user_id)
         else:
             background_tasks.add_task(self.orchestrator.run, photo_id, photo.user_id)
         return new_analysis

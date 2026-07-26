@@ -258,9 +258,11 @@ class PhotoService:
             raise
 
         if analysis_will_run:
-            if settings.meal_analysis_queue_enabled:
-                from app.services.food_analysis import FoodAnalysisService
+            from app.services.airflow_client import AirflowClient
+            from app.services.food_analysis import FoodAnalysisService
 
+            client = AirflowClient()
+            if client.configured or settings.meal_analysis_inline:
                 await FoodAnalysisService(self.db, self.orchestrator).schedule_for_uploaded_photo(
                     user_id=user_id,
                     meal_id=meal.id,
