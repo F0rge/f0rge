@@ -33,8 +33,8 @@ from f0rge_db.tenant import apply_session_user_id
 logger = logging.getLogger(__name__)
 
 
-class MealAnalysisStageService:
-    """HTTP-callable stage handlers for the Airflow meal_analysis DAG."""
+class MealAnalysisStageOrchestrator:
+    """Coordinates Airflow stage HTTP handlers (extract→enrich→gate→persist)."""
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db

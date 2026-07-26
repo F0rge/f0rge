@@ -54,7 +54,7 @@ async def _seed_photo(db: AsyncSession) -> Photo:
 
 
 def test_require_internal_token() -> None:
-    from app.services.meal_analysis_stages import require_internal_token
+    from app.services.meal_analysis_stage_orchestrator import require_internal_token
 
     with pytest.raises(UnauthorizedError):
         require_internal_token(None, "")
@@ -403,7 +403,7 @@ async def test_inline_path_reclaims_fresh_analyzing(
 
 
 async def test_fail_stage_marks_analysis(async_engine) -> None:
-    from app.services.meal_analysis_stages import MealAnalysisStageService
+    from app.services.meal_analysis_stage_orchestrator import MealAnalysisStageOrchestrator
 
     real_maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     user_id = uuid.UUID(settings.default_storage_user_id)
@@ -426,7 +426,7 @@ async def test_fail_stage_marks_analysis(async_engine) -> None:
 
     try:
         async with real_maker() as db:
-            await MealAnalysisStageService(db).fail(
+            await MealAnalysisStageOrchestrator(db).fail(
                 user_id=user_id,
                 analysis_id=analysis_id,
                 error_message="boom",
