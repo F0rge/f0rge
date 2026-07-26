@@ -3,16 +3,15 @@ from __future__ import annotations
 import logging
 import uuid
 
-from sqlalchemy import func, text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.meal_analysis_queue import MealAnalysisQueue
+from app.crud.base import unit_of_work
+from app.crud.meal_analysis_queue import LISTEN_CHANNEL, MealAnalysisQueueCRUD
 
 logger = logging.getLogger(__name__)
 
-LISTEN_CHANNEL = "meal_analysis_queue"
+__all__ = ["LISTEN_CHANNEL", "enqueue_meal_analysis"]
 
 
 async def enqueue_meal_analysis(
@@ -26,36 +25,12 @@ async def enqueue_meal_analysis(
 
     Unique on meal_id: a retry resets attempts/error and re-wakes the worker.
 
-    Commits the current session so any flushed pending ``PhotoAnalysis`` in the
+    Commits via ``unit_of_work`` so any flushed pending ``PhotoAnalysis`` in the
     same session is persisted atomically with the queue row.
     """
-    stmt = (
-        pg_insert(MealAnalysisQueue)
-        .values(
-            user_id=user_id,
-            meal_id=meal_id,
-            photo_id=photo_id,
-            attempts=0,
-            last_attempt_at=None,
-            last_error=None,
-            stage=None,
-        )
-        .on_conflict_do_update(
-            constraint="uq_meal_analysis_queue_meal_id",
-            set_={
-                "photo_id": photo_id,
-                "user_id": user_id,
-                "attempts": 0,
-                "last_attempt_at": None,
-                "last_error": None,
-                "stage": None,
-                "enqueued_at": func.now(),
-            },
-        )
-    )
-    await db.execute(stmt)
-    await db.execute(text("SELECT pg_notify(:channel, 'wake')"), {"channel": LISTEN_CHANNEL})
-    await db.commit()
+    crud = MealAnalysisQueueCRUD(db)
+    async with unit_of_work(db):
+        await crud.upsert_pending(user_id=user_id, meal_id=meal_id, photo_id=photo_id)
     logger.info(
         {
             "event": "meal_analysis_enqueued",
