@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from typing import Optional
 
 from sqlalchemy import (
     BigInteger,
@@ -62,6 +63,6 @@ class MealAnalysisQueue(Base):
         server_default=text("now()"),
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    last_attempt_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
-    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    stage: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_attempt_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    stage: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
