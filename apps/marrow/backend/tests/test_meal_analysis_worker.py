@@ -80,6 +80,133 @@ async def test_claim_batch_returns_pending_rows(async_db: AsyncSession) -> None:
     assert len(rows) >= 1
     assert any(r.photo_id == photo.id and r.meal_id == photo.meal_id for r in rows)
 
+    leased = (
+        await async_db.execute(
+            select(MealAnalysisQueue).where(MealAnalysisQueue.photo_id == photo.id)
+        )
+    ).scalar_one()
+    assert leased.stage == "running"
+    assert leased.last_attempt_at is not None
+
+
+async def test_legacy_background_path_skips_fresh_analyzing(
+    async_engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BackgroundTasks path still skips a fresh concurrent analyzing duplicate."""
+    import app.config as cfg_mod
+    from app.services import food_analysis_orchestrator as fa
+
+    real_maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr(fa, "async_session_maker", real_maker)
+    monkeypatch.setattr(cfg_mod.settings, "openrouter_api_key", "test-key")
+    monkeypatch.setattr(cfg_mod.settings, "food_analysis_enabled", True)
+    monkeypatch.setattr(cfg_mod.settings, "meal_analysis_queue_enabled", False)
+
+    user_id = uuid.UUID(settings.default_storage_user_id)
+    async with real_maker() as setup:
+        await apply_session_user_id(setup, user_id)
+        photo = await _seed_photo(setup)
+        setup.add(
+            PhotoAnalysis(
+                user_id=photo.user_id,
+                meal_id=photo.meal_id,
+                photo_id=photo.id,
+                status="analyzing",
+                model_id="test-model",
+                updated_at=datetime.datetime.utcnow(),
+            )
+        )
+        await setup.commit()
+        photo_id = photo.id
+        meal_id = photo.meal_id
+        entry_id = photo.entry_id
+
+    try:
+        status = await fa.run_staged_pipeline(photo_id, user_id)
+        assert status is None
+
+        async with real_maker() as verify:
+            await apply_session_user_id(verify, user_id)
+            analysis = (
+                await verify.execute(
+                    select(PhotoAnalysis).where(PhotoAnalysis.photo_id == photo_id)
+                )
+            ).scalar_one()
+        assert analysis.status == "analyzing"
+    finally:
+        async with real_maker() as cleanup:
+            await apply_session_user_id(cleanup, user_id)
+            await cleanup.execute(
+                PhotoAnalysis.__table__.delete().where(PhotoAnalysis.meal_id == meal_id)
+            )
+            await cleanup.execute(Photo.__table__.delete().where(Photo.id == photo_id))
+            await cleanup.execute(text("DELETE FROM meals WHERE id = :mid"), {"mid": meal_id})
+            await cleanup.execute(Entry.__table__.delete().where(Entry.id == entry_id))
+            await cleanup.commit()
+
+
+async def test_process_pending_once_deletes_on_non_retryable(
+    async_engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from f0rge_core.exceptions import ExternalServiceError
+
+    from app.meal_analysis_pipeline.worker import process_pending_once
+
+    real_maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
+    monkeypatch.setattr("app.meal_analysis_pipeline.worker.async_session_maker", real_maker)
+
+    run_pipeline = AsyncMock(
+        side_effect=ExternalServiceError('Upstream LLM error: 401 {"error":{}}')
+    )
+    monkeypatch.setattr(
+        "app.meal_analysis_pipeline.worker.run_staged_pipeline",
+        run_pipeline,
+    )
+
+    user_id = uuid.UUID(settings.default_storage_user_id)
+    async with real_maker() as setup:
+        await apply_session_user_id(setup, user_id)
+        photo = await _seed_photo(setup)
+        setup.add(
+            MealAnalysisQueue(
+                user_id=photo.user_id,
+                meal_id=photo.meal_id,
+                photo_id=photo.id,
+            )
+        )
+        await setup.commit()
+        photo_id = photo.id
+        meal_id = photo.meal_id
+        entry_id = photo.entry_id
+
+    try:
+        n = await process_pending_once()
+        assert n >= 1
+        async with real_maker() as verify:
+            await apply_service_role(verify, "worker")
+            remaining = (
+                await verify.execute(
+                    select(func.count())
+                    .select_from(MealAnalysisQueue)
+                    .where(MealAnalysisQueue.meal_id == meal_id)
+                )
+            ).scalar_one()
+        assert remaining == 0
+    finally:
+        async with real_maker() as cleanup:
+            await apply_service_role(cleanup, "worker")
+            await cleanup.execute(
+                text("DELETE FROM meal_analysis_queue WHERE meal_id = :mid"),
+                {"mid": meal_id},
+            )
+            await cleanup.commit()
+        async with real_maker() as cleanup:
+            await apply_session_user_id(cleanup, user_id)
+            await cleanup.execute(Photo.__table__.delete().where(Photo.id == photo_id))
+            await cleanup.execute(text("DELETE FROM meals WHERE id = :mid"), {"mid": meal_id})
+            await cleanup.execute(Entry.__table__.delete().where(Entry.id == entry_id))
+            await cleanup.commit()
+
 
 async def test_process_pending_once_runs_pipeline_and_deletes(
     async_engine, monkeypatch: pytest.MonkeyPatch
