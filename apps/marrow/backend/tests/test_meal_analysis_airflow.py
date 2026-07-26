@@ -426,10 +426,14 @@ async def test_fail_stage_marks_analysis(async_engine) -> None:
 
     try:
         async with real_maker() as db:
+            from app.schemas.meal_analysis_stages import FailRequest
+
             await MealAnalysisStageOrchestrator(db).fail(
-                user_id=user_id,
-                analysis_id=analysis_id,
-                error_message="boom",
+                FailRequest(
+                    user_id=user_id,
+                    analysis_id=analysis_id,
+                    error_message="boom",
+                )
             )
 
         async with real_maker() as verify:

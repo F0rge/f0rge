@@ -11,12 +11,17 @@ from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photos import PhotoCRUD
 from app.models.photo_ingredient import PhotoIngredient
 from app.schemas.meal_analysis_stages import (
+    EnrichRequest,
     EnrichResponse,
     ExtractResponse,
+    FailRequest,
     FailResponse,
+    GateRequest,
     GateResponse,
     IngredientPayload,
+    PersistRequest,
     PersistResponse,
+    StagePhotoRef,
 )
 from app.services.catalog_context import build_catalog_context
 from app.services.food_analysis_orchestrator import (
@@ -39,7 +44,9 @@ class MealAnalysisStageOrchestrator:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def extract(self, photo_id: int, user_id: uuid.UUID) -> ExtractResponse:
+    async def extract(self, body: StagePhotoRef) -> ExtractResponse:
+        photo_id = body.photo_id
+        user_id = body.user_id
         try:
             loaded = await _load_photo_context(self.db, photo_id, user_id)
             if loaded.context is None:
@@ -82,9 +89,9 @@ class MealAnalysisStageOrchestrator:
             await self._mark_failed_by_photo(photo_id, user_id, exc)
             raise
 
-    async def enrich(self, user_id: uuid.UUID, vision: VisionResult) -> EnrichResponse:
-        await apply_session_user_id(self.db, user_id)
-        rows = await enrich_ingredients(self.db, user_id, vision)
+    async def enrich(self, body: EnrichRequest) -> EnrichResponse:
+        await apply_session_user_id(self.db, body.user_id)
+        rows = await enrich_ingredients(self.db, body.user_id, body.vision)
         return EnrichResponse(
             ingredients=[
                 IngredientPayload(
@@ -104,35 +111,25 @@ class MealAnalysisStageOrchestrator:
             ]
         )
 
-    def gate(self, vision: VisionResult) -> GateResponse:
-        return GateResponse(status=gate_status(vision))
+    def gate(self, body: GateRequest) -> GateResponse:
+        return GateResponse(status=gate_status(body.vision))
 
-    async def persist(
-        self,
-        *,
-        user_id: uuid.UUID,
-        analysis_id: int,
-        photo_id: int,
-        raw_content: str,
-        vision: VisionResult,
-        ingredients: list[IngredientPayload],
-        status: str,
-    ) -> PersistResponse:
+    async def persist(self, body: PersistRequest) -> PersistResponse:
         try:
-            await apply_session_user_id(self.db, user_id)
+            await apply_session_user_id(self.db, body.user_id)
             analysis_crud = PhotoAnalysisCRUD(self.db)
-            analysis = await analysis_crud.get_by_id(analysis_id)
+            analysis = await analysis_crud.get_by_id(body.analysis_id)
             if analysis is None:
-                raise NotFoundError(f"Analysis {analysis_id} not found")
+                raise NotFoundError(f"Analysis {body.analysis_id} not found")
 
-            photo = await PhotoCRUD(self.db).get_by_id(photo_id)
+            photo = await PhotoCRUD(self.db).get_by_id(body.photo_id)
             if photo is None:
-                raise NotFoundError(f"Photo {photo_id} not found")
+                raise NotFoundError(f"Photo {body.photo_id} not found")
 
             orm_ingredients = [
                 PhotoIngredient(
-                    user_id=user_id,
-                    analysis_id=analysis_id,
+                    user_id=body.user_id,
+                    analysis_id=body.analysis_id,
                     name=ing.name,
                     canonical_name=ing.canonical_name,
                     visible=ing.visible,
@@ -146,54 +143,50 @@ class MealAnalysisStageOrchestrator:
                     contains_gluten=ing.contains_gluten,
                     contains_dairy=ing.contains_dairy,
                 )
-                for ing in ingredients
+                for ing in body.ingredients
             ]
             await persist_analysis(
                 self.db,
                 analysis,
-                user_id,
-                raw_content,
-                vision,
+                body.user_id,
+                body.raw_content,
+                body.vision,
                 orm_ingredients,
-                status,
+                body.status,
             )
-            await invalidate_user_insights_cache(user_id, photo.entry.date)
+            await invalidate_user_insights_cache(body.user_id, photo.entry.date)
 
-            if status == "confirmed" and photo.source_photo_id is None:
+            if body.status == "confirmed" and photo.source_photo_id is None:
                 from app.services.tag_delivery import TagDeliveryService
 
                 try:
-                    await TagDeliveryService().deliver_for_source(photo_id, user_id)
+                    await TagDeliveryService().deliver_for_source(body.photo_id, body.user_id)
                 except Exception:
                     logger.exception(
                         "Tag delivery failed for photo %d after confirmed analysis",
-                        photo_id,
+                        body.photo_id,
                     )
 
-            return PersistResponse(status=status, analysis_id=analysis_id)
+            return PersistResponse(status=body.status, analysis_id=body.analysis_id)
         except Exception as exc:
             await self.db.rollback()
             await self.fail(
-                user_id=user_id,
-                analysis_id=analysis_id,
-                error_message=str(exc),
+                FailRequest(
+                    user_id=body.user_id,
+                    analysis_id=body.analysis_id,
+                    error_message=str(exc)[:500],
+                )
             )
             raise
 
-    async def fail(
-        self,
-        *,
-        user_id: uuid.UUID,
-        analysis_id: int,
-        error_message: str,
-    ) -> FailResponse:
-        await apply_session_user_id(self.db, user_id)
+    async def fail(self, body: FailRequest) -> FailResponse:
+        await apply_session_user_id(self.db, body.user_id)
         crud = PhotoAnalysisCRUD(self.db)
-        analysis = await crud.get_by_id(analysis_id)
+        analysis = await crud.get_by_id(body.analysis_id)
         if analysis is None:
-            raise NotFoundError(f"Analysis {analysis_id} not found")
+            raise NotFoundError(f"Analysis {body.analysis_id} not found")
         analysis.status = "failed"
-        analysis.error_message = error_message[:500]
+        analysis.error_message = body.error_message[:500]
         await crud.save()
         return FailResponse()
 
