@@ -25,6 +25,9 @@ async def enqueue_meal_analysis(
     """Insert or refresh a queue row for this meal and notify the worker.
 
     Unique on meal_id: a retry resets attempts/error and re-wakes the worker.
+
+    Commits the current session so any flushed pending ``PhotoAnalysis`` in the
+    same session is persisted atomically with the queue row.
     """
     stmt = (
         pg_insert(MealAnalysisQueue)
