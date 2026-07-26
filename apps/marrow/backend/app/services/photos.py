@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import logging
 import os
 from typing import TYPE_CHECKING, Optional
 
@@ -29,8 +28,6 @@ from app.services.entries import _photo_response
 from app.services import object_storage
 from app.services.photo_storage import delete_photo, resize_image, save_photo
 from f0rge_db.tenant import current_user_id
-
-logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
@@ -262,36 +259,13 @@ class PhotoService:
 
         if analysis_will_run:
             if settings.meal_analysis_queue_enabled:
-                from app.crud.photo_analysis import PhotoAnalysisCRUD
-                from app.models.photo_analysis import PhotoAnalysis
-                from app.services.meal_analysis_enqueue import enqueue_meal_analysis
+                from app.services.food_analysis import FoodAnalysisService
 
-                # Pending analysis + queue row share one commit inside enqueue.
-                # On failure, roll back both so we never leave orphan pending
-                # without a queue row (photo itself is already committed).
-                try:
-                    PhotoAnalysisCRUD(self.db).add(
-                        PhotoAnalysis(
-                            user_id=user_id,
-                            meal_id=meal.id,
-                            photo_id=photo.id,
-                            status="pending",
-                            model_id=settings.openrouter_model,
-                        )
-                    )
-                    await self.db.flush()
-                    await enqueue_meal_analysis(
-                        self.db,
-                        user_id=user_id,
-                        meal_id=meal.id,
-                        photo_id=photo.id,
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to enqueue meal analysis for photo %s — upload kept",
-                        photo.id,
-                    )
-                    await self.db.rollback()
+                await FoodAnalysisService(self.db, self.orchestrator).schedule_for_uploaded_photo(
+                    user_id=user_id,
+                    meal_id=meal.id,
+                    photo_id=photo.id,
+                )
             else:
                 background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
 

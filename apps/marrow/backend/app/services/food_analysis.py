@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -7,6 +8,8 @@ from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.crud.base import unit_of_work
+from app.crud.meal_analysis_queue import MealAnalysisQueueCRUD
 from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
@@ -21,6 +24,8 @@ from f0rge_db.tenant import current_user_id
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
+
+logger = logging.getLogger(__name__)
 
 DISH_CONFIDENCE_REVIEW_THRESHOLD = 0.7
 INGREDIENT_CONFIDENCE_REVIEW_THRESHOLD = 0.5
@@ -158,6 +163,51 @@ class FoodAnalysisService:
         )
         self.analysis_crud.add(analysis)
         return await self.analysis_crud.commit_refresh(analysis)
+
+    async def schedule_for_uploaded_photo(
+        self,
+        *,
+        user_id: uuid.UUID,
+        meal_id: int,
+        photo_id: int,
+    ) -> None:
+        """Create pending analysis + queue row after a successful photo upload.
+
+        Failures are logged and swallowed so upload still succeeds. Uses
+        ``unit_of_work`` so a failed enqueue never leaves orphan pending rows.
+        """
+        try:
+            async with unit_of_work(self.db):
+                self.analysis_crud.add(
+                    PhotoAnalysis(
+                        user_id=user_id,
+                        meal_id=meal_id,
+                        photo_id=photo_id,
+                        status="pending",
+                        model_id=settings.openrouter_model,
+                    )
+                )
+                await MealAnalysisQueueCRUD(self.db).upsert_pending(
+                    user_id=user_id,
+                    meal_id=meal_id,
+                    photo_id=photo_id,
+                )
+            logger.info(
+                {
+                    "event": "meal_analysis_enqueued",
+                    "meal_id": meal_id,
+                    "photo_id": photo_id,
+                }
+            )
+            if settings.meal_analysis_inline:
+                from app.meal_analysis_pipeline.worker import process_pending_once
+
+                await process_pending_once()
+        except Exception:
+            logger.exception(
+                "Failed to enqueue meal analysis for photo %s — upload kept",
+                photo_id,
+            )
 
     async def delete_ingredient(self, ingredient_id: int) -> None:
         """Delete an ingredient by id."""
