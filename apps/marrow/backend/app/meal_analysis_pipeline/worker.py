@@ -20,15 +20,27 @@ from f0rge_db.tenant import apply_service_role
 logger = logging.getLogger(__name__)
 
 
-async def _claim_batch(db: AsyncSession) -> list[Any]:
-    """Claim up to batch_size pending queue rows using SKIP LOCKED."""
+async def _claim_and_lease_batch(db: AsyncSession) -> list[Any]:
+    """Claim rows with SKIP LOCKED, set a short lease, then caller commits.
+
+    Lease uses ``stage='running'`` + ``last_attempt_at`` so the FOR UPDATE lock
+    is not held across the LLM call. Stale leases older than
+    ``meal_analysis_stale_analyzing_minutes`` are reclaimable.
+    """
+    lease_minutes = settings.meal_analysis_stale_analyzing_minutes
     stmt = text(
         """
         SELECT id, user_id, meal_id, photo_id, attempts
         FROM meal_analysis_queue
         WHERE attempts < :max_attempts
           AND (
-            last_attempt_at IS NULL
+            stage IS DISTINCT FROM 'running'
+            OR last_attempt_at IS NULL
+            OR last_attempt_at < NOW() - make_interval(mins => :lease_minutes)
+          )
+          AND (
+            stage = 'running'
+            OR last_attempt_at IS NULL
             OR last_attempt_at + (INTERVAL '1 second' * POWER(2, attempts)) < NOW()
           )
         ORDER BY enqueued_at
@@ -41,65 +53,100 @@ async def _claim_batch(db: AsyncSession) -> list[Any]:
         {
             "max_attempts": settings.meal_analysis_worker_max_attempts,
             "batch_size": settings.meal_analysis_worker_batch_size,
+            "lease_minutes": lease_minutes,
         },
     )
-    return result.fetchall()
+    rows = result.fetchall()
+    if not rows:
+        return []
+
+    now = datetime.datetime.utcnow()
+    for row in rows:
+        await db.execute(
+            text(
+                """
+                UPDATE meal_analysis_queue
+                SET stage = 'running',
+                    last_attempt_at = :now
+                WHERE id = :id
+                """
+            ),
+            {"id": row.id, "now": now},
+        )
+    return rows
+
+
+# Backward-compatible name for tests that import _claim_batch.
+async def _claim_batch(db: AsyncSession) -> list[Any]:
+    return await _claim_and_lease_batch(db)
+
+
+async def _delete_queue_row(row_id: int) -> None:
+    async with async_session_maker() as db:
+        async with db.begin():
+            await apply_service_role(db, "worker")
+            await db.execute(delete(MealAnalysisQueue).where(MealAnalysisQueue.id == row_id))
+
+
+async def _mark_failed(row_id: int, error: str) -> None:
+    async with async_session_maker() as db:
+        async with db.begin():
+            await apply_service_role(db, "worker")
+            await db.execute(
+                text(
+                    """
+                    UPDATE meal_analysis_queue
+                    SET attempts = attempts + 1,
+                        last_attempt_at = :now,
+                        last_error = :error,
+                        stage = NULL
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "id": row_id,
+                    "now": datetime.datetime.utcnow(),
+                    "error": error[:2000],
+                },
+            )
 
 
 async def process_pending_once() -> int:
-    """Claim and process one batch while holding SKIP LOCKED row locks.
+    """Lease a batch, commit, then process each row without holding row locks.
 
-    Returns number of rows attempted. Used by the long-running worker loop and by
-    ``meal_analysis_inline`` after enqueue.
+    Returns number of rows attempted.
     """
     async with async_session_maker() as db:
         async with db.begin():
             await apply_service_role(db, "worker")
-            rows = await _claim_batch(db)
-            if not rows:
-                return 0
+            rows = await _claim_and_lease_batch(db)
 
-            for row in rows:
-                try:
-                    # Pipeline opens its own sessions; queue row stays locked here.
-                    await run_staged_pipeline(row.photo_id, row.user_id)
-                    await db.execute(
-                        delete(MealAnalysisQueue).where(MealAnalysisQueue.id == row.id)
-                    )
-                    logger.info(
-                        {
-                            "event": "meal_analysis_queue_done",
-                            "row_id": row.id,
-                            "photo_id": row.photo_id,
-                            "meal_id": row.meal_id,
-                        }
-                    )
-                except Exception as exc:
-                    logger.error(
-                        {
-                            "event": "meal_analysis_queue_failed",
-                            "row_id": row.id,
-                            "photo_id": row.photo_id,
-                            "error": str(exc)[:500],
-                        }
-                    )
-                    await db.execute(
-                        text(
-                            """
-                            UPDATE meal_analysis_queue
-                            SET attempts = attempts + 1,
-                                last_attempt_at = :now,
-                                last_error = :error
-                            WHERE id = :id
-                            """
-                        ),
-                        {
-                            "id": row.id,
-                            "now": datetime.datetime.utcnow(),
-                            "error": str(exc)[:2000],
-                        },
-                    )
-            return len(rows)
+    if not rows:
+        return 0
+
+    for row in rows:
+        try:
+            await run_staged_pipeline(row.photo_id, row.user_id)
+            await _delete_queue_row(row.id)
+            logger.info(
+                {
+                    "event": "meal_analysis_queue_done",
+                    "row_id": row.id,
+                    "photo_id": row.photo_id,
+                    "meal_id": row.meal_id,
+                }
+            )
+        except Exception as exc:
+            logger.error(
+                {
+                    "event": "meal_analysis_queue_failed",
+                    "row_id": row.id,
+                    "photo_id": row.photo_id,
+                    "error": str(exc)[:500],
+                }
+            )
+            await _mark_failed(row.id, str(exc))
+    return len(rows)
 
 
 async def run() -> None:
