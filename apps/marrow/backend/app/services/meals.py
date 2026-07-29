@@ -10,6 +10,7 @@ from app.crud.meals import MealCRUD
 from app.crud.photo_analysis import PhotoAnalysisCRUD
 from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
+from app.cache.invalidation import invalidate_user_insights_cache
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from app.models.meal import Meal
 from app.models.photo import Photo
@@ -162,6 +163,9 @@ class MealService:
         except Exception:
             await asyncio.to_thread(delete_photo, new_filename, user_id=user_id_str)
             raise
+        # Mirror PhotoService.upload — otherwise GET /entries/{date} can keep
+        # serving a Redis-cached entry missing the clone for up to TTL (300s).
+        await invalidate_user_insights_cache(user_id, target_date)
         # Serialize via _photo_response: raw ORM return would make the response
         # model touch the unloaded diet_tags relationship (MissingGreenlet).
         return _photo_response(new_photo)
