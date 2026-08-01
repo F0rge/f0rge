@@ -8,14 +8,14 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/marrow/backend",
-        "command": "uvx ruff check ."
+        "command": "uvx ruff@0.16.1 check ."
       }
     },
     "format-check": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/marrow/backend",
-        "command": "uvx ruff format --check ."
+        "command": "uvx ruff@0.16.1 format --check ."
       }
     },
     "test": {

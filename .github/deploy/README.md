@@ -44,6 +44,10 @@ affected`, and delegates to Fly or Coolify executors.
 Disable Coolify GitHub App auto-deploy on dk apps once Actions webhooks are
 verified — deploy is CI-gated via `deploy-reusable.yml` on `main` push.
 
+Coolify steps **skip (success)** when webhook secrets are missing or Coolify
+returns `Deployments disabled` for the app — so a parked Pi app does not fail
+the marrow Fly release.
+
 After the first successful `main` deploy from f0rge, archive the standalone repo:
 `gh repo archive leothesouthafrican/dk_tag_printer`.
 
