@@ -93,8 +93,8 @@ jobs:
       - name: Pin Python 3.10
         run: uv python install 3.10
 
-      - name: Install ruff
-        run: uv tool install ruff@latest
+      - name: Install pinned ruff
+        run: uv tool install "ruff==$(tr -d '[:space:]' < .github/ruff-version)"
 
       - uses: actions/setup-node@v4
         with:
