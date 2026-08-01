@@ -32,9 +32,9 @@ Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
 
 Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-ui-dev`, `marrow-dev`, `marrow-mcp-dev` (dev).
 
-- `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml`, then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml`.
-- After CI green on push, the `deploy` job calls [`deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) (manifest + Nx affected → Fly or Coolify).
+- `develop` is the integration branch; PRs land there, run `.github/workflows/ci.yml`, then merge.
+- Promotion to prod is a PR `develop` → `main`, gated by the same CI (+ `playwright smoke`).
+- After CI green on push to `develop`/`main`, [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) calls [`deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) (manifest + Nx affected → Fly or Coolify).
 
 ## Fly apps
 
