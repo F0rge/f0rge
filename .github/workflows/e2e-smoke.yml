@@ -50,7 +50,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -108,9 +108,16 @@ jobs:
             exit 1
           fi
 
+      # Production Next build + next start (not `next dev`) so e2e matches deploy.
+      - name: Build frontend (production)
+        run: npm run build -w frontend
+        env:
+          API_URL: http://127.0.0.1:8000
+          NODE_ENV: production
+
       - name: Start frontend
         run: |
-          npm run dev -w frontend &
+          npm run start -w frontend &
           ready=false
           for i in $(seq 1 60); do
             if curl -sf http://127.0.0.1:3000/login; then
@@ -123,6 +130,10 @@ jobs:
             echo "Frontend failed to become healthy"
             exit 1
           fi
+        env:
+          API_URL: http://127.0.0.1:8000
+          PORT: 3000
+          NODE_ENV: production
 
       - name: Run Playwright smoke
         working-directory: apps/marrow/frontend
