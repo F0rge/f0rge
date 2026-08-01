@@ -13,11 +13,17 @@ components:
       config:
         develop: apps/marrow/backend/fly.toml
         main: apps/marrow/backend/fly.prod.toml
+      health_url:
+        develop: https://api-dev.marrow-health.com/api/v1/health
+        main: https://api.marrow-health.com/api/v1/health
     also_deploys:
       - role: mcp
         config:
           develop: apps/marrow/backend/fly.mcp.toml
           main: apps/marrow/backend/fly.mcp.prod.toml
+        health_url:
+          develop: https://marrow-mcp-dev.fly.dev/mcp
+          main: https://marrow-mcp.fly.dev/mcp
 
   marrow-frontend:
     nx: marrow-frontend
@@ -28,6 +34,9 @@ components:
       config:
         develop: apps/marrow/frontend/fly.toml
         main: apps/marrow/frontend/fly.prod.toml
+      health_url:
+        develop: https://app-dev.marrow-health.com/
+        main: https://marrow-health.com/
 
   dk-tag-printer-backend:
     nx: dk-tag-printer-backend

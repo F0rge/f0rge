@@ -18,21 +18,6 @@ export interface TrendsResponse {
   series: TrendSeries[]
 }
 
-export interface CorrelateRow {
-  feature: string
-  label: string
-  category: string
-  rho: number
-  n: number
-  best_lag: number
-}
-
-export interface CorrelatesResponse {
-  outcome: string
-  positive: CorrelateRow[]
-  negative: CorrelateRow[]
-}
-
 export interface TreatmentResponseRow {
   treatment_id: number
   name: string
@@ -51,18 +36,4 @@ export interface TreatmentResponseRow {
 export interface TreatmentResponseList {
   outcome: string
   rows: TreatmentResponseRow[]
-}
-
-export interface SleepNextDayPoint {
-  date: string
-  sleep_value: number
-  next_day_outcome: number
-}
-
-export interface SleepNextDayResponse {
-  outcome: string
-  metric: string
-  points: SleepNextDayPoint[]
-  rho: number | null
-  n: number
 }

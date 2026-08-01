@@ -2,9 +2,9 @@
 
 ## What this is
 
-Review checklist distilled from the qa-engineer's accumulated memory at `~/.claude/projects/-Users-leo-development-health-tracker/memory/` as of 2026-05-25. Loaded by the GitHub Actions PR-review bot (`anthropics/claude-code-action@v1`) on every PR. A fresh Claude reads this and the diff — that's the review.
+Review checklist for QA-relevant diffs in this repo, distilled from real incidents.
 
-The bot **cannot** run servers, click UIs, or talk to OpenRouter. Anything that requires those goes into the "Verification ticket for the human" section as a checklist for the qa-engineer locally.
+A reviewer reading only the diff **cannot** run servers, click UIs, or talk to OpenRouter. Anything that requires those goes into the "Verification ticket for the human" section as a checklist for the qa-engineer locally.
 
 ---
 
@@ -20,7 +20,7 @@ Cite the originating memory file in every block-level comment so future-Leo can 
 - **Datetime tz-strip at the schema boundary** — any new `Mapped[datetime]` or `Mapped[Optional[datetime]]` column without `timezone=True` must have a `@field_validator(..., mode="after")` that subtracts the UTC offset then drops tzinfo on every input path that can carry tz-aware values. Block on `.replace(tzinfo=None)` without prior subtraction (silent 2-hour corruption). Block on a new schema accepting a frontend datetime without a stripper. See `project_datetime_tz_convention.md`.
 - **Class-of-bug audit missing** — when a fix names a pattern (tz-aware bind, `scalar_one_or_none` on non-unique WHERE, `field || undefined` + `exclude_unset`, etc.), the PR must either fix every sibling occurrence in the same diff or open a tracked follow-up issue. Block if neither. See `feedback_audit_class_of_bug.md` (root-cause: 2026-05-17 two prod outages from missing sibling audit on `photos.meal_time`).
 - **`.env.example` not updated for new required env vars** — block on any new entry in `apps/marrow/backend/app/config.py` (e.g. `HEALTHTRACKER_RO_PASSWORD`, `SETTINGS_ENCRYPTION_KEY`, `MCP_READONLY_DATABASE_URL`) that isn't mirrored in `apps/marrow/backend/.env.example`. Redeploys silently break without it. See `mcp_server_issue_49_findings.md`.
-- **`ruff format` regression** — if a touched file used to pass `ruff format --check` and no longer does, block. CI enforces format via `nx run-many -t format-check` in `ci-develop.yml` / `ci-main.yml`.
+- **`ruff format` regression** — if a touched file used to pass `ruff format --check` and no longer does, block. CI enforces format via `nx run-many -t format-check` in `ci.yml`.
 - **Migration without Fly release_command path** — PRs adding files under `apps/marrow/backend/migrations/versions/` must leave `[deploy] release_command` in `fly.toml` / `fly.prod.toml` running alembic via `MIGRATION_DATABASE_URL`. See `.cursor/rules/infra.mdc`.
 - **pgvector extension order** — block any new test fixture or context that calls `Base.metadata.create_all` on a fresh Postgres without first executing `CREATE EXTENSION IF NOT EXISTS vector`. The `embedding.embedding VECTOR(1024)` column will crash `create_all`. See `project_byok_pgvector.md`.
 - **BYOK key resolution missed** — block any new AI/LLM call site that imports `settings.openrouter_api_key` directly instead of calling `resolve_llm_credentials(db)`. Lab extraction has this as an open follow-up; new code must not repeat it. See `project_byok_pgvector_gate.md`.
@@ -132,7 +132,7 @@ Per `project_datetime_tz_convention.md`:
 
 Real things in the repo that are *intentionally* in their current state — do not flag.
 
-- **`ruff format --check` is enforced in CI** via `nx run-many -t format-check` in `ci-develop.yml` and `ci-main.yml`. Flag format regressions on touched files.
+- **`ruff format --check` is enforced in CI** via `nx run-many -t format-check` in `ci.yml`. Flag format regressions on touched files.
 - **`ruff check` rule set is narrow (E/F/W minus E501/F821) by design.** The comment in `apps/marrow/backend/pyproject.toml` `[tool.ruff.lint]` says "Follow-up: enable I + UP + B + SIM + RUF." Do not flag unused-imports / sort-order issues as block-level — they're a pending widen pass.
 - **`/icons/icon-192.png` 404 on every page.** PWA icon not deployed yet. Known harmless. Do not flag.
 - **`/api/v1/auth/me` 401 on first page load.** Happens before login completes. Disappears after email/password login.

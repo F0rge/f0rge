@@ -53,12 +53,12 @@ Local dev:
 cd apps/dk/tag-printer && docker compose up --build   # :3002 / :8002
 ```
 
-Infra: [`apps/dk/tag-printer/.cursor/rules/infra.mdc`](apps/dk/tag-printer/.cursor/rules/infra.mdc). Coolify repoint after first `main` merge: `apps/dk/tag-printer/scripts/repoint-coolify.sh`.
+Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested — auto-loaded when working in that subtree). Coolify repoint after first `main` merge: `apps/dk/tag-printer/scripts/repoint-coolify.sh`.
 
 ## Branch workflow
 
-- `develop` is the integration branch; PRs land there, run `.github/workflows/ci-develop.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml` (same checks + prod-shaped frontend build).
+- `develop` is the integration branch; PRs land there, run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
+- Promotion to prod is a PR `develop` → `main`, gated by the same `.github/workflows/ci.yml` (same checks + prod-shaped frontend build).
 - After CI green on push, the manifest-driven deploy workflow routes marrow to Fly and dk tag printer to Coolify (main only).
 
 ## Running locally
@@ -118,9 +118,11 @@ Scoped rules in `.cursor/rules/` (auto-applied by glob):
 | `shared-libs.mdc` | `libs/**` — shared library conventions |
 | `backend.mdc` | `apps/marrow/backend/**/*.py`, migrations |
 | `frontend.mdc` | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
-| `infra.mdc` | Docker, compose, CI, deploy |
+| `infra.mdc` | `**/fly*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-compose*.yml` |
 | `qa-gate.mdc` | tests, workflows |
 | `data-pipelines.mdc` | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
+
+`.cursor/rules/` is read **only at workspace root** — nested `.cursor/rules/` in a subdirectory is silently ignored. Per-app instructions go in a nested `AGENTS.md` instead (see `apps/dk/tag-printer/AGENTS.md`).
 
 ## Sub-agents
 
@@ -136,7 +138,7 @@ End-to-end workflow (prompt or GitHub issue → develop → dev smoke → main P
 
 ## PR review context
 
-Bugbot/PR review playbooks live in `.cursor/review-context/`.
+Review playbooks live in `.cursor/review-context/`. **Nothing loads these automatically** — no workflow reads them and Bugbot has no `BUGBOT.md` pointing at them. When reviewing a PR, read `_shared/*.md` plus the playbook matching the diff's area (`fastapi-backend`, `frontend-dev`, `devops`, `qa-engineer`).
 
 ## Agent memory
 

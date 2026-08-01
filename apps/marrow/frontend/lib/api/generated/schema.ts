@@ -835,23 +835,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/insights/correlates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Correlates */
-        get: operations["get_correlates_api_v1_insights_correlates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/insights/treatment-response": {
         parameters: {
             query?: never;
@@ -869,15 +852,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/insights/sleep-next-day": {
+    "/api/v1/signals": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Sleep Next Day */
-        get: operations["get_sleep_next_day_api_v1_insights_sleep_next_day_get"];
+        /** Get Signals */
+        get: operations["get_signals_api_v1_signals_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1992,29 +1975,12 @@ export interface components {
             /** Handle */
             handle: string;
         };
-        /** CorrelateRow */
-        CorrelateRow: {
-            /** Feature */
-            feature: string;
-            /** Label */
-            label: string;
-            /** Category */
-            category: string;
-            /** Rho */
-            rho: number;
-            /** N */
-            n: number;
-            /** Best Lag */
-            best_lag: number;
-        };
-        /** CorrelatesResponse */
-        CorrelatesResponse: {
-            /** Outcome */
-            outcome: string;
-            /** Positive */
-            positive: components["schemas"]["CorrelateRow"][];
-            /** Negative */
-            negative: components["schemas"]["CorrelateRow"][];
+        /** DayStripsResponse */
+        DayStripsResponse: {
+            /** Exposed */
+            exposed: (number | null)[];
+            /** Unexposed */
+            unexposed: (number | null)[];
         };
         /** DeviceRegisterRequest */
         DeviceRegisterRequest: {
@@ -2181,6 +2147,15 @@ export interface components {
             source_version?: string | null;
             /** Archived */
             archived?: boolean | null;
+        };
+        /** DoseBinResponse */
+        DoseBinResponse: {
+            /** Label */
+            label: string;
+            /** N */
+            n: number;
+            /** Mean */
+            mean: number | null;
         };
         /**
          * EmbeddingSettingsUpdate
@@ -3498,6 +3473,174 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** SignalsDriverResponse */
+        SignalsDriverResponse: {
+            /** Feature */
+            feature: string;
+            /** Label */
+            label: string;
+            /** Class */
+            class: string;
+            /** Shape */
+            shape: string;
+            /** Theta Hat */
+            theta_hat: number | null;
+            /** Ci Low */
+            ci_low: number | null;
+            /** Ci High */
+            ci_high: number | null;
+            /** Tier */
+            tier: string;
+            /** Reason */
+            reason: string;
+            /** Exposed Days */
+            exposed_days: number;
+            /** Unexposed Days */
+            unexposed_days: number;
+            /** Exposed Runs */
+            exposed_runs: number;
+            /** Dose Table */
+            dose_table: components["schemas"]["DoseBinResponse"][];
+            day_strips: components["schemas"]["DayStripsResponse"];
+            /** Good Direction */
+            good_direction: string | null;
+            /** Se Ratio */
+            se_ratio: number | null;
+        };
+        /** SignalsMetaResponse */
+        SignalsMetaResponse: {
+            /** Days Total */
+            days_total: number;
+            /** Days Usable */
+            days_usable: number;
+            /** Warmup */
+            warmup: number;
+            /** Drop Reasons */
+            drop_reasons: {
+                [key: string]: number;
+            };
+            /** Insufficient Data */
+            insufficient_data: boolean;
+            /** Insufficient Reason */
+            insufficient_reason?: string | null;
+            /** Outcome */
+            outcome: string;
+            /** Start */
+            start?: string | null;
+            /** End */
+            end?: string | null;
+        };
+        /** SignalsMirrorResponse */
+        SignalsMirrorResponse: {
+            /** Feature */
+            feature: string;
+            /** Label */
+            label: string;
+            /** Rho */
+            rho: number | null;
+            /** N */
+            n: number;
+            /** Reason */
+            reason: string;
+        };
+        /** SignalsModelResponse */
+        SignalsModelResponse: {
+            /** Mae */
+            mae?: number | null;
+            /** Baseline Mae */
+            baseline_mae?: number | null;
+            /** Noise Floor Mae */
+            noise_floor_mae?: number | null;
+            /** Noise Sd */
+            noise_sd?: number | null;
+            /** Skill */
+            skill?: number | null;
+            /** Holdout Rmse */
+            holdout_rmse?: number | null;
+            /** Holdout R2 */
+            holdout_r2?: number | null;
+            /** R2 Basis */
+            r2_basis?: string | null;
+            /**
+             * Relearning
+             * @default false
+             */
+            relearning: boolean;
+            /** Relearning Message */
+            relearning_message?: string | null;
+        };
+        /** SignalsResponse */
+        SignalsResponse: {
+            meta: components["schemas"]["SignalsMetaResponse"];
+            model: components["schemas"]["SignalsModelResponse"];
+            today: components["schemas"]["SignalsTodayResponse"];
+            /** Drivers */
+            drivers: components["schemas"]["SignalsDriverResponse"][];
+            /** Mirrors */
+            mirrors: components["schemas"]["SignalsMirrorResponse"][];
+            unexplained: components["schemas"]["SignalsUnexplainedResponse"];
+            trends: components["schemas"]["SignalsTrendsResponse"];
+        };
+        /** SignalsTodayResponse */
+        SignalsTodayResponse: {
+            /** Baseline */
+            baseline?: number | null;
+            /** Contributions */
+            contributions?: components["schemas"]["TodayContributionResponse"][];
+            /** Predicted */
+            predicted?: number | null;
+            /** Band Low */
+            band_low?: number | null;
+            /** Band High */
+            band_high?: number | null;
+            /** Band Level */
+            band_level?: number | null;
+            /** Actual */
+            actual?: number | null;
+            /** Residual */
+            residual?: number | null;
+            /** Calibration Series */
+            calibration_series?: components["schemas"]["TodayCalibrationPointResponse"][];
+        };
+        /** SignalsTrendSeriesResponse */
+        SignalsTrendSeriesResponse: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Category */
+            category: string;
+            /** Points */
+            points: components["schemas"]["TrendPoint"][];
+            /** Current */
+            current: number | null;
+            /** Rolling Avg 7 */
+            rolling_avg_7: number | null;
+            /** Delta 30D */
+            delta_30d: number | null;
+            /** Good Direction */
+            good_direction: string | null;
+        };
+        /** SignalsTrendsResponse */
+        SignalsTrendsResponse: {
+            /** Series */
+            series: components["schemas"]["SignalsTrendSeriesResponse"][];
+        };
+        /** SignalsUnexplainedResponse */
+        SignalsUnexplainedResponse: {
+            /** Unexplained Bad */
+            unexplained_bad: components["schemas"]["UnexplainedEpisodeResponse"][];
+            /** Unexplained Good */
+            unexplained_good: components["schemas"]["UnexplainedEpisodeResponse"][];
+            /** Couldnt Score */
+            couldnt_score: string[];
+            /** Relearning */
+            relearning: boolean;
+            /** Relearning Message */
+            relearning_message: string;
+            /** Tracker Proposals */
+            tracker_proposals: components["schemas"]["TrackerProposalResponse"][];
+        };
         /** SignupRequest */
         SignupRequest: {
             /** Handle */
@@ -3509,28 +3652,6 @@ export interface components {
             email: string;
             /** Password */
             password: string;
-        };
-        /** SleepNextDayPoint */
-        SleepNextDayPoint: {
-            /** Date */
-            date: string;
-            /** Sleep Value */
-            sleep_value: number;
-            /** Next Day Outcome */
-            next_day_outcome: number;
-        };
-        /** SleepNextDayResponse */
-        SleepNextDayResponse: {
-            /** Outcome */
-            outcome: string;
-            /** Metric */
-            metric: string;
-            /** Points */
-            points: components["schemas"]["SleepNextDayPoint"][];
-            /** Rho */
-            rho: number | null;
-            /** N */
-            n: number;
         };
         /** SupplementCatalogItemCreate */
         SupplementCatalogItemCreate: {
@@ -3615,6 +3736,26 @@ export interface components {
             /** Detail */
             detail?: string | null;
         };
+        /** TodayCalibrationPointResponse */
+        TodayCalibrationPointResponse: {
+            /** Date */
+            date: string;
+            /** Predicted */
+            predicted: number;
+            /** Actual */
+            actual: number | null;
+        };
+        /** TodayContributionResponse */
+        TodayContributionResponse: {
+            /** Label */
+            label: string;
+            /** Detail */
+            detail?: string | null;
+            /** Display Value */
+            display_value: number;
+            /** Driver Id */
+            driver_id: string;
+        };
         /** TrackerCreate */
         TrackerCreate: {
             /** Name */
@@ -3633,6 +3774,15 @@ export interface components {
              * @default 0
              */
             position: number;
+        };
+        /** TrackerProposalResponse */
+        TrackerProposalResponse: {
+            /** Tracker Id */
+            tracker_id: string;
+            /** Label */
+            label: string;
+            /** Days Covered */
+            days_covered: number;
         };
         /** TrackerResponse */
         TrackerResponse: {
@@ -3916,6 +4066,19 @@ export interface components {
         TrendsResponse: {
             /** Series */
             series: components["schemas"]["TrendSeries"][];
+        };
+        /** UnexplainedEpisodeResponse */
+        UnexplainedEpisodeResponse: {
+            /** Dates */
+            dates: string[];
+            /** Start Date */
+            start_date: string;
+            /** End Date */
+            end_date: string;
+            /** Direction */
+            direction: string;
+            /** Max Abs Residual */
+            max_abs_residual: number;
         };
         /** UnreadCountResponse */
         UnreadCountResponse: {
@@ -6150,43 +6313,6 @@ export interface operations {
             };
         };
     };
-    get_correlates_api_v1_insights_correlates_get: {
-        parameters: {
-            query: {
-                outcome: string;
-                start?: string | null;
-                end?: string | null;
-                category?: string | null;
-                min_n?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                ht_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CorrelatesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_treatment_response_api_v1_insights_treatment_response_get: {
         parameters: {
             query: {
@@ -6220,11 +6346,10 @@ export interface operations {
             };
         };
     };
-    get_sleep_next_day_api_v1_insights_sleep_next_day_get: {
+    get_signals_api_v1_signals_get: {
         parameters: {
             query: {
                 outcome: string;
-                metric: string;
                 start?: string | null;
                 end?: string | null;
             };
@@ -6242,7 +6367,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SleepNextDayResponse"];
+                    "application/json": components["schemas"]["SignalsResponse"];
                 };
             };
             /** @description Validation Error */

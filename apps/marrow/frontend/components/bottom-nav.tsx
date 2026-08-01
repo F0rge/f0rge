@@ -12,7 +12,7 @@ const NAV_ITEMS = [
   { href: '/history', label: 'History', icon: CalendarDays },
   { href: '/treatments', label: 'Treatments', icon: Pill },
   { href: '/labs', label: 'Labs', icon: Microscope },
-  { href: '/insights', label: 'Insights', icon: TrendingUp },
+  { href: '/signals', label: 'Signals', icon: TrendingUp },
   // icon: null → renders the user's avatar (see the map below)
   { href: '/profile', label: 'Profile', icon: null },
 ] as const

@@ -1,8 +1,17 @@
-# Lockfiles / dependency graphs (huge, low signal for Agent)
-package-lock.json
-**/uv.lock
-**/pnpm-lock.yaml
-**/yarn.lock
+# .cursorignore BLOCKS ACCESS — Agent/Tab/Inline-Edit reads and @-mentions all fail.
+# Only list things the agent must never read. Anything merely large or low-signal
+# belongs in .cursorindexingignore (kept out of the index, still readable on demand).
+# Caveat: terminal + MCP tools bypass this. It is not a security boundary.
+
+# Secrets
+**/.env
+**/.env.*
+!**/.env.example
+.cloudflared/
+
+# Personal health data (PII)
+apps/marrow/backend/photos/
+apps/marrow/backend/lab_attachments/
 
 # Dependency and build outputs
 node_modules/
@@ -16,7 +25,7 @@ out/
 *.tsbuildinfo
 *.egg-info/
 
-# Caches and test runners
+# Caches
 __pycache__/
 .pytest_cache/
 .mypy_cache/
@@ -24,26 +33,11 @@ __pycache__/
 .eslintcache/
 .parcel-cache/
 .turbo/
-.playwright*/
 coverage/
 htmlcov/
 .nyc_output/
 
-# Binary / media / local artifacts (expensive if inlined)
-apps/marrow/backend/photos/
-apps/marrow/backend/lab_attachments/
-qa-screenshots/
-**/*.png
-**/*.jpg
-**/*.jpeg
-**/*.webp
-**/*.gif
-**/*.pdf
+# Archives
 **/*.zip
 **/*.tar
 **/*.gz
-
-# Runtime logs / dumps
-**/*.log
-apps/marrow/backend/scripts/extraction_audit.jsonl
-apps/marrow/backend/scripts/import_labs.log

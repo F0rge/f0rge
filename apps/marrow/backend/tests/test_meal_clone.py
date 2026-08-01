@@ -582,3 +582,44 @@ async def test_recent_endpoint_requires_auth(
 ) -> None:
     resp = await async_client.get("/api/v1/meals/recent")
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# clone() — Redis entry cache invalidation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("memory_redis")
+async def test_clone_busts_stale_entry_cache(
+    async_db: AsyncSession,
+    storage,
+    memory_redis: dict,
+) -> None:
+    """Warm Redis with the target entry, then clone — GET must include the new photo.
+
+    Reproduces the prod "Log again" bug: without invalidation, get_entry keeps
+    serving the pre-clone cached payload until TTL or an unrelated write.
+    """
+    from app.cache.keys import entry_key
+    from app.services.entries import EntryService
+    from f0rge_db.tenant import current_user_id
+
+    src_entry = await _ensure_entry(async_db, SRC_DAY)
+    src = await _add_meal(async_db, src_entry, f"{SRC_DAY}_photo-1.jpg")
+    await _ensure_entry(async_db, TARGET_DAY)
+
+    svc = EntryService(async_db)
+    before = await svc.get_entry(TARGET_DAY)
+    assert before.photos == []
+    cache_key = entry_key(current_user_id(), TARGET_DAY)
+    assert cache_key in memory_redis["store"]
+
+    # Poison the cache with the photo-less payload so a miss would look like a
+    # hit if clone failed to invalidate.
+    memory_redis["store"][cache_key] = before.model_dump_json()
+
+    cloned = await MealService(async_db).clone(TARGET_DAY, src.id)
+
+    assert cache_key not in memory_redis["store"]
+    after = await svc.get_entry(TARGET_DAY)
+    assert any(p.id == cloned.id for p in after.photos)

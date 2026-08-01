@@ -1,13 +1,14 @@
-name: CI (develop)
+name: CI
 
-# PR + push + workflow_dispatch: detect → backend/frontend → ci gate → deploy.
+# PR + push + workflow_dispatch on develop/main: detect → backend/frontend → ci gate → deploy.
 # Manual deploy cannot skip lint/test/build — workflow_dispatch runs CI first.
+# The aggregate gate job MUST stay named `ci` — the main-pr-gate ruleset requires that context.
 
 on:
   pull_request:
-    branches: [develop]
+    branches: [develop, main]
   push:
-    branches: [develop]
+    branches: [develop, main]
   workflow_dispatch:
     inputs:
       component:
@@ -20,11 +21,15 @@ permissions:
   contents: read
   actions: read
 
+# PR → target branch, push/dispatch → the branch itself.
+env:
+  TARGET_BRANCH: ${{ github.base_ref || github.ref_name }}
+
 jobs:
   detect:
     name: detect
     concurrency:
-      group: ci-develop-${{ github.ref }}
+      group: ci-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -40,7 +45,7 @@ jobs:
 
       - uses: nrwl/nx-set-shas@v4
         with:
-          main-branch-name: develop
+          main-branch-name: ${{ env.TARGET_BRANCH }}
 
       - uses: actions/setup-node@v4
         with:
@@ -78,7 +83,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.backend == 'true'
     concurrency:
-      group: ci-develop-backend-${{ github.ref }}
+      group: ci-backend-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -86,10 +91,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: nrwl/nx-set-shas@v4
-        with:
-          main-branch-name: develop
 
       - uses: astral-sh/setup-uv@v3
         with:
@@ -151,7 +152,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.frontend == 'true'
     concurrency:
-      group: ci-develop-frontend-${{ github.ref }}
+      group: ci-frontend-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -159,10 +160,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: nrwl/nx-set-shas@v4
-        with:
-          main-branch-name: develop
 
       - uses: actions/setup-node@v4
         with:
@@ -187,6 +184,13 @@ jobs:
       - name: Pin Python 3.10
         run: uv python install 3.10
 
+      # main only: prod-shaped build (was the sole difference between ci-main and ci-develop).
+      - name: Prod-shaped build env
+        if: env.TARGET_BRANCH == 'main'
+        run: |
+          echo "API_URL=http://backend:8000" >> "$GITHUB_ENV"
+          echo "NODE_ENV=production" >> "$GITHUB_ENV"
+
       - name: nx run (frontend)
         env:
           TS_PROJECTS: ${{ needs.detect.outputs.ts_projects }}
@@ -197,7 +201,7 @@ jobs:
     needs: [detect, backend, frontend]
     if: always()
     concurrency:
-      group: ci-develop-${{ github.ref }}
+      group: ci-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -231,15 +235,16 @@ jobs:
       always() &&
       needs.ci.result == 'success' &&
       (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    # Deploy only ever runs on push/dispatch, so ref_name is the deployed branch.
+    # Anything other than main deploys the develop environment (dispatch parity).
     concurrency:
-      group: fly-deploy-develop
+      group: fly-deploy-${{ github.ref_name == 'main' && 'main' || 'develop' }}
       cancel-in-progress: false
     uses: ./.github/workflows/deploy-reusable.yml
     with:
-      environment: develop
+      environment: ${{ github.ref_name == 'main' && 'main' || 'develop' }}
       sha: ${{ github.sha }}
-      base_branch: develop
-      workflow_id: ci-develop.yml
+      base_branch: ${{ github.ref_name == 'main' && 'main' || 'develop' }}
       component: ${{ github.event_name == 'workflow_dispatch' && inputs.component || 'auto' }}
     secrets:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

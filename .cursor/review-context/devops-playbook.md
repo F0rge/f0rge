@@ -2,7 +2,7 @@
 
 ## What this is
 
-Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker, Fly deploy, or migrations. Scan the diff, apply the rules below, return JSON findings.
+Review checklist for infrastructure diffs. Load this when reviewing a PR that touches infrastructure, CI, Docker, Fly deploy, or migrations. Scan the diff, apply the rules below, return JSON findings.
 
 ## Scope — files YOU review
 
@@ -35,8 +35,8 @@ Used by the PR review bot when an incoming PR touches infrastructure, CI, Docker
 
 | Env | Branch | Apps | Workflow |
 |---|---|---|---|
-| Dev | `develop` | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` | `ci-develop.yml` (deploy job) |
-| Prod | `main` | `marrow`, `marrow-mcp`, `marrow-ui` | `ci-main.yml` (deploy job) |
+| Dev | `develop` | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` | `ci.yml` (deploy job) |
+| Prod | `main` | `marrow`, `marrow-mcp`, `marrow-ui` | `ci.yml` (deploy job) |
 
 Deploy order: API (alembic via `release_command`) → MCP (serial); frontend parallel. Jobs: `plan`, `deploy api`, `deploy mcp`, `deploy frontend`, `smoke`. `workflow_dispatch` supports `component=all|api|mcp|frontend`.
 

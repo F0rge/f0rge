@@ -5,7 +5,7 @@ description: Plan and ship a feature or fix end-to-end from a short prompt or Gi
 
 # Ship Feature — Idea/Issue → Develop → Dev Smoke → Main PR
 
-Orchestrator workflow for health-tracker. Read `AGENTS.md`, `.cursor/rules/orchestration.mdc`, and `~/.cursor/rules/leo-system-wide.mdc` before starting.
+Orchestrator workflow for f0rge. Read `AGENTS.md`, `.cursor/rules/orchestration.mdc`, and `~/.cursor/rules/leo-system-wide.mdc` before starting.
 
 **Intake:** either a GitHub issue (`gh issue view N`) or a short user prompt. Turn prompts into a one-paragraph problem statement + acceptance criteria before planning.
 

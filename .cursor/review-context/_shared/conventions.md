@@ -48,7 +48,7 @@ Automated checks (lint, pytest, build, typecheck) are NOT a complete gate. The P
 - At least one error path was driven and the UI failed gracefully.
 - Backend logs were tailed during the test for hidden 500s.
 
-The PR-review bot CANNOT do this. Its job is to produce a "Verification ticket" — a bulleted checklist the human must run before clicking Merge. See `feedback_qa_e2e_live_server.md`.
+A diff-only reviewer CANNOT do this. Its job is to produce a "Verification ticket" — a bulleted checklist the human must run before clicking Merge. See `feedback_qa_e2e_live_server.md`.
 
 ## No mocks at the seam under test
 
@@ -76,8 +76,8 @@ Canonical playbooks: `.cursor/review-context/`.
 ## Branch & PR conventions
 
 - `develop` is the default integration branch.
-- PRs land on `develop`, run `.github/workflows/ci-develop.yml`, then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by `.github/workflows/ci-main.yml`.
+- PRs land on `develop`, run `.github/workflows/ci.yml`, then merge.
+- Promotion to prod is a PR `develop` → `main`, gated by the same `.github/workflows/ci.yml` (prod-shaped frontend build on `main`).
 - Feature branches: `feat/<descriptive-name>`, `fix/<descriptive-name>`, `chore/<descriptive-name>`.
 - Direct push to `main` is only acceptable for single-file edits on personal config.
 

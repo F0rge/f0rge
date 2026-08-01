@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from f0rge_core.exceptions import ValidationError
 from app.models.entry import Entry
-from app.models.health_metrics import HealthMetric
 from app.models.symptom_catalog import SymptomCatalogItem
 from app.models.treatment import Treatment
 from app.services.insights import InsightsService
@@ -51,29 +50,6 @@ async def _add_entry(
     await db.commit()
     await db.refresh(entry)
     return entry
-
-
-async def _add_hm(
-    db: AsyncSession,
-    date: datetime.date,
-    hrv_mean: float | None = None,
-    resting_hr: float | None = None,
-    sleep_efficiency: float | None = None,
-    sleep_rem_min: float | None = None,
-    sleep_deep_min: float | None = None,
-) -> HealthMetric:
-    hm = HealthMetric(
-        date=date,
-        hrv_mean=hrv_mean,
-        resting_hr=resting_hr,
-        sleep_efficiency=sleep_efficiency,
-        sleep_rem_min=sleep_rem_min,
-        sleep_deep_min=sleep_deep_min,
-    )
-    db.add(hm)
-    await db.commit()
-    await db.refresh(hm)
-    return hm
 
 
 async def _add_sym_item(
@@ -167,103 +143,6 @@ async def test_trends_delta_30d_computed(async_db: AsyncSession) -> None:
     assert overall_series.delta_30d is not None
 
 
-# ── compute_correlates ────────────────────────────────────────────────────────
-
-
-async def test_correlates_invalid_outcome_raises(async_db: AsyncSession) -> None:
-    with pytest.raises(ValidationError):
-        await InsightsService(async_db).compute_correlates(
-            None, None, "not_a_real_outcome", None, 3
-        )
-
-
-async def test_correlates_hrv_correlates_with_overall(
-    async_db: AsyncSession,
-) -> None:
-    """HRV mean seeded to inversely track overall — higher HRV → lower overall."""
-    n_days = 20
-    for i in range(n_days):
-        overall_val = (i % 5) + 1
-        hrv_val = float(6 - overall_val) * 10  # inverse: overall=1 → hrv=50
-        await _add_entry(
-            async_db,
-            _BASE_DATE + datetime.timedelta(days=i),
-            overall=overall_val,
-        )
-        await _add_hm(
-            async_db,
-            _BASE_DATE + datetime.timedelta(days=i),
-            hrv_mean=hrv_val,
-        )
-
-    result = await InsightsService(async_db).compute_correlates(
-        _BASE_DATE,
-        _BASE_DATE + datetime.timedelta(days=n_days - 1),
-        "overall",
-        None,
-        min_n=5,
-    )
-    features = {r.feature: r for r in result.negative}
-    assert "hm_hrv_mean" in features
-    assert features["hm_hrv_mean"].rho < -0.5
-
-
-async def test_correlates_lag_selection(async_db: AsyncSession) -> None:
-    """Feature at t-2 should be picked as best_lag=2 when it's the strongest signal."""
-    n_days = 30
-    signal = [float((i % 7) + 1) for i in range(n_days + 2)]
-
-    for i in range(n_days + 2):
-        d = _BASE_DATE + datetime.timedelta(days=i)
-        overall_val = int(signal[i - 2]) if i >= 2 else 3
-        await _add_entry(async_db, d, overall=overall_val)
-        await _add_hm(async_db, d, hrv_mean=signal[i])
-
-    result = await InsightsService(async_db).compute_correlates(
-        _BASE_DATE,
-        _BASE_DATE + datetime.timedelta(days=n_days + 1),
-        "overall",
-        "metric",
-        min_n=5,
-    )
-
-    hrv_rows = [r for r in result.positive + result.negative if r.feature == "hm_hrv_mean"]
-    if hrv_rows:
-        assert hrv_rows[0].best_lag == 2
-
-
-async def test_correlates_category_filter(async_db: AsyncSession) -> None:
-    """category filter should restrict results to that category."""
-    for i in range(20):
-        await _add_entry(async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i % 5)
-        await _add_hm(async_db, _BASE_DATE + datetime.timedelta(days=i), hrv_mean=float(i))
-
-    result = await InsightsService(async_db).compute_correlates(
-        _BASE_DATE,
-        _BASE_DATE + datetime.timedelta(days=19),
-        "overall",
-        "sleep",  # only sleep category
-        min_n=5,
-    )
-    for row in result.positive + result.negative:
-        assert row.category == "sleep"
-
-
-async def test_correlates_sym_outcome_allowed(async_db: AsyncSession) -> None:
-    await _add_sym_item(async_db, "brain_fog", "Brain Fog")
-    for i in range(20):
-        await _add_entry(
-            async_db,
-            _BASE_DATE + datetime.timedelta(days=i),
-            symptoms_json={"brain_fog": i % 5},
-        )
-    # Should not raise — sym_ outcomes are in the whitelist
-    result = await InsightsService(async_db).compute_correlates(
-        None, None, "sym_brain_fog", None, min_n=3
-    )
-    assert result.outcome == "sym_brain_fog"
-
-
 # ── compute_treatment_response ────────────────────────────────────────────────
 
 
@@ -345,100 +224,3 @@ async def test_treatment_response_no_after_window_when_ongoing(
     assert row.end_date is None
     assert row.after_mean is None
     assert row.after_n == 0
-
-
-# ── compute_sleep_next_day ────────────────────────────────────────────────────
-
-
-async def test_sleep_next_day_invalid_outcome_raises(
-    async_db: AsyncSession,
-) -> None:
-    with pytest.raises(ValidationError):
-        await InsightsService(async_db).compute_sleep_next_day(
-            None, None, "not_real", "hm_sleep_rem_min"
-        )
-
-
-async def test_sleep_next_day_invalid_metric_raises(
-    async_db: AsyncSession,
-) -> None:
-    for i in range(5):
-        await _add_entry(async_db, _BASE_DATE + datetime.timedelta(days=i), overall=i)
-    with pytest.raises(ValidationError):
-        await InsightsService(async_db).compute_sleep_next_day(
-            None, None, "overall", "hm_invalid_metric"
-        )
-
-
-async def test_sleep_next_day_pairs_correctly(async_db: AsyncSession) -> None:
-    """Each point pairs sleep[i] with outcome[i+1]. Last sleep row has no pair."""
-    n_days = 10
-    for i in range(n_days):
-        d = _BASE_DATE + datetime.timedelta(days=i)
-        await _add_entry(async_db, d, overall=i + 1)
-        await _add_hm(async_db, d, sleep_rem_min=float(60 + i * 2))
-
-    result = await InsightsService(async_db).compute_sleep_next_day(
-        _BASE_DATE,
-        _BASE_DATE + datetime.timedelta(days=n_days - 1),
-        "overall",
-        "hm_sleep_rem_min",
-    )
-    assert len(result.points) == n_days - 1
-
-    # First point: sleep on day 0, outcome on day 1
-    first = result.points[0]
-    assert first.sleep_value == pytest.approx(60.0)
-    assert first.next_day_outcome == pytest.approx(2.0)  # overall on day 1
-
-
-async def test_sleep_next_day_orphaned_last_day_dropped(
-    async_db: AsyncSession,
-) -> None:
-    """When the last sleep metric has no following entry, the pair is dropped."""
-    for i in range(5):
-        d = _BASE_DATE + datetime.timedelta(days=i)
-        await _add_entry(async_db, d, overall=i + 1)
-        await _add_hm(async_db, d, sleep_rem_min=60.0)
-    # Add a health metric on day 5 with NO corresponding entry
-    await _add_hm(async_db, _BASE_DATE + datetime.timedelta(days=5), sleep_rem_min=70.0)
-
-    result = await InsightsService(async_db).compute_sleep_next_day(
-        _BASE_DATE,
-        _BASE_DATE + datetime.timedelta(days=5),
-        "overall",
-        "hm_sleep_rem_min",
-    )
-    for pt in result.points:
-        assert pt.next_day_outcome is not None
-        assert pt.sleep_value is not None
-
-
-async def test_correlates_sick_is_valid_outcome(
-    async_db: AsyncSession,
-) -> None:
-    """sick is a core outcome; compute_correlates must accept it without raising."""
-    for i in range(15):
-        d = _BASE_DATE + datetime.timedelta(days=i)
-        await _add_entry(async_db, d)
-
-    # Must not raise ValidationError
-    result = await InsightsService(async_db).compute_correlates(None, None, "sick", None, min_n=3)
-    assert result.outcome == "sick"
-
-
-async def test_sleep_next_day_rho_returned(async_db: AsyncSession) -> None:
-    # Strong synthetic correlation
-    for i in range(15):
-        d = _BASE_DATE + datetime.timedelta(days=i)
-        await _add_entry(async_db, d, overall=i + 1)
-        await _add_hm(async_db, d, sleep_efficiency=float(50 + i * 2))
-
-    result = await InsightsService(async_db).compute_sleep_next_day(
-        _BASE_DATE,
-        _BASE_DATE + datetime.timedelta(days=14),
-        "overall",
-        "hm_sleep_efficiency",
-    )
-    assert result.rho is not None
-    assert result.n >= 5

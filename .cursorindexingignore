@@ -1,0 +1,26 @@
+# Excluded from the codebase index ONLY — these stay readable by Agent on demand.
+# Use this (not .cursorignore) for anything the agent may legitimately need to open
+# but that would pollute semantic search: QA evidence, logs, lockfiles, media.
+
+# Lockfiles / dependency graphs (huge, low signal — but readable when checking versions)
+package-lock.json
+**/uv.lock
+**/pnpm-lock.yaml
+**/yarn.lock
+
+# QA evidence — the agent produces these and must read them back.
+# qa-gate.mdc Phase 4b and ship-feature Phase 6 both depend on this.
+qa-screenshots/
+.playwright*/
+
+# Media
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.webp
+**/*.gif
+**/*.pdf
+
+# Runtime logs / dumps — readable for debugging, never indexed
+**/*.log
+apps/marrow/backend/scripts/extraction_audit.jsonl

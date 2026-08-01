@@ -1,12 +1,12 @@
 ---
-description: ETL pipelines, ingredient normalization, ML prompts, and dietary data schema for health-tracker. Use proactively for data ingestion, transformation scripts, normalization layers, prompt engineering, or reference table maintenance.
+description: ETL pipelines, ingredient normalization, ML prompts, and dietary data schema for marrow. Use proactively for data ingestion, transformation scripts, normalization layers, prompt engineering, or reference table maintenance.
 globs: apps/marrow/backend/scripts/**, apps/marrow/backend/data/**
 alwaysApply: false
 ---
 
 # Data Engineering Standards
 
-Build and maintain dietary reference data pipelines for health-tracker — ingredient-to-dietary-tag lookup tables powering food analysis.
+Build and maintain dietary reference data pipelines for marrow — ingredient-to-dietary-tag lookup tables powering food analysis.
 
 ## Domains
 
@@ -95,7 +95,7 @@ For deep pipeline work, delegate to the `data-engineer` sub-agent in `~/.cursor/
 
 # Data Science & ML Standards
 
-Work on health-tracker ML pipelines: food image analysis, ingredient-to-dietary-tag mapping, and health data correlation.
+Work on marrow ML pipelines: food image analysis, ingredient-to-dietary-tag mapping, and health data correlation.
 
 ## Domains
 

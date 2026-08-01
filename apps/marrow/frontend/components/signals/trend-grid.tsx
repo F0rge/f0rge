@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { useInsightsTrends, useMarkerHistory } from '@/lib/api/hooks'
-import { TrendCard } from './trend-card'
-import type { TrendSeries } from '@/lib/api/types'
+import { useMarkerHistory } from '@/lib/api/hooks'
+import type { SignalsTrendSeries } from '@/lib/api/types/signals'
+import { SignalsTrendCard } from './trend-card'
 
 const PINNED_KEY = 'labs.pinnedMarkers'
 
@@ -14,8 +14,6 @@ function readPinned(): string[] {
     const raw = localStorage.getItem(PINNED_KEY)
     return raw ? (JSON.parse(raw) as string[]) : []
   } catch {
-    // Intentional swallow — same reasoning as marker-history-chart.tsx's
-    // getPinned(), which owns writes to this same PINNED_KEY.
     return []
   }
 }
@@ -25,11 +23,7 @@ function usePinnedMarkers(): string[] {
   return pinned
 }
 
-interface PinnedMarkerCardProps {
-  canonicalName: string
-}
-
-function PinnedMarkerCard({ canonicalName }: PinnedMarkerCardProps) {
+function PinnedMarkerCard({ canonicalName }: { canonicalName: string }) {
   const { data: points, isLoading } = useMarkerHistory(canonicalName)
 
   if (isLoading) {
@@ -44,7 +38,7 @@ function PinnedMarkerCard({ canonicalName }: PinnedMarkerCardProps) {
   if (numericPoints.length === 0) return null
 
   const latest = numericPoints[numericPoints.length - 1]
-  const trendSeries: TrendSeries = {
+  const trendSeries: SignalsTrendSeries = {
     key: canonicalName,
     label: canonicalName,
     category: 'lab',
@@ -56,37 +50,20 @@ function PinnedMarkerCard({ canonicalName }: PinnedMarkerCardProps) {
     current: latest.value,
     rolling_avg_7: null,
     delta_30d: null,
+    good_direction: null,
   }
 
-  return <TrendCard series={trendSeries} />
+  return <SignalsTrendCard series={trendSeries} />
 }
 
 interface Props {
-  start: string
-  end: string
+  series: SignalsTrendSeries[]
 }
 
-export function TrendGrid({ start, end }: Props) {
-  const { data, isLoading, isError } = useInsightsTrends(start, end)
+export function SignalsTrendGrid({ series }: Props) {
   const pinnedMarkers = usePinnedMarkers()
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
-  if (isError) {
-    return (
-      <p className="py-4 text-sm text-destructive">
-        Failed to load trend data.
-      </p>
-    )
-  }
-
-  if (!data || data.series.length === 0) {
+  if (series.length === 0) {
     return (
       <p className="py-4 text-sm text-muted-foreground">No trend data available.</p>
     )
@@ -96,17 +73,19 @@ export function TrendGrid({ start, end }: Props) {
     <div className="space-y-4">
       {pinnedMarkers.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Pinned lab markers</p>
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Pinned lab markers
+          </p>
+          <div className="grid grid-cols-2 gap-2">
             {pinnedMarkers.map((canonical) => (
               <PinnedMarkerCard key={canonical} canonicalName={canonical} />
             ))}
           </div>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
-        {data.series.map((s) => (
-          <TrendCard key={s.key} series={s} />
+      <div className="grid grid-cols-2 gap-2">
+        {series.map((s) => (
+          <SignalsTrendCard key={s.key} series={s} />
         ))}
       </div>
     </div>

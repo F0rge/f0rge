@@ -35,7 +35,7 @@ jobs:
       - name: Install deps
         run: |
           npm ci
-          for p in marrow-backend f0rge-core f0rge-db f0rge-storage f0rge-testing dk-tag-printer-backend; do
+          for p in $(npx nx show projects --projects tag:platform:py --json | jq -r '.[]'); do
             ROOT=$(npx nx show project "$p" --json | jq -r '.root')
             uv sync --frozen --project "$ROOT"
           done

@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { CalendarIcon } from 'lucide-react'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@f0rge/ui'
-import {
+  Label,
   Select,
   SelectContent,
   SelectGroup,
@@ -18,8 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@f0rge/ui'
-import { Button } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
 import { useSymptomCatalog } from '@/lib/api/hooks'
 
 const CORE_OUTCOMES = [
@@ -39,7 +37,7 @@ interface Props {
   onOutcomeChange: (v: string) => void
 }
 
-export function HeaderControls({
+export function SignalsHeaderControls({
   start,
   end,
   outcome,
@@ -50,7 +48,6 @@ export function HeaderControls({
   const [dateOpen, setDateOpen] = useState(false)
   const [draftStart, setDraftStart] = useState(start)
   const [draftEnd, setDraftEnd] = useState(end)
-
   const { data: symptomCatalog } = useSymptomCatalog()
 
   const symptomOutcomes =
@@ -71,7 +68,6 @@ export function HeaderControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Date range picker */}
       <Dialog open={dateOpen} onOpenChange={setDateOpen}>
         <DialogTrigger
           render={
@@ -111,8 +107,12 @@ export function HeaderControls({
         </DialogContent>
       </Dialog>
 
-      {/* Outcome selector */}
-      <Select value={outcome} onValueChange={(v) => { if (v !== null) onOutcomeChange(v) }}>
+      <Select
+        value={outcome}
+        onValueChange={(v) => {
+          if (v !== null) onOutcomeChange(v)
+        }}
+      >
         <SelectTrigger className="h-8 w-auto text-xs">
           <SelectValue>{selectedLabel}</SelectValue>
         </SelectTrigger>
@@ -137,7 +137,6 @@ export function HeaderControls({
           )}
         </SelectContent>
       </Select>
-
     </div>
   )
 }
