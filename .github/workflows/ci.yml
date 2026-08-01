@@ -41,14 +41,7 @@ jobs:
         with:
           main-branch-name: ${{ env.TARGET_BRANCH }}
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install root deps
-        run: npm ci
+      - uses: ./.github/actions/setup-node-workspace
 
       - name: Resolve affected projects
         id: affected
@@ -86,24 +79,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: ./.github/actions/setup-python-uv
         with:
-          enable-cache: true
+          install-ruff: "true"
 
-      - name: Pin Python 3.10
-        run: uv python install 3.10
-
-      - name: Install pinned ruff
-        run: uv tool install "ruff==$(tr -d '[:space:]' < .github/ruff-version)"
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install root deps
-        run: npm ci
+      - uses: ./.github/actions/setup-node-workspace
 
       - name: Install backend deps
         env:
@@ -155,14 +135,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install root deps
-        run: npm ci
+      - uses: ./.github/actions/setup-node-workspace
 
       - name: npm audit (high severity, production deps)
         run: npm audit --omit=dev --audit-level=high
@@ -171,12 +144,7 @@ jobs:
         run: |
           ! grep -rn "from ['\"].*apps/" libs/ --include='*.ts' --include='*.tsx'
 
-      - uses: astral-sh/setup-uv@v3
-        with:
-          enable-cache: true
-
-      - name: Pin Python 3.10
-        run: uv python install 3.10
+      - uses: ./.github/actions/setup-python-uv
 
       # main only: prod-shaped build (was the sole difference between ci-main and ci-develop).
       - name: Prod-shaped build env

@@ -16,25 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: ./.github/actions/setup-python-uv
         with:
-          enable-cache: true
+          install-ruff: "true"
 
-      - name: Pin Python 3.10
-        run: uv python install 3.10
+      - uses: ./.github/actions/setup-node-workspace
 
-      - name: Install pinned ruff
-        run: uv tool install "ruff==$(tr -d '[:space:]' < .github/ruff-version)"
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install deps
+      - name: Install Python project deps
         run: |
-          npm ci
           for p in $(npx nx show projects --projects tag:platform:py --json | jq -r '.[]'); do
             ROOT=$(npx nx show project "$p" --json | jq -r '.root')
             uv sync --frozen --project "$ROOT"

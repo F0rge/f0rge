@@ -55,8 +55,9 @@ jobs:
             ENV="${{ inputs.environment }}"
             SHA="${{ inputs.sha }}"
             COMPONENT="${{ inputs.component }}"
+            # Empty SHA → tip of the ref this workflow was dispatched against.
             if [ -z "$SHA" ]; then
-              SHA=$(git ls-remote "https://github.com/${{ github.repository }}.git" "refs/heads/${ENV}" | awk '{print $1}')
+              SHA="${{ github.sha }}"
             fi
           else
             ENV="${{ github.event.workflow_run.head_branch }}"
