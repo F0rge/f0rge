@@ -72,8 +72,7 @@ jobs:
         if: inputs.component == 'auto'
         with:
           main-branch-name: ${{ inputs.base_branch }}
-          # ci.yml is the only caller — it is the workflow whose last successful
-          # run defines the nx-affected base.
+          # Last successful CI run defines the nx-affected base (Deploy follows CI).
           workflow-id: ci.yml
 
       - name: Resolve deploy plan from manifest

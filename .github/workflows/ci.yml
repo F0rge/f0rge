@@ -1,8 +1,8 @@
 name: CI
 
-# PR + push + workflow_dispatch on develop/main: detect → backend/frontend → ci gate → deploy.
-# Manual deploy cannot skip lint/test/build — workflow_dispatch runs CI first.
-# The aggregate gate job MUST stay named `ci` — the main-pr-gate ruleset requires that context.
+# PR + push + workflow_dispatch on develop/main: detect → backend/frontend → ci gate.
+# Deploy is a separate workflow (deploy.yml) that runs after this succeeds on push.
+# The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
 
 on:
   pull_request:
@@ -10,12 +10,6 @@ on:
   push:
     branches: [develop, main]
   workflow_dispatch:
-    inputs:
-      component:
-        description: Component to deploy (runs CI first)
-        type: choice
-        options: [all, api, mcp, frontend]
-        default: all
 
 permissions:
   contents: read
@@ -227,29 +221,3 @@ jobs:
           }
           gate "$BACKEND_FLAG" "$BACKEND_RESULT" "backend"
           gate "$FRONTEND_FLAG" "$FRONTEND_RESULT" "frontend"
-
-  deploy:
-    name: deploy
-    needs: [ci]
-    if: >-
-      always() &&
-      needs.ci.result == 'success' &&
-      (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
-    # Deploy only ever runs on push/dispatch, so ref_name is the deployed branch.
-    # Anything other than main deploys the develop environment (dispatch parity).
-    concurrency:
-      group: fly-deploy-${{ github.ref_name == 'main' && 'main' || 'develop' }}
-      cancel-in-progress: false
-    uses: ./.github/workflows/deploy-reusable.yml
-    with:
-      environment: ${{ github.ref_name == 'main' && 'main' || 'develop' }}
-      sha: ${{ github.sha }}
-      base_branch: ${{ github.ref_name == 'main' && 'main' || 'develop' }}
-      component: ${{ github.event_name == 'workflow_dispatch' && inputs.component || 'auto' }}
-    secrets:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
-      COOLIFY_WEBHOOK_DK_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DK_BACKEND }}
-      COOLIFY_WEBHOOK_DK_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DK_FRONTEND }}
-      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
-      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
