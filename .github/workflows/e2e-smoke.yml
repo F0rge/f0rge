@@ -52,8 +52,8 @@ jobs:
           echo "run=$run" >> "$GITHUB_OUTPUT"
           echo "affected: $PROJECTS (e2e: $run)"
 
-  playwright:
-    name: playwright smoke
+  playwright-run:
+    name: playwright run
     needs: detect
     if: needs.detect.outputs.run == 'true'
     runs-on: ubuntu-latest
@@ -144,3 +144,30 @@ jobs:
       - name: Run Playwright smoke
         working-directory: apps/marrow/frontend
         run: npx playwright test
+
+  # Always-green context for branch rulesets — even when marrow is unaffected.
+  playwright-smoke:
+    name: playwright smoke
+    needs: [detect, playwright-run]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate gate
+        env:
+          DETECT_RESULT: ${{ needs.detect.result }}
+          RUN_FLAG: ${{ needs.detect.outputs.run }}
+          PLAYWRIGHT_RESULT: ${{ needs.playwright-run.result }}
+        run: |
+          if [ "$DETECT_RESULT" != "success" ]; then
+            echo "detect job required but result was: $DETECT_RESULT"
+            exit 1
+          fi
+          if [ "$RUN_FLAG" != "true" ]; then
+            echo "E2E not required for this change — gate OK"
+            exit 0
+          fi
+          if [ "$PLAYWRIGHT_RESULT" != "success" ]; then
+            echo "playwright run required but result was: $PLAYWRIGHT_RESULT"
+            exit 1
+          fi
