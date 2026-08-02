@@ -170,9 +170,7 @@ class TagDeliveryService:
         if source_filename is not None:
             if not photo_exists(source_filename, user_id=tagger_id_str):
                 raise NotFoundError(f"Source photo file missing for tag {tag.id}")
-            src_bytes = await asyncio.to_thread(
-                read_photo, source_filename, user_id=tagger_id_str
-            )
+            src_bytes = await asyncio.to_thread(read_photo, source_filename, user_id=tagger_id_str)
 
         # Step 2: create recipient placement (same meal_id) under recipient context.
         await apply_session_user_id(db, tag.tagged_user_id)

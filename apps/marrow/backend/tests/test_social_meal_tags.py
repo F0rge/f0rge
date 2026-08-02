@@ -683,9 +683,7 @@ async def test_retroactive_photo_tags(async_db: AsyncSession, storage: None):
     assert len(duplicate.json()["tags"]) == 1
 
 
-async def test_auto_delivers_library_icon_only_meal(
-    async_db: AsyncSession, storage: None
-) -> None:
+async def test_auto_delivers_library_icon_only_meal(async_db: AsyncSession, storage: None) -> None:
     """Icon-only library meals must deliver placements without copying bytes."""
     from app.models.platform_meal import PlatformMeal, PlatformMealIngredient
     from app.services.meals import MealService

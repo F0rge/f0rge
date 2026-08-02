@@ -181,7 +181,9 @@ async def test_delete_entry_with_library_meal_skips_storage(
 
     assert list(photo_dir.iterdir()) == []
     assert (
-        await async_db.execute(select(PhotoAnalysis).where(PhotoAnalysis.dish_name == "Arroz de pato"))
+        await async_db.execute(
+            select(PhotoAnalysis).where(PhotoAnalysis.dish_name == "Arroz de pato")
+        )
     ).scalar_one_or_none() is None
 
 
