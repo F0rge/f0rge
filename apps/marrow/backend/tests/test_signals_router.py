@@ -10,6 +10,7 @@ from httpx import AsyncClient
 from app.cache.invalidation import invalidate_user_insights_cache
 from app.cache.keys import signals_key
 from app.services.signals.baseline import WARMUP_DAYS
+from app.services.signals.effects import MIN_OBSERVED_DAYS
 from app.services.signals.service import SIGNALS_SCHEMA_VERSION
 from app.utils.dates import local_today
 from tests.conftest import authed_user_id
@@ -98,7 +99,7 @@ async def test_signals_insufficient_data_returns_200_with_flag(authed_client: As
     assert resp.status_code == 200
     body = resp.json()
     assert body["meta"]["insufficient_data"] is True
-    assert body["meta"]["days_usable"] < 30
+    assert body["meta"]["days_usable"] < MIN_OBSERVED_DAYS
     assert WARMUP_DAYS == body["meta"]["warmup"]
     assert body["meta"]["insufficient_reason"]
     assert body["drivers"] == []
