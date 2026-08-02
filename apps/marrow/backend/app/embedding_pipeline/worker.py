@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import uuid
 from typing import Any, Optional
 
 import asyncpg
@@ -187,8 +188,22 @@ async def _process_pending() -> None:
                     await savepoint.commit()
 
 
+async def _reference_user_id() -> uuid.UUID:
+    """Platform reference tenant used for worker BYOK when no request user exists."""
+    return uuid.UUID(settings.default_storage_user_id)
+
+
 async def _build_client_or_none(db: AsyncSession) -> Optional[EmbeddingClient]:
+    """Build an embedding client for the worker.
+
+    The worker has no HTTP user context. ``apply_service_role`` stamps a nil
+    ``app.user_id``, so BYOK in ``user_settings`` is invisible under FORCE RLS
+    unless we switch to the reference tenant first. Env ``OPENROUTER_API_KEY``
+    remains the final fallback inside ``resolve_embedding_credentials``.
+    """
     try:
+        ref = await _reference_user_id()
+        await apply_session_user_id(db, ref)
         return await build_embedding_client(db)
     except Exception as exc:
         logger.warning(
@@ -202,7 +217,10 @@ async def _build_client_or_none(db: AsyncSession) -> Optional[EmbeddingClient]:
 
 async def _credentials_for_model() -> tuple[Optional[str], str]:
     async with async_session_maker() as db:
-        return await resolve_embedding_credentials(db)
+        async with db.begin():
+            ref = await _reference_user_id()
+            await apply_session_user_id(db, ref)
+            return await resolve_embedding_credentials(db, user_id=ref)
 
 
 async def run() -> None:

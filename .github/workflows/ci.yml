@@ -3,6 +3,7 @@ name: CI
 # PR + push + workflow_dispatch on develop/main: detect → backend/frontend → ci gate.
 # Deploy is a separate workflow (deploy.yml) that runs after this succeeds on push.
 # The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
+# Tests (pytest / frontend unit / e2e-smoke) run on main only; develop skips them.
 
 on:
   pull_request:
@@ -116,10 +117,18 @@ jobs:
           npm run codegen:api -w frontend
           git diff --exit-code apps/marrow/backend/openapi.json apps/marrow/frontend/openapi.json apps/marrow/frontend/lib/api/generated/schema.ts
 
+      # Pytest is expensive (testcontainers). Run it on main/prod only;
+      # develop keeps lint + format-check so PRs stay cheap.
       - name: nx run (backend)
         env:
           PY_PROJECTS: ${{ needs.detect.outputs.py_projects }}
-        run: npx nx run-many -t lint format-check test --projects "$PY_PROJECTS"
+          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
+        run: |
+          if [ "$TARGET_BRANCH" = "main" ]; then
+            npx nx run-many -t lint format-check test --projects "$PY_PROJECTS"
+          else
+            npx nx run-many -t lint format-check --projects "$PY_PROJECTS"
+          fi
 
   frontend:
     name: frontend
@@ -153,10 +162,17 @@ jobs:
           echo "API_URL=http://backend:8000" >> "$GITHUB_ENV"
           echo "NODE_ENV=production" >> "$GITHUB_ENV"
 
+      # Unit tests only on main/prod; develop keeps lint/typecheck/build.
       - name: nx run (frontend)
         env:
           TS_PROJECTS: ${{ needs.detect.outputs.ts_projects }}
-        run: npx nx run-many -t lint typecheck test build --projects "$TS_PROJECTS"
+          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
+        run: |
+          if [ "$TARGET_BRANCH" = "main" ]; then
+            npx nx run-many -t lint typecheck test build --projects "$TS_PROJECTS"
+          else
+            npx nx run-many -t lint typecheck build --projects "$TS_PROJECTS"
+          fi
 
   ci:
     name: ci

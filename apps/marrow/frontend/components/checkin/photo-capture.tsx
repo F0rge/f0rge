@@ -157,7 +157,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         <button
           type="button"
           onClick={() => setLibraryOpen(true)}
-          className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg border border-primary/40 bg-background px-2 py-2 text-xs font-medium transition-colors hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+          className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-background px-2 py-2 text-xs font-medium transition-colors hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
         >
           <BookOpen className="size-4 shrink-0" />
           From library

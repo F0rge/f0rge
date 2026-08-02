@@ -35,7 +35,11 @@ export function useCloneMeal() {
   })
 }
 
-export function usePlatformMeals({ q, cuisine }: { q?: string; cuisine?: string } = {}) {
+export function usePlatformMeals({
+  q,
+  cuisine,
+  enabled = true,
+}: { q?: string; cuisine?: string; enabled?: boolean } = {}) {
   const params = new URLSearchParams()
   if (q) params.set('q', q)
   if (cuisine) params.set('cuisine', cuisine)
@@ -44,13 +48,20 @@ export function usePlatformMeals({ q, cuisine }: { q?: string; cuisine?: string 
   return useQuery<PlatformMeal[]>({
     queryKey: ['meals', 'library', q ?? '', cuisine ?? ''],
     queryFn: () => apiGet(`/meals/library${qs ? `?${qs}` : ''}`),
+    enabled,
+    // Re-fetch when the sheet re-opens so a prior 5xx/empty cache cannot stick.
+    refetchOnMount: 'always',
+    retry: 1,
   })
 }
 
-export function usePlatformMealCuisines() {
+export function usePlatformMealCuisines({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery<string[]>({
     queryKey: ['meals', 'library', 'cuisines'],
     queryFn: () => apiGet('/meals/library/cuisines'),
+    enabled,
+    refetchOnMount: 'always',
+    retry: 1,
   })
 }
 
