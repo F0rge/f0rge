@@ -49,12 +49,12 @@ class MealService:
         rows = await self.analysis_crud.list_confirmed_with_entry_dates()
 
         dates_per_dish: dict[str, set[datetime.date]] = {}
-        for analysis, entry_date, _photo_id in rows:
+        for analysis, entry_date, _photo_id, _filename, _icon_key in rows:
             dates_per_dish.setdefault(analysis.dish_name, set()).add(entry_date)
 
         seen: set[str] = set()
         out: list[RecentMealResponse] = []
-        for analysis, entry_date, photo_id in rows:
+        for analysis, entry_date, photo_id, filename, icon_key in rows:
             dish = analysis.dish_name
             if dish in seen:
                 continue
@@ -67,6 +67,8 @@ class MealService:
                     times_logged=len(dates_per_dish[dish]),
                     last_logged=entry_date,
                     diet_flags=sorted(signal.flags),
+                    has_image=filename is not None,
+                    icon_key=icon_key,
                 )
             )
             if len(out) >= limit:
@@ -80,24 +82,16 @@ class MealService:
         cuisine: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> list[PlatformMealResponse]:
-        # Cap unfiltered browse so diet-flag resolution stays under gateway
-        # timeouts; searches keep a higher ceiling so matches aren't truncated.
-        if limit is None:
-            effective_limit = 100 if (q or cuisine) else 60
-        else:
-            effective_limit = limit
-        meals = await self.platform_crud.list_active(q=q, cuisine=cuisine, limit=effective_limit)
-        # Deduped cache — repeated ingredients across meals (rice, chicken, …)
-        # were previously N+1 lookups and timed out the library endpoint.
-        lookup_cache: dict[str, Optional[DietaryIngredient]] = {}
+        meals = await self.platform_crud.list_active(q=q, cuisine=cuisine, limit=limit)
+        # Exact canonical match in one query — fuzzy per-ingredient lookup made
+        # the catalogue unusable once the platform library grew to hundreds.
+        all_names = [ing.canonical_name for meal in meals for ing in meal.ingredients]
+        exact = await self.lookup.lookup_exact_many(all_names)
         out: list[PlatformMealResponse] = []
         for meal in meals:
             dietary_items: list[DietaryIngredient] = []
             for ingredient in meal.ingredients:
-                name = ingredient.canonical_name
-                if name not in lookup_cache:
-                    lookup_cache[name] = await self.lookup.lookup(name)
-                match = lookup_cache[name]
+                match = exact.get(ingredient.canonical_name.lower().strip())
                 if match is not None:
                     dietary_items.append(match)
             out.append(

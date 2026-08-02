@@ -13417,6 +13417,22 @@
             "type": "array",
             "title": "Diet Flags",
             "default": []
+          },
+          "has_image": {
+            "type": "boolean",
+            "title": "Has Image",
+            "default": true
+          },
+          "icon_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Key"
           }
         },
         "type": "object",

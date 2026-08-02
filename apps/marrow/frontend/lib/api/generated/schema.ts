@@ -3510,6 +3510,13 @@ export interface components {
              * @default []
              */
             diet_flags: string[];
+            /**
+             * Has Image
+             * @default true
+             */
+            has_image: boolean;
+            /** Icon Key */
+            icon_key?: string | null;
         };
         /**
          * SettingsResponse

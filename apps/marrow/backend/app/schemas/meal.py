@@ -18,6 +18,8 @@ class RecentMealResponse(BaseModel):
     times_logged: int
     last_logged: datetime.date
     diet_flags: list[str] = []
+    has_image: bool = True
+    icon_key: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

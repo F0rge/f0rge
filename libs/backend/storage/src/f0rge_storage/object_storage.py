@@ -122,21 +122,49 @@ class ObjectStorage:
             local_path = os.path.join(self._local_root(), relative_path)
             with open(local_path, "rb") as handle:
                 return handle.read()
-        return self.read_bytes(self.build_object_key(relative_path, user_id=user_id))
+        key = self.resolve_relative_key(relative_path, user_id=user_id)
+        if key is None:
+            raise FileNotFoundError(relative_path)
+        return self.read_bytes(key)
 
     def exists_relative(self, relative_path: str, *, user_id: Optional[str] = None) -> bool:
+        return self.resolve_relative_key(relative_path, user_id=user_id) is not None
+
+    def resolve_relative_key(
+        self, relative_path: str, *, user_id: Optional[str] = None
+    ) -> Optional[str]:
+        """Return the concrete storage key/path that holds ``relative_path``.
+
+        Tries ``{user_id}/…``, then the configured default user prefix, then a
+        bare (unprefixed) key — Railway/Tigris syncs have used all three layouts.
+        """
+        rel = relative_path.lstrip("/")
         if not self.enabled():
-            return os.path.exists(os.path.join(self._local_root(), relative_path))
-        return self.object_exists(self.build_object_key(relative_path, user_id=user_id))
+            local_path = os.path.join(self._local_root(), rel)
+            return local_path if os.path.exists(local_path) else None
+
+        seen: set[str] = set()
+        candidates: list[str] = []
+        for uid in (user_id, self.default_user_prefix(), None):
+            key = self.build_object_key(rel, user_id=uid) if uid else rel
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(key)
+        for key in candidates:
+            if self.object_exists(key):
+                return key
+        return None
 
     def presigned_url_for_relative(
         self, relative_path: str, *, expires_in: int = 300, user_id: Optional[str] = None
     ) -> Optional[str]:
         if not self.enabled():
             return None
-        return self.presigned_get_url(
-            self.build_object_key(relative_path, user_id=user_id), expires_in=expires_in
-        )
+        key = self.resolve_relative_key(relative_path, user_id=user_id)
+        if key is None:
+            return None
+        return self.presigned_get_url(key, expires_in=expires_in)
 
     def save_bytes(self, relative_path: str, data: bytes, *, user_id: Optional[str] = None) -> str:
         """Persist bytes; returns the storage key (S3) or absolute local path."""

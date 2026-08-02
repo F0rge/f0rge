@@ -37,6 +37,14 @@ def test_key_layout() -> None:
     assert storage.build_object_key("/photos/a.jpg") == "default-user/photos/a.jpg"
 
 
+def test_resolve_relative_key_local(tmp_path) -> None:
+    storage = ObjectStorage(ObjectStorageConfig(local_dir=str(tmp_path)))
+    storage.save_bytes("photos/a.jpg", b"payload")
+    resolved = storage.resolve_relative_key("photos/a.jpg", user_id="u1")
+    assert resolved == str(tmp_path / "photos" / "a.jpg")
+    assert storage.resolve_relative_key("photos/missing.jpg", user_id="u1") is None
+
+
 def test_resize_image_smoke() -> None:
     buf = io.BytesIO()
     Image.new("RGB", (200, 100), "red").save(buf, format="PNG")
