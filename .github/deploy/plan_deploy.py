@@ -29,23 +29,39 @@ def main() -> None:
         deploy_frontend = component_mode in {"all", "frontend"}
         coolify = []
     else:
-        affected = set(
-            json.loads(
-                subprocess.check_output(
-                    [
-                        "npx",
-                        "nx",
-                        "show",
-                        "projects",
-                        "--affected",
-                        f"--base={os.environ['NX_BASE']}",
-                        f"--head={os.environ['NX_HEAD']}",
-                        "--json",
-                    ],
-                    text=True,
+        nx_base = os.environ["NX_BASE"]
+        nx_head = os.environ["NX_HEAD"]
+        # workflow_run / detached checkouts sometimes set NX_BASE == NX_HEAD,
+        # which makes `nx affected` empty and skips Railway smoke entirely.
+        if nx_base == nx_head:
+            print(
+                f"NX_BASE == NX_HEAD ({nx_head[:12]}); "
+                "treating all marrow railway components as affected"
+            )
+            affected = {
+                spec["nx"]
+                for spec in manifest["components"].values()
+                if environment in spec.get("branches", [])
+                and spec.get("target") in {"fly", "railway"}
+            }
+        else:
+            affected = set(
+                json.loads(
+                    subprocess.check_output(
+                        [
+                            "npx",
+                            "nx",
+                            "show",
+                            "projects",
+                            "--affected",
+                            f"--base={nx_base}",
+                            f"--head={nx_head}",
+                            "--json",
+                        ],
+                        text=True,
+                    )
                 )
             )
-        )
         deploy_api = deploy_mcp = deploy_frontend = False
         coolify = []
         for _name, spec in manifest["components"].items():
