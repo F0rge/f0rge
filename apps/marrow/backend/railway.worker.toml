@@ -1,0 +1,15 @@
+# Config-as-code for marrow-worker (point Railway service Config File path here).
+# Same backend image; no public domain / no migrations.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/marrow/backend/Dockerfile"
+watchPatterns = [
+  "apps/marrow/backend/**",
+  "libs/backend/**",
+]
+
+[deploy]
+startCommand = "uv run python -m app.embedding_pipeline"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

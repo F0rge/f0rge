@@ -1,0 +1,17 @@
+# Config-as-code for marrow-mcp (point Railway service Config File path here).
+# Same backend image; binds via MCP_SERVER_HOST / MCP_SERVER_PORT (default 8005).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/marrow/backend/Dockerfile"
+watchPatterns = [
+  "apps/marrow/backend/**",
+  "libs/backend/**",
+]
+
+[deploy]
+startCommand = "/app/apps/marrow/backend/.venv/bin/python -m app.mcp --transport streamable-http"
+# No HTTP healthcheck: streamable MCP /mcp is not a plain GET 200 probe target.
+# Smoke via CI curl (accept any non-5xx) instead.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
