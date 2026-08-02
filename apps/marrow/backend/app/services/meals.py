@@ -13,6 +13,7 @@ from app.crud.photos import PhotoCRUD
 from app.crud.platform_meals import PlatformMealCRUD
 from app.cache.invalidation import invalidate_user_insights_cache
 from f0rge_core.exceptions import NotFoundError, ValidationError
+from app.models.dietary_ingredient import DietaryIngredient
 from app.models.meal import Meal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
@@ -77,13 +78,26 @@ class MealService:
         *,
         q: Optional[str] = None,
         cuisine: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> list[PlatformMealResponse]:
-        meals = await self.platform_crud.list_active(q=q, cuisine=cuisine)
+        # Cap unfiltered browse so diet-flag resolution stays under gateway
+        # timeouts; searches keep a higher ceiling so matches aren't truncated.
+        if limit is None:
+            effective_limit = 100 if (q or cuisine) else 60
+        else:
+            effective_limit = limit
+        meals = await self.platform_crud.list_active(q=q, cuisine=cuisine, limit=effective_limit)
+        # Deduped cache — repeated ingredients across meals (rice, chicken, …)
+        # were previously N+1 lookups and timed out the library endpoint.
+        lookup_cache: dict[str, Optional[DietaryIngredient]] = {}
         out: list[PlatformMealResponse] = []
         for meal in meals:
-            dietary_items = []
+            dietary_items: list[DietaryIngredient] = []
             for ingredient in meal.ingredients:
-                match = await self.lookup.lookup(ingredient.canonical_name)
+                name = ingredient.canonical_name
+                if name not in lookup_cache:
+                    lookup_cache[name] = await self.lookup.lookup(name)
+                match = lookup_cache[name]
                 if match is not None:
                     dietary_items.append(match)
             out.append(

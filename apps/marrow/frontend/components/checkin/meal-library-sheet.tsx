@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -43,22 +43,32 @@ export function MealLibrarySheet({
   onEntryEnsured,
 }: MealLibrarySheetProps) {
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [cuisine, setCuisine] = useState<string | null>(null)
   const [selected, setSelected] = useState<PlatformMeal | null>(null)
   const [mealTime, setMealTime] = useState<Date | null>(new Date())
 
-  const q = query.trim()
-  const { data: cuisines = [] } = usePlatformMealCuisines()
-  const { data: meals = [], isLoading } = usePlatformMeals({
-    q: q || undefined,
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedQuery(query.trim()), 250)
+    return () => window.clearTimeout(handle)
+  }, [query])
+
+  const cuisinesQuery = usePlatformMealCuisines({ enabled: open })
+  const mealsQuery = usePlatformMeals({
+    q: debouncedQuery || undefined,
     cuisine: cuisine ?? undefined,
+    enabled: open,
   })
+  const cuisines = cuisinesQuery.data ?? []
+  const meals = mealsQuery.data ?? []
+  const isLoading = mealsQuery.isPending || (mealsQuery.isFetching && meals.length === 0)
   const logFromLibrary = useLogFromLibrary()
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
       setSelected(null)
       setQuery('')
+      setDebouncedQuery('')
       setCuisine(null)
       setMealTime(new Date())
     }
@@ -190,7 +200,24 @@ export function MealLibrarySheet({
             </div>
 
             <div className="-mx-1 max-h-[50vh] overflow-y-auto px-1">
-              {isLoading ? (
+              {mealsQuery.isError ? (
+                <div className="flex flex-col items-center gap-3 py-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Could not load the meal library. Check your connection and try again.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-[44px]"
+                    onClick={() => {
+                      void mealsQuery.refetch()
+                      void cuisinesQuery.refetch()
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : isLoading ? (
                 <div className="flex justify-center py-8 text-muted-foreground">
                   <Loader2 className="size-5 animate-spin" />
                 </div>
