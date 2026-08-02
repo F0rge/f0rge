@@ -4202,5 +4202,779 @@
       "dill"
     ],
     "sort_order": 2840
+  },
+  {
+    "slug": "chicken-karaage",
+    "name": "Chicken karaage",
+    "cuisine": "Japanese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "chicken",
+      "soy sauce",
+      "ginger",
+      "garlic",
+      "wheat flour",
+      "egg"
+    ],
+    "sort_order": 2850
+  },
+  {
+    "slug": "oyako-soba-style",
+    "name": "Chicken egg soba bowl",
+    "cuisine": "Japanese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "wheat noodles",
+      "chicken",
+      "egg",
+      "onion",
+      "soy sauce",
+      "spring onion (white)"
+    ],
+    "sort_order": 2860
+  },
+  {
+    "slug": "salmon-don",
+    "name": "Salmon rice bowl",
+    "cuisine": "Japanese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "salmon, fresh",
+      "rice",
+      "soy sauce",
+      "sesame seeds",
+      "spring onion (white)",
+      "avocado"
+    ],
+    "sort_order": 2870
+  },
+  {
+    "slug": "unagi-style-bowl",
+    "name": "Teriyaki eel-style fish bowl",
+    "cuisine": "Japanese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "salmon, fresh",
+      "rice",
+      "teriyaki sauce",
+      "sesame seeds",
+      "spring onion (white)"
+    ],
+    "sort_order": 2880
+  },
+  {
+    "slug": "hiyashi-chuka",
+    "name": "Cold sesame noodle salad",
+    "cuisine": "Japanese",
+    "icon_key": "salad",
+    "ingredients": [
+      "wheat noodles",
+      "cucumber",
+      "carrot",
+      "egg",
+      "soy sauce",
+      "sesame oil",
+      "ham"
+    ],
+    "sort_order": 2890
+  },
+  {
+    "slug": "niku-udon",
+    "name": "Beef udon",
+    "cuisine": "Japanese",
+    "icon_key": "soup",
+    "ingredients": [
+      "udon",
+      "beef, fresh",
+      "onion",
+      "soy sauce",
+      "spring onion (white)",
+      "ginger"
+    ],
+    "sort_order": 2900
+  },
+  {
+    "slug": "chirashi-style",
+    "name": "Chirashi style bowl",
+    "cuisine": "Japanese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "rice",
+      "salmon, fresh",
+      "egg",
+      "cucumber",
+      "avocado",
+      "soy sauce",
+      "nori"
+    ],
+    "sort_order": 2910
+  },
+  {
+    "slug": "tofu-miso-bowl",
+    "name": "Miso tofu vegetable bowl",
+    "cuisine": "Japanese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "tofu",
+      "miso",
+      "rice",
+      "broccoli",
+      "carrot",
+      "sesame oil"
+    ],
+    "sort_order": 2920
+  },
+  {
+    "slug": "xiaolongbao-style",
+    "name": "Steamed pork soup dumplings",
+    "cuisine": "Chinese",
+    "icon_key": "soup",
+    "ingredients": [
+      "pork, fresh",
+      "dumpling wrappers",
+      "ginger",
+      "soy sauce",
+      "spring onion (white)",
+      "cabbage"
+    ],
+    "sort_order": 2930
+  },
+  {
+    "slug": "lo-mein-veggie",
+    "name": "Vegetable lo mein",
+    "cuisine": "Chinese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "wheat noodles",
+      "cabbage",
+      "carrot",
+      "soy sauce",
+      "garlic",
+      "sesame oil"
+    ],
+    "sort_order": 2940
+  },
+  {
+    "slug": "orange-chicken",
+    "name": "Orange chicken",
+    "cuisine": "Chinese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "chicken",
+      "orange",
+      "soy sauce",
+      "garlic",
+      "sugar",
+      "rice",
+      "chili flakes"
+    ],
+    "sort_order": 2950
+  },
+  {
+    "slug": "general-tso-style",
+    "name": "General Tso style chicken",
+    "cuisine": "Chinese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "chicken",
+      "soy sauce",
+      "garlic",
+      "ginger",
+      "sugar",
+      "chili flakes",
+      "rice"
+    ],
+    "sort_order": 2960
+  },
+  {
+    "slug": "salt-pepper-shrimp",
+    "name": "Salt and pepper shrimp",
+    "cuisine": "Chinese",
+    "icon_key": "fish",
+    "ingredients": [
+      "shrimp",
+      "garlic",
+      "chili pepper",
+      "spring onion (white)",
+      "black pepper",
+      "vegetable oil"
+    ],
+    "sort_order": 2970
+  },
+  {
+    "slug": "beef-chow-fun-style",
+    "name": "Beef rice noodle stir-fry",
+    "cuisine": "Chinese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "rice noodles",
+      "beef, fresh",
+      "soy sauce",
+      "onion",
+      "cabbage",
+      "garlic"
+    ],
+    "sort_order": 2980
+  },
+  {
+    "slug": "tomato-egg-stirfry",
+    "name": "Tomato egg stir-fry",
+    "cuisine": "Chinese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "egg",
+      "tomato",
+      "spring onion (white)",
+      "soy sauce",
+      "sugar",
+      "rice"
+    ],
+    "sort_order": 2990
+  },
+  {
+    "slug": "sundubu-jjigae",
+    "name": "Soft tofu stew",
+    "cuisine": "Korean",
+    "icon_key": "soup",
+    "ingredients": [
+      "tofu",
+      "egg",
+      "gochujang",
+      "garlic",
+      "onion",
+      "zucchini",
+      "spring onion (white)"
+    ],
+    "sort_order": 3000
+  },
+  {
+    "slug": "samgyeopsal-plate",
+    "name": "Pork belly lettuce wraps",
+    "cuisine": "Korean",
+    "icon_key": "bowl",
+    "ingredients": [
+      "pork, fresh",
+      "lettuce",
+      "garlic",
+      "soy sauce",
+      "sesame oil",
+      "rice"
+    ],
+    "sort_order": 3010
+  },
+  {
+    "slug": "kimchi-jjigae",
+    "name": "Kimchi stew",
+    "cuisine": "Korean",
+    "icon_key": "soup",
+    "ingredients": [
+      "kimchi",
+      "pork, fresh",
+      "tofu",
+      "onion",
+      "garlic",
+      "gochujang",
+      "spring onion (white)"
+    ],
+    "sort_order": 3020
+  },
+  {
+    "slug": "haemul-pajeon",
+    "name": "Seafood scallion pancake",
+    "cuisine": "Korean",
+    "icon_key": "bowl",
+    "ingredients": [
+      "wheat flour",
+      "egg",
+      "spring onion (white)",
+      "shrimp",
+      "soy sauce",
+      "vegetable oil"
+    ],
+    "sort_order": 3030
+  },
+  {
+    "slug": "doenjang-style-stew",
+    "name": "Soybean paste vegetable stew",
+    "cuisine": "Korean",
+    "icon_key": "soup",
+    "ingredients": [
+      "tofu",
+      "zucchini",
+      "potato",
+      "onion",
+      "garlic",
+      "miso",
+      "mushroom"
+    ],
+    "sort_order": 3040
+  },
+  {
+    "slug": "thai-basil-chicken",
+    "name": "Thai basil chicken",
+    "cuisine": "Thai",
+    "icon_key": "bowl",
+    "ingredients": [
+      "chicken",
+      "basil",
+      "garlic",
+      "chili pepper",
+      "fish sauce",
+      "soy sauce",
+      "rice"
+    ],
+    "sort_order": 3050
+  },
+  {
+    "slug": "panang-curry",
+    "name": "Panang curry",
+    "cuisine": "Thai",
+    "icon_key": "curry",
+    "ingredients": [
+      "chicken",
+      "coconut milk",
+      "peanuts",
+      "fish sauce",
+      "lime",
+      "basil",
+      "bell pepper"
+    ],
+    "sort_order": 3060
+  },
+  {
+    "slug": "tom-kha-gai",
+    "name": "Tom kha gai",
+    "cuisine": "Thai",
+    "icon_key": "soup",
+    "ingredients": [
+      "chicken",
+      "coconut milk",
+      "mushroom",
+      "lime",
+      "lemongrass",
+      "fish sauce",
+      "ginger"
+    ],
+    "sort_order": 3070
+  },
+  {
+    "slug": "mango-sticky-rice",
+    "name": "Mango sticky rice",
+    "cuisine": "Thai",
+    "icon_key": "bowl",
+    "ingredients": [
+      "rice",
+      "mango",
+      "coconut milk",
+      "sugar"
+    ],
+    "sort_order": 3080
+  },
+  {
+    "slug": "vietnamese-spring-rolls",
+    "name": "Fresh spring rolls",
+    "cuisine": "Vietnamese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "rice noodles",
+      "shrimp",
+      "lettuce",
+      "carrot",
+      "cucumber",
+      "mint",
+      "peanuts"
+    ],
+    "sort_order": 3090
+  },
+  {
+    "slug": "bun-bo-hue-style",
+    "name": "Spicy beef noodle soup",
+    "cuisine": "Vietnamese",
+    "icon_key": "soup",
+    "ingredients": [
+      "rice noodles",
+      "beef, fresh",
+      "lemongrass",
+      "onion",
+      "chili pepper",
+      "fish sauce",
+      "lime",
+      "cilantro"
+    ],
+    "sort_order": 3100
+  },
+  {
+    "slug": "cao-lau-style",
+    "name": "Hoi An style noodle bowl",
+    "cuisine": "Vietnamese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "wheat noodles",
+      "pork, fresh",
+      "lettuce",
+      "mint",
+      "fish sauce",
+      "garlic"
+    ],
+    "sort_order": 3110
+  },
+  {
+    "slug": "indian-butter-paneer",
+    "name": "Paneer makhani",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "ingredients": [
+      "paneer",
+      "tomato",
+      "butter",
+      "cream",
+      "garlic",
+      "cumin",
+      "garam masala"
+    ],
+    "sort_order": 3120
+  },
+  {
+    "slug": "malai-kofta-style",
+    "name": "Vegetable kofta curry",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "ingredients": [
+      "potato",
+      "peas",
+      "paneer",
+      "cream",
+      "tomato",
+      "onion",
+      "garlic",
+      "cumin"
+    ],
+    "sort_order": 3130
+  },
+  {
+    "slug": "rajma",
+    "name": "Rajma",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "ingredients": [
+      "kidney beans",
+      "tomato",
+      "onion",
+      "garlic",
+      "cumin",
+      "ginger",
+      "rice"
+    ],
+    "sort_order": 3140
+  },
+  {
+    "slug": "masala-dosa-style",
+    "name": "Potato masala wrap",
+    "cuisine": "Indian",
+    "icon_key": "bowl",
+    "ingredients": [
+      "potato",
+      "onion",
+      "mustard",
+      "turmeric",
+      "cumin",
+      "flour tortilla"
+    ],
+    "sort_order": 3150
+  },
+  {
+    "slug": "chicken-madras",
+    "name": "Chicken Madras",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "ingredients": [
+      "chicken",
+      "tomato",
+      "onion",
+      "garlic",
+      "chili powder",
+      "cumin",
+      "ginger"
+    ],
+    "sort_order": 3160
+  },
+  {
+    "slug": "fish-molee",
+    "name": "Kerala fish stew",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "ingredients": [
+      "cod",
+      "coconut milk",
+      "tomato",
+      "onion",
+      "ginger",
+      "curry powder",
+      "lime",
+      "turmeric"
+    ],
+    "sort_order": 3170
+  },
+  {
+    "slug": "fattet-hummus-style",
+    "name": "Hummus chickpea bowl",
+    "cuisine": "Middle Eastern",
+    "icon_key": "bowl",
+    "ingredients": [
+      "chickpeas",
+      "tahini",
+      "yogurt",
+      "pita",
+      "garlic",
+      "lemon",
+      "olive oil"
+    ],
+    "sort_order": 3180
+  },
+  {
+    "slug": "manakish-style",
+    "name": "Zaatar style flatbread",
+    "cuisine": "Middle Eastern",
+    "icon_key": "toast",
+    "ingredients": [
+      "pita",
+      "olive oil",
+      "oregano",
+      "thyme",
+      "sesame seeds"
+    ],
+    "sort_order": 3190
+  },
+  {
+    "slug": "kibbeh-plate",
+    "name": "Lamb kibbeh plate",
+    "cuisine": "Middle Eastern",
+    "icon_key": "bowl",
+    "ingredients": [
+      "lamb",
+      "bulgur",
+      "onion",
+      "cumin",
+      "pine nuts",
+      "olive oil",
+      "yogurt"
+    ],
+    "sort_order": 3200
+  },
+  {
+    "slug": "shakshuka-green",
+    "name": "Green shakshuka",
+    "cuisine": "Middle Eastern",
+    "icon_key": "bowl",
+    "ingredients": [
+      "egg",
+      "spinach",
+      "zucchini",
+      "onion",
+      "garlic",
+      "feta cheese",
+      "cumin"
+    ],
+    "sort_order": 3210
+  },
+  {
+    "slug": "italian-wedding-soup",
+    "name": "Italian meatball soup",
+    "cuisine": "Italian",
+    "icon_key": "soup",
+    "ingredients": [
+      "ground beef",
+      "penne pasta",
+      "spinach",
+      "carrot",
+      "onion",
+      "parmesan cheese",
+      "egg"
+    ],
+    "sort_order": 3220
+  },
+  {
+    "slug": "pasta-primavera",
+    "name": "Pasta primavera",
+    "cuisine": "Italian",
+    "icon_key": "bowl",
+    "ingredients": [
+      "penne pasta",
+      "zucchini",
+      "bell pepper",
+      "carrot",
+      "olive oil",
+      "garlic",
+      "parmesan cheese"
+    ],
+    "sort_order": 3230
+  },
+  {
+    "slug": "eggplant-parmesan",
+    "name": "Eggplant Parmesan",
+    "cuisine": "Italian",
+    "icon_key": "bowl",
+    "ingredients": [
+      "eggplant",
+      "tomato sauce",
+      "mozzarella cheese",
+      "parmesan cheese",
+      "wheat flour",
+      "egg",
+      "basil"
+    ],
+    "sort_order": 3240
+  },
+  {
+    "slug": "risotto-milanese",
+    "name": "Risotto milanese",
+    "cuisine": "Italian",
+    "icon_key": "bowl",
+    "ingredients": [
+      "rice",
+      "butter",
+      "parmesan cheese",
+      "onion",
+      "white wine",
+      "saffron"
+    ],
+    "sort_order": 3250
+  },
+  {
+    "slug": "tuna-puttanesca",
+    "name": "Tuna puttanesca",
+    "cuisine": "Italian",
+    "icon_key": "bowl",
+    "ingredients": [
+      "penne pasta",
+      "tuna, canned",
+      "tomato",
+      "olives",
+      "garlic",
+      "chili flakes",
+      "olive oil"
+    ],
+    "sort_order": 3260
+  },
+  {
+    "slug": "french-lentil-salad",
+    "name": "French lentil salad",
+    "cuisine": "French",
+    "icon_key": "salad",
+    "ingredients": [
+      "lentils",
+      "carrot",
+      "onion",
+      "mustard",
+      "olive oil",
+      "vinegar",
+      "parsley"
+    ],
+    "sort_order": 3270
+  },
+  {
+    "slug": "duck-confit-style",
+    "name": "Crispy duck leg plate",
+    "cuisine": "French",
+    "icon_key": "bowl",
+    "ingredients": [
+      "duck",
+      "potato",
+      "garlic",
+      "thyme",
+      "olive oil"
+    ],
+    "sort_order": 3280
+  },
+  {
+    "slug": "nicoise-sandwich",
+    "name": "Ni\u00e7oise sandwich",
+    "cuisine": "French",
+    "icon_key": "sandwich",
+    "ingredients": [
+      "tuna, canned",
+      "sourdough bread",
+      "egg",
+      "olive oil",
+      "lettuce",
+      "tomato",
+      "olives"
+    ],
+    "sort_order": 3290
+  },
+  {
+    "slug": "spanish-tortilla-sandwich",
+    "name": "Spanish omelette sandwich",
+    "cuisine": "Spanish",
+    "icon_key": "sandwich",
+    "ingredients": [
+      "egg",
+      "potato",
+      "onion",
+      "olive oil",
+      "sourdough bread"
+    ],
+    "sort_order": 3300
+  },
+  {
+    "slug": "pulpo-style",
+    "name": "Paprika octopus plate",
+    "cuisine": "Spanish",
+    "icon_key": "fish",
+    "ingredients": [
+      "octopus",
+      "potato",
+      "paprika",
+      "olive oil",
+      "garlic",
+      "lemon"
+    ],
+    "sort_order": 3310
+  },
+  {
+    "slug": "portuguese-bifanas-fries",
+    "name": "Bifana with fries",
+    "cuisine": "Portuguese",
+    "icon_key": "sandwich",
+    "ingredients": [
+      "pork, fresh",
+      "sourdough bread",
+      "garlic",
+      "white wine",
+      "potato",
+      "olive oil"
+    ],
+    "sort_order": 3320
+  },
+  {
+    "slug": "peri-peri-chicken",
+    "name": "Peri peri chicken",
+    "cuisine": "Portuguese",
+    "icon_key": "bowl",
+    "ingredients": [
+      "chicken",
+      "chili pepper",
+      "garlic",
+      "lemon",
+      "paprika",
+      "olive oil",
+      "rice"
+    ],
+    "sort_order": 3330
+  },
+  {
+    "slug": "mexican-street-corn-bowl",
+    "name": "Street corn bowl",
+    "cuisine": "Mexican",
+    "icon_key": "bowl",
+    "ingredients": [
+      "corn",
+      "mayonnaise",
+      "chili powder",
+      "lime",
+      "cheddar cheese",
+      "cilantro"
+    ],
+    "sort_order": 3340
   }
 ]
