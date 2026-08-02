@@ -1,35 +1,47 @@
 {
-  "source": "user-research-2026-07",
-  "source_version": "2026-07",
+  "source": "user-research-2026-07+platform-meal-gaps-2026-08",
+  "source_version": "2026-08",
   "ingredients": [
     {
-      "canonical_name": "reblochon cheese",
-      "category": "dairy",
-      "histamine_score": 3,
-      "fodmap_oligos": "low",
+      "canonical_name": "bagel",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
       "fodmap_fructose": "low",
       "fodmap_polyols": "low",
       "fodmap_lactose": "low",
-      "contains_gluten": false,
-      "contains_dairy": true,
+      "contains_gluten": true,
+      "contains_dairy": false,
       "confidence": "high"
     },
     {
-      "canonical_name": "pesto",
+      "canonical_name": "barbecue sauce",
       "category": "condiments",
       "histamine_score": 3,
       "fodmap_oligos": "high",
+      "fodmap_fructose": "moderate",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "beef broth",
+      "category": "meat",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
       "fodmap_fructose": "low",
       "fodmap_polyols": "low",
       "fodmap_lactose": "low",
       "contains_gluten": false,
-      "contains_dairy": true,
+      "contains_dairy": false,
       "confidence": "medium"
     },
     {
-      "canonical_name": "macaroni",
-      "category": "grains",
-      "histamine_score": 1,
+      "canonical_name": "black pudding",
+      "category": "meat",
+      "histamine_score": 3,
       "fodmap_oligos": "high",
       "fodmap_fructose": "low",
       "fodmap_polyols": "low",
@@ -39,19 +51,7 @@
       "confidence": "high"
     },
     {
-      "canonical_name": "penne pasta",
-      "category": "grains",
-      "histamine_score": 1,
-      "fodmap_oligos": "high",
-      "fodmap_fructose": "low",
-      "fodmap_polyols": "low",
-      "fodmap_lactose": "low",
-      "contains_gluten": true,
-      "contains_dairy": false,
-      "confidence": "high"
-    },
-    {
-      "canonical_name": "white bread",
+      "canonical_name": "breadcrumbs",
       "category": "grains",
       "histamine_score": 1,
       "fodmap_oligos": "high",
@@ -70,6 +70,30 @@
       "fodmap_fructose": "low",
       "fodmap_polyols": "low",
       "fodmap_lactose": "moderate",
+      "contains_gluten": true,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "cheese sauce",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "high",
+      "contains_gluten": true,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "cream sauce",
+      "category": "condiments",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "high",
       "contains_gluten": true,
       "contains_dairy": true,
       "confidence": "medium"
@@ -99,74 +123,62 @@
       "confidence": "low"
     },
     {
-      "canonical_name": "cream sauce",
-      "category": "condiments",
-      "histamine_score": 1,
-      "fodmap_oligos": "high",
-      "fodmap_fructose": "low",
-      "fodmap_polyols": "low",
-      "fodmap_lactose": "high",
-      "contains_gluten": true,
-      "contains_dairy": true,
-      "confidence": "medium"
-    },
-    {
-      "canonical_name": "cheese sauce",
-      "category": "condiments",
-      "histamine_score": 3,
-      "fodmap_oligos": "high",
-      "fodmap_fructose": "low",
-      "fodmap_polyols": "low",
-      "fodmap_lactose": "high",
-      "contains_gluten": true,
-      "contains_dairy": true,
-      "confidence": "medium"
-    },
-    {
-      "canonical_name": "ketchup",
-      "category": "condiments",
-      "histamine_score": 3,
-      "fodmap_oligos": "moderate",
-      "fodmap_fructose": "moderate",
-      "fodmap_polyols": "low",
-      "fodmap_lactose": "low",
-      "contains_gluten": false,
-      "contains_dairy": false,
-      "confidence": "medium"
-    },
-    {
-      "canonical_name": "lychee",
-      "category": "fruit",
-      "histamine_score": 2,
+      "canonical_name": "dried herbs",
+      "category": "spices",
+      "histamine_score": 0,
       "fodmap_oligos": "low",
       "fodmap_fructose": "low",
-      "fodmap_polyols": "moderate",
+      "fodmap_polyols": "low",
       "fodmap_lactose": "low",
       "contains_gluten": false,
       "contains_dairy": false,
       "confidence": "high"
     },
     {
-      "canonical_name": "popcorn",
+      "canonical_name": "dumpling wrappers",
       "category": "grains",
       "histamine_score": 1,
       "fodmap_oligos": "low",
       "fodmap_fructose": "low",
       "fodmap_polyols": "low",
       "fodmap_lactose": "low",
-      "contains_gluten": false,
+      "contains_gluten": true,
       "contains_dairy": false,
-      "confidence": "high"
+      "confidence": "medium"
     },
     {
-      "canonical_name": "vanilla extract",
-      "category": "spices",
+      "canonical_name": "flour tortilla",
+      "category": "grains",
       "histamine_score": 1,
+      "fodmap_oligos": "moderate",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "garam masala",
+      "category": "spices",
+      "histamine_score": 2,
       "fodmap_oligos": "low",
       "fodmap_fructose": "low",
       "fodmap_polyols": "low",
       "fodmap_lactose": "low",
       "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "gochujang",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "moderate",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
       "contains_dairy": false,
       "confidence": "high"
     },
@@ -183,16 +195,124 @@
       "confidence": "medium"
     },
     {
-      "canonical_name": "salad dressing",
+      "canonical_name": "guacamole",
+      "category": "condiments",
+      "histamine_score": 2,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "moderate",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "hoisin sauce",
       "category": "condiments",
       "histamine_score": 3,
-      "fodmap_oligos": "high",
+      "fodmap_oligos": "moderate",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "ketchup",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "moderate",
       "fodmap_fructose": "moderate",
       "fodmap_polyols": "low",
       "fodmap_lactose": "low",
       "contains_gluten": false,
       "contains_dairy": false,
       "confidence": "medium"
+    },
+    {
+      "canonical_name": "lemongrass",
+      "category": "spices",
+      "histamine_score": 0,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "lychee",
+      "category": "fruit",
+      "histamine_score": 2,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "moderate",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "macaroni",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "mushy peas",
+      "category": "legumes",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "naan",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "nori",
+      "category": "vegetables",
+      "histamine_score": 3,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "okra",
+      "category": "vegetables",
+      "histamine_score": 1,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
     },
     {
       "canonical_name": "pancake",
@@ -207,7 +327,91 @@
       "confidence": "medium"
     },
     {
-      "canonical_name": "dried herbs",
+      "canonical_name": "paneer",
+      "category": "dairy",
+      "histamine_score": 0,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": true,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "penne pasta",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "pesto",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "pita",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "popcorn",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "ramen noodles",
+      "category": "grains",
+      "histamine_score": 2,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "moderate",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "reblochon cheese",
+      "category": "dairy",
+      "histamine_score": 3,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": true,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "saffron",
       "category": "spices",
       "histamine_score": 0,
       "fodmap_oligos": "low",
@@ -216,7 +420,151 @@
       "fodmap_lactose": "low",
       "contains_gluten": false,
       "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "salad dressing",
+      "category": "condiments",
+      "histamine_score": 3,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "moderate",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "salsa",
+      "category": "condiments",
+      "histamine_score": 2,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "seaweed",
+      "category": "vegetables",
+      "histamine_score": 3,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
       "confidence": "high"
+    },
+    {
+      "canonical_name": "star anise",
+      "category": "spices",
+      "histamine_score": 1,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "low"
+    },
+    {
+      "canonical_name": "tartar sauce",
+      "category": "condiments",
+      "histamine_score": 2,
+      "fodmap_oligos": "moderate",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "tzatziki",
+      "category": "condiments",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "moderate",
+      "contains_gluten": false,
+      "contains_dairy": true,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "udon",
+      "category": "grains",
+      "histamine_score": 0,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "vanilla extract",
+      "category": "spices",
+      "histamine_score": 1,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "wasabi",
+      "category": "condiments",
+      "histamine_score": 2,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "wheat noodles",
+      "category": "grains",
+      "histamine_score": 0,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "white bread",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "high"
+    },
+    {
+      "canonical_name": "yorkshire pudding",
+      "category": "grains",
+      "histamine_score": 0,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "high",
+      "contains_gluten": true,
+      "contains_dairy": true,
+      "confidence": "medium"
     }
   ],
   "aliases": [
@@ -279,6 +627,246 @@
     {
       "alias": "brown gravy",
       "canonical_name": "gravy"
+    },
+    {
+      "alias": "bagels",
+      "canonical_name": "bagel"
+    },
+    {
+      "alias": "plain bagel",
+      "canonical_name": "bagel"
+    },
+    {
+      "alias": "bbq sauce",
+      "canonical_name": "barbecue sauce"
+    },
+    {
+      "alias": "barbeque sauce",
+      "canonical_name": "barbecue sauce"
+    },
+    {
+      "alias": "beef stock",
+      "canonical_name": "beef broth"
+    },
+    {
+      "alias": "beef bouillon",
+      "canonical_name": "beef broth"
+    },
+    {
+      "alias": "blood sausage",
+      "canonical_name": "black pudding"
+    },
+    {
+      "alias": "boudin noir",
+      "canonical_name": "black pudding"
+    },
+    {
+      "alias": "bread crumbs",
+      "canonical_name": "breadcrumbs"
+    },
+    {
+      "alias": "panko",
+      "canonical_name": "breadcrumbs"
+    },
+    {
+      "alias": "wonton wrappers",
+      "canonical_name": "dumpling wrappers"
+    },
+    {
+      "alias": "gyoza wrappers",
+      "canonical_name": "dumpling wrappers"
+    },
+    {
+      "alias": "potsticker wrappers",
+      "canonical_name": "dumpling wrappers"
+    },
+    {
+      "alias": "wheat tortilla",
+      "canonical_name": "flour tortilla"
+    },
+    {
+      "alias": "soft flour tortilla",
+      "canonical_name": "flour tortilla"
+    },
+    {
+      "alias": "flour wrap",
+      "canonical_name": "flour tortilla"
+    },
+    {
+      "alias": "indian spice blend",
+      "canonical_name": "garam masala"
+    },
+    {
+      "alias": "korean chili paste",
+      "canonical_name": "gochujang"
+    },
+    {
+      "alias": "gochujang paste",
+      "canonical_name": "gochujang"
+    },
+    {
+      "alias": "avocado dip",
+      "canonical_name": "guacamole"
+    },
+    {
+      "alias": "guac",
+      "canonical_name": "guacamole"
+    },
+    {
+      "alias": "hoisin",
+      "canonical_name": "hoisin sauce"
+    },
+    {
+      "alias": "chinese barbecue sauce",
+      "canonical_name": "hoisin sauce"
+    },
+    {
+      "alias": "lemon grass",
+      "canonical_name": "lemongrass"
+    },
+    {
+      "alias": "marrowfat peas",
+      "canonical_name": "mushy peas"
+    },
+    {
+      "alias": "naan bread",
+      "canonical_name": "naan"
+    },
+    {
+      "alias": "indian flatbread",
+      "canonical_name": "naan"
+    },
+    {
+      "alias": "nori seaweed",
+      "canonical_name": "nori"
+    },
+    {
+      "alias": "nori sheets",
+      "canonical_name": "nori"
+    },
+    {
+      "alias": "laver",
+      "canonical_name": "nori"
+    },
+    {
+      "alias": "ladies fingers",
+      "canonical_name": "okra"
+    },
+    {
+      "alias": "bhindi",
+      "canonical_name": "okra"
+    },
+    {
+      "alias": "panir",
+      "canonical_name": "paneer"
+    },
+    {
+      "alias": "indian cottage cheese",
+      "canonical_name": "paneer"
+    },
+    {
+      "alias": "pita bread",
+      "canonical_name": "pita"
+    },
+    {
+      "alias": "pitta",
+      "canonical_name": "pita"
+    },
+    {
+      "alias": "pitta bread",
+      "canonical_name": "pita"
+    },
+    {
+      "alias": "ramen",
+      "canonical_name": "ramen noodles"
+    },
+    {
+      "alias": "instant ramen noodles",
+      "canonical_name": "ramen noodles"
+    },
+    {
+      "alias": "saffron threads",
+      "canonical_name": "saffron"
+    },
+    {
+      "alias": "kesar",
+      "canonical_name": "saffron"
+    },
+    {
+      "alias": "pico de gallo",
+      "canonical_name": "salsa"
+    },
+    {
+      "alias": "tomato salsa",
+      "canonical_name": "salsa"
+    },
+    {
+      "alias": "wakame",
+      "canonical_name": "seaweed"
+    },
+    {
+      "alias": "kelp",
+      "canonical_name": "seaweed"
+    },
+    {
+      "alias": "kombu",
+      "canonical_name": "seaweed"
+    },
+    {
+      "alias": "sea vegetable",
+      "canonical_name": "seaweed"
+    },
+    {
+      "alias": "chinese star anise",
+      "canonical_name": "star anise"
+    },
+    {
+      "alias": "tartare sauce",
+      "canonical_name": "tartar sauce"
+    },
+    {
+      "alias": "tzatziki sauce",
+      "canonical_name": "tzatziki"
+    },
+    {
+      "alias": "cucumber yogurt dip",
+      "canonical_name": "tzatziki"
+    },
+    {
+      "alias": "udon noodles",
+      "canonical_name": "udon"
+    },
+    {
+      "alias": "japanese wheat noodles",
+      "canonical_name": "udon"
+    },
+    {
+      "alias": "wasabi paste",
+      "canonical_name": "wasabi"
+    },
+    {
+      "alias": "japanese horseradish",
+      "canonical_name": "wasabi"
+    },
+    {
+      "alias": "chinese wheat noodles",
+      "canonical_name": "wheat noodles"
+    },
+    {
+      "alias": "egg noodles",
+      "canonical_name": "wheat noodles"
+    },
+    {
+      "alias": "yorkshire puddings",
+      "canonical_name": "yorkshire pudding"
+    },
+    {
+      "alias": "tomato ketchup",
+      "canonical_name": "ketchup"
+    },
+    {
+      "alias": "catsup",
+      "canonical_name": "ketchup"
     }
   ]
 }

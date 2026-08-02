@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-09T15:13:15Z",
+  "generated_at": "2026-08-02T14:03:12Z",
   "files": [
     {
       "filename": "sighi_histamine.json",
@@ -8,7 +8,7 @@
       "source_name": "sighi",
       "downloaded_at": "2026-07-09T15:13:15Z",
       "row_count": 287,
-      "notes": "SIGHI compatibility list — hand-encoded from PDF (July 2024 edition)"
+      "notes": "SIGHI compatibility list \u2014 hand-encoded from PDF (July 2024 edition)"
     },
     {
       "filename": "fodmap_list.json",
@@ -17,7 +17,7 @@
       "source_name": "fodmap_list",
       "downloaded_at": "2026-07-09T15:13:15Z",
       "row_count": 191,
-      "notes": "oseparovic/fodmap_list — Monash-derived FODMAP categories (oligos/fructose/polyols/lactose)"
+      "notes": "oseparovic/fodmap_list \u2014 Monash-derived FODMAP categories (oligos/fructose/polyols/lactose)"
     },
     {
       "filename": "allergens.json",
@@ -30,12 +30,12 @@
     },
     {
       "filename": "curated_ingredients_2026_07.json",
-      "sha256": "5151bf9b29c72a8b901b72bbed103958441485a92946d10486295bbd70f63b78",
+      "sha256": "30768ce385fb16367ddd901d4a64daf6d4a8fe92535f7d14d46918ccab2df6e8",
       "source_url": null,
       "source_name": "manual",
-      "downloaded_at": "2026-07-09T15:13:15Z",
-      "row_count": null,
-      "notes": "Manually curated ingredients and aliases — research-based, July 2026"
+      "downloaded_at": "2026-08-02T14:03:12Z",
+      "row_count": 47,
+      "notes": "Manually curated ingredients and aliases \u2014 research-based; Aug 2026 platform-meal gap fill"
     }
   ]
 }
