@@ -1,7 +1,8 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import { Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
+import { BookOpen, Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
+import { MealLibrarySheet } from './meal-library-sheet'
 import { MealTimeChips } from './meal-time-chips'
 import { TagPeoplePicker } from './tag-people-picker'
 import { useUploadPhoto } from '@/lib/api/hooks'
@@ -39,6 +40,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
   const joinedGroups = (groups.data ?? []).filter((g) => g.my_status === 'joined')
 
   const [photos, setPhotos] = useState<StagedPhoto[]>([])
+  const [libraryOpen, setLibraryOpen] = useState(false)
 
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return
@@ -133,24 +135,32 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
 
   return (
     <div className="space-y-3">
-      <label className="text-sm font-medium leading-none">Photos</label>
+      <label className="text-sm font-medium leading-none">Add meal</label>
 
-      <div className="flex gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => cameraRef.current?.click()}
-          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-background px-2 py-2 text-xs font-medium transition-colors hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
         >
-          <Camera className="size-4" />
+          <Camera className="size-4 shrink-0" />
           Take Photo
         </button>
         <button
           type="button"
           onClick={() => galleryRef.current?.click()}
-          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-background px-2 py-2 text-xs font-medium transition-colors hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
         >
-          <ImageIcon className="size-4" />
+          <ImageIcon className="size-4 shrink-0" />
           Choose Photo
+        </button>
+        <button
+          type="button"
+          onClick={() => setLibraryOpen(true)}
+          className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg border border-primary/40 bg-background px-2 py-2 text-xs font-medium transition-colors hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+        >
+          <BookOpen className="size-4 shrink-0" />
+          From library
         </button>
       </div>
 
@@ -279,6 +289,14 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
           ))}
         </div>
       )}
+
+      <MealLibrarySheet
+        open={libraryOpen}
+        onOpenChange={setLibraryOpen}
+        date={date}
+        ensureEntryExists={ensureEntryExists}
+        onEntryEnsured={onEntryEnsured}
+      />
     </div>
   )
 }

@@ -53,11 +53,17 @@ def _photo_response(photo: Photo, companion_handles: list[str] | None = None) ->
     derived_diet_tags: list[str] = []
     if analysis is not None and analysis.status == "confirmed":
         derived_diet_tags = sorted(compute_signal_from_analyses([analysis]).flags)
+    icon_key = None
+    if "meal" not in unloaded:
+        meal = photo.meal
+        icon_key = meal.icon_key if meal is not None else None
     return PhotoResponse(
         id=photo.id,
         entry_id=photo.entry_id,
         meal_id=photo.meal_id,
         filename=photo.filename,
+        has_image=bool(photo.filename),
+        icon_key=icon_key,
         label=photo.label,
         meal_time=photo.meal_time,
         created_at=photo.created_at,

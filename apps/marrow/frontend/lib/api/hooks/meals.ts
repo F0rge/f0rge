@@ -2,7 +2,18 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost } from '@f0rge/ui/api'
-import type { Entry, Photo, RecentMeal } from '../types'
+import type { Entry, Photo, PlatformMeal, RecentMeal } from '../types'
+
+function mergePhotoIntoEntry(queryClient: ReturnType<typeof useQueryClient>, date: string, photo: Photo) {
+  queryClient.setQueryData<Entry>(['entry', date], (old) => {
+    if (!old) return old
+    if (old.photos.some((p) => p.id === photo.id)) return old
+    return { ...old, photos: [...old.photos, photo] }
+  })
+  queryClient.invalidateQueries({ queryKey: ['entry', date] })
+  queryClient.invalidateQueries({ queryKey: ['entries'] })
+  queryClient.invalidateQueries({ queryKey: ['meals', 'recent'] })
+}
 
 export function useRecentMeals(limit = 12) {
   return useQuery<RecentMeal[]>({
@@ -19,16 +30,48 @@ export function useCloneMeal() {
         source_photo_id: sourcePhotoId,
       })) as Photo,
     onSuccess: (photo, { date }) => {
-      // Merge immediately so the food grid updates with the toast — do not wait
-      // on a refetch that can still hit a stale Redis entry (or race autosave).
-      queryClient.setQueryData<Entry>(['entry', date], (old) => {
-        if (!old) return old
-        if (old.photos.some((p) => p.id === photo.id)) return old
-        return { ...old, photos: [...old.photos, photo] }
-      })
-      queryClient.invalidateQueries({ queryKey: ['entry', date] })
-      queryClient.invalidateQueries({ queryKey: ['entries'] })
-      queryClient.invalidateQueries({ queryKey: ['meals', 'recent'] })
+      mergePhotoIntoEntry(queryClient, date, photo)
+    },
+  })
+}
+
+export function usePlatformMeals({ q, cuisine }: { q?: string; cuisine?: string } = {}) {
+  const params = new URLSearchParams()
+  if (q) params.set('q', q)
+  if (cuisine) params.set('cuisine', cuisine)
+  const qs = params.toString()
+
+  return useQuery<PlatformMeal[]>({
+    queryKey: ['meals', 'library', q ?? '', cuisine ?? ''],
+    queryFn: () => apiGet(`/meals/library${qs ? `?${qs}` : ''}`),
+  })
+}
+
+export function usePlatformMealCuisines() {
+  return useQuery<string[]>({
+    queryKey: ['meals', 'library', 'cuisines'],
+    queryFn: () => apiGet('/meals/library/cuisines'),
+  })
+}
+
+export function useLogFromLibrary() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      date,
+      platformMealId,
+      mealTime,
+    }: {
+      date: string
+      platformMealId: number
+      mealTime?: string
+    }) =>
+      (await apiPost(`/entries/${date}/meals/from-library`, {
+        platform_meal_id: platformMealId,
+        ...(mealTime ? { meal_time: mealTime } : {}),
+      })) as Photo,
+    onSuccess: (photo, { date }) => {
+      mergePhotoIntoEntry(queryClient, date, photo)
     },
   })
 }

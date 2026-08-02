@@ -1,0 +1,82 @@
+[
+  {
+    "slug": "arroz-de-pato",
+    "name": "Arroz de pato",
+    "cuisine": "Portuguese",
+    "icon_key": "duck",
+    "sort_order": 10,
+    "ingredients": ["duck", "rice", "chorizo", "orange", "bay leaf"]
+  },
+  {
+    "slug": "bifana",
+    "name": "Bifana",
+    "cuisine": "Portuguese",
+    "icon_key": "sandwich",
+    "sort_order": 20,
+    "ingredients": ["pork, fresh", "sourdough bread", "garlic", "white wine"]
+  },
+  {
+    "slug": "francesinha",
+    "name": "Francesinha",
+    "cuisine": "Portuguese",
+    "icon_key": "sandwich",
+    "sort_order": 30,
+    "ingredients": ["sourdough bread", "ham", "sausage, cured", "parmesan cheese", "beer"]
+  },
+  {
+    "slug": "pastel-de-nata",
+    "name": "Pastel de nata",
+    "cuisine": "Portuguese",
+    "icon_key": "pastry",
+    "sort_order": 40,
+    "ingredients": ["egg yolk", "milk", "sugar", "cinnamon", "wheat flour"]
+  },
+  {
+    "slug": "grilled-salmon",
+    "name": "Grilled salmon",
+    "cuisine": "Simple",
+    "icon_key": "fish",
+    "sort_order": 50,
+    "ingredients": ["salmon, fresh", "olive oil", "lemon", "dill"]
+  },
+  {
+    "slug": "greek-salad",
+    "name": "Greek salad",
+    "cuisine": "Mediterranean",
+    "icon_key": "salad",
+    "sort_order": 60,
+    "ingredients": ["tomato", "cucumber", "feta cheese", "olive oil", "onion"]
+  },
+  {
+    "slug": "chicken-tikka-masala",
+    "name": "Chicken tikka masala",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "sort_order": 70,
+    "ingredients": ["chicken", "tomato", "cream", "garlic"]
+  },
+  {
+    "slug": "avocado-toast",
+    "name": "Avocado toast",
+    "cuisine": "Simple",
+    "icon_key": "toast",
+    "sort_order": 80,
+    "ingredients": ["sourdough bread", "avocado", "lemon", "chili flakes"]
+  },
+  {
+    "slug": "shoyu-ramen",
+    "name": "Shoyu ramen",
+    "cuisine": "Japanese",
+    "icon_key": "soup",
+    "sort_order": 90,
+    "ingredients": ["rice noodles", "egg", "onion", "garlic"]
+  },
+  {
+    "slug": "mushroom-risotto",
+    "name": "Mushroom risotto",
+    "cuisine": "Italian",
+    "icon_key": "bowl",
+    "sort_order": 100,
+    "ingredients": ["rice", "mushroom", "parmesan cheese", "butter", "onion"]
+  }
+]

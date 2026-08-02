@@ -79,7 +79,7 @@ export function FoodCard({
 
         {existingPhotos.length > 0 && (
           <div className="space-y-3">
-            <label className="text-sm font-semibold">Uploaded photos</label>
+            <label className="text-sm font-semibold">Today&apos;s meals</label>
             <div className="grid grid-cols-2 gap-3">
               {existingPhotos.map((photo) => (
                 <MealCard

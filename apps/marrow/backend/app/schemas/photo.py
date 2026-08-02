@@ -10,7 +10,9 @@ class PhotoResponse(BaseModel):
     id: int
     entry_id: int
     meal_id: int | None = None
-    filename: str
+    filename: Optional[str] = None
+    has_image: bool = True
+    icon_key: Optional[str] = None
     label: Optional[str] = None
     # AI dish name from the meal's analysis; `label` stays the user-facing override.
     # Populated by PhotoService.list_photos only — see the note there.

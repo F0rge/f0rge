@@ -1,7 +1,8 @@
 export interface Photo {
   id: number
   entry_id: number
-  filename: string
+  filename: string | null
+  meal_id?: number | null
   label: string | null
   meal_time: string | null
   created_at: string
@@ -12,6 +13,8 @@ export interface Photo {
   hidden_at?: string | null
   diet_tags?: string[]
   derived_diet_tags?: string[]
+  has_image?: boolean
+  icon_key?: string | null
 }
 
 export interface EntryStats {

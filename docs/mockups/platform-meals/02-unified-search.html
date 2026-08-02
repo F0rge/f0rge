@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Option B — Unified quick-log search</title>
+  <link rel="stylesheet" href="shared.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <a class="nav-back" href="index.html">← All options</a>
+  <div class="page-header">
+    <h1>B · Unified quick-log search</h1>
+    <p>
+      “Log again” becomes <strong>Quick log</strong> — one place for your history and the platform library.
+      Search “arroz” and tap the library result. Photo chips stay for your meals; icon chips for library.
+    </p>
+    <div class="meta">
+      <span class="pill-tag accent">Try: Search all → type “arroz” → tap Arroz de pato</span>
+    </div>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="phone-status"><span>14:41</span><span>●●● 5G ▮</span></div>
+    <div class="toast" id="toast"></div>
+    <div class="phone-body">
+      <div class="app-header">
+        <div class="title">Check-in</div>
+        <div class="sub">Sunday 2 Aug 2026</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Food &amp; drinks <span class="tier">Core</span></div>
+        </div>
+        <div class="card-body">
+          <div id="diet-risk"></div>
+
+          <div id="uploaded" class="section" hidden>
+            <div class="label-sm" style="margin-bottom:8px">Today’s meals</div>
+            <div class="meals-grid" id="meals-grid"></div>
+          </div>
+
+          <div class="section">
+            <div class="label-row">
+              <span class="label-sm">Quick log</span>
+              <button class="link-btn" type="button" id="btn-search-all">Search all</button>
+            </div>
+            <div class="hint-banner" id="hint-banner" style="margin-bottom:10px"></div>
+            <div class="strip" id="mixed-strip"></div>
+          </div>
+
+          <div class="section">
+            <div class="label-sm" style="margin-bottom:8px">Photos</div>
+            <div class="capture-row">
+              <button class="capture-btn" type="button" id="btn-take"></button>
+              <button class="capture-btn" type="button" id="btn-choose"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scrim" id="scrim"></div>
+
+    <div class="sheet" id="sheet-search">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h3>Quick log</h3>
+        <p>Search meals you’ve logged before <em>or</em> dishes from the platform library — no photo needed.</p>
+      </div>
+      <div class="sheet-body">
+        <div class="search">
+          <span id="search-icon"></span>
+          <input id="q" type="search" placeholder="Try “arroz”…" autocomplete="off" autofocus />
+        </div>
+        <div class="tabs" id="tabs">
+          <button class="tab on" type="button" data-tab="all">All</button>
+          <button class="tab" type="button" data-tab="yours">Yours</button>
+          <button class="tab" type="button" data-tab="library">Library</button>
+        </div>
+        <div id="results"></div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="nav-item on" id="nav-home"></div>
+      <div class="nav-item" id="nav-hist"></div>
+      <div class="nav-item" id="nav-treat"></div>
+      <div class="nav-item" id="nav-prof"></div>
+    </nav>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    let tab = 'all';
+    let logged = [];
+
+    document.getElementById('btn-take').innerHTML = ICONS.camera + '<span>Take Photo</span>';
+    document.getElementById('btn-choose').innerHTML = ICONS.image + '<span>Choose Photo</span>';
+    document.getElementById('hint-banner').innerHTML =
+      ICONS.sparkles + '<span><strong>New:</strong> Library dishes appear in this strip with icons. Search all covers both sources.</span>';
+    document.getElementById('search-icon').innerHTML = ICONS.search;
+    document.getElementById('nav-home').innerHTML = ICONS.home + '<span>Today</span>';
+    document.getElementById('nav-hist').innerHTML = ICONS.history + '<span>History</span>';
+    document.getElementById('nav-treat').innerHTML = ICONS.pills + '<span>Treatments</span>';
+    document.getElementById('nav-prof').innerHTML = ICONS.user + '<span>Profile</span>';
+    document.getElementById('diet-risk').innerHTML = dietRiskBlock(false);
+    wireDietPills();
+
+    // Mixed strip: suggested library (Portuguese) + your recent
+    const stripItems = [
+      { kind: 'library', meal: PLATFORM_MEALS[0] },
+      { kind: 'yours', meal: YOUR_MEALS[0] },
+      { kind: 'library', meal: PLATFORM_MEALS[1] },
+      { kind: 'yours', meal: YOUR_MEALS[1] },
+      { kind: 'library', meal: PLATFORM_MEALS[4] },
+      { kind: 'yours', meal: YOUR_MEALS[2] },
+    ];
+
+    function renderStrip() {
+      document.getElementById('mixed-strip').innerHTML = stripItems.map((item, i) => {
+        if (item.kind === 'library') {
+          const m = item.meal;
+          return `
+            <button class="chip highlight-pulse" type="button" data-log-lib="${m.id}" style="${i === 0 ? '' : ''}">
+              <div class="chip-thumb">${iconThumb(m.icon, m.tone)}
+                <span class="icon-badge" style="font-size:0.5rem;padding:2px 5px">Lib</span>
+              </div>
+              <div class="chip-name">${m.name}</div>
+              <div class="chip-when">${m.cuisine}</div>
+              ${flagPills(m.flags)}
+            </button>`;
+        }
+        const m = item.meal;
+        return `
+          <button class="chip" type="button" data-log-yours="${m.id}">
+            <div class="chip-thumb">${photoThumb(m.photo)}</div>
+            <div class="chip-name">${m.name}</div>
+            <div class="chip-when">${m.when}${m.times > 1 ? ` · ×${m.times}` : ''}</div>
+            ${flagPills(m.flags)}
+          </button>`;
+      }).join('');
+
+      document.querySelectorAll('[data-log-lib]').forEach(btn => {
+        btn.addEventListener('click', () => logLibrary(PLATFORM_MEALS.find(m => m.id === btn.dataset.logLib)));
+      });
+      document.querySelectorAll('[data-log-yours]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const m = YOUR_MEALS.find(x => x.id === btn.dataset.logYours);
+          showToast(`Logged again: ${m.name}`);
+        });
+      });
+    }
+
+    function logLibrary(meal) {
+      logged.unshift({ ...meal, source: 'library' });
+      renderLogged();
+      closeSheets();
+      showToast(`Logged: ${meal.name}`);
+    }
+
+    function renderLogged() {
+      const wrap = document.getElementById('uploaded');
+      const grid = document.getElementById('meals-grid');
+      if (!logged.length) {
+        wrap.hidden = true;
+        document.getElementById('diet-risk').innerHTML = dietRiskBlock(false);
+        wireDietPills();
+        return;
+      }
+      wrap.hidden = false;
+      document.getElementById('diet-risk').innerHTML = dietRiskBlock(true);
+      wireDietPills();
+      grid.innerHTML = logged.map((m, i) => `
+        <div class="meal-card">
+          <button class="del" type="button" data-del="${i}" aria-label="Delete">${ICONS.x}</button>
+          <div class="thumb">
+            <span class="icon-badge">Library</span>
+            ${iconThumb(m.icon, m.tone)}
+          </div>
+          <div class="meta">
+            <div class="name">${m.name}</div>
+            <div style="margin-top:4px">${flagPills(m.flags)}</div>
+          </div>
+        </div>`).join('');
+      grid.querySelectorAll('[data-del]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          logged.splice(+btn.dataset.del, 1);
+          renderLogged();
+        });
+      });
+    }
+
+    function renderResults() {
+      const q = (document.getElementById('q').value || '').trim().toLowerCase();
+      const yours = YOUR_MEALS
+        .filter(m => !q || m.name.toLowerCase().includes(q))
+        .map(m => ({ kind: 'yours', meal: m }));
+      const lib = PLATFORM_MEALS
+        .filter(m => !q || m.name.toLowerCase().includes(q) || m.ingredients.some(i => i.toLowerCase().includes(q)) || m.cuisine.toLowerCase().includes(q))
+        .map(m => ({ kind: 'library', meal: m }));
+
+      let rows = [];
+      if (tab === 'all') rows = [...lib, ...yours];
+      if (tab === 'yours') rows = yours;
+      if (tab === 'library') rows = lib;
+
+      // Prefer library matches when searching (demo: arroz first)
+      if (tab === 'all' && q) {
+        rows = [...lib, ...yours];
+      }
+
+      const el = document.getElementById('results');
+      if (!rows.length) {
+        el.innerHTML = `<div class="empty-hint">No meals match “${q || '…'}”.</div>`;
+        return;
+      }
+      el.innerHTML = rows.map(r => {
+        if (r.kind === 'library') {
+          const m = r.meal;
+          return `
+            <button class="list-row" type="button" data-pick-lib="${m.id}">
+              <div class="lr-thumb">${iconThumb(m.icon, m.tone)}</div>
+              <div class="lr-body">
+                <div class="lr-name">${m.name}</div>
+                <div class="lr-meta">
+                  <span class="source-pill">Library</span>
+                  <span class="text-xs muted">${m.cuisine}</span>
+                  ${flagPills(m.flags)}
+                </div>
+              </div>
+            </button>`;
+        }
+        const m = r.meal;
+        return `
+          <button class="list-row" type="button" data-pick-yours="${m.id}">
+            <div class="lr-thumb">${photoThumb(m.photo)}</div>
+            <div class="lr-body">
+              <div class="lr-name">${m.name}</div>
+              <div class="lr-meta">
+                <span class="source-pill yours">Yours</span>
+                <span class="text-xs muted">Logged ${m.times}×</span>
+                ${flagPills(m.flags)}
+              </div>
+            </div>
+          </button>`;
+      }).join('');
+
+      el.querySelectorAll('[data-pick-lib]').forEach(btn => {
+        btn.addEventListener('click', () => logLibrary(PLATFORM_MEALS.find(m => m.id === btn.dataset.pickLib)));
+      });
+      el.querySelectorAll('[data-pick-yours]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const m = YOUR_MEALS.find(x => x.id === btn.dataset.pickYours);
+          closeSheets();
+          showToast(`Logged again: ${m.name}`);
+        });
+      });
+    }
+
+    document.getElementById('btn-search-all').addEventListener('click', () => {
+      document.getElementById('q').value = '';
+      tab = 'all';
+      document.querySelectorAll('[data-tab]').forEach(t => t.classList.toggle('on', t.dataset.tab === 'all'));
+      renderResults();
+      openSheet('sheet-search');
+      setTimeout(() => document.getElementById('q').focus(), 280);
+    });
+    document.getElementById('q').addEventListener('input', renderResults);
+    document.getElementById('tabs').addEventListener('click', e => {
+      const t = e.target.closest('[data-tab]');
+      if (!t) return;
+      tab = t.dataset.tab;
+      document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === t));
+      renderResults();
+    });
+    document.getElementById('scrim').addEventListener('click', closeSheets);
+    document.getElementById('btn-take').addEventListener('click', () => showToast('Camera — unchanged'));
+    document.getElementById('btn-choose').addEventListener('click', () => showToast('Gallery — unchanged'));
+
+    renderStrip();
+  </script>
+</body>
+</html>

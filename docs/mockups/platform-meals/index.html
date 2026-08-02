@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Platform meals — choose a prototype</title>
+  <link rel="stylesheet" href="shared.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="page-header">
+    <h1>Platform meals — UX prototypes</h1>
+    <p>
+      Log curated dishes (e.g. <em>Arroz de pato</em>) composed from the ingredient catalog,
+      with default icons instead of photos — for restaurants, shared meals, or anytime a camera is awkward.
+    </p>
+    <div class="meta">
+      <span class="pill-tag">Matches Food &amp; drinks card</span>
+      <span class="pill-tag">Interactive · mobile frame</span>
+      <span class="pill-tag accent">Pick one direction</span>
+    </div>
+  </div>
+
+  <div class="chooser">
+    <a href="01-meal-library.html">
+      <div class="num">Option A</div>
+      <h2>Meal library browser</h2>
+      <p>
+        Third capture action: <strong>From library</strong>. Browse by cuisine, tap an icon tile,
+        set meal time, done. Discovery-first — best when the platform catalog is the main path.
+      </p>
+    </a>
+    <a href="02-unified-search.html">
+      <div class="num">Option B</div>
+      <h2>Unified quick-log search</h2>
+      <p>
+        Extend <strong>Log again</strong> into one search across your history <em>and</em> the platform library.
+        Type “arroz” → hit the catalog dish. Smallest mental-model change.
+      </p>
+    </a>
+    <a href="03-ingredient-composer.html">
+      <div class="num">Option C</div>
+      <h2>Build from ingredients</h2>
+      <p>
+        <strong>Log without photo</strong> → name the dish → assemble ingredients from your catalog
+        (or start from a platform template). Icons + diet flags fall out of the ingredient list.
+        Best for dishes not yet curated.
+      </p>
+    </a>
+  </div>
+
+  <p class="text-xs muted" style="width:min(100%,420px);line-height:1.45">
+    Scenario to try in each mockup: you ate <strong>Arroz de pato</strong> at a restaurant,
+    didn’t take a photo, and it’s not in your past meals.
+  </p>
+</body>
+</html>

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Option C — Build from ingredients</title>
+  <link rel="stylesheet" href="shared.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <a class="nav-back" href="index.html">← All options</a>
+  <div class="page-header">
+    <h1>C · Build from ingredients</h1>
+    <p>
+      Third action: <strong>Without photo</strong>. Name the dish, optionally start from a library template,
+      then confirm/edit ingredients from your dietary catalog. Icon + diet flags are derived from ingredients —
+      works even when the dish isn’t curated yet.
+    </p>
+    <div class="meta">
+      <span class="pill-tag accent">Try: Without photo → start from Arroz de pato → Log</span>
+    </div>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="phone-status"><span>14:41</span><span>●●● 5G ▮</span></div>
+    <div class="toast" id="toast"></div>
+    <div class="phone-body">
+      <div class="app-header">
+        <div class="title">Check-in</div>
+        <div class="sub">Sunday 2 Aug 2026</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Food &amp; drinks <span class="tier">Core</span></div>
+        </div>
+        <div class="card-body">
+          <div id="diet-risk"></div>
+
+          <div id="uploaded" class="section" hidden>
+            <div class="label-sm" style="margin-bottom:8px">Today’s meals</div>
+            <div class="meals-grid" id="meals-grid"></div>
+          </div>
+
+          <div class="section">
+            <div class="label-row"><span class="label-sm">Log again</span></div>
+            <div class="strip" id="your-strip"></div>
+          </div>
+
+          <div class="section">
+            <div class="label-sm" style="margin-bottom:8px">Add meal</div>
+            <div class="hint-banner" id="hint-banner"></div>
+            <div class="capture-row three" style="margin-top:8px">
+              <button class="capture-btn" type="button" id="btn-take"></button>
+              <button class="capture-btn" type="button" id="btn-choose"></button>
+              <button class="capture-btn primary-outline highlight-pulse" type="button" id="btn-compose"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scrim" id="scrim"></div>
+
+    <!-- Composer sheet -->
+    <div class="sheet" id="sheet-compose">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h3>Log without photo</h3>
+        <p id="sheet-sub">Name the dish, then build it from ingredients.</p>
+      </div>
+      <div class="sheet-body">
+        <div class="step-dots" id="steps">
+          <div class="step-dot on"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+        </div>
+
+        <!-- Step 1: name / template -->
+        <div id="step-1">
+          <label class="label-sm" for="dish-name">Dish name</label>
+          <input id="dish-name" type="text" placeholder="e.g. Arroz de pato"
+            style="width:100%;min-height:44px;margin:8px 0 14px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;outline:none" />
+
+          <div class="label-sm" style="margin-bottom:8px">Or start from library</div>
+          <div class="strip" id="template-strip" style="margin-bottom:12px"></div>
+
+          <button class="btn-primary" type="button" id="btn-to-ingredients" disabled>Continue to ingredients</button>
+        </div>
+
+        <!-- Step 2: ingredients -->
+        <div id="step-2" hidden>
+          <div class="label-sm">Ingredients</div>
+          <p class="text-xs muted" style="margin:4px 0 8px">Pulled from your dietary catalog. Edit before logging.</p>
+          <div class="ing-list" id="ing-list"></div>
+          <button class="add-ing" type="button" id="btn-add-ing"></button>
+
+          <div id="add-panel" hidden style="margin-top:10px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--muted)">
+            <div class="search" style="margin-bottom:8px">
+              <span id="ing-search-icon"></span>
+              <input id="ing-q" type="search" placeholder="Search catalog…" />
+            </div>
+            <div id="ing-results" style="max-height:160px;overflow-y:auto"></div>
+          </div>
+
+          <div id="derived-flags" style="margin-top:14px"></div>
+
+          <button class="btn-primary" type="button" id="btn-to-confirm">Continue</button>
+          <button class="btn-secondary" type="button" id="btn-back-1">Back</button>
+        </div>
+
+        <!-- Step 3: confirm -->
+        <div id="step-3" hidden>
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
+            <div id="final-thumb" style="width:72px;height:72px;border-radius:12px;overflow:hidden;flex:none"></div>
+            <div>
+              <div id="final-name" style="font-weight:650;font-size:1rem"></div>
+              <div id="final-flags" style="margin-top:6px"></div>
+              <div class="text-xs muted" style="margin-top:4px">Icon from cuisine · flags from ingredients</div>
+            </div>
+          </div>
+          <div class="label-sm" style="margin-bottom:8px">Meal time</div>
+          <div class="meal-time" id="meal-times">
+            <button class="time-chip on" type="button" data-time>Now</button>
+            <button class="time-chip" type="button" data-time>1h ago</button>
+            <button class="time-chip" type="button" data-time>2h ago</button>
+            <button class="time-chip" type="button" data-time>3h ago</button>
+            <button class="time-chip" type="button" data-time>Custom</button>
+          </div>
+          <button class="btn-primary" type="button" id="btn-final-log">Log meal</button>
+          <button class="btn-secondary" type="button" id="btn-back-2">Back</button>
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="nav-item on" id="nav-home"></div>
+      <div class="nav-item" id="nav-hist"></div>
+      <div class="nav-item" id="nav-treat"></div>
+      <div class="nav-item" id="nav-prof"></div>
+    </nav>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    let step = 1;
+    let ingredients = [];
+    let icon = 'bowl';
+    let tone = 'slate';
+    let logged = [];
+
+    document.getElementById('btn-take').innerHTML = ICONS.camera + '<span>Take Photo</span>';
+    document.getElementById('btn-choose').innerHTML = ICONS.image + '<span>Choose Photo</span>';
+    document.getElementById('btn-compose').innerHTML = ICONS.plus + '<span>Without photo</span>';
+    document.getElementById('hint-banner').innerHTML =
+      ICONS.sparkles + '<span><strong>New:</strong> Build a meal from catalog ingredients when you can’t (or won’t) take a photo.</span>';
+    document.getElementById('btn-add-ing').innerHTML = ICONS.plus + ' Add ingredient';
+    document.getElementById('ing-search-icon').innerHTML = ICONS.search;
+    document.getElementById('nav-home').innerHTML = ICONS.home + '<span>Today</span>';
+    document.getElementById('nav-hist').innerHTML = ICONS.history + '<span>History</span>';
+    document.getElementById('nav-treat').innerHTML = ICONS.pills + '<span>Treatments</span>';
+    document.getElementById('nav-prof').innerHTML = ICONS.user + '<span>Profile</span>';
+    document.getElementById('diet-risk').innerHTML = dietRiskBlock(false);
+    wireDietPills();
+
+    document.getElementById('your-strip').innerHTML = YOUR_MEALS.map(m => `
+      <button class="chip" type="button">
+        <div class="chip-thumb">${photoThumb(m.photo)}</div>
+        <div class="chip-name">${m.name}</div>
+        <div class="chip-when">${m.when}</div>
+        ${flagPills(m.flags)}
+      </button>`).join('');
+
+    document.getElementById('template-strip').innerHTML = PLATFORM_MEALS.slice(0, 6).map(m => `
+      <button class="chip" type="button" data-template="${m.id}">
+        <div class="chip-thumb">${iconThumb(m.icon, m.tone)}</div>
+        <div class="chip-name">${m.name}</div>
+        <div class="chip-when">${m.cuisine}</div>
+      </button>`).join('');
+
+    document.querySelectorAll('[data-template]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const m = PLATFORM_MEALS.find(x => x.id === btn.dataset.template);
+        document.getElementById('dish-name').value = m.name;
+        ingredients = m.ingredients.map(name => {
+          const cat = CATALOG_INGREDIENTS.find(c => c.name === name);
+          return cat || { name, flags: [], hist: 0 };
+        });
+        icon = m.icon;
+        tone = m.tone;
+        updateContinue();
+        goStep(2);
+      });
+    });
+
+    function derivedFlags() {
+      const set = new Set();
+      ingredients.forEach(i => (i.flags || []).forEach(f => set.add(f)));
+      return [...set];
+    }
+
+    function updateContinue() {
+      const name = document.getElementById('dish-name').value.trim();
+      document.getElementById('btn-to-ingredients').disabled = name.length < 2;
+    }
+
+    function renderIngredients() {
+      const list = document.getElementById('ing-list');
+      if (!ingredients.length) {
+        list.innerHTML = `<div class="empty-hint" style="padding:16px">No ingredients yet — add from your catalog.</div>`;
+      } else {
+        list.innerHTML = ingredients.map((ing, i) => `
+          <div class="ing-row">
+            <span>${ing.name}</span>
+            ${flagPills(ing.flags)}
+            <button class="rm" type="button" data-rm="${i}" aria-label="Remove">${ICONS.x}</button>
+          </div>`).join('');
+        list.querySelectorAll('[data-rm]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            ingredients.splice(+btn.dataset.rm, 1);
+            renderIngredients();
+          });
+        });
+      }
+      const flags = derivedFlags();
+      document.getElementById('derived-flags').innerHTML = flags.length
+        ? `<div class="text-xs muted" style="margin-bottom:6px">Derived diet flags</div>${flagPills(flags)}`
+        : `<div class="text-xs muted">No diet flags from current ingredients</div>`;
+    }
+
+    function goStep(n) {
+      step = n;
+      document.querySelectorAll('.step-dot').forEach((d, i) => d.classList.toggle('on', i < n));
+      document.getElementById('step-1').hidden = n !== 1;
+      document.getElementById('step-2').hidden = n !== 2;
+      document.getElementById('step-3').hidden = n !== 3;
+      const subs = [
+        '',
+        'Name the dish, then build it from ingredients.',
+        'Confirm ingredients from your dietary catalog.',
+        'Pick meal time and log.',
+      ];
+      document.getElementById('sheet-sub').textContent = subs[n];
+      if (n === 2) renderIngredients();
+      if (n === 3) {
+        const name = document.getElementById('dish-name').value.trim();
+        document.getElementById('final-name').textContent = name;
+        document.getElementById('final-flags').innerHTML = flagPills(derivedFlags());
+        document.getElementById('final-thumb').innerHTML = iconThumb(icon, tone);
+      }
+    }
+
+    function renderIngSearch() {
+      const q = (document.getElementById('ing-q').value || '').trim().toLowerCase();
+      const hits = CATALOG_INGREDIENTS.filter(c =>
+        !q || c.name.toLowerCase().includes(q)
+      ).filter(c => !ingredients.some(i => i.name === c.name));
+      const el = document.getElementById('ing-results');
+      if (!hits.length) {
+        el.innerHTML = `<div class="text-xs muted" style="padding:8px">No matches.</div>`;
+        return;
+      }
+      el.innerHTML = hits.map(c => `
+        <button class="list-row" type="button" data-add-ing="${c.name}" style="margin-bottom:6px;padding:6px 8px">
+          <div class="lr-body">
+            <div class="lr-name">${c.name}</div>
+            <div class="lr-meta">${flagPills(c.flags) || '<span class="text-2xs muted">No flags</span>'}</div>
+          </div>
+        </button>`).join('');
+      el.querySelectorAll('[data-add-ing]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const c = CATALOG_INGREDIENTS.find(x => x.name === btn.dataset.addIng);
+          ingredients.push(c);
+          document.getElementById('add-panel').hidden = true;
+          renderIngredients();
+        });
+      });
+    }
+
+    function renderLogged() {
+      const wrap = document.getElementById('uploaded');
+      const grid = document.getElementById('meals-grid');
+      if (!logged.length) {
+        wrap.hidden = true;
+        document.getElementById('diet-risk').innerHTML = dietRiskBlock(false);
+        wireDietPills();
+        return;
+      }
+      wrap.hidden = false;
+      document.getElementById('diet-risk').innerHTML = dietRiskBlock(true);
+      wireDietPills();
+      grid.innerHTML = logged.map((m, i) => `
+        <div class="meal-card">
+          <button class="del" type="button" data-del="${i}">${ICONS.x}</button>
+          <div class="thumb">
+            <span class="icon-badge">Composed</span>
+            ${iconThumb(m.icon, m.tone)}
+          </div>
+          <div class="meta">
+            <div class="name">${m.name}</div>
+            <div class="text-2xs muted" style="margin-top:2px">${m.ingredients.length} ingredients</div>
+            <div style="margin-top:4px">${flagPills(m.flags)}</div>
+          </div>
+        </div>`).join('');
+      grid.querySelectorAll('[data-del]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          logged.splice(+btn.dataset.del, 1);
+          renderLogged();
+        });
+      });
+    }
+
+    function resetComposer() {
+      step = 1;
+      ingredients = [];
+      icon = 'bowl';
+      tone = 'slate';
+      document.getElementById('dish-name').value = '';
+      document.getElementById('add-panel').hidden = true;
+      updateContinue();
+      goStep(1);
+    }
+
+    document.getElementById('btn-compose').addEventListener('click', () => {
+      resetComposer();
+      openSheet('sheet-compose');
+      setTimeout(() => document.getElementById('dish-name').focus(), 280);
+    });
+    document.getElementById('dish-name').addEventListener('input', updateContinue);
+    document.getElementById('btn-to-ingredients').addEventListener('click', () => {
+      // Guess icon from name if blank template
+      const name = document.getElementById('dish-name').value.toLowerCase();
+      const match = PLATFORM_MEALS.find(m => m.name.toLowerCase() === name);
+      if (match) {
+        icon = match.icon;
+        tone = match.tone;
+        if (!ingredients.length) {
+          ingredients = match.ingredients.map(n => CATALOG_INGREDIENTS.find(c => c.name === n) || { name: n, flags: [], hist: 0 });
+        }
+      } else if (name.includes('arroz') || name.includes('rice')) {
+        icon = 'bowl'; tone = 'amber';
+      } else if (name.includes('salad')) {
+        icon = 'salad'; tone = 'sage';
+      }
+      goStep(2);
+    });
+    document.getElementById('btn-back-1').addEventListener('click', () => goStep(1));
+    document.getElementById('btn-to-confirm').addEventListener('click', () => {
+      if (!ingredients.length) {
+        showToast('Add at least one ingredient');
+        return;
+      }
+      goStep(3);
+    });
+    document.getElementById('btn-back-2').addEventListener('click', () => goStep(2));
+    document.getElementById('btn-add-ing').addEventListener('click', () => {
+      const panel = document.getElementById('add-panel');
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) {
+        document.getElementById('ing-q').value = '';
+        renderIngSearch();
+        document.getElementById('ing-q').focus();
+      }
+    });
+    document.getElementById('ing-q').addEventListener('input', renderIngSearch);
+    document.getElementById('meal-times').addEventListener('click', e => {
+      const t = e.target.closest('[data-time]');
+      if (!t) return;
+      document.querySelectorAll('[data-time]').forEach(c => c.classList.remove('on'));
+      t.classList.add('on');
+    });
+    document.getElementById('btn-final-log').addEventListener('click', () => {
+      const name = document.getElementById('dish-name').value.trim();
+      logged.unshift({
+        name,
+        icon,
+        tone,
+        flags: derivedFlags(),
+        ingredients: [...ingredients],
+      });
+      renderLogged();
+      closeSheets();
+      showToast(`Logged: ${name}`);
+    });
+    document.getElementById('scrim').addEventListener('click', closeSheets);
+    document.getElementById('btn-take').addEventListener('click', () => showToast('Camera — unchanged'));
+    document.getElementById('btn-choose').addEventListener('click', () => showToast('Gallery — unchanged'));
+  </script>
+</body>
+</html>

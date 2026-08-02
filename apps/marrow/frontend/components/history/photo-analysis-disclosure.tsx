@@ -2,12 +2,15 @@
 
 import { useState } from 'react'
 import { ChevronDown, Pencil, Check } from 'lucide-react'
+import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
 import { usePhotoAnalysis } from '@/lib/api/hooks'
 import { PhotoAnalysis } from '@/components/shared/food-analysis'
+import type { Photo } from '@/lib/api/types'
 
 interface PhotoAnalysisDisclosureProps {
   photoId: number
   photoLabel?: string | null
+  photo?: Pick<Photo, 'has_image' | 'icon_key' | 'filename'>
 }
 
 function IngredientTeaser({ photoId }: { photoId: number }) {
@@ -26,7 +29,15 @@ function IngredientTeaser({ photoId }: { photoId: number }) {
   )
 }
 
-function SummaryContent({ photoId, photoLabel }: { photoId: number; photoLabel?: string | null }) {
+function SummaryContent({
+  photoId,
+  photoLabel,
+  photo,
+}: {
+  photoId: number
+  photoLabel?: string | null
+  photo?: Pick<Photo, 'has_image' | 'icon_key' | 'filename'>
+}) {
   const { data: analysis } = usePhotoAnalysis(photoId)
 
   const dishName = photoLabel?.trim() || analysis?.dish_name || `Photo ${photoId}`
@@ -35,15 +46,24 @@ function SummaryContent({ photoId, photoLabel }: { photoId: number; photoLabel?:
       ? Math.round(analysis.dish_confidence * 100)
       : null
   const isConfirmed = analysis?.status === 'confirmed'
+  const showImage = photo ? photoHasImage(photo) : true
 
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`/api/v1/photos/${photoId}/file`}
-        alt={dishName}
-        className="size-9 shrink-0 rounded object-cover"
-      />
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/v1/photos/${photoId}/file`}
+          alt={dishName}
+          className="size-9 shrink-0 rounded object-cover"
+        />
+      ) : (
+        <MealIconThumb
+          iconKey={photo?.icon_key ?? 'bowl'}
+          size="sm"
+          className="size-9 shrink-0 rounded"
+        />
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-semibold">{dishName}</span>
@@ -62,7 +82,7 @@ function SummaryContent({ photoId, photoLabel }: { photoId: number; photoLabel?:
   )
 }
 
-export function PhotoAnalysisDisclosure({ photoId, photoLabel }: PhotoAnalysisDisclosureProps) {
+export function PhotoAnalysisDisclosure({ photoId, photoLabel, photo }: PhotoAnalysisDisclosureProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
 
@@ -88,7 +108,7 @@ export function PhotoAnalysisDisclosure({ photoId, photoLabel }: PhotoAnalysisDi
         aria-controls={bodyId}
         className="flex w-full items-center gap-2 px-2.5 py-2 text-left"
       >
-        <SummaryContent photoId={photoId} photoLabel={photoLabel} />
+        <SummaryContent photoId={photoId} photoLabel={photoLabel} photo={photo} />
         <ChevronDown
           className={`size-4 shrink-0 text-muted-foreground transition-transform duration-150 ${
             isExpanded ? 'rotate-180' : ''
