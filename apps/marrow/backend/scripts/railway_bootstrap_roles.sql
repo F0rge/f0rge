@@ -57,5 +57,18 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO healthtracker_app, htmigrate;
 
+-- pg_restore --no-owner leaves tables owned by the restore user (Railway
+-- ``postgres``). htmigrate has GRANT ALL but not ownership — Alembic ALTER
+-- on existing tables needs SET LOCAL ROLE <owner>. Grant membership here.
+DO $$
+DECLARE
+  owner_role name := current_user;
+BEGIN
+  IF owner_role <> 'htmigrate' THEN
+    EXECUTE format('GRANT %I TO htmigrate', owner_role);
+  END IF;
+END
+$$;
+
 -- After this script: set FLY_MPG_SKIP_ROLE_DDL=1 on Railway services so
 -- migrations 004/019 skip role DDL (roles already exist).
