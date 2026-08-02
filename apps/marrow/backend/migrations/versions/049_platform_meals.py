@@ -4,8 +4,8 @@ Revision ID: 049
 Revises: 048
 Create Date: 2026-08-02 00:00:00.000000
 
-Platform meal library templates (mockup A) plus nullable photo/meal filenames
-for icon-only library entries.
+Platform meal library templates (mockup A; seed JSON ~180 common meals)
+plus nullable photo/meal filenames for icon-only library entries.
 """
 
 from __future__ import annotations
