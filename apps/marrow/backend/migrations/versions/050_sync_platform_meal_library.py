@@ -117,15 +117,10 @@ def _sync_platform_meals(bind: sa.Connection) -> None:
 
 
 def _sync_curated_ingredients(bind: sa.Connection) -> None:
-    payload = json.loads(
-        _data_file("curated_ingredients_2026_07.json").read_text(encoding="utf-8")
-    )
+    payload = json.loads(_data_file("curated_ingredients_2026_07.json").read_text(encoding="utf-8"))
     source = payload.get("source", "user-research-2026-07")
     source_version = payload.get("source_version")
-    user_ids = [
-        row[0]
-        for row in bind.execute(sa.text("SELECT id FROM users")).all()
-    ]
+    user_ids = [row[0] for row in bind.execute(sa.text("SELECT id FROM users")).all()]
     if not user_ids:
         return
 
