@@ -162,12 +162,15 @@ class TagDeliveryService:
             raise NotFoundError(f"Source photo {tag.source_photo_id} not found for tag {tag.id}")
 
         tagger_id_str = str(tag.tagger_id)
-        if not photo_exists(source_photo.filename, user_id=tagger_id_str):
-            raise NotFoundError(f"Source photo file missing for tag {tag.id}")
-
-        src_bytes = await asyncio.to_thread(
-            read_photo, source_photo.filename, user_id=tagger_id_str
-        )
+        # Icon-only library meals share meal_id (and thus icon/analysis) with no
+        # object-storage bytes to copy. Photo meals still require a readable file.
+        source_filename = source_photo.filename
+        icon_only = source_filename is None
+        src_bytes: Optional[bytes] = None
+        if source_filename is not None:
+            if not photo_exists(source_filename, user_id=tagger_id_str):
+                raise NotFoundError(f"Source photo file missing for tag {tag.id}")
+            src_bytes = await asyncio.to_thread(read_photo, source_filename, user_id=tagger_id_str)
 
         # Step 2: create recipient placement (same meal_id) under recipient context.
         await apply_session_user_id(db, tag.tagged_user_id)
@@ -175,7 +178,7 @@ class TagDeliveryService:
         recipient_id_str = str(recipient_id)
 
         entry = await get_or_create_entry(db, tag.source_date)
-        new_filename = await next_photo_filename(db, entry)
+        new_filename = None if icon_only else await next_photo_filename(db, entry)
         now = datetime.datetime.utcnow()
 
         photo_crud = PhotoCRUD(db)
@@ -210,7 +213,10 @@ class TagDeliveryService:
 
         try:
             await photo_crud.add_and_flush(new_photo)
-            await asyncio.to_thread(save_photo, src_bytes, new_filename, user_id=recipient_id_str)
+            if src_bytes is not None and new_filename is not None:
+                await asyncio.to_thread(
+                    save_photo, src_bytes, new_filename, user_id=recipient_id_str
+                )
 
             tag.status = "delivered"
             tag.delivered_photo_id = new_photo.id
@@ -231,7 +237,8 @@ class TagDeliveryService:
                     },
                 )
         except IntegrityError:
-            await asyncio.to_thread(delete_photo, new_filename, user_id=recipient_id_str)
+            if new_filename is not None:
+                await asyncio.to_thread(delete_photo, new_filename, user_id=recipient_id_str)
             dup = (
                 await db.execute(
                     select(Photo).where(
@@ -248,7 +255,8 @@ class TagDeliveryService:
             else:
                 raise
         except Exception:
-            await asyncio.to_thread(delete_photo, new_filename, user_id=recipient_id_str)
+            if new_filename is not None:
+                await asyncio.to_thread(delete_photo, new_filename, user_id=recipient_id_str)
             raise
 
     async def sync_confirmed_analysis_to_copies(

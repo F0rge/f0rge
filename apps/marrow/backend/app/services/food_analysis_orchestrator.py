@@ -146,7 +146,8 @@ async def _run_vision(
     """
     from app.services.photo_storage import photo_exists, read_photo
 
-    if not photo_exists(photo.filename, user_id=user_id_str):
+    # Icon-only library meals have no image bytes for vision.
+    if not photo.filename or not photo_exists(photo.filename, user_id=user_id_str):
         raise NotFoundError(f"Photo file not found: {photo.filename}")
 
     image_bytes = await asyncio.to_thread(read_photo, photo.filename, user_id=user_id_str)

@@ -4,6 +4,7 @@ from typing import Iterable, Literal, Optional
 
 from pydantic import BaseModel
 
+from app.models.dietary_ingredient import DietaryIngredient
 from app.models.entry import Entry
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_ingredient import PhotoIngredient
@@ -125,6 +126,27 @@ def _aggregate(
         ),
         sources=sources,
     )
+
+
+def flags_from_dietary_ingredients(items: list[DietaryIngredient]) -> list[str]:
+    """Compute diet flag strings from catalog rows (no meal/analysis context)."""
+    ingredients = [
+        PhotoIngredient(
+            id=0,
+            analysis_id=0,
+            name=item.canonical_name,
+            canonical_name=item.canonical_name,
+            histamine_score=item.histamine_score,
+            fodmap_oligos=item.fodmap_oligos,
+            fodmap_fructose=item.fodmap_fructose,
+            fodmap_polyols=item.fodmap_polyols,
+            fodmap_lactose=item.fodmap_lactose,
+            contains_gluten=item.contains_gluten,
+            contains_dairy=item.contains_dairy,
+        )
+        for item in items
+    ]
+    return sorted(_aggregate(ingredients).flags)
 
 
 def compute_photo_signal(entry: Entry) -> PhotoSignal:

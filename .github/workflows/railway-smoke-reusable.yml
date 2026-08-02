@@ -1,0 +1,130 @@
+name: Railway Smoke (reusable)
+
+# Post-deploy smoke for marrow on Railway. Deploys are owned by Railway GitHub
+# autodeploy; this workflow only verifies health URLs from the manifest plan.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: develop or main
+        required: true
+        type: string
+      smoke_api:
+        required: false
+        type: boolean
+        default: false
+      smoke_mcp:
+        required: false
+        type: boolean
+        default: false
+      smoke_frontend:
+        required: false
+        type: boolean
+        default: false
+      api_health_url:
+        required: false
+        type: string
+        default: ""
+      frontend_health_url:
+        required: false
+        type: string
+        default: ""
+      mcp_health_url:
+        required: false
+        type: string
+        default: ""
+    secrets:
+      SMOKE_EMAIL:
+        required: false
+      SMOKE_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: smoke
+    if: >-
+      inputs.smoke_api ||
+      inputs.smoke_mcp ||
+      inputs.smoke_frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Wait for Railway rollouts
+        run: sleep 45
+
+      - name: Smoke API health
+        if: inputs.smoke_api
+        run: |
+          URL="${{ inputs.api_health_url }}"
+          for i in $(seq 1 18); do
+            if curl -sf "$URL"; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "API health check failed: $URL"
+          exit 1
+
+      - name: Smoke authenticated entries (skip if SMOKE_* unset)
+        if: inputs.smoke_api
+        env:
+          API_BASE: ${{ inputs.api_health_url }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: |
+          if [ -z "${SMOKE_EMAIL:-}" ] || [ -z "${SMOKE_PASSWORD:-}" ]; then
+            echo "SMOKE_EMAIL/SMOKE_PASSWORD not configured — skipping auth smoke"
+            exit 0
+          fi
+          API_ROOT="${API_BASE%/health}"
+          COOKIE_JAR=$(mktemp)
+          LOGIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$SMOKE_EMAIL\",\"password\":\"$SMOKE_PASSWORD\"}" \
+            "$API_ROOT/auth/login")
+          if [ "$LOGIN_CODE" != "200" ]; then
+            echo "Login smoke failed with HTTP $LOGIN_CODE"
+            exit 1
+          fi
+          TODAY=$(date -u +%F)
+          ENTRY_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -b "$COOKIE_JAR" \
+            "$API_ROOT/entries/$TODAY")
+          if [ "$ENTRY_CODE" != "200" ] && [ "$ENTRY_CODE" != "404" ]; then
+            echo "GET /entries/$TODAY failed with HTTP $ENTRY_CODE"
+            exit 1
+          fi
+          echo "Auth smoke OK (entries/$TODAY → $ENTRY_CODE)"
+          rm -f "$COOKIE_JAR"
+
+      - name: Smoke frontend
+        if: inputs.smoke_frontend
+        run: |
+          URL="${{ inputs.frontend_health_url }}"
+          for i in $(seq 1 18); do
+            if curl -sf "$URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Frontend health check failed: $URL"
+          exit 1
+
+      - name: Smoke MCP
+        if: inputs.smoke_mcp
+        run: |
+          URL="${{ inputs.mcp_health_url }}"
+          for i in $(seq 1 18); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+            if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "MCP health check failed: $URL"
+          exit 1

@@ -2,6 +2,7 @@
 
 import { Loader2, X } from 'lucide-react'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
+import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
 import { buildAggregateBadges } from '@/components/shared/food-analysis/dietary-badges'
 import type { Photo } from '@/lib/api/types'
 import { usePhotoAnalysis } from '@/lib/api/hooks'
@@ -15,10 +16,14 @@ export interface MealCardProps {
 
 export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
   const { data: analysis, isLoading } = usePhotoAnalysis(photo.id)
+  const hasImage = photoHasImage(photo)
 
-  const isAnalyzing = isLoading || analysis?.status === 'pending' || analysis?.status === 'analyzing'
+  const isAnalyzing =
+    hasImage &&
+    (isLoading || analysis?.status === 'pending' || analysis?.status === 'analyzing')
   const needsReview = analysis?.status === 'needs_review'
-  const title = photo.label?.trim() || analysis?.dish_name || 'Untitled meal'
+  const title =
+    photo.label?.trim() || analysis?.dish_name || photo.dish_name || 'Untitled meal'
   const confidence =
     analysis?.dish_confidence != null ? Math.round(analysis.dish_confidence * 100) : null
   const badges = analysis
@@ -43,12 +48,27 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
         aria-label={`Review and edit ${title}`}
         className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/api/v1/photos/${photo.id}/file`}
-          alt={title}
-          className="aspect-square w-full object-cover"
-        />
+        <div className="relative aspect-square w-full">
+          {hasImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/api/v1/photos/${photo.id}/file`}
+              alt={title}
+              className="size-full object-cover"
+            />
+          ) : (
+            <>
+              <MealIconThumb
+                iconKey={photo.icon_key ?? 'bowl'}
+                size="lg"
+                className="size-full rounded-none"
+              />
+              <span className="absolute left-1.5 top-1.5 rounded-full bg-background/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-border">
+                Library
+              </span>
+            </>
+          )}
+        </div>
         <div className="p-2.5">
           {isAnalyzing ? (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

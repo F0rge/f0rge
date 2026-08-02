@@ -9,36 +9,35 @@ Personal daily symptom check-in app for Leo's health research vault.
 - Backend: FastAPI + async SQLAlchemy + Postgres (asyncpg) — Python 3.10
 - Frontend: Next.js 16 + React 19 + Tailwind 4 + shadcn/ui
 - Auth: JWT in `ht_session` httpOnly cookie (email + password)
-- Deploy: Fly.io (API, MCP, frontend) + Fly MPG Postgres + Tigris object storage
+- Deploy: Railway (API, worker, MCP, frontend) + Railway pgvector Postgres + Redis + Buckets for photos
 
 ## Environments
 
-All Fly apps run in org **`f0rge`**. Dev and prod share one MPG cluster (`f0rge-db`, `nlkxjo5m3240y93v`).
+Marrow runs on Railway project **zoological-fulfillment** (`a633a271-…`). Environments: `production` ← branch `main`, `develop` ← branch `develop`. dk tag-printer stays on Coolify/Pi.
 
 ### Production (`main`)
 
-| Component | Fly app | URL |
+| Component | Railway service | URL |
 |---|---|---|
-| API + worker | `marrow` | https://api.marrow-health.com |
-| MCP | `marrow-mcp` | https://marrow-mcp.fly.dev |
-| Frontend | `marrow-ui` | https://marrow-health.com |
-| Postgres | MPG `f0rge-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow` | via secrets |
-| Redis | Upstash `marrow-redis` (`fra`, Pay-as-you-go, eviction) | via `REDIS_URL` on `marrow` |
-| Tigris | `f0rge-marrow-prod-photos` | via secrets on `marrow` |
+| API + worker | `marrow-api` / `marrow-worker` | https://api.marrow-health.com |
+| MCP | `marrow-mcp` | https://mcp.marrow-health.com |
+| Frontend | `marrow-frontend` | https://marrow-health.com |
+| Postgres | `pgvector` | via `DATABASE_URL` |
+| Redis | `Redis` | via `REDIS_URL` |
+| Photos | bucket `photos` | via `AWS_*` / `BUCKET_NAME` |
 
 ### Develop (`develop`)
 
-| Component | Fly app | URL |
+| Component | Railway service | URL |
 |---|---|---|
-| API + worker | `marrow-dev` | https://api-dev.marrow-health.com |
-| MCP | `marrow-mcp-dev` | https://marrow-mcp-dev.fly.dev |
-| Frontend | `marrow-ui-dev` | https://app-dev.marrow-health.com |
-| Postgres | MPG `f0rge-db` (`nlkxjo5m3240y93v`, `fra`) — database `marrow_dev` | via secrets |
-| Redis | Upstash `marrow-redis-dev` (`fra`, Pay-as-you-go, eviction) | via `REDIS_URL` on `marrow-dev` |
-| Tigris | `f0rge-marrow-dev-photos` | via secrets on `marrow-dev` |
+| API + worker | `marrow-api` / `marrow-worker` | https://api-dev.marrow-health.com |
+| MCP | `marrow-mcp` | https://mcp-dev.marrow-health.com |
+| Frontend | `marrow-frontend` | https://app-dev.marrow-health.com |
+| Postgres | `pgvector-hRmh` | via `DATABASE_URL` |
+| Redis | `Redis-fVqY` | via `REDIS_URL` |
+| Photos | bucket `photos-dev` | via `AWS_*` / `BUCKET_NAME` |
 
-Deploy configs: `apps/marrow/backend/fly.toml`, `apps/marrow/backend/fly.mcp.toml`, `apps/marrow/frontend/fly.toml` (dev) and `*.prod.toml` (prod). CI/CD and deploy job layout: [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc).
-
+Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. CI smokes only (Railway autodeploys). See [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
 ## apps/dk (tag printer)
 
 DasKasas price tag tool — stateless FastAPI + Next.js, **no auth, no DB**.
@@ -59,7 +58,7 @@ Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested 
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by the same `.github/workflows/ci.yml` (same checks + prod-shaped frontend build).
-- After CI green on push, the manifest-driven deploy workflow routes marrow to Fly and dk tag printer to Coolify (main only).
+- After CI green on push, the manifest-driven deploy workflow smokes marrow on Railway and deploys dk tag printer to Coolify (main only).
 
 ## Running locally
 
@@ -81,8 +80,8 @@ No root-level `start.sh` — local dev is the Postgres container plus separate b
 - Backend API: http://localhost:8000/api/v1
 - Frontend: http://localhost:3000
 - Shared libs: `libs/backend/{core,db,storage,testing}/`, `libs/ui/`
-- Database: Fly MPG in deployed envs; local tests use disposable Postgres via `testcontainers` (see `apps/marrow/backend/tests/conftest.py`). `DATABASE_URL` must use asyncpg driver, e.g. `postgresql+asyncpg://...`.
-- Photo storage: Tigris on Fly; `apps/marrow/backend/photos/` locally
+- Database: Railway pgvector in deployed envs; local tests use disposable Postgres via `testcontainers` (see `apps/marrow/backend/tests/conftest.py`). `DATABASE_URL` must use asyncpg driver, e.g. `postgresql+asyncpg://...`.
+- Photo storage: Railway Buckets in deployed envs; `apps/marrow/backend/photos/` locally
 
 ## Shared libraries
 
@@ -181,7 +180,7 @@ References:
 The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and frontend `node_modules`. The startup update script only refreshes deps (`uv sync --frozen --project apps/marrow/backend`, `uv tool install "ruff==$(cat .github/ruff-version)"`, `npm ci` at repo root). Services and the database are NOT auto-started — bring them up as below. Standard run/lint/test commands live in this file, `.cursor/rules/backend.mdc`, and `.cursor/rules/qa-gate.mdc`.
 
 ### Database + Docker (must start manually each session)
-- There is **no local dev docker-compose**; deploy is Fly.io (`fly.toml` + GitHub Actions workflows).
+- There is **no local dev docker-compose**; deploy is Railway (`railway*.toml` + GitHub Actions smoke) and Coolify for dk.
 - The Docker daemon is not auto-started. Start it once per session: `sudo dockerd > /tmp/dockerd.log 2>&1 &` then `sudo chmod 666 /var/run/docker.sock` (lets `uv run pytest`'s testcontainers reach the socket as the `ubuntu` user). `/etc/docker/daemon.json` is pre-set to `fuse-overlayfs` + `containerd-snapshotter: false` (required for Docker 29 in this VM) — do not change it.
 - Backend + tests need a **pgvector** Postgres on `localhost:5432` with user/pass/db all `health`. Start/reuse it:
   `docker start ht-postgres 2>/dev/null || docker run -d --name ht-postgres -e POSTGRES_USER=health -e POSTGRES_PASSWORD=health -e POSTGRES_DB=health -p 5432:5432 pgvector/pgvector:pg16`

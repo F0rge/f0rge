@@ -1,0 +1,20 @@
+# Config-as-code for marrow-frontend (point Railway service Config File path here).
+# Shared monorepo: do NOT set Root Directory — needs root npm workspaces + libs/ui.
+# Set Docker build-arg API_URL per environment (Railway Variables → Build Args).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/marrow/frontend/Dockerfile"
+watchPatterns = [
+  "apps/marrow/frontend/**",
+  "libs/ui/**",
+  "package.json",
+  "package-lock.json",
+]
+
+[deploy]
+startCommand = "node apps/marrow/frontend/server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

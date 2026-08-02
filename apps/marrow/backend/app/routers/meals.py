@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.dependencies.meals import get_meal_service
 from app.middleware.auth import get_current_session
-from app.schemas.meal import MealCloneCreate, RecentMealResponse
+from app.schemas.meal import (
+    MealCloneCreate,
+    MealFromLibraryCreate,
+    PlatformMealResponse,
+    RecentMealResponse,
+)
 from app.schemas.photo import PhotoResponse
 from app.services.meals import MealService
 
@@ -23,6 +28,35 @@ async def recent_meals(
     service: MealService = Depends(get_meal_service),
 ) -> list[RecentMealResponse]:
     return await service.list_recent(limit)
+
+
+@router.get("/meals/library/cuisines", response_model=list[str])
+async def library_cuisines(
+    service: MealService = Depends(get_meal_service),
+) -> list[str]:
+    return await service.list_library_cuisines()
+
+
+@router.get("/meals/library", response_model=list[PlatformMealResponse])
+async def library_meals(
+    q: str | None = Query(default=None),
+    cuisine: str | None = Query(default=None),
+    service: MealService = Depends(get_meal_service),
+) -> list[PlatformMealResponse]:
+    return await service.list_library(q=q, cuisine=cuisine)
+
+
+@router.post(
+    "/entries/{date}/meals/from-library",
+    response_model=PhotoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def log_meal_from_library(
+    date: datetime.date,
+    body: MealFromLibraryCreate,
+    service: MealService = Depends(get_meal_service),
+) -> PhotoResponse:
+    return await service.log_from_library(date, body.platform_meal_id, body.meal_time)
 
 
 @router.post(

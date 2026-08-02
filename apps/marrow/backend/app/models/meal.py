@@ -4,7 +4,7 @@ import datetime
 import uuid
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,7 +23,13 @@ class Meal(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    filename: Mapped[str] = mapped_column(String, nullable=False)
+    filename: Mapped[str | None] = mapped_column(String, nullable=True)
+    icon_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    platform_meal_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("platform_meals.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     label: Mapped[str | None] = mapped_column(String, nullable=True)
     original_filename: Mapped[str | None] = mapped_column(String, nullable=True)
     meal_time: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)

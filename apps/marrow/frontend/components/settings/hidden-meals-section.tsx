@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Button, FetchError } from '@f0rge/ui'
 import { handleMutationError } from '@f0rge/ui/api'
 import { mealDay } from '@/components/profile/meal-grids'
+import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
 import { useUpdatePhotoVisibility } from '@/lib/api/hooks/entries'
 import { usePhotos } from '@/lib/api/hooks/photos'
 import { SettingsCard } from './settings-card'
@@ -45,12 +46,20 @@ export function HiddenMealsSection() {
             const when = mealDay(photo.meal_time ?? photo.created_at)
             return (
               <li key={photo.id} className="flex items-center gap-3 py-2.5">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`/api/v1/photos/${photo.id}/file`}
-                  alt={name}
-                  className="size-12 shrink-0 rounded-lg bg-muted object-cover ring-1 ring-foreground/10"
-                />
+                {photoHasImage(photo) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`/api/v1/photos/${photo.id}/file`}
+                    alt={name}
+                    className="size-12 shrink-0 rounded-lg bg-muted object-cover ring-1 ring-foreground/10"
+                  />
+                ) : (
+                  <MealIconThumb
+                    iconKey={photo.icon_key ?? 'bowl'}
+                    size="md"
+                    className="size-12 shrink-0 rounded-lg"
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{name}</p>
                   {when && <p className="text-xs text-muted-foreground">{when}</p>}

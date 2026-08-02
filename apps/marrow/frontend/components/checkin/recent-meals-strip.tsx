@@ -7,6 +7,7 @@ import { useCloneMeal, useRecentMeals } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import type { RecentMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
+import { MealIconThumb } from './meal-icon-thumb'
 import { LogAgainSheet } from './log-again-sheet'
 
 // Relative "when last eaten" label. Builds both dates at local midnight (from
@@ -32,6 +33,8 @@ function RecentMealChip({
   loading: boolean
   onClick: () => void
 }) {
+  const [imageError, setImageError] = useState(false)
+
   return (
     <button
       type="button"
@@ -41,12 +44,17 @@ function RecentMealChip({
       className="flex w-28 flex-none flex-col gap-1.5 rounded-xl border border-border bg-background p-2 text-left transition-colors hover:border-primary disabled:opacity-60"
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/api/v1/photos/${meal.source_photo_id}/file`}
-          alt={meal.dish_name}
-          className="size-full object-cover"
-        />
+        {imageError ? (
+          <MealIconThumb iconKey="bowl" size="md" className="size-full rounded-lg" />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/v1/photos/${meal.source_photo_id}/file`}
+            alt={meal.dish_name}
+            className="size-full object-cover"
+            onError={() => setImageError(true)}
+          />
+        )}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <Loader2 className="size-4 animate-spin text-white" />
