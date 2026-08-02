@@ -4,6 +4,8 @@ export interface RecentMeal {
   times_logged: number
   last_logged: string // YYYY-MM-DD
   diet_flags: string[]
+  has_image?: boolean
+  icon_key?: string | null
 }
 
 export interface PlatformMeal {

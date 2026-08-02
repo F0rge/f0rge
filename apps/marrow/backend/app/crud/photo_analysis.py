@@ -3,12 +3,13 @@ from __future__ import annotations
 import datetime
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.crud.base import BaseCRUD
 from app.models.entry import Entry
+from app.models.meal import Meal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from f0rge_db.tenant import owned_by_user
@@ -99,12 +100,32 @@ class PhotoAnalysisCRUD(BaseCRUD):
 
     async def list_confirmed_with_entry_dates(
         self,
-    ) -> list[tuple[PhotoAnalysis, datetime.date, int]]:
-        """Confirmed, named analyses joined to their entry date, most-recent first."""
+    ) -> list[tuple[PhotoAnalysis, datetime.date, int, Optional[str], Optional[str]]]:
+        """Confirmed, named analyses joined to entry date + thumb metadata.
+
+        Returns ``(analysis, entry_date, photo_id, filename, icon_key)`` ordered
+        most-recent first. Prefers ``PhotoAnalysis.photo_id`` when set so the
+        Log-again thumb matches the analyzed placement, not a sibling photo on
+        the same meal.
+        """
+        photo_join = or_(
+            PhotoAnalysis.photo_id == Photo.id,
+            and_(
+                PhotoAnalysis.photo_id.is_(None),
+                PhotoAnalysis.meal_id == Photo.meal_id,
+            ),
+        )
         stmt = (
-            select(PhotoAnalysis, Entry.date, Photo.id)
-            .join(Photo, PhotoAnalysis.meal_id == Photo.meal_id)
+            select(
+                PhotoAnalysis,
+                Entry.date,
+                Photo.id,
+                Photo.filename,
+                Meal.icon_key,
+            )
+            .join(Photo, photo_join)
             .join(Entry, Photo.entry_id == Entry.id)
+            .join(Meal, Photo.meal_id == Meal.id)
             .options(selectinload(PhotoAnalysis.ingredients))
             .where(
                 owned_by_user(Entry.user_id),

@@ -16,18 +16,23 @@ import { MealIconThumb } from './meal-icon-thumb'
 
 function RecentMealThumb({ meal, loading }: { meal: RecentMeal; loading: boolean }) {
   const [imageError, setImageError] = useState(false)
+  const showPhoto = meal.has_image !== false && !imageError
 
   return (
     <div className="relative size-12 flex-none overflow-hidden rounded-lg bg-muted">
-      {imageError ? (
-        <MealIconThumb iconKey="bowl" size="md" className="size-full rounded-lg" />
-      ) : (
+      {showPhoto ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={`/api/v1/photos/${meal.source_photo_id}/file`}
           alt={meal.dish_name}
           className="size-full object-cover"
           onError={() => setImageError(true)}
+        />
+      ) : (
+        <MealIconThumb
+          iconKey={meal.icon_key ?? 'bowl'}
+          size="md"
+          className="size-full rounded-lg"
         />
       )}
       {loading && (

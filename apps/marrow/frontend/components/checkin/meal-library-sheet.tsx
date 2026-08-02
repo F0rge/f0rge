@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -11,10 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  cn,
 } from '@f0rge/ui'
 import { handleMutationError } from '@f0rge/ui/api'
-import { useLogFromLibrary, usePlatformMealCuisines, usePlatformMeals } from '@/lib/api/hooks'
+import { useLogFromLibrary, usePlatformMeals } from '@/lib/api/hooks'
 import type { PlatformMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
 import { MealIconThumb } from './meal-icon-thumb'
@@ -43,23 +42,28 @@ export function MealLibrarySheet({
   onEntryEnsured,
 }: MealLibrarySheetProps) {
   const [query, setQuery] = useState('')
-  const [cuisine, setCuisine] = useState<string | null>(null)
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selected, setSelected] = useState<PlatformMeal | null>(null)
   const [mealTime, setMealTime] = useState<Date | null>(new Date())
 
-  const q = query.trim()
-  const { data: cuisines = [] } = usePlatformMealCuisines()
-  const { data: meals = [], isLoading } = usePlatformMeals({
-    q: q || undefined,
-    cuisine: cuisine ?? undefined,
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedQuery(query.trim()), 250)
+    return () => window.clearTimeout(handle)
+  }, [query])
+
+  const mealsQuery = usePlatformMeals({
+    q: debouncedQuery || undefined,
+    enabled: open,
   })
+  const meals = mealsQuery.data ?? []
+  const isLoading = mealsQuery.isPending || (mealsQuery.isFetching && meals.length === 0)
   const logFromLibrary = useLogFromLibrary()
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
       setSelected(null)
       setQuery('')
-      setCuisine(null)
+      setDebouncedQuery('')
       setMealTime(new Date())
     }
     onOpenChange(next)
@@ -159,38 +163,24 @@ export function MealLibrarySheet({
               />
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setCuisine(null)}
-                className={cn(
-                  'min-h-[32px] rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                  cuisine === null
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-background text-muted-foreground hover:bg-muted',
-                )}
-              >
-                All
-              </button>
-              {cuisines.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCuisine(c)}
-                  className={cn(
-                    'min-h-[32px] rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                    cuisine === c
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-background text-muted-foreground hover:bg-muted',
-                  )}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-
             <div className="-mx-1 max-h-[50vh] overflow-y-auto px-1">
-              {isLoading ? (
+              {mealsQuery.isError ? (
+                <div className="flex flex-col items-center gap-3 py-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Could not load the meal library. Check your connection and try again.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-[44px]"
+                    onClick={() => {
+                      void mealsQuery.refetch()
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : isLoading ? (
                 <div className="flex justify-center py-8 text-muted-foreground">
                   <Loader2 className="size-5 animate-spin" />
                 </div>

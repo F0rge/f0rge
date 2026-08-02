@@ -13,6 +13,7 @@ from app.crud.photos import PhotoCRUD
 from app.crud.platform_meals import PlatformMealCRUD
 from app.cache.invalidation import invalidate_user_insights_cache
 from f0rge_core.exceptions import NotFoundError, ValidationError
+from app.models.dietary_ingredient import DietaryIngredient
 from app.models.meal import Meal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
@@ -48,12 +49,12 @@ class MealService:
         rows = await self.analysis_crud.list_confirmed_with_entry_dates()
 
         dates_per_dish: dict[str, set[datetime.date]] = {}
-        for analysis, entry_date, _photo_id in rows:
+        for analysis, entry_date, _photo_id, _filename, _icon_key in rows:
             dates_per_dish.setdefault(analysis.dish_name, set()).add(entry_date)
 
         seen: set[str] = set()
         out: list[RecentMealResponse] = []
-        for analysis, entry_date, photo_id in rows:
+        for analysis, entry_date, photo_id, filename, icon_key in rows:
             dish = analysis.dish_name
             if dish in seen:
                 continue
@@ -66,6 +67,8 @@ class MealService:
                     times_logged=len(dates_per_dish[dish]),
                     last_logged=entry_date,
                     diet_flags=sorted(signal.flags),
+                    has_image=filename is not None,
+                    icon_key=icon_key,
                 )
             )
             if len(out) >= limit:
@@ -76,14 +79,18 @@ class MealService:
         self,
         *,
         q: Optional[str] = None,
-        cuisine: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> list[PlatformMealResponse]:
-        meals = await self.platform_crud.list_active(q=q, cuisine=cuisine)
+        meals = await self.platform_crud.list_active(q=q, limit=limit)
+        # Exact canonical match in one query — fuzzy per-ingredient lookup made
+        # the catalogue unusable once the platform library grew to hundreds.
+        all_names = [ing.canonical_name for meal in meals for ing in meal.ingredients]
+        exact = await self.lookup.lookup_exact_many(all_names)
         out: list[PlatformMealResponse] = []
         for meal in meals:
-            dietary_items = []
+            dietary_items: list[DietaryIngredient] = []
             for ingredient in meal.ingredients:
-                match = await self.lookup.lookup(ingredient.canonical_name)
+                match = exact.get(ingredient.canonical_name.lower().strip())
                 if match is not None:
                     dietary_items.append(match)
             out.append(
@@ -98,9 +105,6 @@ class MealService:
                 )
             )
         return out
-
-    async def list_library_cuisines(self) -> list[str]:
-        return await self.platform_crud.list_cuisines()
 
     async def log_from_library(
         self,

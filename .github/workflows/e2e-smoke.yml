@@ -1,10 +1,12 @@
 name: E2E smoke
 
+# Playwright + local stack is the bulk of Actions minutes. Keep it on
+# main/prod only; develop relies on lint/typecheck/build in ci.yml.
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [main]
   push:
-    branches: [develop, main]
+    branches: [main]
 
 permissions:
   contents: read

@@ -34,6 +34,7 @@ function RecentMealChip({
   onClick: () => void
 }) {
   const [imageError, setImageError] = useState(false)
+  const showPhoto = meal.has_image !== false && !imageError
 
   return (
     <button
@@ -44,15 +45,19 @@ function RecentMealChip({
       className="flex w-28 flex-none flex-col gap-1.5 rounded-xl border border-border bg-background p-2 text-left transition-colors hover:border-primary disabled:opacity-60"
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted">
-        {imageError ? (
-          <MealIconThumb iconKey="bowl" size="md" className="size-full rounded-lg" />
-        ) : (
+        {showPhoto ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={`/api/v1/photos/${meal.source_photo_id}/file`}
             alt={meal.dish_name}
             className="size-full object-cover"
             onError={() => setImageError(true)}
+          />
+        ) : (
+          <MealIconThumb
+            iconKey={meal.icon_key ?? 'bowl'}
+            size="md"
+            className="size-full rounded-lg"
           />
         )}
         {loading && (

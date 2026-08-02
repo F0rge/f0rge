@@ -7,50 +7,47 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.crud.base import BaseCRUD
-from app.models.platform_meal import PlatformMeal
+from app.models.platform_meal import PlatformMeal, PlatformMealIngredient
 
 
 class PlatformMealCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
 
-    def _active_stmt(self, *, q: Optional[str] = None, cuisine: Optional[str] = None):
+    def _active_stmt(
+        self,
+        *,
+        q: Optional[str] = None,
+        limit: Optional[int] = None,
+    ):
         stmt = (
             select(PlatformMeal)
             .where(PlatformMeal.is_active.is_(True))
             .options(selectinload(PlatformMeal.ingredients))
             .order_by(PlatformMeal.sort_order.asc(), PlatformMeal.id.asc())
         )
-        if cuisine:
-            stmt = stmt.where(PlatformMeal.cuisine == cuisine)
         if q:
             pattern = f"%{q.strip()}%"
             stmt = stmt.where(
                 or_(
                     PlatformMeal.name.ilike(pattern),
                     PlatformMeal.slug.ilike(pattern),
+                    PlatformMeal.ingredients.any(
+                        PlatformMealIngredient.canonical_name.ilike(pattern)
+                    ),
                 )
             )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         return stmt
 
     async def list_active(
         self,
         *,
         q: Optional[str] = None,
-        cuisine: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> list[PlatformMeal]:
-        return list(
-            (await self.db.execute(self._active_stmt(q=q, cuisine=cuisine))).scalars().all()
-        )
-
-    async def list_cuisines(self) -> list[str]:
-        stmt = (
-            select(PlatformMeal.cuisine)
-            .where(PlatformMeal.is_active.is_(True))
-            .distinct()
-            .order_by(PlatformMeal.cuisine.asc())
-        )
-        return list((await self.db.execute(stmt)).scalars().all())
+        return list((await self.db.execute(self._active_stmt(q=q, limit=limit))).scalars().all())
 
     async def get_by_id(self, platform_meal_id: int) -> Optional[PlatformMeal]:
         stmt = (

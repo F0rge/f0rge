@@ -104,6 +104,19 @@ class IngredientLookupService:
             result[name] = await self.lookup(name)
         return result
 
+    async def lookup_exact_many(self, names: list[str]) -> dict[str, Optional[DietaryIngredient]]:
+        """One-query exact canonical match for many names (no fuzzy fallbacks).
+
+        Platform meal ingredients are seeded with catalog canonical names, so
+        the library list path must not pay for per-name alias/ilike round-trips.
+        """
+        normalised = sorted({name.lower().strip() for name in names if name and name.strip()})
+        if not normalised:
+            return {}
+        rows = await self.crud.get_by_canonicals(normalised)
+        by_name = {row.canonical_name.lower(): row for row in rows}
+        return {name: by_name.get(name) for name in normalised}
+
     async def suggest_canonical(self, name: str, limit: int = 5) -> list[DietaryIngredient]:
         """Return top matching dietary ingredients for autocomplete."""
         normalised = name.lower().strip()
