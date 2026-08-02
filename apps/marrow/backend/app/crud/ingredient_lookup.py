@@ -22,6 +22,16 @@ class IngredientLookupCRUD(BaseCRUD):
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
+    async def get_by_canonicals(self, canonical_names: list[str]) -> list[DietaryIngredient]:
+        """Exact match on lowercased canonical names (caller normalises input)."""
+        if not canonical_names:
+            return []
+        stmt = select(DietaryIngredient).where(
+            owned_by_user(DietaryIngredient.user_id),
+            func.lower(DietaryIngredient.canonical_name).in_(canonical_names),
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
     async def get_alias(self, alias: str) -> Optional[IngredientAlias]:
         stmt = select(IngredientAlias).where(
             owned_by_user(IngredientAlias.user_id), IngredientAlias.alias == alias

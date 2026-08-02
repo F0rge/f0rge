@@ -55,6 +55,7 @@ build_object_key = _storage.build_object_key
 delete_relative = _storage.delete_relative
 read_relative = _storage.read_relative
 exists_relative = _storage.exists_relative
+resolve_relative_key = _storage.resolve_relative_key
 presigned_url_for_relative = _storage.presigned_url_for_relative
 save_bytes = _storage.save_bytes
 read_bytes = _storage.read_bytes
