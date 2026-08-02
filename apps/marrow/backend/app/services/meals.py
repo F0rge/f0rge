@@ -79,10 +79,9 @@ class MealService:
         self,
         *,
         q: Optional[str] = None,
-        cuisine: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> list[PlatformMealResponse]:
-        meals = await self.platform_crud.list_active(q=q, cuisine=cuisine, limit=limit)
+        meals = await self.platform_crud.list_active(q=q, limit=limit)
         # Exact canonical match in one query — fuzzy per-ingredient lookup made
         # the catalogue unusable once the platform library grew to hundreds.
         all_names = [ing.canonical_name for meal in meals for ing in meal.ingredients]
@@ -106,9 +105,6 @@ class MealService:
                 )
             )
         return out
-
-    async def list_library_cuisines(self) -> list[str]:
-        return await self.platform_crud.list_cuisines()
 
     async def log_from_library(
         self,

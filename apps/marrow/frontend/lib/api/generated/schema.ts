@@ -336,23 +336,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/meals/library/cuisines": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Library Cuisines */
-        get: operations["library_cuisines_api_v1_meals_library_cuisines_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/meals/library": {
         parameters: {
             query?: never;
@@ -5195,42 +5178,10 @@ export interface operations {
             };
         };
     };
-    library_cuisines_api_v1_meals_library_cuisines_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                ht_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     library_meals_api_v1_meals_library_get: {
         parameters: {
             query?: {
                 q?: string | null;
-                cuisine?: string | null;
             };
             header?: never;
             path?: never;

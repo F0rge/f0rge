@@ -75,20 +75,6 @@ async def test_library_lists_arroz_de_pato(async_db: AsyncSession, platform_libr
     assert "arroz-de-pato" in slugs
 
 
-async def test_library_cuisine_filter_portuguese(
-    async_db: AsyncSession, platform_library: None
-) -> None:
-    meals = await MealService(async_db).list_library(cuisine="Portuguese")
-    assert meals
-    assert all(meal.cuisine == "Portuguese" for meal in meals)
-    assert {meal.slug for meal in meals} >= {
-        "arroz-de-pato",
-        "bifana",
-        "francesinha",
-        "pastel-de-nata",
-    }
-
-
 async def test_library_search_arroz(async_db: AsyncSession, platform_library: None) -> None:
     meals = await MealService(async_db).list_library(q="arroz")
     slugs = {meal.slug for meal in meals}

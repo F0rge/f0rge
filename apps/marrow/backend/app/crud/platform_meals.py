@@ -18,7 +18,6 @@ class PlatformMealCRUD(BaseCRUD):
         self,
         *,
         q: Optional[str] = None,
-        cuisine: Optional[str] = None,
         limit: Optional[int] = None,
     ):
         stmt = (
@@ -27,8 +26,6 @@ class PlatformMealCRUD(BaseCRUD):
             .options(selectinload(PlatformMeal.ingredients))
             .order_by(PlatformMeal.sort_order.asc(), PlatformMeal.id.asc())
         )
-        if cuisine:
-            stmt = stmt.where(PlatformMeal.cuisine == cuisine)
         if q:
             pattern = f"%{q.strip()}%"
             stmt = stmt.where(
@@ -48,23 +45,9 @@ class PlatformMealCRUD(BaseCRUD):
         self,
         *,
         q: Optional[str] = None,
-        cuisine: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> list[PlatformMeal]:
-        return list(
-            (await self.db.execute(self._active_stmt(q=q, cuisine=cuisine, limit=limit)))
-            .scalars()
-            .all()
-        )
-
-    async def list_cuisines(self) -> list[str]:
-        stmt = (
-            select(PlatformMeal.cuisine)
-            .where(PlatformMeal.is_active.is_(True))
-            .distinct()
-            .order_by(PlatformMeal.cuisine.asc())
-        )
-        return list((await self.db.execute(stmt)).scalars().all())
+        return list((await self.db.execute(self._active_stmt(q=q, limit=limit))).scalars().all())
 
     async def get_by_id(self, platform_meal_id: int) -> Optional[PlatformMeal]:
         stmt = (
