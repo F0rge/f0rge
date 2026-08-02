@@ -195,7 +195,7 @@ entries stay in the trend chart but are excluded from Layers 1–4. Rescaling a
 
 - `L(t)` — **rolling personal level**: exponentially weighted mean of `overall`
   over days strictly before t, half-life 21 days (α = 1 − 2^(−1/21) ≈ 0.0325),
-  computed on observed days only, initialised to the user's first-28-day mean.
+  computed on observed days only, initialised to the user's first-21-day mean.
 - `W(d)` — **day-of-week offset**, 7 values, fitted on days strictly before t
   and **shrunk to zero**: `Ŵ(d) = n_d/(n_d + 10) · (mean_d − overall_mean)`.
   The k = 10 prior stops 7 free parameters from eating a 92-day dataset; at
@@ -220,7 +220,7 @@ EWMA, trailing slope, expanding-window shrunk weekday means, expanding-window
 `β_sick`. So `r(t)` is a genuine **one-step-ahead** residual. Two payoffs: the
 calibration strip in the UI is showing real out-of-sample error rather than an
 in-sample fit, and `baselineMae` is a legitimate skill reference rather than a
-number the baseline was tuned to beat. Cost: the first 28 days are warm-up and
+number the baseline was tuned to beat. Cost: the first 21 days are warm-up and
 are excluded from estimation (report as a limit).
 
 **Failure mode.** If an exposure is *itself* slow-moving — a supplement started
@@ -353,7 +353,7 @@ then evaluate θ̂ₖ on the held-out fold.
 reason, never tiered:*
 
 - taxonomy class ≠ `mirror` (mirrors go to the set-aside list regardless)
-- feature observed on ≥ 30 usable days
+- feature observed on ≥ 21 usable days
 - exposed days ≥ 5, unexposed days ≥ 5
 - exposed **runs** ≥ 2, where a run is a maximal consecutive stretch of exposed
   days. This is what stops one 15-day holiday from becoming an "effect"

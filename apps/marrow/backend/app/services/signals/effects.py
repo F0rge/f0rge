@@ -18,7 +18,7 @@ FOLD_AGREEMENT_FRAC = 0.5  # §Layer 3 — |θ̂ₖ| ≥ 0.5·|θ̂_full|
 SE_RATIO_FORCE_WATCHING = 1.5  # §Layer 3 — bootstrap/naive SE diagnostic cap
 EMERGING_ZERO_MARGIN = 0.10  # §Layer 3 — zero-side bound within 0.10 of 0
 
-MIN_OBSERVED_DAYS = 30  # §Layer 3 — preconditions
+MIN_OBSERVED_DAYS = 21  # §Layer 3 — preconditions (softened from 30)
 MIN_GROUP_DAYS = 5  # §Layer 3 — exposed/unexposed minimum
 MIN_EXPOSED_RUNS = 2  # §Layer 3 — consecutive exposed stretches
 

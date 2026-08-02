@@ -11,7 +11,7 @@ EWMA_ALPHA = 1.0 - 2.0 ** (-1.0 / EWMA_HALF_LIFE_DAYS)  # ≈ 0.0325
 WEEKDAY_SHRINK_PRIOR = 10  # §Layer 1 — W(d) prior k
 TREND_WINDOW_DAYS = 56  # §Layer 1 — trailing slope window for T(t)
 TREND_CAP_POINTS_PER_DAY = 0.02  # §Layer 1 — |T| cap
-WARMUP_DAYS = 28  # §Layer 1 — excluded from estimation
+WARMUP_DAYS = 21  # §Layer 1 — excluded from estimation (softened from 28)
 CONFOUNDED_TREND_CORR = 0.6  # §Layer 1 — confounded-with-trend threshold
 MIN_SCHEMA_VERSION = 4  # Part B — estimate on schema_version >= 4 only
 
