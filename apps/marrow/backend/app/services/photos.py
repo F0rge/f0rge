@@ -302,4 +302,6 @@ class PhotoService:
         await self.meal_crud.delete_if_orphaned(meal_id)
 
         # File cleanup happens after the successful commit.
-        await asyncio.to_thread(delete_photo, filename, user_id=user_id_str)
+        # Icon-only library meals have no object-storage file.
+        if filename is not None:
+            await asyncio.to_thread(delete_photo, filename, user_id=user_id_str)

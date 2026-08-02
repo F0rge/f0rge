@@ -312,4 +312,7 @@ class EntryService:
         await invalidate_user_insights_cache(user_id, entry_date)
 
         for photo in photos:
+            # Icon-only library meals have no object-storage file.
+            if photo.filename is None:
+                continue
             await asyncio.to_thread(delete_photo, photo.filename, user_id=str(photo.user_id))

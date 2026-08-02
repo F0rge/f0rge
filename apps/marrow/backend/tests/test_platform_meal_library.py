@@ -159,3 +159,66 @@ async def test_photo_file_for_library_meal_returns_404(
 
     resp = await authed_client.get(f"/api/v1/photos/{photo.id}/file")
     assert resp.status_code == 404
+
+
+async def test_delete_entry_with_library_meal_skips_storage(
+    async_db: AsyncSession,
+    platform_library: None,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nullable filename must not be passed to delete_photo (class-of-bug audit)."""
+    photo_dir = tmp_path / "photos"
+    photo_dir.mkdir()
+    monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
+
+    platform_id = await _platform_meal_id(async_db, "arroz-de-pato")
+    await MealService(async_db).log_from_library(TARGET_DAY, platform_id)
+
+    from app.services.entries import EntryService
+
+    await EntryService(async_db).delete_entry(TARGET_DAY)
+
+    assert list(photo_dir.iterdir()) == []
+    assert (
+        await async_db.execute(select(PhotoAnalysis).where(PhotoAnalysis.dish_name == "Arroz de pato"))
+    ).scalar_one_or_none() is None
+
+
+async def test_delete_library_photo_skips_storage(
+    async_db: AsyncSession,
+    platform_library: None,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    photo_dir = tmp_path / "photos"
+    photo_dir.mkdir()
+    monkeypatch.setattr(settings, "photo_dir", str(photo_dir))
+
+    platform_id = await _platform_meal_id(async_db, "arroz-de-pato")
+    photo = await MealService(async_db).log_from_library(TARGET_DAY, platform_id)
+
+    from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
+    from app.services.meal_tags import MealTagService
+    from app.services.photos import PhotoService
+
+    await PhotoService(async_db, FoodAnalysisOrchestrator(), MealTagService(async_db)).delete(
+        photo.id
+    )
+
+    assert list(photo_dir.iterdir()) == []
+
+
+async def test_next_filename_ignores_null_library_rows(
+    async_db: AsyncSession,
+    platform_library: None,
+) -> None:
+    platform_id = await _platform_meal_id(async_db, "arroz-de-pato")
+    await MealService(async_db).log_from_library(TARGET_DAY, platform_id)
+
+    from app.services.entries import get_or_create_entry
+    from app.services.photos import next_photo_filename
+
+    entry = await get_or_create_entry(async_db, TARGET_DAY)
+    name = await next_photo_filename(async_db, entry)
+    assert name == f"{TARGET_DAY.isoformat()}_photo-1.jpg"

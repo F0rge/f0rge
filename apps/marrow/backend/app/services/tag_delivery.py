@@ -162,7 +162,10 @@ class TagDeliveryService:
             raise NotFoundError(f"Source photo {tag.source_photo_id} not found for tag {tag.id}")
 
         tagger_id_str = str(tag.tagger_id)
-        if not photo_exists(source_photo.filename, user_id=tagger_id_str):
+        # Library / icon-only meals have no bytes to copy to the recipient.
+        if not source_photo.filename or not photo_exists(
+            source_photo.filename, user_id=tagger_id_str
+        ):
             raise NotFoundError(f"Source photo file missing for tag {tag.id}")
 
         src_bytes = await asyncio.to_thread(
