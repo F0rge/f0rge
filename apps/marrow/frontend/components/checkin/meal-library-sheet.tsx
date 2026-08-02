@@ -11,10 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  cn,
 } from '@f0rge/ui'
 import { handleMutationError } from '@f0rge/ui/api'
-import { useLogFromLibrary, usePlatformMealCuisines, usePlatformMeals } from '@/lib/api/hooks'
+import { useLogFromLibrary, usePlatformMeals } from '@/lib/api/hooks'
 import type { PlatformMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
 import { MealIconThumb } from './meal-icon-thumb'
@@ -44,7 +43,6 @@ export function MealLibrarySheet({
 }: MealLibrarySheetProps) {
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [cuisine, setCuisine] = useState<string | null>(null)
   const [selected, setSelected] = useState<PlatformMeal | null>(null)
   const [mealTime, setMealTime] = useState<Date | null>(new Date())
 
@@ -53,13 +51,10 @@ export function MealLibrarySheet({
     return () => window.clearTimeout(handle)
   }, [query])
 
-  const cuisinesQuery = usePlatformMealCuisines({ enabled: open })
   const mealsQuery = usePlatformMeals({
     q: debouncedQuery || undefined,
-    cuisine: cuisine ?? undefined,
     enabled: open,
   })
-  const cuisines = cuisinesQuery.data ?? []
   const meals = mealsQuery.data ?? []
   const isLoading = mealsQuery.isPending || (mealsQuery.isFetching && meals.length === 0)
   const logFromLibrary = useLogFromLibrary()
@@ -69,7 +64,6 @@ export function MealLibrarySheet({
       setSelected(null)
       setQuery('')
       setDebouncedQuery('')
-      setCuisine(null)
       setMealTime(new Date())
     }
     onOpenChange(next)
@@ -169,36 +163,6 @@ export function MealLibrarySheet({
               />
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setCuisine(null)}
-                className={cn(
-                  'min-h-[32px] rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                  cuisine === null
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-background text-muted-foreground hover:bg-muted',
-                )}
-              >
-                All
-              </button>
-              {cuisines.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCuisine(c)}
-                  className={cn(
-                    'min-h-[32px] rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                    cuisine === c
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-background text-muted-foreground hover:bg-muted',
-                  )}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-
             <div className="-mx-1 max-h-[50vh] overflow-y-auto px-1">
               {mealsQuery.isError ? (
                 <div className="flex flex-col items-center gap-3 py-6 text-center">
@@ -211,7 +175,6 @@ export function MealLibrarySheet({
                     className="min-h-[44px]"
                     onClick={() => {
                       void mealsQuery.refetch()
-                      void cuisinesQuery.refetch()
                     }}
                   >
                     Retry
