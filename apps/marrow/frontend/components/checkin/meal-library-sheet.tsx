@@ -84,7 +84,7 @@ export function MealLibrarySheet({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="gap-3">
+      <DialogContent className="gap-3 border-border ring-0">
         {selected ? (
           <>
             <DialogHeader>
