@@ -683,6 +683,65 @@ async def test_retroactive_photo_tags(async_db: AsyncSession, storage: None):
     assert len(duplicate.json()["tags"]) == 1
 
 
+async def test_auto_delivers_library_icon_only_meal(
+    async_db: AsyncSession, storage: None
+) -> None:
+    """Icon-only library meals must deliver placements without copying bytes."""
+    from app.models.platform_meal import PlatformMeal, PlatformMealIngredient
+    from app.services.meals import MealService
+
+    platform = PlatformMeal(
+        slug="tag-lib-meal",
+        name="Tagged library dish",
+        cuisine="Simple",
+        icon_key="bowl",
+        sort_order=1,
+        is_active=True,
+    )
+    async_db.add(platform)
+    await async_db.flush()
+    async_db.add(
+        PlatformMealIngredient(
+            platform_meal_id=platform.id,
+            canonical_name="rice",
+            sort_order=10,
+        )
+    )
+    await async_db.commit()
+
+    a = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    b = await _signup_client(async_db, uuid.uuid4().hex[:6])
+    await _connect_users(a, b)
+    b_handle = (await b.get("/api/v1/auth/me")).json()["handle"]
+    mode = await b.put("/api/v1/settings/tagged-meal-mode", json={"tagged_meal_mode": "auto"})
+    assert mode.status_code == 200
+
+    tagger_id = await _user_id(a)
+    await apply_session_user_id(async_db, tagger_id)
+    source = await MealService(async_db).log_from_library(DAY, platform.id)
+    assert source.filename is None
+
+    tagged = await a.post(f"/api/v1/photos/{source.id}/tags", json={"handles": [b_handle]})
+    assert tagged.status_code == 200, tagged.text
+    assert tagged.json()["tags"][0]["status"] == "delivered"
+
+    outgoing = (await a.get("/api/v1/social/meal-tags")).json()["outgoing"]
+    assert outgoing[0]["status"] == "delivered"
+    assert await _recipient_photo_count_http(b, DAY) == 1
+
+    entry = await b.get(f"/api/v1/entries/{DAY.isoformat()}")
+    assert entry.status_code == 200
+    copy = entry.json()["photos"][0]
+    assert copy["filename"] is None
+    assert copy["has_image"] is False
+    assert copy["icon_key"] == "bowl"
+
+    analysis = await b.get(f"/api/v1/photos/{copy['id']}/analysis")
+    assert analysis.status_code == 200
+    assert analysis.json()["dish_name"] == "Tagged library dish"
+    assert analysis.json()["status"] == "confirmed"
+
+
 # ---------------------------------------------------------------------------
 # GET /api/v1/photos — profile-grid list endpoint (issue #363)
 # ---------------------------------------------------------------------------
