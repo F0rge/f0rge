@@ -2,26 +2,25 @@
 
 ## Verdict
 
-**PARTIAL PASS** — Railway prod + develop data/photos/services healthy on `*.up.railway.app`. Custom-domain DNS still on Fly (Cloudflare API token invalid; UI apply pending). Re-run domain section after DNS cutover.
+**PASS** — custom domains on Railway (prod + develop).
 
-## Evidence (Railway hosts)
+## Custom-domain evidence
 
-| Check | Prod | Develop |
-|-------|------|---------|
-| API `/api/v1/health` | 200 `{"status":"ok"}` | 200 `{"status":"ok"}` |
-| Frontend `/` | 200 | 200 |
-| MCP `/mcp` | 401 (auth expected) | 401 |
-| DB restore counts | users=7 entries=148 photos=284 alembic=048 | users=133 entries=59 photos=54 alembic=048 |
-| Photo bucket sync | 287/287 objects; HEAD sample OK | 56/56 objects |
+| Check | Result |
+|-------|--------|
+| `api.marrow-health.com/api/v1/health` | 200 `{"status":"ok"}` (`server: railway-hikari`) |
+| `api-dev.marrow-health.com/api/v1/health` | 200 `{"status":"ok"}` |
+| `marrow-health.com/` / `www` / `app-dev` | 200 HTML |
+| `mcp.marrow-health.com/mcp` / `mcp-dev` | 401 auth required (non-5xx) |
+| TLS | `CN=api.marrow-health.com` (Let's Encrypt via Railway) |
+| DNS | CNAMEs → `*.up.railway.app` (DoH); not Fly IPs |
+| Photos | Bucket sync 287/56; MCP `list_photos_for_entry` 2026-04-01 → photo id 1; `/photos/1/file` → 401 unauth |
+| DB | Prod 7/148/284; Develop 133/59/54; alembic `048` |
 
-## Pending (custom domains)
+## CI
 
-Apply [`railway_dns_cutover_checklist.md`](railway_dns_cutover_checklist.md) in Cloudflare UI (DNS-only until cert ACTIVE), then:
-
-- dig → Railway CNAME targets
-- curl health/login/photo/MCP on `*.marrow-health.com` / `*-dev.*`
-- Update this report to **PASS**
+PR #438 merged to `develop` (Railway smoke, Fly deploy workflow removed).
 
 ## Fly
 
-Web/worker scaled to 0. Teardown after 48h: [`railway_fly_teardown.md`](railway_fly_teardown.md).
+Web/worker at 0. Destroy after 48h per `railway_fly_teardown.md`.
