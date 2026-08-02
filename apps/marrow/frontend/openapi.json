@@ -1556,6 +1556,213 @@
         }
       }
     },
+    "/api/v1/meals/library/cuisines": {
+      "get": {
+        "tags": [
+          "meals"
+        ],
+        "summary": "Library Cuisines",
+        "operationId": "library_cuisines_api_v1_meals_library_cuisines_get",
+        "parameters": [
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Library Cuisines Api V1 Meals Library Cuisines Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meals/library": {
+      "get": {
+        "tags": [
+          "meals"
+        ],
+        "summary": "Library Meals",
+        "operationId": "library_meals_api_v1_meals_library_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "cuisine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cuisine"
+            }
+          },
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlatformMealResponse"
+                  },
+                  "title": "Response Library Meals Api V1 Meals Library Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/entries/{date}/meals/from-library": {
+      "post": {
+        "tags": [
+          "meals"
+        ],
+        "summary": "Log Meal From Library",
+        "operationId": "log_meal_from_library_api_v1_entries__date__meals_from_library_post",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Date"
+            }
+          },
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealFromLibraryCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/entries/{date}/meals/clone": {
       "post": {
         "tags": [
@@ -12193,6 +12400,31 @@
         ],
         "title": "MealCloneCreate"
       },
+      "MealFromLibraryCreate": {
+        "properties": {
+          "platform_meal_id": {
+            "type": "integer",
+            "title": "Platform Meal Id"
+          },
+          "meal_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meal Time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform_meal_id"
+        ],
+        "title": "MealFromLibraryCreate"
+      },
       "MealTagListResponse": {
         "properties": {
           "incoming_pending": {
@@ -12678,8 +12910,31 @@
             "title": "Meal Id"
           },
           "filename": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Filename"
+          },
+          "has_image": {
+            "type": "boolean",
+            "title": "Has Image",
+            "default": true
+          },
+          "icon_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Key"
           },
           "label": {
             "anyOf": [
@@ -12783,7 +13038,6 @@
         "required": [
           "id",
           "entry_id",
-          "filename",
           "created_at"
         ],
         "title": "PhotoResponse"
@@ -12924,6 +13178,55 @@
         },
         "type": "object",
         "title": "PhotoUpdate"
+      },
+      "PlatformMealResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "cuisine": {
+            "type": "string",
+            "title": "Cuisine"
+          },
+          "icon_key": {
+            "type": "string",
+            "title": "Icon Key"
+          },
+          "ingredients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ingredients"
+          },
+          "diet_flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Diet Flags",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "cuisine",
+          "icon_key",
+          "ingredients"
+        ],
+        "title": "PlatformMealResponse"
       },
       "ProfileTagFilterUpdate": {
         "properties": {

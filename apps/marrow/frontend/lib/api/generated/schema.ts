@@ -336,6 +336,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/meals/library/cuisines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Library Cuisines */
+        get: operations["library_cuisines_api_v1_meals_library_cuisines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/meals/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Library Meals */
+        get: operations["library_meals_api_v1_meals_library_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entries/{date}/meals/from-library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Log Meal From Library */
+        post: operations["log_meal_from_library_api_v1_entries__date__meals_from_library_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entries/{date}/meals/clone": {
         parameters: {
             query?: never;
@@ -3091,6 +3142,13 @@ export interface components {
             /** Meal Time */
             meal_time?: string | null;
         };
+        /** MealFromLibraryCreate */
+        MealFromLibraryCreate: {
+            /** Platform Meal Id */
+            platform_meal_id: number;
+            /** Meal Time */
+            meal_time?: string | null;
+        };
         /** MealTagListResponse */
         MealTagListResponse: {
             /** Incoming Pending */
@@ -3267,7 +3325,14 @@ export interface components {
             /** Meal Id */
             meal_id?: number | null;
             /** Filename */
-            filename: string;
+            filename?: string | null;
+            /**
+             * Has Image
+             * @default true
+             */
+            has_image: boolean;
+            /** Icon Key */
+            icon_key?: string | null;
             /** Label */
             label?: string | null;
             /** Dish Name */
@@ -3339,6 +3404,26 @@ export interface components {
             hidden?: boolean | null;
             /** Diet Tags */
             diet_tags?: string[] | null;
+        };
+        /** PlatformMealResponse */
+        PlatformMealResponse: {
+            /** Id */
+            id: number;
+            /** Slug */
+            slug: string;
+            /** Name */
+            name: string;
+            /** Cuisine */
+            cuisine: string;
+            /** Icon Key */
+            icon_key: string;
+            /** Ingredients */
+            ingredients: string[];
+            /**
+             * Diet Flags
+             * @default []
+             */
+            diet_flags: string[];
         };
         /** ProfileTagFilterUpdate */
         ProfileTagFilterUpdate: {
@@ -5090,6 +5175,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecentMealResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    library_cuisines_api_v1_meals_library_cuisines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    library_meals_api_v1_meals_library_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                cuisine?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformMealResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    log_meal_from_library_api_v1_entries__date__meals_from_library_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                date: string;
+            };
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealFromLibraryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoResponse"];
                 };
             };
             /** @description Validation Error */
