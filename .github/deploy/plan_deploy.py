@@ -53,8 +53,10 @@ def main() -> None:
                 continue
             if spec["nx"] not in affected:
                 continue
-            if spec["target"] == "fly":
-                role = spec["fly"]["role"]
+            if spec["target"] in {"fly", "railway"}:
+                # fly kept for legacy manifests; railway is the live marrow target.
+                block = spec.get(spec["target"]) or spec.get("railway") or spec.get("fly")
+                role = block["role"]
                 if role == "api":
                     deploy_api = True
                     deploy_mcp = True
@@ -90,14 +92,16 @@ def main() -> None:
 
 
 def _health_urls(manifest: dict, environment: str) -> dict[str, str]:
-    """Fly role -> health URL for this environment, from the manifest."""
-    urls = {}
+    """Role -> health URL for this environment, from the manifest."""
+    urls: dict[str, str] = {}
     for spec in manifest["components"].values():
-        if spec.get("target") != "fly":
+        target = spec.get("target")
+        if target not in {"fly", "railway"}:
             continue
-        for fly in [spec["fly"], *spec.get("also_deploys", [])]:
-            if "health_url" in fly:
-                urls[fly["role"]] = fly["health_url"][environment]
+        primary = spec.get(target) or spec.get("railway") or spec.get("fly") or {}
+        for block in [primary, *spec.get("also_deploys", [])]:
+            if "health_url" in block and "role" in block:
+                urls[block["role"]] = block["health_url"][environment]
     return urls
 
 

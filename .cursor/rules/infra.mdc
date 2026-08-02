@@ -1,6 +1,6 @@
 ---
-description: Fly.io + Coolify deploy, CI/CD, and Docker build conventions. Use proactively for fly.toml, Dockerfiles, GitHub Actions, and env configuration.
-globs: **/fly*.toml, .github/**, **/Dockerfile, **/docker-entrypoint.sh, **/docker-compose*.yml
+description: Railway + Coolify deploy, CI/CD, and Docker build conventions. Use proactively for railway.toml, fly.toml (legacy), Dockerfiles, GitHub Actions, and env configuration.
+globs: **/railway*.toml, **/fly*.toml, .github/**, **/Dockerfile, **/docker-entrypoint.sh, **/docker-compose*.yml
 alwaysApply: false
 ---
 
@@ -12,55 +12,48 @@ Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
 
 | App | Target | Branches | Manifest component |
 |-----|--------|----------|-------------------|
-| marrow | Fly.io | `develop`, `main` | `marrow-backend`, `marrow-frontend` |
+| marrow | Railway (autodeploy + Actions smoke) | `develop`, `main` | `marrow-backend`, `marrow-frontend` |
 | dk tag printer | Pi Coolify | `main` only | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
 
-Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) reads [`.github/deploy/manifest.yml`](../.github/deploy/manifest.yml) + Nx affected. Marrow executor: [`fly-deploy-reusable.yml`](../.github/workflows/fly-deploy-reusable.yml). Coolify: webhook POST from deploy job (secrets `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DK_*`).
+Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) reads [`.github/deploy/manifest.yml`](../.github/deploy/manifest.yml) + Nx affected. Marrow smoke: [`railway-smoke-reusable.yml`](../.github/workflows/railway-smoke-reusable.yml). Coolify: webhook POST from deploy job (secrets `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DK_*`).
 
-# Marrow Infrastructure (Fly.io)
+# Marrow Infrastructure (Railway)
 
-Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
-
-**Deploy gotchas:** read `~/.cursor/agent-memory/devops/project_health_tracker_*.md` before changing Fly apps, MPG, or DNS.
+**Deploy gotchas:** read `~/.cursor/agent-memory/devops/` + [`apps/marrow/backend/docs/railway_env.md`](../../apps/marrow/backend/docs/railway_env.md). Cloudflare DNS Edit for `marrow-health.com` often needs UI (API token may 9109/7003).
 
 ## Environments
 
 | Env | Branch | Frontend | Backend API | MCP |
 |---|---|---|---|---|
-| Production | `main` | https://marrow-health.com | https://api.marrow-health.com | https://marrow-mcp.fly.dev |
-| Develop | `develop` | https://app-dev.marrow-health.com | https://api-dev.marrow-health.com | https://marrow-mcp-dev.fly.dev |
+| Production | `main` | https://marrow-health.com | https://api.marrow-health.com | https://mcp.marrow-health.com |
+| Develop | `develop` | https://app-dev.marrow-health.com | https://api-dev.marrow-health.com | https://mcp-dev.marrow-health.com |
 
-Fly hostnames also work: `marrow-ui`, `marrow`, `marrow-mcp` (prod) and `marrow-ui-dev`, `marrow-dev`, `marrow-mcp-dev` (dev).
+Railway `*.up.railway.app` hostnames also work for interim smoke.
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci.yml`, then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by the same CI (+ `playwright smoke`).
-- After CI green on push to `develop`/`main`, [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) calls [`deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) (manifest + Nx affected → Fly or Coolify).
+- Promotion to prod is a PR `develop` → `main`, gated by the same CI.
+- After CI green on push to `develop`/`main`, [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) calls [`deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) (manifest + Nx affected → Railway smoke or Coolify).
 
-## Fly apps
+## Railway services
 
-| Role | Dev app | Prod app | Config |
-|---|---|---|---|
-| API + worker | `marrow-dev` | `marrow` | `apps/marrow/backend/fly.toml` / `fly.prod.toml` |
-| MCP | `marrow-mcp-dev` | `marrow-mcp` | `apps/marrow/backend/fly.mcp.toml` / `fly.mcp.prod.toml` |
-| Frontend | `marrow-ui-dev` | `marrow-ui` | `apps/marrow/frontend/fly.toml` / `fly.prod.toml` |
+| Role | Service | Config |
+|---|---|---|
+| API | `marrow-api` | `apps/marrow/backend/railway.toml` |
+| Worker | `marrow-worker` | `apps/marrow/backend/railway.worker.toml` |
+| MCP | `marrow-mcp` | `apps/marrow/backend/railway.mcp.toml` (no HTTP healthcheckPath) |
+| Frontend | `marrow-frontend` | `apps/marrow/frontend/railway.toml` |
 
-## MPG (Postgres)
+Shared monorepo: **no Root Directory**; Dockerfile build context = repo root.
 
-- Cluster: `f0rge-db` (`nlkxjo5m3240y93v`, `fra`, org `f0rge`)
-- Databases: `marrow` (prod), `marrow_dev` (dev)
-- Users: `healthtracker-app` (writer), `healthtracker-ro` (reader), `htmigrate` (migrations only)
-- Set `FLY_MPG_SKIP_ROLE_DDL=1` on Fly apps
+## Postgres / Redis / photos
 
-Migrations: `[deploy] release_command` in `fly.toml` runs `alembic upgrade head` as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker-app).
+- Postgres: Railway pgvector template; roles via `scripts/railway_bootstrap_roles.sql`
+- Set `FLY_MPG_SKIP_ROLE_DDL=1` on Railway apps after bootstrap (name is historical)
+- Migrations: Railway `preDeployCommand` runs alembic as `MIGRATION_DATABASE_URL` (htmigrate). Runtime uses `DATABASE_URL` (healthtracker_app).
+- Redis: Railway Redis plugin (`REDIS_URL`)
+- Photos: Railway Buckets (`AWS_*`, `BUCKET_NAME`); sync runbook `scripts/railway_bucket_sync.sh`
 
-`apps/marrow/backend/docker-entrypoint.sh` still supports `RUN_MIGRATIONS=1` for local Docker builds; Fly uses `release_command` instead.
-
-## Redis (Upstash)
-
-- Dev: `marrow-redis-dev` — prod: `marrow-redis` (org `f0rge`, region `fra`, Pay-as-you-go, eviction enabled)
-- `REDIS_URL` secret on API apps only (`marrow-dev`, `marrow`) — **not** on MCP apps
-- Private URL from `fly redis status <name>`; set via `fly secrets set REDIS_URL=... -a <app>`
-- Local: `REDIS_URL` optional in `.env`; empty/unset = cache no-op (no local Redis container required)
+`apps/marrow/backend/docker-entrypoint.sh` still supports `RUN_MIGRATIONS=1` for local Docker builds.
 
 ## Local development
 
@@ -82,7 +75,6 @@ Docker builds use **repo root** as context (not `apps/marrow/{backend,frontend}`
 ```bash
 docker build -f apps/marrow/backend/Dockerfile .
 docker build -f apps/marrow/frontend/Dockerfile .
-flyctl deploy . --remote-only --config apps/marrow/backend/fly.toml
 ```
 
 `.dockerignore` files are **root-relative whitelists** (`*` then `!apps/marrow/...` then `!libs/**`). Blacklist patterns ship the whole repo to remote builders.
@@ -99,6 +91,10 @@ For every new `app/config.py` setting:
 
 - [ ] In `apps/marrow/backend/.env.example`
 - [ ] README/deploy doc updated if required
-- [ ] Set on Fly app secrets (`fly secrets set -a marrow-dev` / `marrow`) if deployed
+- [ ] Set on Railway service variables (production + develop)
 - [ ] Degrades gracefully when missing (no 500 storm)
 - [ ] Startup warning when feature enabled but credentials missing
+
+## Legacy Fly
+
+`fly*.toml` retained until the 48h post-DNS rollback window ends, then delete in a follow-up PR with Fly app teardown.

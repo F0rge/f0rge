@@ -2,38 +2,30 @@ version: 1
 
 # Maps Nx projects to deploy targets. The orchestrator (deploy-reusable.yml)
 # filters by branch/environment and nx affected before calling executors.
+# Marrow: Railway GitHub autodeploy + Actions smoke only. dk: Coolify on main.
 
 components:
   marrow-backend:
     nx: marrow-backend
-    target: fly
+    target: railway
     branches: [develop, main]
-    fly:
+    railway:
       role: api
-      config:
-        develop: apps/marrow/backend/fly.toml
-        main: apps/marrow/backend/fly.prod.toml
       health_url:
         develop: https://api-dev.marrow-health.com/api/v1/health
         main: https://api.marrow-health.com/api/v1/health
     also_deploys:
       - role: mcp
-        config:
-          develop: apps/marrow/backend/fly.mcp.toml
-          main: apps/marrow/backend/fly.mcp.prod.toml
         health_url:
-          develop: https://marrow-mcp-dev.fly.dev/mcp
-          main: https://marrow-mcp.fly.dev/mcp
+          develop: https://mcp-dev.marrow-health.com/mcp
+          main: https://mcp.marrow-health.com/mcp
 
   marrow-frontend:
     nx: marrow-frontend
-    target: fly
+    target: railway
     branches: [develop, main]
-    fly:
+    railway:
       role: frontend
-      config:
-        develop: apps/marrow/frontend/fly.toml
-        main: apps/marrow/frontend/fly.prod.toml
       health_url:
         develop: https://app-dev.marrow-health.com/
         main: https://marrow-health.com/
