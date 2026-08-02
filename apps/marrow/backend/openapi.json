@@ -1556,59 +1556,6 @@
         }
       }
     },
-    "/api/v1/meals/library/cuisines": {
-      "get": {
-        "tags": [
-          "meals"
-        ],
-        "summary": "Library Cuisines",
-        "operationId": "library_cuisines_api_v1_meals_library_cuisines_get",
-        "parameters": [
-          {
-            "name": "ht_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Ht Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "title": "Response Library Cuisines Api V1 Meals Library Cuisines Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/meals/library": {
       "get": {
         "tags": [
@@ -1631,22 +1578,6 @@
                 }
               ],
               "title": "Q"
-            }
-          },
-          {
-            "name": "cuisine",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cuisine"
             }
           },
           {

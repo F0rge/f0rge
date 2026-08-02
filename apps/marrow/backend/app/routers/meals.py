@@ -30,20 +30,12 @@ async def recent_meals(
     return await service.list_recent(limit)
 
 
-@router.get("/meals/library/cuisines", response_model=list[str])
-async def library_cuisines(
-    service: MealService = Depends(get_meal_service),
-) -> list[str]:
-    return await service.list_library_cuisines()
-
-
 @router.get("/meals/library", response_model=list[PlatformMealResponse])
 async def library_meals(
     q: str | None = Query(default=None),
-    cuisine: str | None = Query(default=None),
     service: MealService = Depends(get_meal_service),
 ) -> list[PlatformMealResponse]:
-    return await service.list_library(q=q, cuisine=cuisine)
+    return await service.list_library(q=q)
 
 
 @router.post(
