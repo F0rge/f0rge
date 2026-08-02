@@ -91,8 +91,9 @@ async def test_library_cuisine_filter_portuguese(
 
 async def test_library_search_arroz(async_db: AsyncSession, platform_library: None) -> None:
     meals = await MealService(async_db).list_library(q="arroz")
-    assert len(meals) == 1
-    assert meals[0].slug == "arroz-de-pato"
+    slugs = {meal.slug for meal in meals}
+    assert "arroz-de-pato" in slugs
+    assert "arroz-con-pollo" in slugs
 
 
 async def test_log_from_library_creates_confirmed_icon_only_meal(
