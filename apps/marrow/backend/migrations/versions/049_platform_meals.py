@@ -176,25 +176,29 @@ def _seed_platform_meals(bind: sa.Connection) -> None:
                 {"slug": meal_data["slug"]},
             ).scalar_one()
         for index, canonical_name in enumerate(meal_data["ingredients"]):
+            # Distinct bind names: asyncpg AmbiguousParameterError if the same
+            # name appears in both the SELECT list and WHERE (AGENTS.md).
             bind.execute(
                 sa.text(
                     """
                     INSERT INTO platform_meal_ingredients (
                         platform_meal_id, canonical_name, sort_order
                     )
-                    SELECT :platform_meal_id, :canonical_name, :sort_order
+                    SELECT :platform_meal_id_ins, :canonical_name_ins, :sort_order
                     WHERE NOT EXISTS (
                         SELECT 1
                         FROM platform_meal_ingredients
-                        WHERE platform_meal_id = :platform_meal_id
-                          AND canonical_name = :canonical_name
+                        WHERE platform_meal_id = :platform_meal_id_chk
+                          AND canonical_name = :canonical_name_chk
                     )
                     """
                 ),
                 {
-                    "platform_meal_id": meal_id,
-                    "canonical_name": canonical_name,
+                    "platform_meal_id_ins": meal_id,
+                    "canonical_name_ins": canonical_name,
                     "sort_order": (index + 1) * 10,
+                    "platform_meal_id_chk": meal_id,
+                    "canonical_name_chk": canonical_name,
                 },
             )
 
