@@ -35,7 +35,7 @@ class Photo(Base):
         ForeignKey("meals.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    filename: Mapped[str] = mapped_column(String, nullable=False)
+    filename: Mapped[str | None] = mapped_column(String, nullable=True)
     label: Mapped[str | None] = mapped_column(String, nullable=True)
     original_filename: Mapped[str | None] = mapped_column(String, nullable=True)
     meal_time: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)

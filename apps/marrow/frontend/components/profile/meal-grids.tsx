@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { LayoutGrid, Tag } from 'lucide-react'
 import { cn, formatDisplayDate, formatLocalDate } from '@f0rge/ui'
+import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { usePhotos } from '@/lib/api/hooks'
 import type { Photo } from '@/lib/api/types'
@@ -73,14 +74,22 @@ function Grid({
             aria-label={`Open ${name || 'meal photo'}`}
             className="relative aspect-square cursor-pointer overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Image
-              src={`/api/v1/photos/${photo.id}/file`}
-              alt={photo.label ?? 'Meal photo'}
-              fill
-              unoptimized
-              sizes="(max-width: 672px) 33vw, 224px"
-              className="object-cover"
-            />
+            {photoHasImage(photo) ? (
+              <Image
+                src={`/api/v1/photos/${photo.id}/file`}
+                alt={photo.label ?? 'Meal photo'}
+                fill
+                unoptimized
+                sizes="(max-width: 672px) 33vw, 224px"
+                className="object-cover"
+              />
+            ) : (
+              <MealIconThumb
+                iconKey={photo.icon_key ?? 'bowl'}
+                size="lg"
+                className="size-full rounded-none"
+              />
+            )}
             {tagged && photo.tagged_by_handle && (
               <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-card px-1.5 text-[8.5px] font-bold leading-4 ring-1 ring-border">
                 @{photo.tagged_by_handle}

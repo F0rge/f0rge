@@ -5,3 +5,13 @@ export interface RecentMeal {
   last_logged: string // YYYY-MM-DD
   diet_flags: string[]
 }
+
+export interface PlatformMeal {
+  id: number
+  slug: string
+  name: string
+  cuisine: string
+  icon_key: string
+  ingredients: string[]
+  diet_flags: string[]
+}

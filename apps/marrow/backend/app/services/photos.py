@@ -268,6 +268,8 @@ class PhotoService:
         photo = await self.crud.get_by_id_owned(photo_id)
         if photo is None:
             raise NotFoundError("Photo not found")
+        if not photo.filename:
+            raise NotFoundError("Photo file not found")
         if not object_storage.exists_relative(photo.filename, user_id=str(photo.user_id)):
             raise NotFoundError("Photo file not found")
         presigned = object_storage.presigned_url_for_relative(
@@ -300,4 +302,6 @@ class PhotoService:
         await self.meal_crud.delete_if_orphaned(meal_id)
 
         # File cleanup happens after the successful commit.
-        await asyncio.to_thread(delete_photo, filename, user_id=user_id_str)
+        # Icon-only library meals have no object-storage file.
+        if filename is not None:
+            await asyncio.to_thread(delete_photo, filename, user_id=user_id_str)

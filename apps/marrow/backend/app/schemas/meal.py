@@ -22,6 +22,36 @@ class RecentMealResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PlatformMealIngredientPreview(BaseModel):
+    canonical_name: str
+
+
+class PlatformMealResponse(BaseModel):
+    id: int
+    slug: str
+    name: str
+    cuisine: str
+    icon_key: str
+    ingredients: list[str]
+    diet_flags: list[str] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MealFromLibraryCreate(BaseModel):
+    platform_meal_id: int
+    meal_time: Optional[datetime.datetime] = None
+
+    @field_validator("meal_time", mode="after")
+    @classmethod
+    def strip_meal_time_tz(cls, v: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+        if v is None or v.tzinfo is None:
+            return v
+        utc_offset = v.utcoffset()
+        naive_utc = (v - utc_offset).replace(tzinfo=None)
+        return naive_utc
+
+
 class MealCloneCreate(BaseModel):
     source_photo_id: int
     meal_time: Optional[datetime.datetime] = None

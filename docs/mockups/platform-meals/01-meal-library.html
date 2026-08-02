@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Option A — Meal library browser</title>
+  <link rel="stylesheet" href="shared.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <a class="nav-back" href="index.html">← All options</a>
+  <div class="page-header">
+    <h1>A · Meal library browser</h1>
+    <p>
+      New third button beside Take / Choose photo. Opens a cuisine-filtered catalog of platform meals
+      with icon tiles. Confirm meal time → meal appears in the grid with a <em>Library</em> badge (no photo).
+    </p>
+    <div class="meta">
+      <span class="pill-tag accent">Try: From library → Portuguese → Arroz de pato</span>
+    </div>
+  </div>
+
+  <div class="phone" id="phone">
+    <div class="phone-status"><span>14:41</span><span>●●● 5G ▮</span></div>
+    <div class="toast" id="toast"></div>
+    <div class="phone-body">
+      <div class="app-header">
+        <div class="title">Check-in</div>
+        <div class="sub">Sunday 2 Aug 2026</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Food &amp; drinks <span class="tier">Core</span></div>
+        </div>
+        <div class="card-body">
+          <div id="diet-risk"></div>
+
+          <div id="uploaded" class="section" hidden>
+            <div class="label-sm" style="margin-bottom:8px">Uploaded photos</div>
+            <div class="meals-grid" id="meals-grid"></div>
+          </div>
+
+          <div class="section">
+            <div class="label-row">
+              <span class="label-sm">Log again</span>
+            </div>
+            <div class="strip" id="your-strip"></div>
+          </div>
+
+          <div class="section">
+            <div class="label-sm" style="margin-bottom:8px">Photos</div>
+            <div class="hint-banner" id="hint-banner"></div>
+            <div class="capture-row three" style="margin-top:8px">
+              <button class="capture-btn" type="button" id="btn-take"></button>
+              <button class="capture-btn" type="button" id="btn-choose"></button>
+              <button class="capture-btn primary-outline highlight-pulse" type="button" id="btn-library"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scrim" id="scrim"></div>
+
+    <!-- Library sheet -->
+    <div class="sheet" id="sheet-library">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h3>Meal library</h3>
+        <p>Platform dishes built from the ingredient catalog. Tap to log — no photo.</p>
+      </div>
+      <div class="sheet-body">
+        <div class="search">
+          <span id="search-icon"></span>
+          <input id="lib-search" type="search" placeholder="Search meals…" autocomplete="off" />
+        </div>
+        <div class="cuisine-row" id="cuisines"></div>
+        <div class="catalog-grid" id="catalog-grid"></div>
+      </div>
+    </div>
+
+    <!-- Confirm sheet -->
+    <div class="sheet" id="sheet-confirm">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h3 id="confirm-title">Log meal</h3>
+        <p id="confirm-desc">Ingredients and diet flags come from the library recipe.</p>
+      </div>
+      <div class="sheet-body">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
+          <div id="confirm-thumb" style="width:72px;height:72px;border-radius:12px;overflow:hidden;flex:none"></div>
+          <div>
+            <div id="confirm-name" style="font-weight:650;font-size:1rem"></div>
+            <div id="confirm-flags" style="margin-top:6px"></div>
+            <div id="confirm-ings" class="text-xs muted" style="margin-top:6px;line-height:1.35"></div>
+          </div>
+        </div>
+        <div class="label-sm" style="margin-bottom:8px">Meal time</div>
+        <div class="meal-time" id="meal-times">
+          <button class="time-chip on" type="button" data-time>Now</button>
+          <button class="time-chip" type="button" data-time>1h ago</button>
+          <button class="time-chip" type="button" data-time>2h ago</button>
+          <button class="time-chip" type="button" data-time>3h ago</button>
+          <button class="time-chip" type="button" data-time>Custom</button>
+        </div>
+        <button class="btn-primary" type="button" id="btn-confirm-log">Log meal</button>
+        <button class="btn-secondary" type="button" id="btn-back-lib">Back to library</button>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="nav-item on" id="nav-home"></div>
+      <div class="nav-item" id="nav-hist"></div>
+      <div class="nav-item" id="nav-treat"></div>
+      <div class="nav-item" id="nav-prof"></div>
+    </nav>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    let cuisine = 'All';
+    let selected = null;
+    let logged = [];
+
+    // Wire chrome icons
+    document.getElementById('btn-take').innerHTML = ICONS.camera + '<span>Take Photo</span>';
+    document.getElementById('btn-choose').innerHTML = ICONS.image + '<span>Choose Photo</span>';
+    document.getElementById('btn-library').innerHTML = ICONS.book + '<span>From library</span>';
+    document.getElementById('hint-banner').innerHTML =
+      ICONS.sparkles + '<span><strong>New:</strong> “From library” logs a curated dish with a default icon — no camera needed.</span>';
+    document.getElementById('search-icon').innerHTML = ICONS.search;
+    document.getElementById('nav-home').innerHTML = ICONS.home + '<span>Today</span>';
+    document.getElementById('nav-hist').innerHTML = ICONS.history + '<span>History</span>';
+    document.getElementById('nav-treat').innerHTML = ICONS.pills + '<span>Treatments</span>';
+    document.getElementById('nav-prof').innerHTML = ICONS.user + '<span>Profile</span>';
+
+    document.getElementById('diet-risk').innerHTML = dietRiskBlock(false);
+    wireDietPills();
+
+    // Your meals strip
+    document.getElementById('your-strip').innerHTML = YOUR_MEALS.map(m => `
+      <button class="chip" type="button" data-clone="${m.id}">
+        <div class="chip-thumb">${photoThumb(m.photo)}</div>
+        <div class="chip-name">${m.name}</div>
+        <div class="chip-when">${m.when}${m.times > 1 ? ` · ×${m.times}` : ''}</div>
+        ${flagPills(m.flags)}
+      </button>`).join('');
+
+    document.querySelectorAll('[data-clone]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const m = YOUR_MEALS.find(x => x.id === btn.dataset.clone);
+        showToast(`Logged again: ${m.name}`);
+      });
+    });
+
+    const cuisines = ['All', ...new Set(PLATFORM_MEALS.map(m => m.cuisine))];
+    function renderCuisines() {
+      document.getElementById('cuisines').innerHTML = cuisines.map(c =>
+        `<button class="cuisine${c === cuisine ? ' on' : ''}" type="button" data-cuisine="${c}">${c}</button>`
+      ).join('');
+      document.querySelectorAll('[data-cuisine]').forEach(b => {
+        b.addEventListener('click', () => { cuisine = b.dataset.cuisine; renderCuisines(); renderCatalog(); });
+      });
+    }
+
+    function renderCatalog() {
+      const q = (document.getElementById('lib-search').value || '').trim().toLowerCase();
+      const meals = PLATFORM_MEALS.filter(m => {
+        const cuisineOk = cuisine === 'All' || m.cuisine === cuisine;
+        const qOk = !q || m.name.toLowerCase().includes(q) || m.ingredients.some(i => i.toLowerCase().includes(q));
+        return cuisineOk && qOk;
+      });
+      const grid = document.getElementById('catalog-grid');
+      if (!meals.length) {
+        grid.innerHTML = `<div class="empty-hint" style="grid-column:1/-1">No library meals match.</div>`;
+        return;
+      }
+      grid.innerHTML = meals.map(m => `
+        <button class="catalog-tile" type="button" data-pm="${m.id}">
+          <div class="ct-thumb">${iconThumb(m.icon, m.tone)}</div>
+          <div class="ct-body">
+            <div class="ct-name">${m.name}</div>
+            <div class="ct-ing">${m.ingredients.slice(0, 3).join(' · ')}</div>
+            <div style="margin-top:6px">${flagPills(m.flags)}</div>
+          </div>
+        </button>`).join('');
+      grid.querySelectorAll('[data-pm]').forEach(btn => {
+        btn.addEventListener('click', () => openConfirm(PLATFORM_MEALS.find(m => m.id === btn.dataset.pm)));
+      });
+    }
+
+    function openConfirm(meal) {
+      selected = meal;
+      document.getElementById('confirm-title').textContent = 'Log from library';
+      document.getElementById('confirm-name').textContent = meal.name;
+      document.getElementById('confirm-flags').innerHTML = flagPills(meal.flags);
+      document.getElementById('confirm-ings').textContent = meal.ingredients.join(' · ');
+      document.getElementById('confirm-thumb').innerHTML = iconThumb(meal.icon, meal.tone);
+      document.getElementById('sheet-library').classList.remove('open');
+      openSheet('sheet-confirm');
+    }
+
+    function renderLogged() {
+      const wrap = document.getElementById('uploaded');
+      const grid = document.getElementById('meals-grid');
+      if (!logged.length) { wrap.hidden = true; document.getElementById('diet-risk').innerHTML = dietRiskBlock(false); wireDietPills(); return; }
+      wrap.hidden = false;
+      document.getElementById('diet-risk').innerHTML = dietRiskBlock(true);
+      wireDietPills();
+      grid.innerHTML = logged.map((m, i) => `
+        <div class="meal-card">
+          <button class="del" type="button" data-del="${i}" aria-label="Delete">${ICONS.x}</button>
+          <div class="thumb">
+            <span class="icon-badge">Library</span>
+            ${iconThumb(m.icon, m.tone)}
+          </div>
+          <div class="meta">
+            <div class="name">${m.name}</div>
+            <div style="margin-top:4px">${flagPills(m.flags)}</div>
+          </div>
+        </div>`).join('');
+      grid.querySelectorAll('[data-del]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          logged.splice(+btn.dataset.del, 1);
+          renderLogged();
+          showToast('Meal removed');
+        });
+      });
+    }
+
+    document.getElementById('btn-library').addEventListener('click', () => {
+      renderCuisines();
+      renderCatalog();
+      openSheet('sheet-library');
+    });
+    document.getElementById('lib-search').addEventListener('input', renderCatalog);
+    document.getElementById('scrim').addEventListener('click', closeSheets);
+    document.getElementById('btn-back-lib').addEventListener('click', () => {
+      document.getElementById('sheet-confirm').classList.remove('open');
+      openSheet('sheet-library');
+    });
+    document.getElementById('meal-times').addEventListener('click', e => {
+      const t = e.target.closest('[data-time]');
+      if (!t) return;
+      document.querySelectorAll('[data-time]').forEach(c => c.classList.remove('on'));
+      t.classList.add('on');
+    });
+    document.getElementById('btn-confirm-log').addEventListener('click', () => {
+      if (!selected) return;
+      logged.unshift({ ...selected });
+      renderLogged();
+      closeSheets();
+      showToast(`Logged: ${selected.name}`);
+      selected = null;
+    });
+    document.getElementById('btn-take').addEventListener('click', () => showToast('Camera — unchanged in this prototype'));
+    document.getElementById('btn-choose').addEventListener('click', () => showToast('Gallery — unchanged in this prototype'));
+
+    renderCuisines();
+  </script>
+</body>
+</html>

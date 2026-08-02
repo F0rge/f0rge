@@ -114,7 +114,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="checkin-food"]',
     title: 'Food & diet',
     content:
-      'Snap meal photos for AI analysis or log manually. Diet-risk tags flag high-histamine, FODMAP, gluten, and dairy items.',
+      'Snap meal photos for AI analysis, pick from the meal library (no photo), or log again from history. Diet-risk tags flag high-histamine, FODMAP, gluten, and dairy items.',
     placement: 'bottom',
   },
   {

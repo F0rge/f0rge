@@ -5,6 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Eye, EyeOff, Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
+import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import {
   usePhotoAnalysis,
@@ -226,7 +227,7 @@ function MealTimeEditor({
 }: {
   photoId: number
   mealTime: string | null
-  filename: string
+  filename: string | null
 }) {
   const updateMealTime = useUpdatePhotoMealTime()
   const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(mealTime)
@@ -244,7 +245,8 @@ function MealTimeEditor({
 
   const chipValue = optimisticMealTime ? new Date(optimisticMealTime) : null
   const referenceDate =
-    entryDateFromFilename(filename) ?? (mealTime ? new Date(mealTime) : new Date())
+    (filename ? entryDateFromFilename(filename) : null) ??
+    (mealTime ? new Date(mealTime) : new Date())
 
   return (
     <div className="mb-3">
@@ -445,13 +447,26 @@ export function PhotoFocusOverlay({
 
         {/* Hero image + meal tabs */}
         <div data-sheet-top-region className="relative">
-          {photoId !== null && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/api/v1/photos/${photoId}/file`}
-              alt={currentPhoto?.label || dishName || 'Meal photo'}
-              className="aspect-[4/3] w-full object-cover"
-            />
+          {photoId !== null && currentPhoto && (
+            photoHasImage(currentPhoto) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/v1/photos/${photoId}/file`}
+                alt={currentPhoto.label || dishName || 'Meal photo'}
+                className="aspect-[4/3] w-full object-cover"
+              />
+            ) : (
+              <div className="relative flex aspect-[4/3] w-full items-center justify-center bg-muted">
+                <MealIconThumb
+                  iconKey={currentPhoto.icon_key ?? 'bowl'}
+                  size="lg"
+                  className="size-24 rounded-2xl"
+                />
+                <span className="absolute left-3 top-3 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-border">
+                  Library
+                </span>
+              </div>
+            )
           )}
 
           {photos.length > 1 && (

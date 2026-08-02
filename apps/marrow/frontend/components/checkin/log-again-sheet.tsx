@@ -12,6 +12,32 @@ import {
 import { Input } from '@f0rge/ui'
 import type { RecentMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
+import { MealIconThumb } from './meal-icon-thumb'
+
+function RecentMealThumb({ meal, loading }: { meal: RecentMeal; loading: boolean }) {
+  const [imageError, setImageError] = useState(false)
+
+  return (
+    <div className="relative size-12 flex-none overflow-hidden rounded-lg bg-muted">
+      {imageError ? (
+        <MealIconThumb iconKey="bowl" size="md" className="size-full rounded-lg" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/v1/photos/${meal.source_photo_id}/file`}
+          alt={meal.dish_name}
+          className="size-full object-cover"
+          onError={() => setImageError(true)}
+        />
+      )}
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+          <Loader2 className="size-4 animate-spin text-white" />
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface LogAgainSheetProps {
   open: boolean
@@ -62,19 +88,7 @@ export function LogAgainSheet({ open, onOpenChange, meals, cloningId, onClone }:
                 className="flex w-full items-center gap-3 rounded-xl border border-border bg-background p-2 text-left transition-colors hover:border-primary disabled:opacity-60"
                 aria-label={`Log ${meal.dish_name} again`}
               >
-                <div className="relative size-12 flex-none overflow-hidden rounded-lg bg-muted">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/api/v1/photos/${meal.source_photo_id}/file`}
-                    alt={meal.dish_name}
-                    className="size-full object-cover"
-                  />
-                  {cloningId === meal.source_photo_id && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <Loader2 className="size-4 animate-spin text-white" />
-                    </div>
-                  )}
-                </div>
+                <RecentMealThumb meal={meal} loading={cloningId === meal.source_photo_id} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{meal.dish_name}</div>
                   <div className="mt-0.5 flex items-center gap-2">

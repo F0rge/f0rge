@@ -4,6 +4,7 @@ import { use, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Pencil, Loader2, Pill } from 'lucide-react'
 import { useEntry, useUpdatePhotoMealTime, useMedicationCatalog, useSymptomCatalog } from '@/lib/api/hooks'
+import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-disclosure'
 import { PageShell } from '@/components/layout/page-shell'
@@ -71,12 +72,22 @@ function PhotoWithMealTime({ photo }: { photo: Photo }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="overflow-hidden rounded-lg border border-border">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/api/v1/photos/${photo.id}/file`}
-          alt={photo.label || `Photo ${photo.id}`}
-          className="aspect-square w-full object-cover"
-        />
+        {photoHasImage(photo) ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/v1/photos/${photo.id}/file`}
+            alt={photo.label || `Photo ${photo.id}`}
+            className="aspect-square w-full object-cover"
+          />
+        ) : (
+          <div className="relative flex aspect-square w-full items-center justify-center bg-muted">
+            <MealIconThumb
+              iconKey={photo.icon_key ?? 'bowl'}
+              size="lg"
+              className="size-24 rounded-2xl"
+            />
+          </div>
+        )}
         {photo.label && (
           <p className="bg-muted px-2 py-1 text-xs text-muted-foreground">{photo.label}</p>
         )}
@@ -89,7 +100,7 @@ function PhotoWithMealTime({ photo }: { photo: Photo }) {
           <MealTimeChips value={chipValue} onChange={handleChange} />
         </div>
       </div>
-      <PhotoAnalysisDisclosure photoId={photo.id} photoLabel={photo.label} />
+      <PhotoAnalysisDisclosure photoId={photo.id} photoLabel={photo.label} photo={photo} />
     </div>
   )
 }

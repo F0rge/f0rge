@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.entry import Entry
 from app.models.health_metrics import HealthMetric
 from app.models.meal import Meal
+from app.models.platform_meal import PlatformMeal, PlatformMealIngredient
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
 from app.models.photo_diet_tag import PhotoDietTag
@@ -38,6 +39,8 @@ __all__ = [
     "User",
     "Entry",
     "Meal",
+    "PlatformMeal",
+    "PlatformMealIngredient",
     "Photo",
     "PhotoAnalysis",
     "PhotoDietTag",

@@ -53,10 +53,15 @@ class PhotoCRUD(BaseCRUD):
 
     async def list_filenames_for_entry(self, entry_id: int) -> list[str]:
         stmt = select(Photo.filename).where(
-            owned_by_user(Photo.user_id), Photo.entry_id == entry_id
+            owned_by_user(Photo.user_id),
+            Photo.entry_id == entry_id,
+            Photo.filename.is_not(None),
         )
         return [row[0] for row in (await self.db.execute(stmt)).all()]
 
     async def list_filenames_for_user(self) -> list[str]:
-        stmt = select(Photo.filename).where(owned_by_user(Photo.user_id))
+        stmt = select(Photo.filename).where(
+            owned_by_user(Photo.user_id),
+            Photo.filename.is_not(None),
+        )
         return [row[0] for row in (await self.db.execute(stmt)).all()]
