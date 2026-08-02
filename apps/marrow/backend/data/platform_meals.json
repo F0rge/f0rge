@@ -428,7 +428,7 @@
   },
   {
     "slug": "nicoise-salad",
-    "name": "Salade Ni\u00e7oise",
+    "name": "Salade Niçoise",
     "cuisine": "French",
     "icon_key": "salad",
     "sort_order": 320,
@@ -3218,7 +3218,7 @@
   },
   {
     "slug": "tuna-nicoise-wrap",
-    "name": "Ni\u00e7oise wrap",
+    "name": "Niçoise wrap",
     "cuisine": "French",
     "icon_key": "sandwich",
     "ingredients": [
@@ -4888,7 +4888,7 @@
   },
   {
     "slug": "nicoise-sandwich",
-    "name": "Ni\u00e7oise sandwich",
+    "name": "Niçoise sandwich",
     "cuisine": "French",
     "icon_key": "sandwich",
     "ingredients": [
@@ -4976,5 +4976,775 @@
       "cilantro"
     ],
     "sort_order": 3340
+  },
+  {
+    "slug": "sukiyaki",
+    "name": "Sukiyaki",
+    "cuisine": "Japanese",
+    "icon_key": "bowl",
+    "sort_order": 3350,
+    "ingredients": [
+      "beef, fresh",
+      "tofu",
+      "cabbage",
+      "mushroom",
+      "soy sauce",
+      "sugar",
+      "rice"
+    ]
+  },
+  {
+    "slug": "shogayaki",
+    "name": "Shogayaki",
+    "cuisine": "Japanese",
+    "icon_key": "bowl",
+    "sort_order": 3360,
+    "ingredients": [
+      "pork, fresh",
+      "ginger",
+      "soy sauce",
+      "onion",
+      "cooking oil",
+      "rice"
+    ]
+  },
+  {
+    "slug": "nikujaga",
+    "name": "Nikujaga",
+    "cuisine": "Japanese",
+    "icon_key": "bowl",
+    "sort_order": 3370,
+    "ingredients": [
+      "beef, fresh",
+      "potato",
+      "onion",
+      "carrot",
+      "soy sauce",
+      "sugar"
+    ]
+  },
+  {
+    "slug": "wonton-soup",
+    "name": "Wonton soup",
+    "cuisine": "Chinese",
+    "icon_key": "soup",
+    "sort_order": 3380,
+    "ingredients": [
+      "dumpling wrappers",
+      "pork, fresh",
+      "shrimp",
+      "spring onion (white)",
+      "soy sauce",
+      "ginger",
+      "garlic"
+    ]
+  },
+  {
+    "slug": "mongolian-beef",
+    "name": "Mongolian beef",
+    "cuisine": "Chinese",
+    "icon_key": "bowl",
+    "sort_order": 3390,
+    "ingredients": [
+      "beef, fresh",
+      "spring onion (white)",
+      "soy sauce",
+      "ginger",
+      "garlic",
+      "sugar"
+    ]
+  },
+  {
+    "slug": "red-braised-pork",
+    "name": "Red braised pork",
+    "cuisine": "Chinese",
+    "icon_key": "bowl",
+    "sort_order": 3400,
+    "ingredients": [
+      "pork, fresh",
+      "soy sauce",
+      "ginger",
+      "sugar",
+      "star anise",
+      "garlic"
+    ]
+  },
+  {
+    "slug": "hot-and-sour-soup",
+    "name": "Hot and sour soup",
+    "cuisine": "Chinese",
+    "icon_key": "soup",
+    "sort_order": 3410,
+    "ingredients": [
+      "tofu",
+      "mushroom",
+      "vinegar",
+      "soy sauce",
+      "chili pepper",
+      "egg",
+      "spring onion (white)"
+    ]
+  },
+  {
+    "slug": "korean-fried-chicken",
+    "name": "Korean fried chicken",
+    "cuisine": "Korean",
+    "icon_key": "bowl",
+    "sort_order": 3420,
+    "ingredients": [
+      "chicken",
+      "soy sauce",
+      "garlic",
+      "ginger",
+      "honey",
+      "cooking oil"
+    ]
+  },
+  {
+    "slug": "gimbap",
+    "name": "Gimbap",
+    "cuisine": "Korean",
+    "icon_key": "bowl",
+    "sort_order": 3430,
+    "ingredients": [
+      "rice",
+      "nori",
+      "egg",
+      "carrot",
+      "cucumber",
+      "spinach",
+      "sesame oil"
+    ]
+  },
+  {
+    "slug": "bun-cha",
+    "name": "Bun cha",
+    "cuisine": "Vietnamese",
+    "icon_key": "bowl",
+    "sort_order": 3440,
+    "ingredients": [
+      "pork, fresh",
+      "rice noodles",
+      "fish sauce",
+      "lettuce",
+      "cilantro",
+      "garlic",
+      "sugar"
+    ]
+  },
+  {
+    "slug": "bhindi-masala",
+    "name": "Bhindi masala",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "sort_order": 3450,
+    "ingredients": [
+      "okra",
+      "onion",
+      "tomato",
+      "cumin",
+      "turmeric",
+      "garlic",
+      "ginger",
+      "coriander seed"
+    ]
+  },
+  {
+    "slug": "paneer-tikka-plate",
+    "name": "Paneer tikka plate",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "sort_order": 3460,
+    "ingredients": [
+      "paneer",
+      "yogurt",
+      "bell pepper",
+      "onion",
+      "turmeric",
+      "cumin",
+      "lemon",
+      "paprika"
+    ]
+  },
+  {
+    "slug": "pav-bhaji-style",
+    "name": "Pav bhaji style",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "sort_order": 3470,
+    "ingredients": [
+      "potato",
+      "cauliflower",
+      "tomato",
+      "butter",
+      "onion",
+      "bell pepper",
+      "cumin",
+      "white bread"
+    ]
+  },
+  {
+    "slug": "tandoori-chicken-plate",
+    "name": "Tandoori chicken plate",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "sort_order": 3480,
+    "ingredients": [
+      "chicken",
+      "yogurt",
+      "lemon",
+      "paprika",
+      "cumin",
+      "garlic",
+      "ginger",
+      "olive oil"
+    ]
+  },
+  {
+    "slug": "mushroom-masala",
+    "name": "Mushroom masala",
+    "cuisine": "Indian",
+    "icon_key": "curry",
+    "sort_order": 3490,
+    "ingredients": [
+      "mushroom",
+      "onion",
+      "tomato",
+      "garlic",
+      "ginger",
+      "cumin",
+      "turmeric",
+      "cream"
+    ]
+  },
+  {
+    "slug": "lamb-apricot-tagine",
+    "name": "Lamb apricot tagine",
+    "cuisine": "Middle Eastern",
+    "icon_key": "bowl",
+    "sort_order": 3500,
+    "ingredients": [
+      "lamb",
+      "dried apricot",
+      "cinnamon",
+      "cumin",
+      "onion",
+      "tomato",
+      "chickpeas"
+    ]
+  },
+  {
+    "slug": "shish-tawook-plate",
+    "name": "Shish tawook plate",
+    "cuisine": "Middle Eastern",
+    "icon_key": "sandwich",
+    "sort_order": 3510,
+    "ingredients": [
+      "chicken",
+      "yogurt",
+      "lemon",
+      "garlic",
+      "olive oil",
+      "paprika",
+      "pita"
+    ]
+  },
+  {
+    "slug": "turkish-red-lentil-soup",
+    "name": "Turkish red lentil soup",
+    "cuisine": "Middle Eastern",
+    "icon_key": "soup",
+    "sort_order": 3520,
+    "ingredients": [
+      "lentils",
+      "carrot",
+      "onion",
+      "cumin",
+      "lemon",
+      "tomato paste",
+      "olive oil"
+    ]
+  },
+  {
+    "slug": "israeli-salad-bowl",
+    "name": "Israeli salad bowl",
+    "cuisine": "Middle Eastern",
+    "icon_key": "salad",
+    "sort_order": 3530,
+    "ingredients": [
+      "cucumber",
+      "tomato",
+      "bell pepper",
+      "parsley",
+      "lemon",
+      "olive oil",
+      "mint"
+    ]
+  },
+  {
+    "slug": "lemon-herb-sea-bass",
+    "name": "Lemon herb sea bass",
+    "cuisine": "Mediterranean",
+    "icon_key": "fish",
+    "sort_order": 3540,
+    "ingredients": [
+      "sea bass",
+      "lemon",
+      "olive oil",
+      "garlic",
+      "oregano",
+      "tomato",
+      "parsley"
+    ]
+  },
+  {
+    "slug": "pasta-e-fagioli",
+    "name": "Pasta e fagioli",
+    "cuisine": "Italian",
+    "icon_key": "soup",
+    "sort_order": 3550,
+    "ingredients": [
+      "macaroni",
+      "white beans",
+      "tomato",
+      "garlic",
+      "onion",
+      "olive oil",
+      "rosemary"
+    ]
+  },
+  {
+    "slug": "panzanella-salad",
+    "name": "Panzanella salad",
+    "cuisine": "Italian",
+    "icon_key": "salad",
+    "sort_order": 3560,
+    "ingredients": [
+      "tomato",
+      "cucumber",
+      "onion",
+      "sourdough bread",
+      "olive oil",
+      "basil",
+      "balsamic vinegar"
+    ]
+  },
+  {
+    "slug": "spaghetti-vongole",
+    "name": "Spaghetti alle vongole",
+    "cuisine": "Italian",
+    "icon_key": "fish",
+    "sort_order": 3570,
+    "ingredients": [
+      "wheat noodles",
+      "clams",
+      "garlic",
+      "olive oil",
+      "parsley",
+      "white wine",
+      "chili flakes"
+    ]
+  },
+  {
+    "slug": "pissaladiere",
+    "name": "Pissaladière",
+    "cuisine": "French",
+    "icon_key": "pastry",
+    "sort_order": 3580,
+    "ingredients": [
+      "onion",
+      "anchovies",
+      "olives",
+      "olive oil",
+      "thyme",
+      "wheat flour",
+      "water"
+    ]
+  },
+  {
+    "slug": "piperade",
+    "name": "Piperade",
+    "cuisine": "French",
+    "icon_key": "bowl",
+    "sort_order": 3590,
+    "ingredients": [
+      "bell pepper",
+      "tomato",
+      "egg",
+      "onion",
+      "olive oil",
+      "paprika"
+    ]
+  },
+  {
+    "slug": "jamon-bocadillo",
+    "name": "Jamón bocadillo",
+    "cuisine": "Spanish",
+    "icon_key": "sandwich",
+    "sort_order": 3600,
+    "ingredients": [
+      "dry-cured ham",
+      "sourdough bread",
+      "tomato",
+      "olive oil",
+      "garlic"
+    ]
+  },
+  {
+    "slug": "cullen-skink",
+    "name": "Cullen skink",
+    "cuisine": "British",
+    "icon_key": "soup",
+    "sort_order": 3610,
+    "ingredients": [
+      "smoked fish",
+      "potato",
+      "onion",
+      "milk",
+      "butter",
+      "leek"
+    ]
+  },
+  {
+    "slug": "pan-con-tomate",
+    "name": "Pan con tomate",
+    "cuisine": "Spanish",
+    "icon_key": "toast",
+    "sort_order": 3620,
+    "ingredients": [
+      "sourdough bread",
+      "tomato",
+      "olive oil",
+      "garlic",
+      "salt"
+    ]
+  },
+  {
+    "slug": "cornish-pasty",
+    "name": "Cornish pasty",
+    "cuisine": "British",
+    "icon_key": "pastry",
+    "sort_order": 3630,
+    "ingredients": [
+      "beef, fresh",
+      "potato",
+      "onion",
+      "wheat flour",
+      "butter",
+      "carrot"
+    ]
+  },
+  {
+    "slug": "acorda-alentejana",
+    "name": "Açorda à alentejana",
+    "cuisine": "Portuguese",
+    "icon_key": "soup",
+    "sort_order": 3640,
+    "ingredients": [
+      "sourdough bread",
+      "garlic",
+      "cilantro",
+      "olive oil",
+      "egg",
+      "shrimp"
+    ]
+  },
+  {
+    "slug": "chilaquiles-rojos",
+    "name": "Chilaquiles rojos",
+    "cuisine": "Mexican",
+    "icon_key": "bowl",
+    "sort_order": 3650,
+    "ingredients": [
+      "corn tortilla",
+      "tomato sauce",
+      "egg",
+      "onion",
+      "cilantro",
+      "sour cream",
+      "feta cheese"
+    ]
+  },
+  {
+    "slug": "loco-moco",
+    "name": "Loco moco",
+    "cuisine": "Hawaiian",
+    "icon_key": "bowl",
+    "sort_order": 3660,
+    "ingredients": [
+      "ground beef",
+      "rice",
+      "egg",
+      "gravy",
+      "onion",
+      "butter"
+    ]
+  },
+  {
+    "slug": "al-pastor-tacos",
+    "name": "Al pastor tacos",
+    "cuisine": "Mexican",
+    "icon_key": "sandwich",
+    "sort_order": 3670,
+    "ingredients": [
+      "pork, fresh",
+      "pineapple",
+      "onion",
+      "cilantro",
+      "lime",
+      "corn tortilla",
+      "chili powder",
+      "paprika"
+    ]
+  },
+  {
+    "slug": "cuban-sandwich",
+    "name": "Cuban sandwich",
+    "cuisine": "Latin",
+    "icon_key": "sandwich",
+    "sort_order": 3680,
+    "ingredients": [
+      "ham",
+      "pork, fresh",
+      "pickles",
+      "mustard",
+      "swiss cheese",
+      "sourdough bread"
+    ]
+  },
+  {
+    "slug": "arroz-con-pollo",
+    "name": "Arroz con pollo",
+    "cuisine": "Latin",
+    "icon_key": "bowl",
+    "sort_order": 3690,
+    "ingredients": [
+      "chicken",
+      "rice",
+      "bell pepper",
+      "onion",
+      "tomato",
+      "garlic",
+      "cilantro"
+    ]
+  },
+  {
+    "slug": "carnitas-rice-bowl",
+    "name": "Carnitas rice bowl",
+    "cuisine": "Mexican",
+    "icon_key": "bowl",
+    "sort_order": 3700,
+    "ingredients": [
+      "pork, fresh",
+      "rice",
+      "black beans",
+      "onion",
+      "cilantro",
+      "lime",
+      "salsa"
+    ]
+  },
+  {
+    "slug": "shrimp-tacos",
+    "name": "Shrimp tacos",
+    "cuisine": "Mexican",
+    "icon_key": "sandwich",
+    "sort_order": 3710,
+    "ingredients": [
+      "shrimp",
+      "cabbage",
+      "lime",
+      "cilantro",
+      "sour cream",
+      "corn tortilla",
+      "avocado"
+    ]
+  },
+  {
+    "slug": "chicken-tortilla-soup",
+    "name": "Chicken tortilla soup",
+    "cuisine": "Mexican",
+    "icon_key": "soup",
+    "sort_order": 3720,
+    "ingredients": [
+      "chicken",
+      "tomato",
+      "onion",
+      "corn tortilla",
+      "avocado",
+      "cilantro",
+      "lime",
+      "chili powder"
+    ]
+  },
+  {
+    "slug": "white-chicken-chili",
+    "name": "White chicken chili",
+    "cuisine": "American",
+    "icon_key": "soup",
+    "sort_order": 3730,
+    "ingredients": [
+      "chicken",
+      "white beans",
+      "onion",
+      "garlic",
+      "chili powder",
+      "sour cream",
+      "cilantro"
+    ]
+  },
+  {
+    "slug": "huli-huli-chicken-bowl",
+    "name": "Huli huli chicken bowl",
+    "cuisine": "Hawaiian",
+    "icon_key": "bowl",
+    "sort_order": 3740,
+    "ingredients": [
+      "chicken",
+      "pineapple",
+      "rice",
+      "soy sauce",
+      "ginger",
+      "garlic"
+    ]
+  },
+  {
+    "slug": "peanut-butter-banana-toast",
+    "name": "Peanut butter banana toast",
+    "cuisine": "American",
+    "icon_key": "toast",
+    "sort_order": 3750,
+    "ingredients": [
+      "peanut butter",
+      "banana",
+      "sourdough bread",
+      "honey",
+      "butter"
+    ]
+  },
+  {
+    "slug": "cheese-toastie",
+    "name": "Cheese toastie",
+    "cuisine": "British",
+    "icon_key": "sandwich",
+    "sort_order": 3760,
+    "ingredients": [
+      "cheddar cheese",
+      "white bread",
+      "butter",
+      "mustard"
+    ]
+  },
+  {
+    "slug": "bacon-butty",
+    "name": "Bacon butty",
+    "cuisine": "British",
+    "icon_key": "sandwich",
+    "sort_order": 3770,
+    "ingredients": [
+      "bacon",
+      "white bread",
+      "butter",
+      "ketchup"
+    ]
+  },
+  {
+    "slug": "ricotta-honey-toast",
+    "name": "Ricotta honey toast",
+    "cuisine": "European",
+    "icon_key": "toast",
+    "sort_order": 3780,
+    "ingredients": [
+      "ricotta cheese",
+      "sourdough bread",
+      "honey",
+      "lemon",
+      "butter"
+    ]
+  },
+  {
+    "slug": "tuna-melt",
+    "name": "Tuna melt",
+    "cuisine": "American",
+    "icon_key": "sandwich",
+    "sort_order": 3790,
+    "ingredients": [
+      "tuna, canned",
+      "cheddar cheese",
+      "sourdough bread",
+      "mayonnaise",
+      "onion"
+    ]
+  },
+  {
+    "slug": "mortadella-mozzarella-sandwich",
+    "name": "Mortadella mozzarella sandwich",
+    "cuisine": "European",
+    "icon_key": "sandwich",
+    "sort_order": 3800,
+    "ingredients": [
+      "mortadella",
+      "mozzarella cheese",
+      "sourdough bread",
+      "olive oil",
+      "mixed salad greens"
+    ]
+  },
+  {
+    "slug": "cucumber-tea-sandwich",
+    "name": "Cucumber tea sandwich",
+    "cuisine": "British",
+    "icon_key": "sandwich",
+    "sort_order": 3810,
+    "ingredients": [
+      "cucumber",
+      "white bread",
+      "butter",
+      "cream cheese"
+    ]
+  },
+  {
+    "slug": "leek-and-potato-soup",
+    "name": "Leek and potato soup",
+    "cuisine": "British",
+    "icon_key": "soup",
+    "sort_order": 3820,
+    "ingredients": [
+      "leek",
+      "potato",
+      "butter",
+      "milk",
+      "thyme",
+      "vegetable oil"
+    ]
+  },
+  {
+    "slug": "cauliflower-cheese",
+    "name": "Cauliflower cheese",
+    "cuisine": "British",
+    "icon_key": "bowl",
+    "sort_order": 3830,
+    "ingredients": [
+      "cauliflower",
+      "cheddar cheese",
+      "milk",
+      "butter",
+      "wheat flour"
+    ]
+  },
+  {
+    "slug": "fish-pie",
+    "name": "Fish pie",
+    "cuisine": "British",
+    "icon_key": "fish",
+    "sort_order": 3840,
+    "ingredients": [
+      "cod",
+      "potato",
+      "milk",
+      "butter",
+      "peas",
+      "wheat flour"
+    ]
   }
 ]
