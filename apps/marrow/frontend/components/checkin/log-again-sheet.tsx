@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Loader2, Search } from 'lucide-react'
 import {
   Dialog,
@@ -13,6 +13,8 @@ import { Input } from '@f0rge/ui'
 import type { RecentMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
 import { MealIconThumb } from './meal-icon-thumb'
+import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
+import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 
 function RecentMealThumb({ meal, loading }: { meal: RecentMeal; loading: boolean }) {
   const [imageError, setImageError] = useState(false)
@@ -54,6 +56,12 @@ interface LogAgainSheetProps {
 
 export function LogAgainSheet({ open, onOpenChange, meals, cloningId, onClone }: LogAgainSheetProps) {
   const [query, setQuery] = useState('')
+  const searchAnchorRef = useRef<HTMLDivElement>(null)
+  const onFocusScroll = useFocusScrollIntoView()
+  const keyboardOpen = useKeyboardOpen()
+  const listMaxHeight = useClampedHeightBelow(searchAnchorRef, {
+    enabled: open && keyboardOpen,
+  })
   const q = query.trim().toLowerCase()
   const filtered = q ? meals.filter((m) => m.dish_name.toLowerCase().includes(q)) : meals
 
@@ -67,18 +75,22 @@ export function LogAgainSheet({ open, onOpenChange, meals, cloningId, onClone }:
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative">
+        <div ref={searchAnchorRef} className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             autoFocus
             value={query}
+            onFocus={onFocusScroll}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search meals…"
             className="pl-9"
           />
         </div>
 
-        <div className="-mx-1 max-h-[55vh] space-y-1.5 overflow-y-auto px-1">
+        <div
+          className="-mx-1 space-y-1.5 overflow-y-auto px-1"
+          style={{ maxHeight: listMaxHeight != null ? listMaxHeight : '55vh' }}
+        >
           {filtered.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               No meals match &ldquo;{query}&rdquo;.

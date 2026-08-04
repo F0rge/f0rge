@@ -1,9 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Input } from '@f0rge/ui'
 import { cn } from '@f0rge/ui'
+import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
+import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 
 interface PickerItem {
   id: string
@@ -38,8 +40,14 @@ export function SetupSearchPicker({
   addLaterHint,
 }: SetupSearchPickerProps) {
   const [search, setSearch] = useState('')
-  const selectedSet = useMemo(() => new Set(selected), [selected])
   const trimmedSearch = search.trim()
+  const searchAnchorRef = useRef<HTMLDivElement>(null)
+  const onFocusScroll = useFocusScrollIntoView()
+  const keyboardOpen = useKeyboardOpen()
+  const gridMaxHeight = useClampedHeightBelow(searchAnchorRef, {
+    enabled: keyboardOpen && trimmedSearch.length > 0,
+  })
+  const selectedSet = useMemo(() => new Set(selected), [selected])
 
   const visibleItems = useMemo(() => {
     if (!trimmedSearch) {
@@ -91,11 +99,12 @@ export function SetupSearchPicker({
 
   return (
     <div className="space-y-3">
-      <div className="relative">
+      <div ref={searchAnchorRef} className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="search"
           value={search}
+          onFocus={onFocusScroll}
           onChange={(event) => setSearch(event.target.value)}
           placeholder={searchPlaceholder}
           className="h-9 pl-8"
@@ -107,7 +116,10 @@ export function SetupSearchPicker({
           No matches. {addLaterHint}
         </p>
       ) : (
-        <div className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+        <div
+          className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
+          style={gridMaxHeight != null ? { maxHeight: gridMaxHeight } : undefined}
+        >
           {visibleItems.map((item) => {
             const isSelected = selectedSet.has(item.id)
             return (

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { Label } from '@f0rge/ui'
+import { useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
 
 interface NotesInputProps {
   value: string
@@ -19,6 +20,7 @@ export function NotesInput({
   registerDraftFlush,
 }: NotesInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const onFocusScroll = useFocusScrollIntoView()
   const [draft, setDraft] = useState(value)
   const draftRef = useRef(value)
   const onChangeRef = useRef(onChange)
@@ -94,6 +96,7 @@ export function NotesInput({
         ref={textareaRef}
         value={draft}
         onChange={handleChange}
+        onFocus={onFocusScroll}
         onBlur={handleBlur}
         placeholder="Anything notable today... meals, events, how you felt"
         className="w-full min-h-[80px] resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"

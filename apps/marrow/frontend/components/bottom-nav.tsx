@@ -6,6 +6,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { ClipboardCheck, Pill, CalendarDays, TrendingUp, Microscope } from 'lucide-react'
 import { cn } from '@f0rge/ui'
 import { UserAvatar } from '@/components/account/user-avatar'
+import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 
 const NAV_ITEMS = [
   { href: '/checkin', label: 'Today', icon: ClipboardCheck },
@@ -37,6 +38,7 @@ const INK_BASE_TRANSITION = 'background-color .25s'
 
 export function BottomNav() {
   const pathname = usePathname()
+  const keyboardOpen = useKeyboardOpen()
   const navHidden = pathname.startsWith('/login') || pathname.startsWith('/signup')
   const barRef = useRef<HTMLElement>(null)
   const inkRef = useRef<HTMLDivElement>(null)
@@ -243,12 +245,15 @@ export function BottomNav() {
     <nav
       ref={barRef}
       aria-label="Primary"
+      aria-hidden={keyboardOpen}
       data-tour="bottom-nav"
       className={cn(
         'fixed bottom-[calc(20px+env(safe-area-inset-bottom))] left-1/2 z-50 flex',
         'w-3/4 max-w-[400px] -translate-x-1/2 items-stretch rounded-[22px]',
         'border border-border bg-background/88 px-[7px] pt-1 pb-2',
         'shadow-[0_14px_34px_-10px_rgba(0,0,0,0.28)] backdrop-blur-[14px] backdrop-saturate-[1.4]',
+        'transition-[opacity,transform] duration-200 ease-out',
+        keyboardOpen && 'pointer-events-none translate-y-4 opacity-0',
       )}
     >
       <div
