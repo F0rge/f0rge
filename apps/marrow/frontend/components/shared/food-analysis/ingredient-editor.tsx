@@ -1,6 +1,8 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
+import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 import { Loader2, Plus, Search } from 'lucide-react'
 import { Button } from '@f0rge/ui'
 import { Input } from '@f0rge/ui'
@@ -56,7 +58,10 @@ function normalizeName(name: string): string {
 export function IngredientEditor({ photoId, existingNames, onAdded }: IngredientEditorProps) {
   const [adding, setAdding] = useState(false)
   const [searchInput, setSearchInput] = useState('')
+  const searchAnchorRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const onFocusScroll = useFocusScrollIntoView()
+  const keyboardOpen = useKeyboardOpen()
   const debouncedSearch = useDebouncedValue(searchInput, 300)
   const addIngredient = useAddIngredient()
 
@@ -89,6 +94,15 @@ export function IngredientEditor({ photoId, existingNames, onAdded }: Ingredient
     }
   }
 
+  const showSpinner = adding && searchReady && (isLoading || isFetching)
+  const availableCatalog = catalog.filter(
+    (ing) => !existingSet.has(normalizeName(ing.canonical_name)),
+  )
+  const showSuggestions = adding && searchReady && !showSpinner && availableCatalog.length > 0
+  const listMaxHeight = useClampedHeightBelow(searchAnchorRef, {
+    enabled: showSuggestions && keyboardOpen,
+  })
+
   if (!adding) {
     return (
       <Button
@@ -106,19 +120,15 @@ export function IngredientEditor({ photoId, existingNames, onAdded }: Ingredient
     )
   }
 
-  const showSpinner = searchReady && (isLoading || isFetching)
-  const availableCatalog = catalog.filter(
-    (ing) => !existingSet.has(normalizeName(ing.canonical_name)),
-  )
-
   return (
     <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-2">
-      <div className="relative">
+      <div ref={searchAnchorRef} className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={searchRef}
           type="search"
           value={searchInput}
+          onFocus={onFocusScroll}
           onChange={(e) => setSearchInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
@@ -147,8 +157,12 @@ export function IngredientEditor({ photoId, existingNames, onAdded }: Ingredient
         <p className="px-1 text-xs text-muted-foreground">No catalog matches.</p>
       )}
 
-      {searchReady && !showSpinner && availableCatalog.length > 0 && (
-        <ul className="max-h-64 space-y-1 overflow-y-auto" aria-label="Ingredient suggestions">
+      {showSuggestions && (
+        <ul
+          className="max-h-64 space-y-1 overflow-y-auto"
+          style={listMaxHeight != null ? { maxHeight: listMaxHeight } : undefined}
+          aria-label="Ingredient suggestions"
+        >
           {availableCatalog.map((ing) => (
             <li key={ing.id}>
               <button
