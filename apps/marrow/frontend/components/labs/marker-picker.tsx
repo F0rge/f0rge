@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Loader2, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
+import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 import { useMarkerCatalog, useCreateMarker } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import type { LabMarkerCatalog } from '@/lib/api/types'
@@ -24,6 +26,12 @@ function normalizeCanonical(raw: string): string {
 export function MarkerPicker({ value, onSelect }: MarkerPickerProps) {
   const [query, setQuery] = useState(value)
   const [adding, setAdding] = useState(false)
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const onFocusScroll = useFocusScrollIntoView()
+  const keyboardOpen = useKeyboardOpen()
+  const dropdownMaxHeight = useClampedHeightBelow(anchorRef, {
+    enabled: adding && query.length >= 1 && keyboardOpen,
+  })
 
   const { data: catalog = [], isLoading } = useMarkerCatalog(query.length >= 1 ? query : undefined)
   const createMarker = useCreateMarker()
@@ -67,7 +75,7 @@ export function MarkerPicker({ value, onSelect }: MarkerPickerProps) {
 
   return (
     <div className="relative">
-      <div className="flex gap-1">
+      <div ref={anchorRef} className="flex gap-1">
         <input
           type="text"
           value={query}
@@ -75,7 +83,10 @@ export function MarkerPicker({ value, onSelect }: MarkerPickerProps) {
             setQuery(e.target.value)
             setAdding(true)
           }}
-          onFocus={() => setAdding(true)}
+          onFocus={(e) => {
+            setAdding(true)
+            onFocusScroll(e)
+          }}
           placeholder="Search or create marker..."
           className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         />
@@ -94,7 +105,10 @@ export function MarkerPicker({ value, onSelect }: MarkerPickerProps) {
       </div>
 
       {adding && query.length >= 1 && (
-        <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-md">
+        <div
+          className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-md"
+          style={dropdownMaxHeight != null ? { maxHeight: dropdownMaxHeight } : undefined}
+        >
           {isLoading ? (
             <div className="flex items-center justify-center py-3">
               <Loader2 className="size-4 animate-spin text-muted-foreground" />

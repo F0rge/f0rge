@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { cn } from '@f0rge/ui'
+import { useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
 
 interface CatalogItem {
   key: string
@@ -35,6 +36,7 @@ export function CatalogSection({
   totalCount,
 }: CatalogSectionProps) {
   const [search, setSearch] = useState('')
+  const onFocusScroll = useFocusScrollIntoView()
   const existingKeys = new Set(items.map((item) => item.key))
   const availableSuggestions = suggestions.filter((item) => !existingKeys.has(item.key))
 
@@ -70,6 +72,7 @@ export function CatalogSection({
         <input
           type="search"
           value={search}
+          onFocus={onFocusScroll}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={`Search ${title.toLowerCase()}…`}
           className={cn(

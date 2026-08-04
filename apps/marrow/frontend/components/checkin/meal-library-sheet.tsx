@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -18,6 +18,8 @@ import type { PlatformMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
 import { MealIconThumb } from './meal-icon-thumb'
 import { MealTimeChips } from './meal-time-chips'
+import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
+import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 
 interface MealLibrarySheetProps {
   open: boolean
@@ -45,6 +47,12 @@ export function MealLibrarySheet({
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selected, setSelected] = useState<PlatformMeal | null>(null)
   const [mealTime, setMealTime] = useState<Date | null>(new Date())
+  const searchAnchorRef = useRef<HTMLDivElement>(null)
+  const onFocusScroll = useFocusScrollIntoView()
+  const keyboardOpen = useKeyboardOpen()
+  const listMaxHeight = useClampedHeightBelow(searchAnchorRef, {
+    enabled: open && !selected && keyboardOpen,
+  })
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedQuery(query.trim()), 250)
@@ -152,18 +160,22 @@ export function MealLibrarySheet({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="relative">
+            <div ref={searchAnchorRef} className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 autoFocus
                 value={query}
+                onFocus={onFocusScroll}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search meals…"
                 className="pl-9"
               />
             </div>
 
-            <div className="-mx-1 max-h-[50vh] overflow-y-auto px-1">
+            <div
+              className="-mx-1 overflow-y-auto px-1"
+              style={{ maxHeight: listMaxHeight != null ? listMaxHeight : '50vh' }}
+            >
               {mealsQuery.isError ? (
                 <div className="flex flex-col items-center gap-3 py-6 text-center">
                   <p className="text-sm text-muted-foreground">
