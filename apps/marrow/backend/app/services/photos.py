@@ -26,8 +26,19 @@ from app.models.photo_diet_tag import PhotoDietTag
 from app.schemas.photo import PhotoResponse, PhotoUpdate
 from app.services.entries import _photo_response
 from app.services import object_storage
-from app.services.photo_storage import delete_photo, resize_image, save_photo
+from app.services.photo_storage import (
+    THUMB_MAX_DIM,
+    THUMB_QUALITY,
+    delete_photo,
+    photo_exists,
+    read_photo,
+    resize_image,
+    save_photo,
+    thumb_filename,
+)
 from f0rge_db.tenant import current_user_id
+
+PHOTO_CACHE_CONTROL = "private, max-age=86400"
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
@@ -192,9 +203,13 @@ class PhotoService:
 
         raw_bytes = await file.read()
         processed_bytes = await asyncio.to_thread(resize_image, raw_bytes)
-        await asyncio.to_thread(
-            save_photo, processed_bytes, filename, user_id=str(current_user_id())
+        user_id_str = str(current_user_id())
+        await asyncio.to_thread(save_photo, processed_bytes, filename, user_id=user_id_str)
+        thumb_bytes = await asyncio.to_thread(
+            resize_image, processed_bytes, max_dim=THUMB_MAX_DIM, quality=THUMB_QUALITY
         )
+        thumb_name = thumb_filename(filename)
+        await asyncio.to_thread(save_photo, thumb_bytes, thumb_name, user_id=user_id_str)
 
         now = datetime.datetime.utcnow()
 
@@ -255,6 +270,7 @@ class PhotoService:
                     )
         except Exception:
             await asyncio.to_thread(delete_photo, filename, user_id=str(user_id))
+            await asyncio.to_thread(delete_photo, thumb_filename(filename), user_id=str(user_id))
             raise
 
         if analysis_will_run:
@@ -281,9 +297,39 @@ class PhotoService:
 
     async def serve_photo_file(self, photo_id: int) -> FileResponse | RedirectResponse:
         target = await self.get_file_path(photo_id)
+        return self._photo_file_response(target)
+
+    async def serve_photo_thumb(self, photo_id: int) -> FileResponse | RedirectResponse:
+        photo = await self.crud.get_by_id_owned(photo_id)
+        if photo is None:
+            raise NotFoundError("Photo not found")
+        if not photo.filename:
+            raise NotFoundError("Photo file not found")
+        user_id_str = str(photo.user_id)
+        if not object_storage.exists_relative(photo.filename, user_id=user_id_str):
+            raise NotFoundError("Photo file not found")
+        thumb_name = thumb_filename(photo.filename)
+        if not photo_exists(thumb_name, user_id=user_id_str):
+            full_bytes = await asyncio.to_thread(read_photo, photo.filename, user_id=user_id_str)
+            thumb_bytes = await asyncio.to_thread(
+                resize_image, full_bytes, max_dim=THUMB_MAX_DIM, quality=THUMB_QUALITY
+            )
+            await asyncio.to_thread(save_photo, thumb_bytes, thumb_name, user_id=user_id_str)
+        presigned = object_storage.presigned_url_for_relative(thumb_name, user_id=user_id_str)
+        if presigned:
+            target = presigned
+        else:
+            target = os.path.join(os.path.abspath(settings.photo_dir), thumb_name)
+        return self._photo_file_response(target)
+
+    def _photo_file_response(self, target: str) -> FileResponse | RedirectResponse:
         if target.startswith("http://") or target.startswith("https://"):
-            return RedirectResponse(target)
-        return FileResponse(target, media_type="image/jpeg")
+            return RedirectResponse(target, headers={"Cache-Control": PHOTO_CACHE_CONTROL})
+        return FileResponse(
+            target,
+            media_type="image/jpeg",
+            headers={"Cache-Control": PHOTO_CACHE_CONTROL},
+        )
 
     async def delete(self, photo_id: int) -> None:
         photo = await self.crud.get_by_id_owned(photo_id)
@@ -305,3 +351,4 @@ class PhotoService:
         # Icon-only library meals have no object-storage file.
         if filename is not None:
             await asyncio.to_thread(delete_photo, filename, user_id=user_id_str)
+            await asyncio.to_thread(delete_photo, thumb_filename(filename), user_id=user_id_str)

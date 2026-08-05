@@ -76,7 +76,7 @@ function Grid({
           >
             {photoHasImage(photo) ? (
               <Image
-                src={`/api/v1/photos/${photo.id}/file`}
+                src={`/api/v1/photos/${photo.id}/thumb`}
                 alt={photo.label ?? 'Meal photo'}
                 fill
                 unoptimized
@@ -114,7 +114,7 @@ export function MealGrids() {
   const [tab, setTab] = useState<'all' | 'tagged'>('all')
   const [focusedPhotoId, setFocusedPhotoId] = useState<number | null>(null)
   const allPhotos = usePhotos('all')
-  const taggedPhotos = usePhotos('tagged')
+  const taggedPhotos = usePhotos('tagged', { enabled: tab === 'tagged' })
   const activePhotos = (tab === 'all' ? allPhotos.data : taggedPhotos.data) ?? []
   // Hiding (or rule-hiding) the focused photo removes it from the feed — close the overlay with it.
   const focusedPhoto =
