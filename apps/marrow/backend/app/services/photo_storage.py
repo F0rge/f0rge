@@ -1,10 +1,29 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from f0rge_storage.images import resize_image
 
 from app.services import object_storage
 
-__all__ = ["resize_image", "save_photo", "delete_photo", "read_photo", "photo_exists"]
+THUMB_MAX_DIM = 480
+THUMB_QUALITY = 75
+
+__all__ = [
+    "THUMB_MAX_DIM",
+    "THUMB_QUALITY",
+    "resize_image",
+    "save_photo",
+    "delete_photo",
+    "read_photo",
+    "photo_exists",
+    "thumb_filename",
+]
+
+
+def thumb_filename(filename: str) -> str:
+    """Derive the thumbnail object name from a full-size photo filename."""
+    return f"{Path(filename).stem}_thumb.jpg"
 
 
 def save_photo(file_bytes: bytes, filename: str, *, user_id: str | None = None) -> str:

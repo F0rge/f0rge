@@ -22,13 +22,15 @@ export interface PhotoMealTagListResponse {
 
 export function usePhotos(
   scope: 'all' | 'tagged',
-  options?: { visibility?: 'visible' | 'hidden'; limit?: number },
+  options?: { visibility?: 'visible' | 'hidden'; limit?: number; enabled?: boolean },
 ) {
   const visibility = options?.visibility ?? 'visible'
   const limit = options?.limit ?? 24
+  const enabled = options?.enabled ?? true
   return useQuery<Photo[]>({
     queryKey: ['photos', scope, visibility, limit],
     queryFn: () => apiGet(`/photos?scope=${scope}&limit=${limit}&visibility=${visibility}`),
+    enabled,
   })
 }
 
