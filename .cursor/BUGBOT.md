@@ -18,3 +18,11 @@ Implementation detail: `.cursor/rules/nx.mdc`. Block on the following when revie
 - Turning off `targetDefaults` cache without justification.
 - Hand-written `nx:run-commands` lint/test when `@nx/eslint` / `@nx/vitest` / `@nx/playwright` already infer them.
 - New TypeScript project that does not import `eslint/nx-boundaries.mjs`.
+
+## UI kit — instant block
+
+1. **`apps/**` importing `@base-ui/react` or `@mantine/core` / `@mantine/hooks`** — engines belong in `libs/ui` only.
+2. **New shadcn primitive under `apps/**/components/ui`** — add to `libs/ui` instead.
+3. **New `CompactStepper`-style fork** instead of `@f0rge/ui` `Stepper` (`libs/ui/src/components/ui/stepper.tsx`).
+4. **New primitive in `libs/ui` without a Storybook story** — when `libs/ui/.storybook` exists (skip until Storybook is set up).
+5. **Brand tokens (`--marrow-*`, `--dk-*`) inside `libs/ui` components** — brand vars live in app CSS skins only.
