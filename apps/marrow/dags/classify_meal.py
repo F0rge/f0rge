@@ -13,7 +13,7 @@ import logging
 import os
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from airflow.providers.common.ai.operators.llm_file_analysis import LLMFileAnalysisOperator
@@ -228,6 +228,7 @@ def marrow_classify_meal() -> None:
         serialize_output=True,
         require_approval=False,
         retries=2,
+        retry_delay=timedelta(seconds=45),
         max_file_size_bytes=8 * 1024 * 1024,
     )
 
