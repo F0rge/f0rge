@@ -87,7 +87,8 @@ export function IngredientFormDialog({ open, onOpenChange, ingredient }: Ingredi
   useEffect(() => {
     if (!open) return
     form.setValues(initialValues(ingredient))
-  }, [open, ingredient, form])
+    // form object identity changes after setValues in Mantine 8
+  }, [open, ingredient])
 
   const addIngredient = useAddDietaryIngredient()
   const updateIngredient = useUpdateDietaryIngredient()

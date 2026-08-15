@@ -50,7 +50,8 @@ export function SymptomFormModal({ open, onClose, symptom }: SymptomFormModalPro
   useEffect(() => {
     if (!open) return
     form.setValues({ label: symptom?.label ?? '' })
-  }, [open, symptom, form])
+    // form object identity changes after setValues in Mantine 8
+  }, [open, symptom])
 
   const previewKey = isEdit ? symptom.key : normalizeKey(form.getValues().label)
 

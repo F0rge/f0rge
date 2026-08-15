@@ -132,7 +132,8 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
     form.setValues({ date, name, type: labType, location, notes })
     // eslint-disable-next-line react-hooks/set-state-in-effect -- sync marker rows when dialog opens with new lab/prefill
     setRows(nextRows)
-  }, [open, lab, prefill, form])
+    // form object identity changes after setValues in Mantine 8
+  }, [open, lab, prefill])
 
   const createLab = useCreateLab()
   const updateLab = useUpdateLab()

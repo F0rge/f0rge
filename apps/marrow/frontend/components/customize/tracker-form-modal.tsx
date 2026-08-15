@@ -59,7 +59,8 @@ export function TrackerFormModal({
       icon: tracker?.icon ?? '',
       unit: tracker?.unit ?? '',
     })
-  }, [open, tracker, form])
+    // form object identity changes after setValues in Mantine 8
+  }, [open, tracker])
 
   function handleClose() {
     onOpenChange(false)

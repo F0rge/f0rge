@@ -71,7 +71,8 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
     form.setValues(initialValues(treatment))
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset delete confirmation when dialog reopens
     setConfirmDelete(false)
-  }, [open, treatment, form])
+    // form object identity changes after setValues in Mantine 8
+  }, [open, treatment])
 
   const { data: existingTreatments } = useTreatments()
   const groupOptions = Array.from(

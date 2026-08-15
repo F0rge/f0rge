@@ -48,7 +48,8 @@ export function MedicationQuickAddDialog({
       dose: '',
       reason: '',
     })
-  }, [open, initialKey, form])
+    // form object identity changes after setValues in Mantine 8
+  }, [open, initialKey])
 
   function handleOpenChange(v: boolean) {
     if (!v) form.reset()

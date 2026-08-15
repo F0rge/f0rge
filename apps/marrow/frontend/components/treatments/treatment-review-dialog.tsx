@@ -64,7 +64,8 @@ export function TreatmentReviewDialog({
   useEffect(() => {
     if (!open) return
     form.setValues({ rows: candidates.map(toEditable) })
-  }, [open, candidates, form])
+    // form object identity changes after setValues in Mantine 8
+  }, [open, candidates])
 
   const handleSave = form.onSubmit(async ({ rows }) => {
     const selected = rows.filter((r) => r.selected)
