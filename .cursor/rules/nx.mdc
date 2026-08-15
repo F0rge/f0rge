@@ -24,7 +24,7 @@ Canonical map: `nx.json` + each app/lib `project.json`. Details live there — d
 
 ## CI
 
-- Use `npx nx affected -t … --projects tag:platform:py|ts` (or `run-many` on `workflow_dispatch`).
+- Use `npx nx affected -t=lint,format-check --exclude='*,!tag:platform:py'` (or `run-many --projects=tag:platform:py` on `workflow_dispatch`). `affected` does **not** take `--projects` — that flag is forwarded into the task and breaks tsc/ruff.
 - **Do not** reintroduce a custom detect job that builds project lists for `run-many --projects "$LIST"`.
 - Develop omits `test`; main includes it. Keep that split.
 

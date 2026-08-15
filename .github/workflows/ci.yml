@@ -97,15 +97,15 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx run-many -t lint format-check test --projects tag:platform:py
+              npx nx run-many -t=lint,format-check,test --projects=tag:platform:py
             else
-              npx nx run-many -t lint format-check --projects tag:platform:py
+              npx nx run-many -t=lint,format-check --projects=tag:platform:py
             fi
           else
             if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx affected -t lint format-check test --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}"
+              npx nx affected -t=lint,format-check,test --exclude='*,!tag:platform:py' --base="${NX_BASE}" --head="${NX_HEAD}"
             else
-              npx nx affected -t lint format-check --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}"
+              npx nx affected -t=lint,format-check --exclude='*,!tag:platform:py' --base="${NX_BASE}" --head="${NX_HEAD}"
             fi
           fi
 
@@ -176,15 +176,15 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx run-many -t lint typecheck test build codegen:check --projects tag:platform:ts
+              npx nx run-many -t=lint,typecheck,test,build,codegen:check --projects=tag:platform:ts
             else
-              npx nx run-many -t lint typecheck build codegen:check --projects tag:platform:ts
+              npx nx run-many -t=lint,typecheck,build,codegen:check --projects=tag:platform:ts
             fi
           else
             if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx affected -t lint typecheck test build codegen:check --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}"
+              npx nx affected -t=lint,typecheck,test,build,codegen:check --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
             else
-              npx nx affected -t lint typecheck build codegen:check --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}"
+              npx nx affected -t=lint,typecheck,build,codegen:check --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
             fi
           fi
 

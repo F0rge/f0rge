@@ -6,7 +6,7 @@ Implementation detail: `.cursor/rules/nx.mdc`. Block on the following when revie
 
 1. **New app/lib without `project.json`** under `apps/**` or `libs/**` that has `package.json` or `pyproject.toml` (exception: documented radar/demo WIP without manifests).
 2. **Missing `platform:py` or `platform:ts` tag** on a new/edited `project.json` (exception: `marrow-ios` — `scope:marrow` only).
-3. **Custom CI detect / project-list plumbing** — reintroducing `nx show projects --affected` into a detect job that feeds `run-many --projects "$LIST"`. Prefer `nx affected -t … --projects tag:platform:…`.
+3. **Custom CI detect / project-list plumbing** — reintroducing `nx show projects --affected` into a detect job that feeds `run-many --projects "$LIST"`. Prefer `nx affected -t=… --exclude='*,!tag:platform:…'`. Do not pass `--projects` to `nx affected` (it is forwarded into the task).
 4. **Libs importing apps** — `libs/**` → `apps/` (TS or Python).
 5. **OpenAPI drift bypass** — removing `codegen:check`, `marrow-backend:openapi`, or frontend `implicitDependencies: ["marrow-backend"]` without an equivalent graph-aware check.
 6. **Playwright outside Nx** — new/changed CI that runs `npx playwright test` instead of `npx nx run …:e2e`.
