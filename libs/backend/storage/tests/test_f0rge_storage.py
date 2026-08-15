@@ -54,3 +54,42 @@ def test_resize_image_smoke() -> None:
     resized = Image.open(io.BytesIO(out))
     assert resized.format == "JPEG"
     assert resized.size == (64, 32)
+
+
+def test_presigned_url_for_relative_skips_head_object() -> None:
+    """Serve-path presign must be CPU-only: no S3 HEAD / resolve probe."""
+    head_calls: list[str] = []
+
+    class _StubS3:
+        def head_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803
+            head_calls.append(Key)
+            return {}
+
+        def generate_presigned_url(
+            self,
+            ClientMethod: str,
+            Params: dict,
+            ExpiresIn: int,  # noqa: N803
+        ) -> str:
+            assert ClientMethod == "get_object"
+            return f"https://storage.test/{Params['Bucket']}/{Params['Key']}?exp={ExpiresIn}"
+
+    storage = ObjectStorage(
+        ObjectStorageConfig(
+            bucket_name="photos",
+            aws_access_key_id="key",
+            aws_secret_access_key="secret",
+            aws_endpoint_url_s3="http://storage.test",
+            default_user_prefix="default-user",
+        ),
+        client_factory=lambda: _StubS3(),
+    )
+
+    url = storage.presigned_url_for_relative("2026-08-04_photo-1.jpg", user_id="u1")
+    assert url == "https://storage.test/photos/u1/2026-08-04_photo-1.jpg?exp=300"
+    assert head_calls == []
+
+    # Missing object still presigns the canonical key (no probe fallbacks).
+    url2 = storage.presigned_url_for_relative("missing.jpg", user_id="u1")
+    assert url2 == "https://storage.test/photos/u1/missing.jpg?exp=300"
+    assert head_calls == []

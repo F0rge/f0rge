@@ -2,7 +2,7 @@
 
 import { Loader2, X } from 'lucide-react'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
+import { MealIconThumb, photoHasImage, photoThumbSrc } from '@/components/checkin/meal-icon-thumb'
 import { buildAggregateBadges } from '@/components/shared/food-analysis/dietary-badges'
 import type { Photo } from '@/lib/api/types'
 import { usePhotoAnalysis } from '@/lib/api/hooks'
@@ -52,7 +52,7 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
           {hasImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={`/api/v1/photos/${photo.id}/file`}
+              src={photoThumbSrc(photo.id)}
               alt={title}
               className="size-full object-cover"
             />
