@@ -187,3 +187,80 @@ async def test_delete_removes_thumb(
     assert resp.status_code == 204
     assert not os.path.exists(full_path)
     assert not os.path.exists(thumb_path)
+
+
+async def test_remote_serve_presigns_without_head_storm(
+    async_db: AsyncSession,
+    authed_client: AsyncClient,
+    authed_user_id: uuid.UUID,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GET /file is HEAD-free; GET /thumb does at most one canonical HEAD."""
+    from app.models.meal import Meal
+    from app.models.photo import Photo
+    from app.services import object_storage
+
+    monkeypatch.setattr(settings, "bucket_name", "test-bucket")
+    monkeypatch.setattr(settings, "aws_access_key_id", "test-key")
+    monkeypatch.setattr(settings, "aws_secret_access_key", "test-secret")
+    monkeypatch.setattr(settings, "aws_endpoint_url_s3", "http://storage.test")
+    monkeypatch.setattr(settings, "food_analysis_enabled", False)
+
+    head_calls: list[str] = []
+
+    class _StubS3:
+        def head_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803
+            head_calls.append(Key)
+            return {}
+
+        def generate_presigned_url(
+            self,
+            ClientMethod: str,
+            Params: dict,
+            ExpiresIn: int,  # noqa: N803
+        ) -> str:
+            return f"https://storage.test/{Params['Bucket']}/{Params['Key']}?e={ExpiresIn}"
+
+    monkeypatch.setattr(object_storage, "_s3_client", lambda: _StubS3())
+
+    day = datetime.date(2026, 8, 4)
+    entry = await _make_entry(async_db, day, authed_user_id)
+    filename = "2026-08-04_photo-1.jpg"
+    now = datetime.datetime.utcnow()
+    meal = Meal(
+        owner_user_id=authed_user_id,
+        filename=filename,
+        original_filename="meal.png",
+        meal_time=now,
+        created_at=now,
+    )
+    async_db.add(meal)
+    await async_db.flush()
+    photo = Photo(
+        user_id=authed_user_id,
+        entry_id=entry.id,
+        meal_id=meal.id,
+        filename=filename,
+        original_filename="meal.png",
+        meal_time=now,
+        created_at=now,
+    )
+    async_db.add(photo)
+    await async_db.commit()
+    await async_db.refresh(photo)
+
+    head_calls.clear()
+    file_resp = await authed_client.get(f"/api/v1/photos/{photo.id}/file", follow_redirects=False)
+    assert file_resp.status_code == 307
+    assert file_resp.headers.get("cache-control") == PHOTO_CACHE_CONTROL
+    assert f"{authed_user_id}/{filename}" in file_resp.headers.get("location", "")
+    assert head_calls == []
+
+    head_calls.clear()
+    thumb_resp = await authed_client.get(f"/api/v1/photos/{photo.id}/thumb", follow_redirects=False)
+    assert thumb_resp.status_code == 307
+    assert thumb_resp.headers.get("cache-control") == PHOTO_CACHE_CONTROL
+    assert thumb_filename(filename) in thumb_resp.headers.get("location", "")
+    # One canonical HEAD for "does thumb exist?" — no multi-layout probe.
+    assert len(head_calls) == 1
+    assert head_calls[0] == f"{authed_user_id}/{thumb_filename(filename)}"
