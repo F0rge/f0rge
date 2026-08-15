@@ -319,7 +319,12 @@ class PhotoService:
             return photo_exists(thumb_name, user_id=user_id_str)
 
         if not await asyncio.to_thread(_canonical_thumb_exists):
-            full_bytes = await asyncio.to_thread(read_photo, photo.filename, user_id=user_id_str)
+            try:
+                full_bytes = await asyncio.to_thread(
+                    read_photo, photo.filename, user_id=user_id_str
+                )
+            except FileNotFoundError as exc:
+                raise NotFoundError("Photo file not found") from exc
             thumb_bytes = await asyncio.to_thread(
                 resize_image, full_bytes, max_dim=THUMB_MAX_DIM, quality=THUMB_QUALITY
             )
