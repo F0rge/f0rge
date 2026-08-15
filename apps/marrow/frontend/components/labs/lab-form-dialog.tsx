@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Trash2 } from 'lucide-react'
 import {
@@ -11,14 +11,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@f0rge/ui'
-import { Button } from '@f0rge/ui'
-import { Input } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
-import { Textarea } from '@f0rge/ui'
+import { Button, cn, formatLocalDate } from '@f0rge/ui'
+import { NumberInput, Textarea, TextInput, useForm } from '@f0rge/ui/forms'
 import { useCreateLab, useUpdateLab } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import { MarkerPicker } from './marker-picker'
-import { cn, formatLocalDate } from '@f0rge/ui'
 import type { Lab, LabType, LabMarkerCreate, ExtractedLabPayload } from '@/lib/api/types'
 
 interface LabFormDialogProps {
@@ -107,12 +104,35 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
   const initNotes = prefill?.lab.notes ?? lab?.notes ?? ''
   const initRows = prefill ? prefillRows(prefill) : lab ? labToRows(lab) : [emptyRow()]
 
-  const [date, setDate] = useState(initDate)
-  const [name, setName] = useState(initName)
-  const [type, setType] = useState<LabType>(initType)
-  const [location, setLocation] = useState(initLocation)
-  const [notes, setNotes] = useState(initNotes)
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: {
+      date: initDate,
+      name: initName,
+      type: initType,
+      location: initLocation,
+      notes: initNotes,
+    },
+    validate: {
+      date: (value) => (value ? null : 'Date is required'),
+      name: (value) => (value.trim() ? null : 'Name is required'),
+    },
+  })
+
   const [rows, setRows] = useState<MarkerRow[]>(initRows)
+
+  useEffect(() => {
+    if (!open) return
+    const date = prefill?.lab.lab_date ?? lab?.lab_date ?? formatLocalDate(new Date())
+    const name = prefill?.lab.name ?? lab?.name ?? ''
+    const labType: LabType = prefill?.lab.type ?? lab?.type ?? 'blood'
+    const location = prefill?.lab.lab_location ?? lab?.lab_location ?? ''
+    const notes = prefill?.lab.notes ?? lab?.notes ?? ''
+    const nextRows = prefill ? prefillRows(prefill) : lab ? labToRows(lab) : [emptyRow()]
+    form.setValues({ date, name, type: labType, location, notes })
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync marker rows when dialog opens with new lab/prefill
+    setRows(nextRows)
+  }, [open, lab, prefill, form])
 
   const createLab = useCreateLab()
   const updateLab = useUpdateLab()
@@ -162,17 +182,14 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
       })
   }
 
-  async function handleSubmit() {
-    if (!date) { toast.error('Date is required'); return }
-    if (!name.trim()) { toast.error('Name is required'); return }
-
+  const handleSubmit = form.onSubmit(async (values) => {
     const markers = buildMarkers()
     const payload = {
-      lab_date: date,
-      name: name.trim(),
-      type,
-      lab_location: location.trim() || null,
-      notes: notes.trim() || null,
+      lab_date: values.date,
+      name: values.name.trim(),
+      type: values.type,
+      lab_location: values.location.trim() || null,
+      notes: values.notes.trim() || null,
       markers,
     }
 
@@ -188,9 +205,10 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
     } catch (err) {
       handleMutationError(err, isEdit ? 'Failed to update lab' : 'Failed to add lab')
     }
-  }
+  })
 
   const isPending = createLab.isPending || updateLab.isPending
+  const type = form.getValues().type
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -216,36 +234,30 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
           </div>
         )}
 
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="lab-date">Date</Label>
-              <Input
-                id="lab-date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="lab-name">Name</Label>
-              <Input
-                id="lab-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Complete Blood Count"
-              />
-            </div>
+            <TextInput
+              key={form.key('date')}
+              label="Date"
+              type="date"
+              {...form.getInputProps('date')}
+            />
+            <TextInput
+              key={form.key('name')}
+              label="Name"
+              placeholder="e.g. Complete Blood Count"
+              {...form.getInputProps('name')}
+            />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Type</Label>
+            <p className="text-sm font-medium leading-none">Type</p>
             <div className="grid grid-cols-4 gap-1.5">
               {LAB_TYPES.map((t) => (
                 <button
                   key={t.value}
                   type="button"
-                  onClick={() => setType(t.value)}
+                  onClick={() => form.setFieldValue('type', t.value)}
                   className={cn(
                     'rounded-lg border px-2 py-2 text-xs font-medium transition-colors',
                     type === t.value
@@ -259,30 +271,24 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="lab-location">Location</Label>
-            <Input
-              id="lab-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Hospital de Santa Maria"
-            />
-          </div>
+          <TextInput
+            key={form.key('location')}
+            label="Location"
+            placeholder="e.g. Hospital de Santa Maria"
+            {...form.getInputProps('location')}
+          />
 
-          <div className="space-y-1.5">
-            <Label htmlFor="lab-notes">Notes</Label>
-            <Textarea
-              id="lab-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes..."
-              rows={2}
-            />
-          </div>
+          <Textarea
+            key={form.key('notes')}
+            label="Notes"
+            placeholder="Optional notes..."
+            minRows={2}
+            {...form.getInputProps('notes')}
+          />
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Markers</Label>
+              <p className="text-sm font-medium leading-none">Markers</p>
               <button
                 type="button"
                 onClick={addRow}
@@ -300,7 +306,7 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
               >
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Marker</Label>
+                    <p className="text-xs text-muted-foreground">Marker</p>
                     <MarkerPicker
                       value={row.display_name || row.canonical_name}
                       onSelect={(canonical, id) =>
@@ -313,10 +319,10 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Display name</Label>
-                    <Input
+                    <p className="text-xs text-muted-foreground">Display name</p>
+                    <TextInput
                       value={row.display_name}
-                      onChange={(e) => updateRow(row.id, { display_name: e.target.value })}
+                      onChange={(e) => updateRow(row.id, { display_name: e.currentTarget.value })}
                       placeholder="e.g. Hemoglobin"
                       className="text-sm"
                     />
@@ -325,51 +331,48 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
 
                 <div className="grid grid-cols-4 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Value</Label>
-                    <Input
-                      type="number"
+                    <p className="text-xs text-muted-foreground">Value</p>
+                    <NumberInput
                       value={row.value}
-                      onChange={(e) => updateRow(row.id, { value: e.target.value })}
+                      onChange={(value) => updateRow(row.id, { value: value === '' ? '' : String(value) })}
                       placeholder="15.5"
                       className="text-sm"
                     />
                   </div>
                   {!row.value && (
                     <div className="space-y-1">
-                      <Label className="text-xs">Value text</Label>
-                      <Input
+                      <p className="text-xs text-muted-foreground">Value text</p>
+                      <TextInput
                         value={row.value_text}
-                        onChange={(e) => updateRow(row.id, { value_text: e.target.value })}
+                        onChange={(e) => updateRow(row.id, { value_text: e.currentTarget.value })}
                         placeholder="Negative"
                         className="text-sm"
                       />
                     </div>
                   )}
                   <div className="space-y-1">
-                    <Label className="text-xs">Unit</Label>
-                    <Input
+                    <p className="text-xs text-muted-foreground">Unit</p>
+                    <TextInput
                       value={row.unit}
-                      onChange={(e) => updateRow(row.id, { unit: e.target.value })}
+                      onChange={(e) => updateRow(row.id, { unit: e.currentTarget.value })}
                       placeholder="g/dL"
                       className="text-sm"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Ref low</Label>
-                    <Input
-                      type="number"
+                    <p className="text-xs text-muted-foreground">Ref low</p>
+                    <NumberInput
                       value={row.ref_low}
-                      onChange={(e) => updateRow(row.id, { ref_low: e.target.value })}
+                      onChange={(value) => updateRow(row.id, { ref_low: value === '' ? '' : String(value) })}
                       placeholder="13.7"
                       className="text-sm"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Ref high</Label>
-                    <Input
-                      type="number"
+                    <p className="text-xs text-muted-foreground">Ref high</p>
+                    <NumberInput
                       value={row.ref_high}
-                      onChange={(e) => updateRow(row.id, { ref_high: e.target.value })}
+                      onChange={(value) => updateRow(row.id, { ref_high: value === '' ? '' : String(value) })}
                       placeholder="17.2"
                       className="text-sm"
                     />
@@ -378,10 +381,10 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
 
                 <div className="flex items-end justify-between gap-2">
                   <div className="flex-1 space-y-1">
-                    <Label className="text-xs">Ref text (optional)</Label>
-                    <Input
+                    <p className="text-xs text-muted-foreground">Ref text (optional)</p>
+                    <TextInput
                       value={row.ref_text}
-                      onChange={(e) => updateRow(row.id, { ref_text: e.target.value })}
+                      onChange={(e) => updateRow(row.id, { ref_text: e.currentTarget.value })}
                       placeholder="e.g. >60, Negative"
                       className="text-sm"
                     />
@@ -403,16 +406,16 @@ export function LabFormDialog({ open, onOpenChange, lab, prefill, extractionMeta
               </p>
             )}
           </div>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isPending}>
-            {isPending ? 'Saving...' : isEdit ? 'Save changes' : 'Add lab'}
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? 'Saving...' : isEdit ? 'Save changes' : 'Add lab'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

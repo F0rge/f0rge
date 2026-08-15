@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
 import { toast } from 'sonner'
-import { Key, RefreshCw, Sparkles } from 'lucide-react'
+import { RefreshCw, Sparkles } from 'lucide-react'
 import {
   useUserSettings,
   useUpdateLLMSettings,
@@ -11,11 +10,11 @@ import {
   useTestEmbeddingConnection,
 } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
+import { PasswordInput, useForm } from '@f0rge/ui/forms'
 import { SettingsCard } from './settings-card'
 import { ModelPicker } from './model-picker'
 import { BUTTON_CLASS } from './constants'
 
-// Canonical model slugs: docs/architecture/ai_seams.md
 const LLM_MODELS = [
   { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash Preview (default)' },
   { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
@@ -38,27 +37,35 @@ export function AiSettingsSection() {
   const testLLM = useTestLLMConnection()
   const testEmbedding = useTestEmbeddingConnection()
 
-  const [llmApiKey, setLlmApiKey] = useState('')
-  const [llmModel, setLlmModel] = useState('')
-  const [llmCustomModel, setLlmCustomModel] = useState('')
-  const [llmUseCustom, setLlmUseCustom] = useState(false)
-  const [embeddingModel, setEmbeddingModel] = useState('')
-  const [embeddingCustomModel, setEmbeddingCustomModel] = useState('')
-  const [embeddingUseCustom, setEmbeddingUseCustom] = useState(false)
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: {
+      llmApiKey: '',
+      llmModel: '',
+      llmCustomModel: '',
+      llmUseCustom: false,
+      embeddingModel: '',
+      embeddingCustomModel: '',
+      embeddingUseCustom: false,
+    },
+  })
 
   const saving = updateLLM.isPending || updateEmbedding.isPending
 
   const handleSave = async () => {
+    const values = form.getValues()
     const llmPayload: { llm_api_key?: string; llm_model?: string } = {}
-    if (llmApiKey) llmPayload.llm_api_key = llmApiKey
-    const analysisModel = llmUseCustom ? llmCustomModel.trim() : llmModel
+    if (values.llmApiKey) llmPayload.llm_api_key = values.llmApiKey
+    const analysisModel = values.llmUseCustom ? values.llmCustomModel.trim() : values.llmModel
     if (analysisModel) llmPayload.llm_model = analysisModel
 
     const embeddingPayload: { embedding_model?: string } = {}
-    const embedModel = embeddingUseCustom ? embeddingCustomModel.trim() : embeddingModel
+    const embedModel = values.embeddingUseCustom
+      ? values.embeddingCustomModel.trim()
+      : values.embeddingModel
     if (embedModel) embeddingPayload.embedding_model = embedModel
 
-    if (!llmApiKey && !analysisModel && !embedModel) {
+    if (!values.llmApiKey && !analysisModel && !embedModel) {
       toast.error('Nothing to save')
       return
     }
@@ -71,10 +78,10 @@ export function AiSettingsSection() {
         await updateEmbedding.mutateAsync(embeddingPayload)
         embeddingUpdated = true
       }
-      if (llmApiKey || analysisModel) {
+      if (values.llmApiKey || analysisModel) {
         await updateLLM.mutateAsync(llmPayload)
       }
-      setLlmApiKey('')
+      form.setFieldValue('llmApiKey', '')
       toast.success('AI settings saved')
     } catch (err) {
       if (embeddingUpdated && previous) {
@@ -83,7 +90,7 @@ export function AiSettingsSection() {
             embedding_model: previous.embedding_model,
           })
         } catch {
-          // Best-effort rollback; original error is still reported.
+          // Best-effort rollback
         }
       }
       handleMutationError(err, 'Failed to save AI settings')
@@ -119,23 +126,18 @@ export function AiSettingsSection() {
   return (
     <SettingsCard icon={Sparkles} iconClassName="text-purple-500" title="AI & Embeddings">
       <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">Provider</label>
+        <p className="text-xs font-medium text-muted-foreground">Provider</p>
         <p className="text-sm">OpenRouter</p>
       </div>
 
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-          <Key className="size-3" />
-          API Key
-        </label>
-        <input
-          type="password"
+      <div>
+        <PasswordInput
+          key={form.key('llmApiKey')}
+          label="API Key"
           placeholder="sk-or-..."
-          value={llmApiKey}
-          onChange={(e) => setLlmApiKey(e.target.value)}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          {...form.getInputProps('llmApiKey')}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           Used for food-photo analysis and semantic search embeddings.{' '}
           {userSettings.data?.has_api_key
             ? 'Key set (re-enter to change)'
@@ -148,12 +150,12 @@ export function AiSettingsSection() {
           label="Analysis model"
           options={LLM_MODELS}
           currentModel={userSettings.data?.llm_model}
-          model={llmModel}
-          onModelChange={setLlmModel}
-          customModel={llmCustomModel}
-          onCustomModelChange={setLlmCustomModel}
-          useCustom={llmUseCustom}
-          onUseCustomChange={setLlmUseCustom}
+          model={form.getValues().llmModel}
+          onModelChange={(value) => form.setFieldValue('llmModel', value)}
+          customModel={form.getValues().llmCustomModel}
+          onCustomModelChange={(value) => form.setFieldValue('llmCustomModel', value)}
+          useCustom={form.getValues().llmUseCustom}
+          onUseCustomChange={(value) => form.setFieldValue('llmUseCustom', value)}
           customPlaceholder="e.g. mistralai/mistral-7b-instruct"
         />
 
@@ -161,12 +163,12 @@ export function AiSettingsSection() {
           label="Embedding model"
           options={EMBEDDING_MODELS}
           currentModel={userSettings.data?.embedding_model}
-          model={embeddingModel}
-          onModelChange={setEmbeddingModel}
-          customModel={embeddingCustomModel}
-          onCustomModelChange={setEmbeddingCustomModel}
-          useCustom={embeddingUseCustom}
-          onUseCustomChange={setEmbeddingUseCustom}
+          model={form.getValues().embeddingModel}
+          onModelChange={(value) => form.setFieldValue('embeddingModel', value)}
+          customModel={form.getValues().embeddingCustomModel}
+          onCustomModelChange={(value) => form.setFieldValue('embeddingCustomModel', value)}
+          useCustom={form.getValues().embeddingUseCustom}
+          onUseCustomChange={(value) => form.setFieldValue('embeddingUseCustom', value)}
           customPlaceholder="e.g. cohere/embed-v4"
         />
       </div>

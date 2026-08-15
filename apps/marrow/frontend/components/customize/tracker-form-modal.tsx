@@ -2,13 +2,9 @@
 
 /**
  * TrackerFormModal — create or edit a custom tracker.
- *
- * Create mode: tracker prop is undefined → calls useCreateTracker on submit.
- * Edit mode:   tracker prop is defined  → calls useUpdateTracker on submit.
- *              kind is immutable at the backend, shown as read-only text in edit mode.
  */
 
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -18,8 +14,7 @@ import {
   DialogDescription,
 } from '@f0rge/ui'
 import { Button } from '@f0rge/ui'
-import { Input } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
+import { TextInput, useForm } from '@f0rge/ui/forms'
 import { useCreateTracker, useUpdateTracker } from '@/lib/api/hooks'
 import { ApiError, handleMutationError } from '@f0rge/ui/api'
 import type { Tracker, TrackerKind } from '@/lib/api/types'
@@ -28,9 +23,7 @@ import { IconPicker } from '@/components/checkin/cards/components/IconPicker'
 interface TrackerFormModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Provide to enter edit mode; omit for create mode. */
   tracker?: Tracker
-  /** Total active tracker count — used to set position on create. */
   trackerCount?: number
 }
 
@@ -41,46 +34,56 @@ export function TrackerFormModal({
   trackerCount = 0,
 }: TrackerFormModalProps) {
   const isEdit = tracker !== undefined
-
-  const [name, setName] = useState(tracker?.name ?? '')
-  const [kind, setKind] = useState<TrackerKind>(tracker?.kind ?? 'counter')
-  const [icon, setIcon] = useState<string | null>(tracker?.icon ?? null)
-  const [unit, setUnit] = useState(tracker?.unit ?? '')
-
   const createTracker = useCreateTracker()
   const updateTracker = useUpdateTracker()
   const isPending = createTracker.isPending || updateTracker.isPending
 
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: {
+      name: tracker?.name ?? '',
+      kind: (tracker?.kind ?? 'counter') as TrackerKind,
+      icon: tracker?.icon ?? '',
+      unit: tracker?.unit ?? '',
+    },
+    validate: {
+      name: (value) => (value.trim() ? null : 'Name is required'),
+    },
+  })
+
+  useEffect(() => {
+    if (!open) return
+    form.setValues({
+      name: tracker?.name ?? '',
+      kind: tracker?.kind ?? 'counter',
+      icon: tracker?.icon ?? '',
+      unit: tracker?.unit ?? '',
+    })
+  }, [open, tracker, form])
+
   function handleClose() {
     onOpenChange(false)
-    // Reset to tracker values (or defaults) on close
-    setName(tracker?.name ?? '')
-    setKind(tracker?.kind ?? 'counter')
-    setIcon(tracker?.icon ?? null)
-    setUnit(tracker?.unit ?? '')
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!name.trim()) return
-
+  const handleSubmit = form.onSubmit(async (values) => {
+    const icon = values.icon || null
     try {
       if (isEdit) {
         await updateTracker.mutateAsync({
           id: tracker.id,
           data: {
-            name: name.trim(),
-            icon: icon ?? null,
-            unit: tracker.kind === 'counter' && unit.trim() ? unit.trim() : null,
+            name: values.name.trim(),
+            icon,
+            unit: tracker.kind === 'counter' && values.unit.trim() ? values.unit.trim() : null,
           },
         })
         toast.success('Tracker updated')
       } else {
         await createTracker.mutateAsync({
-          name: name.trim(),
-          kind,
-          icon: icon ?? null,
-          unit: kind === 'counter' && unit.trim() ? unit.trim() : null,
+          name: values.name.trim(),
+          kind: values.kind,
+          icon,
+          unit: values.kind === 'counter' && values.unit.trim() ? values.unit.trim() : null,
           position: trackerCount,
         })
       }
@@ -92,9 +95,9 @@ export function TrackerFormModal({
         handleMutationError(err, 'Failed to save tracker. Please try again.')
       }
     }
-  }
+  })
 
-  const effectiveKind = isEdit ? tracker.kind : kind
+  const effectiveKind = isEdit ? tracker.kind : form.getValues().kind
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -107,36 +110,29 @@ export function TrackerFormModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name */}
-          <div className="space-y-1.5">
-            <Label htmlFor="tracker-name" className="text-xs text-muted-foreground">
-              Name
-            </Label>
-            <Input
-              id="tracker-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Steps"
-              autoFocus
-              required
-            />
-          </div>
+          <TextInput
+            key={form.key('name')}
+            label="Name"
+            placeholder="e.g. Steps"
+            autoFocus
+            required
+            {...form.getInputProps('name')}
+          />
 
-          {/* Type — segmented control in create mode, read-only text in edit mode */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Type</Label>
+            <p className="text-xs text-muted-foreground">Type</p>
             {isEdit ? (
               <p className="text-sm text-muted-foreground capitalize">{tracker.kind}</p>
             ) : (
-              <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-md">
+              <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
                 {(['counter', 'binary'] as TrackerKind[]).map((k) => (
                   <button
                     key={k}
                     type="button"
-                    onClick={() => setKind(k)}
-                    className={`py-1.5 rounded text-xs font-medium transition-all ${
-                      kind === k
-                        ? 'bg-card shadow-sm text-foreground'
+                    onClick={() => form.setFieldValue('kind', k)}
+                    className={`rounded py-1.5 text-xs font-medium transition-all ${
+                      form.getValues().kind === k
+                        ? 'bg-card text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -147,33 +143,28 @@ export function TrackerFormModal({
             )}
           </div>
 
-          {/* Icon picker */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Icon</Label>
-            <IconPicker value={icon} onChange={setIcon} />
+            <p className="text-xs text-muted-foreground">Icon</p>
+            <IconPicker
+              value={form.getValues().icon || null}
+              onChange={(icon) => form.setFieldValue('icon', icon ?? '')}
+            />
           </div>
 
-          {/* Unit — only for counter */}
           {effectiveKind === 'counter' && (
-            <div className="space-y-1.5">
-              <Label htmlFor="tracker-unit" className="text-xs text-muted-foreground">
-                Unit (optional)
-              </Label>
-              <Input
-                id="tracker-unit"
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                placeholder="e.g. glasses, mg, minutes"
-              />
-            </div>
+            <TextInput
+              key={form.key('unit')}
+              label="Unit (optional)"
+              placeholder="e.g. glasses, mg, minutes"
+              {...form.getInputProps('unit')}
+            />
           )}
 
-          {/* Actions */}
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" size="sm" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={!name.trim() || isPending}>
+            <Button type="submit" size="sm" disabled={isPending}>
               {isPending
                 ? isEdit ? 'Saving…' : 'Adding…'
                 : isEdit ? 'Save changes' : 'Add tracker'}

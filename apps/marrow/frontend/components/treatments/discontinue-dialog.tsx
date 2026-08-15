@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -11,15 +10,7 @@ import {
   DialogFooter,
 } from '@f0rge/ui'
 import { Button } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
-import { Textarea } from '@f0rge/ui'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@f0rge/ui'
+import { Select, Textarea, useForm } from '@f0rge/ui/forms'
 import { useUpdateTreatment } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import type { Treatment } from '@/lib/api/types'
@@ -34,24 +25,27 @@ interface DiscontinueDialogProps {
 
 export function DiscontinueDialog({ open, onOpenChange, treatment }: DiscontinueDialogProps) {
   const isCorrection = !!treatment.end_date
-  const [reason, setReason] = useState(treatment.end_reason ?? '')
-  const [note, setNote] = useState(treatment.end_note ?? '')
   const updateMutation = useUpdateTreatment()
 
-  const selectedLabel = END_REASON_OPTIONS.find((o) => o.value === reason)?.label ?? 'Select a reason'
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: {
+      reason: treatment.end_reason ?? '',
+      note: treatment.end_note ?? '',
+    },
+    validate: {
+      reason: (value) => (value ? null : 'Select a reason'),
+    },
+  })
 
-  async function handleConfirm() {
-    if (!reason) {
-      toast.error('Select a reason')
-      return
-    }
+  const handleConfirm = form.onSubmit(async (values) => {
     try {
       await updateMutation.mutateAsync({
         id: treatment.id,
         data: {
           end_date: treatment.end_date ?? formatLocalDate(new Date()),
-          end_reason: reason,
-          end_note: note.trim() || null,
+          end_reason: values.reason,
+          end_note: values.note.trim() || null,
         },
       })
       toast.success(isCorrection ? 'Reason updated' : 'Treatment discontinued')
@@ -59,7 +53,7 @@ export function DiscontinueDialog({ open, onOpenChange, treatment }: Discontinue
     } catch (err) {
       handleMutationError(err, 'Failed to discontinue treatment')
     }
-  }
+  })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -73,46 +67,30 @@ export function DiscontinueDialog({ open, onOpenChange, treatment }: Discontinue
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="discontinue-reason">Reason</Label>
-            <Select
-              value={reason}
-              onValueChange={(v) => {
-                if (v !== null) setReason(v)
-              }}
-            >
-              <SelectTrigger id="discontinue-reason" className="w-full">
-                <SelectValue>{selectedLabel}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {END_REASON_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <form onSubmit={handleConfirm} className="space-y-4">
+          <Select
+            key={form.key('reason')}
+            label="Reason"
+            placeholder="Select a reason"
+            data={END_REASON_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            {...form.getInputProps('reason')}
+          />
 
-          <div className="space-y-1.5">
-            <Label htmlFor="discontinue-note">Explanation (optional)</Label>
-            <Textarea
-              id="discontinue-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Optional details..."
-              rows={3}
-              maxLength={1000}
-            />
-          </div>
-        </div>
+          <Textarea
+            key={form.key('note')}
+            label="Explanation (optional)"
+            placeholder="Optional details..."
+            maxLength={1000}
+            minRows={3}
+            {...form.getInputProps('note')}
+          />
 
-        <DialogFooter>
-          <Button onClick={handleConfirm} disabled={updateMutation.isPending}>
-            {updateMutation.isPending ? 'Saving...' : 'Discontinue'}
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button type="submit" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? 'Saving...' : 'Discontinue'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

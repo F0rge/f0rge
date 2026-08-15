@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -10,13 +10,10 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@f0rge/ui'
-import { Button } from '@f0rge/ui'
-import { Input } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
-import { Textarea } from '@f0rge/ui'
+import { Button, cn } from '@f0rge/ui'
+import { Checkbox, NumberInput, Textarea, TextInput, useForm } from '@f0rge/ui/forms'
 import { useCreateTreatment } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
-import { cn } from '@f0rge/ui'
 import type { ExtractedTreatmentCandidate, TreatmentType } from '@/lib/api/types'
 
 const TREATMENT_TYPES: { value: TreatmentType; label: string }[] = [
@@ -56,14 +53,20 @@ export function TreatmentReviewDialog({
   candidates,
   extractionMeta,
 }: TreatmentReviewDialogProps) {
-  const [rows, setRows] = useState<EditableCandidate[]>(() => candidates.map(toEditable))
   const createMutation = useCreateTreatment()
 
-  function updateRow(id: string, patch: Partial<EditableCandidate>) {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
-  }
+  const form = useForm({
+    initialValues: {
+      rows: candidates.map(toEditable),
+    },
+  })
 
-  async function handleSave() {
+  useEffect(() => {
+    if (!open) return
+    form.setValues({ rows: candidates.map(toEditable) })
+  }, [open, candidates, form])
+
+  const handleSave = form.onSubmit(async ({ rows }) => {
     const selected = rows.filter((r) => r.selected)
     if (selected.length === 0) {
       toast.error('Select at least one treatment to save')
@@ -113,7 +116,9 @@ export function TreatmentReviewDialog({
       onOpenChange(false)
     } catch (err) {
       if (savedIds.length > 0) {
-        setRows((prev) => prev.filter((r) => !savedIds.includes(r.id)))
+        form.setValues({
+          rows: rows.filter((r) => !savedIds.includes(r.id)),
+        })
         toast.warning(
           savedIds.length === 1
             ? '1 treatment saved before the error'
@@ -122,8 +127,9 @@ export function TreatmentReviewDialog({
       }
       handleMutationError(err, 'Failed to save treatments')
     }
-  }
+  })
 
+  const rows = form.values.rows
   const selectedCount = rows.filter((r) => r.selected).length
 
   return (
@@ -147,8 +153,8 @@ export function TreatmentReviewDialog({
           </div>
         )}
 
-        <div className="space-y-4">
-          {rows.map((row) => (
+        <form onSubmit={handleSave} className="space-y-4">
+          {rows.map((row, index) => (
             <div
               key={row.id}
               className={cn(
@@ -156,32 +162,27 @@ export function TreatmentReviewDialog({
                 !row.selected && 'opacity-60',
               )}
             >
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={row.selected}
-                  onChange={(e) => updateRow(row.id, { selected: e.target.checked })}
-                  className="size-4 rounded border-border"
-                />
-                <span className="text-sm font-medium">Include this treatment</span>
-              </label>
+              <Checkbox
+                label="Include this treatment"
+                checked={row.selected}
+                onChange={(event) =>
+                  form.setFieldValue(`rows.${index}.selected`, event.currentTarget.checked)
+                }
+              />
+
+              <TextInput
+                label="Name"
+                {...form.getInputProps(`rows.${index}.name`)}
+              />
 
               <div className="space-y-1.5">
-                <Label>Name</Label>
-                <Input
-                  value={row.name}
-                  onChange={(e) => updateRow(row.id, { name: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Type</Label>
+                <p className="text-sm font-medium leading-none">Type</p>
                 <div className="grid grid-cols-3 gap-1.5">
                   {TREATMENT_TYPES.map((t) => (
                     <button
                       key={t.value}
                       type="button"
-                      onClick={() => updateRow(row.id, { type: t.value })}
+                      onClick={() => form.setFieldValue(`rows.${index}.type`, t.value)}
                       className={cn(
                         'rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors',
                         row.type === t.value
@@ -196,94 +197,79 @@ export function TreatmentReviewDialog({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Start date</Label>
-                  <Input
-                    type="date"
-                    value={row.start_date}
-                    onChange={(e) => updateRow(row.id, { start_date: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>End date</Label>
-                  <Input
-                    type="date"
-                    value={row.end_date ?? ''}
-                    disabled={row.ongoing}
-                    onChange={(e) =>
-                      updateRow(row.id, { end_date: e.target.value || null, ongoing: false })
-                    }
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={row.ongoing}
-                  onChange={(e) =>
-                    updateRow(row.id, {
-                      ongoing: e.target.checked,
-                      end_date: e.target.checked ? null : row.end_date,
-                    })
-                  }
-                  className="size-4 rounded border-border"
+                <TextInput
+                  label="Start date"
+                  type="date"
+                  {...form.getInputProps(`rows.${index}.start_date`)}
                 />
-                <span className="text-sm text-muted-foreground">Ongoing (no end date)</span>
-              </label>
-
-              <div className="space-y-1.5">
-                <Label>Dose</Label>
-                <Input
-                  value={row.dose ?? ''}
-                  onChange={(e) => updateRow(row.id, { dose: e.target.value || null })}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Doses per day</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={row.doses_per_day ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    updateRow(row.id, {
-                      doses_per_day: v === '' ? null : Number(v),
-                    })
+                <TextInput
+                  label="End date"
+                  type="date"
+                  disabled={row.ongoing}
+                  value={row.end_date ?? ''}
+                  onChange={(event) => {
+                    form.setFieldValue(`rows.${index}.end_date`, event.currentTarget.value || null)
+                    form.setFieldValue(`rows.${index}.ongoing`, false)
                   }}
-                  className="max-w-24"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Group</Label>
-                <Input
-                  value={row.group_name ?? ''}
-                  onChange={(e) => updateRow(row.id, { group_name: e.target.value || null })}
-                />
-              </div>
+              <Checkbox
+                label="Ongoing (no end date)"
+                checked={row.ongoing}
+                onChange={(event) => {
+                  const checked = event.currentTarget.checked
+                  form.setFieldValue(`rows.${index}.ongoing`, checked)
+                  if (checked) form.setFieldValue(`rows.${index}.end_date`, null)
+                }}
+              />
 
-              <div className="space-y-1.5">
-                <Label>Notes</Label>
-                <Textarea
-                  value={row.notes ?? ''}
-                  onChange={(e) => updateRow(row.id, { notes: e.target.value || null })}
-                  rows={2}
-                />
-              </div>
+              <TextInput
+                label="Dose"
+                value={row.dose ?? ''}
+                onChange={(event) =>
+                  form.setFieldValue(`rows.${index}.dose`, event.currentTarget.value || null)
+                }
+              />
+
+              <NumberInput
+                label="Doses per day"
+                min={1}
+                max={12}
+                className="max-w-24"
+                value={row.doses_per_day ?? ''}
+                onChange={(value) =>
+                  form.setFieldValue(`rows.${index}.doses_per_day`, value === '' ? null : Number(value))
+                }
+              />
+
+              <TextInput
+                label="Group"
+                value={row.group_name ?? ''}
+                onChange={(event) =>
+                  form.setFieldValue(`rows.${index}.group_name`, event.currentTarget.value || null)
+                }
+              />
+
+              <Textarea
+                label="Notes"
+                minRows={2}
+                value={row.notes ?? ''}
+                onChange={(event) =>
+                  form.setFieldValue(`rows.${index}.notes`, event.currentTarget.value || null)
+                }
+              />
             </div>
           ))}
-        </div>
 
-        <DialogFooter>
-          <Button onClick={handleSave} disabled={createMutation.isPending || selectedCount === 0}>
-            {createMutation.isPending
-              ? 'Saving...'
-              : `Save ${selectedCount} treatment${selectedCount === 1 ? '' : 's'}`}
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button type="submit" disabled={createMutation.isPending || selectedCount === 0}>
+              {createMutation.isPending
+                ? 'Saving...'
+                : `Save ${selectedCount} treatment${selectedCount === 1 ? '' : 's'}`}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

@@ -1,15 +1,6 @@
 'use client'
 
-/**
- * MedicationQuickAddDialog — "Log a medication" quick-add sheet.
- *
- * Mirrors the mockup's Option 1 sheet: pick one med from the active catalog
- * as a chip, optional dose + reason, "Log it" appends a MedicationIntake to
- * the day's array. No API call here — the entry rides the existing autosave
- * path via the parent's onAdd callback (same as SupplementsCard/TrackersCard).
- */
-
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -18,10 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@f0rge/ui'
-import { Button } from '@f0rge/ui'
-import { Input } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
-import { cn, nowHHMM } from '@f0rge/ui'
+import { Button, cn, nowHHMM } from '@f0rge/ui'
+import { TextInput, useForm } from '@f0rge/ui/forms'
 import { useMedicationCatalog } from '@/lib/api/hooks'
 import type { MedicationIntake } from '@/lib/api/types'
 
@@ -39,31 +28,44 @@ export function MedicationQuickAddDialog({
   initialKey = null,
 }: MedicationQuickAddDialogProps) {
   const { data: catalog = [], isLoading } = useMedicationCatalog(false)
-  const [selectedKey, setSelectedKey] = useState<string | null>(initialKey)
-  const [dose, setDose] = useState('')
-  const [reason, setReason] = useState('')
 
-  function reset() {
-    setSelectedKey(null)
-    setDose('')
-    setReason('')
-  }
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: {
+      selectedKey: initialKey ?? '',
+      dose: '',
+      reason: '',
+    },
+    validate: {
+      selectedKey: (value) => (value ? null : 'Select a medication'),
+    },
+  })
+
+  useEffect(() => {
+    if (!open) return
+    form.setValues({
+      selectedKey: initialKey ?? '',
+      dose: '',
+      reason: '',
+    })
+  }, [open, initialKey, form])
 
   function handleOpenChange(v: boolean) {
-    if (!v) reset()
+    if (!v) form.reset()
     onOpenChange(v)
   }
 
-  function handleLogIt() {
-    if (!selectedKey) return
+  const handleSubmit = form.onSubmit((values) => {
     onAdd({
-      key: selectedKey,
-      dose: dose.trim() || undefined,
-      reason: reason.trim() || undefined,
+      key: values.selectedKey,
+      dose: values.dose.trim() || undefined,
+      reason: values.reason.trim() || undefined,
       time: nowHHMM(),
     })
     handleOpenChange(false)
-  }
+  })
+
+  const selectedKey = form.getValues().selectedKey
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -75,9 +77,9 @@ export function MedicationQuickAddDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Which</Label>
+            <p className="text-xs text-muted-foreground">Which</p>
             {isLoading ? (
               <div className="flex items-center justify-center py-3 text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
@@ -92,7 +94,7 @@ export function MedicationQuickAddDialog({
                   <button
                     key={med.key}
                     type="button"
-                    onClick={() => setSelectedKey(med.key)}
+                    onClick={() => form.setFieldValue('selectedKey', med.key)}
                     className={cn(
                       'rounded-full border px-3 py-1.5 text-sm transition-colors',
                       selectedKey === med.key
@@ -105,41 +107,29 @@ export function MedicationQuickAddDialog({
                 ))}
               </div>
             )}
+            {form.errors.selectedKey && (
+              <p className="text-xs text-destructive">{form.errors.selectedKey}</p>
+            )}
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="med-dose" className="text-xs text-muted-foreground">
-              Dose <span className="normal-case font-normal">(optional)</span>
-            </Label>
-            <Input
-              id="med-dose"
-              value={dose}
-              onChange={(e) => setDose(e.target.value)}
-              placeholder="e.g. 400 mg"
-            />
-          </div>
+          <TextInput
+            key={form.key('dose')}
+            label="Dose (optional)"
+            placeholder="e.g. 400 mg"
+            {...form.getInputProps('dose')}
+          />
 
-          <div className="space-y-1.5">
-            <Label htmlFor="med-reason" className="text-xs text-muted-foreground">
-              Reason <span className="normal-case font-normal">(optional)</span>
-            </Label>
-            <Input
-              id="med-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. headache"
-            />
-          </div>
+          <TextInput
+            key={form.key('reason')}
+            label="Reason (optional)"
+            placeholder="e.g. headache"
+            {...form.getInputProps('reason')}
+          />
 
-          <Button
-            type="button"
-            className="w-full justify-center"
-            disabled={!selectedKey}
-            onClick={handleLogIt}
-          >
+          <Button type="submit" className="w-full justify-center" disabled={!selectedKey}>
             Log it
           </Button>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   )

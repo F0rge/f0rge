@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Label } from '@f0rge/ui'
+import { Textarea } from '@f0rge/ui/forms'
 import { useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
 
 interface NotesInputProps {
@@ -91,16 +91,18 @@ export function NotesInput({
 
   return (
     <div className="space-y-3">
-      <Label className="text-sm font-medium leading-none">Notes (optional)</Label>
-      <textarea
+      <Textarea
         ref={textareaRef}
+        label="Notes (optional)"
         value={draft}
         onChange={handleChange}
         onFocus={onFocusScroll}
         onBlur={handleBlur}
         placeholder="Anything notable today... meals, events, how you felt"
-        className="w-full min-h-[80px] resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        rows={3}
+        minRows={3}
+        maxLength={500}
+        autosize
+        classNames={{ input: 'min-h-[80px] resize-none' }}
       />
       <p className={`text-xs text-right ${remaining < 50 ? 'text-destructive' : 'text-muted-foreground'}`}>
         {remaining} characters remaining

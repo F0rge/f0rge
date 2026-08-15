@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -10,14 +10,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@f0rge/ui'
-import { Button } from '@f0rge/ui'
-import { Input } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
-import { Textarea } from '@f0rge/ui'
+import { Button, cn, formatLocalDate } from '@f0rge/ui'
+import { Checkbox, NumberInput, Textarea, TextInput, useForm } from '@f0rge/ui/forms'
 import { useTreatments, useCreateTreatment, useUpdateTreatment, useDeleteTreatment } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import type { Treatment, TreatmentType } from '@/lib/api/types'
-import { cn, formatLocalDate } from '@f0rge/ui'
 
 interface TreatmentFormDialogProps {
   open: boolean
@@ -34,20 +31,47 @@ const TREATMENT_TYPES: { value: TreatmentType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
+function initialValues(treatment?: Treatment | null) {
+  return {
+    name: treatment?.name ?? '',
+    type: (treatment?.type ?? 'other') as TreatmentType,
+    group: treatment?.group_name ?? '',
+    startDate: treatment?.start_date ?? formatLocalDate(new Date()),
+    endDate: treatment?.end_date ?? '',
+    ongoing: !treatment?.end_date,
+    dose: treatment?.dose ?? '',
+    dosesPerDay: treatment?.doses_per_day != null ? String(treatment.doses_per_day) : '',
+    notes: treatment?.notes ?? '',
+  }
+}
+
 export function TreatmentFormDialog({ open, onOpenChange, treatment }: TreatmentFormDialogProps) {
   const isEdit = !!treatment
-  const [name, setName] = useState(treatment?.name ?? '')
-  const [type, setType] = useState<TreatmentType>(treatment?.type ?? 'other')
-  const [group, setGroup] = useState(treatment?.group_name ?? '')
-  const [startDate, setStartDate] = useState(treatment?.start_date ?? formatLocalDate(new Date()))
-  const [endDate, setEndDate] = useState(treatment?.end_date ?? '')
-  const [ongoing, setOngoing] = useState(!treatment?.end_date)
-  const [dose, setDose] = useState(treatment?.dose ?? '')
-  const [dosesPerDay, setDosesPerDay] = useState(
-    treatment?.doses_per_day != null ? String(treatment.doses_per_day) : '',
-  )
-  const [notes, setNotes] = useState(treatment?.notes ?? '')
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: initialValues(treatment),
+    validate: {
+      name: (value) => (value.trim() ? null : 'Name is required'),
+      startDate: (value) => (value ? null : 'Start date is required'),
+      dosesPerDay: (value) => {
+        if (!value.trim()) return null
+        const parsed = Number(value)
+        if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) {
+          return 'Doses per day must be a whole number between 1 and 12'
+        }
+        return null
+      },
+    },
+  })
+
+  useEffect(() => {
+    if (!open) return
+    form.setValues(initialValues(treatment))
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset delete confirmation when dialog reopens
+    setConfirmDelete(false)
+  }, [open, treatment, form])
 
   const { data: existingTreatments } = useTreatments()
   const groupOptions = Array.from(
@@ -63,40 +87,22 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
   const updateMutation = useUpdateTreatment()
   const deleteMutation = useDeleteTreatment()
 
-  async function handleSubmit() {
-    if (!name.trim()) {
-      toast.error('Name is required')
-      return
-    }
-    if (!startDate) {
-      toast.error('Start date is required')
-      return
-    }
-    const finalEnd = ongoing ? null : endDate || null
-    if (finalEnd && finalEnd < startDate) {
+  const handleSubmit = form.onSubmit(async (values) => {
+    const finalEnd = values.ongoing ? null : values.endDate || null
+    if (finalEnd && finalEnd < values.startDate) {
       toast.error('End date must be on or after start date')
       return
     }
 
-    let finalDosesPerDay: number | null = null
-    if (dosesPerDay.trim()) {
-      const parsed = Number(dosesPerDay)
-      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) {
-        toast.error('Doses per day must be a whole number between 1 and 12')
-        return
-      }
-      finalDosesPerDay = parsed
-    }
-
     const payload = {
-      name: name.trim(),
-      type,
-      group_name: group.trim() || null,
-      start_date: startDate,
+      name: values.name.trim(),
+      type: values.type,
+      group_name: values.group.trim() || null,
+      start_date: values.startDate,
       end_date: finalEnd,
-      dose: dose.trim() || null,
-      doses_per_day: finalDosesPerDay,
-      notes: notes.trim() || null,
+      dose: values.dose.trim() || null,
+      doses_per_day: values.dosesPerDay.trim() ? Number(values.dosesPerDay) : null,
+      notes: values.notes.trim() || null,
     }
 
     try {
@@ -111,7 +117,7 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
     } catch (err) {
       handleMutationError(err, isEdit ? 'Failed to update treatment' : 'Failed to add treatment')
     }
-  }
+  })
 
   async function handleDelete() {
     if (!treatment) return
@@ -129,6 +135,11 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending
+  const type = form.getValues().type
+  const ongoing = form.getValues().ongoing
+
+  const endDateProps = form.getInputProps('endDate')
+  const { onChange: onEndDateChange, ...endDateFieldProps } = endDateProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -140,25 +151,22 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="tx-name">Name</Label>
-            <Input
-              id="tx-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Rifaximin"
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <TextInput
+            key={form.key('name')}
+            label="Name"
+            placeholder="e.g. Rifaximin"
+            {...form.getInputProps('name')}
+          />
 
           <div className="space-y-1.5">
-            <Label>Type</Label>
+            <p className="text-sm font-medium leading-none">Type</p>
             <div className="grid grid-cols-3 gap-1.5">
               {TREATMENT_TYPES.map((t) => (
                 <button
                   key={t.value}
                   type="button"
-                  onClick={() => setType(t.value)}
+                  onClick={() => form.setFieldValue('type', t.value)}
                   className={cn(
                     'rounded-lg border px-2 py-2 text-xs font-medium transition-colors',
                     type === t.value
@@ -172,113 +180,93 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="tx-group">Group</Label>
-            <Input
-              id="tx-group"
-              value={group}
-              onChange={(e) => setGroup(e.target.value)}
-              placeholder="e.g. SIBO Treatment"
-              maxLength={100}
-              list="tx-group-options"
-            />
-            <datalist id="tx-group-options">
-              {groupOptions.map((g) => (
-                <option key={g} value={g} />
-              ))}
-            </datalist>
-          </div>
+          <TextInput
+            key={form.key('group')}
+            label="Group"
+            placeholder="e.g. SIBO Treatment"
+            maxLength={100}
+            list="tx-group-options"
+            {...form.getInputProps('group')}
+          />
+          <datalist id="tx-group-options">
+            {groupOptions.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="tx-start">Start date</Label>
-              <Input
-                id="tx-start"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tx-end">End date</Label>
-              <Input
-                id="tx-end"
-                type="date"
-                value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setOngoing(false) }}
-              />
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={ongoing}
-              onChange={(e) => {
-                setOngoing(e.target.checked)
-                if (e.target.checked) setEndDate('')
+            <TextInput
+              key={form.key('startDate')}
+              label="Start date"
+              type="date"
+              {...form.getInputProps('startDate')}
+            />
+            <TextInput
+              key={form.key('endDate')}
+              label="End date"
+              type="date"
+              disabled={ongoing}
+              {...endDateFieldProps}
+              onChange={(event) => {
+                onEndDateChange?.(event)
+                form.setFieldValue('ongoing', false)
               }}
-              className="size-4 rounded border-border"
-            />
-            <span className="text-sm text-muted-foreground">Ongoing (no end date)</span>
-          </label>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="tx-dose">Dose</Label>
-            <Input
-              id="tx-dose"
-              value={dose}
-              onChange={(e) => setDose(e.target.value)}
-              placeholder="e.g. 550mg 3x daily"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="tx-doses-per-day">Doses per day</Label>
-            <Input
-              id="tx-doses-per-day"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={12}
-              step={1}
-              value={dosesPerDay}
-              onChange={(e) => setDosesPerDay(e.target.value)}
-              placeholder="e.g. 3"
-              className="max-w-24"
-            />
-            <p className="text-xs text-muted-foreground">
-              How many times a day you take this. Leave blank for non-dose treatments (e.g. a diet).
-            </p>
-          </div>
+          <Checkbox
+            label="Ongoing (no end date)"
+            checked={ongoing}
+            onChange={(event) => {
+              const checked = event.currentTarget.checked
+              form.setFieldValue('ongoing', checked)
+              if (checked) form.setFieldValue('endDate', '')
+            }}
+          />
 
-          <div className="space-y-1.5">
-            <Label htmlFor="tx-notes">Notes</Label>
-            <Textarea
-              id="tx-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes..."
-              rows={3}
-            />
-          </div>
-        </div>
+          <TextInput
+            key={form.key('dose')}
+            label="Dose"
+            placeholder="e.g. 550mg 3x daily"
+            {...form.getInputProps('dose')}
+          />
 
-        <DialogFooter>
-          {isEdit && (
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={isPending}
-              className="sm:mr-auto"
-            >
-              {confirmDelete ? 'Confirm delete' : 'Delete'}
+          <NumberInput
+            key={form.key('dosesPerDay')}
+            label="Doses per day"
+            placeholder="e.g. 3"
+            min={1}
+            max={12}
+            className="max-w-24"
+            description="How many times a day you take this. Leave blank for non-dose treatments (e.g. a diet)."
+            {...form.getInputProps('dosesPerDay')}
+          />
+
+          <Textarea
+            key={form.key('notes')}
+            label="Notes"
+            placeholder="Optional notes..."
+            minRows={3}
+            {...form.getInputProps('notes')}
+          />
+
+          <DialogFooter>
+            {isEdit && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={isPending}
+                className="sm:mr-auto"
+              >
+                {confirmDelete ? 'Confirm delete' : 'Delete'}
+              </Button>
+            )}
+            <Button type="submit" disabled={isPending}>
+              {isPending ? 'Saving...' : isEdit ? 'Save' : 'Add treatment'}
             </Button>
-          )}
-          <Button onClick={handleSubmit} disabled={isPending}>
-            {isPending ? 'Saving...' : isEdit ? 'Save' : 'Add treatment'}
-          </Button>
-        </DialogFooter>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

@@ -1,7 +1,9 @@
 import type { Preview } from "@storybook/react"
 import React, { useEffect } from "react"
 
+import { UiProvider } from "../src/provider"
 import "../src/styles/storybook.css"
+import "../src/styles/extras.css"
 import defaultSkin from "../src/styles/skins/default.css?raw"
 import marrowSkin from "../src/styles/skins/marrow.css?raw"
 
@@ -33,9 +35,11 @@ function SkinDecorator({
   }, [globals.darkMode])
 
   return (
-    <div className="bg-background p-4 font-sans text-foreground">
-      <Story />
-    </div>
+    <UiProvider colorScheme={globals.darkMode === "dark" ? "dark" : "light"}>
+      <div className="bg-background p-4 font-sans text-foreground">
+        <Story />
+      </div>
+    </UiProvider>
   )
 }
 

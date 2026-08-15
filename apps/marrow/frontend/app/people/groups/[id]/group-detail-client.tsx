@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, UsersRound } from 'lucide-react'
-import { Badge, Button, Card, Input, Label } from '@f0rge/ui'
+import { Badge, Button, Card } from '@f0rge/ui'
+import { TextInput, useForm } from '@f0rge/ui/forms'
 import { FetchError } from '@f0rge/ui'
 import { ConfirmActionDialog } from '@/components/people/confirm-action-dialog'
 import { PeerAvatar } from '@/components/people/peer-avatar'
@@ -40,43 +41,62 @@ export default function GroupDetailClient() {
   const acceptInvite = useAcceptGroupInvite()
   const removeMember = useRemoveGroupMember()
 
-  const [name, setName] = useState('')
   const [nameDirty, setNameDirty] = useState(false)
-  const [inviteHandle, setInviteHandle] = useState('')
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<{ action: ConfirmAction; handle?: string } | null>(null)
+
+  const renameForm = useForm({
+    mode: 'uncontrolled',
+    initialValues: { name: '' },
+    validate: {
+      name: (value) => (value.trim() ? null : 'Group name is required'),
+    },
+    onValuesChange: () => setNameDirty(true),
+  })
+
+  const inviteForm = useForm({
+    mode: 'uncontrolled',
+    initialValues: { handle: '' },
+    validate: {
+      handle: (value) => (value.length >= 3 ? null : 'Enter a handle'),
+    },
+  })
 
   const myHandle = account.data?.handle ?? ''
   const data = group.data
   const isOwner = data?.my_role === 'owner'
   const isInvited = data?.my_status === 'invited'
 
+  useEffect(() => {
+    if (data?.name && !nameDirty) {
+      renameForm.setFieldValue('name', data.name)
+    }
+  }, [data?.name, nameDirty, renameForm])
+
   const acceptedHandles = useMemo(
     () => new Set(connections.data?.accepted.map((c) => c.user.handle) ?? []),
     [connections.data?.accepted],
   )
+  const inviteHandle = inviteForm.getValues().handle
   const lookup = useUserLookup(inviteHandle)
   const connectedPreview =
     lookup.data && acceptedHandles.has(lookup.data.handle) ? lookup.data : null
 
-  const displayName = nameDirty ? name : (data?.name ?? '')
-
-  const onRename = async () => {
-    const trimmed = name.trim()
-    if (!trimmed || !data) return
+  const onRename = renameForm.onSubmit(async (values) => {
+    if (!data) return
     try {
-      await renameGroup.mutateAsync({ id: data.id, name: trimmed })
+      await renameGroup.mutateAsync({ id: data.id, name: values.name.trim() })
       toast.success('Group renamed')
       setNameDirty(false)
     } catch (err) {
       toast.error(getErrorDetail(err, 'Could not rename group'))
     }
-  }
+  })
 
-  const onInvite = async () => {
+  const onInvite = inviteForm.onSubmit(async (values) => {
     if (!data) return
     setInviteError(null)
-    const handle = inviteHandle.trim().toLowerCase().replace(/^@/, '')
+    const handle = values.handle.trim().toLowerCase().replace(/^@/, '')
     if (!acceptedHandles.has(handle)) {
       setInviteError('You can only invite connected people')
       return
@@ -84,11 +104,11 @@ export default function GroupDetailClient() {
     try {
       await inviteToGroup.mutateAsync({ id: data.id, handle })
       toast.success('Invite sent')
-      setInviteHandle('')
+      inviteForm.reset()
     } catch (err) {
       setInviteError(getErrorDetail(err, 'Could not send invite'))
     }
-  }
+  })
 
   const runConfirm = async () => {
     if (!data || !confirm) return
@@ -194,48 +214,43 @@ export default function GroupDetailClient() {
 
       {data && isOwner && (
         <Card className="mb-4 space-y-3 p-4">
-          <Label htmlFor="rename-group">Group name</Label>
-          <div className="flex gap-2">
-            <Input
-              id="rename-group"
-              value={displayName}
-              onChange={(e) => {
-                setName(e.target.value)
-                setNameDirty(true)
-              }}
+          <form onSubmit={onRename} className="flex gap-2">
+            <TextInput
+              key={renameForm.key('name')}
+              label="Group name"
               maxLength={60}
               className="flex-1"
+              {...renameForm.getInputProps('name')}
             />
             <Button
-              type="button"
-              onClick={onRename}
-              disabled={renameGroup.isPending || !nameDirty || name.trim().length === 0}
+              type="submit"
+              disabled={renameGroup.isPending || !nameDirty || !renameForm.getValues().name.trim()}
+              className="self-end"
             >
               Save
             </Button>
-          </div>
+          </form>
         </Card>
       )}
 
       {data && data.my_status === 'joined' && (
         <Card className="mb-4 space-y-3 p-4">
-          <Label htmlFor="invite-handle">Invite a connection</Label>
-          <div className="flex gap-2">
-            <Input
-              id="invite-handle"
-              value={inviteHandle}
-              onChange={(e) => setInviteHandle(e.target.value.toLowerCase().replace(/^@/, ''))}
+          <form onSubmit={onInvite} className="flex gap-2">
+            <TextInput
+              key={inviteForm.key('handle')}
+              label="Invite a connection"
               placeholder="their_handle"
               className="flex-1"
+              {...inviteForm.getInputProps('handle')}
             />
             <Button
-              type="button"
-              onClick={onInvite}
+              type="submit"
               disabled={inviteToGroup.isPending || inviteHandle.length < 3}
+              className="self-end"
             >
               Invite
             </Button>
-          </div>
+          </form>
           {connectedPreview && (
             <div className="flex items-center gap-3 rounded-lg border border-muted px-3 py-2">
               <PeerAvatar
