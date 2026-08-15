@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import axios from 'axios';
 import { FileText, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -27,7 +27,12 @@ interface TagConfig {
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
-  const dark = resolvedTheme === 'dark';
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const dark = mounted && resolvedTheme === 'dark';
 
   return (
     <Button
@@ -37,7 +42,7 @@ function ThemeToggle() {
       onClick={() => setTheme(dark ? 'light' : 'dark')}
       aria-label="Toggle theme"
     >
-      {dark ? <Sun /> : <Moon />}
+      {mounted ? (dark ? <Sun /> : <Moon />) : <span className="size-4" aria-hidden />}
     </Button>
   );
 }
