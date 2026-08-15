@@ -37,7 +37,7 @@ from app.services.avatar_storage import (
     resize_avatar,
     save_avatar,
 )
-from app.services.photo_storage import delete_photo
+from app.services.photo_storage import delete_photo, thumb_filename
 from f0rge_db.tenant import current_user_id
 
 logger = logging.getLogger(__name__)
@@ -223,7 +223,8 @@ class AccountService:
         cleanup_tasks = [
             *(
                 _delete_soft(partial(delete_photo, name, user_id=str(user_id)), name)
-                for name in filenames
+                for full in filenames
+                for name in (full, thumb_filename(full))
             ),
             *(_delete_soft(partial(object_storage.delete_object, ref), ref) for ref in lab_refs),
         ]

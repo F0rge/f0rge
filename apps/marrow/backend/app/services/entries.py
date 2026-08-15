@@ -23,7 +23,7 @@ from app.services.diet_flags import (
     compute_signal_from_analyses,
     parse_diet_risk_csv,
 )
-from app.services.photo_storage import delete_photo
+from app.services.photo_storage import delete_photo, thumb_filename
 from app.utils.dates import local_today
 from f0rge_db.tenant import current_user_id
 
@@ -315,4 +315,8 @@ class EntryService:
             # Icon-only library meals have no object-storage file.
             if photo.filename is None:
                 continue
-            await asyncio.to_thread(delete_photo, photo.filename, user_id=str(photo.user_id))
+            user_id_str = str(photo.user_id)
+            await asyncio.to_thread(delete_photo, photo.filename, user_id=user_id_str)
+            await asyncio.to_thread(
+                delete_photo, thumb_filename(photo.filename), user_id=user_id_str
+            )

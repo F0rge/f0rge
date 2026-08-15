@@ -38,7 +38,9 @@ from app.services.photo_storage import (
 )
 from f0rge_db.tenant import current_user_id
 
-PHOTO_CACHE_CONTROL = "private, max-age=86400"
+# 240s < the 300s presigned-URL expiry so a cached redirect never points at an
+# expired URL (same policy as AccountService.AVATAR_CACHE_CONTROL).
+PHOTO_CACHE_CONTROL = "private, max-age=240"
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
