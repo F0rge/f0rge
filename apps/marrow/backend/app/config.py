@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "google/gemini-3-flash-preview"
     food_analysis_enabled: bool = True
+    food_analysis_via_airflow: bool = False
+    airflow_url: str = ""
+    airflow_username: str = "airflow"
+    airflow_password: str = ""
+    airflow_service_token: str = ""
     mcp_readonly_database_url: str = ""
     mcp_server_host: str = "0.0.0.0"
     mcp_server_port: int = 8005

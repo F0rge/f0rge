@@ -16,6 +16,7 @@ from app.middleware.auth import AuthContextMiddleware
 from app.middleware.request_id import RequestIdFilter, RequestIdMiddleware
 from app.routers import (
     account,
+    airflow_internal,
     auth,
     cache,
     devices,
@@ -87,10 +88,21 @@ def _warn_misconfigured_features() -> None:
     credentials are missing. Catches deployments where the env var wasn't
     added to the host but the flag stayed enabled."""
     if settings.food_analysis_enabled and not settings.openrouter_api_key:
+        if settings.food_analysis_via_airflow:
+            logger.info(
+                "FOOD_ANALYSIS_VIA_AIRFLOW=true — OpenRouter key lives on the Airflow "
+                "pydanticai_openrouter connection; Marrow OPENROUTER_API_KEY may be empty."
+            )
+        else:
+            logger.warning(
+                "FOOD_ANALYSIS_ENABLED=true but OPENROUTER_API_KEY is empty. "
+                "Photo analysis will be marked as failed for every upload. "
+                "Either set OPENROUTER_API_KEY or set FOOD_ANALYSIS_ENABLED=false."
+            )
+    if settings.food_analysis_via_airflow and not settings.airflow_url:
         logger.warning(
-            "FOOD_ANALYSIS_ENABLED=true but OPENROUTER_API_KEY is empty. "
-            "Photo analysis will be marked as failed for every upload. "
-            "Either set OPENROUTER_API_KEY or set FOOD_ANALYSIS_ENABLED=false."
+            "FOOD_ANALYSIS_VIA_AIRFLOW=true but AIRFLOW_URL is empty. "
+            "Meal photo uploads will fall back to in-process analysis if credentials exist."
         )
     if settings.weather_fetch_enabled and not settings.openweathermap_api_key:
         logger.warning(
@@ -213,6 +225,7 @@ app.include_router(medication_catalog.router)
 app.include_router(onboarding.router)
 app.include_router(symptom_catalog.router)
 app.include_router(food_analysis.router)
+app.include_router(airflow_internal.router)
 app.include_router(insights.router)
 app.include_router(signals.router)
 app.include_router(treatments.router)

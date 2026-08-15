@@ -1,0 +1,5 @@
+# Follow-up image layer for consumer DAGs (meal classification, etc.).
+# Keep versions pinned; bump deliberately with the Airflow base image.
+apache-airflow-providers-common-ai[openai]==0.7.0
+apache-airflow-providers-amazon>=9.0.0
+apache-airflow-providers-git>=0.0.4

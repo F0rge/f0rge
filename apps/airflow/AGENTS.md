@@ -9,7 +9,7 @@ CeleryExecutor + Redis. DAGs come from GitHub via **GitDagBundle** (not host bin
 | Path | Purpose |
 |------|---------|
 | `docker-compose.yml` | postgres 16 + redis + api-server + scheduler + dag-processor + celery worker + flower |
-| `Dockerfile` | `apache/airflow:3.0.3` (includes git + celery providers) |
+| `Dockerfile` | `apache/airflow:3.1.7` + `requirements.txt` (`common-ai[openai]==0.7`, amazon, git) |
 | `dags/_system/smoke.py` | `airflow_smoke` system DAG (bundle `airflow`) |
 | `scripts/status.sh` | Stack health: compose ps, stats, redis, celery ping, API |
 | `scripts/scale-workers.sh` | Scale celery workers `1\|2\|3` |
