@@ -22,7 +22,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/airflow",
-        "command": "docker compose -f docker-compose.yml -f docker-compose.pi.yml config >/dev/null"
+        "command": "docker compose -f docker-compose.yml config >/dev/null"
       }
     }
   },
