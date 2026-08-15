@@ -1,0 +1,30 @@
+# Pi (rpi) overlay — bind API to loopback only; Tailscale reaches 100.103.61.77:8082
+# via kernel routing without exposing 0.0.0.0.
+# Usage (from apps/airflow):
+#   docker compose -p airflow -f docker-compose.yml -f docker-compose.pi.yml up -d --build
+
+services:
+  airflow-apiserver:
+    ports: !override
+      # Loopback + Tailscale only — not 0.0.0.0 (LAN).
+      - "127.0.0.1:8082:8080"
+      - "100.103.61.77:8082:8080"
+    environment:
+      AIRFLOW__CORE__PARALLELISM: "2"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "2"
+
+  airflow-scheduler:
+    environment:
+      AIRFLOW__CORE__PARALLELISM: "2"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "2"
+
+  airflow-dag-processor:
+    environment:
+      AIRFLOW__CORE__PARALLELISM: "2"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "2"
+
+  airflow-init:
+    environment:
+      AIRFLOW_UID: "1000"
+      AIRFLOW__CORE__PARALLELISM: "2"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "2"

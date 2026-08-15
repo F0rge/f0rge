@@ -1,0 +1,18 @@
+[project]
+name = "f0rge-airflow"
+version = "0.1.0"
+description = "Shared Airflow 3 control plane (DAGs + compose). Runtime is the official image."
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff==0.16.1",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
