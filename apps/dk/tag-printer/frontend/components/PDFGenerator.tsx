@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button, Card, CardContent } from '@f0rge/ui';
 import { getApiBase } from '@/lib/api';
 
 interface TagConfig {
@@ -59,7 +60,6 @@ export default function PDFGenerator({
         }
       );
 
-      // Create download link
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -82,24 +82,28 @@ export default function PDFGenerator({
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <button
-        onClick={handleGenerate}
-        disabled={isGenerating || selectedProducts.length === 0}
-        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-      >
-        {isGenerating ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Generating PDF…
-          </>
-        ) : (
-          <>
-            <Download className="h-4 w-4" />
-            Generate &amp; Download PDF
-          </>
-        )}
-      </button>
-    </div>
+    <Card className="p-0">
+      <CardContent className="pt-4">
+        <Button
+          type="button"
+          className="w-full"
+          size="lg"
+          onClick={handleGenerate}
+          disabled={isGenerating || selectedProducts.length === 0}
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="animate-spin" />
+              Generating PDF…
+            </>
+          ) : (
+            <>
+              <Download />
+              Generate &amp; Download PDF
+            </>
+          )}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

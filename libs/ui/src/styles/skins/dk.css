@@ -1,0 +1,78 @@
+:root {
+  --dk-ink: #1a2e22;
+  --dk-paper: #f5f3eb;
+  --dk-green: #1f6b3f;
+  --dk-gold: #b8942e;
+
+  --background: var(--dk-paper);
+  --foreground: var(--dk-ink);
+  --card: #fdfcf8;
+  --card-foreground: var(--dk-ink);
+  --popover: #fdfcf8;
+  --popover-foreground: var(--dk-ink);
+  --primary: var(--dk-green);
+  --primary-foreground: #fdfcf8;
+  --secondary: #e8e4d8;
+  --secondary-foreground: var(--dk-ink);
+  --muted: #e8e4d8;
+  --muted-foreground: #5a6358;
+  --accent: #ebe6d4;
+  --accent-foreground: var(--dk-ink);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #d4cfc0;
+  --input: #d4cfc0;
+  --ring: var(--dk-gold);
+  --chart-1: var(--dk-green);
+  --chart-2: var(--dk-gold);
+  --chart-3: #5a6358;
+  --chart-4: #2d8a52;
+  --chart-5: #e8e4d8;
+  --radius: 0.625rem;
+  --sidebar: #fdfcf8;
+  --sidebar-foreground: var(--dk-ink);
+  --sidebar-primary: var(--dk-green);
+  --sidebar-primary-foreground: #fdfcf8;
+  --sidebar-accent: #e8e4d8;
+  --sidebar-accent-foreground: var(--dk-ink);
+  --sidebar-border: #d4cfc0;
+  --sidebar-ring: var(--dk-gold);
+}
+
+.dark {
+  --dk-ink: #e8ebe4;
+  --dk-paper: #141a16;
+  --dk-green: #3d9e62;
+  --dk-gold: #d4b04a;
+
+  --background: var(--dk-paper);
+  --foreground: var(--dk-ink);
+  --card: #1c2420;
+  --card-foreground: var(--dk-ink);
+  --popover: #1c2420;
+  --popover-foreground: var(--dk-ink);
+  --primary: var(--dk-green);
+  --primary-foreground: #141a16;
+  --secondary: #252e28;
+  --secondary-foreground: var(--dk-ink);
+  --muted: #252e28;
+  --muted-foreground: #9aa89e;
+  --accent: #2a332c;
+  --accent-foreground: var(--dk-ink);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.984 0.003 140 / 10%);
+  --input: oklch(0.984 0.003 140 / 15%);
+  --ring: var(--dk-gold);
+  --chart-1: var(--dk-green);
+  --chart-2: var(--dk-gold);
+  --chart-3: #9aa89e;
+  --chart-4: #5cb87a;
+  --chart-5: #252e28;
+  --sidebar: #1c2420;
+  --sidebar-foreground: var(--dk-ink);
+  --sidebar-primary: var(--dk-green);
+  --sidebar-primary-foreground: #141a16;
+  --sidebar-accent: #252e28;
+  --sidebar-accent-foreground: var(--dk-ink);
+  --sidebar-border: oklch(0.984 0.003 140 / 10%);
+  --sidebar-ring: var(--dk-gold);
+}

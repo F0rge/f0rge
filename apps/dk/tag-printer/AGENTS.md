@@ -48,7 +48,7 @@ Memory: `~/.cursor/agent-memory/devops/project_dk_tag_printer_deploy.md`
 
 ## Frontend kit
 
-- Consume `@f0rge/ui` for primitives and chrome (once wired in this app)
+- Consume `@f0rge/ui` for primitives and chrome; labeled fields from `@f0rge/ui/forms`
 - No local `cn` helper or copied `Button` — import from the kit
 - **Tailwind 4** — `globals.css` `@source` must scan `libs/ui`
 - Frontend Dockerfile must `COPY libs/ui` (same pattern as marrow) — build context is repo root

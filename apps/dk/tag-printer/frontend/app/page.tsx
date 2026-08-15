@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { FileText, Moon, Sun } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
+import { Button, Card, CardContent } from '@f0rge/ui';
 import { getApiBase } from '@/lib/api';
 import CSVUploader from '@/components/CSVUploader';
 import ConfigPanel from '@/components/ConfigPanel';
@@ -24,28 +26,19 @@ interface TagConfig {
 }
 
 function ThemeToggle() {
-  const [dark, setDark] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const isDark = localStorage.getItem('theme') === 'dark';
-    document.documentElement.classList.toggle('dark', isDark);
-    return isDark;
-  });
-
-  const toggle = () => {
-    const next = !dark;
-    document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('theme', next ? 'dark' : 'light');
-    setDark(next);
-  };
+  const { resolvedTheme, setTheme } = useTheme();
+  const dark = resolvedTheme === 'dark';
 
   return (
-    <button
-      onClick={toggle}
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-sm"
+      onClick={() => setTheme(dark ? 'light' : 'dark')}
       aria-label="Toggle theme"
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-input bg-transparent transition-colors hover:bg-accent"
     >
-      {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-    </button>
+      {dark ? <Sun /> : <Moon />}
+    </Button>
   );
 }
 
@@ -121,13 +114,15 @@ export default function Home() {
           <CSVUploader onFileUpload={handleFileUpload} isLoading={isUploading} />
 
           {csvData.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border p-10 text-center">
-              <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">No file yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Upload a DEAR Inventory CSV export to pick products and generate tags.
-              </p>
-            </div>
+            <Card className="border-dashed p-0">
+              <CardContent className="py-10 text-center">
+                <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+                <p className="text-sm font-medium">No file yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Upload a DEAR Inventory CSV export to pick products and generate tags.
+                </p>
+              </CardContent>
+            </Card>
           ) : (
             <>
               <ProductSelector

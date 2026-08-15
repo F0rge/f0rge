@@ -5,11 +5,13 @@ import { UiProvider } from "../src/provider"
 import "../src/styles/storybook.css"
 import "../src/styles/extras.css"
 import defaultSkin from "../src/styles/skins/default.css?raw"
+import dkSkin from "../src/styles/skins/dk.css?raw"
 import marrowSkin from "../src/styles/skins/marrow.css?raw"
 
 const SKINS: Record<string, string> = {
   default: defaultSkin,
   marrow: marrowSkin,
+  dk: dkSkin,
 }
 
 function SkinDecorator({
@@ -53,6 +55,7 @@ const preview: Preview = {
         items: [
           { value: "default", title: "Default" },
           { value: "marrow", title: "Marrow" },
+          { value: "dk", title: "DasKasas" },
         ],
         dynamicTitle: true,
       },

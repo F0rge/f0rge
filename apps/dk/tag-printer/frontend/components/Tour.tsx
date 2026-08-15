@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
 import { GraduationCap } from 'lucide-react';
+import { Button } from '@f0rge/ui';
 
 function startTour() {
   const tour = driver({
@@ -12,9 +13,6 @@ function startTour() {
     nextBtnText: 'Next',
     prevBtnText: 'Back',
     doneBtnText: 'Done',
-    // Overriding onDestroyStarted means we must call destroy() ourselves (driver.js API).
-    // This is the reliable "tour finished or closed" hook; onDestroyed does not fire on
-    // last-step Done in v1.6, so persist the "seen" flag here.
     onDestroyStarted: () => {
       localStorage.setItem('dk-tour-v1', '1');
       tour.destroy();
@@ -88,13 +86,15 @@ export default function Tour() {
   }, []);
 
   return (
-    <button
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-sm"
       onClick={startTour}
       aria-label="Take a tour"
       title="Take a tour"
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-input bg-transparent transition-colors hover:bg-accent"
     >
-      <GraduationCap className="h-4 w-4" />
-    </button>
+      <GraduationCap />
+    </Button>
   );
 }
