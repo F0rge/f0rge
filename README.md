@@ -26,24 +26,27 @@ Agent workflow, environments, conventions, and sub-agent delegation rules live i
 
 ## Nx workspace
 
-Nine application/library projects: `marrow-backend`, `marrow-frontend`, `dk-tag-printer-backend`, `dk-tag-printer-frontend`, `f0rge-core`, `f0rge-db`, `f0rge-storage`, `f0rge-testing`, `f0rge-ui`. Frontend targets (`build`/`dev`/`start`) are inferred by the `@nx/next` plugin; backend targets (`lock`/`sync`) by `@nxlv/python`. `defaultBase` is `develop`.
+Ten projects: `marrow-backend`, `marrow-frontend`, `marrow-ios`, `dk-tag-printer-backend`, `dk-tag-printer-frontend`, `f0rge-core`, `f0rge-db`, `f0rge-storage`, `f0rge-testing`, `f0rge-ui`. Inferred targets: Next (`build`/`dev`/`start`), ESLint (`lint`), Vitest (`test`), Playwright (`e2e`), `@nxlv/python` (`lock`/`sync` + import graph). Task cache via `targetDefaults` in `nx.json`. `defaultBase` is `develop`. Conventions: [`.cursor/rules/nx.mdc`](.cursor/rules/nx.mdc).
 
 ```bash
-npx nx graph                                   # interactive dependency graph (opens a browser)
-npx nx graph --file=graph.html                 # same, written to a static file instead
+npx nx graph                                   # interactive dependency graph
 npx nx show projects                           # list projects
 npx nx run marrow-backend:lint                 # ruff check
 npx nx run marrow-backend:test                 # pytest
-npx nx run marrow-frontend:lint                # eslint
+npx nx run marrow-frontend:lint                # eslint (inferred)
 npx nx run marrow-frontend:typecheck           # tsc --noEmit
 npx nx run marrow-frontend:build               # production build
-npx nx run-many -t lint test typecheck         # everything, across both projects
-npx nx affected -t lint test typecheck         # only what changed vs. develop
+npx nx run marrow-frontend:e2e                 # Playwright
+npx nx run marrow-frontend:codegen:check       # OpenAPI drift (depends on backend:openapi)
+npx nx run marrow-ios:codegen                  # Swift client (local Xcode)
+npx nx affected -t lint typecheck build        # only what changed vs. develop
+npx nx run-many -t lint test typecheck         # everything
+npx nx sync:check                              # Python pkg-sync
 npx nx reset                                   # clear the Nx cache
 ```
 
 ## CI/CD
 
-- **`CI`** ([`ci.yml`](.github/workflows/ci.yml)) — `detect` → `backend` / `frontend` (Nx affected) → `ci` gate. Required checks: `ci` on `develop`; `ci` + `playwright smoke` on `main` (see [`.github/branch-rules.md`](.github/branch-rules.md)). Detection is tag-driven: `backend` for `platform:py`, `frontend` for `platform:ts`. Every new project must carry the matching `platform:` tag in its `project.json` or CI will silently ignore it.
-- **`Deploy`** ([`deploy.yml`](.github/workflows/deploy.yml)) — separate workflow after successful CI on push to `develop`/`main`. Orchestrator ([`deploy-reusable.yml`](.github/workflows/deploy-reusable.yml)): manifest + Nx affected → **Fly** (marrow) or **Coolify webhook** (dk tag printer on Pi). Marrow: `deploy api` → `deploy mcp` (serial) → `deploy frontend` → smoke. dk: prod-only on `main` via Coolify (skipped when deployments disabled).
-- **Manual deploy**: `gh workflow run Deploy --ref develop -f environment=develop -f component=mcp` (`all` / `api` / `mcp` / `frontend` — marrow Fly only).
+- **`CI`** ([`ci.yml`](.github/workflows/ci.yml)) — parallel `backend` / `frontend` jobs each run `nx affected` with `tag:platform:py|ts` (no detect job) → `ci` gate. Required checks: `ci` on `develop`; `ci` + `playwright smoke` on `main` (see [`.github/branch-rules.md`](.github/branch-rules.md)). Every new project must carry a `platform:` tag or CI ignores it (guard: [`.github/scripts/check-nx-projects.sh`](.github/scripts/check-nx-projects.sh)).
+- **`Deploy`** ([`deploy.yml`](.github/workflows/deploy.yml)) — separate workflow after successful CI on push to `develop`/`main`. Orchestrator ([`deploy-reusable.yml`](.github/workflows/deploy-reusable.yml)): manifest + Nx affected → Railway smoke (marrow) or Coolify webhook (dk). Marrow: Railway autodeploy + Actions smoke. dk: prod-only on `main` via Coolify.
+- **Manual deploy**: `gh workflow run Deploy --ref develop -f environment=develop -f component=mcp` (`all` / `api` / `mcp` / `frontend` — marrow only).

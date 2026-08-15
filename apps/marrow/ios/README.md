@@ -132,9 +132,14 @@ distribute a dev-API build via TestFlight, flip `marrow-dev` to
 
 ## 5. Regenerate the API client (after a backend spec change)
 
-The Swift client is checked in and generated from the backend OpenAPI contract:
+The Swift client is checked in and generated from the backend OpenAPI contract.
+Needs local Xcode (`DEVELOPER_DIR`); not run in Linux CI.
 
 ```bash
+# Preferred (Nx; marrow-ios is on the project graph):
+npx nx run marrow-ios:codegen
+
+# Or directly:
 cd apps/marrow/ios
 ./scripts/generate-client.sh            # reads ../backend/openapi.json
 # or: ./scripts/generate-client.sh path/to/openapi.json
