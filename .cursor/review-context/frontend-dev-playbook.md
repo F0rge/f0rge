@@ -35,7 +35,7 @@ NOT in scope for this playbook: `.github/`, `apps/marrow/backend/`, `apps/dk/tag
 - **New shadcn primitive under `apps/**/components/ui`** — add to `libs/ui` + Storybook instead.
 - **`CompactStepper` or other stepper fork** instead of `@f0rge/ui` `Stepper`.
 - **New `libs/ui` primitive without Storybook story** — when `libs/ui/.storybook` exists.
-- **Brand tokens (`--marrow-*`, `--dk-*`) in `libs/ui` components** — brand vars belong in app CSS only.
+- **Brand tokens (`--marrow-*`, `--dk-*`) in `libs/ui` TSX** — brand vars belong in `libs/ui/src/styles/skins/` only.
 
 **1. dnd-kit on 2D grid must use `rectSortingStrategy`, NOT `verticalListSortingStrategy`.**
 `verticalListSortingStrategy` only works on single-column lists. The check-in card grid is CSS `grid-cols-12` at desktop. Using the wrong strategy causes cards at the same vertical position to swap incorrectly.
@@ -202,7 +202,7 @@ Use these and only these. Block new primitives without explicit approval.
 - Single Responsibility — one thing per component
 - Co-locate route files: `page.tsx`, `loading.tsx`, `error.tsx` in the same folder
 - Server Components by default; `'use client'` only for interactivity, browser APIs, or hooks
-- Use shadcn/ui primitives before building custom; available in `components/ui/`: badge, button, card, dialog, input, label, radio-group, select, tabs, textarea, stepper, tooltip
+- Chrome from `@f0rge/ui` (Button, Card, Dialog, Accordion, Stepper, …). Labeled fields from `@f0rge/ui/forms`. Never copy primitives into `apps/**/components/ui`
 - Props interface must be an explicit TypeScript interface (not inline type literal)
 - `RowItem` primitive at `components/customize/row-item.tsx` — do not duplicate row anatomy elsewhere
 
