@@ -11,6 +11,6 @@
       }
     }
   },
-  "//": "No lint target: eslint-config-next doesn't fit a non-Next lib. No build target: source-consumed via transpilePackages. Revisit both when app #2 lands.",
+  "//": "lint inferred by @nx/eslint from eslint.config.mjs. No build: source-consumed via transpilePackages.",
   "tags": ["platform:ts", "scope:shared"]
 }

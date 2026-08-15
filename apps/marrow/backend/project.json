@@ -34,6 +34,17 @@
     "sync": {
       "executor": "@nxlv/python:sync",
       "options": {}
+    },
+    "openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/marrow/backend",
+        "command": "uv run python scripts/export_openapi.py"
+      },
+      "outputs": [
+        "{projectRoot}/openapi.json",
+        "{workspaceRoot}/apps/marrow/frontend/openapi.json"
+      ]
     }
   },
   "tags": ["platform:py", "scope:marrow"]

@@ -10,7 +10,7 @@ Apps import from `libs/` — never the reverse. Block on:
 - New projects missing `platform:` / `scope:` tags in `project.json`
 - Creating a root `uv.lock` (breaks per-project lock isolation)
 
-See `AGENTS.md` § Shared libraries for the canonical inventory.
+See `AGENTS.md` § Shared libraries for the canonical inventory. **Nx gates** (affected CI, OpenAPI `codegen:check`, Playwright via Nx, project registration): `.cursor/rules/nx.mdc` and `.cursor/BUGBOT.md` — do not duplicate the checklist here.
 
 ## Plans must delegate to sub-agents
 

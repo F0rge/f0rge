@@ -1,7 +1,8 @@
 name: CI
 
-# PR + push + workflow_dispatch on develop/main: detect → backend/frontend → ci gate.
-# Deploy is a separate workflow (deploy.yml) that runs after this succeeds on push.
+# PR + push + workflow_dispatch on develop/main: parallel backend/frontend via
+# `nx affected` (no detect job) → `ci` gate. Deploy is a separate workflow
+# (deploy.yml) after this succeeds on push.
 # The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
 # Tests (pytest / frontend unit / e2e-smoke) run on main only; develop skips them.
 
@@ -21,18 +22,100 @@ env:
   TARGET_BRANCH: ${{ github.base_ref || github.ref_name }}
 
 jobs:
-  detect:
-    name: detect
+  backend:
+    name: backend
     concurrency:
-      group: ci-${{ github.ref }}
+      group: ci-backend-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      backend: ${{ steps.affected.outputs.backend }}
-      frontend: ${{ steps.affected.outputs.frontend }}
-      py_projects: ${{ steps.affected.outputs.py_projects }}
-      ts_projects: ${{ steps.affected.outputs.ts_projects }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: ${{ env.TARGET_BRANCH }}
+
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          install-ruff: "true"
+
+      - uses: ./.github/actions/setup-node-workspace
+
+      - name: Assert no root uv.lock
+        run: bash .github/scripts/assert-no-root-uv-lock.sh
+
+      - name: Nx project registration guard
+        run: bash .github/scripts/check-nx-projects.sh
+
+      - name: Python lib boundary guard
+        run: bash .github/scripts/check-lib-boundary.sh
+
+      - name: Install affected Python deps
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -o pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            PROJECTS=$(npx nx show projects --projects tag:platform:py --json | jq -r '.[]')
+          else
+            PROJECTS=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r '.[]')
+          fi
+          for p in $PROJECTS; do
+            ROOT=$(npx nx show project "$p" --json | jq -r '.root')
+            uv sync --frozen --project "$ROOT"
+          done
+
+      - name: uv pip audit (high severity)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -o pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            PROJECTS=$(npx nx show projects --projects tag:platform:py --json | jq -r 'join(" ")')
+          else
+            PROJECTS=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(" ")')
+          fi
+          case " $PROJECTS " in
+            *" marrow-backend "*) ;;
+            *) echo "marrow-backend not affected — skip audit"; exit 0 ;;
+          esac
+          cd apps/marrow/backend
+          uv export --frozen --no-dev --no-hashes --no-editable -o /tmp/marrow-req.txt
+          python3 -m pip install --user pip-audit
+          python3 -m pip_audit -r /tmp/marrow-req.txt
+
+      # Pytest is expensive (testcontainers). Run it on main/prod only;
+      # develop keeps lint + format-check so PRs stay cheap.
+      # workflow_dispatch uses run-many (full matrix).
+      - name: nx affected (backend)
+        env:
+          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$TARGET_BRANCH" = "main" ]; then
+              npx nx run-many -t=lint,format-check,test --projects=tag:platform:py
+            else
+              npx nx run-many -t=lint,format-check --projects=tag:platform:py
+            fi
+          else
+            if [ "$TARGET_BRANCH" = "main" ]; then
+              npx nx affected -t=lint,format-check,test --exclude='*,!tag:platform:py' --base="${NX_BASE}" --head="${NX_HEAD}"
+            else
+              npx nx affected -t=lint,format-check --exclude='*,!tag:platform:py' --base="${NX_BASE}" --head="${NX_HEAD}"
+            fi
+          fi
+
+  frontend:
+    name: frontend
+    concurrency:
+      group: ci-frontend-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,107 +127,7 @@ jobs:
 
       - uses: ./.github/actions/setup-node-workspace
 
-      - name: Resolve affected projects
-        id: affected
-        run: |
-          set -o pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PY=$(npx nx show projects --projects tag:platform:py --json | jq -r 'join(",")')
-            TS=$(npx nx show projects --projects tag:platform:ts --json | jq -r 'join(",")')
-          else
-            PY=$(npx nx show projects --affected --projects tag:platform:py --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
-            TS=$(npx nx show projects --affected --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(",")')
-          fi
-          backend=false
-          frontend=false
-          [ -n "$PY" ] && backend=true
-          [ -n "$TS" ] && frontend=true
-          echo "backend=$backend" >> "$GITHUB_OUTPUT"
-          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
-          echo "py_projects=$PY" >> "$GITHUB_OUTPUT"
-          echo "ts_projects=$TS" >> "$GITHUB_OUTPUT"
-          echo "affected py: $PY"
-          echo "affected ts: $TS"
-
-  backend:
-    name: backend
-    needs: detect
-    if: needs.detect.outputs.backend == 'true'
-    concurrency:
-      group: ci-backend-${{ github.ref }}
-      cancel-in-progress: true
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - uses: ./.github/actions/setup-python-uv
-        with:
-          install-ruff: "true"
-
-      - uses: ./.github/actions/setup-node-workspace
-
-      - name: Install backend deps
-        env:
-          PY_PROJECTS: ${{ needs.detect.outputs.py_projects }}
-        run: |
-          for p in ${PY_PROJECTS//,/ }; do
-            ROOT=$(npx nx show project "$p" --json | jq -r '.root')
-            uv sync --frozen --project "$ROOT"
-          done
-
-      - name: Assert no root uv.lock
-        run: bash .github/scripts/assert-no-root-uv-lock.sh
-
-      - name: Python lib boundary guard
-        run: bash .github/scripts/check-lib-boundary.sh
-
-      - name: uv pip audit (high severity)
-        if: contains(needs.detect.outputs.py_projects, 'marrow-backend')
-        run: |
-          cd apps/marrow/backend
-          uv export --frozen --no-dev --no-hashes --no-editable -o /tmp/marrow-req.txt
-          python3 -m pip install --user pip-audit
-          python3 -m pip_audit -r /tmp/marrow-req.txt
-
-      - name: OpenAPI codegen drift check
-        if: contains(needs.detect.outputs.py_projects, 'marrow-backend')
-        run: |
-          uv sync --frozen --project apps/marrow/backend
-          uv run --project apps/marrow/backend python apps/marrow/backend/scripts/export_openapi.py
-          npm run codegen:api -w frontend
-          git diff --exit-code apps/marrow/backend/openapi.json apps/marrow/frontend/openapi.json apps/marrow/frontend/lib/api/generated/schema.ts
-
-      # Pytest is expensive (testcontainers). Run it on main/prod only;
-      # develop keeps lint + format-check so PRs stay cheap.
-      - name: nx run (backend)
-        env:
-          PY_PROJECTS: ${{ needs.detect.outputs.py_projects }}
-          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
-        run: |
-          if [ "$TARGET_BRANCH" = "main" ]; then
-            npx nx run-many -t lint format-check test --projects "$PY_PROJECTS"
-          else
-            npx nx run-many -t lint format-check --projects "$PY_PROJECTS"
-          fi
-
-  frontend:
-    name: frontend
-    needs: detect
-    if: needs.detect.outputs.frontend == 'true'
-    concurrency:
-      group: ci-frontend-${{ github.ref }}
-      cancel-in-progress: true
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/setup-node-workspace
 
       - name: npm audit (high severity, production deps)
         run: npm audit --omit=dev --audit-level=high
@@ -153,7 +136,8 @@ jobs:
         run: |
           ! grep -rn "from ['\"].*apps/" libs/ --include='*.ts' --include='*.tsx'
 
-      - uses: ./.github/actions/setup-python-uv
+      - name: Nx project registration guard
+        run: bash .github/scripts/check-nx-projects.sh
 
       # main only: prod-shaped build (was the sole difference between ci-main and ci-develop).
       - name: Prod-shaped build env
@@ -162,21 +146,51 @@ jobs:
           echo "API_URL=http://backend:8000" >> "$GITHUB_ENV"
           echo "NODE_ENV=production" >> "$GITHUB_ENV"
 
-      # Unit tests only on main/prod; develop keeps lint/typecheck/build.
-      - name: nx run (frontend)
+      # Install marrow-backend when OpenAPI codegen:check is in the affected set
+      # (frontend depends on marrow-backend via implicitDependencies).
+      - name: Install marrow-backend for OpenAPI (if affected)
         env:
-          TS_PROJECTS: ${{ needs.detect.outputs.ts_projects }}
-          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "$TARGET_BRANCH" = "main" ]; then
-            npx nx run-many -t lint typecheck test build --projects "$TS_PROJECTS"
+          set -o pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            NEED=true
           else
-            npx nx run-many -t lint typecheck build --projects "$TS_PROJECTS"
+            PROJECTS=$(npx nx show projects --affected --projects tag:platform:ts --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(" ")')
+            case " $PROJECTS " in
+              *" marrow-frontend "*) NEED=true ;;
+              *) NEED=false ;;
+            esac
+          fi
+          if [ "$NEED" = "true" ]; then
+            uv sync --frozen --project apps/marrow/backend
+          else
+            echo "marrow-frontend not affected — skip backend sync for codegen"
+          fi
+
+      # Unit tests only on main/prod; develop keeps lint/typecheck/build + codegen:check.
+      - name: nx affected (frontend)
+        env:
+          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$TARGET_BRANCH" = "main" ]; then
+              npx nx run-many -t=lint,typecheck,test,build,codegen:check --projects=tag:platform:ts
+            else
+              npx nx run-many -t=lint,typecheck,build,codegen:check --projects=tag:platform:ts
+            fi
+          else
+            if [ "$TARGET_BRANCH" = "main" ]; then
+              npx nx affected -t=lint,typecheck,test,build,codegen:check --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
+            else
+              npx nx affected -t=lint,typecheck,build,codegen:check --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
+            fi
           fi
 
   ci:
     name: ci
-    needs: [detect, backend, frontend]
+    needs: [backend, frontend]
     if: always()
     concurrency:
       group: ci-${{ github.ref }}
@@ -186,22 +200,14 @@ jobs:
     steps:
       - name: Aggregate gate
         env:
-          DETECT_RESULT: ${{ needs.detect.result }}
-          BACKEND_FLAG: ${{ needs.detect.outputs.backend }}
-          FRONTEND_FLAG: ${{ needs.detect.outputs.frontend }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
         run: |
-          if [ "$DETECT_RESULT" != "success" ]; then
-            echo "detect job required but result was: $DETECT_RESULT"
+          if [ "$BACKEND_RESULT" != "success" ]; then
+            echo "backend job required but result was: $BACKEND_RESULT"
             exit 1
           fi
-          gate() {
-            local flag="$1" result="$2" name="$3"
-            if [ "$flag" = "true" ] && [ "$result" != "success" ]; then
-              echo "$name job required but result was: $result"
-              exit 1
-            fi
-          }
-          gate "$BACKEND_FLAG" "$BACKEND_RESULT" "backend"
-          gate "$FRONTEND_FLAG" "$FRONTEND_RESULT" "frontend"
+          if [ "$FRONTEND_RESULT" != "success" ]; then
+            echo "frontend job required but result was: $FRONTEND_RESULT"
+            exit 1
+          fi

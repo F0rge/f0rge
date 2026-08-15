@@ -4,13 +4,6 @@
   "projectType": "application",
   "sourceRoot": "apps/dk/tag-printer/frontend",
   "targets": {
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "apps/dk/tag-printer/frontend",
-        "command": "npm run lint"
-      }
-    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {

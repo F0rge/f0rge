@@ -48,10 +48,12 @@ Genuinely generic code lives here. Apps import from libs — never the reverse.
 
 Every new lib or app project must have:
 
-1. `project.json` with correct tags:
+1. `project.json` with correct tags (see `.cursor/rules/nx.mdc`):
    - Python lib: `["platform:py", "scope:shared"]`
    - TS lib: `["platform:ts", "scope:shared"]`
    - App backend: `["platform:py", "scope:<app>"]`
    - App frontend: `["platform:ts", "scope:<app>"]`
-2. Nx targets: `lint`, `test` (and `format-check` for Python)
-3. Without `platform:` tags, CI silently ignores the project
+   - Exception: `marrow-ios` — `["scope:marrow"]` only (no `platform:`)
+2. Nx targets: inferred lint/test preferred; Python needs `lint`, `test`, `format-check`
+3. Without `platform:` tags, CI silently ignores the project (guard: `.github/scripts/check-nx-projects.sh`)
+4. TS projects import `eslint/nx-boundaries.mjs` for `@nx/enforce-module-boundaries`
