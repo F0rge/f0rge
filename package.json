@@ -20,7 +20,7 @@
   "devDependencies": {
     "@nx/eslint": "~22.7.0",
     "@nx/eslint-plugin": "~22.7.0",
-    "@nx/next": "~22.7.0",
+    "@nx/next": "~23.1.1",
     "@nx/playwright": "~22.7.0",
     "@nx/vitest": "~22.7.0",
     "@nxlv/python": "~22.2.1",
