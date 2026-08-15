@@ -4,9 +4,11 @@ FROM apache/airflow:3.1.7
 
 USER root
 COPY scripts/ /opt/airflow/scripts/
+RUN chmod +x /opt/airflow/scripts/*.sh || true
+
+USER airflow
 COPY requirements.txt /requirements.txt
-RUN chmod +x /opt/airflow/scripts/*.sh || true \
- && pip install --no-cache-dir \
+# Install as airflow user — 3.1.x image refuses pip as root.
+RUN pip install --no-cache-dir \
       "apache-airflow==${AIRFLOW_VERSION}" \
       -r /requirements.txt
-USER airflow
