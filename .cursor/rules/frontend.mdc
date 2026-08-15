@@ -12,7 +12,7 @@ Kit/import/token rules: `.cursor/rules/ui-kit.mdc`.
 
 - **Next.js 16** (App Router, not Pages Router)
 - **React 19**, **TypeScript** strict mode
-- **shadcn/ui** + **Tailwind CSS v4**
+- **@f0rge/ui** + **Tailwind CSS v4** (primitives and forms; see `ui-kit.mdc`)
 - Backend API at `http://localhost:8000/api/v1` via `/api/*` rewrite
 - Auth: `ht_session` cookie (email + password)
 

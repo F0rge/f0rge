@@ -8,7 +8,7 @@ alwaysApply: false
 
 ## Four layers (never skip or fork)
 
-1. **Tokens** — app `:root` skins (`app/globals.css`); brand vars (`--marrow-*`, `--dk-*`) live here only.
+1. **Tokens** — semantic map in `libs/ui/src/styles/tokens.css`; brand skins in `libs/ui/src/styles/skins/*.css`. Apps `@import` a skin from `globals.css`. Brand vars (`--marrow-*`, `--dk-*`) live in skin CSS only — never in TSX.
 2. **Composition** — app screens and domain widgets (Bristol grid, meal chips, symptom picker).
 3. **Wrappers** — `libs/ui/src/components/ui/*`; engines stay inside this package.
 4. **Documented overrides** — `libs/ui/src/styles/extras.css` only; never edit `node_modules` or fork engine internals.
@@ -18,7 +18,7 @@ alwaysApply: false
 Apps import **only**:
 
 - `@f0rge/ui` — primitives, `cn`, date formatters, hooks
-- `@f0rge/ui/forms` — labeled data-entry (Mantine wrappers) once that export exists
+- `@f0rge/ui/forms` — labeled data-entry (Mantine wrappers)
 - `@f0rge/ui/api` — marrow API client only; dk keeps its own axios client
 
 **Never** in `apps/**`:
@@ -40,8 +40,7 @@ Apps import **only**:
 
 ## Forms
 
-- Labeled data-entry → `@f0rge/ui/forms` (Mantine wrappers) once exported.
-- Until then → `@f0rge/ui` `Input` / `Select`.
+- Labeled data-entry → `@f0rge/ui/forms` (Mantine wrappers).
 - Apps never import Mantine directly.
 
 ## Submit / chrome
