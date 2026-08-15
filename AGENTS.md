@@ -107,6 +107,10 @@ Canonical reference for what lives in `libs/` and the non-duplication mandate. S
 - API prefix: /api/v1
 - Auth cookie name: ht_session
 
+## Nx conventions
+
+Always-on agent policy: [`.cursor/rules/nx.mdc`](.cursor/rules/nx.mdc). Bugbot / Agent Review checklist: [`.cursor/BUGBOT.md`](.cursor/BUGBOT.md). New apps/libs need `project.json` + `platform:` tags; CI uses `nx affected` (no custom project-list detect job); OpenAPI via `marrow-frontend:codegen:check`; Playwright via `nx run …:e2e`.
+
 ## Project rules
 
 Scoped rules in `.cursor/rules/` (auto-applied by glob):
@@ -114,6 +118,7 @@ Scoped rules in `.cursor/rules/` (auto-applied by glob):
 | Rule | Scope |
 |------|-------|
 | `orchestration.mdc` | Always — planning must delegate to sub-agents |
+| `nx.mdc` | Always — Nx registration, cache, affected CI, boundaries |
 | `shared-libs.mdc` | `libs/**` — shared library conventions |
 | `backend.mdc` | `apps/marrow/backend/**/*.py`, migrations |
 | `frontend.mdc` | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
@@ -137,8 +142,9 @@ End-to-end workflow (prompt or GitHub issue → develop → dev smoke → main P
 
 ## PR review context
 
-Review playbooks live in `.cursor/review-context/`. **Nothing loads these automatically** — no workflow reads them and Bugbot has no `BUGBOT.md` pointing at them. When reviewing a PR, read `_shared/*.md` plus the playbook matching the diff's area (`fastapi-backend`, `frontend-dev`, `devops`, `qa-engineer`).
+Review playbooks live in `.cursor/review-context/`. **Nothing loads these automatically** — no workflow reads them. When reviewing a PR, read `_shared/*.md` plus the playbook matching the diff's area (`fastapi-backend`, `frontend-dev`, `devops`, `qa-engineer`).
 
+**Bugbot / Agent Review:** [`.cursor/BUGBOT.md`](.cursor/BUGBOT.md) is auto-loaded by Bugbot (project `.mdc` rules are not). Keep Nx gates there; point playbooks at `nx.mdc` / `BUGBOT.md` instead of duplicating checklists.
 ## Agent memory
 
 **Canonical:** `~/.cursor/agent-memory/<agent>/` (global, cross-project).

@@ -14,12 +14,17 @@
     "react-dom": "19.2.8",
     "eslint-plugin-react-hooks": "7.0.1",
     "sharp": "0.35.3",
-    "fast-uri": "3.1.5"
+    "fast-uri": "3.1.5",
+    "nanoid": "3.3.18"
   },
   "devDependencies": {
-    "@playwright/test": "^1.52.0",
+    "@nx/eslint": "~22.7.0",
+    "@nx/eslint-plugin": "~22.7.0",
     "@nx/next": "~22.7.0",
+    "@nx/playwright": "~22.7.0",
+    "@nx/vitest": "~22.7.0",
     "@nxlv/python": "~22.2.1",
+    "@playwright/test": "^1.52.0",
     "@types/react": "^19",
     "nx": "~22.7.0",
     "typescript": "^5"

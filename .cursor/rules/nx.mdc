@@ -1,0 +1,43 @@
+---
+description: Nx monorepo conventions — project registration, cache, affected CI, boundaries, OpenAPI, Playwright.
+alwaysApply: true
+---
+
+# Nx workspace (f0rge)
+
+Canonical map: `nx.json` + each app/lib `project.json`. Details live there — do not invent alternate CI wiring.
+
+## Required for every new app/lib
+
+1. `project.json` with tags:
+   - Python: `platform:py` + `scope:shared|marrow|dk|…`
+   - TypeScript: `platform:ts` + matching `scope:`
+   - Exception: `marrow-ios` — `scope:marrow` only (no `platform:` — Linux CI ignores it)
+2. Without `platform:py|ts`, CI silently ignores the project. Guard: `.github/scripts/check-nx-projects.sh`.
+3. Never create a root `uv.lock` (`@nxlv/python` flips to workspace mode).
+
+## Cache + targets
+
+- Cache is on via `targetDefaults` in `nx.json` (`lint`, `format-check`, `typecheck`, `test`, `build`, `codegen:check`). Do not disable without reason.
+- Prefer inferred targets (`@nx/eslint`, `@nx/vitest`, `@nx/playwright`, `@nx/next`) over new `nx:run-commands` copies.
+- Do **not** persist `.nx/cache` across GHA machines. Never add deprecated `@nx/s3-cache` / `@nx/gcs-cache` / `@nx/azure-cache` / `@nx/shared-fs-cache`.
+
+## CI
+
+- Use `npx nx affected -t=lint,format-check --exclude='*,!tag:platform:py'` (or `run-many --projects=tag:platform:py` on `workflow_dispatch`). `affected` does **not** take `--projects` — that flag is forwarded into the task and breaks tsc/ruff.
+- **Do not** reintroduce a custom detect job that builds project lists for `run-many --projects "$LIST"`.
+- Develop omits `test`; main includes it. Keep that split.
+
+## Boundaries + OpenAPI + e2e
+
+- TS imports: `@nx/enforce-module-boundaries` via `eslint/nx-boundaries.mjs` (`scope:shared` / `marrow` / `dk`).
+- Python libs→apps: keep `.github/scripts/check-lib-boundary.sh` (ESLint does not see Python).
+- Marrow OpenAPI: `marrow-frontend` has `implicitDependencies: ["marrow-backend"]` and `codegen:check` (depends on `marrow-backend:openapi`). Do not replace with ad-hoc CI export+diff steps.
+- Playwright: `npx nx run marrow-frontend:e2e` (inferred). e2e-smoke boots the stack, then runs that target.
+
+## Python plugin
+
+- `@nxlv/python` with `inferDependencies: true` and `sync.globalGenerators: ["@nxlv/python:pkg-sync"]`.
+- Keep per-project `uv.lock`. Run `npx nx sync:check` when changing local path deps.
+
+See also `.cursor/BUGBOT.md` (PR review) and `.cursor/rules/shared-libs.mdc`.

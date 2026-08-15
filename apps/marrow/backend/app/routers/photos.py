@@ -69,6 +69,14 @@ async def serve_photo(
     return await service.serve_photo_file(photo_id)
 
 
+@router.get("/photos/{photo_id}/thumb", response_model=None)
+async def serve_photo_thumb(
+    photo_id: int,
+    service: PhotoService = Depends(get_photo_service),
+) -> FileResponse | RedirectResponse:
+    return await service.serve_photo_thumb(photo_id)
+
+
 @router.delete("/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_photo(
     photo_id: int,

@@ -23,8 +23,12 @@ You are the final gate before a PR ships. **Build, test, verify rules, report.**
 
 ```bash
 cd apps/marrow/backend && uv run ruff check . && uv run ruff format --check .
+bash .github/scripts/check-nx-projects.sh
+npx nx affected -t=lint,format-check --exclude='*,!tag:platform:py'
+npx nx affected -t=lint,typecheck,build,codegen:check --exclude='*,!tag:platform:ts'
+# Full matrix (or main/prod):
 npx nx run-many -t lint format-check test --projects tag:platform:py
-npx nx run-many -t lint typecheck build --projects tag:platform:ts
+npx nx run-many -t lint typecheck test build --projects tag:platform:ts
 ```
 
 Report every violation with `file:line`.
@@ -35,14 +39,15 @@ Report every violation with `file:line`.
 
 **Frontend:** TypeScript strict (no `any`), `@f0rge/ui` primitives, loading/error/empty states, mobile-first.
 
-**Shared libs:** lib tests pass; no `libs/**` imports from `apps/`; grep diff for re-implementations of lib-owned helpers (exceptions, CRUD base, API client, shadcn primitives). New projects carry `platform:` tag in `project.json`.
+**Shared libs / Nx:** lib tests pass; no `libs/**` imports from `apps/`; grep diff for re-implementations of lib-owned helpers (exceptions, CRUD base, API client, shadcn primitives). New projects carry `platform:` tag in `project.json`. Follow `.cursor/rules/nx.mdc` (affected CI, OpenAPI `codegen:check`, Playwright via Nx `e2e`).
 
 **Data:** confidence scores on AI output, idempotent ETL, versioned/traceable source data.
 
 ### Phase 3: Test Coverage
 
 ```bash
-npx nx run-many -t test --projects tag:platform:py
+npx nx affected -t=test --exclude='*,!tag:platform:py'
+# or full: npx nx run-many -t test --projects tag:platform:py
 ```
 
 Verify tests exist for new service methods/endpoints; cover edge cases (empty, invalid, auth failures).

@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # This suite only exercises marrow backend + frontend; skip it for everything else.
+  # Gate: skip expensive stack boot when no project with an e2e target is affected.
   detect:
     name: detect
     runs-on: ubuntu-latest
@@ -35,17 +35,15 @@ jobs:
 
       - uses: ./.github/actions/setup-node-workspace
 
-      - name: Resolve affected projects
+      - name: Resolve affected e2e projects
         id: affected
         run: |
           set -o pipefail
-          PROJECTS=$(npx nx show projects --affected --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(" ")')
+          PROJECTS=$(npx nx show projects --affected --withTarget=e2e --base="${NX_BASE}" --head="${NX_HEAD}" --json | jq -r 'join(" ")')
           run=false
-          case " $PROJECTS " in
-            *" marrow-backend "*|*" marrow-frontend "*) run=true ;;
-          esac
+          [ -n "$PROJECTS" ] && run=true
           echo "run=$run" >> "$GITHUB_OUTPUT"
-          echo "affected: $PROJECTS (e2e: $run)"
+          echo "affected e2e projects: $PROJECTS (run: $run)"
 
   playwright-run:
     name: playwright run
@@ -137,9 +135,8 @@ jobs:
           PORT: 3000
           NODE_ENV: production
 
-      - name: Run Playwright smoke
-        working-directory: apps/marrow/frontend
-        run: npx playwright test
+      - name: Run Playwright smoke via Nx
+        run: npx nx run marrow-frontend:e2e
 
   # Always-green context for branch rulesets — even when marrow is unaffected.
   playwright-smoke:

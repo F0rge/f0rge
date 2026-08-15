@@ -3,14 +3,8 @@
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "sourceRoot": "apps/marrow/frontend",
+  "implicitDependencies": ["marrow-backend"],
   "targets": {
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "cwd": "apps/marrow/frontend",
-        "command": "npm run lint"
-      }
-    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
@@ -18,11 +12,12 @@
         "command": "npm run typecheck"
       }
     },
-    "test": {
+    "codegen:check": {
       "executor": "nx:run-commands",
+      "dependsOn": ["marrow-backend:openapi"],
       "options": {
         "cwd": "apps/marrow/frontend",
-        "command": "npm run test"
+        "command": "npm run codegen:api && git diff --exit-code lib/api/generated/schema.ts openapi.json ../backend/openapi.json"
       }
     }
   },
