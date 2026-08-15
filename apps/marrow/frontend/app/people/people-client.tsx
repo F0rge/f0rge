@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -9,7 +9,8 @@ import {
   Users,
   UsersRound,
 } from 'lucide-react'
-import { Button, Card, Input, Label } from '@f0rge/ui'
+import { Button, Card, useDebouncedValue } from '@f0rge/ui'
+import { TextInput, useForm } from '@f0rge/ui/forms'
 import { HubRow } from '@/components/customize/hub-row'
 import { PageHeader } from '@/components/layout/page-header'
 import { PageShell } from '@/components/layout/page-shell'
@@ -18,21 +19,26 @@ import { useConnections, useGroups, useMealTags } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { toast } from 'sonner'
 
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delayMs)
-    return () => window.clearTimeout(timer)
-  }, [value, delayMs])
-  return debounced
-}
-
 function ClaimHandleCard() {
   const account = useAccount()
   const updateAccount = useUpdateAccount()
-  const [handle, setHandle] = useState('')
+  const [handleDraft, setHandleDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const debounced = useDebouncedValue(handle, 400)
+
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: { handle: '' },
+    validate: {
+      handle: (value) => {
+        if (value.length < 3) return 'Handle must be at least 3 characters'
+        if (!/^[a-z0-9_]+$/.test(value)) return 'Use 3–30 characters: a-z, 0-9, _'
+        return null
+      },
+    },
+    onValuesChange: (values) => setHandleDraft(values.handle),
+  })
+
+  const debounced = useDebouncedValue(handleDraft, 400)
   const availability = useHandleAvailable(debounced)
 
   const status = useMemo(() => {
@@ -42,15 +48,17 @@ function ClaimHandleCard() {
     return 'taken'
   }, [availability.data?.available, availability.isLoading, debounced.length])
 
-  const handleSave = async () => {
+  const handleSave = form.onSubmit(async (values) => {
     setError(null)
     try {
-      await updateAccount.mutateAsync({ handle: handle.trim().toLowerCase().replace(/^@/, '') })
+      await updateAccount.mutateAsync({
+        handle: values.handle.trim().toLowerCase().replace(/^@/, ''),
+      })
       toast.success('Handle claimed')
     } catch (err) {
       setError(getErrorDetail(err, 'Could not claim handle'))
     }
-  }
+  })
 
   if (!account.data || account.data.handle) return null
 
@@ -60,22 +68,16 @@ function ClaimHandleCard() {
       <p className="mt-1 text-xs text-muted-foreground">
         People find you by handle. You can change it later in Account.
       </p>
-      <div className="mt-3 space-y-2">
-        <Label htmlFor="claim-handle">Handle</Label>
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-            @
-          </span>
-          <Input
-            id="claim-handle"
-            value={handle}
-            onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/^@/, ''))}
-            className="pl-7"
-            placeholder="your_name"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
+      <form onSubmit={handleSave} className="mt-3 space-y-2">
+        <TextInput
+          key={form.key('handle')}
+          label="Handle"
+          leftSection={<span className="text-sm text-muted-foreground">@</span>}
+          placeholder="your_name"
+          autoComplete="off"
+          spellCheck={false}
+          {...form.getInputProps('handle')}
+        />
         {status === 'available' && (
           <p className="text-xs text-emerald-600">Available</p>
         )}
@@ -84,14 +86,13 @@ function ClaimHandleCard() {
         )}
         {error && <p className="text-xs text-destructive">{error}</p>}
         <Button
-          type="button"
-          onClick={handleSave}
+          type="submit"
           disabled={updateAccount.isPending || status !== 'available'}
           className="w-full sm:w-auto"
         >
           {updateAccount.isPending ? 'Saving...' : 'Claim handle'}
         </Button>
-      </div>
+      </form>
     </Card>
   )
 }

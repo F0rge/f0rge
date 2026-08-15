@@ -1,49 +1,52 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
-import { Button } from '@f0rge/ui'
-import { Input } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
+import { Button, useDebouncedValue } from '@f0rge/ui'
+import { isEmail, PasswordInput, TextInput, useForm } from '@f0rge/ui/forms'
 import { useHandleAvailable } from '@/lib/api/hooks'
 
 interface AuthCredentialsFormProps {
   mode: 'login' | 'signup'
-  email: string
-  password: string
-  handle?: string
-  onEmailChange: (value: string) => void
-  onPasswordChange: (value: string) => void
-  onHandleChange?: (value: string) => void
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+  onSubmit: (values: { email: string; password: string; handle?: string }) => void | Promise<void>
   loading?: boolean
   error?: string | null
 }
 
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delayMs)
-    return () => window.clearTimeout(timer)
-  }, [value, delayMs])
-  return debounced
-}
-
 export function AuthCredentialsForm({
   mode,
-  email,
-  password,
-  handle = '',
-  onEmailChange,
-  onPasswordChange,
-  onHandleChange,
   onSubmit,
   loading = false,
   error = null,
 }: AuthCredentialsFormProps) {
   const isLogin = mode === 'login'
-  const debouncedHandle = useDebouncedValue(handle, 400)
+  const [handleDraft, setHandleDraft] = useState('')
+
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: {
+      email: '',
+      password: '',
+      handle: '',
+    },
+    validate: {
+      email: (value) => (isEmail(value) ? null : 'Enter a valid email'),
+      password: (value) => (value.length >= 8 ? null : 'Password must be at least 8 characters'),
+      handle: (value) => {
+        if (isLogin) return null
+        if (value.length < 3) return 'Handle must be at least 3 characters'
+        if (value.length > 30) return 'Handle must be at most 30 characters'
+        if (!/^[a-z0-9_]+$/.test(value)) return 'Use 3–30 characters: a-z, 0-9, _'
+        return null
+      },
+    },
+    onValuesChange: (values) => {
+      if (!isLogin) setHandleDraft(values.handle)
+    },
+  })
+
+  const debouncedHandle = useDebouncedValue(handleDraft, 400)
   const availability = useHandleAvailable(debouncedHandle)
 
   const handleStatus = useMemo(() => {
@@ -54,72 +57,61 @@ export function AuthCredentialsForm({
     return 'taken'
   }, [availability.data?.available, availability.data?.reason, availability.isLoading, debouncedHandle.length, isLogin])
 
-  return (
-    <form onSubmit={onSubmit} className="flex w-full max-w-sm flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          inputMode="email"
-          required
-          value={email}
-          onChange={(event) => onEmailChange(event.target.value)}
-          disabled={loading}
-          aria-invalid={error ? true : undefined}
-        />
-      </div>
+  const handleSubmit = form.onSubmit(async (values) => {
+    await onSubmit({
+      email: values.email,
+      password: values.password,
+      handle: isLogin ? undefined : values.handle.trim().toLowerCase().replace(/^@/, ''),
+    })
+  })
 
-      {!isLogin && onHandleChange && (
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="handle">Handle</Label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-              @
-            </span>
-            <Input
-              id="handle"
-              value={handle}
-              onChange={(event) =>
-                onHandleChange(event.target.value.toLowerCase().replace(/^@/, ''))
-              }
-              className="pl-7"
-              placeholder="your_name"
-              required
-              minLength={3}
-              maxLength={30}
-              autoComplete="off"
-              spellCheck={false}
-              disabled={loading}
-            />
-          </div>
+  return (
+    <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
+      <TextInput
+        key={form.key('email')}
+        label="Email"
+        type="email"
+        autoComplete="email"
+        inputMode="email"
+        required
+        disabled={loading}
+        error={error ? ' ' : undefined}
+        {...form.getInputProps('email')}
+      />
+
+      {!isLogin && (
+        <div>
+          <TextInput
+            key={form.key('handle')}
+            label="Handle"
+            leftSection={<span className="text-sm text-muted-foreground">@</span>}
+            placeholder="your_name"
+            required
+            autoComplete="off"
+            spellCheck={false}
+            disabled={loading}
+            {...form.getInputProps('handle')}
+          />
           {handleStatus === 'available' && (
-            <p className="text-xs text-emerald-600">Available</p>
+            <p className="mt-1 text-xs text-emerald-600">Available</p>
           )}
           {handleStatus === 'taken' && (
-            <p className="text-xs text-destructive">Already taken</p>
+            <p className="mt-1 text-xs text-destructive">Already taken</p>
           )}
           {handleStatus === 'invalid' && (
-            <p className="text-xs text-destructive">Use 3–30 characters: a-z, 0-9, _</p>
+            <p className="mt-1 text-xs text-destructive">Use 3–30 characters: a-z, 0-9, _</p>
           )}
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="password">Password</Label>
-        <Input
-          id="password"
-          type="password"
-          autoComplete={isLogin ? 'current-password' : 'new-password'}
-          required
-          minLength={8}
-          value={password}
-          onChange={(event) => onPasswordChange(event.target.value)}
-          disabled={loading}
-          aria-invalid={error ? true : undefined}
-        />
-      </div>
+      <PasswordInput
+        key={form.key('password')}
+        label="Password"
+        autoComplete={isLogin ? 'current-password' : 'new-password'}
+        required
+        disabled={loading}
+        {...form.getInputProps('password')}
+      />
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

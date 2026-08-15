@@ -176,15 +176,15 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx run-many -t=lint,typecheck,test,build,codegen:check --projects=tag:platform:ts
+              npx nx run-many -t=lint,typecheck,test,build,codegen:check,storybook-build --projects=tag:platform:ts
             else
-              npx nx run-many -t=lint,typecheck,build,codegen:check --projects=tag:platform:ts
+              npx nx run-many -t=lint,typecheck,build,codegen:check,storybook-build --projects=tag:platform:ts
             fi
           else
             if [ "$TARGET_BRANCH" = "main" ]; then
-              npx nx affected -t=lint,typecheck,test,build,codegen:check --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
+              npx nx affected -t=lint,typecheck,test,build,codegen:check,storybook-build --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
             else
-              npx nx affected -t=lint,typecheck,build,codegen:check --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
+              npx nx affected -t=lint,typecheck,build,codegen:check,storybook-build --exclude='*,!tag:platform:ts' --base="${NX_BASE}" --head="${NX_HEAD}"
             fi
           fi
 

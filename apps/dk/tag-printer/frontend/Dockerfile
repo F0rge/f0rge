@@ -2,12 +2,14 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/dk/tag-printer/frontend/package.json ./apps/dk/tag-printer/frontend/
+COPY libs/ui/package.json ./libs/ui/
 RUN npm ci
 
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
+COPY libs/ui ./libs/ui
 COPY apps/dk/tag-printer/frontend ./apps/dk/tag-printer/frontend
 
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000

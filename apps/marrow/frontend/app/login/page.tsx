@@ -1,26 +1,23 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AuthCredentialsForm } from '@/components/auth/auth-credentials-form'
 import { MarrowWordmark } from '@/components/brand/marrow-wordmark'
 import { useLogin } from '@/lib/api/hooks'
 import { getErrorDetail } from '@f0rge/ui/api'
+import { useState } from 'react'
 
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const login = useLogin()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleSubmit = async (values: { email: string; password: string }) => {
     setError(null)
-
     try {
-      await login.mutateAsync({ email, password })
+      await login.mutateAsync(values)
       const redirect = searchParams.get('redirect') || '/checkin'
       router.replace(redirect)
     } catch (err) {
@@ -31,10 +28,6 @@ function LoginForm() {
   return (
     <AuthCredentialsForm
       mode="login"
-      email={email}
-      password={password}
-      onEmailChange={setEmail}
-      onPasswordChange={setPassword}
       onSubmit={handleSubmit}
       loading={login.isPending}
       error={error}

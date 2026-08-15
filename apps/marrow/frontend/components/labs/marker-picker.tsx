@@ -7,6 +7,7 @@ import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-
 import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 import { useMarkerCatalog, useCreateMarker } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
+import { TextInput } from '@f0rge/ui/forms'
 import type { LabMarkerCatalog } from '@/lib/api/types'
 
 interface MarkerPickerProps {
@@ -76,11 +77,10 @@ export function MarkerPicker({ value, onSelect }: MarkerPickerProps) {
   return (
     <div className="relative">
       <div ref={anchorRef} className="flex gap-1">
-        <input
-          type="text"
+        <TextInput
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value)
+            setQuery(e.currentTarget.value)
             setAdding(true)
           }}
           onFocus={(e) => {
@@ -88,7 +88,7 @@ export function MarkerPicker({ value, onSelect }: MarkerPickerProps) {
             onFocusScroll(e)
           }}
           placeholder="Search or create marker..."
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="flex-1"
         />
         {query && (
           <button

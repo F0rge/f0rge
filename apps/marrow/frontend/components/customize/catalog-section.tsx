@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { cn } from '@f0rge/ui'
+import { TextInput } from '@f0rge/ui/forms'
 import { useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
 
 interface CatalogItem {
@@ -68,18 +69,14 @@ export function CatalogSection({
       </div>
 
       <div className="relative mb-2">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input
+        <TextInput
           type="search"
           value={search}
           onFocus={onFocusScroll}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.currentTarget.value)}
           placeholder={`Search ${title.toLowerCase()}…`}
-          className={cn(
-            'h-8 w-full rounded-md border bg-background pl-8 pr-3 text-sm',
-            'placeholder:text-muted-foreground',
-            'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
-          )}
+          leftSection={<Search className="size-3.5 text-muted-foreground" />}
+          classNames={{ input: 'pl-8' }}
         />
       </div>
 

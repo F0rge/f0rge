@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -11,16 +11,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@f0rge/ui'
-import { Button } from '@f0rge/ui'
-import { Input } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@f0rge/ui'
+import { Button, cn } from '@f0rge/ui'
+import { Checkbox, Select, TextInput, useForm } from '@f0rge/ui/forms'
 import {
   useAddDietaryIngredient,
   useUpdateDietaryIngredient,
@@ -34,7 +26,6 @@ import type {
   IngredientCreatePayload,
   IngredientUpdatePayload,
 } from '@/lib/api/types'
-import { cn } from '@f0rge/ui'
 import { CATEGORY_OPTIONS, FODMAP_AXES, FODMAP_LEVEL_OPTIONS, HISTAMINE_OPTIONS } from '@/lib/ingredients'
 
 const NONE = '__none__'
@@ -51,37 +42,26 @@ const FODMAP_SELECT_OPTIONS: Option[] = [
   ...FODMAP_LEVEL_OPTIONS,
 ]
 
-function FieldSelect({
-  id,
-  value,
-  onChange,
-  options,
-}: {
-  id: string
-  value: string
-  onChange: (v: string) => void
-  options: Option[]
-}) {
-  const label = options.find((o) => o.value === value)?.label ?? ''
-  return (
-    <Select
-      value={value}
-      onValueChange={(v) => {
-        if (v !== null) onChange(v)
-      }}
-    >
-      <SelectTrigger id={id} className="min-h-[44px] w-full">
-        <SelectValue>{label}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
+function initialFodmap(ingredient?: DietaryIngredient | null) {
+  return Object.fromEntries(
+    FODMAP_AXES.map((a) => [a.field, (ingredient?.[a.field] as string | null) ?? NONE]),
+  ) as Record<string, string>
+}
+
+function initialValues(ingredient?: DietaryIngredient | null) {
+  const fodmap = initialFodmap(ingredient)
+  return {
+    name: ingredient?.canonical_name ?? '',
+    category: ingredient?.category ?? NONE,
+    histamine: ingredient?.histamine_score != null ? String(ingredient.histamine_score) : NONE,
+    fodmap_oligos: fodmap.fodmap_oligos,
+    fodmap_fructose: fodmap.fodmap_fructose,
+    fodmap_polyols: fodmap.fodmap_polyols,
+    fodmap_lactose: fodmap.fodmap_lactose,
+    gluten: ingredient?.contains_gluten ?? false,
+    dairy: ingredient?.contains_dairy ?? false,
+    newAlias: '',
+  }
 }
 
 interface IngredientFormDialogProps {
@@ -93,17 +73,22 @@ interface IngredientFormDialogProps {
 export function IngredientFormDialog({ open, onOpenChange, ingredient }: IngredientFormDialogProps) {
   const isEdit = !!ingredient
 
-  const [name, setName] = useState(ingredient?.canonical_name ?? '')
-  const [category, setCategory] = useState(ingredient?.category ?? NONE)
-  const [histamine, setHistamine] = useState(
-    ingredient?.histamine_score != null ? String(ingredient.histamine_score) : NONE,
-  )
-  const [fodmap, setFodmap] = useState<Record<string, string>>(() =>
-    Object.fromEntries(FODMAP_AXES.map((a) => [a.field, (ingredient?.[a.field] as string | null) ?? NONE])),
-  )
-  const [gluten, setGluten] = useState(ingredient?.contains_gluten ?? false)
-  const [dairy, setDairy] = useState(ingredient?.contains_dairy ?? false)
-  const [newAlias, setNewAlias] = useState('')
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: initialValues(ingredient),
+    validate: {
+      name: (value) => {
+        if (isEdit) return null
+        return value.trim() ? null : 'Name is required'
+      },
+    },
+  })
+
+  useEffect(() => {
+    if (!open) return
+    form.setValues(initialValues(ingredient))
+    // form object identity changes after setValues in Mantine 8
+  }, [open, ingredient])
 
   const addIngredient = useAddDietaryIngredient()
   const updateIngredient = useUpdateDietaryIngredient()
@@ -111,23 +96,19 @@ export function IngredientFormDialog({ open, onOpenChange, ingredient }: Ingredi
   const removeAlias = useRemoveIngredientAlias()
 
   const toNull = (v: string) => (v === NONE ? null : v)
-  const fodmapValue = (field: string) => toNull(fodmap[field]) as FodmapLevel | null
+  const fodmapValue = (field: string, values: ReturnType<typeof form.getValues>) =>
+    toNull(values[field as keyof typeof values] as string) as FodmapLevel | null
 
-  async function handleSubmit() {
-    if (!isEdit && !name.trim()) {
-      toast.error('Name is required')
-      return
-    }
-
+  const handleSubmit = form.onSubmit(async (values) => {
     const fields = {
-      category: toNull(category),
-      histamine_score: histamine === NONE ? null : Number(histamine),
-      fodmap_oligos: fodmapValue('fodmap_oligos'),
-      fodmap_fructose: fodmapValue('fodmap_fructose'),
-      fodmap_polyols: fodmapValue('fodmap_polyols'),
-      fodmap_lactose: fodmapValue('fodmap_lactose'),
-      contains_gluten: gluten,
-      contains_dairy: dairy,
+      category: toNull(values.category),
+      histamine_score: values.histamine === NONE ? null : Number(values.histamine),
+      fodmap_oligos: fodmapValue('fodmap_oligos', values),
+      fodmap_fructose: fodmapValue('fodmap_fructose', values),
+      fodmap_polyols: fodmapValue('fodmap_polyols', values),
+      fodmap_lactose: fodmapValue('fodmap_lactose', values),
+      contains_gluten: values.gluten,
+      contains_dairy: values.dairy,
     }
 
     try {
@@ -136,7 +117,7 @@ export function IngredientFormDialog({ open, onOpenChange, ingredient }: Ingredi
         await updateIngredient.mutateAsync({ id: ingredient.id, data })
         toast.success('Ingredient updated')
       } else {
-        const data: IngredientCreatePayload = { canonical_name: name.trim(), ...fields }
+        const data: IngredientCreatePayload = { canonical_name: values.name.trim(), ...fields }
         await addIngredient.mutateAsync(data)
         toast.success('Ingredient added')
       }
@@ -144,15 +125,15 @@ export function IngredientFormDialog({ open, onOpenChange, ingredient }: Ingredi
     } catch (err) {
       handleMutationError(err, isEdit ? 'Failed to update ingredient' : 'Failed to add ingredient')
     }
-  }
+  })
 
   async function handleAddAlias() {
     if (!ingredient) return
-    const alias = newAlias.trim()
+    const alias = form.getValues().newAlias.trim()
     if (!alias) return
     try {
       await addAlias.mutateAsync({ id: ingredient.id, alias })
-      setNewAlias('')
+      form.setFieldValue('newAlias', '')
     } catch (err) {
       handleMutationError(err, 'Failed to add alias')
     }
@@ -181,83 +162,59 @@ export function IngredientFormDialog({ open, onOpenChange, ingredient }: Ingredi
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="ing-name">Name</Label>
-            <Input
-              id="ing-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. cheddar cheese"
-              disabled={isEdit}
-              className={cn(isEdit && 'opacity-70')}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <TextInput
+            key={form.key('name')}
+            label="Name"
+            placeholder="e.g. cheddar cheese"
+            disabled={isEdit}
+            className={cn(isEdit && 'opacity-70')}
+            {...form.getInputProps('name')}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              key={form.key('category')}
+              label="Category"
+              data={CATEGORY_SELECT_OPTIONS}
+              {...form.getInputProps('category')}
+            />
+            <Select
+              key={form.key('histamine')}
+              label="Histamine (0–3)"
+              data={HISTAMINE_SELECT_OPTIONS}
+              {...form.getInputProps('histamine')}
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="ing-category">Category</Label>
-              <FieldSelect
-                id="ing-category"
-                value={category}
-                onChange={setCategory}
-                options={CATEGORY_SELECT_OPTIONS}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ing-histamine">Histamine (0–3)</Label>
-              <FieldSelect
-                id="ing-histamine"
-                value={histamine}
-                onChange={setHistamine}
-                options={HISTAMINE_SELECT_OPTIONS}
-              />
-            </div>
-          </div>
-
           <div className="space-y-1.5">
-            <Label>FODMAP levels</Label>
+            <p className="text-sm font-medium leading-none">FODMAP levels</p>
             <div className="grid grid-cols-2 gap-3">
               {FODMAP_AXES.map((axis) => (
-                <div key={axis.field} className="space-y-1">
-                  <Label htmlFor={`ing-${axis.field}`} className="text-xs text-muted-foreground">
-                    {axis.short}
-                  </Label>
-                  <FieldSelect
-                    id={`ing-${axis.field}`}
-                    value={fodmap[axis.field]}
-                    onChange={(v) => setFodmap((prev) => ({ ...prev, [axis.field]: v }))}
-                    options={FODMAP_SELECT_OPTIONS}
-                  />
-                </div>
+                <Select
+                  key={form.key(axis.field)}
+                  label={axis.short}
+                  data={FODMAP_SELECT_OPTIONS}
+                  {...form.getInputProps(axis.field)}
+                />
               ))}
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="flex min-h-[44px] items-center gap-2">
-              <input
-                type="checkbox"
-                checked={gluten}
-                onChange={(e) => setGluten(e.target.checked)}
-                className="size-4 rounded border-border"
-              />
-              <span className="text-sm">Contains gluten</span>
-            </label>
-            <label className="flex min-h-[44px] items-center gap-2">
-              <input
-                type="checkbox"
-                checked={dairy}
-                onChange={(e) => setDairy(e.target.checked)}
-                className="size-4 rounded border-border"
-              />
-              <span className="text-sm">Contains dairy</span>
-            </label>
-          </div>
+          <Checkbox
+            label="Contains gluten"
+            checked={form.getValues().gluten}
+            onChange={(event) => form.setFieldValue('gluten', event.currentTarget.checked)}
+          />
+          <Checkbox
+            label="Contains dairy"
+            checked={form.getValues().dairy}
+            onChange={(event) => form.setFieldValue('dairy', event.currentTarget.checked)}
+          />
 
           {isEdit && (
             <div className="space-y-2 border-t border-muted pt-4">
-              <Label>Aliases</Label>
+              <p className="text-sm font-medium leading-none">Aliases</p>
               <p className="text-xs text-muted-foreground">
                 Alternate names that map to this ingredient when scoring meals.
               </p>
@@ -285,23 +242,23 @@ export function IngredientFormDialog({ open, onOpenChange, ingredient }: Ingredi
                 <p className="text-xs text-muted-foreground">No aliases yet.</p>
               )}
               <div className="flex items-center gap-2">
-                <Input
-                  value={newAlias}
-                  onChange={(e) => setNewAlias(e.target.value)}
+                <TextInput
+                  key={form.key('newAlias')}
+                  placeholder="Add an alias..."
+                  className="min-h-[44px] flex-1"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault()
                       handleAddAlias()
                     }
                   }}
-                  placeholder="Add an alias..."
-                  className="min-h-[44px]"
+                  {...form.getInputProps('newAlias')}
                 />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleAddAlias}
-                  disabled={!newAlias.trim() || addAlias.isPending}
+                  disabled={!form.getValues().newAlias.trim() || addAlias.isPending}
                   className="min-h-[44px] shrink-0"
                 >
                   Add
@@ -309,13 +266,13 @@ export function IngredientFormDialog({ open, onOpenChange, ingredient }: Ingredi
               </div>
             </div>
           )}
-        </div>
 
-        <DialogFooter>
-          <Button onClick={handleSubmit} disabled={isPending} className="min-h-[44px]">
-            {isPending ? 'Saving...' : isEdit ? 'Save' : 'Add ingredient'}
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button type="submit" disabled={isPending} className="min-h-[44px]">
+              {isPending ? 'Saving...' : isEdit ? 'Save' : 'Add ingredient'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

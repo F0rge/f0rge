@@ -1,10 +1,12 @@
 ---
-description: React/Next.js App Router, shadcn/ui, and Tailwind conventions. Use proactively when building or reviewing UI components, pages, hooks, styles, forms, or frontend API integration.
+description: Marrow App Router UX — Next.js stack, API/auth, customize-hub contract, onboarding tour, quality gate. Kit/import/token rules live in ui-kit.mdc.
 globs: apps/marrow/frontend/**/*.tsx, apps/marrow/frontend/**/*.ts
 alwaysApply: false
 ---
 
-# Frontend Standards (Next.js + shadcn/ui)
+# Frontend Standards (Marrow App Router)
+
+Kit/import/token rules: `.cursor/rules/ui-kit.mdc`.
 
 ## Stack
 
@@ -14,10 +16,8 @@ alwaysApply: false
 - Backend API at `http://localhost:8000/api/v1` via `/api/*` rewrite
 - Auth: `ht_session` cookie (email + password)
 
-## UI/UX standards — enforced repo-wide
+## UI/UX standards
 
-- **Primitives from `@f0rge/ui`** — Button, Card, Dialog, Input, Select, etc. Never copy shadcn components into `apps/`
-- **shadcn CLI additions** land in `libs/ui`, never `apps/marrow/frontend/components/ui`
 - **Icons:** lucide-react only
 - **Toasts:** sonner only
 - **Dark mode:** next-themes (via profile menu theme toggle)
@@ -25,7 +25,6 @@ alwaysApply: false
 - **Dates:** shared formatters from `@f0rge/ui` (`formatLocalDate`, `formatDisplayDate`)
 - **API client:** `@f0rge/ui/api` — never re-implement `ApiError` / `handleResponse`
 - **Loading/empty/error states:** use shared `FetchError` from `@f0rge/ui`
-- **Shared lib components:** semantic tokens only (`var(--primary)`, `text-muted-foreground`) — apps own token values + `--marrow-*` brand vars
 
 ## Core Principles
 
@@ -38,7 +37,6 @@ alwaysApply: false
 
 - Single responsibility; explicit TypeScript prop interfaces
 - Composition over configuration
-- Use `@f0rge/ui` primitives — don't rebuild what exists in the shared lib
 - Descriptive names: `IngredientTagEditor` not `Editor1`
 
 ## State & Data
@@ -58,7 +56,7 @@ alwaysApply: false
 
 ## Forms
 
-Controlled components, inline validation errors, disable submit during submission, clear success/error feedback.
+Labeled forms use `@f0rge/ui/forms` (see `ui-kit.mdc`). Controlled components, inline validation errors, disable submit during submission, clear success/error feedback.
 
 ## Customize-Hub UX Contract (marrow)
 

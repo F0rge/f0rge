@@ -1,3 +1,5 @@
+import { Checkbox, Select, TextInput } from '@f0rge/ui/forms'
+
 interface ModelOption {
   value: string
   label: string
@@ -16,8 +18,6 @@ interface ModelPickerProps {
   label?: string
 }
 
-// Select-a-preset-or-type-a-custom-model-name control, shared verbatim by
-// the AI Provider and Embedding Provider sections.
 export function ModelPicker({
   options,
   currentModel,
@@ -30,41 +30,34 @@ export function ModelPicker({
   customPlaceholder,
   label = 'Model',
 }: ModelPickerProps) {
+  const selectData = [
+    { value: '', label: `— use current setting (${currentModel ?? 'default'}) —` },
+    ...options.map((m) => ({ value: m.value, label: m.label })),
+  ]
+
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
-      {!useCustom && (
-        <select
+      {!useCustom ? (
+        <Select
+          label={label}
+          data={selectData}
           value={model}
-          onChange={(e) => onModelChange(e.target.value)}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-        >
-          <option value="">— use current setting ({currentModel ?? 'default'}) —</option>
-          {options.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      )}
-      {useCustom && (
-        <input
-          type="text"
+          onChange={(value) => onModelChange(value ?? '')}
+        />
+      ) : (
+        <TextInput
+          label={label}
           placeholder={customPlaceholder}
           value={customModel}
-          onChange={(e) => onCustomModelChange(e.target.value)}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          onChange={(event) => onCustomModelChange(event.currentTarget.value)}
         />
       )}
-      <label className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-        <input
-          type="checkbox"
-          checked={useCustom}
-          onChange={(e) => onUseCustomChange(e.target.checked)}
-          className="rounded"
-        />
-        Use custom model name
-      </label>
+      <Checkbox
+        label="Use custom model name"
+        checked={useCustom}
+        onChange={(event) => onUseCustomChange(event.currentTarget.checked)}
+        className="mt-1"
+      />
     </div>
   )
 }

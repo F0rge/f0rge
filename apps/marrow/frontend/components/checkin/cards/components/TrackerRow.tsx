@@ -1,6 +1,7 @@
 'use client'
 
-import { Archive, Circle, Minus, Plus } from 'lucide-react'
+import { Stepper } from '@f0rge/ui'
+import { Archive, Circle } from 'lucide-react'
 import { ICON_COMPONENT_MAP } from './IconPicker'
 import type { Tracker } from '@/lib/api/types'
 
@@ -38,48 +39,6 @@ function TrackerIcon({ icon }: { icon: string | null }) {
       <span className="text-base leading-none" aria-hidden="true">
         {icon}
       </span>
-    </div>
-  )
-}
-
-// Compact inline stepper: [−] n [+]
-function CompactStepper({
-  value,
-  onChange,
-  label,
-}: {
-  value: number
-  onChange: (v: number) => void
-  label: string
-}) {
-  return (
-    <div className="flex items-center gap-2 shrink-0">
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(0, value - 1))}
-        disabled={value <= 0}
-        aria-label={`Decrease ${label}`}
-        className="size-8 rounded-md border border-border flex items-center justify-center
-          hover:bg-muted active:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        <Minus className="size-4" />
-      </button>
-      <span
-        className="text-sm font-semibold tabular-nums w-6 text-center"
-        aria-label={`${label}: ${value}`}
-      >
-        {value}
-      </span>
-      <button
-        type="button"
-        onClick={() => onChange(Math.min(99, value + 1))}
-        disabled={value >= 99}
-        aria-label={`Increase ${label}`}
-        className="size-8 rounded-md border border-border flex items-center justify-center
-          hover:bg-muted active:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        <Plus className="size-4" />
-      </button>
     </div>
   )
 }
@@ -173,7 +132,14 @@ export function TrackerRow({
           label={tracker.name}
         />
       ) : (
-        <CompactStepper value={value} onChange={onChange} label={tracker.name} />
+        <Stepper
+          size="compact"
+          min={0}
+          max={99}
+          value={value}
+          onChange={onChange}
+          label={tracker.name}
+        />
       )}
 
       {onArchive && (

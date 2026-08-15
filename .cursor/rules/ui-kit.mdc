@@ -1,0 +1,81 @@
+---
+description: Design-system hard rules — @f0rge/ui imports, token layers, banned engines, forms via wrappers. Use when editing apps frontend, libs/ui, or adding UI primitives/forms.
+globs: libs/ui/**,apps/**/frontend/**/*.tsx,apps/**/frontend/**/*.ts,apps/**/frontend/**/*.css
+alwaysApply: false
+---
+
+# UI Kit — `@f0rge/ui`
+
+## Four layers (never skip or fork)
+
+1. **Tokens** — app `:root` skins (`app/globals.css`); brand vars (`--marrow-*`, `--dk-*`) live here only.
+2. **Composition** — app screens and domain widgets (Bristol grid, meal chips, symptom picker).
+3. **Wrappers** — `libs/ui/src/components/ui/*`; engines stay inside this package.
+4. **Documented overrides** — `libs/ui/src/styles/extras.css` only; never edit `node_modules` or fork engine internals.
+
+## App imports (hard ban)
+
+Apps import **only**:
+
+- `@f0rge/ui` — primitives, `cn`, date formatters, hooks
+- `@f0rge/ui/forms` — labeled data-entry (Mantine wrappers) once that export exists
+- `@f0rge/ui/api` — marrow API client only; dk keeps its own axios client
+
+**Never** in `apps/**`:
+
+- `@base-ui/react`
+- `@mantine/core`, `@mantine/hooks`, or any `@mantine/*`
+
+## Engines (libs/ui only)
+
+`@base-ui/react` and `@mantine/*` are implementation details of `libs/ui`.
+
+- Canonical Base UI wrapper: `libs/ui/src/components/ui/button.tsx`
+- Canonical stepper: `libs/ui/src/components/ui/stepper.tsx` — no `CompactStepper` forks in apps
+
+## Tokens in components
+
+- **Lib components:** semantic tokens only (`bg-primary`, `text-muted-foreground`, `var(--primary)`).
+- **Brand vars:** `--marrow-*`, `--dk-*` only in app CSS skins — never inside `libs/ui` TSX.
+
+## Forms
+
+- Labeled data-entry → `@f0rge/ui/forms` (Mantine wrappers) once exported.
+- Until then → `@f0rge/ui` `Input` / `Select`.
+- Apps never import Mantine directly.
+
+## Submit / chrome
+
+- `Button`, `Card`, `Dialog`, and other shadcn chrome from `@f0rge/ui`.
+- Domain widgets stay in the app; do not promote app-specific UI into the kit without a deliberate primitive request.
+
+## New primitives
+
+1. Add under `libs/ui/src/components/ui/`.
+2. Export from `libs/ui/src/index.ts`.
+3. Add a Storybook story when `libs/ui/.storybook` exists.
+4. **Never** copy shadcn into `apps/**/components/ui`.
+
+Workflow skill: `.cursor/skills/add-ui-primitive/SKILL.md`.
+
+## Catalogue
+
+When Storybook is present, it is the source of truth:
+
+```bash
+npx nx run f0rge-ui:storybook
+```
+
+## Base UI vs Radix
+
+`@f0rge/ui` runs on **Base UI**, not Radix. Use the `render` prop — not `asChild`:
+
+```tsx
+// WRONG
+<DialogTrigger asChild><Button>Open</Button></DialogTrigger>
+
+// CORRECT
+<DialogTrigger render={<Button />}>Open</DialogTrigger>
+```
+
+`Select.onValueChange` may pass `null` — always null-guard.

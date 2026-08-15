@@ -16,7 +16,7 @@ Genuinely generic code lives here. Apps import from libs — never the reverse.
 | `libs/backend/db` | `f0rge_db` | Engine/session/get_db factories, auth context, tenant/RLS mechanism, `unit_of_work`, `BaseCRUD`, mixins (`UUIDPk`, `Timestamp`, `UserOwned`) | `fastapi-backend` |
 | `libs/backend/storage` | `f0rge_storage` | `ObjectStorageConfig` + client, `resize_image` | `fastapi-backend` |
 | `libs/backend/testing` | `f0rge_testing` | pgvector testcontainer fixture, savepoint-session fixture factories | `fastapi-backend` |
-| `libs/ui` | `@f0rge/ui`, `@f0rge/ui/api` | 12 shadcn primitives, `cn`, date formatters, hooks, `fetch-error`, API client | `frontend-dev` |
+| `libs/ui` | `@f0rge/ui`, `@f0rge/ui/api`, `@f0rge/ui/forms` (when added) | 12 shadcn primitives, `cn`, date formatters, hooks, `fetch-error`, API client; Storybook catalogue in `libs/ui` | `frontend-dev` |
 
 **Deferred:** `f0rge-llm` — extract when a second LLM consumer exists. Parser duplication in `lab_extraction_prompt.py` / `vision_prompt.py` is known debt.
 
@@ -43,6 +43,8 @@ Genuinely generic code lives here. Apps import from libs — never the reverse.
 - Apps: `transpilePackages: ["@f0rge/ui"]`, `globals.css` `@source` for Tailwind 4 scanning
 - **Semantic tokens only** in lib components (`var(--primary)`, `text-muted-foreground`) — never `--marrow-*` brand vars
 - shadcn CLI additions land in `libs/ui`, never `apps/`
+- New primitive → Storybook story required when `libs/ui/.storybook` exists (see `.cursor/rules/ui-kit.mdc`)
+- `libs/ui/src/styles/extras.css` is the only documented override file for kit-level CSS tweaks
 
 ## New project checklist
 
