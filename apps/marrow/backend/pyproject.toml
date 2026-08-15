@@ -38,6 +38,11 @@ dev = [
     "f0rge-testing",
 ]
 
+[tool.uv]
+constraint-dependencies = [
+    "h2>=4.4.1",  # PYSEC-2026-3628 / CVE-2026-71554 (aioapns transitive)
+]
+
 [tool.uv.sources]
 f0rge-core = { path = "../../../libs/backend/core", editable = true }
 f0rge-db = { path = "../../../libs/backend/db", editable = true }
