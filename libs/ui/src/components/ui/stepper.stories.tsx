@@ -27,3 +27,19 @@ export const Default: Story = {
     )
   },
 }
+
+export const Compact: Story = {
+  render: function CompactStepperDemo() {
+    const [value, setValue] = useState(2)
+    return (
+      <Stepper
+        label="Steps"
+        value={value}
+        onChange={setValue}
+        size="compact"
+        min={0}
+        max={99}
+      />
+    )
+  },
+}
