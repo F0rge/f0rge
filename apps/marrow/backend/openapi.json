@@ -3870,6 +3870,197 @@
         }
       }
     },
+    "/api/v1/internal/airflow/meal-analysis/resolve": {
+      "post": {
+        "tags": [
+          "internal-airflow"
+        ],
+        "summary": "Resolve Meal Analysis",
+        "operationId": "resolve_meal_analysis_api_v1_internal_airflow_meal_analysis_resolve_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealAnalysisResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealAnalysisResolveResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/internal/airflow/meal-analysis/{analysis_id}/complete": {
+      "post": {
+        "tags": [
+          "internal-airflow"
+        ],
+        "summary": "Complete Meal Analysis",
+        "operationId": "complete_meal_analysis_api_v1_internal_airflow_meal_analysis__analysis_id__complete_post",
+        "parameters": [
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Analysis Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealAnalysisCompleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/internal/airflow/meal-analysis/{analysis_id}/fail": {
+      "post": {
+        "tags": [
+          "internal-airflow"
+        ],
+        "summary": "Fail Meal Analysis",
+        "operationId": "fail_meal_analysis_api_v1_internal_airflow_meal_analysis__analysis_id__fail_post",
+        "parameters": [
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Analysis Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealAnalysisFailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/insights/trends": {
       "get": {
         "tags": [
@@ -12362,6 +12553,117 @@
         ],
         "title": "MarkerHistoryPoint"
       },
+      "MealAnalysisCompleteRequest": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "dish_name": {
+            "type": "string",
+            "title": "Dish Name"
+          },
+          "cuisine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cuisine"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "ingredients": {
+            "items": {
+              "$ref": "#/components/schemas/VisionIngredientIn"
+            },
+            "type": "array",
+            "title": "Ingredients"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "dish_name",
+          "confidence"
+        ],
+        "title": "MealAnalysisCompleteRequest"
+      },
+      "MealAnalysisFailRequest": {
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "error_message": {
+            "type": "string",
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error_message"
+        ],
+        "title": "MealAnalysisFailRequest"
+      },
+      "MealAnalysisResolveRequest": {
+        "properties": {
+          "photo_id": {
+            "type": "integer",
+            "title": "Photo Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "photo_id",
+          "user_id"
+        ],
+        "title": "MealAnalysisResolveRequest"
+      },
+      "MealAnalysisResolveResponse": {
+        "properties": {
+          "analysis_id": {
+            "type": "integer",
+            "title": "Analysis Id"
+          },
+          "file_path": {
+            "type": "string",
+            "title": "File Path"
+          },
+          "catalog_context": {
+            "type": "string",
+            "title": "Catalog Context",
+            "default": ""
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type",
+            "default": "image/jpeg"
+          }
+        },
+        "type": "object",
+        "required": [
+          "analysis_id",
+          "file_path"
+        ],
+        "title": "MealAnalysisResolveResponse"
+      },
       "MealCloneCreate": {
         "properties": {
           "source_photo_id": {
@@ -15726,6 +16028,29 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VisionIngredientIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible",
+            "default": true
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "confidence"
+        ],
+        "title": "VisionIngredientIn"
       },
       "WeatherDailySummary": {
         "properties": {
