@@ -245,18 +245,21 @@ class PhotoService:
             meal_time=effective_meal_time,
             created_at=now,
         )
-        # Queue analysis when enabled and credentials resolve (env or BYOK).
-        # Credential resolution must not fail the upload — the photo is already persisted.
+        # Queue analysis when enabled. Airflow path uses platform OpenRouter on
+        # the worker; BackgroundTasks path still needs Marrow credentials (env/BYOK).
         analysis_will_run = False
         if settings.food_analysis_enabled:
-            from app.services.llm.factory import resolve_llm_credentials
-
-            try:
-                api_key, _ = await resolve_llm_credentials(self.db)
-            except Exception:
-                api_key = None
-            if api_key:
+            if settings.food_analysis_via_airflow and settings.airflow_url:
                 analysis_will_run = True
+            else:
+                from app.services.llm.factory import resolve_llm_credentials
+
+                try:
+                    api_key, _ = await resolve_llm_credentials(self.db)
+                except Exception:
+                    api_key = None
+                if api_key:
+                    analysis_will_run = True
 
         try:
             async with unit_of_work(self.db):
@@ -276,7 +279,14 @@ class PhotoService:
             raise
 
         if analysis_will_run:
-            background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
+            from app.services.food_analysis_enqueue import enqueue_food_analysis
+
+            await enqueue_food_analysis(
+                photo.id,
+                photo.user_id,
+                background_tasks,
+                orchestrator_run=self.orchestrator.run,
+            )
 
         await invalidate_user_insights_cache(user_id, entry.date)
         companions = await MealTagCRUD(self.db).companion_handles_by_photo_ids([photo.id])
