@@ -46,3 +46,7 @@ qa-screenshots/
 .nx/
 *.tsbuildinfo
 .tmp/
+
+# libs/ui Storybook
+libs/ui/dist/
+libs/ui/storybook-static/

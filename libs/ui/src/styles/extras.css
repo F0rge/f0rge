@@ -1,0 +1,14 @@
+/* extras.css — documented kit-level CSS overrides (2026-08-15)
+ * Overrides:
+ * - ios-date-input — strips Safari menulist-button appearance on input[type=date]
+ */
+
+/* ios-date-input: Safari renders date inputs as a menulist-button with intrinsic
+   width, ignoring w-full/min-w-0 from the shared Input primitive. */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
