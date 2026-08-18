@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, UsersRound } from 'lucide-react'
-import { Badge, Button, Card, Input, Label } from '@f0rge/ui'
+import { Badge, Button, Card } from '@f0rge/ui'
+import { TextInput, useForm } from '@f0rge/ui/forms'
 import { FetchError } from '@f0rge/ui'
 import { PageHeader } from '@/components/layout/page-header'
 import { PageShell } from '@/components/layout/page-shell'
@@ -22,21 +23,25 @@ export default function GroupsClient() {
   const createGroup = useCreateGroup()
   const acceptInvite = useAcceptGroupInvite()
   const declineInvite = useDeclineGroupInvite()
-  const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: { name: '' },
+    validate: {
+      name: (value) => (value.trim() ? null : 'Group name is required'),
+    },
+  })
 
-  const onCreate = async () => {
-    const trimmed = name.trim()
-    if (!trimmed) return
+  const onCreate = form.onSubmit(async (values) => {
     setError(null)
     try {
-      await createGroup.mutateAsync(trimmed)
+      await createGroup.mutateAsync(values.name.trim())
       toast.success('Group created')
-      setName('')
+      form.reset()
     } catch (err) {
       setError(getErrorDetail(err, 'Could not create group'))
     }
-  }
+  })
 
   const onAccept = async (groupId: string) => {
     try {
@@ -82,24 +87,23 @@ export default function GroupsClient() {
       />
 
       <Card className="space-y-3 p-4">
-        <Label htmlFor="group-name">Create a group</Label>
-        <div className="flex gap-2">
-          <Input
-            id="group-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+        <form onSubmit={onCreate} className="flex gap-2">
+          <TextInput
+            key={form.key('name')}
+            label="Create a group"
             placeholder="our family"
             maxLength={60}
             className="flex-1"
+            {...form.getInputProps('name')}
           />
           <Button
-            type="button"
-            onClick={onCreate}
-            disabled={createGroup.isPending || name.trim().length === 0}
+            type="submit"
+            disabled={createGroup.isPending || !form.getValues().name.trim()}
+            className="self-end"
           >
             Create
           </Button>
-        </div>
+        </form>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </Card>
 

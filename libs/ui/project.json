@@ -9,6 +9,18 @@
       "options": {
         "command": "npx tsc --noEmit -p libs/ui/tsconfig.json"
       }
+    },
+    "storybook": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run storybook --workspace=@f0rge/ui"
+      }
+    },
+    "storybook-build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run storybook-build --workspace=@f0rge/ui"
+      }
     }
   },
   "//": "lint inferred by @nx/eslint from eslint.config.mjs. No build: source-consumed via transpilePackages.",

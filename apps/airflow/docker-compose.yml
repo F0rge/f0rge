@@ -1,0 +1,211 @@
+# f0rge shared Airflow 3 control plane — CeleryExecutor + GitDagBundle on rpi.
+# Not Coolify. Deploy: docker compose -p airflow up -d --build
+# Scale workers: ./scripts/scale-workers.sh 1|2|3
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: ${AIRFLOW_IMAGE_NAME:-f0rge-airflow:3.1.7}
+  env_file:
+    - path: .env
+      required: false
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__CELERY__WORKER_CONCURRENCY: ${AIRFLOW__CELERY__WORKER_CONCURRENCY:-2}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-}
+    # Must be identical on every Airflow process (Execution API JWT).
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:-dev-only-change-me-jwt}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__PARALLELISM: ${AIRFLOW__CORE__PARALLELISM:-2}
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: ${AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG:-2}
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API__AUTH_BACKENDS: airflow.providers.fab.auth_manager.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "60"
+    # Default is /tmp/airflow/dag_bundles (wiped on recreate). Pin to named volume.
+    AIRFLOW__DAG_PROCESSOR__DAG_BUNDLE_STORAGE_PATH: /opt/airflow/dag_bundles
+    # Replaces default LocalDagBundle. Public HTTPS clone — no token.
+    AIRFLOW__DAG_PROCESSOR__DAG_BUNDLE_CONFIG_LIST: >-
+      [{"name":"airflow","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/airflow/dags","tracking_ref":"develop","refresh_interval":60}},{"name":"marrow","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/marrow/dags","tracking_ref":"develop","refresh_interval":60}},{"name":"dk","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/dk/dags","tracking_ref":"develop","refresh_interval":60}}]
+    # Meal classification DAG → Marrow internal HTTP (set in .env on the Pi).
+    MARROW_API_BASE_URL: ${MARROW_API_BASE_URL:-}
+    MARROW_AIRFLOW_SERVICE_TOKEN: ${MARROW_AIRFLOW_SERVICE_TOKEN:-}
+  volumes:
+    - ./logs:/opt/airflow/logs
+    - ./config:/opt/airflow/config
+    - ./plugins:/opt/airflow/plugins
+    - ./scripts:/opt/airflow/scripts
+    - dag-bundles:/opt/airflow/dag_bundles
+  user: "${AIRFLOW_UID:-1000}:0"
+  networks:
+    - airflow
+  depends_on: &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+    networks:
+      - airflow
+
+  redis:
+    # 7.2-bookworm: Redis dual-license cutover after 7.2.
+    image: redis:7.2-bookworm
+    # No host port — broker is internal to this compose network only.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    restart: always
+    networks:
+      - airflow
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        if [[ -z "$${AIRFLOW_UID}" ]]; then
+          export AIRFLOW_UID=1000
+        fi
+        mkdir -v -p /opt/airflow/{logs,dags,plugins,config,scripts,dag_bundles}
+        /entrypoint airflow version
+        chown -R "$${AIRFLOW_UID}:0" /opt/airflow/logs /opt/airflow/config /opt/airflow/plugins /opt/airflow/dag_bundles || true
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW_UID: "1000"
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-change-me-admin}
+    user: "0:0"
+    restart: "no"
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      # Loopback + Tailscale only — not 0.0.0.0 (LAN).
+      - "127.0.0.1:8082:8080"
+      - "100.103.61.77:8082:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # No container_name — required for --scale airflow-worker=N.
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      <<: *airflow-common-env
+      # Warm shutdown of celery workers (official compose).
+      DUMB_INIT_SETSID: "0"
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-apiserver:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  flower:
+    <<: *airflow-common
+    command: celery flower
+    ports:
+      - "127.0.0.1:5555:5555"
+      - "100.103.61.77:5555:5555"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-db-volume:
+  dag-bundles:
+
+networks:
+  airflow:
+    driver: bridge

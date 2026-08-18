@@ -93,7 +93,7 @@ Canonical reference for what lives in `libs/` and the non-duplication mandate. S
 | `libs/backend/db` | `f0rge_db` | Engine/session/get_db factories, auth context, RLS mechanism, `unit_of_work`, `BaseCRUD`, mixins | `fastapi-backend` | Import only — never re-implement |
 | `libs/backend/storage` | `f0rge_storage` | Object storage client, `resize_image` | `fastapi-backend` | Import only — app wires settings |
 | `libs/backend/testing` | `f0rge_testing` | pgvector testcontainer, savepoint session fixtures | `fastapi-backend` | Dev dep only |
-| `libs/ui` | `@f0rge/ui`, `@f0rge/ui/api` | 12 shadcn primitives, `cn`, hooks, API client, `FetchError` | `frontend-dev` | All UI primitives from lib; shadcn adds land in `libs/ui` |
+| `libs/ui` | `@f0rge/ui`, `@f0rge/ui/api`, `@f0rge/ui/forms` (when present) | 12 shadcn primitives, `cn`, hooks, API client, `FetchError`; Storybook catalogue | `frontend-dev` | All UI primitives from lib; shadcn adds land in `libs/ui` |
 
 **Stays in marrow (deliberately):** shared `Base` instance, `USER_OWNED_TABLES`, LLM/prompts, domain schemas, `CatalogItemCRUD`, `use-autosave-entry`, brand tokens (`--marrow-*`).
 
@@ -103,7 +103,7 @@ Canonical reference for what lives in `libs/` and the non-duplication mandate. S
 
 - Python: ruff for linting/formatting, target Python 3.10 (no 3.11+ syntax)
 - Use `from __future__ import annotations` in all Python files
-- Frontend: TypeScript strict, Tailwind for styling, shadcn/ui components
+- Frontend: TypeScript strict, Tailwind for styling; primitives from `@f0rge/ui`; forms from `@f0rge/ui/forms`; token skins in app CSS; Storybook is the catalogue — see `.cursor/rules/ui-kit.mdc`
 - API prefix: /api/v1
 - Auth cookie name: ht_session
 
@@ -122,11 +122,12 @@ Scoped rules in `.cursor/rules/` (auto-applied by glob):
 | `shared-libs.mdc` | `libs/**` — shared library conventions |
 | `backend.mdc` | `apps/marrow/backend/**/*.py`, migrations |
 | `frontend.mdc` | `apps/marrow/frontend/**/*.tsx`, `apps/marrow/frontend/**/*.ts` |
+| `ui-kit.mdc` | `libs/ui/**`, `apps/**/frontend/**` — design-system imports, tokens, primitives |
 | `infra.mdc` | `**/fly*.toml`, `.github/**`, `**/Dockerfile`, `**/docker-compose*.yml` |
 | `qa-gate.mdc` | tests, workflows |
 | `data-pipelines.mdc` | `apps/marrow/backend/scripts/**`, `apps/marrow/backend/data/**` |
 
-`.cursor/rules/` is read **only at workspace root** — nested `.cursor/rules/` in a subdirectory is silently ignored. Per-app instructions go in a nested `AGENTS.md` instead (see `apps/dk/tag-printer/AGENTS.md`).
+`.cursor/rules/` is read **only at workspace root** — nested `.cursor/rules/` in a subdirectory is silently ignored. Nested `AGENTS.md` **is** auto-applied for that subtree; use it for per-app instructions (see `apps/dk/tag-printer/AGENTS.md`, `libs/ui/AGENTS.md`).
 
 ## Sub-agents
 
@@ -144,7 +145,7 @@ End-to-end workflow (prompt or GitHub issue → develop → dev smoke → main P
 
 Review playbooks live in `.cursor/review-context/`. **Nothing loads these automatically** — no workflow reads them. When reviewing a PR, read `_shared/*.md` plus the playbook matching the diff's area (`fastapi-backend`, `frontend-dev`, `devops`, `qa-engineer`).
 
-**Bugbot / Agent Review:** [`.cursor/BUGBOT.md`](.cursor/BUGBOT.md) is auto-loaded by Bugbot (project `.mdc` rules are not). Keep Nx gates there; point playbooks at `nx.mdc` / `BUGBOT.md` instead of duplicating checklists.
+**Bugbot / Agent Review:** [`.cursor/BUGBOT.md`](.cursor/BUGBOT.md) is auto-loaded by Bugbot (project `.mdc` rules are not). Keep Nx gates and UI kit import bans there; point playbooks at `nx.mdc` / `BUGBOT.md` instead of duplicating checklists.
 ## Agent memory
 
 **Canonical:** `~/.cursor/agent-memory/<agent>/` (global, cross-project).

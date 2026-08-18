@@ -1,0 +1,7 @@
+.env
+*.pyc
+__pycache__/
+.ruff_cache/
+airflow.cfg
+airflow.db
+dag_bundles/

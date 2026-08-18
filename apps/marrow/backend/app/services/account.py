@@ -32,7 +32,6 @@ from app.services.auth import (
 )
 from app.services.social import SocialService
 from app.services.avatar_storage import (
-    avatar_exists,
     delete_avatar,
     resize_avatar,
     save_avatar,
@@ -150,19 +149,21 @@ class AccountService:
         user = await self._get_current_user()
         if user.avatar_custom_filename is None:
             raise NotFoundError("No custom avatar")
-        if not avatar_exists(user_id=str(user.id)):
-            raise NotFoundError("Avatar file not found")
-
+        # Trust the DB filename; presign is CPU-only (no HEAD). Local/dev
+        # still checks the filesystem before FileResponse.
         presigned = object_storage.presigned_url_for_relative(
             user.avatar_custom_filename,
             user_id=str(user.id),
         )
         if presigned:
             return presigned
-        return os.path.join(
+        local_path = os.path.join(
             os.path.abspath(settings.photo_dir),
             user.avatar_custom_filename,
         )
+        if not os.path.exists(local_path):
+            raise NotFoundError("Avatar file not found")
+        return local_path
 
     async def serve_avatar_response(self) -> FileResponse | RedirectResponse:
         target = await self.get_avatar_file_target()

@@ -159,11 +159,15 @@ class ObjectStorage:
     def presigned_url_for_relative(
         self, relative_path: str, *, expires_in: int = 300, user_id: Optional[str] = None
     ) -> Optional[str]:
+        """Presign the canonical ``{user_id}/{relative}`` key with no S3 HEAD.
+
+        Serve paths trust the DB filename (upload invariant: row implies object).
+        Probing alternate key layouts via ``resolve_relative_key`` is for
+        reads/deletes of legacy Fly/Railway layouts — not for redirects.
+        """
         if not self.enabled():
             return None
-        key = self.resolve_relative_key(relative_path, user_id=user_id)
-        if key is None:
-            return None
+        key = self.build_object_key(relative_path, user_id=user_id)
         return self.presigned_get_url(key, expires_in=expires_in)
 
     def save_bytes(self, relative_path: str, data: bytes, *, user_id: Optional[str] = None) -> str:

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { LayoutGrid, Tag } from 'lucide-react'
 import { cn, formatDisplayDate, formatLocalDate } from '@f0rge/ui'
-import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
+import { MealIconThumb, photoHasImage, photoThumbSrc } from '@/components/checkin/meal-icon-thumb'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { usePhotos } from '@/lib/api/hooks'
 import type { Photo } from '@/lib/api/types'
@@ -76,7 +76,7 @@ function Grid({
           >
             {photoHasImage(photo) ? (
               <Image
-                src={`/api/v1/photos/${photo.id}/thumb`}
+                src={photoThumbSrc(photo.id)}
                 alt={photo.label ?? 'Meal photo'}
                 fill
                 unoptimized

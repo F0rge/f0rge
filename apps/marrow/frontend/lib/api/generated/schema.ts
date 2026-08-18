@@ -869,6 +869,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/internal/airflow/meal-analysis/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Meal Analysis */
+        post: operations["resolve_meal_analysis_api_v1_internal_airflow_meal_analysis_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/internal/airflow/meal-analysis/{analysis_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Meal Analysis */
+        post: operations["complete_meal_analysis_api_v1_internal_airflow_meal_analysis__analysis_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/internal/airflow/meal-analysis/{analysis_id}/fail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fail Meal Analysis */
+        post: operations["fail_meal_analysis_api_v1_internal_airflow_meal_analysis__analysis_id__fail_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/insights/trends": {
         parameters: {
             query?: never;
@@ -3135,6 +3186,50 @@ export interface components {
             /** Flag */
             flag: string;
         };
+        /** MealAnalysisCompleteRequest */
+        MealAnalysisCompleteRequest: {
+            /** User Id */
+            user_id: string;
+            /** Dish Name */
+            dish_name: string;
+            /** Cuisine */
+            cuisine?: string | null;
+            /** Confidence */
+            confidence: number;
+            /** Ingredients */
+            ingredients?: components["schemas"]["VisionIngredientIn"][];
+        };
+        /** MealAnalysisFailRequest */
+        MealAnalysisFailRequest: {
+            /** User Id */
+            user_id?: string | null;
+            /** Error Message */
+            error_message: string;
+        };
+        /** MealAnalysisResolveRequest */
+        MealAnalysisResolveRequest: {
+            /** Photo Id */
+            photo_id: number;
+            /** User Id */
+            user_id: string;
+        };
+        /** MealAnalysisResolveResponse */
+        MealAnalysisResolveResponse: {
+            /** Analysis Id */
+            analysis_id: number;
+            /** File Path */
+            file_path: string;
+            /**
+             * Catalog Context
+             * @default
+             */
+            catalog_context: string;
+            /**
+             * Content Type
+             * @default image/jpeg
+             */
+            content_type: string;
+        };
         /** MealCloneCreate */
         MealCloneCreate: {
             /** Source Photo Id */
@@ -4215,6 +4310,18 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VisionIngredientIn */
+        VisionIngredientIn: {
+            /** Name */
+            name: string;
+            /**
+             * Visible
+             * @default true
+             */
+            visible: boolean;
+            /** Confidence */
+            confidence: number;
         };
         /** WeatherDailySummary */
         WeatherDailySummary: {
@@ -6461,6 +6568,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IngredientResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_meal_analysis_api_v1_internal_airflow_meal_analysis_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealAnalysisResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealAnalysisResolveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_meal_analysis_api_v1_internal_airflow_meal_analysis__analysis_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                analysis_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealAnalysisCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fail_meal_analysis_api_v1_internal_airflow_meal_analysis__analysis_id__fail_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                analysis_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealAnalysisFailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

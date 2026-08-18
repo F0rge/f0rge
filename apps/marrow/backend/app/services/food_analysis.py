@@ -183,7 +183,14 @@ class FoodAnalysisService:
         photo = await PhotoCRUD(self.db).get_by_id(photo_id)
         if photo is None:
             raise NotFoundError(f"Photo {photo_id} not found")
-        background_tasks.add_task(self.orchestrator.run, photo_id, photo.user_id)
+        from app.services.food_analysis_enqueue import enqueue_food_analysis
+
+        await enqueue_food_analysis(
+            photo_id,
+            photo.user_id,
+            background_tasks,
+            orchestrator_run=self.orchestrator.run,
+        )
         return new_analysis
 
     async def add_ingredient_to_photo(

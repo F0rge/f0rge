@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ChevronDown, Pencil, Check } from 'lucide-react'
-import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
+import { MealIconThumb, photoHasImage, photoThumbSrc } from '@/components/checkin/meal-icon-thumb'
 import { usePhotoAnalysis } from '@/lib/api/hooks'
 import { PhotoAnalysis } from '@/components/shared/food-analysis'
 import type { Photo } from '@/lib/api/types'
@@ -53,7 +53,7 @@ function SummaryContent({
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`/api/v1/photos/${photoId}/file`}
+          src={photoThumbSrc(photoId)}
           alt={dishName}
           className="size-9 shrink-0 rounded object-cover"
         />

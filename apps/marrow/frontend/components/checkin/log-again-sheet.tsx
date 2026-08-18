@@ -12,7 +12,7 @@ import {
 import { Input } from '@f0rge/ui'
 import type { RecentMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
-import { MealIconThumb } from './meal-icon-thumb'
+import { MealIconThumb, photoThumbSrc } from './meal-icon-thumb'
 import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
 import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 
@@ -25,7 +25,7 @@ function RecentMealThumb({ meal, loading }: { meal: RecentMeal; loading: boolean
       {showPhoto ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`/api/v1/photos/${meal.source_photo_id}/file`}
+          src={photoThumbSrc(meal.source_photo_id)}
           alt={meal.dish_name}
           className="size-full object-cover"
           onError={() => setImageError(true)}

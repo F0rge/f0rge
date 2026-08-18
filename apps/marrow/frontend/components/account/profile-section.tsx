@@ -1,11 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Upload, UserRound } from 'lucide-react'
-import { Button } from '@f0rge/ui'
-import { Input } from '@f0rge/ui'
-import { Label } from '@f0rge/ui'
+import { Button, useDebouncedValue } from '@f0rge/ui'
+import { TextInput, useForm } from '@f0rge/ui/forms'
 import { UserAvatar } from '@/components/account/user-avatar'
 import { SettingsCard } from '@/components/settings/settings-card'
 import {
@@ -13,10 +12,10 @@ import {
   useUpdateAccount,
   useUploadAvatar,
   useDeleteAvatar,
+  useHandleAvailable,
 } from '@/lib/api/hooks'
 import { getErrorDetail, handleMutationError } from '@f0rge/ui/api'
 import type { Account } from '@/lib/api/types'
-import { useHandleAvailable } from '@/lib/api/hooks'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
 const MAX_BYTES = 5 * 1024 * 1024
@@ -42,43 +41,67 @@ function ProfileForm({ account }: { account: Account }) {
   const updateAccount = useUpdateAccount()
   const uploadAvatar = useUploadAvatar()
   const deleteAvatar = useDeleteAvatar()
-  const [displayName, setDisplayName] = useState(account.display_name ?? '')
-  const [handle, setHandle] = useState(account.handle ?? '')
   const [handleError, setHandleError] = useState<string | null>(null)
-  const debouncedHandle = useDebouncedValue(handle, 400)
-  const availability = useHandleAvailable(debouncedHandle)
-  const handleChanged = handle.trim().toLowerCase() !== (account.handle ?? '')
-  const handleStatus =
-    !handleChanged || debouncedHandle.length < 3
-      ? null
-      : availability.isLoading
-        ? 'checking'
-        : availability.data?.available
-          ? 'available'
-        : availability.data?.reason === 'invalid'
-          ? 'invalid'
-          : 'taken'
+  const [handleDraft, setHandleDraft] = useState(account.handle ?? '')
 
-  const handleSave = async () => {
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: {
+      displayName: account.display_name ?? '',
+      handle: account.handle ?? '',
+    },
+    validate: {
+      handle: (value) => {
+        if (account.handle) return null
+        if (value.length < 3) return 'Handle must be at least 3 characters'
+        if (!/^[a-z0-9_]+$/.test(value)) return 'Use 3–30 characters: a-z, 0-9, _'
+        return null
+      },
+    },
+    onValuesChange: (values) => {
+      if (!account.handle) setHandleDraft(values.handle)
+    },
+  })
+
+  const debouncedHandle = useDebouncedValue(handleDraft, 400)
+  const availability = useHandleAvailable(debouncedHandle)
+  const handleChanged = handleDraft.trim().toLowerCase() !== (account.handle ?? '')
+
+  const handleStatus = useMemo(() => {
+    if (account.handle || !handleChanged || debouncedHandle.length < 3) return null
+    if (availability.isLoading) return 'checking'
+    if (availability.data?.available) return 'available'
+    if (availability.data?.reason === 'invalid') return 'invalid'
+    return 'taken'
+  }, [
+    account.handle,
+    availability.data?.available,
+    availability.data?.reason,
+    availability.isLoading,
+    debouncedHandle.length,
+    handleChanged,
+  ])
+
+  const handleSave = form.onSubmit(async (values) => {
     setHandleError(null)
     try {
       const payload: { display_name: string | null; handle?: string } = {
-        display_name: displayName.trim() || null,
+        display_name: values.displayName.trim() || null,
       }
-      if (handleChanged && !account.handle) {
-        payload.handle = handle.trim().toLowerCase().replace(/^@/, '')
+      if (!account.handle && handleChanged) {
+        payload.handle = values.handle.trim().toLowerCase().replace(/^@/, '')
       }
       await updateAccount.mutateAsync(payload)
       toast.success('Profile updated')
     } catch (err) {
       const detail = getErrorDetail(err, 'Failed to update profile')
-      if (handleChanged) {
+      if (!account.handle && handleChanged) {
         setHandleError(detail)
       } else {
         handleMutationError(err, 'Failed to update profile')
       }
     }
-  }
+  })
 
   const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -143,30 +166,28 @@ function ProfileForm({ account }: { account: Account }) {
       </div>
 
       <div className="space-y-1.5">
-        <Label>Email</Label>
+        <p className="text-sm font-medium leading-none">Email</p>
         <p className="text-sm text-muted-foreground">{account.email}</p>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="handle">Handle</Label>
         {account.handle ? (
-          <p className="text-sm font-medium">@{account.handle}</p>
+          <>
+            <p className="text-sm font-medium leading-none">Handle</p>
+            <p className="text-sm font-medium">@{account.handle}</p>
+            <p className="text-xs text-muted-foreground">Your handle is permanent and cannot be changed.</p>
+          </>
         ) : (
           <>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                @
-              </span>
-              <Input
-                id="handle"
-                value={handle}
-                onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/^@/, ''))}
-                className="pl-7"
-                placeholder="your_name"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
+            <TextInput
+              key={form.key('handle')}
+              label="Handle"
+              leftSection={<span className="text-sm text-muted-foreground">@</span>}
+              placeholder="your_name"
+              autoComplete="off"
+              spellCheck={false}
+              {...form.getInputProps('handle')}
+            />
             {handleStatus === 'available' && (
               <p className="text-xs text-emerald-600">Available</p>
             )}
@@ -179,30 +200,21 @@ function ProfileForm({ account }: { account: Account }) {
             {handleError && <p className="text-xs text-destructive">{handleError}</p>}
           </>
         )}
-        {account.handle && (
-          <p className="text-xs text-muted-foreground">Your handle is permanent and cannot be changed.</p>
-        )}
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="display-name">Display name</Label>
-        <Input
-          id="display-name"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="Optional"
-        />
-      </div>
+      <TextInput
+        key={form.key('displayName')}
+        label="Display name"
+        placeholder="Optional"
+        {...form.getInputProps('displayName')}
+      />
 
       <Button
         type="button"
-        onClick={handleSave}
+        onClick={() => handleSave()}
         disabled={
           updateAccount.isPending ||
-          (!account.handle &&
-            handleChanged &&
-            handleStatus !== 'available' &&
-            handleStatus !== null)
+          (!account.handle && handleChanged && handleStatus !== 'available' && handleStatus !== null)
         }
         className="w-full sm:w-auto"
       >
@@ -210,13 +222,4 @@ function ProfileForm({ account }: { account: Account }) {
       </Button>
     </SettingsCard>
   )
-}
-
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delayMs)
-    return () => window.clearTimeout(timer)
-  }, [value, delayMs])
-  return debounced
 }

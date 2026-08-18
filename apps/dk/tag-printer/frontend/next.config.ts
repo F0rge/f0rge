@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   turbopack: { root: repoRoot },
-  typescript: { ignoreBuildErrors: true },
+  transpilePackages: ["@f0rge/ui"],
 };
 
 export default nextConfig;

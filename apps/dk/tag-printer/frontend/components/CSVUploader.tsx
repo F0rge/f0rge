@@ -3,7 +3,7 @@
 import { ChangeEvent, DragEvent, useRef, useState } from 'react';
 import { FileText, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn } from '@f0rge/ui';
 
 interface CSVUploaderProps {
   onFileUpload: (file: File) => void;

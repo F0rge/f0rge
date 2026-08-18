@@ -11,14 +11,60 @@ interface StepperProps {
   max?: number
   label: string
   tooltip?: string
+  size?: 'default' | 'compact'
 }
 
-export function Stepper({ value, onChange, min = 0, max = 10, label, tooltip }: StepperProps) {
+export function Stepper({
+  value,
+  onChange,
+  min = 0,
+  max: maxProp,
+  label,
+  tooltip,
+  size = 'default',
+}: StepperProps) {
+  const max = maxProp ?? (size === 'compact' ? 99 : 10)
+
   const decrement = () => {
     if (value > min) onChange(value - 1)
   }
   const increment = () => {
     if (value < max) onChange(value + 1)
+  }
+
+  if (size === 'compact') {
+    return (
+      <div className="flex items-center gap-2 shrink-0">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={decrement}
+          disabled={value <= min}
+          aria-label={`Decrease ${label}`}
+          className="size-8 rounded-md"
+        >
+          <Minus className="size-4" />
+        </Button>
+        <span
+          className="text-sm font-semibold tabular-nums w-6 text-center"
+          aria-label={`${label}: ${value}`}
+        >
+          {value}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={increment}
+          disabled={value >= max}
+          aria-label={`Increase ${label}`}
+          className="size-8 rounded-md"
+        >
+          <Plus className="size-4" />
+        </Button>
+      </div>
+    )
   }
 
   return (

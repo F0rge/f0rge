@@ -7,7 +7,7 @@ import { useCloneMeal, useRecentMeals } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import type { RecentMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
-import { MealIconThumb } from './meal-icon-thumb'
+import { MealIconThumb, photoThumbSrc } from './meal-icon-thumb'
 import { LogAgainSheet } from './log-again-sheet'
 
 // Relative "when last eaten" label. Builds both dates at local midnight (from
@@ -48,7 +48,7 @@ function RecentMealChip({
         {showPhoto ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={`/api/v1/photos/${meal.source_photo_id}/file`}
+            src={photoThumbSrc(meal.source_photo_id)}
             alt={meal.dish_name}
             className="size-full object-cover"
             onError={() => setImageError(true)}

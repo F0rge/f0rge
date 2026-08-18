@@ -1,0 +1,29 @@
+/* extras.css — documented kit-level CSS overrides (2026-08-15)
+ * Overrides:
+ * - ios-date-input — strips Safari menulist-button appearance on input[type=date]
+ * - mantine-tailwind-preflight — Mantine form inputs vs Tailwind 4 preflight (2026-08-15)
+ */
+
+/* mantine-tailwind-preflight: Tailwind 4 preflight and Mantine both set box-sizing and
+   form-control defaults. Do NOT disable Tailwind preflight globally — apps rely on it for
+   layout. Mantine styles load once in UiProvider (@mantine/core/styles.css). Scoped fixes:
+   (1) Mantine inputs inherit our semantic tokens via cssVariablesResolver in provider.tsx;
+   (2) wrapper classNames in libs/ui/src/forms/* match shadcn Input height/border;
+   (3) if a field looks “double bordered”, check for Tailwind border utilities on the
+   Mantine wrapper AND the inner input — keep borders on .mantine-Input-input only. */
+.mantine-Input-input,
+.mantine-Textarea-input,
+.mantine-PasswordInput-input,
+.mantine-NumberInput-input {
+  box-sizing: border-box;
+}
+
+/* ios-date-input: Safari renders date inputs as a menulist-button with intrinsic
+   width, ignoring w-full/min-w-0 from the shared Input primitive. */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}

@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { Button, FetchError } from '@f0rge/ui'
 import { handleMutationError } from '@f0rge/ui/api'
 import { mealDay } from '@/components/profile/meal-grids'
-import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
+import { MealIconThumb, photoHasImage, photoThumbSrc } from '@/components/checkin/meal-icon-thumb'
 import { useUpdatePhotoVisibility } from '@/lib/api/hooks/entries'
 import { usePhotos } from '@/lib/api/hooks/photos'
 import { SettingsCard } from './settings-card'
@@ -49,7 +49,7 @@ export function HiddenMealsSection() {
                 {photoHasImage(photo) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={`/api/v1/photos/${photo.id}/file`}
+                    src={photoThumbSrc(photo.id)}
                     alt={name}
                     className="size-12 shrink-0 rounded-lg bg-muted object-cover ring-1 ring-foreground/10"
                   />

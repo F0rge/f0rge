@@ -4,7 +4,7 @@ import { use, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Pencil, Loader2, Pill } from 'lucide-react'
 import { useEntry, useUpdatePhotoMealTime, useMedicationCatalog, useSymptomCatalog } from '@/lib/api/hooks'
-import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
+import { MealIconThumb, photoHasImage, photoThumbSrc } from '@/components/checkin/meal-icon-thumb'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-disclosure'
 import { PageShell } from '@/components/layout/page-shell'
@@ -75,7 +75,7 @@ function PhotoWithMealTime({ photo }: { photo: Photo }) {
         {photoHasImage(photo) ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={`/api/v1/photos/${photo.id}/file`}
+            src={photoThumbSrc(photo.id)}
             alt={photo.label || `Photo ${photo.id}`}
             className="aspect-square w-full object-cover"
           />

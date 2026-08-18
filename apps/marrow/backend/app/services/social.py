@@ -23,7 +23,6 @@ from app.schemas.social import (
     validate_handle_format,
 )
 from app.services import object_storage
-from app.services.avatar_storage import avatar_exists
 from app.services.notifications import NotificationService
 from f0rge_db.tenant import current_user_id
 
@@ -74,17 +73,19 @@ class SocialService:
         user = await self.crud.get_by_handle(handle)
         if user is None or user.avatar_custom_filename is None:
             raise NotFoundError("No avatar")
-        if not avatar_exists(user_id=str(user.id)):
-            raise NotFoundError("Avatar file not found")
-
+        # Trust the DB filename; presign is CPU-only (no HEAD). Local/dev
+        # still checks the filesystem before FileResponse.
         presigned = object_storage.presigned_url_for_relative(
             user.avatar_custom_filename, user_id=str(user.id)
         )
         headers = {"Cache-Control": AVATAR_CACHE_CONTROL}
         if presigned:
             return RedirectResponse(presigned, headers=headers)
+        local_path = os.path.join(os.path.abspath(settings.photo_dir), user.avatar_custom_filename)
+        if not os.path.exists(local_path):
+            raise NotFoundError("Avatar file not found")
         return FileResponse(
-            os.path.join(os.path.abspath(settings.photo_dir), user.avatar_custom_filename),
+            local_path,
             media_type="image/jpeg",
             headers=headers,
         )

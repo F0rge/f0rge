@@ -1,0 +1,30 @@
+{
+  "name": "airflow",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/airflow",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/airflow",
+        "command": "uvx ruff@0.16.1 check dags"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/airflow",
+        "command": "uvx ruff@0.16.1 format --check dags"
+      }
+    },
+    "compose-config": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/airflow",
+        "command": "docker compose -f docker-compose.yml config >/dev/null"
+      }
+    }
+  },
+  "tags": ["platform:py", "scope:shared"]
+}

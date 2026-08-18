@@ -38,7 +38,9 @@ from app.services.photo_storage import (
 )
 from f0rge_db.tenant import current_user_id
 
-PHOTO_CACHE_CONTROL = "private, max-age=86400"
+# 240s < the 300s default presigned-URL expiry so a cached redirect never
+# points at an expired URL (same contract as AVATAR_CACHE_CONTROL).
+PHOTO_CACHE_CONTROL = "private, max-age=240"
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
@@ -243,18 +245,21 @@ class PhotoService:
             meal_time=effective_meal_time,
             created_at=now,
         )
-        # Queue analysis when enabled and credentials resolve (env or BYOK).
-        # Credential resolution must not fail the upload — the photo is already persisted.
+        # Queue analysis when enabled. Airflow path uses platform OpenRouter on
+        # the worker; BackgroundTasks path still needs Marrow credentials (env/BYOK).
         analysis_will_run = False
         if settings.food_analysis_enabled:
-            from app.services.llm.factory import resolve_llm_credentials
-
-            try:
-                api_key, _ = await resolve_llm_credentials(self.db)
-            except Exception:
-                api_key = None
-            if api_key:
+            if settings.food_analysis_via_airflow and settings.airflow_url:
                 analysis_will_run = True
+            else:
+                from app.services.llm.factory import resolve_llm_credentials
+
+                try:
+                    api_key, _ = await resolve_llm_credentials(self.db)
+                except Exception:
+                    api_key = None
+                if api_key:
+                    analysis_will_run = True
 
         try:
             async with unit_of_work(self.db):
@@ -274,7 +279,14 @@ class PhotoService:
             raise
 
         if analysis_will_run:
-            background_tasks.add_task(self.orchestrator.run, photo.id, photo.user_id)
+            from app.services.food_analysis_enqueue import enqueue_food_analysis
+
+            await enqueue_food_analysis(
+                photo.id,
+                photo.user_id,
+                background_tasks,
+                orchestrator_run=self.orchestrator.run,
+            )
 
         await invalidate_user_insights_cache(user_id, entry.date)
         companions = await MealTagCRUD(self.db).companion_handles_by_photo_ids([photo.id])
@@ -286,14 +298,16 @@ class PhotoService:
             raise NotFoundError("Photo not found")
         if not photo.filename:
             raise NotFoundError("Photo file not found")
-        if not object_storage.exists_relative(photo.filename, user_id=str(photo.user_id)):
-            raise NotFoundError("Photo file not found")
-        presigned = object_storage.presigned_url_for_relative(
-            photo.filename, user_id=str(photo.user_id)
-        )
+        user_id_str = str(photo.user_id)
+        # Trust the DB filename: upload invariant is row ⇒ object. Presign is
+        # CPU-only (no HEAD). Local/dev still checks the filesystem.
+        presigned = object_storage.presigned_url_for_relative(photo.filename, user_id=user_id_str)
         if presigned:
             return presigned
-        return os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
+        local_path = os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
+        if not os.path.exists(local_path):
+            raise NotFoundError("Photo file not found")
+        return local_path
 
     async def serve_photo_file(self, photo_id: int) -> FileResponse | RedirectResponse:
         target = await self.get_file_path(photo_id)
@@ -306,11 +320,21 @@ class PhotoService:
         if not photo.filename:
             raise NotFoundError("Photo file not found")
         user_id_str = str(photo.user_id)
-        if not object_storage.exists_relative(photo.filename, user_id=user_id_str):
-            raise NotFoundError("Photo file not found")
         thumb_name = thumb_filename(photo.filename)
-        if not photo_exists(thumb_name, user_id=user_id_str):
-            full_bytes = await asyncio.to_thread(read_photo, photo.filename, user_id=user_id_str)
+
+        def _canonical_thumb_exists() -> bool:
+            if object_storage.object_storage_enabled():
+                key = object_storage.build_object_key(thumb_name, user_id=user_id_str)
+                return object_storage.object_exists(key)
+            return photo_exists(thumb_name, user_id=user_id_str)
+
+        if not await asyncio.to_thread(_canonical_thumb_exists):
+            try:
+                full_bytes = await asyncio.to_thread(
+                    read_photo, photo.filename, user_id=user_id_str
+                )
+            except FileNotFoundError as exc:
+                raise NotFoundError("Photo file not found") from exc
             thumb_bytes = await asyncio.to_thread(
                 resize_image, full_bytes, max_dim=THUMB_MAX_DIM, quality=THUMB_QUALITY
             )
@@ -320,6 +344,8 @@ class PhotoService:
             target = presigned
         else:
             target = os.path.join(os.path.abspath(settings.photo_dir), thumb_name)
+            if not os.path.exists(target):
+                raise NotFoundError("Photo file not found")
         return self._photo_file_response(target)
 
     def _photo_file_response(self, target: str) -> FileResponse | RedirectResponse:

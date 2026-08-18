@@ -10,17 +10,16 @@ import { getErrorDetail } from '@f0rge/ui/api'
 export default function SignupPage() {
   const router = useRouter()
   const signup = useSignup()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [handle, setHandle] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleSubmit = async (values: { email: string; password: string; handle?: string }) => {
     setError(null)
-
     try {
-      await signup.mutateAsync({ email, password, handle })
+      await signup.mutateAsync({
+        email: values.email,
+        password: values.password,
+        handle: values.handle ?? '',
+      })
       router.replace('/checkin')
     } catch (err) {
       setError(getErrorDetail(err, 'Could not create account'))
@@ -38,12 +37,6 @@ export default function SignupPage() {
       </div>
       <AuthCredentialsForm
         mode="signup"
-        email={email}
-        password={password}
-        handle={handle}
-        onEmailChange={setEmail}
-        onPasswordChange={setPassword}
-        onHandleChange={setHandle}
         onSubmit={handleSubmit}
         loading={signup.isPending}
         error={error}

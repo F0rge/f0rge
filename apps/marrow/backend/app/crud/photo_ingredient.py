@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import BaseCRUD
@@ -37,3 +37,13 @@ class PhotoIngredientCRUD(BaseCRUD):
             )
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def delete_for_analysis(self, analysis_id: int) -> None:
+        """Remove all ingredients for an analysis (retry-safe complete)."""
+        await self.db.execute(
+            delete(PhotoIngredient).where(
+                owned_by_user(PhotoIngredient.user_id),
+                PhotoIngredient.analysis_id == analysis_id,
+            )
+        )
+        await self.flush()

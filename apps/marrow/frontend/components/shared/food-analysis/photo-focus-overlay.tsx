@@ -5,7 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Eye, EyeOff, Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { MealIconThumb, photoHasImage } from '@/components/checkin/meal-icon-thumb'
+import { MealIconThumb, photoHasImage, photoFileSrc } from '@/components/checkin/meal-icon-thumb'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import {
   usePhotoAnalysis,
@@ -451,7 +451,7 @@ export function PhotoFocusOverlay({
             photoHasImage(currentPhoto) ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={`/api/v1/photos/${photoId}/file`}
+                src={photoFileSrc(photoId)}
                 alt={currentPhoto.label || dishName || 'Meal photo'}
                 className="aspect-[4/3] w-full object-cover"
               />

@@ -37,7 +37,7 @@ Report every violation with `file:line`.
 
 **Backend:** thin routers, `Depends()` injection, class-based services, Pydantic schemas, `from __future__ import annotations`, no secrets, Python 3.10 syntax.
 
-**Frontend:** TypeScript strict (no `any`), `@f0rge/ui` primitives, loading/error/empty states, mobile-first.
+**Frontend:** TypeScript strict (no `any`), `@f0rge/ui` primitives, loading/error/empty states, mobile-first. No `@base-ui/react` or `@mantine/*` imports in `apps/**` (see `ui-kit.mdc`). When `libs/ui` is affected and Storybook exists, run `npx nx run f0rge-ui:storybook` build. Enforce restricted-imports ESLint when configured.
 
 **Shared libs / Nx:** lib tests pass; no `libs/**` imports from `apps/`; grep diff for re-implementations of lib-owned helpers (exceptions, CRUD base, API client, shadcn primitives). New projects carry `platform:` tag in `project.json`. Follow `.cursor/rules/nx.mdc` (affected CI, OpenAPI `codegen:check`, Playwright via Nx `e2e`).
 

@@ -50,6 +50,16 @@ export function photoHasImage(photo: Pick<Photo, 'has_image' | 'filename'>): boo
   return Boolean(photo.filename)
 }
 
+/** Full-size image URL — lightbox / focus overlay only. */
+export function photoFileSrc(photoId: number): string {
+  return `/api/v1/photos/${photoId}/file`
+}
+
+/** 480px thumbnail — every tile-sized surface. */
+export function photoThumbSrc(photoId: number): string {
+  return `/api/v1/photos/${photoId}/thumb`
+}
+
 interface MealIconThumbProps {
   iconKey: string
   className?: string
