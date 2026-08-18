@@ -15,6 +15,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from f0rge_db.rls import migration_bypass
+
 revision: str = "052"
 down_revision: Union[str, None] = "051"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -30,16 +32,17 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    bind.execute(
-        sa.text(
-            """
-            UPDATE entries SET
-              overall = COALESCE(overall, 2),
-              bloating = COALESCE(bloating, 0),
-              sleep_quality = COALESCE(sleep_quality, 2),
-              stress = COALESCE(stress, 1)
-            """
+    with migration_bypass(bind, ("entries",)):
+        bind.execute(
+            sa.text(
+                """
+                UPDATE entries SET
+                  overall = COALESCE(overall, 2),
+                  bloating = COALESCE(bloating, 0),
+                  sleep_quality = COALESCE(sleep_quality, 2),
+                  stress = COALESCE(stress, 1)
+                """
+            )
         )
-    )
     for col in _COLS:
         op.alter_column("entries", col, existing_type=sa.Integer(), nullable=False)
