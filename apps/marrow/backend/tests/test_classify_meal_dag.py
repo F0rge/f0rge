@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 DAG_PATH = Path(__file__).resolve().parents[2] / "dags" / "classify_meal.py"
+SCHEMA_PATH = DAG_PATH.with_name("_vision_schema.py")
 
 
 def test_classify_meal_dag_file_parses():
@@ -27,10 +28,7 @@ def test_classify_meal_dag_file_parses():
 
 
 def test_vision_result_in_dag_accepts_fixture():
-    # Load VisionResult from the DAG file without importing airflow providers.
     source = DAG_PATH.read_text(encoding="utf-8")
-    # Extract models via exec of the pydantic section only is brittle; use
-    # the marrow backend models which must stay in sync.
     from app.services.vision_prompt import VisionResult
 
     fixture = {
@@ -43,6 +41,39 @@ def test_vision_result_in_dag_accepts_fixture():
     assert "food identification assistant" in source
     assert "LLMFileAnalysisOperator" in source
     assert 'dag_id="marrow_classify_meal"' in source or "dag_id='marrow_classify_meal'" in source
+    assert "Never emit null/None in ingredients" in source
+    assert "agent_params" in source
+
+
+def test_dag_vision_result_drops_null_ingredients():
+    """Gemini sometimes returns ingredients: [null, null, …]."""
+    spec = importlib.util.spec_from_file_location("marrow_vision_schema", SCHEMA_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    result = module.VisionResult.model_validate(
+        {
+            "dish_name": "salad",
+            "cuisine": None,
+            "confidence": 0.8,
+            "ingredients": [
+                None,
+                {"name": "lettuce", "visible": True, "confidence": 0.9},
+                None,
+                "tomato",
+            ],
+        }
+    )
+    assert [i.name for i in result.ingredients] == ["lettuce", "tomato"]
+    empty = module.VisionResult.model_validate(
+        {
+            "dish_name": "unknown",
+            "cuisine": None,
+            "confidence": 0,
+            "ingredients": [None] * 14,
+        }
+    )
+    assert empty.ingredients == []
 
 
 @pytest.mark.skipif(
