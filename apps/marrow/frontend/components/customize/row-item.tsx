@@ -7,6 +7,8 @@
  */
 
 import { cn } from '@f0rge/ui'
+import { IconWell } from '@/components/shared/color-artifact'
+import { toneFromTier, type CustomizeTier } from '@/lib/ui/status'
 import type { ReactNode } from 'react'
 
 interface RowItemProps {
@@ -22,6 +24,8 @@ interface RowItemProps {
   actions?: ReactNode
   /** Whether the row should appear dimmed (e.g. hidden or archived state). */
   dimmed?: boolean
+  /** When set, the icon well matches the page's governance tier. */
+  tier?: CustomizeTier
   className?: string
 }
 
@@ -32,6 +36,7 @@ export function RowItem({
   meta,
   actions,
   dimmed = false,
+  tier,
   className,
 }: RowItemProps) {
   return (
@@ -49,9 +54,12 @@ export function RowItem({
       )}
 
       {icon && (
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+        <IconWell
+          tone={tier ? toneFromTier(tier) : undefined}
+          className="size-8 rounded-full"
+        >
           {icon}
-        </span>
+        </IconWell>
       )}
 
       <div className="flex-1 min-w-0">

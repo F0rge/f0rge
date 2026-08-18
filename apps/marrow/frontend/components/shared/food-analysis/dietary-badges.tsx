@@ -1,20 +1,16 @@
 import type { PhotoIngredient } from '@/lib/api/types'
+import {
+  confirmedFreeClass,
+  fodmapHighClass,
+  fodmapModClass,
+  histamineClass,
+  statusPill,
+} from '@/lib/ui/status'
 
 export interface DietaryBadge {
   label: string
   className: string
 }
-
-const HISTAMINE_COLORS: Record<number, string> = {
-  0: 'bg-green-100 text-green-800',
-  1: 'bg-yellow-100 text-yellow-800',
-  2: 'bg-orange-100 text-orange-800',
-  3: 'bg-red-100 text-red-800',
-}
-
-const FODMAP_HIGH = 'bg-orange-100 text-orange-800'
-const FODMAP_MOD = 'bg-amber-100 text-amber-800'
-const CONFIRMED_FREE = 'bg-green-100 text-green-800'
 
 /** Per-meal "confirmed free" flags — suppress the corresponding risk badge and
  * swap in a green ✓ pill. Mirrors the backend scoring gate so the UI never
@@ -41,7 +37,7 @@ export function buildIngredientBadges(
   if (ingredient.histamine_score !== null) {
     badges.push({
       label: `H:${ingredient.histamine_score}`,
-      className: HISTAMINE_COLORS[ingredient.histamine_score] ?? 'bg-gray-100 text-gray-600',
+      className: histamineClass[ingredient.histamine_score] ?? statusPill.muted,
     })
   }
 
@@ -50,15 +46,15 @@ export function buildIngredientBadges(
   if (ingredient.contains_gluten) {
     badges.push(
       glutenFreeConfirmed
-        ? { label: 'GF ✓', className: CONFIRMED_FREE }
-        : { label: 'Gluten', className: 'bg-red-100 text-red-800' },
+        ? { label: 'GF ✓', className: confirmedFreeClass }
+        : { label: 'Gluten', className: statusPill.destructive },
     )
   }
 
   // Dairy is never suppressed — lactose-free confirmation only clears the
   // lactose (F:L) FODMAP flag below, not the dairy protein flag.
   if (ingredient.contains_dairy) {
-    badges.push({ label: 'Dairy', className: 'bg-blue-100 text-blue-800' })
+    badges.push({ label: 'Dairy', className: statusPill.info })
   }
 
   // FODMAP flags. For each category, `high` takes precedence over
@@ -75,11 +71,11 @@ export function buildIngredientBadges(
     if (value !== 'high' && value !== 'moderate') continue
     // Lactose-free confirmed: drop the F:L pill, swap in a green ✓.
     if (abbrev === 'F:L' && lactoseFreeConfirmed) {
-      badges.push({ label: 'LF ✓', className: CONFIRMED_FREE })
+      badges.push({ label: 'LF ✓', className: confirmedFreeClass })
     } else if (value === 'high') {
-      badges.push({ label: abbrev, className: FODMAP_HIGH })
+      badges.push({ label: abbrev, className: fodmapHighClass })
     } else {
-      badges.push({ label: `${abbrev}?`, className: FODMAP_MOD })
+      badges.push({ label: `${abbrev}?`, className: fodmapModClass })
     }
   }
 
@@ -89,7 +85,7 @@ export function buildIngredientBadges(
     ingredient.contains_gluten === null &&
     ingredient.contains_dairy === null
   ) {
-    badges.push({ label: '?', className: 'bg-gray-100 text-gray-500' })
+    badges.push({ label: '?', className: statusPill.muted })
   }
 
   return badges

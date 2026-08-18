@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Microscope, List, FlaskConical, Upload, Plus } from 'lucide-react'
+import { Loader2, List, FlaskConical, Upload, Plus } from 'lucide-react'
 import { useLabs } from '@/lib/api/hooks'
 import { LG_DESKTOP_QUERY, useMediaQuery } from '@f0rge/ui'
 import { LabCard } from '@/components/labs/lab-card'
@@ -10,6 +10,7 @@ import { LabDetailInline } from '@/components/labs/lab-detail-inline'
 import { LabFormDialog } from '@/components/labs/lab-form-dialog'
 import { LabUploadDialog } from '@/components/labs/lab-upload-dialog'
 import { MarkerList } from '@/components/labs/marker-list'
+import { EmptyMark } from '@/components/shared/color-artifact'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { cn } from '@f0rge/ui'
@@ -96,7 +97,7 @@ export default function LabsPage() {
 
           {!isLoading && !isError && (!labs || labs.length === 0) && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Microscope className="mb-4 size-12 text-muted-foreground/40" />
+              <EmptyMark className="mb-4" />
               <h2 className="mb-1 text-lg font-semibold">No labs yet</h2>
               <p className="mb-4 text-sm text-muted-foreground">
                 Add lab results manually or upload a PDF/image for automatic extraction.

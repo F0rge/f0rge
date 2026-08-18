@@ -11,9 +11,9 @@ interface Props {
 
 function stripColor(value: number | null): string {
   if (value === null) return 'bg-muted'
-  if (value >= 0.66) return 'bg-emerald-500/80'
-  if (value >= 0.33) return 'bg-amber-500/80'
-  return 'bg-red-500/80'
+  if (value >= 0.66) return 'bg-ok/80'
+  if (value >= 0.33) return 'bg-warn/80'
+  return 'bg-destructive/80'
 }
 
 function StripRow({

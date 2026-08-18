@@ -2293,9 +2293,9 @@ export interface components {
             /** Period Of Day */
             period_of_day?: string | null;
             /** Overall */
-            overall: number;
+            overall?: number | null;
             /** Bloating */
-            bloating: number;
+            bloating?: number | null;
             /** Stool Normal */
             stool_normal?: boolean | null;
             /** Stool Type */
@@ -2323,9 +2323,9 @@ export interface components {
              */
             neuro: number;
             /** Sleep Quality */
-            sleep_quality: number;
+            sleep_quality?: number | null;
             /** Stress */
-            stress: number;
+            stress?: number | null;
             /** Diet Risk */
             diet_risk: string;
             /** Supplements */
@@ -2366,9 +2366,9 @@ export interface components {
             /** Period Of Day */
             period_of_day?: string | null;
             /** Overall */
-            overall: number;
+            overall?: number | null;
             /** Bloating */
-            bloating: number;
+            bloating?: number | null;
             /** Stool Normal */
             stool_normal?: boolean | null;
             /** Stool Type */
@@ -2384,9 +2384,9 @@ export interface components {
             /** Neuro */
             neuro: number;
             /** Sleep Quality */
-            sleep_quality: number;
+            sleep_quality?: number | null;
             /** Stress */
-            stress: number;
+            stress?: number | null;
             /** Diet Risk */
             diet_risk: string;
             /** Supplements */

@@ -1,5 +1,6 @@
-import { formatDisplayDate } from '@f0rge/ui'
+import { cn, formatDisplayDate } from '@f0rge/ui'
 import type { SignalsUnexplained } from '@/lib/api/types/signals'
+import { statusText } from '@/lib/ui/status'
 
 interface Props {
   unexplained: SignalsUnexplained
@@ -56,7 +57,7 @@ export function UnexplainedDays({ unexplained }: Props) {
       </h2>
       <div className="space-y-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10">
         {unexplained.relearning && unexplained.relearning_message ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
+          <p className={cn('text-xs', statusText.warn)}>
             {unexplained.relearning_message}
           </p>
         ) : null}

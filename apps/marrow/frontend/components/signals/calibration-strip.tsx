@@ -9,6 +9,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { TodayCalibrationPoint } from '@/lib/api/types/signals'
+import { chartStroke } from '@/lib/ui/status'
 
 interface Props {
   series: TodayCalibrationPoint[]
@@ -46,7 +47,7 @@ export function CalibrationStrip({ series }: Props) {
             <Line
               type="monotone"
               dataKey="predicted"
-              stroke="#6366f1"
+              stroke={chartStroke[1]}
               strokeWidth={1.5}
               dot={false}
               name="Predicted"
@@ -54,7 +55,7 @@ export function CalibrationStrip({ series }: Props) {
             <Line
               type="monotone"
               dataKey="actual"
-              stroke="#22c55e"
+              stroke={chartStroke.ok}
               strokeWidth={1.5}
               dot={false}
               name="Actual"

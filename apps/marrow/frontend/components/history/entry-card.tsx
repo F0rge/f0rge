@@ -19,7 +19,7 @@ function formatDate(dateStr: string): string {
 
 function getSummary(entry: Entry): string {
   const parts: string[] = []
-  if (entry.bloating > 0) {
+  if ((entry.bloating ?? 0) > 0) {
     const level = entry.bloating === 1 ? 'mild' : entry.bloating === 2 ? 'moderate' : 'severe'
     parts.push(`${level} bloating`)
   }

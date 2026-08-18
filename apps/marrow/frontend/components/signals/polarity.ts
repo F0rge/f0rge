@@ -1,4 +1,5 @@
 import type { GoodDirection } from '@/lib/api/types/signals'
+import { statusText } from '@/lib/ui/status'
 
 const FLAT_DELTA = 0.05
 
@@ -13,9 +14,7 @@ export function deltaIsGood(delta: number, goodDirection: GoodDirection): boolea
 export function polarityTone(delta: number, goodDirection: GoodDirection): string {
   const good = deltaIsGood(delta, goodDirection)
   if (good === null) return 'text-muted-foreground'
-  return good
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : 'text-destructive'
+  return good ? statusText.ok : statusText.destructive
 }
 
 export function crossesZero(ciLow: number | null, ciHigh: number | null): boolean {

@@ -52,8 +52,8 @@ export interface Entry {
   schema_version: number
   entry_time: string | null
   period_of_day: 'morning' | 'midday' | 'evening' | 'night' | null
-  overall: number // 1-3 (Very Poor, Standard, Very Good)
-  bloating: number // 0-3
+  overall: number | null // 1-5, or null if not rated
+  bloating: number | null // 0-3, or null if not rated
   // v1 legacy
   stool_normal: boolean | null
   stool_type: string | null
@@ -64,8 +64,8 @@ export interface Entry {
   stool_completeness: 'complete' | 'incomplete' | null
   joint_pain: number // 0-3
   neuro: number // -1, 0, 1
-  sleep_quality: number // 1-3
-  stress: number // 1-3
+  sleep_quality: number | null // 1-5, or null if not rated
+  stress: number | null // 1-5, or null if not rated
   diet_risk: string
   supplements: string // comma-separated supplement IDs
   sick: boolean
@@ -89,15 +89,15 @@ export interface EntryCreate {
   schema_version?: number
   entry_time?: string
   period_of_day?: string
-  overall: number
-  bloating: number
+  overall?: number | null
+  bloating?: number | null
   stool_status?: StoolStatus
   bristol_type?: number
   stool_completeness?: 'complete' | 'incomplete' | null
   joint_pain?: number
   neuro?: number
-  sleep_quality: number
-  stress: number
+  sleep_quality?: number | null
+  stress?: number | null
   diet_risk: string
   supplements: string
   sick: boolean

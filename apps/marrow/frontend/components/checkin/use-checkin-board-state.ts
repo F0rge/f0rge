@@ -116,13 +116,13 @@ export function useCheckinBoardState({
     return () => window.removeEventListener('focus', handleFocus)
   }, [])
 
-  const [overall, setOverall] = useState(2)
-  const [bloating, setBloating] = useState(0)
-  const [stoolStatus, setStoolStatus] = useState<StoolStatus>('normal')
+  const [overall, setOverall] = useState<number | null>(null)
+  const [bloating, setBloating] = useState<number | null>(null)
+  const [stoolStatus, setStoolStatus] = useState<StoolStatus | null>(null)
   const [bristolType, setBristolType] = useState<number | null>(null)
   const [stoolCompleteness, setStoolCompleteness] = useState<'complete' | 'incomplete' | null>(null)
-  const [sleepQuality, setSleepQuality] = useState(2)
-  const [stress, setStress] = useState(1)
+  const [sleepQuality, setSleepQuality] = useState<number | null>(null)
+  const [stress, setStress] = useState<number | null>(null)
   const [dietRisk, setDietRisk] = useState<string>('')
   const [supplements, setSupplements] = useState<string>('')
   const [supplementsTouched, setSupplementsTouched] = useState(false)
@@ -217,14 +217,12 @@ export function useCheckinBoardState({
         setStoolStatus(existingEntry.stool_status)
       } else if (existingEntry.stool_normal === false) {
         setStoolStatus('abnormal')
-      } else {
+      } else if (existingEntry.stool_normal === true) {
         setStoolStatus('normal')
+      } else {
+        setStoolStatus(null)
       }
-      const resolvedStool = existingEntry.stool_status
-        ?? (existingEntry.stool_normal === false ? 'abnormal' : 'normal')
-      const resolvedBristol = existingEntry.bristol_type
-        ?? (resolvedStool === 'abnormal' ? 4 : null)
-      setBristolType(resolvedBristol)
+      setBristolType(existingEntry.bristol_type)
       setStoolCompleteness(existingEntry.stool_completeness ?? null)
       setSleepQuality(existingEntry.sleep_quality)
       setStress(existingEntry.stress)
@@ -250,10 +248,9 @@ export function useCheckinBoardState({
   const fivePoint = (existingEntry?.schema_version ?? 4) >= 4
 
   useEffect(() => {
+    if (stoolStatus === null) return
     if (stoolStatus !== 'abnormal') {
       setBristolType(null)
-    } else {
-      setBristolType((prev) => prev ?? 4)
     }
   }, [stoolStatus])
 
@@ -261,7 +258,7 @@ export function useCheckinBoardState({
     date,
     overall,
     bloating,
-    stool_status: stoolStatus,
+    stool_status: stoolStatus ?? undefined,
     bristol_type: stoolStatus === 'abnormal' && bristolType !== null ? bristolType : undefined,
     stool_completeness: stoolCompleteness ?? undefined,
     sleep_quality: sleepQuality,

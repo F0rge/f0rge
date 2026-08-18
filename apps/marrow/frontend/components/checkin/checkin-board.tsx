@@ -61,7 +61,7 @@ export function CheckinBoard({
 
   return (
     <div className="space-y-4 pb-8">
-      <div className="grid grid-cols-12 gap-4 auto-rows-min">
+      <div className="em-stagger grid grid-cols-12 gap-4 auto-rows-min">
         <ProtocolCard
           date={date}
           collapsed={state.isCardCollapsed('protocol')}

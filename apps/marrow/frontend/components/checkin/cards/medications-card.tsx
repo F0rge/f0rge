@@ -16,6 +16,7 @@ import { MedicationQuickAddDialog } from '@/components/checkin/medication-quick-
 import { useMedicationCatalog } from '@/lib/api/hooks'
 import { cn } from '@f0rge/ui'
 import type { MedicationIntake } from '@/lib/api/types'
+import { statusPill } from '@/lib/ui/status'
 
 interface MedicationsCardProps extends CheckinCardCollapseProps {
   value: MedicationIntake[]
@@ -72,7 +73,7 @@ export function MedicationsCard({
                 key={`${intake.key}-${index}`}
                 className="flex items-center gap-2.5 rounded-lg border border-border bg-background p-2.5"
               >
-                <span className="flex size-7 flex-none items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                <span className={cn('flex size-7 flex-none items-center justify-center rounded-full', statusPill.warn)}>
                   <Pill className="size-3.5" />
                 </span>
                 <div className="min-w-0 flex-1">

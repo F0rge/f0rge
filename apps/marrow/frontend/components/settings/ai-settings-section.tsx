@@ -124,7 +124,7 @@ export function AiSettingsSection() {
   }
 
   return (
-    <SettingsCard icon={Sparkles} iconClassName="text-purple-500" title="AI & Embeddings">
+    <SettingsCard icon={Sparkles} iconClassName="text-muted-foreground" title="AI & Embeddings">
       <div className="space-y-1">
         <p className="text-xs font-medium text-muted-foreground">Provider</p>
         <p className="text-sm">OpenRouter</p>

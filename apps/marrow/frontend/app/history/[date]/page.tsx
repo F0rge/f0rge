@@ -11,6 +11,8 @@ import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
 import type { Entry, Photo } from '@/lib/api/types'
 import { getOverallBadgeClass, getScaleLabel } from '@/lib/checkin/scale-labels'
+import { cn } from '@f0rge/ui'
+import { statusPill } from '@/lib/ui/status'
 
 function formatDisplayDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00')
@@ -23,7 +25,8 @@ function formatDisplayDate(dateStr: string): string {
 }
 
 // bloating is 0-3 in every schema version — unaffected by v4.
-function getBloatingLabel(v: number): string {
+function getBloatingLabel(v: number | null): string {
+  if (v == null) return 'Not rated'
   return ['None', 'Mild', 'Moderate', 'Severe'][v] ?? 'Unknown'
 }
 
@@ -120,7 +123,7 @@ function MedicationsSection({ medications }: { medications: Entry['medications']
             key={`${intake.key}-${index}`}
             className="flex items-center gap-2.5 rounded-lg border border-border bg-background p-2.5"
           >
-            <span className="flex size-7 flex-none items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+            <span className={cn('flex size-7 flex-none items-center justify-center rounded-full', statusPill.warn)}>
               <Pill className="size-3.5" />
             </span>
             <div className="min-w-0 flex-1">

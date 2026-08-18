@@ -32,7 +32,7 @@ export function ExportDataSection() {
   }
 
   return (
-    <SettingsCard icon={Download} iconClassName="text-green-500" title="Export Data">
+    <SettingsCard icon={Download} iconClassName="text-muted-foreground" title="Export Data">
       <p className="text-sm text-muted-foreground">
         Download all check-in and health metric data as a CSV feature matrix for analysis.
       </p>

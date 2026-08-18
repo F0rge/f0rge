@@ -1,16 +1,12 @@
 'use client'
 
 import { Button } from '@f0rge/ui'
+import { cn } from '@f0rge/ui'
 import { MarkerSparkline } from './marker-sparkline'
-import type { Lab, MarkerFlag, LabType } from '@/lib/api/types'
+import type { Lab, LabType } from '@/lib/api/types'
+import { labFlagClass, statusPill } from '@/lib/ui/status'
 
-const FLAG_CLASSES: Record<MarkerFlag, string> = {
-  normal: 'bg-muted text-muted-foreground',
-  low: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  high: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  abnormal: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  unknown: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
-}
+const FLAG_CLASSES = labFlagClass
 
 const TYPE_LABELS: Record<LabType, string> = {
   blood: 'Blood',
@@ -108,7 +104,7 @@ export function LabDetailContent({
           </p>
         </div>
         {lab.review_status === 'needs_review' && (
-          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+          <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusPill.warn)}>
             Needs review
           </span>
         )}

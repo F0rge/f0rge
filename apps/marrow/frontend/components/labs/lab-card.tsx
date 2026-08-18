@@ -1,7 +1,8 @@
 'use client'
 
-import type { Lab, LabType } from '@/lib/api/types'
+import type { Lab } from '@/lib/api/types'
 import { cn, formatDisplayDate } from '@f0rge/ui'
+import { labTypeClass, statusPill } from '@/lib/ui/status'
 
 interface LabCardProps {
   lab: Lab
@@ -9,15 +10,7 @@ interface LabCardProps {
   selected?: boolean
 }
 
-const TYPE_CLASSES: Record<LabType, string> = {
-  blood: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  breath: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400',
-  imaging: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
-  microbiology: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  allergy: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  comprehensive: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  other: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
-}
+const TYPE_CLASSES = labTypeClass
 
 export function LabCard({ lab, onClick, selected = false }: LabCardProps) {
   const abnormalCount = lab.markers.filter(
@@ -55,12 +48,12 @@ export function LabCard({ lab, onClick, selected = false }: LabCardProps) {
             {lab.markers.length} marker{lab.markers.length !== 1 ? 's' : ''}
           </span>
           {abnormalCount > 0 && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
+            <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusPill.destructive)}>
               {abnormalCount} abnormal
             </span>
           )}
           {lab.review_status === 'needs_review' && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+            <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusPill.warn)}>
               review
             </span>
           )}

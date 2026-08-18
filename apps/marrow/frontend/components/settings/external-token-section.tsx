@@ -11,6 +11,7 @@ import {
 import { handleMutationError } from '@f0rge/ui/api'
 import { SettingsCard } from './settings-card'
 import { BUTTON_CLASS } from './constants'
+import { statusText } from '@/lib/ui/status'
 
 const MCP_CONFIG_SNIPPET = `{
   "mcpServers": {
@@ -82,7 +83,7 @@ export function ExternalTokenSection() {
               <Copy className="size-4" />
             </button>
           </div>
-          <p className="text-xs text-amber-600 dark:text-amber-400">
+          <p className={`text-xs ${statusText.warn}`}>
             Copy this now — it will not be shown again. Closing this page will hide it.
           </p>
           <div className="flex gap-2">

@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Daily symptom check-in and health tracking.',
     start_url: '/checkin',
     display: 'standalone',
-    theme_color: '#131110',
-    background_color: '#F4EEE6',
+    theme_color: '#000000',
+    background_color: '#F2F1EF',
     icons: [
       {
         src: '/icons/icon-32.png',

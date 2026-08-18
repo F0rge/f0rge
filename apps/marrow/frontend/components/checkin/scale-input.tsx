@@ -21,7 +21,7 @@ interface ScaleOption {
 interface ScaleInputProps {
   label: string
   options: ScaleOption[]
-  value: number | string
+  value: number | string | null
   onChange: (value: number | string) => void
   description?: string
 }
@@ -36,7 +36,7 @@ function assertValidScaleOptions(options: ScaleOption[]): void {
   if (options.length > MAX_SCALE_OPTIONS) {
     throw new Error(
       `ScaleInput: received ${options.length} options but the maximum is ${MAX_SCALE_OPTIONS}. ` +
-        `Use a different component for more options.`
+        `Use a different component for more options.`,
     )
   }
 
@@ -45,7 +45,7 @@ function assertValidScaleOptions(options: ScaleOption[]): void {
       throw new Error(
         `ScaleInput: label "${option.label}" is ${option.label.length} chars, ` +
           `which exceeds MAX_SCALE_LABEL_LENGTH (${MAX_SCALE_LABEL_LENGTH}). ` +
-          `Shorten the label or use a different component.`
+          `Shorten the label or use a different component.`,
       )
     }
   }
@@ -55,22 +55,31 @@ export function ScaleInput({ label, options, value, onChange, description }: Sca
   assertValidScaleOptions(options)
 
   const isProduction = process.env.NODE_ENV === 'production'
+  const unset = value === null || value === ''
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-semibold leading-none">{label}</label>
-      {description && (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      )}
-      {/* Track: darker zinc-200 background so the selected thumb has real contrast */}
+      <div className="flex items-center gap-2">
+        <label className="text-sm font-semibold leading-none">{label}</label>
+        {unset && (
+          <span
+            aria-hidden
+            className="size-2 shrink-0 rounded-full bg-chart-1 motion-safe:animate-[em-needle_1.8s_ease-in-out_infinite]"
+          />
+        )}
+      </div>
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
       <div
-        className="grid w-full rounded-xl bg-border p-1 gap-0.5"
+        className={cn(
+          'relative grid w-full rounded-full p-1 gap-0.5',
+          unset ? 'bg-muted ring-1 ring-dashed ring-chart-1/70' : 'bg-border',
+        )}
         style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
-        role="group"
-        aria-label={label}
+        role="radiogroup"
+        aria-label={unset ? `${label}, not rated yet` : label}
       >
         {options.map((option) => {
-          const isActive = value === option.value
+          const isActive = !unset && value === option.value
           return (
             <button
               key={String(option.value)}
@@ -79,25 +88,16 @@ export function ScaleInput({ label, options, value, onChange, description }: Sca
               aria-checked={isActive}
               onClick={() => onChange(option.value)}
               className={cn(
-                // Base segment
-                'inline-flex items-center justify-center',
-                'min-h-[44px] rounded-lg px-2.5',
+                'relative z-20 inline-flex items-center justify-center',
+                'min-h-[44px] rounded-full px-2.5',
                 'text-sm font-medium',
-                'transition-all duration-150',
-                'active:scale-[0.98]',
+                'transition-all duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]',
+                'active:scale-[0.97]',
                 'focus-visible:outline-2 focus-visible:outline-foreground focus-visible:outline-offset-2',
-                // Overflow: in production degrade gracefully instead of crashing
                 isProduction ? 'overflow-hidden text-ellipsis' : 'whitespace-nowrap',
-                !isProduction && 'whitespace-nowrap',
-                // State
                 isActive
-                  ? [
-                      'bg-card text-foreground font-semibold',
-                      // Contrast carriers: real shadow + inset dark ring
-                      'shadow-[0_1px_2px_rgba(0,0,0,0.08),0_2px_6px_rgba(0,0,0,0.06)]',
-                      'ring-1 ring-inset ring-foreground/[.12]',
-                    ]
-                  : 'bg-transparent text-muted-foreground hover:text-foreground'
+                  ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                  : 'bg-transparent text-muted-foreground hover:text-foreground',
               )}
             >
               {option.label}
@@ -105,6 +105,7 @@ export function ScaleInput({ label, options, value, onChange, description }: Sca
           )
         })}
       </div>
+      {unset && <p className="text-[11px] text-muted-foreground">Not rated — tap a level</p>}
     </div>
   )
 }
