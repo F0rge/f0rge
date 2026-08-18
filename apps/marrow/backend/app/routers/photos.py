@@ -54,7 +54,7 @@ async def upload_photo(
 async def list_photos(
     scope: Literal["all", "tagged"] = Query("all"),
     visibility: Literal["visible", "hidden", "all"] = Query("visible"),
-    limit: int = Query(24, ge=1, le=100),
+    limit: Optional[int] = Query(None, ge=1),
     offset: int = Query(0, ge=0),
     service: PhotoService = Depends(get_photo_service),
 ) -> list[PhotoResponse]:

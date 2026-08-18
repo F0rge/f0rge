@@ -96,11 +96,12 @@ class PhotoService:
         self.meal_tags = meal_tags
 
     async def list_photos(
-        self, scope: str, visibility: str, limit: int, offset: int
+        self, scope: str, visibility: str, limit: Optional[int], offset: int
     ) -> list[PhotoResponse]:
         """Profile-grid feed: the user's photos, optionally only tagged copies.
 
-        The profile tag-filter rule (settings) applies only to
+        ``limit=None`` returns the full feed (profile grid). Explicit ``limit``
+        still paginates. The profile tag-filter rule (settings) applies only to
         ``visibility="visible"``; hidden/all listings are never tag-filtered.
         """
         settings_row = await self.settings_crud.get() if visibility == "visible" else None
@@ -131,8 +132,9 @@ class PhotoService:
             wanted = set(settings_row.profile_filter_tags_list)
             # show_only with no tags would filter everything; treat as off (hide
             # with an empty list is already a no-op).
+            end = None if limit is None else offset + limit
             if mode == "show_only" and not wanted:
-                return responses[offset : offset + limit]
+                return responses[offset:end]
 
             def _matches(r: PhotoResponse) -> bool:
                 return bool((set(r.diet_tags) | set(r.derived_diet_tags)) & wanted)
@@ -141,7 +143,7 @@ class PhotoService:
                 responses = [r for r in responses if not _matches(r)]
             else:  # show_only
                 responses = [r for r in responses if _matches(r)]
-            responses = responses[offset : offset + limit]
+            responses = responses[offset:end]
         return responses
 
     async def update_photo(self, photo_id: int, data: PhotoUpdate) -> PhotoResponse:

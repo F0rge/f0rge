@@ -25,11 +25,13 @@ export function usePhotos(
   options?: { visibility?: 'visible' | 'hidden'; limit?: number; enabled?: boolean },
 ) {
   const visibility = options?.visibility ?? 'visible'
-  const limit = options?.limit ?? 24
+  const limit = options?.limit
   const enabled = options?.enabled ?? true
+  const params = new URLSearchParams({ scope, visibility })
+  if (limit != null) params.set('limit', String(limit))
   return useQuery<Photo[]>({
-    queryKey: ['photos', scope, visibility, limit],
-    queryFn: () => apiGet(`/photos?scope=${scope}&limit=${limit}&visibility=${visibility}`),
+    queryKey: ['photos', scope, visibility, limit ?? 'all'],
+    queryFn: () => apiGet(`/photos?${params}`),
     enabled,
   })
 }
