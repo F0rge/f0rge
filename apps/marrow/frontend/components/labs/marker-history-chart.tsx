@@ -181,7 +181,8 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
             <ReferenceArea
               y1={refBand.low}
               y2={refBand.high}
-              fill={`${chartStroke[1]}20`}
+              fill={chartStroke[1]}
+              fillOpacity={0x20 / 0xff}
               strokeOpacity={0}
             />
           )}
@@ -190,7 +191,8 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
             <ReferenceLine
               key={`t-start-${t.id}`}
               x={t.start_date.slice(5)}
-              stroke={`${chartStroke[1]}80`}
+              stroke={chartStroke[1]}
+              strokeOpacity={0x80 / 0xff}
               strokeDasharray="4 2"
               label={{ value: t.name.slice(0, 8), fontSize: 9, fill: chartStroke[1] }}
             />
@@ -201,7 +203,8 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
               <ReferenceLine
                 key={`t-end-${t.id}`}
                 x={t.end_date!.slice(5)}
-                stroke={`${chartStroke.muted}80`}
+                stroke={chartStroke.muted}
+                strokeOpacity={0x80 / 0xff}
                 strokeDasharray="4 2"
               />
             ))}
