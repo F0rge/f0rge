@@ -3,14 +3,14 @@
 dag_run.conf: {"photo_id": int, "user_id": "<uuid>"}
 
 The Celery worker never imports Marrow or opens its DB. Resolve/persist go through
-Marrow internal HTTP (MARROW_API_BASE_URL + MARROW_AIRFLOW_SERVICE_TOKEN).
+Marrow internal HTTP. Bundle ``marrow_dev`` (@ develop) vs ``marrow_prod`` (@ main)
+selects dag_id, S3 connection, and Marrow URL/token — never a shared process env.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -19,9 +19,20 @@ from typing import Any
 from airflow.providers.common.ai.operators.llm_file_analysis import LLMFileAnalysisOperator
 from airflow.sdk import dag, task
 
+from _bundle_env import (
+    classify_dag_id,
+    marrow_airflow_env,
+    marrow_api_base_url,
+    marrow_service_token,
+    photos_conn_id,
+)
 from _vision_schema import VisionResult
 
 logger = logging.getLogger(__name__)
+
+_ENV = marrow_airflow_env(__file__)
+DAG_ID = classify_dag_id(_ENV)
+FILE_CONN_ID = photos_conn_id(_ENV)
 
 
 SYSTEM_PROMPT = """\
@@ -91,21 +102,14 @@ USER_PROMPT = (
 )
 
 LLM_CONN_ID = "pydanticai_openrouter"
-FILE_CONN_ID = "aws_photos"
 
 
 def _marrow_base() -> str:
-    base = os.environ.get("MARROW_API_BASE_URL", "").rstrip("/")
-    if not base:
-        raise RuntimeError("MARROW_API_BASE_URL is not set on the Airflow worker")
-    return base
+    return marrow_api_base_url(_ENV)
 
 
 def _marrow_token() -> str:
-    token = os.environ.get("MARROW_AIRFLOW_SERVICE_TOKEN", "")
-    if not token:
-        raise RuntimeError("MARROW_AIRFLOW_SERVICE_TOKEN is not set on the Airflow worker")
-    return token
+    return marrow_service_token(_ENV)
 
 
 def _marrow_request(
@@ -164,11 +168,11 @@ def _mark_failed(context: dict[str, Any]) -> None:
 
 
 @dag(
-    dag_id="marrow_classify_meal",
+    dag_id=DAG_ID,
     schedule=None,
     start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     catchup=False,
-    tags=["marrow", "meal", "vision", "common-ai"],
+    tags=["marrow", "meal", "vision", "common-ai", _ENV],
     on_failure_callback=_mark_failed,
 )
 def marrow_classify_meal() -> None:
