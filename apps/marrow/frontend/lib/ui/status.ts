@@ -175,6 +175,7 @@ export const mealThumbBg: Record<string, string> = {
   duck: 'from-chart-1/55 to-chart-1/20',
   sandwich: 'from-chart-4/50 to-chart-1/15',
   pastry: 'from-chart-4/50 to-chart-4/15',
+  fish: 'from-chart-5/45 to-chart-5/15',
   salad: 'from-chart-3/45 to-chart-3/15',
   curry: 'from-chart-1/50 to-chart-3/15',
   toast: 'from-chart-1/40 to-muted',
