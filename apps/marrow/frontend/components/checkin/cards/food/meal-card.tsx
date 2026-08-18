@@ -2,7 +2,7 @@
 
 import { Loader2, X } from 'lucide-react'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { MealIconThumb, photoHasImage, photoThumbSrc } from '@/components/checkin/meal-icon-thumb'
+import { MealIconThumb, photoHasImage, useMealThumbSrc } from '@/components/checkin/meal-icon-thumb'
 import { buildAggregateBadges } from '@/components/shared/food-analysis/dietary-badges'
 import type { Photo } from '@/lib/api/types'
 import { usePhotoAnalysis } from '@/lib/api/hooks'
@@ -17,6 +17,7 @@ export interface MealCardProps {
 export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
   const { data: analysis, isLoading } = usePhotoAnalysis(photo.id)
   const hasImage = photoHasImage(photo)
+  const { src: thumbSrc, onError: onThumbError } = useMealThumbSrc(photo.id)
 
   const isAnalyzing =
     hasImage &&
@@ -49,12 +50,13 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
         className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="relative aspect-square w-full">
-          {hasImage ? (
+          {hasImage && thumbSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={photoThumbSrc(photo.id)}
+              src={thumbSrc}
               alt={title}
               className="size-full object-cover"
+              onError={onThumbError}
             />
           ) : (
             <>

@@ -7,7 +7,7 @@ import { useCloneMeal, useRecentMeals } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import type { RecentMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
-import { MealIconThumb, photoThumbSrc } from './meal-icon-thumb'
+import { MealIconThumb, useMealThumbSrc } from './meal-icon-thumb'
 import { LogAgainSheet } from './log-again-sheet'
 
 // Relative "when last eaten" label. Builds both dates at local midnight (from
@@ -33,8 +33,8 @@ function RecentMealChip({
   loading: boolean
   onClick: () => void
 }) {
-  const [imageError, setImageError] = useState(false)
-  const showPhoto = meal.has_image !== false && !imageError
+  const { src, onError } = useMealThumbSrc(meal.source_photo_id)
+  const showPhoto = meal.has_image !== false && src != null
 
   return (
     <button
@@ -48,10 +48,10 @@ function RecentMealChip({
         {showPhoto ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={photoThumbSrc(meal.source_photo_id)}
+            src={src}
             alt={meal.dish_name}
             className="size-full object-cover"
-            onError={() => setImageError(true)}
+            onError={onError}
           />
         ) : (
           <MealIconThumb

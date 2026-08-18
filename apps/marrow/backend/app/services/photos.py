@@ -38,9 +38,11 @@ from app.services.photo_storage import (
 )
 from f0rge_db.tenant import current_user_id
 
-# 240s < the 300s default presigned-URL expiry so a cached redirect never
-# points at an expired URL (same contract as AVATAR_CACHE_CONTROL).
-PHOTO_CACHE_CONTROL = "private, max-age=240"
+# Never cache the 307 itself. Browsers cache Location and will keep hitting a
+# dead Tigris URL after the 300s presign TTL (and after a slow first /thumb
+# that raced lazy generation). Avatars can use a short max-age; meal grids
+# fire many parallel thumbs and must re-hit the API each time.
+PHOTO_CACHE_CONTROL = "private, no-store"
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
