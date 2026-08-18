@@ -14,30 +14,14 @@ import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any
 
 from airflow.providers.common.ai.operators.llm_file_analysis import LLMFileAnalysisOperator
 from airflow.sdk import dag, task
-from pydantic import BaseModel
+
+from _vision_schema import VisionResult
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Structured output — keep in sync with apps/marrow/backend/.../vision_prompt.py
-# ---------------------------------------------------------------------------
-
-
-class VisionIngredient(BaseModel):
-    name: str
-    visible: bool = True
-    confidence: float
-
-
-class VisionResult(BaseModel):
-    dish_name: str
-    cuisine: Optional[str] = None
-    confidence: float
-    ingredients: list[VisionIngredient]
 
 
 SYSTEM_PROMPT = """\
@@ -72,6 +56,7 @@ Return ONLY a JSON object (no markdown, no commentary) matching this schema:
 - Lowercase, singular form: "tomato" not "Tomatoes", "egg" not "eggs"
 - Use common English names: "cilantro" not "coriander leaf"
 - Be specific when visible: "red bell pepper" not just "pepper"
+- Never emit null/None in ingredients — omit unknown items or use []
 
 ## Edge cases
 - Non-food image: {"dish_name": "unknown", "cuisine": null, "confidence": 0, \
@@ -161,9 +146,7 @@ def _mark_failed(context: dict[str, Any]) -> None:
         if not analysis_id:
             conf = (context.get("dag_run") or {}).conf or {}
             # resolve never ran — nothing to mark
-            logger.warning(
-                "on_failure: no analysis_id (photo_id=%s)", conf.get("photo_id")
-            )
+            logger.warning("on_failure: no analysis_id (photo_id=%s)", conf.get("photo_id"))
             return
         exc = context.get("exception")
         message = f"{type(exc).__name__}: {exc}" if exc else "DAG task failed"
@@ -227,6 +210,7 @@ def marrow_classify_meal() -> None:
         output_type=VisionResult,
         serialize_output=True,
         require_approval=False,
+        agent_params={"retries": 3},
         retries=2,
         retry_delay=timedelta(seconds=45),
         max_file_size_bytes=8 * 1024 * 1024,
