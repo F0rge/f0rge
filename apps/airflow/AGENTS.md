@@ -13,7 +13,7 @@ CeleryExecutor + Redis. DAGs come from GitHub via **GitDagBundle** (not host bin
 | `dags/_system/smoke.py` | `airflow_smoke` system DAG (bundle `airflow`) |
 | `scripts/status.sh` | Stack health: compose ps, stats, redis, celery ping, API |
 | `scripts/scale-workers.sh` | Scale celery workers `1\|2\|3` |
-| `apps/marrow/dags` | Marrow-owned DAGs (`marrow_*`) — GitDagBundle `marrow` |
+| `apps/marrow/dags` | Marrow-owned DAGs (`marrow_*`) — GitDagBundles `marrow_dev` (@ develop) and `marrow_prod` (@ main) |
 | `apps/dk/dags` | dk-owned DAGs (`dk_*`) — GitDagBundle `dk` |
 
 ## Boot (rpi)
@@ -43,10 +43,11 @@ A plain `docker compose up -d` resets workers to **1** unless you pass `--scale 
 
 ## How a new DAG appears
 
-1. Merge DAG Python to **`develop`** under `apps/<app>/dags/` with the right `dag_id` prefix.
-2. dag-processor GitDagBundle fetches `https://github.com/F0rge/f0rge.git` @ `develop` about every **60s**.
-3. Three bundles, same repo, different `subdir`: `airflow` → `apps/airflow/dags`, `marrow` → `apps/marrow/dags`, `dk` → `apps/dk/dags`.
-4. Repo is **public** — no deploy key / PAT. If it becomes private, add an Airflow `git` connection (`AIRFLOW_CONN_GIT_DEFAULT`) and `git_conn_id` on each bundle.
+1. Merge DAG Python under `apps/<app>/dags/` with the right `dag_id` prefix.
+2. dag-processor GitDagBundle fetches `https://github.com/F0rge/f0rge.git` about every **60s**.
+3. Four bundles, same repo, different `subdir` / `tracking_ref`: `airflow` → `apps/airflow/dags` @ `develop`, `marrow_dev` → `apps/marrow/dags` @ `develop`, `marrow_prod` → `apps/marrow/dags` @ `main`, `dk` → `apps/dk/dags` @ `develop`.
+4. Meal classify `dag_id`s must differ (`marrow_classify_meal_dev` vs `_prod`) so both clones can load. Env (S3 conn + Marrow URL/token) is derived from the clone path, not a process env var.
+5. Repo is **public** — no deploy key / PAT. If it becomes private, add an Airflow `git` connection (`AIRFLOW_CONN_GIT_DEFAULT`) and `git_conn_id` on each bundle.
 
 No `git pull` on the Pi for DAGs. Compose/env changes still need a copy onto the Pi (rsync or a real clone of the control-plane tree).
 

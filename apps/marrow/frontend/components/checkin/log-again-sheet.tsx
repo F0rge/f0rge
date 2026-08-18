@@ -12,23 +12,23 @@ import {
 import { Input } from '@f0rge/ui'
 import type { RecentMeal } from '@/lib/api/types'
 import { DietFlagPills } from './diet-flag-pills'
-import { MealIconThumb, photoThumbSrc } from './meal-icon-thumb'
+import { MealIconThumb, useMealThumbSrc } from './meal-icon-thumb'
 import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
 import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
 
 function RecentMealThumb({ meal, loading }: { meal: RecentMeal; loading: boolean }) {
-  const [imageError, setImageError] = useState(false)
-  const showPhoto = meal.has_image !== false && !imageError
+  const { src, onError } = useMealThumbSrc(meal.source_photo_id)
+  const showPhoto = meal.has_image !== false && src != null
 
   return (
     <div className="relative size-12 flex-none overflow-hidden rounded-lg bg-muted">
       {showPhoto ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={photoThumbSrc(meal.source_photo_id)}
+          src={src}
           alt={meal.dish_name}
           className="size-full object-cover"
-          onError={() => setImageError(true)}
+          onError={onError}
         />
       ) : (
         <MealIconThumb

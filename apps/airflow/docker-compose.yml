@@ -32,10 +32,13 @@ x-airflow-common: &airflow-common
     AIRFLOW__DAG_PROCESSOR__DAG_BUNDLE_STORAGE_PATH: /opt/airflow/dag_bundles
     # Replaces default LocalDagBundle. Public HTTPS clone — no token.
     AIRFLOW__DAG_PROCESSOR__DAG_BUNDLE_CONFIG_LIST: >-
-      [{"name":"airflow","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/airflow/dags","tracking_ref":"develop","refresh_interval":60}},{"name":"marrow","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/marrow/dags","tracking_ref":"develop","refresh_interval":60}},{"name":"dk","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/dk/dags","tracking_ref":"develop","refresh_interval":60}}]
+      [{"name":"airflow","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/airflow/dags","tracking_ref":"develop","refresh_interval":60}},{"name":"marrow_dev","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/marrow/dags","tracking_ref":"develop","refresh_interval":60}},{"name":"marrow_prod","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/marrow/dags","tracking_ref":"main","refresh_interval":60}},{"name":"dk","classpath":"airflow.providers.git.bundles.git.GitDagBundle","kwargs":{"repo_url":"https://github.com/F0rge/f0rge.git","subdir":"apps/dk/dags","tracking_ref":"develop","refresh_interval":60}}]
     # Meal classification DAG → Marrow internal HTTP (set in .env on the Pi).
-    MARROW_API_BASE_URL: ${MARROW_API_BASE_URL:-}
-    MARROW_AIRFLOW_SERVICE_TOKEN: ${MARROW_AIRFLOW_SERVICE_TOKEN:-}
+    # marrow_dev vs marrow_prod DAGs pick these; do not share one URL across envs.
+    MARROW_DEV_API_BASE_URL: ${MARROW_DEV_API_BASE_URL:-${MARROW_API_BASE_URL:-}}
+    MARROW_DEV_AIRFLOW_SERVICE_TOKEN: ${MARROW_DEV_AIRFLOW_SERVICE_TOKEN:-${MARROW_AIRFLOW_SERVICE_TOKEN:-}}
+    MARROW_PROD_API_BASE_URL: ${MARROW_PROD_API_BASE_URL:-}
+    MARROW_PROD_AIRFLOW_SERVICE_TOKEN: ${MARROW_PROD_AIRFLOW_SERVICE_TOKEN:-}
   volumes:
     - ./logs:/opt/airflow/logs
     - ./config:/opt/airflow/config

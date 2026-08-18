@@ -3,41 +3,36 @@
 dag_run.conf: {"photo_id": int, "user_id": "<uuid>"}
 
 The Celery worker never imports Marrow or opens its DB. Resolve/persist go through
-Marrow internal HTTP (MARROW_API_BASE_URL + MARROW_AIRFLOW_SERVICE_TOKEN).
+Marrow internal HTTP. Bundle ``marrow_dev`` (@ develop) vs ``marrow_prod`` (@ main)
+selects dag_id, S3 connection, and Marrow URL/token — never a shared process env.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any
 
 from airflow.providers.common.ai.operators.llm_file_analysis import LLMFileAnalysisOperator
 from airflow.sdk import dag, task
-from pydantic import BaseModel
+
+from _bundle_env import (
+    classify_dag_id,
+    marrow_airflow_env,
+    marrow_api_base_url,
+    marrow_service_token,
+    photos_conn_id,
+)
+from _vision_schema import VisionResult
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Structured output — keep in sync with apps/marrow/backend/.../vision_prompt.py
-# ---------------------------------------------------------------------------
-
-
-class VisionIngredient(BaseModel):
-    name: str
-    visible: bool = True
-    confidence: float
-
-
-class VisionResult(BaseModel):
-    dish_name: str
-    cuisine: Optional[str] = None
-    confidence: float
-    ingredients: list[VisionIngredient]
+_ENV = marrow_airflow_env(__file__)
+DAG_ID = classify_dag_id(_ENV)
+FILE_CONN_ID = photos_conn_id(_ENV)
 
 
 SYSTEM_PROMPT = """\
@@ -63,15 +58,15 @@ Return ONLY a JSON object (no markdown, no commentary) matching this schema:
   "dish_name": "string — lowercase, concise name",
   "cuisine": "string or null — e.g. italian, japanese, mexican",
   "confidence": 0.0-1.0,
-  "ingredients": [
-    {"name": "ingredient", "visible": true, "confidence": 0.0-1.0}
-  ]
+  "visible_ingredients": ["ingredient names you can see"],
+  "inferred_ingredients": ["likely extra ingredients not clearly visible"]
 }
 
 ## Ingredient naming rules
 - Lowercase, singular form: "tomato" not "Tomatoes", "egg" not "eggs"
 - Use common English names: "cilantro" not "coriander leaf"
 - Be specific when visible: "red bell pepper" not just "pepper"
+- Never emit null/None in ingredient lists — use [] if none
 
 ## Edge cases
 - Non-food image: {"dish_name": "unknown", "cuisine": null, "confidence": 0, \
@@ -90,7 +85,8 @@ ingredient names with their tracked vocabulary.
 
 Rules:
 - When a visible or inferred ingredient plausibly matches a catalog entry, \
-emit the exact canonical_name from the list in ingredients[].name.
+emit the exact canonical_name from the list in visible_ingredients or \
+inferred_ingredients.
 - Treat listed aliases as recognition aids only — never emit an alias as \
 the ingredient name; always output the canonical_name.
 - If nothing in the catalog fits what you see, use the best free-form \
@@ -100,26 +96,20 @@ Catalog (alphabetical, canonical names):
 """
 
 USER_PROMPT = (
-    "Analyze this food photo. Return a JSON object with dish_name, "
-    "cuisine, confidence, and ingredients array."
+    "Analyze this food photo. Return dish_name, cuisine, confidence, "
+    "visible_ingredients (strings you can see), and inferred_ingredients "
+    "(strings likely present but not clearly visible). Never emit nulls."
 )
 
 LLM_CONN_ID = "pydanticai_openrouter"
-FILE_CONN_ID = "aws_photos"
 
 
 def _marrow_base() -> str:
-    base = os.environ.get("MARROW_API_BASE_URL", "").rstrip("/")
-    if not base:
-        raise RuntimeError("MARROW_API_BASE_URL is not set on the Airflow worker")
-    return base
+    return marrow_api_base_url(_ENV)
 
 
 def _marrow_token() -> str:
-    token = os.environ.get("MARROW_AIRFLOW_SERVICE_TOKEN", "")
-    if not token:
-        raise RuntimeError("MARROW_AIRFLOW_SERVICE_TOKEN is not set on the Airflow worker")
-    return token
+    return marrow_service_token(_ENV)
 
 
 def _marrow_request(
@@ -161,9 +151,7 @@ def _mark_failed(context: dict[str, Any]) -> None:
         if not analysis_id:
             conf = (context.get("dag_run") or {}).conf or {}
             # resolve never ran — nothing to mark
-            logger.warning(
-                "on_failure: no analysis_id (photo_id=%s)", conf.get("photo_id")
-            )
+            logger.warning("on_failure: no analysis_id (photo_id=%s)", conf.get("photo_id"))
             return
         exc = context.get("exception")
         message = f"{type(exc).__name__}: {exc}" if exc else "DAG task failed"
@@ -180,11 +168,11 @@ def _mark_failed(context: dict[str, Any]) -> None:
 
 
 @dag(
-    dag_id="marrow_classify_meal",
+    dag_id=DAG_ID,
     schedule=None,
     start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
     catchup=False,
-    tags=["marrow", "meal", "vision", "common-ai"],
+    tags=["marrow", "meal", "vision", "common-ai", _ENV],
     on_failure_callback=_mark_failed,
 )
 def marrow_classify_meal() -> None:
@@ -227,6 +215,7 @@ def marrow_classify_meal() -> None:
         output_type=VisionResult,
         serialize_output=True,
         require_approval=False,
+        agent_params={"retries": 3},
         retries=2,
         retry_delay=timedelta(seconds=45),
         max_file_size_bytes=8 * 1024 * 1024,
@@ -234,13 +223,14 @@ def marrow_classify_meal() -> None:
 
     @task
     def persist(job_data: dict[str, Any], vision: Any) -> dict[str, Any]:
-        if isinstance(vision, VisionResult):
-            body = vision.model_dump()
-        elif isinstance(vision, dict):
-            body = vision
-        else:
-            body = VisionResult.model_validate(vision).model_dump()
-        body["user_id"] = job_data["user_id"]
+        result = vision if isinstance(vision, VisionResult) else VisionResult.model_validate(vision)
+        body = {
+            "user_id": job_data["user_id"],
+            "dish_name": result.dish_name,
+            "cuisine": result.cuisine,
+            "confidence": result.confidence,
+            "ingredients": result.to_marrow_ingredients(),
+        }
 
         return _marrow_request(
             "POST",

@@ -29,7 +29,8 @@ async def enqueue_food_analysis(
 
             dag_run_id = await trigger_classify_meal_dag(photo_id, user_id)
             logger.info(
-                "Enqueued marrow_classify_meal for photo %s (dag_run_id=%s)",
+                "Enqueued %s for photo %s (dag_run_id=%s)",
+                settings.airflow_classify_dag_id,
                 photo_id,
                 dag_run_id,
             )
