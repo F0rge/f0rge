@@ -40,7 +40,9 @@ def test_vision_result_in_dag_accepts_fixture():
     assert VisionResult.model_validate(fixture).dish_name == "rice bowl"
     assert "food identification assistant" in source
     assert "LLMFileAnalysisOperator" in source
-    assert 'dag_id="marrow_classify_meal"' in source or "dag_id='marrow_classify_meal'" in source
+    assert "dag_id=DAG_ID" in source
+    assert "classify_dag_id" in source
+    assert "photos_conn_id" in source
     assert "Never emit null/None in ingredient lists" in source
     assert "agent_params" in source
 
@@ -111,3 +113,64 @@ def test_dag_import_when_airflow_present():
     spec.loader.exec_module(module)
     assert hasattr(module, "VisionResult")
     assert hasattr(module, "marrow_classify_meal")
+    assert module.DAG_ID == "marrow_classify_meal_dev"
+    assert module.FILE_CONN_ID == "aws_photos_dev"
+
+
+BUNDLE_ENV_PATH = DAG_PATH.with_name("_bundle_env.py")
+COMPOSE_PATH = Path(__file__).resolve().parents[3] / "airflow" / "docker-compose.yml"
+
+
+def _load_bundle_env():
+    spec = importlib.util.spec_from_file_location("marrow_bundle_env", BUNDLE_ENV_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_bundle_env_from_clone_path():
+    env = _load_bundle_env()
+    dev = "/opt/airflow/dag_bundles/marrow_dev/versions/abc/apps/marrow/dags/classify_meal.py"
+    prod = "/opt/airflow/dag_bundles/marrow_prod/versions/def/apps/marrow/dags/classify_meal.py"
+    assert env.marrow_airflow_env(dev) == "dev"
+    assert env.classify_dag_id(dag_file=dev) == "marrow_classify_meal_dev"
+    assert env.photos_conn_id(dag_file=dev) == "aws_photos_dev"
+    assert env.marrow_airflow_env(prod) == "prod"
+    assert env.classify_dag_id(dag_file=prod) == "marrow_classify_meal_prod"
+    assert env.photos_conn_id(dag_file=prod) == "aws_photos_prod"
+
+
+def test_bundle_env_local_checkout_defaults_dev():
+    env = _load_bundle_env()
+    local = str(DAG_PATH)
+    assert env.marrow_airflow_env(local) == "dev"
+    assert env.classify_dag_id(dag_file=local) == "marrow_classify_meal_dev"
+
+
+def test_bundle_env_reads_env_specific_url_and_token(monkeypatch):
+    env = _load_bundle_env()
+    prod = "/opt/airflow/dag_bundles/marrow_prod/versions/sha/apps/marrow/dags/x.py"
+    monkeypatch.setenv("MARROW_PROD_API_BASE_URL", "https://api.marrow-health.com/")
+    monkeypatch.setenv("MARROW_PROD_AIRFLOW_SERVICE_TOKEN", "prod-token")
+    monkeypatch.setenv("MARROW_DEV_API_BASE_URL", "https://api-dev.marrow-health.com")
+    monkeypatch.setenv("MARROW_DEV_AIRFLOW_SERVICE_TOKEN", "dev-token")
+    assert env.marrow_api_base_url(dag_file=prod) == "https://api.marrow-health.com"
+    assert env.marrow_service_token(dag_file=prod) == "prod-token"
+    dev = "/opt/airflow/dag_bundles/marrow_dev/versions/sha/apps/marrow/dags/x.py"
+    assert env.marrow_api_base_url(dag_file=dev) == "https://api-dev.marrow-health.com"
+    assert env.marrow_service_token(dag_file=dev) == "dev-token"
+
+
+def test_compose_splits_marrow_git_bundles():
+    text = COMPOSE_PATH.read_text(encoding="utf-8")
+    assert '"name":"marrow_dev"' in text
+    assert '"name":"marrow_prod"' in text
+    assert '"name":"marrow"' not in text.replace('"name":"marrow_dev"', "").replace(
+        '"name":"marrow_prod"', ""
+    )
+    assert '"tracking_ref":"main"' in text
+    assert "MARROW_DEV_API_BASE_URL" in text
+    assert "MARROW_PROD_API_BASE_URL" in text
+    assert "MARROW_DEV_AIRFLOW_SERVICE_TOKEN" in text
+    assert "MARROW_PROD_AIRFLOW_SERVICE_TOKEN" in text

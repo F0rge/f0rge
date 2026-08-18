@@ -11,6 +11,7 @@ from f0rge_core.exceptions import UnauthorizedError, ValidationError
 from app.schemas.airflow_meal import MealAnalysisCompleteRequest, VisionIngredientIn
 from app.services.airflow_meal_analysis import (
     AirflowMealAnalysisService,
+    trigger_classify_meal_dag,
     validate_airflow_service_token,
 )
 
@@ -111,3 +112,46 @@ async def test_complete_sets_confirmed(monkeypatch):
     assert out["status"] == "confirmed"
     assert analysis.status == "confirmed"
     service.ingredient_crud.add.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_trigger_classify_meal_dag_uses_settings_dag_id(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.airflow_meal_analysis.settings.airflow_url",
+        "https://airflow.example",
+    )
+    monkeypatch.setattr(
+        "app.services.airflow_meal_analysis.settings.airflow_username",
+        "airflow",
+    )
+    monkeypatch.setattr(
+        "app.services.airflow_meal_analysis.settings.airflow_password",
+        "pw",
+    )
+    monkeypatch.setattr(
+        "app.services.airflow_meal_analysis.settings.airflow_classify_dag_id",
+        "marrow_classify_meal_prod",
+    )
+
+    token_resp = MagicMock()
+    token_resp.raise_for_status = MagicMock()
+    token_resp.json.return_value = {"access_token": "jwt"}
+
+    run_resp = MagicMock()
+    run_resp.raise_for_status = MagicMock()
+    run_resp.json.return_value = {"dag_run_id": "manual__1"}
+
+    client = MagicMock()
+    client.post = AsyncMock(side_effect=[token_resp, run_resp])
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch(
+        "app.services.airflow_meal_analysis.httpx.AsyncClient",
+        return_value=client,
+    ):
+        dag_run_id = await trigger_classify_meal_dag(9, uuid.uuid4())
+
+    assert dag_run_id == "manual__1"
+    dag_url = client.post.await_args_list[1].args[0]
+    assert dag_url.endswith("/dags/marrow_classify_meal_prod/dagRuns")

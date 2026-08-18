@@ -41,7 +41,7 @@ def validate_airflow_service_token(authorization: Optional[str]) -> None:
 
 
 class AirflowMealAnalysisService:
-    """HTTP seams for the marrow_classify_meal DAG (resolve / complete / fail)."""
+    """HTTP seams for marrow_classify_meal_{dev,prod} DAGs (resolve / complete / fail)."""
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -213,7 +213,7 @@ class AirflowMealAnalysisService:
 
 
 async def trigger_classify_meal_dag(photo_id: int, user_id: uuid.UUID) -> Optional[str]:
-    """POST dagRuns for marrow_classify_meal. Returns dag_run_id or None."""
+    """POST dagRuns for AIRFLOW_CLASSIFY_DAG_ID. Returns dag_run_id or None."""
     base = settings.airflow_url.rstrip("/")
     if not base:
         raise ValidationError("AIRFLOW_URL is not configured")
@@ -221,6 +221,9 @@ async def trigger_classify_meal_dag(photo_id: int, user_id: uuid.UUID) -> Option
     password = settings.airflow_password
     if not username or not password:
         raise ValidationError("AIRFLOW_USERNAME / AIRFLOW_PASSWORD are not configured")
+    dag_id = settings.airflow_classify_dag_id
+    if not dag_id:
+        raise ValidationError("AIRFLOW_CLASSIFY_DAG_ID is not configured")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         token_resp = await client.post(
@@ -231,7 +234,7 @@ async def trigger_classify_meal_dag(photo_id: int, user_id: uuid.UUID) -> Option
         access_token = token_resp.json()["access_token"]
 
         run_resp = await client.post(
-            f"{base}/api/v2/dags/marrow_classify_meal/dagRuns",
+            f"{base}/api/v2/dags/{dag_id}/dagRuns",
             headers={"Authorization": f"Bearer {access_token}"},
             json={
                 "logical_date": None,

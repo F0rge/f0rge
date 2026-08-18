@@ -48,10 +48,11 @@ to `postgresql+asyncpg://`.
 | `MCP_SERVER_HOST` / `MCP_SERVER_PORT` | `0.0.0.0` / `8005` |
 | `API_URL` (frontend **build arg**) | Public API URL for Next rewrites |
 | `FLY_MPG_SKIP_ROLE_DDL` | Set `1` after running `scripts/railway_bootstrap_roles.sql` (roles already exist) |
-| `FOOD_ANALYSIS_VIA_AIRFLOW` | `true` to enqueue `marrow_classify_meal` on Pi Airflow instead of BackgroundTasks |
-| `AIRFLOW_URL` | `https://airflow.leo-figueiredo.com` |
+| `FOOD_ANALYSIS_VIA_AIRFLOW` | `true` to enqueue meal classify on Pi Airflow instead of BackgroundTasks |
+| `AIRFLOW_URL` | `https://airflow.leo-figueiredo.com` (same UI for both envs) |
 | `AIRFLOW_USERNAME` / `AIRFLOW_PASSWORD` | FAB user used to mint `/auth/token` |
-| `AIRFLOW_SERVICE_TOKEN` | Shared bearer for Airflow worker → Marrow `/api/v1/internal/airflow/*` |
+| `AIRFLOW_SERVICE_TOKEN` | Bearer for Airflow worker → this env's `/api/v1/internal/airflow/*` (generate a distinct token per Railway env) |
+| `AIRFLOW_CLASSIFY_DAG_ID` | develop: `marrow_classify_meal_dev`; production: `marrow_classify_meal_prod` |
 
 ## Domains (cutover)
 
