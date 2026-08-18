@@ -8,6 +8,8 @@ import { TagPeoplePicker } from './tag-people-picker'
 import { useUploadPhoto } from '@/lib/api/hooks'
 import { useConnections, useGroups } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
+import { cn } from '@f0rge/ui'
+import { statusText } from '@/lib/ui/status'
 
 interface StagedPhoto {
   id: string
@@ -141,7 +143,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         <button
           type="button"
           onClick={() => cameraRef.current?.click()}
-          className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-background px-2 py-2 text-xs font-medium transition-colors hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+          className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
         >
           <Camera className="size-4 shrink-0" />
           Take Photo
@@ -149,7 +151,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         <button
           type="button"
           onClick={() => galleryRef.current?.click()}
-          className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-background px-2 py-2 text-xs font-medium transition-colors hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+          className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
         >
           <ImageIcon className="size-4 shrink-0" />
           Choose Photo
@@ -157,7 +159,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         <button
           type="button"
           onClick={() => setLibraryOpen(true)}
-          className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg border border-border bg-background px-2 py-2 text-xs font-medium transition-colors hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+          className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
         >
           <BookOpen className="size-4 shrink-0" />
           From library
@@ -200,7 +202,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                   )}
                   {photo.status === 'error' && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <AlertTriangle className="size-5 text-amber-400" />
+                      <AlertTriangle className={cn('size-5', statusText.warn)} />
                     </div>
                   )}
                 </div>
@@ -230,7 +232,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                       <button
                         type="button"
                         onClick={() => void retryUpload(photo.id)}
-                        className="mt-1 text-xs text-amber-600 underline underline-offset-2 dark:text-amber-400"
+                        className={cn('mt-1 text-xs underline underline-offset-2', statusText.warn)}
                       >
                         Retry upload
                       </button>

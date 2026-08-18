@@ -1,6 +1,7 @@
 'use client'
 
 import { Loader2 } from 'lucide-react'
+import { cn } from '@f0rge/ui'
 import {
   BarChart,
   Bar,
@@ -12,6 +13,7 @@ import {
 } from 'recharts'
 import { useInsightsTreatmentResponse } from '@/lib/api/hooks'
 import type { TreatmentResponseRow } from '@/lib/api/types'
+import { chartStroke, statusText } from '@/lib/ui/status'
 
 interface Props {
   outcome: string
@@ -40,11 +42,10 @@ function TreatmentBar({ row }: { row: TreatmentResponseRow }) {
         </div>
         {deltaLabel && (
           <span
-            className={
-              row.delta_during_vs_baseline! > 0
-                ? 'text-sm font-semibold text-green-600 dark:text-green-400'
-                : 'text-sm font-semibold text-red-600 dark:text-red-400'
-            }
+            className={cn(
+              'text-sm font-semibold',
+              row.delta_during_vs_baseline! > 0 ? statusText.ok : statusText.destructive,
+            )}
           >
             {deltaLabel}
           </span>
@@ -67,10 +68,10 @@ function TreatmentBar({ row }: { row: TreatmentResponseRow }) {
                 key={idx}
                 fill={
                   entry.phase === 'Baseline'
-                    ? '#94a3b8'
+                    ? chartStroke.muted
                     : entry.phase === 'During'
-                      ? '#6366f1'
-                      : '#22c55e'
+                      ? chartStroke[1]
+                      : chartStroke.ok
                 }
               />
             ))}

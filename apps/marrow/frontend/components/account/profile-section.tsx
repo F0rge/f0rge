@@ -16,6 +16,7 @@ import {
 } from '@/lib/api/hooks'
 import { getErrorDetail, handleMutationError } from '@f0rge/ui/api'
 import type { Account } from '@/lib/api/types'
+import { statusText } from '@/lib/ui/status'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
 const MAX_BYTES = 5 * 1024 * 1024
@@ -189,7 +190,7 @@ function ProfileForm({ account }: { account: Account }) {
               {...form.getInputProps('handle')}
             />
             {handleStatus === 'available' && (
-              <p className="text-xs text-emerald-600">Available</p>
+              <p className={`text-xs ${statusText.ok}`}>Available</p>
             )}
             {handleStatus === 'taken' && (
               <p className="text-xs text-destructive">Already taken</p>

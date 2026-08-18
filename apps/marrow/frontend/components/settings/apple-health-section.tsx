@@ -27,7 +27,7 @@ export function AppleHealthSection() {
   }
 
   return (
-    <SettingsCard icon={Heart} iconClassName="text-red-500" title="Apple Health">
+    <SettingsCard icon={Heart} iconClassName="text-muted-foreground" title="Apple Health">
       <p className="text-sm text-muted-foreground">
         Auto-syncs via Health Auto Export iOS app. Use this upload for manual XML imports as a backup.
       </p>

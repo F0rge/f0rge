@@ -57,7 +57,7 @@ export function ProfileVisibilitySection() {
   }
 
   return (
-    <SettingsCard icon={Eye} iconClassName="text-violet-500" title="Profile visibility">
+    <SettingsCard icon={Eye} iconClassName="text-muted-foreground" title="Profile visibility">
       <p className="text-sm text-muted-foreground">
         Automatically filter your profile meal grids by diet tag. Hide removes matching meals;
         Show only keeps nothing but matches. Check-ins always show every meal.

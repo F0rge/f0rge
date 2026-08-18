@@ -7,6 +7,7 @@ import { ClipboardCheck, Pill, CalendarDays, TrendingUp, Microscope } from 'luci
 import { cn } from '@f0rge/ui'
 import { UserAvatar } from '@/components/account/user-avatar'
 import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
+import { CHROME_TONE, iconWellClass } from '@/lib/ui/status'
 
 const NAV_ITEMS = [
   { href: '/checkin', label: 'Today', icon: ClipboardCheck },
@@ -14,27 +15,15 @@ const NAV_ITEMS = [
   { href: '/treatments', label: 'Treatments', icon: Pill },
   { href: '/labs', label: 'Labs', icon: Microscope },
   { href: '/signals', label: 'Signals', icon: TrendingUp },
-  // icon: null → renders the user's avatar (see the map below)
   { href: '/profile', label: 'Profile', icon: null },
 ] as const
 
-// Content-derived tab sizing. Each tab's "need" is icon + gap + clamped
-// label width + breathing room; the active tab's flex-grow is solved so its
-// final layout width lands on its need instead of a fixed ratio, so
-// "Treatments" doesn't carry the same footprint as "Labs".
-const ICON_W = 24
+const ICON_W = 32
 const ICON_GAP = 6
 const MAX_LABEL_W = 62
 const BREATHING = 16
 const MIN_GROW = 1.2
-
-// Leading edge stretches out fast with a small overshoot; trailing edge
-// arrives slower with a late snap. Ported verbatim from the approved mockup
-// (nav-mockups.html) — tuned empirically, do not re-derive.
-const FAST_EDGE = '.18s cubic-bezier(.2,.9,.3,1.18)'
-const SLOW_EDGE = '.3s cubic-bezier(.7,.02,.35,1.06)'
-const COOL_DELAY_MS = 330
-const INK_BASE_TRANSITION = 'background-color .25s'
+const EDGE = '0.5s cubic-bezier(0.19, 1, 0.22, 1)'
 
 export function BottomNav() {
   const pathname = usePathname()
@@ -45,107 +34,70 @@ export function BottomNav() {
   const labelRefs = useRef<(HTMLSpanElement | null)[]>([])
   const prevIndexRef = useRef<number | null>(null)
   const lastActiveIndexRef = useRef<number | null>(null)
-  const coolTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const activeIndex = NAV_ITEMS.findIndex((item) => pathname.startsWith(item.href))
-
-  // Per-tab flex-grow, keyed by index. Resting tabs stay at 1; the active
-  // tab's grow is solved so its final width lands on its content need
-  // instead of a fixed ratio (see place() for the derivation).
   const [activeGrow, setActiveGrow] = useState(2.4)
 
-  // Compute the underline's left/right target (px, relative to the bar's
-  // border box) from final flex-grow layout math rather than reading
-  // mid-transition geometry. Verbatim port of the mockup's targets(), with
-  // GROW replaced by a per-call solved value so tab width tracks content.
-  // useCallback with an empty dep array: only reads stable refs and the
-  // stable setActiveGrow setter, so it's safe to list as an effect dep
-  // without refiring on every render.
-  const place = useCallback((index: number, direction: number) => {
-    const bar = barRef.current
-    const ink = inkRef.current
-    if (!bar || !ink || index < 0) return
+  const place = useCallback(
+    (index: number, direction: number) => {
+      const bar = barRef.current
+      const ink = inkRef.current
+      if (!bar || !ink || index < 0) return
 
-    const cs = getComputedStyle(bar)
-    const inner = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-    const n = NAV_ITEMS.length
-    const minTabW = ICON_W
+      const cs = getComputedStyle(bar)
+      const inner = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+      const n = NAV_ITEMS.length
+      const minTabW = ICON_W
 
-    // icon + gap + clamped label width + breathing room. scrollWidth is
-    // read straight off the DOM so it's accurate even while the label is
-    // clipped (max-width: 0) on a resting tab.
-    const label = labelRefs.current[index]
-    const labelW = label ? Math.min(label.scrollWidth, MAX_LABEL_W) : 0
-    const rawNeed = ICON_W + ICON_GAP + labelW + BREATHING
+      const label = labelRefs.current[index]
+      const labelW = label ? Math.min(label.scrollWidth, MAX_LABEL_W) : 0
+      const rawNeed = ICON_W + ICON_GAP + labelW + BREATHING
 
-    const grow = Math.max(
-      MIN_GROW,
-      Math.min(
-        (rawNeed * (n - 1)) / (inner - rawNeed),
-        (inner - minTabW * (n - 1)) / minTabW, // caps activeW at inner - (n-1)*minTabW
-      ),
-    )
-    setActiveGrow(grow)
+      const grow = Math.max(
+        MIN_GROW,
+        Math.min(
+          (rawNeed * (n - 1)) / (inner - rawNeed),
+          (inner - minTabW * (n - 1)) / minTabW,
+        ),
+      )
+      setActiveGrow(grow)
 
-    const unit = inner / (grow + (n - 1))
-    const activeW = unit * grow
-    const startX = parseFloat(cs.paddingLeft) + unit * index
-    const lineW = rawNeed - BREATHING
-    const left = startX + (activeW - lineW) / 2
-    const right = bar.clientWidth - (left + lineW)
+      const unit = inner / (grow + (n - 1))
+      const activeW = unit * grow
+      const startX = parseFloat(cs.paddingLeft) + unit * index
+      const lineW = rawNeed - BREATHING
+      const left = startX + (activeW - lineW) / 2
+      const right = bar.clientWidth - (left + lineW)
 
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-    if (reduced || direction === 0) {
-      // No-op if the ink is already at (or animating toward) these targets.
-      // A redundant direction-0 re-place would otherwise reset the transition
-      // and cancel an in-flight stretch a sibling call just armed — the exact
-      // class of bug behind the fonts.ready cancellation (see effect below).
-      if (
-        Math.abs(parseFloat(ink.style.left || '0') - left) < 0.5 &&
-        Math.abs(parseFloat(ink.style.right || '0') - right) < 0.5
-      ) {
+      if (reduced || direction === 0) {
+        if (
+          Math.abs(parseFloat(ink.style.left || '0') - left) < 0.5 &&
+          Math.abs(parseFloat(ink.style.right || '0') - right) < 0.5
+        ) {
+          return
+        }
+        ink.style.transition = 'none'
+        ink.style.left = `${left}px`
+        ink.style.right = `${right}px`
+        void ink.offsetWidth
+        ink.style.transition = `left ${EDGE}, right ${EDGE}`
         return
       }
-      ink.style.transition = 'none'
+
+      ink.style.transition = `left ${EDGE}, right ${EDGE}`
+      void ink.offsetWidth
       ink.style.left = `${left}px`
       ink.style.right = `${right}px`
-      void ink.offsetWidth
-      ink.style.transition = INK_BASE_TRANSITION
-      return
-    }
+    },
+    [],
+  )
 
-    // Direction-aware: the edge in the direction of travel leads (fast,
-    // bouncy), the trailing edge follows (slower, late snap).
-    ink.style.transition =
-      direction > 0
-        ? `right ${FAST_EDGE}, left ${SLOW_EDGE}, background-color .18s`
-        : `left ${FAST_EDGE}, right ${SLOW_EDGE}, background-color .18s`
-    void ink.offsetWidth // commit the transition swap before moving the edges, or one edge snaps
-
-    ink.classList.add('bg-foreground')
-    ink.classList.remove('bg-muted-foreground')
-    ink.style.left = `${left}px`
-    ink.style.right = `${right}px`
-
-    clearTimeout(coolTimeoutRef.current)
-    coolTimeoutRef.current = setTimeout(() => {
-      ink.classList.remove('bg-foreground')
-      ink.classList.add('bg-muted-foreground')
-      ink.style.transition = INK_BASE_TRANSITION
-    }, COOL_DELAY_MS)
-  }, [])
-
-  // Collapse the ink to zero width at its current center when entering a
-  // non-tab route (e.g. /customize/**). Mirrors place()'s imperative ink
-  // control so the underline never ghosts under a tab without a matching
-  // active icon/label.
   const collapseInk = useCallback((direction: number) => {
     const bar = barRef.current
     const ink = inkRef.current
     if (!bar || !ink) return
-
-    clearTimeout(coolTimeoutRef.current)
 
     const left = parseFloat(ink.style.left || '0')
     const right = parseFloat(ink.style.right || '0')
@@ -157,45 +109,13 @@ export function BottomNav() {
     setActiveGrow(1)
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-    if (reduced || direction === 0) {
-      const alreadyCollapsed =
-        Math.abs(parseFloat(ink.style.left || '0') - collapsedLeft) < 0.5 &&
-        Math.abs(parseFloat(ink.style.right || '0') - collapsedRight) < 0.5
-      const alreadyMuted = ink.classList.contains('bg-muted-foreground')
-
-      if (alreadyCollapsed && alreadyMuted) {
-        return
-      }
-
-      ink.style.transition = 'none'
-      ink.classList.remove('bg-foreground')
-      ink.classList.add('bg-muted-foreground')
-      if (!alreadyCollapsed) {
-        ink.style.left = `${collapsedLeft}px`
-        ink.style.right = `${collapsedRight}px`
-        void ink.offsetWidth
-      }
-      ink.style.transition = INK_BASE_TRANSITION
-      return
-    }
-
-    ink.style.transition = `left ${FAST_EDGE}, right ${FAST_EDGE}, background-color .18s`
+    ink.style.transition =
+      reduced || direction === 0
+        ? 'none'
+        : `left ${EDGE}, right ${EDGE}`
     void ink.offsetWidth
-    ink.classList.remove('bg-foreground')
-    ink.classList.add('bg-muted-foreground')
     ink.style.left = `${collapsedLeft}px`
     ink.style.right = `${collapsedRight}px`
-    ink.style.transition = INK_BASE_TRANSITION
-  }, [])
-
-  useLayoutEffect(() => {
-    // Own the ink's transition imperatively from mount onward. place() sets
-    // this same property on every call (direction change, reset, cool-down);
-    // declaring it once here — and never in JSX — means a re-render can
-    // never clobber a mid-flight edge transition by re-applying a stale JSX
-    // style. See INK_BASE_TRANSITION clobber note below.
-    if (inkRef.current) inkRef.current.style.transition = INK_BASE_TRANSITION
   }, [])
 
   const activeIndexRef = useRef(activeIndex)
@@ -221,20 +141,11 @@ export function BottomNav() {
   }, [activeIndex, place, collapseInk])
 
   useLayoutEffect(() => {
-    // Registered ONCE (stable deps): re-registering per navigation made
-    // `document.fonts.ready.then` refire as an immediate microtask on every
-    // route change — its direction-0 re-place reset the ink transition ~0.3ms
-    // after the animated place() armed it, cancelling the stretch entirely.
-    // The current index is read through a ref so this closure never staleness-
-    // requires re-registration.
     const onResize = () => {
       if (activeIndexRef.current < 0) return
       place(activeIndexRef.current, 0)
     }
     window.addEventListener('resize', onResize)
-    // Label scrollWidth depends on rendered glyph metrics — re-place once
-    // the real font has swapped in, since the mount-time read may have
-    // measured a fallback font's (different) width.
     document.fonts?.ready.then(onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [place])
@@ -249,16 +160,16 @@ export function BottomNav() {
       data-tour="bottom-nav"
       className={cn(
         'fixed bottom-[calc(20px+env(safe-area-inset-bottom))] left-1/2 z-50 flex',
-        'w-3/4 max-w-[400px] -translate-x-1/2 items-stretch rounded-[22px]',
-        'border border-border bg-background/88 px-[7px] pt-1 pb-2',
-        'shadow-[0_14px_34px_-10px_rgba(0,0,0,0.28)] backdrop-blur-[14px] backdrop-saturate-[1.4]',
-        'transition-[opacity,transform] duration-200 ease-out',
+        'w-3/4 max-w-[400px] -translate-x-1/2 items-stretch rounded-full',
+        'border border-border bg-card/90 px-[7px] pt-1 pb-2',
+        'shadow-[0_18px_40px_-18px_rgba(0,0,0,0.28)] backdrop-blur-[18px] backdrop-saturate-[1.5]',
+        'transition-[opacity,transform] duration-[450ms] ease-[cubic-bezier(0.19,1,0.22,1)]',
         keyboardOpen && 'pointer-events-none translate-y-4 opacity-0',
       )}
     >
       <div
         ref={inkRef}
-        className="absolute bottom-[5px] left-0 right-full h-[2.5px] rounded-full bg-muted-foreground"
+        className="absolute bottom-[5px] left-0 right-full h-[3px] rounded-full bg-chart-1"
       />
       {NAV_ITEMS.map((item, index) => {
         const active = index === activeIndex
@@ -275,21 +186,27 @@ export function BottomNav() {
             )}
             style={{
               flexGrow: active ? activeGrow : 1,
-              transition: 'flex-grow .34s cubic-bezier(.34,1.45,.5,1), color .25s',
+              transition: 'flex-grow 0.5s cubic-bezier(0.19, 1, 0.22, 1), color 0.35s ease',
             }}
           >
             {item.icon ? (
-              <item.icon
-                className={cn('size-6 flex-none', active ? 'scale-[1.02]' : 'scale-[.8]')}
-                style={{ transition: 'transform .34s cubic-bezier(.34,1.55,.5,1)' }}
-              />
+              <span
+                className={cn(
+                  'flex size-8 flex-none items-center justify-center rounded-full',
+                  'transition-all duration-500 ease-[cubic-bezier(0.19,1,0.22,1)]',
+                  active ? iconWellClass[CHROME_TONE] : 'bg-transparent',
+                  active ? 'scale-100' : 'scale-[0.82]',
+                )}
+              >
+                <item.icon className="size-4" />
+              </span>
             ) : (
               <span
                 className={cn(
-                  'relative flex-none rounded-full',
-                  active ? 'scale-[1.02] ring-[1.5px] ring-foreground' : 'scale-[.8]',
+                  'relative flex size-8 flex-none items-center justify-center rounded-full',
+                  'transition-all duration-500 ease-[cubic-bezier(0.19,1,0.22,1)]',
+                  active ? 'scale-100 ring-[2px] ring-chart-1' : 'scale-[0.82]',
                 )}
-                style={{ transition: 'transform .34s cubic-bezier(.34,1.55,.5,1)' }}
               >
                 <UserAvatar size="xs" />
               </span>
@@ -305,7 +222,7 @@ export function BottomNav() {
               )}
               style={{
                 transition:
-                  'opacity .22s, transform .34s cubic-bezier(.34,1.45,.5,1), max-width .34s cubic-bezier(.34,1.45,.5,1), margin-left .34s cubic-bezier(.34,1.45,.5,1)',
+                  'opacity 0.28s ease, transform 0.5s cubic-bezier(0.19, 1, 0.22, 1), max-width 0.5s cubic-bezier(0.19, 1, 0.22, 1), margin-left 0.5s cubic-bezier(0.19, 1, 0.22, 1)',
               }}
             >
               {item.label}

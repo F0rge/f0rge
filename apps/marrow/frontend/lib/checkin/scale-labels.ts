@@ -15,6 +15,14 @@
  * either changes.
  */
 
+import {
+  legacyScaleBadgeClass,
+  legacyScaleDotClass,
+  scaleBadgeClass,
+  scaleDotClass,
+  type ScaleTier,
+} from '@/lib/ui/status'
+
 export type CoreScaleField = 'overall' | 'sleep_quality' | 'stress' | 'neuro'
 
 const FIVE_POINT_LABELS: Record<CoreScaleField, Record<number, string>> = {
@@ -38,45 +46,19 @@ export function isFivePoint(schemaVersion: number): boolean {
 /** Label for a core-scale field's stored value, correct for its schema version. */
 export function getScaleLabel(
   field: CoreScaleField,
-  value: number,
-  schemaVersion: number
+  value: number | null,
+  schemaVersion: number,
 ): string {
+  if (value == null) return 'Not rated'
   const table = isFivePoint(schemaVersion) ? FIVE_POINT_LABELS[field] : LEGACY_LABELS[field]
   return table[value] ?? 'Unknown'
 }
 
-export type ScaleTier = 'good' | 'neutral' | 'poor'
-
-const FIVE_POINT_DOT_CLASS: Record<number, string> = {
-  1: 'bg-rose-700',
-  2: 'bg-red-500',
-  3: 'bg-amber-500',
-  4: 'bg-lime-500',
-  5: 'bg-emerald-500',
-}
-
-const FIVE_POINT_BADGE_CLASS: Record<number, string> = {
-  1: 'bg-rose-900/30 text-rose-400',
-  2: 'bg-red-900/30 text-red-400',
-  3: 'bg-amber-900/30 text-amber-400',
-  4: 'bg-lime-900/30 text-lime-400',
-  5: 'bg-emerald-900/30 text-emerald-400',
-}
-
-const LEGACY_DOT_CLASS: Record<ScaleTier, string> = {
-  poor: 'bg-red-500',
-  neutral: 'bg-amber-500',
-  good: 'bg-green-500',
-}
-
-const LEGACY_BADGE_CLASS: Record<ScaleTier, string> = {
-  poor: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  neutral: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  good: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-}
+export type { ScaleTier }
 
 /** Three-way good/neutral/poor split for legacy `overall` entries. */
-export function getOverallTier(value: number, schemaVersion: number): ScaleTier {
+export function getOverallTier(value: number | null, schemaVersion: number): ScaleTier {
+  if (value == null) return 'neutral'
   if (isFivePoint(schemaVersion)) {
     if (value >= 4) return 'good'
     if (value === 3) return 'neutral'
@@ -88,19 +70,21 @@ export function getOverallTier(value: number, schemaVersion: number): ScaleTier 
 }
 
 /** Solid dot color for calendar wellbeing indicators. */
-export function getOverallDotClass(value: number, schemaVersion: number): string {
+export function getOverallDotClass(value: number | null, schemaVersion: number): string {
+  if (value == null) return 'bg-transparent ring-1 ring-chart-1'
   if (isFivePoint(schemaVersion)) {
-    return FIVE_POINT_DOT_CLASS[value] ?? 'bg-muted-foreground'
+    return scaleDotClass[value] ?? 'bg-muted-foreground'
   }
-  return LEGACY_DOT_CLASS[getOverallTier(value, schemaVersion)]
+  return legacyScaleDotClass[getOverallTier(value, schemaVersion)]
 }
 
 /** Soft pill color for wellbeing badges on history surfaces. */
-export function getOverallBadgeClass(value: number, schemaVersion: number): string {
+export function getOverallBadgeClass(value: number | null, schemaVersion: number): string {
+  if (value == null) return 'bg-chart-1/25 text-foreground'
   if (isFivePoint(schemaVersion)) {
-    return FIVE_POINT_BADGE_CLASS[value] ?? 'bg-muted text-muted-foreground'
+    return scaleBadgeClass[value] ?? 'bg-muted text-muted-foreground'
   }
-  return LEGACY_BADGE_CLASS[getOverallTier(value, schemaVersion)]
+  return legacyScaleBadgeClass[getOverallTier(value, schemaVersion)]
 }
 
 export type NeuroDirection = 'worse' | 'better' | 'baseline'

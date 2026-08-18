@@ -7,6 +7,7 @@
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@f0rge/ui'
+import { IconWell } from '@/components/shared/color-artifact'
 import type { ReactNode } from 'react'
 
 function CountBadge({ count }: { count: number }) {
@@ -15,7 +16,7 @@ function CountBadge({ count }: { count: number }) {
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full bg-destructive text-[10px] font-semibold leading-none text-white',
+        'inline-flex shrink-0 items-center justify-center rounded-full bg-chart-1 text-[10px] font-semibold leading-none text-foreground',
         label.length === 1 ? 'size-[18px]' : 'h-[18px] min-w-[18px] px-1',
       )}
       aria-hidden
@@ -27,7 +28,7 @@ function CountBadge({ count }: { count: number }) {
 
 interface SettingsLinkRowProps {
   href: string
-  /** 16px icon element rendered in a muted 36px tile. */
+  /** 16px icon rendered in a 36px chromatic well. */
   icon: ReactNode
   title: string
   description: string
@@ -42,9 +43,7 @@ export function SettingsLinkRow({ href, icon, title, description, badge = 0 }: S
       className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/50 active:bg-muted"
       aria-label={badge > 0 ? `${title}, ${badge} pending` : undefined}
     >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-        {icon}
-      </span>
+      <IconWell>{icon}</IconWell>
       <div className="min-w-0 flex-1">
         <span className="text-sm font-medium">{title}</span>
         <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p>

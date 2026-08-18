@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Loader2, Check, AlertTriangle } from 'lucide-react'
 import { cn } from '@f0rge/ui'
 import type { AutosaveStatus } from '@/lib/hooks/use-autosave-entry'
+import { statusPill } from '@/lib/ui/status'
 
 interface AutosaveStatusPillProps {
   status: AutosaveStatus
@@ -50,7 +51,7 @@ export function AutosaveStatusPill({
   if (status === 'saved') {
     const elapsed = lastSavedAt ? now - lastSavedAt : 0
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-400">
+      <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium', statusPill.ok)}>
         <Check className="size-3" />
         Saved {formatElapsed(elapsed)}
       </span>
@@ -64,9 +65,8 @@ export function AutosaveStatusPill({
         title={errorMessage ?? undefined}
         onClick={onRetry}
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-          'bg-amber-100 text-amber-700 hover:bg-amber-200',
-          'dark:bg-amber-950 dark:text-amber-400 dark:hover:bg-amber-900',
+          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors hover:bg-warn/25',
+          statusPill.warn,
         )}
       >
         <AlertTriangle className="size-3" />

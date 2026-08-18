@@ -1,11 +1,13 @@
 'use client'
 
 import { Loader2, X } from 'lucide-react'
+import { cn } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
 import { MealIconThumb, photoHasImage, useMealThumbSrc } from '@/components/checkin/meal-icon-thumb'
 import { buildAggregateBadges } from '@/components/shared/food-analysis/dietary-badges'
 import type { Photo } from '@/lib/api/types'
 import { usePhotoAnalysis } from '@/lib/api/hooks'
+import { statusPill } from '@/lib/ui/status'
 
 export interface MealCardProps {
   photo: Photo
@@ -85,7 +87,7 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
                   <span className="shrink-0 text-xs text-muted-foreground">({confidence}%)</span>
                 )}
                 {needsReview && (
-                  <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                  <span className={cn('ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium', statusPill.warn)}>
                     Review
                   </span>
                 )}

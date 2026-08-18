@@ -5,20 +5,14 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Treatment } from '@/lib/api/types'
 import { cn } from '@f0rge/ui'
 import { groupTreatments } from '@/components/treatments/group-treatments'
+import { treatmentTimelineBarClass } from '@/lib/ui/status'
 
 interface TreatmentTimelineProps {
   treatments: Treatment[]
   onTreatmentClick: (treatment: Treatment) => void
 }
 
-const TYPE_BAR_CLASSES: Record<string, string> = {
-  antibiotic: 'bg-red-400 dark:bg-red-500',
-  antimicrobial: 'bg-orange-400 dark:bg-orange-500',
-  prescription: 'bg-blue-400 dark:bg-blue-500',
-  intervention: 'bg-purple-400 dark:bg-purple-500',
-  protocol: 'bg-teal-400 dark:bg-teal-500',
-  other: 'bg-gray-400 dark:bg-gray-500',
-}
+const TYPE_BAR_CLASSES = treatmentTimelineBarClass
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date)

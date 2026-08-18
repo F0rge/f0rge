@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 import { Button, useDebouncedValue } from '@f0rge/ui'
 import { isEmail, PasswordInput, TextInput, useForm } from '@f0rge/ui/forms'
 import { useHandleAvailable } from '@/lib/api/hooks'
+import { statusText } from '@/lib/ui/status'
 
 interface AuthCredentialsFormProps {
   mode: 'login' | 'signup'
@@ -93,7 +94,7 @@ export function AuthCredentialsForm({
             {...form.getInputProps('handle')}
           />
           {handleStatus === 'available' && (
-            <p className="mt-1 text-xs text-emerald-600">Available</p>
+            <p className={`mt-1 text-xs ${statusText.ok}`}>Available</p>
           )}
           {handleStatus === 'taken' && (
             <p className="mt-1 text-xs text-destructive">Already taken</p>

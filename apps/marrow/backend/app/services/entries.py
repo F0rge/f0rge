@@ -116,18 +116,16 @@ def _derive_stool_normal(stool_status: Optional[str], current: Optional[bool]) -
     return None
 
 
-# Neutral scale defaults for a photo-first skeleton entry -- mirrors the
-# check-in form's own defaults (mid-scale overall/sleep = 2, stress = 1,
-# everything else neutral/off). symptoms_json is deliberately excluded: it's
-# a mutable {} and must be constructed fresh per entry, not shared from here.
+# Unset core scales — a new day (and photo-first skeleton) has no wellbeing
+# or gut rating until the user taps a level. Distinct from bloating=0 (None).
 NEUTRAL_SKELETON: dict[str, object] = {
-    "overall": 2,
-    "bloating": 0,
-    "stool_normal": True,
+    "overall": None,
+    "bloating": None,
+    "stool_normal": None,
     "joint_pain": 0,
     "neuro": 0,
-    "sleep_quality": 2,
-    "stress": 1,
+    "sleep_quality": None,
+    "stress": None,
     "diet_risk": "",
     "supplements": "",
     "sick": False,
@@ -139,15 +137,8 @@ async def get_or_create_entry(db: AsyncSession, target_date: datetime.date) -> E
     """Return the entry for ``target_date``, creating a neutral skeleton if absent.
 
     Used by meal-clone (and any future photo-first flow) to legally satisfy
-    Entry's NOT NULL columns without a caller-supplied check-in. The skeleton
-    matches the values the frontend already POSTs when a photo is added to an
-    untouched day (the check-in form's defaults: mid-scale overall/sleep = 2,
-    stress = 1, everything else neutral), so a clone-created day is
-    indistinguishable from a photo-first day and the board's pre-fill effect
-    reads back valid on-scale values (the wellbeing scales are 1-3, so a 0
-    would render as no selection). Flushes only (never commits) and skips every
-    create_entry side-effect (catalog touch, tracker sync): the caller owns
-    the transaction.
+    Entry's remaining NOT NULL columns without a caller-supplied check-in.
+    Core wellbeing/gut scales stay NULL until the user rates them.
     """
     crud = EntryCRUD(db)
     existing = await crud.get_by_date(target_date)

@@ -19,7 +19,7 @@ export function WeatherSection() {
   }
 
   return (
-    <SettingsCard icon={Cloud} iconClassName="text-blue-500" title="Weather Data">
+    <SettingsCard icon={Cloud} iconClassName="text-muted-foreground" title="Weather Data">
       <p className="text-sm text-muted-foreground">
         Fetches hourly from OpenWeatherMap for Luxembourg. Barometric pressure drops correlate with symptom flares.
       </p>

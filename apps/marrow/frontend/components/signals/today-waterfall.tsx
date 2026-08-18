@@ -31,7 +31,7 @@ function WaterfallRow({
           <div
             className={cn(
               'absolute top-0 h-full rounded',
-              value >= 0 ? 'left-1/2 bg-emerald-500/70' : 'right-1/2 bg-red-500/70',
+              value >= 0 ? 'left-1/2 bg-ok/70' : 'right-1/2 bg-destructive/70',
             )}
             style={{ width: `${barWidth}%` }}
           />

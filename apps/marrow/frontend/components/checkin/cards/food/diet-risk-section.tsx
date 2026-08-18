@@ -28,24 +28,22 @@ function buildSourceLine(signal: PhotoSignal, catalog: DietTagCatalogItem[]): st
 }
 
 interface LockedChipProps {
-  flag: string
   label: string
   score: number
   title: string
 }
 
-function LockedChip({ flag, label, score, title }: LockedChipProps) {
+function LockedChip({ label, score, title }: LockedChipProps) {
   return (
     <span
-      key={flag}
       title={title}
-      className="inline-flex items-center gap-2 min-h-[48px] rounded-xl border border-primary bg-foreground text-primary-foreground px-3 py-2.5 text-sm font-medium cursor-not-allowed shadow-sm"
+      className="inline-flex items-center gap-2 min-h-[48px] rounded-full border border-primary bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground shadow-sm cursor-not-allowed"
     >
-      <span className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full bg-white/20">
+      <span className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full bg-primary-foreground/20">
         <Camera className="size-2.5" />
       </span>
       {label}
-      <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded-full px-1.5 text-xs font-bold bg-white/20 text-primary-foreground tabular-nums">
+      <span className="inline-flex min-w-[22px] h-[22px] items-center justify-center rounded-full px-1.5 text-xs font-bold bg-primary-foreground/20 tabular-nums">
         {score}
       </span>
     </span>
@@ -87,7 +85,6 @@ function PhotoDerivedRow({ signal, photoCount, catalog }: PhotoDerivedRowProps) 
               return (
                 <LockedChip
                   key={flag}
-                  flag={flag}
                   label={flagLabel}
                   score={score}
                   title={`${scoreDescription}${sources.length > 0 ? `: ${sources.join(', ')}` : ''}`}
@@ -212,10 +209,10 @@ export function DietRiskSection({
                   type="button"
                   onClick={() => onToggle(opt.key)}
                   className={[
-                    'min-h-[48px] rounded-xl border px-2 py-2.5 text-sm font-medium transition-all',
+                    'em-press min-h-[48px] rounded-full border px-2 py-2.5 text-sm font-medium',
                     selected
                       ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                      : 'border-border bg-background text-muted-foreground',
+                      : 'border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground',
                   ].join(' ')}
                 >
                   {opt.label}

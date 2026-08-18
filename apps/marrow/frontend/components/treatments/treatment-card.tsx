@@ -1,8 +1,9 @@
 'use client'
 
 import type { Treatment } from '@/lib/api/types'
-import { formatDisplayDate } from '@f0rge/ui'
+import { cn, formatDisplayDate } from '@f0rge/ui'
 import { getEndReasonLabel } from './end-reason'
+import { statusPill, treatmentTypeClass } from '@/lib/ui/status'
 
 interface TreatmentCardProps {
   treatment: Treatment
@@ -10,14 +11,7 @@ interface TreatmentCardProps {
   onDiscontinue: () => void
 }
 
-const TYPE_BADGE_CLASSES: Record<string, string> = {
-  antibiotic: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  antimicrobial: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-  prescription: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  intervention: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-  protocol: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
-  other: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
-}
+const TYPE_BADGE_CLASSES = treatmentTypeClass
 
 function formatDateRange(treatment: Treatment): string {
   const startStr = formatDisplayDate(treatment.start_date)
@@ -52,7 +46,7 @@ export function TreatmentCard({ treatment, onClick, onDiscontinue }: TreatmentCa
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-medium">{treatment.name}</span>
               {treatment.is_active && (
-                <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusPill.ok)}>
                   Active
                 </span>
               )}
@@ -98,11 +92,10 @@ export function TreatmentCard({ treatment, onClick, onDiscontinue }: TreatmentCa
           className="block w-full border-t border-border/50 px-4 py-2 text-left"
         >
           <span
-            className={
-              treatment.end_reason === 'completed'
-                ? 'rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                : 'rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-            }
+            className={cn(
+              'rounded-full px-2 py-0.5 text-xs font-medium',
+              treatment.end_reason === 'completed' ? statusPill.ok : statusPill.warn,
+            )}
           >
             {treatment.end_reason === 'completed'
               ? 'Completed'

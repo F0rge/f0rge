@@ -4,6 +4,7 @@ import { Triangle } from 'lucide-react'
 import { cn, formatLocalDate } from '@f0rge/ui'
 import { useInsightsTrends } from '@/lib/api/hooks'
 import type { TrendSeries } from '@/lib/api/types'
+import { statusText } from '@/lib/ui/status'
 
 // Which series earn a card, and which way is "better" — the product decision.
 const METRICS: { key: string; unit: string; downIsGood: boolean }[] = [
@@ -54,7 +55,7 @@ function Sparkline({ xs }: { xs: number[] }) {
         strokeLinejoin="round"
         className="stroke-muted-foreground"
       />
-      <circle cx={lastX} cy={lastY} r="2" style={{ fill: 'var(--marrow-nucleus)' }} />
+      <circle cx={lastX} cy={lastY} r="2" style={{ fill: 'var(--chart-1)' }} />
     </svg>
   )
 }
@@ -68,8 +69,8 @@ function Delta({ delta, downIsGood }: { delta: number; downIsGood: boolean }) {
   const tone = flat
     ? 'text-muted-foreground'
     : improving
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : 'text-destructive'
+      ? statusText.ok
+      : statusText.destructive
 
   return (
     // role="img" — a bare aria-label on a <p> doesn't announce.

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { LayoutGrid, Tag } from 'lucide-react'
 import { cn, formatDisplayDate, formatLocalDate } from '@f0rge/ui'
 import {
@@ -10,6 +11,7 @@ import {
   useMealThumbSrc,
 } from '@/components/checkin/meal-icon-thumb'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
+import { EmptyBoard } from '@/components/shared/color-artifact'
 import { usePhotos } from '@/lib/api/hooks'
 import type { Photo } from '@/lib/api/types'
 
@@ -109,14 +111,23 @@ function Grid({
 }: {
   photos: Photo[]
   tagged?: boolean
-  empty: string
+  empty: { title: string; body: string; href: string; cta: string }
   onOpen: (photoId: number) => void
 }) {
   if (photos.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-        {empty}
-      </p>
+      <EmptyBoard
+        title={empty.title}
+        body={empty.body}
+        action={
+          <Link
+            href={empty.href}
+            className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+          >
+            {empty.cta}
+          </Link>
+        }
+      />
     )
   }
   return (
@@ -173,12 +184,26 @@ export function MealGrids() {
         ))}
       </div>
       {tab === 'all' ? (
-        <Grid photos={allPhotos.data ?? []} empty="No meals logged yet." onOpen={setFocusedPhotoId} />
+        <Grid
+          photos={allPhotos.data ?? []}
+          empty={{
+            title: 'No meals yet',
+            body: 'Log a meal from today’s check-in and it will show up here.',
+            href: '/checkin',
+            cta: 'Log a meal',
+          }}
+          onOpen={setFocusedPhotoId}
+        />
       ) : (
         <Grid
           photos={taggedPhotos.data ?? []}
           tagged
-          empty="Nothing shared with you yet — connections can tag you on meal photos."
+          empty={{
+            title: 'Nothing shared yet',
+            body: 'Connections can tag you on meal photos. Find people by @handle.',
+            href: '/people/connections',
+            cta: 'Find people',
+          }}
           onOpen={setFocusedPhotoId}
         />
       )}

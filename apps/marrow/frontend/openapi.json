@@ -9487,11 +9487,25 @@
             "title": "Period Of Day"
           },
           "overall": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Overall"
           },
           "bloating": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Bloating"
           },
           "stool_normal": {
@@ -9564,11 +9578,25 @@
             "default": 0
           },
           "sleep_quality": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Sleep Quality"
           },
           "stress": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Stress"
           },
           "diet_risk": {
@@ -9655,10 +9683,6 @@
         "type": "object",
         "required": [
           "date",
-          "overall",
-          "bloating",
-          "sleep_quality",
-          "stress",
           "diet_risk",
           "supplements",
           "sick"
@@ -9704,11 +9728,25 @@
             "title": "Period Of Day"
           },
           "overall": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Overall"
           },
           "bloating": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Bloating"
           },
           "stool_normal": {
@@ -9775,11 +9813,25 @@
             "title": "Neuro"
           },
           "sleep_quality": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Sleep Quality"
           },
           "stress": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Stress"
           },
           "diet_risk": {
@@ -9892,12 +9944,8 @@
           "id",
           "date",
           "schema_version",
-          "overall",
-          "bloating",
           "joint_pain",
           "neuro",
-          "sleep_quality",
-          "stress",
           "diet_risk",
           "supplements",
           "sick",

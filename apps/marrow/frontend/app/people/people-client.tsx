@@ -18,6 +18,7 @@ import { useAccount, useHandleAvailable, useUpdateAccount } from '@/lib/api/hook
 import { useConnections, useGroups, useMealTags } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { toast } from 'sonner'
+import { statusText } from '@/lib/ui/status'
 
 function ClaimHandleCard() {
   const account = useAccount()
@@ -79,7 +80,7 @@ function ClaimHandleCard() {
           {...form.getInputProps('handle')}
         />
         {status === 'available' && (
-          <p className="text-xs text-emerald-600">Available</p>
+          <p className={`text-xs ${statusText.ok}`}>Available</p>
         )}
         {status === 'taken' && (
           <p className="text-xs text-destructive">Already taken</p>

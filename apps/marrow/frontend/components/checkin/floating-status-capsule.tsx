@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Loader2, Check, AlertTriangle } from 'lucide-react'
 import { cn } from '@f0rge/ui'
 import type { AutosaveStatus } from '@/lib/hooks/use-autosave-entry'
+import { statusText } from '@/lib/ui/status'
 
 interface FloatingStatusCapsuleProps {
   date: string
@@ -123,14 +124,14 @@ export function FloatingStatusCapsule({
         opacity: isVisible ? 1 : 0,
         transition: reducedMotion
           ? 'opacity 220ms ease'
-          : 'opacity 220ms ease, transform 280ms cubic-bezier(.2,.8,.2,1)',
+          : 'opacity 320ms var(--ease-em), transform 450ms var(--ease-em)',
       }}
       className={cn(
         'flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-xs',
         'border border-foreground/10',
-        'shadow-[0_8px_24px_-8px_rgba(0,0,0,0.12),0_2px_4px_rgba(0,0,0,0.04)]',
+        'shadow-[var(--shadow-float)]',
         'backdrop-blur-md',
-        'bg-white/72 dark:bg-background/80',
+        'bg-card/80',
       )}
     >
       <span className="shrink-0 font-semibold text-foreground">{shortDate}</span>
@@ -168,7 +169,7 @@ function StatusContent({ status, lastSavedAt, errorMessage, onRetry, now }: Stat
   if (status === 'saved') {
     const elapsed = lastSavedAt ? now - lastSavedAt : 0
     return (
-      <span className="inline-flex items-center gap-1.5 text-green-700 dark:text-green-400">
+      <span className={cn('inline-flex items-center gap-1.5', statusText.ok)}>
         <Check className="size-3" strokeWidth={3} />
         <span>Saved {formatElapsed(elapsed)}</span>
       </span>
@@ -181,7 +182,7 @@ function StatusContent({ status, lastSavedAt, errorMessage, onRetry, now }: Stat
         type="button"
         title={errorMessage ?? undefined}
         onClick={onRetry}
-        className="inline-flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400"
+        className={cn('inline-flex items-center gap-1.5 font-medium', statusText.warn)}
       >
         <AlertTriangle className="size-3" />
         <span>Couldn&apos;t save &mdash; Retry</span>

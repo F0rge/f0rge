@@ -26,7 +26,7 @@ export function HiddenMealsSection() {
   const items = photos.data ?? []
 
   return (
-    <SettingsCard icon={EyeOff} iconClassName="text-slate-500" title="Hidden meals">
+    <SettingsCard icon={EyeOff} iconClassName="text-muted-foreground" title="Hidden meals">
       <p className="text-sm text-muted-foreground">
         Meals you removed from your profile grids. They stay visible in your check-ins.
       </p>

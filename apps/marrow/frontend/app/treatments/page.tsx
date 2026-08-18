@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Plus, Pill, List, BarChart3, Upload } from 'lucide-react'
+import { Loader2, Plus, List, BarChart3, Upload } from 'lucide-react'
 import { useTreatments } from '@/lib/api/hooks'
 import { TreatmentCard } from '@/components/treatments/treatment-card'
 import { TreatmentFormDialog } from '@/components/treatments/treatment-form-dialog'
@@ -11,6 +11,7 @@ import { TreatmentTimeline } from '@/components/treatments/treatment-timeline'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { FetchError } from '@f0rge/ui'
+import { EmptyMark } from '@/components/shared/color-artifact'
 import type { Treatment } from '@/lib/api/types'
 import { cn } from '@f0rge/ui'
 import { groupTreatments } from '@/components/treatments/group-treatments'
@@ -108,7 +109,7 @@ export default function TreatmentsPage() {
         </div>
       ) : !treatments || treatments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Pill className="mb-4 size-12 text-muted-foreground/40" />
+          <EmptyMark className="mb-4" />
           <h2 className="mb-1 text-lg font-semibold">No treatments yet</h2>
           <p className="mb-4 text-sm text-muted-foreground">
             Track courses of antibiotics, antimicrobials, and other treatments.

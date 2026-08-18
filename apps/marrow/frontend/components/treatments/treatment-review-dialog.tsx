@@ -13,6 +13,7 @@ import {
 import { Button, cn } from '@f0rge/ui'
 import { Checkbox, NumberInput, Textarea, TextInput, useForm } from '@f0rge/ui/forms'
 import { useCreateTreatment } from '@/lib/api/hooks'
+import { statusText } from '@/lib/ui/status'
 import { handleMutationError } from '@f0rge/ui/api'
 import type { ExtractedTreatmentCandidate, TreatmentType } from '@/lib/api/types'
 
@@ -149,7 +150,7 @@ export function TreatmentReviewDialog({
             confidence {Math.round(extractionMeta.confidence * 100)}% &middot; attempt
             {extractionMeta.attempts > 1 ? `s ${extractionMeta.attempts}` : ' 1'}
             {extractionMeta.confidence < 0.7 && (
-              <span className="ml-1.5 font-medium text-amber-600">— marked for review</span>
+              <span className={cn('ml-1.5 font-medium', statusText.warn)}>— marked for review</span>
             )}
           </div>
         )}
