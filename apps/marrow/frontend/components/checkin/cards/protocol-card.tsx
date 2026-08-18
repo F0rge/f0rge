@@ -18,6 +18,7 @@ import type { ProtocolItem } from '@/lib/api/types'
 import { cn } from '@f0rge/ui'
 import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
+import { statusFill, statusPill, statusText } from '@/lib/ui/status'
 
 const RADIUS = 20
 const STROKE = 4
@@ -62,7 +63,7 @@ export function ProtocolCard({ date, collapsed, onToggleCollapsed }: ProtocolCar
         <div
           className={cn(
             'flex items-center gap-4 border-b border-border px-4 py-3.5',
-            isComplete && 'bg-emerald-50/60 dark:bg-emerald-950/30',
+            isComplete && 'bg-ok/10',
           )}
         >
           <div className="relative size-12 shrink-0">
@@ -90,17 +91,15 @@ export function ProtocolCard({ date, collapsed, onToggleCollapsed }: ProtocolCar
                 strokeDashoffset={offset}
                 className={cn(
                   'transition-[stroke-dashoffset] duration-500 ease-out',
-                  isComplete
-                    ? 'stroke-emerald-600 dark:stroke-emerald-400'
-                    : 'stroke-teal-600 dark:stroke-teal-400',
+                  isComplete ? 'stroke-ok' : 'stroke-chart-1',
                 )}
               />
             </svg>
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               {isComplete ? (
-                <Check className="size-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+                <Check className={cn('size-4', statusText.ok)} strokeWidth={2.5} />
               ) : (
-                <span className="text-[11px] font-semibold tabular-nums text-teal-700 dark:text-teal-400">
+                <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">
                   {formatProgressPct(today.pct)}
                 </span>
               )}
@@ -111,7 +110,8 @@ export function ProtocolCard({ date, collapsed, onToggleCollapsed }: ProtocolCar
             {isComplete ? (
               <p
                 className={cn(
-                  'text-sm font-medium text-emerald-600 dark:text-emerald-400',
+                  'text-sm font-medium',
+                  statusText.ok,
                   'motion-safe:animate-in motion-safe:zoom-in-90 motion-safe:duration-300',
                 )}
               >
@@ -129,18 +129,16 @@ export function ProtocolCard({ date, collapsed, onToggleCollapsed }: ProtocolCar
               <span
                 className={cn(
                   'flex items-center gap-1',
-                  streak > 0
-                    ? 'text-amber-700 dark:text-amber-400'
-                    : 'text-muted-foreground',
+                  streak > 0 ? statusText.warn : 'text-muted-foreground',
                 )}
               >
                 <Flame
-                  className={cn('size-3.5', streak > 0 && 'fill-amber-500 text-amber-500')}
+                  className={cn('size-3.5', streak > 0 && cn('fill-warn', statusText.warn))}
                 />
                 {streak}-day streak
               </span>
               {best_streak > streak && (
-                <span className="rounded-full bg-amber-50 px-1.5 py-px text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                <span className={cn('rounded-full px-1.5 py-px text-xs', statusPill.warn)}>
                   Best: {best_streak}
                 </span>
               )}
@@ -175,7 +173,7 @@ function InfoRow({ item }: { item: ProtocolItem }) {
   return (
     <li className="flex items-center justify-between gap-3 px-4 py-3">
       <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
-      <span className="shrink-0 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-900/30 dark:text-teal-400">
+      <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusPill.ok)}>
         day {item.day_num}
       </span>
     </li>
@@ -190,7 +188,7 @@ function DoseRow({ item, onTap }: { item: ProtocolItem; onTap: (n: number) => vo
     <li
       className={cn(
         'flex items-center justify-between gap-3 px-4 py-3',
-        rowComplete && 'bg-teal-50/50 dark:bg-teal-950/20',
+        rowComplete && 'bg-ok/10',
       )}
     >
       <div className="min-w-0">
@@ -211,8 +209,8 @@ function DoseRow({ item, onTap }: { item: ProtocolItem; onTap: (n: number) => vo
                 'flex size-5 items-center justify-center rounded-full border-2',
                 'motion-safe:transition-[transform,colors] motion-safe:active:scale-90',
                 taken
-                  ? 'border-teal-600 bg-teal-600 dark:border-teal-400 dark:bg-teal-400'
-                  : 'border-muted-foreground/30 bg-transparent hover:border-teal-400/60',
+                  ? cn('border-ok', statusFill.ok)
+                  : 'border-muted-foreground/30 bg-transparent hover:border-ok/60',
               )}
             >
               {taken && <Check className="size-3 text-white" strokeWidth={3} />}

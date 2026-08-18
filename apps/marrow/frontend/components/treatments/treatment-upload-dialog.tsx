@@ -14,6 +14,8 @@ import { useExtractTreatmentUpload } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import { TreatmentReviewDialog } from './treatment-review-dialog'
 import type { TreatmentExtractionResult } from '@/lib/api/types'
+import { cn } from '@f0rge/ui'
+import { statusText } from '@/lib/ui/status'
 
 interface TreatmentUploadDialogProps {
   open: boolean
@@ -136,7 +138,7 @@ export function TreatmentUploadDialog({ open, onOpenChange }: TreatmentUploadDia
                 {Math.round(result.payload.confidence * 100)}% &middot; attempt
                 {result.attempts > 1 ? `s ${result.attempts}` : ' 1'}
                 {result.payload.confidence < 0.7 && (
-                  <span className="ml-1.5 font-medium text-amber-600">— marked for review</span>
+                  <span className={cn('ml-1.5 font-medium', statusText.warn)}>— marked for review</span>
                 )}
               </div>
               <Button onClick={() => setConfirmOpen(true)} className="w-full">

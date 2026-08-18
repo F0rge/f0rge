@@ -363,11 +363,10 @@ async def test_clone_creates_target_entry_when_absent(async_db: AsyncSession, st
 
     target = await _get_entry(async_db, TARGET_DAY)
     assert target is not None
-    # Skeleton matches the frontend form defaults (mid-scale 1-3 wellbeing), not
-    # zeros, so the check-in board reads back valid on-scale values.
-    assert target.overall == 2
-    assert target.sleep_quality == 2
-    assert target.stress == 1
+    # Unrated skeleton — core scales stay NULL until the user taps a level.
+    assert target.overall is None
+    assert target.sleep_quality is None
+    assert target.stress is None
     assert target.diet_risk == ""
 
 

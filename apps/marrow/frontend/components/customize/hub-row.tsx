@@ -7,13 +7,15 @@
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@f0rge/ui'
+import { IconWell } from '@/components/shared/color-artifact'
+import { toneFromTier } from '@/lib/ui/status'
 import { TierPill, type Tier } from './tier-pill'
 import type { ReactNode } from 'react'
 
 interface HubRowProps {
   /** Route to push when row is tapped. */
   href: string
-  /** 24px icon element rendered in a muted tile. */
+  /** 16px icon rendered in a 36px chromatic well. */
   icon: ReactNode
   title: string
   description: string
@@ -43,10 +45,9 @@ export function HubRow({
         comingSoon ? 'opacity-50' : 'hover:bg-muted/50 active:bg-muted transition-colors',
       )}
     >
-      {/* Icon tile */}
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+      <IconWell tone={tier ? toneFromTier(tier) : undefined} muted={comingSoon}>
         {icon}
-      </span>
+      </IconWell>
 
       {/* Title + description */}
       <div className="flex-1 min-w-0">

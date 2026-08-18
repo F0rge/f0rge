@@ -20,6 +20,7 @@ import {
 } from 'recharts'
 import type { SignalsTrendSeries } from '@/lib/api/types/signals'
 import { polarityTone } from './polarity'
+import { chartStroke } from '@/lib/ui/status'
 
 interface Props {
   series: SignalsTrendSeries
@@ -87,7 +88,7 @@ function FullChart({ series }: { series: SignalsTrendSeries }) {
         <Line
           type="monotone"
           dataKey="value"
-          stroke="#6366f1"
+          stroke={chartStroke[1]}
           strokeWidth={1.5}
           dot={false}
           name="Value"
@@ -95,7 +96,7 @@ function FullChart({ series }: { series: SignalsTrendSeries }) {
         <Line
           type="monotone"
           dataKey="avg7"
-          stroke="#94a3b8"
+          stroke={chartStroke.muted}
           strokeWidth={1.5}
           dot={false}
           strokeDasharray="4 2"

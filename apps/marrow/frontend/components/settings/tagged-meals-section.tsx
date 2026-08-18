@@ -31,7 +31,7 @@ export function TaggedMealsSection() {
   }
 
   return (
-    <SettingsCard icon={Tag} iconClassName="text-sky-500" title="Tagged meals">
+    <SettingsCard icon={Tag} iconClassName="text-muted-foreground" title="Tagged meals">
       <p className="text-sm text-muted-foreground">
         When someone tags you on a meal, choose whether it lands on your timeline automatically or
         waits for your approval.

@@ -6,11 +6,11 @@ import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
 interface WellbeingCardProps extends CheckinCardCollapseProps {
-  overall: number
+  overall: number | null
   onOverallChange: (v: number) => void
-  sleepQuality: number
+  sleepQuality: number | null
   onSleepQualityChange: (v: number) => void
-  stress: number
+  stress: number | null
   onStressChange: (v: number) => void
   // v4 entries (and any new, not-yet-created day) use 5-point core scales.
   // Legacy entries (schema_version <= 3) keep their original 3-point scales

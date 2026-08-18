@@ -16,9 +16,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@f0rge/ui'
+import { IconWell } from '@/components/shared/color-artifact'
 
 interface SettingsAccordionRowProps {
-  /** 16px icon element rendered in a muted 36px tile. */
+  /** 16px icon rendered in a 36px chromatic well. */
   icon: ReactNode
   title: string
   description: string
@@ -32,9 +33,7 @@ export function SettingsAccordionRow({ icon, title, description, children }: Set
         <AccordionTrigger
           className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/50 hover:no-underline active:bg-muted [&_[data-slot=accordion-trigger-icon]]:hidden"
         >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            {icon}
-          </span>
+          <IconWell>{icon}</IconWell>
           <div className="min-w-0 flex-1">
             <span className="text-sm font-medium">{title}</span>
             <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p>

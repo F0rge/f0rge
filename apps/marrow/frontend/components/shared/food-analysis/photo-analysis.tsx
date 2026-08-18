@@ -10,9 +10,11 @@ import {
   useUpdateDietaryConfirm,
 } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
+import { cn } from '@f0rge/ui'
 import { IngredientEditor } from './ingredient-editor'
 import { DietaryBadges } from './dietary-badges'
 import type { PhotoIngredient } from '@/lib/api/types'
+import { statusText } from '@/lib/ui/status'
 
 type PhotoAnalysisMode = 'view' | 'edit'
 
@@ -218,7 +220,7 @@ export function PhotoAnalysis({
   return (
     <div className="mt-2 rounded-lg border border-border p-2.5">
       {needsReview && (
-        <p className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+        <p className={cn('mb-2 rounded-md border border-warn/30 bg-warn/10 px-2 py-1.5 text-xs', statusText.warn)}>
           Low confidence — review ingredients before confirming.
         </p>
       )}
@@ -232,7 +234,7 @@ export function PhotoAnalysis({
             </span>
           )}
           {isConfirmed && (
-            <Check className="ml-auto size-3.5 text-green-600" />
+            <Check className={cn('ml-auto size-3.5', statusText.ok)} />
           )}
         </div>
       )}

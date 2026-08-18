@@ -8,9 +8,9 @@ import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
 interface GutCardProps extends CheckinCardCollapseProps {
-  bloating: number
+  bloating: number | null
   onBloatingChange: (v: number) => void
-  stoolStatus: StoolStatus
+  stoolStatus: StoolStatus | null
   onStoolStatusChange: (v: StoolStatus) => void
   bristolType: number | null
   onBristolTypeChange: (v: number | null) => void
@@ -61,7 +61,7 @@ export function GutCard({
           {stoolStatus === 'abnormal' && (
             <BristolInput value={bristolType} onChange={onBristolTypeChange} />
           )}
-          {stoolStatus !== 'none' && (
+          {stoolStatus !== null && stoolStatus !== 'none' && (
             <ScaleInput
               label="Completeness"
               value={stoolCompleteness ?? ''}

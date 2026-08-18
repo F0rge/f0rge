@@ -13,6 +13,7 @@ import { handleMutationError } from '@f0rge/ui/api'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
+import { IconWell } from '@/components/shared/color-artifact'
 import { SettingsLinkRow } from '@/components/settings/settings-link-row'
 import { SettingsAccordionRow } from '@/components/settings/settings-accordion-row'
 import { WeatherSection } from '@/components/settings/weather-section'
@@ -107,9 +108,9 @@ export default function SettingsPage() {
           description: 'Theme for this device',
           node: (
             <div key="Appearance" className="flex items-center gap-3 px-4 py-3.5">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <IconWell>
                 <SunMoon className="size-4" />
-              </span>
+              </IconWell>
               <div className="min-w-0 flex-1">
                 <span className="text-sm font-medium">Appearance</span>
                 <p className="mt-0.5 text-xs leading-snug text-muted-foreground">Theme for this device</p>

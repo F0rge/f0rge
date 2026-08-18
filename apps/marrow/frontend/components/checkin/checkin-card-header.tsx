@@ -5,6 +5,8 @@ import { CardHeader, CardTitle, CardAction } from '@f0rge/ui'
 import { TierPill, type Tier } from '@/components/customize/tier-pill'
 import { LG_DESKTOP_QUERY, useMediaQuery } from '@f0rge/ui'
 import { cn } from '@f0rge/ui'
+import { SectionMark } from '@/components/shared/color-artifact'
+import { toneFromTier } from '@/lib/ui/status'
 
 interface CheckinCardHeaderProps {
   title: string
@@ -28,6 +30,7 @@ export function CheckinCardHeader({
           'flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground',
         )}
       >
+        <SectionMark tone={tier ? toneFromTier(tier) : undefined} />
         {title}
         {tier !== undefined && <TierPill tier={tier} />}
       </CardTitle>
@@ -39,7 +42,7 @@ export function CheckinCardHeader({
             aria-expanded={!collapsed}
             aria-label={collapsed ? `Show ${title}` : `Hide ${title}`}
             className={cn(
-              'flex size-8 items-center justify-center rounded-md transition-colors',
+              'flex size-8 items-center justify-center rounded-full transition-colors',
               'text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >

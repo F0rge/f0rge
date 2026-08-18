@@ -47,6 +47,7 @@ export function ArchivedTrackersList({ archived, onRestore }: ArchivedTrackersLi
                     <IconComponent className="size-4 text-muted-foreground" />
                   ) : undefined
                 }
+                tier="custom"
                 label={tracker.name}
                 meta={
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

@@ -26,10 +26,14 @@ async def serialize_entry(db: AsyncSession, source_id: int) -> Optional[str]:
     parts = [f"Health log entry for {row.date}"]
     if row.notes:
         parts.append(f"Notes: {row.notes}")
-    parts.append(f"Overall: {row.overall}/10")
-    parts.append(f"Bloating: {row.bloating}/10")
-    parts.append(f"Sleep quality: {row.sleep_quality}/10")
-    parts.append(f"Stress: {row.stress}/10")
+    if row.overall is not None:
+        parts.append(f"Overall: {row.overall}/10")
+    if row.bloating is not None:
+        parts.append(f"Bloating: {row.bloating}/10")
+    if row.sleep_quality is not None:
+        parts.append(f"Sleep quality: {row.sleep_quality}/10")
+    if row.stress is not None:
+        parts.append(f"Stress: {row.stress}/10")
     _effective = sorted(compute_photo_signal(row).flags | parse_diet_risk_csv(row.diet_risk))
     parts.append(f"Diet risk: {', '.join(_effective) if _effective else 'normal'}")
     parts.append(f"Sick: {row.sick}")

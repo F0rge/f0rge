@@ -17,6 +17,7 @@ import {
 import type { IncomingMealTag, MealTagStatus, OutgoingMealTag } from '@/lib/api/types/social'
 import { toast } from 'sonner'
 import { getErrorDetail } from '@f0rge/ui/api'
+import { statusPill, tagStatusClass } from '@/lib/ui/status'
 
 const STATUS_LABELS: Record<MealTagStatus, string> = {
   pending_analysis: 'Pending analysis',
@@ -27,11 +28,11 @@ const STATUS_LABELS: Record<MealTagStatus, string> = {
 }
 
 const STATUS_CLASS: Record<MealTagStatus, string> = {
-  pending_analysis: 'bg-amber-100 text-amber-800',
-  pending_approval: 'bg-sky-100 text-sky-800',
-  delivered: 'bg-emerald-100 text-emerald-800',
-  declined: 'bg-muted text-muted-foreground',
-  cancelled: 'bg-muted text-muted-foreground',
+  pending_analysis: tagStatusClass.pending_analysis,
+  pending_approval: statusPill.info,
+  delivered: tagStatusClass.delivered,
+  declined: tagStatusClass.default,
+  cancelled: tagStatusClass.default,
 }
 
 function mealTitle(tag: { source_dish_name: string | null; source_label: string | null }) {

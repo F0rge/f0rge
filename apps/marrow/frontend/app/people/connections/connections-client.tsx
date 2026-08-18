@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, UserPlus } from 'lucide-react'
-import { Button, Card, Input, Label, useDebouncedValue } from '@f0rge/ui'
+import { Button, Card, useDebouncedValue } from '@f0rge/ui'
+import { TextInput } from '@f0rge/ui/forms'
 import { PeerAvatar } from '@/components/people/peer-avatar'
 import { PageHeader } from '@/components/layout/page-header'
 import { PageShell } from '@/components/layout/page-shell'
@@ -60,12 +61,12 @@ export default function ConnectionsClient() {
       />
 
       <Card className="space-y-3 p-4">
-        <Label htmlFor="add-handle">Find by @handle</Label>
-        <Input
+        <TextInput
           id="add-handle"
+          label="Find by @handle"
           value={handle}
           onChange={(e) => {
-            setHandle(e.target.value.toLowerCase().replace(/^@/, ''))
+            setHandle(e.currentTarget.value.toLowerCase().replace(/^@/, ''))
             setError(null)
           }}
           placeholder="Search handle prefix (min 3 chars)"

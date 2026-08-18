@@ -2,6 +2,7 @@
 
 import { cn } from '@f0rge/ui'
 import type { DayStrips as DayStripsData } from '@/lib/api/types/signals'
+import { statusFill } from '@/lib/ui/status'
 
 interface Props {
   strips: DayStripsData
@@ -11,9 +12,9 @@ interface Props {
 
 function stripColor(value: number | null): string {
   if (value === null) return 'bg-muted'
-  if (value >= 0.66) return 'bg-emerald-500/80'
-  if (value >= 0.33) return 'bg-amber-500/80'
-  return 'bg-red-500/80'
+  if (value >= 0.66) return `${statusFill.ok}/80`
+  if (value >= 0.33) return `${statusFill.warn}/80`
+  return `${statusFill.destructive}/80`
 }
 
 function StripRow({

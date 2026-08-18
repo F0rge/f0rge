@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Flame } from 'lucide-react'
 import { useProtocol } from '@/lib/api/hooks'
 import { formatLocalDate, cn } from '@f0rge/ui'
+import { statusPill, statusText } from '@/lib/ui/status'
 
 interface ProtocolStreakHintProps {
   /** Currently viewed month in YYYY-MM form. */
@@ -31,18 +32,18 @@ export function ProtocolStreakHint({ month }: ProtocolStreakHintProps) {
       href="/treatments"
       className={cn(
         'mb-3 flex items-center gap-2 text-xs transition-colors hover:text-foreground',
-        streak > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
+        streak > 0 ? statusText.warn : 'text-muted-foreground',
       )}
     >
       <Flame
-        className={cn('size-3.5 shrink-0', streak > 0 && 'fill-amber-500 text-amber-500')}
+        className={cn('size-3.5 shrink-0', streak > 0 && cn('fill-warn', statusText.warn))}
         aria-hidden
       />
       {streak > 0 ? (
         <>
           <span>{streak}-day protocol streak</span>
           {best_streak > streak && (
-            <span className="rounded-full bg-amber-50 px-1.5 py-px text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+            <span className={cn('rounded-full px-1.5 py-px text-xs', statusPill.warn)}>
               Best: {best_streak}
             </span>
           )}

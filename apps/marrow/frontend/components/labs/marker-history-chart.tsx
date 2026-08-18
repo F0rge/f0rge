@@ -15,6 +15,7 @@ import {
 import { Loader2, Pin, PinOff } from 'lucide-react'
 import { useMarkerHistory, useTreatments } from '@/lib/api/hooks'
 import type { MarkerFlag } from '@/lib/api/types'
+import { chartStroke } from '@/lib/ui/status'
 
 interface MarkerHistoryChartProps {
   canonicalName: string
@@ -22,11 +23,11 @@ interface MarkerHistoryChartProps {
 }
 
 const FLAG_COLORS: Record<MarkerFlag, string> = {
-  normal: '#6366f1',
-  low: '#3b82f6',
-  high: '#ef4444',
-  abnormal: '#f59e0b',
-  unknown: '#94a3b8',
+  normal: chartStroke.muted,
+  low: chartStroke[2],
+  high: 'var(--destructive)',
+  abnormal: chartStroke.warn,
+  unknown: chartStroke.muted,
 }
 
 const PINNED_KEY = 'labs.pinnedMarkers'
@@ -180,7 +181,7 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
             <ReferenceArea
               y1={refBand.low}
               y2={refBand.high}
-              fill="#6366f120"
+              fill={`${chartStroke[1]}20`}
               strokeOpacity={0}
             />
           )}
@@ -189,9 +190,9 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
             <ReferenceLine
               key={`t-start-${t.id}`}
               x={t.start_date.slice(5)}
-              stroke="#6366f180"
+              stroke={`${chartStroke[1]}80`}
               strokeDasharray="4 2"
-              label={{ value: t.name.slice(0, 8), fontSize: 9, fill: '#6366f1' }}
+              label={{ value: t.name.slice(0, 8), fontSize: 9, fill: chartStroke[1] }}
             />
           ))}
           {treatments
@@ -200,7 +201,7 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
               <ReferenceLine
                 key={`t-end-${t.id}`}
                 x={t.end_date!.slice(5)}
-                stroke="#94a3b880"
+                stroke={`${chartStroke.muted}80`}
                 strokeDasharray="4 2"
               />
             ))}
@@ -208,7 +209,7 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
           <Line
             type="monotone"
             dataKey="value"
-            stroke="#6366f1"
+            stroke={chartStroke[1]}
             strokeWidth={2}
             dot={<FlagDot />}
             activeDot={{ r: 5 }}

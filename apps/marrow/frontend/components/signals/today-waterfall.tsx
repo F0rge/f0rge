@@ -3,6 +3,7 @@
 import { cn } from '@f0rge/ui'
 import type { SignalsToday } from '@/lib/api/types/signals'
 import { polarityTone } from './polarity'
+import { statusFill } from '@/lib/ui/status'
 
 interface Props {
   today: SignalsToday
@@ -31,7 +32,7 @@ function WaterfallRow({
           <div
             className={cn(
               'absolute top-0 h-full rounded',
-              value >= 0 ? 'left-1/2 bg-emerald-500/70' : 'right-1/2 bg-red-500/70',
+              value >= 0 ? `left-1/2 ${statusFill.ok}/70` : `right-1/2 ${statusFill.destructive}/70`,
             )}
             style={{ width: `${barWidth}%` }}
           />

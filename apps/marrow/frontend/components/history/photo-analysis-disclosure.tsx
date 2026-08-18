@@ -6,6 +6,8 @@ import { MealIconThumb, photoHasImage, photoThumbSrc } from '@/components/checki
 import { usePhotoAnalysis } from '@/lib/api/hooks'
 import { PhotoAnalysis } from '@/components/shared/food-analysis'
 import type { Photo } from '@/lib/api/types'
+import { cn } from '@f0rge/ui'
+import { statusText } from '@/lib/ui/status'
 
 interface PhotoAnalysisDisclosureProps {
   photoId: number
@@ -71,7 +73,7 @@ function SummaryContent({
             <span className="shrink-0 text-xs text-muted-foreground">({confidence}%)</span>
           )}
           {isConfirmed && (
-            <Check className="ml-1 size-3.5 shrink-0 text-green-600" />
+            <Check className={cn('ml-1 size-3.5 shrink-0', statusText.ok)} />
           )}
         </div>
         <div className="mt-0.5">

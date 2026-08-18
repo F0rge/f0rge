@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@f0rge/ui'
 import type { Photo } from '@/lib/api/types'
+import { mealThumbBg, mealThumbBgFallback } from '@/lib/ui/status'
 
 const ICON_MAP: Record<string, LucideIcon> = {
   duck: Bird,
@@ -28,17 +29,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   bowl: Soup,
 }
 
-const BG_MAP: Record<string, string> = {
-  duck: 'from-amber-100 to-amber-50 dark:from-amber-950/50 dark:to-amber-900/30',
-  sandwich: 'from-amber-100 to-orange-50 dark:from-amber-950/50 dark:to-orange-900/30',
-  pastry: 'from-rose-100 to-rose-50 dark:from-rose-950/50 dark:to-rose-900/30',
-  fish: 'from-sky-100 to-sky-50 dark:from-sky-950/50 dark:to-sky-900/30',
-  salad: 'from-emerald-100 to-emerald-50 dark:from-emerald-950/50 dark:to-emerald-900/30',
-  curry: 'from-orange-100 to-amber-50 dark:from-orange-950/50 dark:to-amber-900/30',
-  toast: 'from-amber-100 to-yellow-50 dark:from-amber-950/50 dark:to-yellow-900/30',
-  soup: 'from-slate-100 to-slate-50 dark:from-slate-800/60 dark:to-slate-900/40',
-  bowl: 'from-slate-100 to-slate-50 dark:from-slate-800/60 dark:to-slate-900/40',
-}
+const BG_MAP = mealThumbBg
 
 const SIZE_MAP = {
   sm: { box: 'size-10', icon: 'size-4' },
@@ -91,7 +82,7 @@ interface MealIconThumbProps {
 
 export function MealIconThumb({ iconKey, className, size = 'md' }: MealIconThumbProps) {
   const Icon = ICON_MAP[iconKey] ?? Utensils
-  const bg = BG_MAP[iconKey] ?? 'from-slate-100 to-slate-50 dark:from-slate-800/60 dark:to-slate-900/40'
+  const bg = BG_MAP[iconKey] ?? mealThumbBgFallback
   const dims = SIZE_MAP[size]
 
   return (

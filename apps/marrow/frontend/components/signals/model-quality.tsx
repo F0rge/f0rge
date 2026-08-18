@@ -1,4 +1,6 @@
+import { cn } from '@f0rge/ui'
 import type { SignalsModel } from '@/lib/api/types/signals'
+import { statusText } from '@/lib/ui/status'
 
 interface Props {
   model: SignalsModel
@@ -27,7 +29,7 @@ export function ModelQuality({ model }: Props) {
       </h2>
       <div className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
         {model.relearning && model.relearning_message ? (
-          <p className="mb-3 text-xs text-amber-600 dark:text-amber-400">
+          <p className={cn('mb-3 text-xs', statusText.warn)}>
             {model.relearning_message}
           </p>
         ) : null}
