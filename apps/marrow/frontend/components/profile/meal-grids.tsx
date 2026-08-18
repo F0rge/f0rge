@@ -4,7 +4,11 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { LayoutGrid, Tag } from 'lucide-react'
 import { cn, formatDisplayDate, formatLocalDate } from '@f0rge/ui'
-import { MealIconThumb, photoHasImage, photoThumbSrc } from '@/components/checkin/meal-icon-thumb'
+import {
+  MealIconThumb,
+  photoHasImage,
+  useMealThumbSrc,
+} from '@/components/checkin/meal-icon-thumb'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
 import { usePhotos } from '@/lib/api/hooks'
 import type { Photo } from '@/lib/api/types'
@@ -34,6 +38,69 @@ export function mealDay(iso: string): string {
   return formatDisplayDate(formatLocalDate(d))
 }
 
+function GridTile({
+  photo,
+  tagged,
+  onOpen,
+}: {
+  photo: Photo
+  tagged?: boolean
+  onOpen: (photoId: number) => void
+}) {
+  // User label wins, AI dish name is the fallback; `||` (not `??`) so a
+  // cleared label ('') falls through to the AI guess instead of rendering blank.
+  const name = photo.label || photo.dish_name
+  const when = mealDay(photo.meal_time ?? photo.created_at)
+  const { src: thumbSrc, onError: onThumbError } = useMealThumbSrc(photo.id)
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(photo.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen(photo.id)
+        }
+      }}
+      aria-label={`Open ${name || 'meal photo'}`}
+      className="relative aspect-square cursor-pointer overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {photoHasImage(photo) && thumbSrc ? (
+        <Image
+          src={thumbSrc}
+          alt={photo.label ?? 'Meal photo'}
+          fill
+          unoptimized
+          sizes="(max-width: 672px) 33vw, 224px"
+          className="object-cover"
+          onError={onThumbError}
+        />
+      ) : (
+        <MealIconThumb
+          iconKey={photo.icon_key ?? 'bowl'}
+          size="lg"
+          className="size-full rounded-none"
+        />
+      )}
+      {tagged && photo.tagged_by_handle && (
+        <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-card px-1.5 text-[8.5px] font-bold leading-4 ring-1 ring-border">
+          @{photo.tagged_by_handle}
+        </span>
+      )}
+      {(name || when) && (
+        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 pb-1 pt-3.5 text-left">
+          {name && (
+            <span className="block truncate text-[9.5px] font-semibold text-white">{name}</span>
+          )}
+          {when && <span className="block truncate text-[8.5px] text-white/75">{when}</span>}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function Grid({
   photos,
   tagged,
@@ -54,58 +121,9 @@ function Grid({
   }
   return (
     <div className="grid grid-cols-3 gap-1.5">
-      {photos.map((photo) => {
-        // User label wins, AI dish name is the fallback; `||` (not `??`) so a
-        // cleared label ('') falls through to the AI guess instead of rendering blank.
-        const name = photo.label || photo.dish_name
-        const when = mealDay(photo.meal_time ?? photo.created_at)
-        return (
-          <div
-            key={photo.id}
-            role="button"
-            tabIndex={0}
-            onClick={() => onOpen(photo.id)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onOpen(photo.id)
-              }
-            }}
-            aria-label={`Open ${name || 'meal photo'}`}
-            className="relative aspect-square cursor-pointer overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {photoHasImage(photo) ? (
-              <Image
-                src={photoThumbSrc(photo.id)}
-                alt={photo.label ?? 'Meal photo'}
-                fill
-                unoptimized
-                sizes="(max-width: 672px) 33vw, 224px"
-                className="object-cover"
-              />
-            ) : (
-              <MealIconThumb
-                iconKey={photo.icon_key ?? 'bowl'}
-                size="lg"
-                className="size-full rounded-none"
-              />
-            )}
-            {tagged && photo.tagged_by_handle && (
-              <span className="absolute left-1.5 top-1.5 z-10 rounded-full bg-card px-1.5 text-[8.5px] font-bold leading-4 ring-1 ring-border">
-                @{photo.tagged_by_handle}
-              </span>
-            )}
-            {(name || when) && (
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 pb-1 pt-3.5 text-left">
-                {name && (
-                  <span className="block truncate text-[9.5px] font-semibold text-white">{name}</span>
-                )}
-                {when && <span className="block truncate text-[8.5px] text-white/75">{when}</span>}
-              </span>
-            )}
-          </div>
-        )
-      })}
+      {photos.map((photo) => (
+        <GridTile key={photo.id} photo={photo} tagged={tagged} onOpen={onOpen} />
+      ))}
     </div>
   )
 }

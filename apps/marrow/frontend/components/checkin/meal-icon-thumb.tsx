@@ -1,5 +1,6 @@
 'use client'
 
+import { useCallback, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   Bird,
@@ -56,8 +57,30 @@ export function photoFileSrc(photoId: number): string {
 }
 
 /** 480px thumbnail — every tile-sized surface. */
-export function photoThumbSrc(photoId: number): string {
-  return `/api/v1/photos/${photoId}/thumb`
+export function photoThumbSrc(photoId: number, bust?: number): string {
+  const base = `/api/v1/photos/${photoId}/thumb`
+  return bust && bust > 0 ? `${base}?r=${bust}` : base
+}
+
+/**
+ * One automatic retry on thumb load failure (slow first /thumb after deploy /
+ * lazy generation), then give up so callers can show the bowl icon.
+ */
+export function useMealThumbSrc(photoId: number): {
+  src: string | null
+  onError: () => void
+} {
+  const [attempt, setAttempt] = useState(0)
+  const [failed, setFailed] = useState(false)
+  const onError = useCallback(() => {
+    if (failed) return
+    if (attempt >= 1) {
+      setFailed(true)
+      return
+    }
+    setAttempt(attempt + 1)
+  }, [attempt, failed])
+  return { src: failed ? null : photoThumbSrc(photoId, attempt), onError }
 }
 
 interface MealIconThumbProps {
