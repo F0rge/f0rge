@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     airflow_username: str = "airflow"
     airflow_password: str = ""
     airflow_service_token: str = ""
-    airflow_classify_dag_id: str = "marrow_classify_meal_dev"
+    airflow_classify_dag_id: str = ""
     mcp_readonly_database_url: str = ""
     mcp_server_host: str = "0.0.0.0"
     mcp_server_port: int = 8005
