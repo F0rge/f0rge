@@ -89,9 +89,17 @@ async def test_get_invalid_date_format_422(authed_client: AsyncClient) -> None:
 
 async def test_create_missing_required_field_422(authed_client: AsyncClient) -> None:
     payload = dict(_VALID_PAYLOAD)
-    del payload["overall"]
+    del payload["date"]
     resp = await authed_client.post("/api/v1/entries", json=payload)
     assert resp.status_code == 422
+
+
+async def test_create_omits_overall_201(authed_client: AsyncClient) -> None:
+    payload = dict(_VALID_PAYLOAD)
+    del payload["overall"]
+    resp = await authed_client.post("/api/v1/entries", json=payload)
+    assert resp.status_code == 201
+    assert resp.json()["overall"] is None
 
 
 # ---------------------------------------------------------------------------
