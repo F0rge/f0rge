@@ -174,6 +174,36 @@ async def test_hide_unhide_flow(
     assert set(await _photo_ids(authed_client)) == {photo_a.id, photo_b.id}
 
 
+async def test_photos_list_returns_all_when_uncapped(
+    authed_client: AsyncClient,
+    async_db: AsyncSession,
+    isolated_storage: None,
+    authed_user_id: uuid.UUID,
+) -> None:
+    """Profile grid: omitting limit returns every meal, not the old 24/100 cap."""
+    day = datetime.date(2026, 7, 8)
+    await apply_session_user_id(async_db, authed_user_id)
+    entry = await _make_entry(async_db, day, authed_user_id)
+    count = 30
+    async_db.add_all(
+        [
+            Photo(
+                user_id=authed_user_id,
+                entry_id=entry.id,
+                filename=f"meal-{i}.jpg",
+                label=f"Meal {i}",
+            )
+            for i in range(count)
+        ]
+    )
+    await async_db.commit()
+
+    uncapped = await _photo_ids(authed_client)
+    assert len(uncapped) == count
+    paged = await _photo_ids(authed_client, limit=24)
+    assert len(paged) == 24
+
+
 # ---------------------------------------------------------------------------
 # Explicit diet tags
 # ---------------------------------------------------------------------------
