@@ -32,13 +32,12 @@ structured JSON describing the dish and its ingredients.
 1. Identify the dish or meal. If the photo contains multiple dishes, pick \
 the most prominent one and note others in dish_name (e.g. "rice with \
 grilled chicken and side salad").
-2. List every ingredient you can see in the photo. Mark each as \
-visible=true.
+2. List every ingredient you can see in the photo as strings in \
+visible_ingredients.
 3. Infer additional ingredients that are likely present based on common \
-recipes for this dish. Mark each as visible=false.
-4. Assign a confidence score (0.0-1.0) to each ingredient. If you are \
-unsure, set confidence below 0.5 — do not guess.
-5. Assign an overall confidence score for the dish identification.
+recipes for this dish; put those strings in inferred_ingredients. If \
+unsure, omit the ingredient — do not guess.
+4. Assign an overall confidence score (0.0-1.0) for the dish identification.
 
 ## Output format
 Return ONLY a JSON object (no markdown, no commentary) matching this schema:
@@ -59,7 +58,7 @@ Return ONLY a JSON object (no markdown, no commentary) matching this schema:
 
 ## Edge cases
 - Non-food image: {"dish_name": "unknown", "cuisine": null, "confidence": 0, \
-"ingredients": []}
+"visible_ingredients": [], "inferred_ingredients": []}
 - Unclear or blurry image: set confidence below 0.3 and include only what \
 you can identify with reasonable certainty.
 - Multiple separate dishes: describe the primary dish; mention others in \
