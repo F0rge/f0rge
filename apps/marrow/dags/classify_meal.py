@@ -47,16 +47,15 @@ Return ONLY a JSON object (no markdown, no commentary) matching this schema:
   "dish_name": "string — lowercase, concise name",
   "cuisine": "string or null — e.g. italian, japanese, mexican",
   "confidence": 0.0-1.0,
-  "ingredients": [
-    {"name": "ingredient", "visible": true, "confidence": 0.0-1.0}
-  ]
+  "visible_ingredients": ["ingredient names you can see"],
+  "inferred_ingredients": ["likely extra ingredients not clearly visible"]
 }
 
 ## Ingredient naming rules
 - Lowercase, singular form: "tomato" not "Tomatoes", "egg" not "eggs"
 - Use common English names: "cilantro" not "coriander leaf"
 - Be specific when visible: "red bell pepper" not just "pepper"
-- Never emit null/None in ingredients — omit unknown items or use []
+- Never emit null/None in ingredient lists — use [] if none
 
 ## Edge cases
 - Non-food image: {"dish_name": "unknown", "cuisine": null, "confidence": 0, \
@@ -75,7 +74,8 @@ ingredient names with their tracked vocabulary.
 
 Rules:
 - When a visible or inferred ingredient plausibly matches a catalog entry, \
-emit the exact canonical_name from the list in ingredients[].name.
+emit the exact canonical_name from the list in visible_ingredients or \
+inferred_ingredients.
 - Treat listed aliases as recognition aids only — never emit an alias as \
 the ingredient name; always output the canonical_name.
 - If nothing in the catalog fits what you see, use the best free-form \
@@ -85,8 +85,9 @@ Catalog (alphabetical, canonical names):
 """
 
 USER_PROMPT = (
-    "Analyze this food photo. Return a JSON object with dish_name, "
-    "cuisine, confidence, and ingredients array."
+    "Analyze this food photo. Return dish_name, cuisine, confidence, "
+    "visible_ingredients (strings you can see), and inferred_ingredients "
+    "(strings likely present but not clearly visible). Never emit nulls."
 )
 
 LLM_CONN_ID = "pydanticai_openrouter"
@@ -218,13 +219,14 @@ def marrow_classify_meal() -> None:
 
     @task
     def persist(job_data: dict[str, Any], vision: Any) -> dict[str, Any]:
-        if isinstance(vision, VisionResult):
-            body = vision.model_dump()
-        elif isinstance(vision, dict):
-            body = vision
-        else:
-            body = VisionResult.model_validate(vision).model_dump()
-        body["user_id"] = job_data["user_id"]
+        result = vision if isinstance(vision, VisionResult) else VisionResult.model_validate(vision)
+        body = {
+            "user_id": job_data["user_id"],
+            "dish_name": result.dish_name,
+            "cuisine": result.cuisine,
+            "confidence": result.confidence,
+            "ingredients": result.to_marrow_ingredients(),
+        }
 
         return _marrow_request(
             "POST",

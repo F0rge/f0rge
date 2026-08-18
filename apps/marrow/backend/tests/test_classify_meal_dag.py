@@ -41,12 +41,12 @@ def test_vision_result_in_dag_accepts_fixture():
     assert "food identification assistant" in source
     assert "LLMFileAnalysisOperator" in source
     assert 'dag_id="marrow_classify_meal"' in source or "dag_id='marrow_classify_meal'" in source
-    assert "Never emit null/None in ingredients" in source
+    assert "Never emit null/None in ingredient lists" in source
     assert "agent_params" in source
 
 
 def test_dag_vision_result_drops_null_ingredients():
-    """Gemini sometimes returns ingredients: [null, null, …]."""
+    """Gemini sometimes returns ingredient slots as null or nested objects."""
     spec = importlib.util.spec_from_file_location("marrow_vision_schema", SCHEMA_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -56,24 +56,48 @@ def test_dag_vision_result_drops_null_ingredients():
             "dish_name": "salad",
             "cuisine": None,
             "confidence": 0.8,
-            "ingredients": [
+            "visible_ingredients": [
                 None,
-                {"name": "lettuce", "visible": True, "confidence": 0.9},
+                {"name": "lettuce"},
                 None,
                 "tomato",
             ],
+            "inferred_ingredients": ["salt", None],
         }
     )
-    assert [i.name for i in result.ingredients] == ["lettuce", "tomato"]
+    assert result.visible_ingredients == ["lettuce", "tomato"]
+    assert result.inferred_ingredients == ["salt"]
+    ings = result.to_marrow_ingredients()
+    assert [i["name"] for i in ings] == ["lettuce", "tomato", "salt"]
+    assert ings[2]["visible"] is False
+
     empty = module.VisionResult.model_validate(
         {
             "dish_name": "unknown",
             "cuisine": None,
             "confidence": 0,
-            "ingredients": [None] * 14,
+            "visible_ingredients": [None] * 14,
         }
     )
-    assert empty.ingredients == []
+    assert empty.visible_ingredients == []
+    assert empty.to_marrow_ingredients() == []
+
+
+def test_dag_vision_result_rejects_identified_dish_without_ingredients():
+    spec = importlib.util.spec_from_file_location("marrow_vision_schema", SCHEMA_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with pytest.raises(Exception):
+        module.VisionResult.model_validate(
+            {
+                "dish_name": "mixed green salad with orange juice",
+                "cuisine": None,
+                "confidence": 0.95,
+                "visible_ingredients": [],
+                "inferred_ingredients": [],
+            }
+        )
 
 
 @pytest.mark.skipif(
