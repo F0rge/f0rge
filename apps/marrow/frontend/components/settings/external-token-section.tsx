@@ -16,7 +16,7 @@ import { statusText } from '@/lib/ui/status'
 const MCP_CONFIG_SNIPPET = `{
   "mcpServers": {
     "marrow": {
-      "url": "https://marrow-mcp.fly.dev/mcp",
+      "url": "https://mcp.marrow-health.com/mcp",
       "headers": {
         "Authorization": "Bearer {TOKEN}"
       }
@@ -154,12 +154,12 @@ export function ExternalTokenSection() {
 
         <details className="rounded-lg border border-border">
           <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">
-            Claude Desktop / Claude Code (JSON config)
+            Claude / Cursor (JSON config)
           </summary>
           <div className="border-t border-border px-3 py-2 space-y-2">
             <pre className="overflow-x-auto rounded bg-muted p-2 text-xs leading-relaxed">{MCP_CONFIG_SNIPPET}</pre>
             <p className="text-xs text-muted-foreground">
-              Paste into <code className="rounded bg-muted px-1">~/Library/Application Support/Claude/claude_desktop_config.json</code>. Replace <code className="rounded bg-muted px-1">{'{TOKEN}'}</code> with the regenerated token above.
+              Paste into Cursor <code className="rounded bg-muted px-1">~/.cursor/mcp.json</code> or Claude Desktop config. Replace <code className="rounded bg-muted px-1">{'{TOKEN}'}</code> with the regenerated token above.
             </p>
             <button
               type="button"
