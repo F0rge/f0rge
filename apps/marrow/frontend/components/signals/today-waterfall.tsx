@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { cn } from '@f0rge/ui'
 import type { SignalsToday } from '@/lib/api/types/signals'
 import { polarityFill, polarityTone } from './polarity'
@@ -79,6 +80,25 @@ export function TodayWaterfall({ today, goodDirection }: Props) {
     } else {
       residualCopy = 'Today matched the model prediction.'
     }
+  }
+
+  if (today.baseline == null && predicted == null && contributions.length === 0) {
+    return (
+      <section aria-label="Today's prediction breakdown" className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Waterfall
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          No check-in for today yet.{' '}
+          <Link
+            href="/checkin"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            Log a check-in
+          </Link>
+        </p>
+      </section>
+    )
   }
 
   return (
