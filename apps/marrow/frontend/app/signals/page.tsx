@@ -150,9 +150,6 @@ function SignalsContent() {
                       )}
                     </div>
                     <SetAside mirrors={data.mirrors} />
-                    <div className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
-                      Experiments — coming soon
-                    </div>
                   </>
                 )}
               </TabsContent>
