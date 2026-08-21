@@ -8,6 +8,7 @@ import { PhotoCapture } from '@/components/checkin/photo-capture'
 import { RecentMealsStrip } from '@/components/checkin/recent-meals-strip'
 import type { Entry } from '@/lib/api/types'
 import { useDeletePhoto, useDietTagCatalog } from '@/lib/api/hooks'
+import { invalidateSignals } from '@/lib/api/hooks/signals'
 import { handleMutationError } from '@f0rge/ui/api'
 import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
@@ -50,6 +51,7 @@ export function FoodCard({
       await deletePhotoMutation.mutateAsync(photoId)
       onPhotosChange(existingPhotos.filter((p) => p.id !== photoId))
       queryClient.invalidateQueries({ queryKey: ['entry', date] })
+      invalidateSignals(queryClient)
       toast.success('Photo deleted')
     } catch (err) {
       handleMutationError(err, 'Failed to delete photo')

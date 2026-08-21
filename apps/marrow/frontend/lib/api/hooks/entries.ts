@@ -11,6 +11,7 @@ import {
   ApiError,
 } from '@f0rge/ui/api'
 import type { Entry, EntryCreate, EntryStats } from '../types'
+import { invalidateSignals } from './signals'
 
 export function useEntryStats() {
   return useQuery<EntryStats>({
@@ -53,6 +54,7 @@ export function useCreateEntry() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
     },
   })
 }
@@ -65,6 +67,7 @@ export function useUpdateEntry() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
     },
   })
 }
@@ -76,6 +79,7 @@ export function useDeleteEntry() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
     },
   })
 }
@@ -88,6 +92,7 @@ export function useUpdatePhotoMealTime() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
@@ -102,6 +107,7 @@ export function useUpdatePhotoLabel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
       queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
@@ -120,6 +126,7 @@ export function useUpdatePhotoVisibility() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
@@ -135,6 +142,7 @@ export function useUpdatePhotoDietTags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
@@ -154,6 +162,7 @@ export function useUpdateDietaryConfirm() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
       // Confirmation changes derived_diet_tags and profile tag-filter matches.
       queryClient.invalidateQueries({ queryKey: ['photos'] })
