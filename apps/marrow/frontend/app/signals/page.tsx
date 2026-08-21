@@ -56,7 +56,7 @@ function SignalsContent() {
   const outcome = searchParams.get('outcome') ?? 'overall'
   const tab = parseTab(searchParams.get('tab'))
 
-  const { data, isLoading, isError, refetch } = useSignals(outcome, start, end)
+  const { data, isPending, isFetching, isError, refetch } = useSignals(outcome, start, end)
 
   function updateParams(next: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
@@ -104,17 +104,27 @@ function SignalsContent() {
             <TabsTrigger value="trends">Trends</TabsTrigger>
           </TabsList>
 
-          {isLoading && (
-            <div className="flex items-center justify-center py-12">
+          {isPending && !data && (
+            <div
+              role="status"
+              className="flex items-center justify-center py-12"
+              aria-label="Loading signals"
+            >
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
             </div>
           )}
 
-          {isError && (
+          {isFetching && data && (
+            <p className="text-xs text-muted-foreground" role="status">
+              Updating…
+            </p>
+          )}
+
+          {isError && !data && (
             <FetchError message="Failed to load signals." onRetry={() => refetch()} />
           )}
 
-          {data && !isLoading && (
+          {data && (
             <>
               <InsufficientDataBanner meta={data.meta} />
 

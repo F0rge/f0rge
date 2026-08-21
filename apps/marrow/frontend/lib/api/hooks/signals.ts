@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { apiGet } from '@f0rge/ui/api'
 import type { SignalsDriverJson, SignalsResponse } from '../types/signals'
 
@@ -25,5 +25,6 @@ export function useSignals(outcome: string, start: string, end: string) {
       return normalizeSignals(raw)
     },
     enabled: !!outcome && !!start && !!end,
+    placeholderData: keepPreviousData,
   })
 }
