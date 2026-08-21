@@ -12,6 +12,7 @@ export function InsufficientDataBanner({ meta }: Props) {
   return (
     <div
       role="status"
+      data-tour="signals-insufficient"
       className="flex gap-3 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm"
     >
       <SectionMark className="mt-0.5" />
