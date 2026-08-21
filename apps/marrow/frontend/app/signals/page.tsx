@@ -119,7 +119,11 @@ function SignalsContent() {
               <InsufficientDataBanner meta={data.meta} />
 
               <TabsContent value="today" className="mt-0 space-y-6">
-                {!data.meta.insufficient_data && (
+                {data.meta.insufficient_data ? (
+                  <p className="text-sm text-muted-foreground">
+                    Today&apos;s breakdown unlocks after more check-ins.
+                  </p>
+                ) : (
                   <>
                     <TodayWaterfall today={data.today} goodDirection={goodDirection} />
                     <CalibrationStrip series={data.today.calibration_series ?? []} />
@@ -130,7 +134,11 @@ function SignalsContent() {
               </TabsContent>
 
               <TabsContent value="drivers" className="mt-0 space-y-4">
-                {!data.meta.insufficient_data && (
+                {data.meta.insufficient_data ? (
+                  <p className="text-sm text-muted-foreground">
+                    Drivers unlock after more check-ins.
+                  </p>
+                ) : (
                   <>
                     <div className="space-y-2">
                       {data.drivers.length === 0 ? (
