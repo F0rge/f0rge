@@ -1,14 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarIcon } from 'lucide-react'
 import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
   Select,
   SelectContent,
   SelectGroup,
@@ -16,10 +9,9 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-  formatDisplayDate,
 } from '@f0rge/ui'
-import { TextInput } from '@f0rge/ui/forms'
 import { useSymptomCatalog } from '@/lib/api/hooks'
+import { SignalsDateRangeDialog } from './date-range-dialog'
 
 const CORE_OUTCOMES = [
   { value: 'overall', label: 'Overall' },
@@ -80,43 +72,18 @@ export function SignalsHeaderControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Dialog open={dateOpen} onOpenChange={handleDateOpenChange}>
-        <DialogTrigger
-          render={
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" />
-          }
-        >
-          <CalendarIcon className="size-3.5" />
-          {formatDisplayDate(start)} — {formatDisplayDate(end)}
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Date range</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <TextInput
-              id="signals-start"
-              label="Start"
-              type="date"
-              value={draftStart}
-              onChange={(e) => setDraftStart(e.currentTarget.value)}
-            />
-            <TextInput
-              id="signals-end"
-              label="End"
-              type="date"
-              value={draftEnd}
-              onChange={(e) => setDraftEnd(e.currentTarget.value)}
-            />
-            {rangeInvalid ? (
-              <p className="text-xs text-destructive">Start must be on or before end.</p>
-            ) : null}
-            <Button className="w-full" size="sm" onClick={applyDates} disabled={rangeInvalid}>
-              Apply
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SignalsDateRangeDialog
+        open={dateOpen}
+        start={start}
+        end={end}
+        draftStart={draftStart}
+        draftEnd={draftEnd}
+        rangeInvalid={rangeInvalid}
+        onOpenChange={handleDateOpenChange}
+        onDraftStart={setDraftStart}
+        onDraftEnd={setDraftEnd}
+        onApply={applyDates}
+      />
 
       <Select
         value={outcome}
