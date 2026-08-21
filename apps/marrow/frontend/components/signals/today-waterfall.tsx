@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { cn } from '@f0rge/ui'
 import type { SignalsToday } from '@/lib/api/types/signals'
 import { polarityFill, polarityTone } from './polarity'
-import { WaterfallRow } from './waterfall-row'
+import { formatWaterfallNumber, WaterfallRow } from './waterfall-row'
 
 interface Props {
   today: SignalsToday
@@ -93,14 +93,14 @@ export function TodayWaterfall({ today, goodDirection }: Props) {
         )}
         {residual != null && (
           <p className={cn('text-xs', polarityTone(residual, goodDirection))}>
-            Residual {residual >= 0 ? '+' : ''}
-            {residual}
+            Residual {formatWaterfallNumber(residual, true)}
             {residualCopy ? ` — ${residualCopy}` : null}
           </p>
         )}
         {today.band_low != null && today.band_high != null && (
           <p className="text-xs text-muted-foreground">
-            Band {today.band_low} – {today.band_high}
+            Band {formatWaterfallNumber(today.band_low)} –{' '}
+            {formatWaterfallNumber(today.band_high)}
             {today.band_level != null ? ` (level ${today.band_level})` : null}
           </p>
         )}

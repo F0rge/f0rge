@@ -237,7 +237,7 @@ def compute_day_attribution(
         contrib.display_value = disp
 
     display_baseline = _round_1dp(b_raw)
-    display_predicted = display_baseline + sum(c.display_value for c in contributions)
+    display_predicted = _round_1dp(display_baseline + sum(c.display_value for c in contributions))
     display_residual = _round_1dp(residual) if residual is not None else None
 
     return DayAttribution(

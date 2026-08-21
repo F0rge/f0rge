@@ -467,7 +467,7 @@ def _today_block(
     return SignalsTodayResponse(
         baseline=day.display_baseline,
         contributions=contributions,
-        predicted=predicted_display,
+        predicted=_round_optional(predicted_display, 1),
         band_low=_round_optional(predicted_display - band_half, 1),
         band_high=_round_optional(predicted_display + band_half, 1),
         band_level=BAND_LEVEL,
