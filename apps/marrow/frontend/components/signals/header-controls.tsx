@@ -17,6 +17,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
+  formatDisplayDate,
 } from '@f0rge/ui'
 import { useSymptomCatalog } from '@/lib/api/hooks'
 
@@ -75,7 +76,7 @@ export function SignalsHeaderControls({
           }
         >
           <CalendarIcon className="size-3.5" />
-          {start} — {end}
+          {formatDisplayDate(start)} — {formatDisplayDate(end)}
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
