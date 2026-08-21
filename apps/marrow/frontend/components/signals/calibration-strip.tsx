@@ -25,9 +25,10 @@ export function CalibrationStrip({ series }: Props) {
   if (data.length < 2) {
     return (
       <section aria-label="Calibration">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Calibration
         </h2>
+        <p className="mb-2 text-xs text-muted-foreground">Predicted vs logged</p>
         <p className="text-sm text-muted-foreground">Not enough calibration history.</p>
       </section>
     )
@@ -35,9 +36,10 @@ export function CalibrationStrip({ series }: Props) {
 
   return (
     <section aria-label="Calibration">
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         Calibration
       </h2>
+      <p className="mb-2 text-xs text-muted-foreground">Predicted vs logged</p>
       <div className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
         <ResponsiveContainer width="100%" height={120}>
           <LineChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>

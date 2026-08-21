@@ -5,6 +5,7 @@ import { statusText } from '@/lib/ui/status'
 
 interface Props {
   unexplained: SignalsUnexplained
+  hideRelearning?: boolean
 }
 
 function EpisodeList({
@@ -38,14 +39,16 @@ function EpisodeList({
   )
 }
 
-export function UnexplainedDays({ unexplained }: Props) {
+export function UnexplainedDays({ unexplained, hideRelearning = false }: Props) {
+  const showRelearning =
+    !hideRelearning && unexplained.relearning && Boolean(unexplained.relearning_message)
   const hasContent =
     unexplained.unexplained_bad.length > 0 ||
     unexplained.unexplained_good.length > 0 ||
     unexplained.couldnt_score.length > 0 ||
     unexplained.tracker_proposals.length > 0
 
-  if (!hasContent && !unexplained.relearning) return null
+  if (!hasContent && !showRelearning) return null
 
   return (
     <section aria-label="Unexplained days">
@@ -53,7 +56,7 @@ export function UnexplainedDays({ unexplained }: Props) {
         Unexplained
       </h2>
       <div className="space-y-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10">
-        {unexplained.relearning && unexplained.relearning_message ? (
+        {showRelearning ? (
           <p className={cn('text-xs', statusText.warn)}>
             {unexplained.relearning_message}
           </p>

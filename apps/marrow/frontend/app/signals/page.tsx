@@ -138,7 +138,10 @@ function SignalsContent() {
                     <TodayWaterfall today={data.today} goodDirection={goodDirection} />
                     <CalibrationStrip series={data.today.calibration_series ?? []} />
                     <ModelQuality model={data.model} />
-                    <UnexplainedDays unexplained={data.unexplained} />
+                    <UnexplainedDays
+                      unexplained={data.unexplained}
+                      hideRelearning={data.model.relearning}
+                    />
                   </>
                 )}
               </TabsContent>
