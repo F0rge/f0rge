@@ -57,6 +57,14 @@ export function SignalsHeaderControls({
       label: s.label,
     })) ?? []
 
+  function handleDateOpenChange(open: boolean) {
+    if (open) {
+      setDraftStart(start)
+      setDraftEnd(end)
+    }
+    setDateOpen(open)
+  }
+
   function applyDates() {
     onStartChange(draftStart)
     onEndChange(draftEnd)
@@ -69,7 +77,7 @@ export function SignalsHeaderControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Dialog open={dateOpen} onOpenChange={setDateOpen}>
+      <Dialog open={dateOpen} onOpenChange={handleDateOpenChange}>
         <DialogTrigger
           render={
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" />
