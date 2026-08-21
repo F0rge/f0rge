@@ -16,6 +16,7 @@ function WaterfallRow({
   tone,
   barWidth,
   barClass,
+  signed = true,
 }: {
   label: string
   value: number
@@ -23,8 +24,13 @@ function WaterfallRow({
   tone?: string
   barWidth?: number
   barClass?: string
+  signed?: boolean
 }) {
-  const signed = value >= 0 ? `+${value}` : String(value)
+  const display = signed
+    ? value >= 0
+      ? `+${value}`
+      : String(value)
+    : String(value)
   return (
     <div className="flex items-center gap-2 text-sm">
       <span className="w-24 shrink-0 truncate text-muted-foreground">{label}</span>
@@ -41,7 +47,7 @@ function WaterfallRow({
         )}
       </div>
       <span className={cn('w-14 shrink-0 text-right tabular-nums', tone)}>
-        {signed}
+        {display}
       </span>
       {detail ? (
         <span className="hidden truncate text-xs text-muted-foreground sm:inline">
@@ -86,6 +92,7 @@ export function TodayWaterfall({ today, goodDirection }: Props) {
             label="Baseline"
             value={today.baseline}
             barWidth={(Math.abs(today.baseline) / maxAbs) * 50}
+            signed={false}
           />
         )}
         {contributions.map((c) => (
@@ -101,13 +108,14 @@ export function TodayWaterfall({ today, goodDirection }: Props) {
         ))}
         {predicted != null && (
           <div className="border-t border-border pt-2">
-            <WaterfallRow label="Predicted" value={predicted} />
+            <WaterfallRow label="Predicted" value={predicted} signed={false} />
           </div>
         )}
         {actual != null && (
           <WaterfallRow
             label="Actual"
             value={actual}
+            signed={false}
             tone={residual != null ? polarityTone(residual, goodDirection) : undefined}
           />
         )}
