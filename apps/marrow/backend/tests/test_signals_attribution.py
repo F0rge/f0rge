@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 
 import numpy as np
 import pytest
@@ -259,4 +260,6 @@ def test_additivity_property_random_days() -> None:
         raw_sum = day.baseline + sum(c.value for c in day.contributions)
         assert raw_sum == pytest.approx(day.predicted, abs=1e-9)
         display_sum = day.display_baseline + sum(c.display_value for c in day.contributions)
-        assert display_sum == pytest.approx(day.display_predicted, abs=1e-9)
+        assert round(display_sum, 1) == pytest.approx(day.display_predicted, abs=1e-9)
+        assert day.display_predicted == round(day.display_predicted, 1)
+        assert json.dumps(day.display_predicted) == json.dumps(round(day.display_predicted, 1))
