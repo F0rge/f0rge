@@ -28,7 +28,13 @@ export function UserAvatar({ size = 'sm', className }: UserAvatarProps) {
   const account = useAccount()
   const cacheBust = useAvatarCacheBust()
   const data = account.data
+  const bust = cacheBust.data ?? 0
   const [failed, setFailed] = useState(false)
+  const [seenBust, setSeenBust] = useState(bust)
+  if (seenBust !== bust) {
+    setSeenBust(bust)
+    setFailed(false)
+  }
 
   if (!data) {
     return (
@@ -49,7 +55,7 @@ export function UserAvatar({ size = 'sm', className }: UserAvatarProps) {
   if (data.has_custom_avatar && !failed) {
     return (
       <Image
-        src={`/api/v1/account/avatar?v=${cacheBust.data ?? 0}`}
+        src={`/api/v1/account/avatar?v=${bust}`}
         alt=""
         width={SIZE_PX[size]}
         height={SIZE_PX[size]}
