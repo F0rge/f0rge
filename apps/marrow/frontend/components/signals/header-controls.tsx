@@ -95,8 +95,11 @@ export function SignalsHeaderControls({
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label className="text-xs">Start</Label>
+              <Label htmlFor="signals-start" className="text-xs">
+                Start
+              </Label>
               <input
+                id="signals-start"
                 type="date"
                 value={draftStart}
                 onChange={(e) => setDraftStart(e.target.value)}
@@ -104,8 +107,11 @@ export function SignalsHeaderControls({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">End</Label>
+              <Label htmlFor="signals-end" className="text-xs">
+                End
+              </Label>
               <input
+                id="signals-end"
                 type="date"
                 value={draftEnd}
                 onChange={(e) => setDraftEnd(e.target.value)}
@@ -128,7 +134,7 @@ export function SignalsHeaderControls({
           if (v !== null) onOutcomeChange(v)
         }}
       >
-        <SelectTrigger className="h-8 w-auto text-xs">
+        <SelectTrigger className="h-8 w-auto text-xs" aria-label="Outcome">
           <SelectValue>{selectedLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
