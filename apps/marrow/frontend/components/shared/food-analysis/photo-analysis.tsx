@@ -141,7 +141,7 @@ export function PhotoAnalysis({
   isSharedMeal = false,
   hideTitle = false,
 }: PhotoAnalysisProps) {
-  const { data: analysis, isLoading } = usePhotoAnalysis(photoId, { sharedMeal: isSharedMeal })
+  const { data: analysis, isLoading, isError, refetch } = usePhotoAnalysis(photoId, { sharedMeal: isSharedMeal })
   const retryAnalysis = useRetryAnalysis()
   const updateDietaryConfirm = useUpdateDietaryConfirm()
 
@@ -154,6 +154,22 @@ export function PhotoAnalysis({
           <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
           <span className="text-xs text-muted-foreground">Loading meal analysis…</span>
         </div>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="mt-2 rounded-lg border border-border p-2.5">
+        <p className="text-xs text-muted-foreground">Couldn’t load meal analysis.</p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="mt-1.5 flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+        >
+          <RefreshCw className="size-3" />
+          Retry
+        </button>
       </div>
     )
   }

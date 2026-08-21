@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 
 import pytest
+from botocore.exceptions import ClientError
 from PIL import Image
 
 from f0rge_storage.images import resize_image
@@ -93,3 +94,71 @@ def test_presigned_url_for_relative_skips_head_object() -> None:
     url2 = storage.presigned_url_for_relative("missing.jpg", user_id="u1")
     assert url2 == "https://storage.test/photos/u1/missing.jpg?exp=300"
     assert head_calls == []
+
+
+class _GetStub:
+    def __init__(self, objects: dict[str, bytes]) -> None:
+        self.objects = objects
+        self.get_calls: list[str] = []
+        self.head_calls: list[str] = []
+
+    def get_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803
+        self.get_calls.append(Key)
+        if Key not in self.objects:
+            raise ClientError(
+                {
+                    "Error": {"Code": "404", "Message": "Not Found"},
+                    "ResponseMetadata": {"HTTPStatusCode": 404},
+                },
+                "GetObject",
+            )
+        return {"Body": io.BytesIO(self.objects[Key])}
+
+    def head_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803
+        self.head_calls.append(Key)
+        if Key not in self.objects:
+            raise ClientError(
+                {
+                    "Error": {"Code": "404", "Message": "Not Found"},
+                    "ResponseMetadata": {"HTTPStatusCode": 404},
+                },
+                "HeadObject",
+            )
+        return {}
+
+
+def _remote_storage(stub: _GetStub) -> ObjectStorage:
+    return ObjectStorage(
+        ObjectStorageConfig(
+            bucket_name="photos",
+            aws_access_key_id="key",
+            aws_secret_access_key="secret",
+            aws_endpoint_url_s3="http://storage.test",
+            default_user_prefix="default-user",
+        ),
+        client_factory=lambda: stub,
+    )
+
+
+def test_read_relative_canonical_get_skips_head() -> None:
+    stub = _GetStub({"u1/a.jpg": b"payload"})
+    storage = _remote_storage(stub)
+    assert storage.read_relative("a.jpg", user_id="u1") == b"payload"
+    assert stub.get_calls == ["u1/a.jpg"]
+    assert stub.head_calls == []
+
+
+def test_read_relative_falls_back_to_legacy_layout() -> None:
+    stub = _GetStub({"default-user/a.jpg": b"legacy"})
+    storage = _remote_storage(stub)
+    assert storage.read_relative("a.jpg", user_id="u1") == b"legacy"
+    assert stub.get_calls[0] == "u1/a.jpg"
+    assert "default-user/a.jpg" in stub.get_calls
+    assert "default-user/a.jpg" in stub.head_calls
+
+
+def test_read_bytes_missing_raises_file_not_found() -> None:
+    stub = _GetStub({})
+    storage = _remote_storage(stub)
+    with pytest.raises(FileNotFoundError):
+        storage.read_relative("missing.jpg", user_id="u1")

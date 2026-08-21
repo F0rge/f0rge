@@ -5,7 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Eye, EyeOff, Pencil } from 'lucide-react'
 import { Dialog, DialogContent } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
-import { MealIconThumb, photoHasImage, photoFileSrc } from '@/components/checkin/meal-icon-thumb'
+import { MealIconThumb, photoHasImage, useMealFileSrc } from '@/components/checkin/meal-icon-thumb'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
 import {
   usePhotoAnalysis,
@@ -368,6 +368,7 @@ export function PhotoFocusOverlay({
   const isSharedMeal =
     currentPhoto?.source_photo_id != null || currentPhoto?.tagged_by_handle != null
   const isHidden = currentPhoto?.hidden_at != null
+  const { src: fileSrc, onError: onFileError } = useMealFileSrc(photoId)
 
   const toggleHidden = async () => {
     if (!currentPhoto) return
@@ -448,12 +449,13 @@ export function PhotoFocusOverlay({
         {/* Hero image + meal tabs */}
         <div data-sheet-top-region className="relative">
           {photoId !== null && currentPhoto && (
-            photoHasImage(currentPhoto) ? (
+            photoHasImage(currentPhoto) && fileSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={photoFileSrc(photoId)}
+                src={fileSrc}
                 alt={currentPhoto.label || dishName || 'Meal photo'}
                 className="aspect-[4/3] w-full object-cover"
+                onError={onFileError}
               />
             ) : (
               <div className="relative flex aspect-[4/3] w-full items-center justify-center bg-muted">
@@ -462,9 +464,11 @@ export function PhotoFocusOverlay({
                   size="lg"
                   className="size-24 rounded-2xl"
                 />
-                <span className="absolute left-3 top-3 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-border">
-                  Library
-                </span>
+                {!photoHasImage(currentPhoto) && (
+                  <span className="absolute left-3 top-3 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-border">
+                    Library
+                  </span>
+                )}
               </div>
             )
           )}
