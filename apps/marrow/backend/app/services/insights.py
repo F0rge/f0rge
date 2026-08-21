@@ -39,6 +39,7 @@ _TREND_SERIES_KEYS: list[str] = [
     "bloating",
     "sleep_quality",
     "stress",
+    "sick",
     "hm_hrv_mean",
     "hm_sleep_efficiency",
     "hm_resting_hr",

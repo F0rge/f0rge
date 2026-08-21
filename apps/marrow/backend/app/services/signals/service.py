@@ -87,6 +87,8 @@ def _humanize(col: str) -> str:
 
 
 def _good_direction(feature: str) -> Optional[str]:
+    if feature.startswith("sym_") or feature == "sick":
+        return "down"
     if feature.startswith("sym_"):
         return "down"
     scale_dir = SCALE_DIRECTION.get(feature)

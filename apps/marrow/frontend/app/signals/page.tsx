@@ -44,6 +44,8 @@ function outcomeGoodDirection(
   outcome: string,
 ): GoodDirection {
   const match = trends.series.find((s) => s.key === outcome)
+  if (match?.good_direction) return match.good_direction
+  if (outcome === 'sick' || outcome.startsWith('sym_')) return 'down'
   return match?.good_direction ?? null
 }
 
