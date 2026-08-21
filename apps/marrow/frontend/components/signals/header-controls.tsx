@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Label,
   Select,
   SelectContent,
   SelectGroup,
@@ -19,6 +18,7 @@ import {
   SelectValue,
   formatDisplayDate,
 } from '@f0rge/ui'
+import { TextInput } from '@f0rge/ui/forms'
 import { useSymptomCatalog } from '@/lib/api/hooks'
 
 const CORE_OUTCOMES = [
@@ -94,30 +94,20 @@ export function SignalsHeaderControls({
             <DialogTitle>Date range</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="signals-start" className="text-xs">
-                Start
-              </Label>
-              <input
-                id="signals-start"
-                type="date"
-                value={draftStart}
-                onChange={(e) => setDraftStart(e.target.value)}
-                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="signals-end" className="text-xs">
-                End
-              </Label>
-              <input
-                id="signals-end"
-                type="date"
-                value={draftEnd}
-                onChange={(e) => setDraftEnd(e.target.value)}
-                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
+            <TextInput
+              id="signals-start"
+              label="Start"
+              type="date"
+              value={draftStart}
+              onChange={(e) => setDraftStart(e.currentTarget.value)}
+            />
+            <TextInput
+              id="signals-end"
+              label="End"
+              type="date"
+              value={draftEnd}
+              onChange={(e) => setDraftEnd(e.currentTarget.value)}
+            />
             {rangeInvalid ? (
               <p className="text-xs text-destructive">Start must be on or before end.</p>
             ) : null}
