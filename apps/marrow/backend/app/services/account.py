@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from collections.abc import Callable
 from functools import partial
 
 from fastapi import Response, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -24,6 +22,7 @@ from app.schemas.account import (
 )
 from app.schemas.social import validate_handle_format
 from app.services import object_storage
+from app.services.object_storage import jpeg_response
 from app.services.auth import (
     clear_session_cookie,
     hash_password,
@@ -51,12 +50,8 @@ ALLOWED_AVATAR_CONTENT_TYPES = frozenset(
     }
 )
 MAX_AVATAR_BYTES = 5 * 1024 * 1024
-# Browsers re-mount the avatar on every screen navigation; without this the
-# image refetches through the API→object-storage redirect each time. 240s stays
-# under the 300s presigned-URL expiry so a cached redirect never goes stale.
-AVATAR_CACHE_CONTROL = "private, max-age=240"
-# 240s < the 300s presigned-URL expiry so a cached redirect never points at an
-# expired URL.
+# JPEG body (not a 307). Browsers re-mount the avatar on every screen
+# navigation; 240s avoids refetching the bytes each time.
 AVATAR_CACHE_CONTROL = "private, max-age=240"
 
 
@@ -145,35 +140,21 @@ class AccountService:
         await asyncio.to_thread(delete_avatar, user_id=str(user.id))
         return self._to_response(user)
 
-    async def get_avatar_file_target(self) -> str:
+    async def serve_avatar_response(self) -> Response:
         user = await self._get_current_user()
         if user.avatar_custom_filename is None:
             raise NotFoundError("No custom avatar")
-        # Trust the DB filename; presign is CPU-only (no HEAD). Local/dev
-        # still checks the filesystem before FileResponse.
-        presigned = object_storage.presigned_url_for_relative(
-            user.avatar_custom_filename,
-            user_id=str(user.id),
-        )
-        if presigned:
-            return presigned
-        local_path = os.path.join(
-            os.path.abspath(settings.photo_dir),
-            user.avatar_custom_filename,
-        )
-        if not os.path.exists(local_path):
-            raise NotFoundError("Avatar file not found")
-        return local_path
-
-    async def serve_avatar_response(self) -> FileResponse | RedirectResponse:
-        target = await self.get_avatar_file_target()
-        if target.startswith("http://") or target.startswith("https://"):
-            return RedirectResponse(target, headers={"Cache-Control": AVATAR_CACHE_CONTROL})
-        return FileResponse(
-            target,
-            media_type="image/jpeg",
-            headers={"Cache-Control": AVATAR_CACHE_CONTROL},
-        )
+        # JPEG body, not a 307. Safari caches redirect Location past max-age
+        # and then hits an expired Tigris presign (same bug as meal photos).
+        try:
+            data = await asyncio.to_thread(
+                object_storage.read_relative,
+                user.avatar_custom_filename,
+                user_id=str(user.id),
+            )
+        except FileNotFoundError as exc:
+            raise NotFoundError("Avatar file not found") from exc
+        return jpeg_response(data, AVATAR_CACHE_CONTROL)
 
     async def change_password(self, data: PasswordChangeRequest) -> None:
         user = await self._get_current_user()

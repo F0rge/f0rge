@@ -25,6 +25,13 @@ import boto3
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 
+_S3_NOT_FOUND = ("404", "NoSuchKey", "NotFound")
+
+
+def _is_s3_not_found(exc: ClientError) -> bool:
+    code = exc.response.get("Error", {}).get("Code")
+    return code in _S3_NOT_FOUND
+
 
 @dataclass(frozen=True)
 class ObjectStorageConfig:
@@ -122,10 +129,15 @@ class ObjectStorage:
             local_path = os.path.join(self._local_root(), relative_path)
             with open(local_path, "rb") as handle:
                 return handle.read()
-        key = self.resolve_relative_key(relative_path, user_id=user_id)
-        if key is None:
-            raise FileNotFoundError(relative_path)
-        return self.read_bytes(key)
+        # Canonical GET first — no HEAD. Probe legacy layouts only on 404.
+        key = self.build_object_key(relative_path, user_id=user_id)
+        try:
+            return self.read_bytes(key)
+        except FileNotFoundError:
+            resolved = self.resolve_relative_key(relative_path, user_id=user_id)
+            if resolved is None or resolved == key:
+                raise FileNotFoundError(relative_path)
+            return self.read_bytes(resolved)
 
     def exists_relative(self, relative_path: str, *, user_id: Optional[str] = None) -> bool:
         return self.resolve_relative_key(relative_path, user_id=user_id) is not None
@@ -188,17 +200,21 @@ class ObjectStorage:
             client.head_object(Bucket=bucket, Key=key)
             raise FileExistsError(f"Refusing to overwrite existing object: {key}")
         except ClientError as exc:
-            code = exc.response.get("Error", {}).get("Code")
-            if code not in ("404", "NoSuchKey", "NotFound"):
+            if not _is_s3_not_found(exc):
                 raise
         client.put_object(Bucket=bucket, Key=key, Body=data)
         return key
 
     def read_bytes(self, storage_ref: str) -> bytes:
         if self.enabled() and not os.path.isabs(storage_ref):
-            response = self._client().get_object(
-                Bucket=self._get_config().bucket_name, Key=storage_ref
-            )
+            try:
+                response = self._client().get_object(
+                    Bucket=self._get_config().bucket_name, Key=storage_ref
+                )
+            except ClientError as exc:
+                if _is_s3_not_found(exc):
+                    raise FileNotFoundError(storage_ref) from exc
+                raise
             return response["Body"].read()
         with open(storage_ref, "rb") as handle:
             return handle.read()

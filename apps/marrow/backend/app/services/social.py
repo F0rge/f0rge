@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
-import os
 import uuid
 
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.crud.base import unit_of_work
 from app.crud.social import SocialCRUD, _pair_ids
 from app.models.connection import Connection
@@ -23,11 +22,11 @@ from app.schemas.social import (
     validate_handle_format,
 )
 from app.services import object_storage
+from app.services.object_storage import jpeg_response
 from app.services.notifications import NotificationService
 from f0rge_db.tenant import current_user_id
 
-# Matches AccountService.AVATAR_CACHE_CONTROL — peers' avatars re-mount on every
-# screen just like the current user's, so they need the same browser caching.
+# Matches AccountService.AVATAR_CACHE_CONTROL — JPEG bytes, not a 307.
 AVATAR_CACHE_CONTROL = "private, max-age=240"
 
 
@@ -63,7 +62,7 @@ class SocialService:
             raise NotFoundError("No user with that handle")
         return self.to_public_card(user)
 
-    async def serve_peer_avatar_response(self, handle: str) -> FileResponse | RedirectResponse:
+    async def serve_peer_avatar_response(self, handle: str) -> Response:
         """Serve another user's custom avatar by handle.
 
         Mirrors AccountService.serve_avatar_response but for a user resolved by
@@ -73,22 +72,15 @@ class SocialService:
         user = await self.crud.get_by_handle(handle)
         if user is None or user.avatar_custom_filename is None:
             raise NotFoundError("No avatar")
-        # Trust the DB filename; presign is CPU-only (no HEAD). Local/dev
-        # still checks the filesystem before FileResponse.
-        presigned = object_storage.presigned_url_for_relative(
-            user.avatar_custom_filename, user_id=str(user.id)
-        )
-        headers = {"Cache-Control": AVATAR_CACHE_CONTROL}
-        if presigned:
-            return RedirectResponse(presigned, headers=headers)
-        local_path = os.path.join(os.path.abspath(settings.photo_dir), user.avatar_custom_filename)
-        if not os.path.exists(local_path):
-            raise NotFoundError("Avatar file not found")
-        return FileResponse(
-            local_path,
-            media_type="image/jpeg",
-            headers=headers,
-        )
+        try:
+            data = await asyncio.to_thread(
+                object_storage.read_relative,
+                user.avatar_custom_filename,
+                user_id=str(user.id),
+            )
+        except FileNotFoundError as exc:
+            raise NotFoundError("Avatar file not found") from exc
+        return jpeg_response(data, AVATAR_CACHE_CONTROL)
 
     async def search_users(self, query: str, limit: int = 10) -> UserSearchResponse:
         me = current_user_id()

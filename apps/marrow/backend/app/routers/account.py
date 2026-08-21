@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Response, UploadFile, status
-from fastapi.responses import FileResponse, RedirectResponse
 
 from app.dependencies.account import get_account_service
 from app.middleware.auth import get_current_session
@@ -46,7 +45,7 @@ async def upload_avatar(
 @router.get("/avatar", response_model=None)
 async def serve_avatar(
     service: AccountService = Depends(get_account_service),
-) -> FileResponse | RedirectResponse:
+) -> Response:
     return await service.serve_avatar_response()
 
 

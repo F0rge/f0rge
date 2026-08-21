@@ -13,7 +13,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import Response
 
 from app.dependencies.photos import get_photo_service
 from app.dependencies.meal_tags import get_meal_tag_service
@@ -65,7 +65,7 @@ async def list_photos(
 async def serve_photo(
     photo_id: int,
     service: PhotoService = Depends(get_photo_service),
-) -> FileResponse | RedirectResponse:
+) -> Response:
     return await service.serve_photo_file(photo_id)
 
 
@@ -73,7 +73,7 @@ async def serve_photo(
 async def serve_photo_thumb(
     photo_id: int,
     service: PhotoService = Depends(get_photo_service),
-) -> FileResponse | RedirectResponse:
+) -> Response:
     return await service.serve_photo_thumb(photo_id)
 
 

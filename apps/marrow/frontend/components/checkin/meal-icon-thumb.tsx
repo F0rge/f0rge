@@ -43,8 +43,9 @@ export function photoHasImage(photo: Pick<Photo, 'has_image' | 'filename'>): boo
 }
 
 /** Full-size image URL — lightbox / focus overlay only. */
-export function photoFileSrc(photoId: number): string {
-  return `/api/v1/photos/${photoId}/file`
+export function photoFileSrc(photoId: number, bust?: number): string {
+  const base = `/api/v1/photos/${photoId}/file`
+  return bust && bust > 0 ? `${base}?r=${bust}` : base
 }
 
 /** 480px thumbnail — every tile-sized surface. */
@@ -54,15 +55,24 @@ export function photoThumbSrc(photoId: number, bust?: number): string {
 }
 
 /**
- * One automatic retry on thumb load failure (slow first /thumb after deploy /
+ * One automatic retry on image load failure (slow first /thumb after deploy /
  * lazy generation), then give up so callers can show the bowl icon.
  */
-export function useMealThumbSrc(photoId: number): {
+export function useMealImageSrc(
+  photoId: number | null,
+  kind: 'file' | 'thumb',
+): {
   src: string | null
   onError: () => void
 } {
   const [attempt, setAttempt] = useState(0)
   const [failed, setFailed] = useState(false)
+  const [seenId, setSeenId] = useState(photoId)
+  if (seenId !== photoId) {
+    setSeenId(photoId)
+    setAttempt(0)
+    setFailed(false)
+  }
   const onError = useCallback(() => {
     if (failed) return
     if (attempt >= 1) {
@@ -71,7 +81,25 @@ export function useMealThumbSrc(photoId: number): {
     }
     setAttempt(attempt + 1)
   }, [attempt, failed])
-  return { src: failed ? null : photoThumbSrc(photoId, attempt), onError }
+  const srcFn = kind === 'file' ? photoFileSrc : photoThumbSrc
+  return {
+    src: photoId == null || failed ? null : srcFn(photoId, attempt),
+    onError,
+  }
+}
+
+export function useMealThumbSrc(photoId: number): {
+  src: string | null
+  onError: () => void
+} {
+  return useMealImageSrc(photoId, 'thumb')
+}
+
+export function useMealFileSrc(photoId: number | null): {
+  src: string | null
+  onError: () => void
+} {
+  return useMealImageSrc(photoId, 'file')
 }
 
 interface MealIconThumbProps {

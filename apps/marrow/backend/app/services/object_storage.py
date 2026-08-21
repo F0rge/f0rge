@@ -17,6 +17,7 @@ from functools import lru_cache
 
 import boto3
 from botocore.client import BaseClient
+from fastapi.responses import Response
 from f0rge_storage.object_storage import ObjectStorage, ObjectStorageConfig
 
 from app.config import settings
@@ -64,3 +65,12 @@ object_exists = _storage.object_exists
 list_photo_filenames = _storage.list_filenames
 presigned_get_url = _storage.presigned_get_url
 is_remote_storage_ref = _storage.is_remote_storage_ref
+
+
+def jpeg_response(content: bytes, cache_control: str) -> Response:
+    """Return a JPEG body. Callers cache the bytes, never a presigned Location."""
+    return Response(
+        content=content,
+        media_type="image/jpeg",
+        headers={"Cache-Control": cache_control},
+    )

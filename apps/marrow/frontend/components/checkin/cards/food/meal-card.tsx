@@ -17,13 +17,12 @@ export interface MealCardProps {
 }
 
 export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
-  const { data: analysis, isLoading } = usePhotoAnalysis(photo.id)
+  const { data: analysis } = usePhotoAnalysis(photo.id)
   const hasImage = photoHasImage(photo)
   const { src: thumbSrc, onError: onThumbError } = useMealThumbSrc(photo.id)
 
   const isAnalyzing =
-    hasImage &&
-    (isLoading || analysis?.status === 'pending' || analysis?.status === 'analyzing')
+    hasImage && (analysis?.status === 'pending' || analysis?.status === 'analyzing')
   const needsReview = analysis?.status === 'needs_review'
   const title =
     photo.label?.trim() || analysis?.dish_name || photo.dish_name || 'Untitled meal'

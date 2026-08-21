@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import os
 from typing import TYPE_CHECKING, Optional
 
 from fastapi import BackgroundTasks, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache.invalidation import invalidate_user_insights_cache
@@ -26,11 +25,11 @@ from app.models.photo_diet_tag import PhotoDietTag
 from app.schemas.photo import PhotoResponse, PhotoUpdate
 from app.services.entries import _photo_response
 from app.services import object_storage
+from app.services.object_storage import jpeg_response
 from app.services.photo_storage import (
     THUMB_MAX_DIM,
     THUMB_QUALITY,
     delete_photo,
-    photo_exists,
     read_photo,
     resize_image,
     save_photo,
@@ -38,11 +37,10 @@ from app.services.photo_storage import (
 )
 from f0rge_db.tenant import current_user_id
 
-# Never cache the 307 itself. Browsers cache Location and will keep hitting a
-# dead Tigris URL after the 300s presign TTL (and after a slow first /thumb
-# that raced lazy generation). Avatars can use a short max-age; meal grids
-# fire many parallel thumbs and must re-hit the API each time.
-PHOTO_CACHE_CONTROL = "private, no-store"
+# JPEG body (not a 307 to a 300s Tigris URL). iOS Safari caches redirect
+# Location past Cache-Control, then keeps hitting a dead presign — #469's
+# no-store header did not stop that. Caching the bytes themselves is safe.
+PHOTO_CACHE_CONTROL = "private, max-age=240"
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
@@ -296,70 +294,39 @@ class PhotoService:
         companions = await MealTagCRUD(self.db).companion_handles_by_photo_ids([photo.id])
         return _photo_response(photo, companions.get(photo.id, []))
 
-    async def get_file_path(self, photo_id: int) -> str:
+    async def serve_photo_file(self, photo_id: int) -> Response:
         photo = await self.crud.get_by_id_owned(photo_id)
-        if photo is None:
-            raise NotFoundError("Photo not found")
-        if not photo.filename:
+        if photo is None or not photo.filename:
             raise NotFoundError("Photo file not found")
-        user_id_str = str(photo.user_id)
-        # Trust the DB filename: upload invariant is row ⇒ object. Presign is
-        # CPU-only (no HEAD). Local/dev still checks the filesystem.
-        presigned = object_storage.presigned_url_for_relative(photo.filename, user_id=user_id_str)
-        if presigned:
-            return presigned
-        local_path = os.path.join(os.path.abspath(settings.photo_dir), photo.filename)
-        if not os.path.exists(local_path):
-            raise NotFoundError("Photo file not found")
-        return local_path
+        try:
+            data = await asyncio.to_thread(read_photo, photo.filename, user_id=str(photo.user_id))
+        except FileNotFoundError as exc:
+            raise NotFoundError("Photo file not found") from exc
+        return jpeg_response(data, PHOTO_CACHE_CONTROL)
 
-    async def serve_photo_file(self, photo_id: int) -> FileResponse | RedirectResponse:
-        target = await self.get_file_path(photo_id)
-        return self._photo_file_response(target)
-
-    async def serve_photo_thumb(self, photo_id: int) -> FileResponse | RedirectResponse:
+    async def serve_photo_thumb(self, photo_id: int) -> Response:
         photo = await self.crud.get_by_id_owned(photo_id)
-        if photo is None:
-            raise NotFoundError("Photo not found")
-        if not photo.filename:
+        if photo is None or not photo.filename:
             raise NotFoundError("Photo file not found")
         user_id_str = str(photo.user_id)
         thumb_name = thumb_filename(photo.filename)
-
-        def _canonical_thumb_exists() -> bool:
-            if object_storage.object_storage_enabled():
-                key = object_storage.build_object_key(thumb_name, user_id=user_id_str)
-                return object_storage.object_exists(key)
-            return photo_exists(thumb_name, user_id=user_id_str)
-
-        if not await asyncio.to_thread(_canonical_thumb_exists):
+        try:
+            data = await asyncio.to_thread(read_photo, thumb_name, user_id=user_id_str)
+        except FileNotFoundError:
             try:
                 full_bytes = await asyncio.to_thread(
                     read_photo, photo.filename, user_id=user_id_str
                 )
             except FileNotFoundError as exc:
                 raise NotFoundError("Photo file not found") from exc
-            thumb_bytes = await asyncio.to_thread(
+            data = await asyncio.to_thread(
                 resize_image, full_bytes, max_dim=THUMB_MAX_DIM, quality=THUMB_QUALITY
             )
-            await asyncio.to_thread(save_photo, thumb_bytes, thumb_name, user_id=user_id_str)
-        presigned = object_storage.presigned_url_for_relative(thumb_name, user_id=user_id_str)
-        if presigned:
-            target = presigned
-        else:
-            target = os.path.join(os.path.abspath(settings.photo_dir), thumb_name)
-            if not os.path.exists(target):
-                raise NotFoundError("Photo file not found")
-        return self._photo_file_response(target)
-
-    def _photo_file_response(self, target: str) -> FileResponse | RedirectResponse:
-        if target.startswith("http://") or target.startswith("https://"):
-            return RedirectResponse(target, headers={"Cache-Control": PHOTO_CACHE_CONTROL})
-        return FileResponse(
-            target,
-            media_type="image/jpeg",
-            headers={"Cache-Control": PHOTO_CACHE_CONTROL},
-        )
+            try:
+                await asyncio.to_thread(save_photo, data, thumb_name, user_id=user_id_str)
+            except FileExistsError:
+                pass
+        return jpeg_response(data, PHOTO_CACHE_CONTROL)
 
     async def delete(self, photo_id: int) -> None:
         photo = await self.crud.get_by_id_owned(photo_id)
