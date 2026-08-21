@@ -87,6 +87,8 @@ def _humanize(col: str) -> str:
 
 
 def _good_direction(feature: str) -> Optional[str]:
+    if feature.startswith("sym_") or feature == "sick":
+        return "down"
     if feature.startswith("sym_"):
         return "down"
     scale_dir = SCALE_DIRECTION.get(feature)
@@ -614,7 +616,9 @@ class SignalsService:
         )
         noise = estimate_noise_floor(rows, columns, baseline, effects)
         quality = compute_model_quality(rows, columns, baseline, ctx, noise, effects)
-        unexplained = detect_unexplained(rows, columns, baseline, ctx)
+        unexplained = detect_unexplained(
+            rows, columns, baseline, ctx, good_direction=_good_direction(outcome)
+        )
 
         drivers: list[SignalsDriverResponse] = []
         for effect in effects:

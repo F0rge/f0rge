@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useCallback } from 'react'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { apiPost, apiPut, ApiError } from '@f0rge/ui/api'
 import type { Entry, EntryCreate } from '@/lib/api/types'
+import { invalidateSignals } from '@/lib/api/hooks/signals'
 
 export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'blocked'
 
@@ -46,6 +47,7 @@ function useCreateEntrySilent(date: string) {
       queryClient.setQueryData(['entry', date], serverEntry)
       // Still refresh the list so history view updates.
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      invalidateSignals(queryClient)
     },
   })
 }
@@ -59,6 +61,7 @@ function useUpdateEntrySilent(date: string) {
     onSuccess: (serverEntry: Entry) => {
       queryClient.setQueryData(['entry', date], serverEntry)
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      invalidateSignals(queryClient)
     },
   })
 }

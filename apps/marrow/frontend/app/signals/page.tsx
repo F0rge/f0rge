@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import {
@@ -44,6 +44,8 @@ function outcomeGoodDirection(
   outcome: string,
 ): GoodDirection {
   const match = trends.series.find((s) => s.key === outcome)
+  if (match?.good_direction) return match.good_direction
+  if (outcome === 'sick' || outcome.startsWith('sym_')) return 'down'
   return match?.good_direction ?? null
 }
 
@@ -54,9 +56,10 @@ function SignalsContent() {
   const start = searchParams.get('start') ?? defaults.start
   const end = searchParams.get('end') ?? defaults.end
   const outcome = searchParams.get('outcome') ?? 'overall'
-  const tab = parseTab(searchParams.get('tab'))
+  const tabParam = searchParams.get('tab')
+  const tab = parseTab(tabParam)
 
-  const { data, isLoading, isError, refetch } = useSignals(outcome, start, end)
+  const { data, isPending, isFetching, isError, refetch } = useSignals(outcome, start, end)
 
   function updateParams(next: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
@@ -66,6 +69,14 @@ function SignalsContent() {
     }
     router.replace(`/signals?${params.toString()}`)
   }
+
+  useEffect(() => {
+    if (tabParam == null) return
+    if (tabParam === 'today' || tabParam === 'drivers' || tabParam === 'trends') return
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', 'today')
+    router.replace(`/signals?${params.toString()}`)
+  }, [tabParam, searchParams, router])
 
   const goodDirection =
     data != null ? outcomeGoodDirection(data.trends, outcome) : null
@@ -104,33 +115,70 @@ function SignalsContent() {
             <TabsTrigger value="trends">Trends</TabsTrigger>
           </TabsList>
 
-          {isLoading && (
-            <div className="flex items-center justify-center py-12">
+          {isPending && !data && (
+            <div
+              role="status"
+              className="flex items-center justify-center py-12"
+              aria-label="Loading signals"
+            >
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
             </div>
           )}
 
-          {isError && (
+          {isFetching && data && (
+            <p className="text-xs text-muted-foreground" role="status">
+              Updating…
+            </p>
+          )}
+
+          {isError && data && (
+            <div
+              role="status"
+              className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+            >
+              <span>Couldn&apos;t refresh signals.</span>
+              <button
+                type="button"
+                className="font-medium underline-offset-4 hover:underline"
+                onClick={() => refetch()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {isError && !data && (
             <FetchError message="Failed to load signals." onRetry={() => refetch()} />
           )}
 
-          {data && !isLoading && (
+          {data && (
             <>
               <InsufficientDataBanner meta={data.meta} />
 
               <TabsContent value="today" className="mt-0 space-y-6">
-                {!data.meta.insufficient_data && (
+                {data.meta.insufficient_data ? (
+                  <p className="text-sm text-muted-foreground">
+                    Today&apos;s breakdown unlocks after more check-ins.
+                  </p>
+                ) : (
                   <>
                     <TodayWaterfall today={data.today} goodDirection={goodDirection} />
                     <CalibrationStrip series={data.today.calibration_series ?? []} />
                     <ModelQuality model={data.model} />
-                    <UnexplainedDays unexplained={data.unexplained} />
+                    <UnexplainedDays
+                      unexplained={data.unexplained}
+                      hideRelearning={data.model.relearning}
+                    />
                   </>
                 )}
               </TabsContent>
 
               <TabsContent value="drivers" className="mt-0 space-y-4">
-                {!data.meta.insufficient_data && (
+                {data.meta.insufficient_data ? (
+                  <p className="text-sm text-muted-foreground">
+                    Drivers unlock after more check-ins.
+                  </p>
+                ) : (
                   <>
                     <div className="space-y-2">
                       {data.drivers.length === 0 ? (
@@ -142,9 +190,6 @@ function SignalsContent() {
                       )}
                     </div>
                     <SetAside mirrors={data.mirrors} />
-                    <div className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
-                      Experiments — coming soon
-                    </div>
                   </>
                 )}
               </TabsContent>

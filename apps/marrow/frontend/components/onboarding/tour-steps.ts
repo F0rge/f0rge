@@ -192,7 +192,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
   {
     id: 'signals',
     route: '/signals',
-    target: '[data-tour="signals-header"]',
+    target: '[data-tour="signals-insufficient"], [data-tour="signals-header"]',
     title: 'Signals',
     content:
       'See what drives your outcomes — today\'s prediction, ranked drivers, and trends. Unlocks after a few weeks of check-ins.',

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { useMarkerHistory } from '@/lib/api/hooks'
+import { FetchError } from '@f0rge/ui'
+import { useMarkerCatalog, useMarkerHistory } from '@/lib/api/hooks'
 import type { SignalsTrendSeries } from '@/lib/api/types/signals'
 import { SignalsTrendCard } from './trend-card'
 
@@ -19,18 +20,45 @@ function readPinned(): string[] {
 }
 
 function usePinnedMarkers(): string[] {
-  const [pinned] = useState<string[]>(readPinned)
+  const [pinned, setPinned] = useState<string[]>([])
+
+  useEffect(() => {
+    function refresh() {
+      setPinned(readPinned())
+    }
+    refresh()
+    window.addEventListener('focus', refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [])
+
   return pinned
 }
 
 function PinnedMarkerCard({ canonicalName }: { canonicalName: string }) {
-  const { data: points, isLoading } = useMarkerHistory(canonicalName)
+  const { data: points, isLoading, isError, refetch } = useMarkerHistory(canonicalName)
+  const { data: catalog } = useMarkerCatalog()
+  const displayName =
+    catalog?.find((m) => m.canonical_name === canonicalName)?.display_name ?? canonicalName
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center rounded-xl bg-card p-3 ring-1 ring-foreground/10">
+      <div
+        role="status"
+        aria-label={`Loading ${displayName}`}
+        className="flex items-center justify-center rounded-xl bg-card p-3 ring-1 ring-foreground/10"
+      >
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <FetchError message={`Failed to load ${displayName}.`} onRetry={() => refetch()} />
     )
   }
 
@@ -40,7 +68,7 @@ function PinnedMarkerCard({ canonicalName }: { canonicalName: string }) {
   const latest = numericPoints[numericPoints.length - 1]
   const trendSeries: SignalsTrendSeries = {
     key: canonicalName,
-    label: canonicalName,
+    label: displayName,
     category: 'lab',
     points: numericPoints.map((p) => ({
       date: p.lab_date,
@@ -63,7 +91,7 @@ interface Props {
 export function SignalsTrendGrid({ series }: Props) {
   const pinnedMarkers = usePinnedMarkers()
 
-  if (series.length === 0) {
+  if (series.length === 0 && pinnedMarkers.length === 0) {
     return (
       <p className="py-4 text-sm text-muted-foreground">No trend data available.</p>
     )
@@ -76,18 +104,20 @@ export function SignalsTrendGrid({ series }: Props) {
           <p className="mb-2 text-xs font-medium text-muted-foreground">
             Pinned lab markers
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {pinnedMarkers.map((canonical) => (
               <PinnedMarkerCard key={canonical} canonicalName={canonical} />
             ))}
           </div>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2">
-        {series.map((s) => (
-          <SignalsTrendCard key={s.key} series={s} />
-        ))}
-      </div>
+      {series.length > 0 && (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {series.map((s) => (
+            <SignalsTrendCard key={s.key} series={s} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -17,6 +17,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
+  formatDisplayDate,
 } from '@f0rge/ui'
 import { useSymptomCatalog } from '@/lib/api/hooks'
 
@@ -56,7 +57,18 @@ export function SignalsHeaderControls({
       label: s.label,
     })) ?? []
 
+  function handleDateOpenChange(open: boolean) {
+    if (open) {
+      setDraftStart(start)
+      setDraftEnd(end)
+    }
+    setDateOpen(open)
+  }
+
+  const rangeInvalid = draftStart > draftEnd
+
   function applyDates() {
+    if (rangeInvalid) return
     onStartChange(draftStart)
     onEndChange(draftEnd)
     setDateOpen(false)
@@ -68,14 +80,14 @@ export function SignalsHeaderControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Dialog open={dateOpen} onOpenChange={setDateOpen}>
+      <Dialog open={dateOpen} onOpenChange={handleDateOpenChange}>
         <DialogTrigger
           render={
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" />
           }
         >
           <CalendarIcon className="size-3.5" />
-          {start} — {end}
+          {formatDisplayDate(start)} — {formatDisplayDate(end)}
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
@@ -83,8 +95,11 @@ export function SignalsHeaderControls({
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label className="text-xs">Start</Label>
+              <Label htmlFor="signals-start" className="text-xs">
+                Start
+              </Label>
               <input
+                id="signals-start"
                 type="date"
                 value={draftStart}
                 onChange={(e) => setDraftStart(e.target.value)}
@@ -92,15 +107,21 @@ export function SignalsHeaderControls({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">End</Label>
+              <Label htmlFor="signals-end" className="text-xs">
+                End
+              </Label>
               <input
+                id="signals-end"
                 type="date"
                 value={draftEnd}
                 onChange={(e) => setDraftEnd(e.target.value)}
                 className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
-            <Button className="w-full" size="sm" onClick={applyDates}>
+            {rangeInvalid ? (
+              <p className="text-xs text-destructive">Start must be on or before end.</p>
+            ) : null}
+            <Button className="w-full" size="sm" onClick={applyDates} disabled={rangeInvalid}>
               Apply
             </Button>
           </div>
@@ -113,7 +134,7 @@ export function SignalsHeaderControls({
           if (v !== null) onOutcomeChange(v)
         }}
       >
-        <SelectTrigger className="h-8 w-auto text-xs">
+        <SelectTrigger className="h-8 w-auto text-xs" aria-label="Outcome">
           <SelectValue>{selectedLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>

@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete, apiPostForm, ApiError } from '@f0rge/ui/api'
 import type { Photo, PhotoAnalysis } from '../types'
+import { invalidateSignals } from './signals'
 
 export interface PhotoMealTagItem {
   id: string
@@ -59,6 +60,7 @@ export function useAddPhotoTags() {
     onSuccess: (_data, { photoId }) => {
       queryClient.invalidateQueries({ queryKey: ['photo-tags', photoId] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['photos'] })
       queryClient.invalidateQueries({ queryKey: ['social', 'meal-tags'] })
@@ -98,6 +100,7 @@ export function useUploadPhoto() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
@@ -110,6 +113,7 @@ export function useDeletePhoto() {
     mutationFn: (id: number) => apiDelete(`/photos/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['entries'] })
       queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
@@ -154,6 +158,7 @@ export function usePhotoAnalysis(
     const status = query.data?.status
     if (status === 'confirmed' && prevStatusRef.current !== 'confirmed') {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['photos'] })
     }
     prevStatusRef.current = status
@@ -169,6 +174,7 @@ export function useConfirmAnalysis() {
     onSuccess: (_data, photoId) => {
       queryClient.invalidateQueries({ queryKey: ['photo-analysis', photoId] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
       queryClient.invalidateQueries({ queryKey: ['photos'] })
     },
   })
@@ -192,6 +198,7 @@ export function useUpdateIngredient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
     },
   })
 }
@@ -204,6 +211,7 @@ export function useAddIngredient() {
     onSuccess: (_data, { photoId }) => {
       queryClient.invalidateQueries({ queryKey: ['photo-analysis', photoId] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
     },
   })
 }
@@ -215,6 +223,7 @@ export function useDeleteIngredient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['photo-analysis'] })
       queryClient.invalidateQueries({ queryKey: ['entry'] })
+      invalidateSignals(queryClient)
     },
   })
 }

@@ -21,6 +21,7 @@ import {
 import type { SignalsTrendSeries } from '@/lib/api/types/signals'
 import { polarityTone } from './polarity'
 import { chartStroke } from '@/lib/ui/status'
+import { SignalsChartTooltip, chartAxisTick } from './chart-tooltip'
 
 interface Props {
   series: SignalsTrendSeries
@@ -60,10 +61,9 @@ function Sparkline({ points }: { points: SignalsTrendSeries['points'] }) {
         <Line
           type="monotone"
           dataKey="v"
-          stroke="currentColor"
+          stroke={chartStroke[1]}
           strokeWidth={1.5}
           dot={false}
-          className="text-primary"
         />
       </LineChart>
     </ResponsiveContainer>
@@ -81,10 +81,10 @@ function FullChart({ series }: { series: SignalsTrendSeries }) {
 
   return (
     <ResponsiveContainer width="100%" height={200}>
-      <LineChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-        <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-        <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip contentStyle={{ fontSize: 12 }} labelStyle={{ fontSize: 11 }} />
+      <LineChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+        <XAxis dataKey="date" tick={chartAxisTick} interval="preserveStartEnd" />
+        <YAxis tick={chartAxisTick} />
+        <Tooltip content={<SignalsChartTooltip />} />
         <Line
           type="monotone"
           dataKey="value"
@@ -120,13 +120,27 @@ export function SignalsTrendCard({ series }: Props) {
         className={cn(
           'w-full rounded-xl bg-card p-3 text-left ring-1 ring-foreground/10',
           'transition-colors hover:bg-muted/40 active:bg-muted/60',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >
         <div className="mb-1 flex items-center justify-between gap-1">
           <span className="truncate text-xs font-medium text-card-foreground">
             {series.label}
           </span>
-          <DeltaArrow delta={series.delta_30d} goodDirection={series.good_direction} />
+          <span className="flex shrink-0 items-center gap-1">
+            {series.delta_30d !== null && (
+              <span
+                className={cn(
+                  'text-[10px] tabular-nums',
+                  polarityTone(series.delta_30d, series.good_direction),
+                )}
+              >
+                {series.delta_30d > 0 ? '+' : ''}
+                {series.delta_30d.toFixed(1)}
+              </span>
+            )}
+            <DeltaArrow delta={series.delta_30d} goodDirection={series.good_direction} />
+          </span>
         </div>
         <Sparkline points={series.points} />
         <div className="mt-1 flex items-baseline gap-2">
@@ -139,7 +153,7 @@ export function SignalsTrendCard({ series }: Props) {
         <DialogHeader>
           <DialogTitle>{series.label}</DialogTitle>
         </DialogHeader>
-        <div className="mt-2">
+        <div className="mt-2" aria-label={`${series.label} trend chart`}>
           <FullChart series={series} />
         </div>
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">

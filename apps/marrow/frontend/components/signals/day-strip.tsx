@@ -16,6 +16,13 @@ function stripColor(value: number | null): string {
   return 'bg-destructive/80'
 }
 
+function stripTone(value: number | null): string {
+  if (value === null) return 'missing'
+  if (value >= 0.66) return 'high'
+  if (value >= 0.33) return 'mid'
+  return 'low'
+}
+
 function StripRow({
   label,
   values,
@@ -38,6 +45,9 @@ function StripRow({
           />
         ))}
       </div>
+      <p className="sr-only">
+        {label}: {count} days. {values.map(stripTone).join(', ') || 'none'}
+      </p>
     </div>
   )
 }

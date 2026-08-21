@@ -1,8 +1,9 @@
 'use client'
 
+import Link from 'next/link'
 import { cn } from '@f0rge/ui'
 import type { SignalsToday } from '@/lib/api/types/signals'
-import { polarityTone } from './polarity'
+import { polarityFill, polarityTone } from './polarity'
 
 interface Props {
   today: SignalsToday
@@ -15,35 +16,44 @@ function WaterfallRow({
   detail,
   tone,
   barWidth,
+  barClass,
+  signed = true,
 }: {
   label: string
   value: number
   detail?: string | null
   tone?: string
   barWidth?: number
+  barClass?: string
+  signed?: boolean
 }) {
-  const signed = value >= 0 ? `+${value}` : String(value)
+  const display = signed
+    ? value >= 0
+      ? `+${value}`
+      : String(value)
+    : String(value)
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className="w-24 shrink-0 truncate text-muted-foreground">{label}</span>
-      <div className="relative h-5 min-w-0 flex-1 rounded bg-muted/50">
-        {barWidth != null && barWidth > 0 && (
-          <div
-            className={cn(
-              'absolute top-0 h-full rounded',
-              value >= 0 ? 'left-1/2 bg-ok/70' : 'right-1/2 bg-destructive/70',
-            )}
-            style={{ width: `${barWidth}%` }}
-          />
-        )}
-      </div>
-      <span className={cn('w-14 shrink-0 text-right tabular-nums', tone)}>
-        {signed}
-      </span>
-      {detail ? (
-        <span className="hidden truncate text-xs text-muted-foreground sm:inline">
-          {detail}
+    <div className="space-y-0.5">
+      <div className="flex items-center gap-2 text-sm">
+        <span className="w-24 shrink-0 truncate text-muted-foreground">{label}</span>
+        <div className="relative h-5 min-w-0 flex-1 rounded bg-muted/50">
+          {barWidth != null && barWidth > 0 && (
+            <div
+              className={cn(
+                'absolute top-0 h-full rounded',
+                value >= 0 ? 'left-1/2' : 'right-1/2',
+                barClass ?? 'bg-muted-foreground/70',
+              )}
+              style={{ width: `${barWidth}%` }}
+            />
+          )}
+        </div>
+        <span className={cn('w-14 shrink-0 text-right tabular-nums', tone)}>
+          {display}
         </span>
+      </div>
+      {detail ? (
+        <p className="text-xs text-muted-foreground">{detail}</p>
       ) : null}
     </div>
   )
@@ -72,6 +82,25 @@ export function TodayWaterfall({ today, goodDirection }: Props) {
     }
   }
 
+  if (today.baseline == null && predicted == null && contributions.length === 0) {
+    return (
+      <section aria-label="Today's prediction breakdown" className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Waterfall
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          No check-in for today yet.{' '}
+          <Link
+            href="/checkin"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            Log a check-in
+          </Link>
+        </p>
+      </section>
+    )
+  }
+
   return (
     <section aria-label="Today's prediction breakdown" className="space-y-3">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -83,6 +112,7 @@ export function TodayWaterfall({ today, goodDirection }: Props) {
             label="Baseline"
             value={today.baseline}
             barWidth={(Math.abs(today.baseline) / maxAbs) * 50}
+            signed={false}
           />
         )}
         {contributions.map((c) => (
@@ -93,17 +123,19 @@ export function TodayWaterfall({ today, goodDirection }: Props) {
             detail={c.detail}
             tone={polarityTone(c.display_value, goodDirection)}
             barWidth={(Math.abs(c.display_value) / maxAbs) * 50}
+            barClass={polarityFill(c.display_value, goodDirection)}
           />
         ))}
         {predicted != null && (
           <div className="border-t border-border pt-2">
-            <WaterfallRow label="Predicted" value={predicted} />
+            <WaterfallRow label="Predicted" value={predicted} signed={false} />
           </div>
         )}
         {actual != null && (
           <WaterfallRow
             label="Actual"
             value={actual}
+            signed={false}
             tone={residual != null ? polarityTone(residual, goodDirection) : undefined}
           />
         )}

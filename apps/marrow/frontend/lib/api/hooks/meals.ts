@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost } from '@f0rge/ui/api'
 import type { Entry, Photo, PlatformMeal, RecentMeal } from '../types'
+import { invalidateSignals } from './signals'
 
 function mergePhotoIntoEntry(queryClient: ReturnType<typeof useQueryClient>, date: string, photo: Photo) {
   queryClient.setQueryData<Entry>(['entry', date], (old) => {
@@ -13,6 +14,7 @@ function mergePhotoIntoEntry(queryClient: ReturnType<typeof useQueryClient>, dat
   queryClient.invalidateQueries({ queryKey: ['entry', date] })
   queryClient.invalidateQueries({ queryKey: ['entries'] })
   queryClient.invalidateQueries({ queryKey: ['meals', 'recent'] })
+  invalidateSignals(queryClient)
 }
 
 export function useRecentMeals(limit = 12) {
