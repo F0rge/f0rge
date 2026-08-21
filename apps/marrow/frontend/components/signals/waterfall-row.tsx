@@ -1,5 +1,13 @@
 import { cn } from '@f0rge/ui'
 
+/** One decimal so IEEE leftovers like 1.19999999999 cannot overflow the value column. */
+export function formatWaterfallNumber(value: number, signed = false): string {
+  const body = value.toFixed(1)
+  if (!signed) return body
+  if (value >= 0) return `+${body}`
+  return body
+}
+
 export function WaterfallRow({
   label,
   value,
@@ -17,11 +25,7 @@ export function WaterfallRow({
   barClass?: string
   signed?: boolean
 }) {
-  const display = signed
-    ? value >= 0
-      ? `+${value}`
-      : String(value)
-    : String(value)
+  const display = formatWaterfallNumber(value, signed)
   return (
     <div className="space-y-0.5">
       <div className="flex items-center gap-2 text-sm">
