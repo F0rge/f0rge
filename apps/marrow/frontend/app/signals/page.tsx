@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import {
@@ -56,7 +56,8 @@ function SignalsContent() {
   const start = searchParams.get('start') ?? defaults.start
   const end = searchParams.get('end') ?? defaults.end
   const outcome = searchParams.get('outcome') ?? 'overall'
-  const tab = parseTab(searchParams.get('tab'))
+  const tabParam = searchParams.get('tab')
+  const tab = parseTab(tabParam)
 
   const { data, isPending, isFetching, isError, refetch } = useSignals(outcome, start, end)
 
@@ -68,6 +69,14 @@ function SignalsContent() {
     }
     router.replace(`/signals?${params.toString()}`)
   }
+
+  useEffect(() => {
+    if (tabParam == null) return
+    if (tabParam === 'today' || tabParam === 'drivers' || tabParam === 'trends') return
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', 'today')
+    router.replace(`/signals?${params.toString()}`)
+  }, [tabParam, searchParams, router])
 
   const goodDirection =
     data != null ? outcomeGoodDirection(data.trends, outcome) : null
@@ -120,6 +129,22 @@ function SignalsContent() {
             <p className="text-xs text-muted-foreground" role="status">
               Updating…
             </p>
+          )}
+
+          {isError && data && (
+            <div
+              role="status"
+              className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+            >
+              <span>Couldn&apos;t refresh signals.</span>
+              <button
+                type="button"
+                className="font-medium underline-offset-4 hover:underline"
+                onClick={() => refetch()}
+              >
+                Retry
+              </button>
+            </div>
           )}
 
           {isError && !data && (
