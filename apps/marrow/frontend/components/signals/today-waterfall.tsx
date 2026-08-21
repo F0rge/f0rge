@@ -2,7 +2,7 @@
 
 import { cn } from '@f0rge/ui'
 import type { SignalsToday } from '@/lib/api/types/signals'
-import { polarityTone } from './polarity'
+import { polarityFill, polarityTone } from './polarity'
 
 interface Props {
   today: SignalsToday
@@ -15,12 +15,14 @@ function WaterfallRow({
   detail,
   tone,
   barWidth,
+  barClass,
 }: {
   label: string
   value: number
   detail?: string | null
   tone?: string
   barWidth?: number
+  barClass?: string
 }) {
   const signed = value >= 0 ? `+${value}` : String(value)
   return (
@@ -31,7 +33,8 @@ function WaterfallRow({
           <div
             className={cn(
               'absolute top-0 h-full rounded',
-              value >= 0 ? 'left-1/2 bg-ok/70' : 'right-1/2 bg-destructive/70',
+              value >= 0 ? 'left-1/2' : 'right-1/2',
+              barClass ?? 'bg-muted-foreground/70',
             )}
             style={{ width: `${barWidth}%` }}
           />
@@ -93,6 +96,7 @@ export function TodayWaterfall({ today, goodDirection }: Props) {
             detail={c.detail}
             tone={polarityTone(c.display_value, goodDirection)}
             barWidth={(Math.abs(c.display_value) / maxAbs) * 50}
+            barClass={polarityFill(c.display_value, goodDirection)}
           />
         ))}
         {predicted != null && (
