@@ -65,7 +65,10 @@ export function SignalsHeaderControls({
     setDateOpen(open)
   }
 
+  const rangeInvalid = draftStart > draftEnd
+
   function applyDates() {
+    if (rangeInvalid) return
     onStartChange(draftStart)
     onEndChange(draftEnd)
     setDateOpen(false)
@@ -109,7 +112,10 @@ export function SignalsHeaderControls({
                 className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
-            <Button className="w-full" size="sm" onClick={applyDates}>
+            {rangeInvalid ? (
+              <p className="text-xs text-destructive">Start must be on or before end.</p>
+            ) : null}
+            <Button className="w-full" size="sm" onClick={applyDates} disabled={rangeInvalid}>
               Apply
             </Button>
           </div>
