@@ -37,7 +37,7 @@ class PhotoCRUD(BaseCRUD):
 
         ``visibility``: "visible" (default) filters to ``hidden_at IS NULL``,
         "hidden" to ``IS NOT NULL``, "all" applies no filter. ``limit=None``
-        returns everything unpaginated.
+        is the internal unpaged path (tag-filter); HTTP callers always pass a page size.
         """
         stmt = select(Photo).where(owned_by_user(Photo.user_id))
         if tagged_only:

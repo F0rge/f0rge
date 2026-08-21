@@ -21,7 +21,7 @@ from app.middleware.auth import get_current_session
 from app.schemas.photo import PhotoResponse, PhotoUpdate
 from app.schemas.social import PhotoMealTagListResponse, PhotoTagRequest
 from app.services.meal_tags import MealTagService
-from app.services.photos import PhotoService
+from app.services.photos import PHOTO_LIST_PAGE_SIZE, PhotoService
 
 router = APIRouter(
     prefix="/api/v1",
@@ -54,7 +54,7 @@ async def upload_photo(
 async def list_photos(
     scope: Literal["all", "tagged"] = Query("all"),
     visibility: Literal["visible", "hidden", "all"] = Query("visible"),
-    limit: Optional[int] = Query(None, ge=1),
+    limit: int = Query(PHOTO_LIST_PAGE_SIZE, ge=1, le=PHOTO_LIST_PAGE_SIZE),
     offset: int = Query(0, ge=0),
     service: PhotoService = Depends(get_photo_service),
 ) -> list[PhotoResponse]:

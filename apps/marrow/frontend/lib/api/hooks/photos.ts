@@ -21,6 +21,8 @@ export interface PhotoMealTagListResponse {
   tags: PhotoMealTagItem[]
 }
 
+export const PHOTO_LIST_PAGE_SIZE = 100
+
 export function usePhotos(
   scope: 'all' | 'tagged',
   options?: { visibility?: 'visible' | 'hidden'; limit?: number; enabled?: boolean },
@@ -28,11 +30,33 @@ export function usePhotos(
   const visibility = options?.visibility ?? 'visible'
   const limit = options?.limit
   const enabled = options?.enabled ?? true
-  const params = new URLSearchParams({ scope, visibility })
-  if (limit != null) params.set('limit', String(limit))
   return useQuery<Photo[]>({
     queryKey: ['photos', scope, visibility, limit ?? 'all'],
-    queryFn: () => apiGet(`/photos?${params}`),
+    queryFn: async () => {
+      if (limit != null) {
+        const params = new URLSearchParams({
+          scope,
+          visibility,
+          limit: String(limit),
+        })
+        return apiGet(`/photos?${params}`)
+      }
+      const all: Photo[] = []
+      let offset = 0
+      while (true) {
+        const params = new URLSearchParams({
+          scope,
+          visibility,
+          limit: String(PHOTO_LIST_PAGE_SIZE),
+          offset: String(offset),
+        })
+        const page = (await apiGet(`/photos?${params}`)) as Photo[]
+        all.push(...page)
+        if (page.length < PHOTO_LIST_PAGE_SIZE) break
+        offset += PHOTO_LIST_PAGE_SIZE
+      }
+      return all
+    },
     enabled,
   })
 }

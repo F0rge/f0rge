@@ -5067,7 +5067,7 @@ export interface operations {
             query?: {
                 scope?: "all" | "tagged";
                 visibility?: "visible" | "hidden" | "all";
-                limit?: number | null;
+                limit?: number;
                 offset?: number;
             };
             header?: never;
