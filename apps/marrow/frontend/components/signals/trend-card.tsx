@@ -10,18 +10,9 @@ import {
   DialogTrigger,
   cn,
 } from '@f0rge/ui'
-import {
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import type { SignalsTrendSeries } from '@/lib/api/types/signals'
 import { polarityTone } from './polarity'
-import { chartStroke } from '@/lib/ui/status'
-import { SignalsChartTooltip, chartAxisTick } from './chart-tooltip'
+import { TrendFullChart, TrendSparkline } from './trend-charts'
 
 interface Props {
   series: SignalsTrendSeries
@@ -39,72 +30,6 @@ function DeltaArrow({
   if (delta > 0) return <TrendingUp className={cn('size-3', tone)} />
   if (delta < 0) return <TrendingDown className={cn('size-3', tone)} />
   return <Minus className="size-3 text-muted-foreground" />
-}
-
-function Sparkline({ points }: { points: SignalsTrendSeries['points'] }) {
-  const data = points
-    .filter((p) => p.value !== null)
-    .slice(-30)
-    .map((p) => ({ date: p.date, v: p.value }))
-
-  if (data.length < 2) {
-    return (
-      <div className="flex h-10 items-center justify-center text-xs text-muted-foreground">
-        not enough data
-      </div>
-    )
-  }
-
-  return (
-    <ResponsiveContainer width="100%" height={40}>
-      <LineChart data={data}>
-        <Line
-          type="monotone"
-          dataKey="v"
-          stroke={chartStroke[1]}
-          strokeWidth={1.5}
-          dot={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  )
-}
-
-function FullChart({ series }: { series: SignalsTrendSeries }) {
-  const data = series.points
-    .filter((p) => p.value !== null || p.rolling_avg_7 !== null)
-    .map((p) => ({
-      date: p.date.slice(5),
-      value: p.value,
-      avg7: p.rolling_avg_7,
-    }))
-
-  return (
-    <ResponsiveContainer width="100%" height={200}>
-      <LineChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-        <XAxis dataKey="date" tick={chartAxisTick} interval="preserveStartEnd" />
-        <YAxis tick={chartAxisTick} />
-        <Tooltip content={<SignalsChartTooltip />} />
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke={chartStroke[1]}
-          strokeWidth={1.5}
-          dot={false}
-          name="Value"
-        />
-        <Line
-          type="monotone"
-          dataKey="avg7"
-          stroke={chartStroke.muted}
-          strokeWidth={1.5}
-          dot={false}
-          strokeDasharray="4 2"
-          name="7-day avg"
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  )
 }
 
 export function SignalsTrendCard({ series }: Props) {
@@ -142,7 +67,7 @@ export function SignalsTrendCard({ series }: Props) {
             <DeltaArrow delta={series.delta_30d} goodDirection={series.good_direction} />
           </span>
         </div>
-        <Sparkline points={series.points} />
+        <TrendSparkline points={series.points} />
         <div className="mt-1 flex items-baseline gap-2">
           <span className="text-sm font-semibold tabular-nums">{currentDisplay}</span>
           <span className="text-xs text-muted-foreground">7d avg {avgDisplay}</span>
@@ -154,7 +79,7 @@ export function SignalsTrendCard({ series }: Props) {
           <DialogTitle>{series.label}</DialogTitle>
         </DialogHeader>
         <div className="mt-2" aria-label={`${series.label} trend chart`}>
-          <FullChart series={series} />
+          <TrendFullChart series={series} />
         </div>
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
           <span>

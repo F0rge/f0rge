@@ -34,3 +34,10 @@ export const Required: Story = {
     required: true,
   },
 }
+
+export const DateField: Story = {
+  args: {
+    label: 'Start',
+    type: 'date',
+  },
+}

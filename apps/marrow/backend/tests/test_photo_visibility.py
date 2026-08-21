@@ -33,7 +33,7 @@ from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH, User
 from app.schemas.photo import PhotoUpdate
 from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
 from app.services.meal_tags import MealTagService
-from app.services.photos import PhotoService
+from app.services.photos import PHOTO_LIST_PAGE_SIZE, PhotoService
 from tests.conftest import authed_user_id as fetch_authed_user_id
 
 pytestmark = pytest.mark.asyncio
@@ -174,13 +174,13 @@ async def test_hide_unhide_flow(
     assert set(await _photo_ids(authed_client)) == {photo_a.id, photo_b.id}
 
 
-async def test_photos_list_returns_all_when_uncapped(
+async def test_photos_list_default_page_is_at_most_100(
     authed_client: AsyncClient,
     async_db: AsyncSession,
     isolated_storage: None,
     authed_user_id: uuid.UUID,
 ) -> None:
-    """Profile grid: omitting limit returns every meal, not the old 24/100 cap."""
+    """Default page is 100; offset walks the rest. Profile grid pages client-side."""
     day = datetime.date(2026, 7, 8)
     await apply_session_user_id(async_db, authed_user_id)
     entry = await _make_entry(async_db, day, authed_user_id)
@@ -198,10 +198,40 @@ async def test_photos_list_returns_all_when_uncapped(
     )
     await async_db.commit()
 
-    uncapped = await _photo_ids(authed_client)
-    assert len(uncapped) == count
+    default_page = await _photo_ids(authed_client)
+    assert len(default_page) == count
     paged = await _photo_ids(authed_client, limit=24)
     assert len(paged) == 24
+
+
+async def test_photos_list_pages_beyond_default_size(
+    authed_client: AsyncClient,
+    async_db: AsyncSession,
+    isolated_storage: None,
+    authed_user_id: uuid.UUID,
+) -> None:
+    day = datetime.date(2026, 7, 9)
+    await apply_session_user_id(async_db, authed_user_id)
+    entry = await _make_entry(async_db, day, authed_user_id)
+    count = PHOTO_LIST_PAGE_SIZE + 1
+    async_db.add_all(
+        [
+            Photo(
+                user_id=authed_user_id,
+                entry_id=entry.id,
+                filename=f"page-{i}.jpg",
+                label=f"Meal {i}",
+            )
+            for i in range(count)
+        ]
+    )
+    await async_db.commit()
+
+    first = await _photo_ids(authed_client)
+    assert len(first) == PHOTO_LIST_PAGE_SIZE
+    rest = await _photo_ids(authed_client, offset=PHOTO_LIST_PAGE_SIZE)
+    assert len(rest) == 1
+    assert not set(rest) & set(first)
 
 
 # ---------------------------------------------------------------------------

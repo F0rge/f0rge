@@ -1,15 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarIcon } from 'lucide-react'
 import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  Label,
   Select,
   SelectContent,
   SelectGroup,
@@ -17,9 +9,9 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-  formatDisplayDate,
 } from '@f0rge/ui'
 import { useSymptomCatalog } from '@/lib/api/hooks'
+import { SignalsDateRangeDialog } from './date-range-dialog'
 
 const CORE_OUTCOMES = [
   { value: 'overall', label: 'Overall' },
@@ -80,53 +72,18 @@ export function SignalsHeaderControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Dialog open={dateOpen} onOpenChange={handleDateOpenChange}>
-        <DialogTrigger
-          render={
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" />
-          }
-        >
-          <CalendarIcon className="size-3.5" />
-          {formatDisplayDate(start)} — {formatDisplayDate(end)}
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Date range</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="signals-start" className="text-xs">
-                Start
-              </Label>
-              <input
-                id="signals-start"
-                type="date"
-                value={draftStart}
-                onChange={(e) => setDraftStart(e.target.value)}
-                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="signals-end" className="text-xs">
-                End
-              </Label>
-              <input
-                id="signals-end"
-                type="date"
-                value={draftEnd}
-                onChange={(e) => setDraftEnd(e.target.value)}
-                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            {rangeInvalid ? (
-              <p className="text-xs text-destructive">Start must be on or before end.</p>
-            ) : null}
-            <Button className="w-full" size="sm" onClick={applyDates} disabled={rangeInvalid}>
-              Apply
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SignalsDateRangeDialog
+        open={dateOpen}
+        start={start}
+        end={end}
+        draftStart={draftStart}
+        draftEnd={draftEnd}
+        rangeInvalid={rangeInvalid}
+        onOpenChange={handleDateOpenChange}
+        onDraftStart={setDraftStart}
+        onDraftEnd={setDraftEnd}
+        onApply={applyDates}
+      />
 
       <Select
         value={outcome}

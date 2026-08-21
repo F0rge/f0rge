@@ -25,7 +25,7 @@ from app.models.photo_diet_tag import PhotoDietTag
 from app.schemas.photo import PhotoResponse, PhotoUpdate
 from app.services.entries import _photo_response
 from app.services import object_storage
-from app.services.object_storage import jpeg_response
+from app.http_responses import jpeg_response
 from app.services.photo_storage import (
     THUMB_MAX_DIM,
     THUMB_QUALITY,
@@ -41,6 +41,9 @@ from f0rge_db.tenant import current_user_id
 # Location past Cache-Control, then keeps hitting a dead presign — #469's
 # no-store header did not stop that. Caching the bytes themselves is safe.
 PHOTO_CACHE_CONTROL = "private, max-age=240"
+# Single GET /photos response ceiling. Clients that need the full feed
+# (profile grid) page with offset; see usePhotos.
+PHOTO_LIST_PAGE_SIZE = 100
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
@@ -94,13 +97,13 @@ class PhotoService:
         self.meal_tags = meal_tags
 
     async def list_photos(
-        self, scope: str, visibility: str, limit: Optional[int], offset: int
+        self, scope: str, visibility: str, limit: int, offset: int
     ) -> list[PhotoResponse]:
         """Profile-grid feed: the user's photos, optionally only tagged copies.
 
-        ``limit=None`` returns the full feed (profile grid). Explicit ``limit``
-        still paginates. The profile tag-filter rule (settings) applies only to
-        ``visibility="visible"``; hidden/all listings are never tag-filtered.
+        Each response is at most ``PHOTO_LIST_PAGE_SIZE`` rows. Pass ``offset``
+        to walk the rest. The profile tag-filter rule (settings) applies only
+        to ``visibility="visible"``; hidden/all listings are never tag-filtered.
         """
         settings_row = await self.settings_crud.get() if visibility == "visible" else None
         mode = settings_row.profile_tag_filter_mode if settings_row else "off"
@@ -130,7 +133,7 @@ class PhotoService:
             wanted = set(settings_row.profile_filter_tags_list)
             # show_only with no tags would filter everything; treat as off (hide
             # with an empty list is already a no-op).
-            end = None if limit is None else offset + limit
+            end = offset + limit
             if mode == "show_only" and not wanted:
                 return responses[offset:end]
 
