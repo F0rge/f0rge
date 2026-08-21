@@ -42,7 +42,7 @@ export function DriverCard({ driver }: Props) {
           </Badge>
           {crosses && (
             <Badge variant="outline" className="text-[10px]">
-              crosses zero
+              uncertain
             </Badge>
           )}
         </div>

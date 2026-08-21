@@ -44,13 +44,12 @@ export function DriverDetail({ driver, open, onOpenChange }: Props) {
             <Badge variant="outline" className="capitalize">
               {driver.feature_class}
             </Badge>
-            <Badge variant="outline">{driver.shape}</Badge>
             <Badge>{driver.tier}</Badge>
-            {crosses && <Badge variant="outline">crosses zero</Badge>}
+            {crosses && <Badge variant="outline">uncertain</Badge>}
           </div>
 
           <div>
-            <p className="text-xs text-muted-foreground">Effect (θ̂)</p>
+            <p className="text-xs text-muted-foreground">Effect</p>
             <p
               className={cn(
                 'text-xl font-semibold tabular-nums',
@@ -67,7 +66,7 @@ export function DriverDetail({ driver, open, onOpenChange }: Props) {
             </p>
             {driver.ci_low != null && driver.ci_high != null && (
               <p className="text-xs text-muted-foreground tabular-nums">
-                95% CI [{driver.ci_low.toFixed(3)}, {driver.ci_high.toFixed(3)}]
+                Range [{driver.ci_low.toFixed(3)}, {driver.ci_high.toFixed(3)}]
               </p>
             )}
           </div>
