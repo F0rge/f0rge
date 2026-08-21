@@ -144,10 +144,9 @@ export function DietRiskSection({
     })),
   })
   const analyses = analysisQueries.map((query) => query.data)
-  const analysesLoading = analysisQueries.some((query) => query.isLoading)
-  const anyStillAnalyzing =
-    analysesLoading ||
-    analyses.some((analysis) => analysis?.status === 'pending' || analysis?.status === 'analyzing')
+  const anyStillAnalyzing = analyses.some(
+    (analysis) => analysis?.status === 'pending' || analysis?.status === 'analyzing',
+  )
   const anyAwaitingConfirm = analyses.some(
     (analysis) => analysis?.status === 'needs_review' || analysis?.status === 'complete',
   )
@@ -175,7 +174,7 @@ export function DietRiskSection({
                   ? 'Photos still analyzing — flags will update once confirmed.'
                   : anyAwaitingConfirm
                     ? 'Review photo ingredients above — diet flags will update once confirmed.'
-                    : 'Photos still analyzing — flags will update once confirmed.'}
+                    : 'Diet flags appear after analysis confirms.'}
               </span>
             </div>
           </div>

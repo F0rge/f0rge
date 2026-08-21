@@ -152,7 +152,7 @@ export function PhotoAnalysis({
       <div className="mt-2 rounded-lg border border-border p-2.5">
         <div className="flex items-center gap-2">
           <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Loading meal analysis…</span>
+          <span className="text-xs text-muted-foreground">Loading saved analysis…</span>
         </div>
       </div>
     )
