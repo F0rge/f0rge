@@ -25,7 +25,7 @@ from app.models.photo_diet_tag import PhotoDietTag
 from app.schemas.photo import PhotoResponse, PhotoUpdate
 from app.services.entries import _photo_response
 from app.services import object_storage
-from app.services.object_storage import jpeg_response
+from app.http_responses import jpeg_response
 from app.services.photo_storage import (
     THUMB_MAX_DIM,
     THUMB_QUALITY,

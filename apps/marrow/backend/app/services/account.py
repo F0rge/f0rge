@@ -22,7 +22,7 @@ from app.schemas.account import (
 )
 from app.schemas.social import validate_handle_format
 from app.services import object_storage
-from app.services.object_storage import jpeg_response
+from app.http_responses import jpeg_response
 from app.services.auth import (
     clear_session_cookie,
     hash_password,
