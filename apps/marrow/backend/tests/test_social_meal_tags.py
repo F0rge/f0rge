@@ -819,3 +819,4 @@ async def test_photos_list_rejects_bad_params(
     client = await _signup_client(async_db, uuid.uuid4().hex[:6])
     assert (await client.get("/api/v1/photos?scope=mine")).status_code == 422
     assert (await client.get("/api/v1/photos?limit=0")).status_code == 422
+    assert (await client.get("/api/v1/photos?limit=101")).status_code == 422

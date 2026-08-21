@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass, field
+from typing import Optional
 
 import numpy as np
 
@@ -173,6 +174,13 @@ def rank_tracker_proposals(flagged_days: list[FlaggedDay]) -> list[TrackerPropos
     return proposals
 
 
+def residual_is_unexplained_bad(residual: float, good_direction: Optional[str]) -> bool:
+    """Whether a large residual is worse than expected for this outcome."""
+    if good_direction == "down":
+        return residual > 0
+    return residual < 0
+
+
 def detect_unexplained(
     rows: list[dict],
     columns: list[str],
@@ -180,6 +188,7 @@ def detect_unexplained(
     ctx: AttributionContext | None = None,
     *,
     sigma_resid: float | None = None,
+    good_direction: Optional[str] = None,
 ) -> UnexplainedResult:
     """Flag unexplained days, cluster episodes, apply re-learning guard."""
     base = baseline if baseline is not None else compute_baseline_residuals(rows, columns)
@@ -222,7 +231,7 @@ def detect_unexplained(
         )
 
     for day in flagged_candidates:
-        if day.residual < 0:
+        if residual_is_unexplained_bad(day.residual, good_direction):
             flagged_bad.append(day)
         else:
             flagged_good.append(day)

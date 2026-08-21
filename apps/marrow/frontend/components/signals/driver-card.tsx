@@ -11,8 +11,8 @@ interface Props {
 }
 
 function tierVariant(tier: string): 'default' | 'secondary' | 'outline' {
-  if (tier === 'strong') return 'default'
-  if (tier === 'moderate') return 'secondary'
+  if (tier === 'established') return 'default'
+  if (tier === 'emerging') return 'secondary'
   return 'outline'
 }
 
@@ -42,7 +42,7 @@ export function DriverCard({ driver }: Props) {
           </Badge>
           {crosses && (
             <Badge variant="outline" className="text-[10px]">
-              crosses zero
+              uncertain
             </Badge>
           )}
         </div>

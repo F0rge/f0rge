@@ -13,7 +13,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import Response
 
 from app.dependencies.photos import get_photo_service
 from app.dependencies.meal_tags import get_meal_tag_service
@@ -21,7 +21,7 @@ from app.middleware.auth import get_current_session
 from app.schemas.photo import PhotoResponse, PhotoUpdate
 from app.schemas.social import PhotoMealTagListResponse, PhotoTagRequest
 from app.services.meal_tags import MealTagService
-from app.services.photos import PhotoService
+from app.services.photos import PHOTO_LIST_PAGE_SIZE, PhotoService
 
 router = APIRouter(
     prefix="/api/v1",
@@ -54,7 +54,7 @@ async def upload_photo(
 async def list_photos(
     scope: Literal["all", "tagged"] = Query("all"),
     visibility: Literal["visible", "hidden", "all"] = Query("visible"),
-    limit: int = Query(24, ge=1, le=100),
+    limit: int = Query(PHOTO_LIST_PAGE_SIZE, ge=1, le=PHOTO_LIST_PAGE_SIZE),
     offset: int = Query(0, ge=0),
     service: PhotoService = Depends(get_photo_service),
 ) -> list[PhotoResponse]:
@@ -65,7 +65,7 @@ async def list_photos(
 async def serve_photo(
     photo_id: int,
     service: PhotoService = Depends(get_photo_service),
-) -> FileResponse | RedirectResponse:
+) -> Response:
     return await service.serve_photo_file(photo_id)
 
 
@@ -73,7 +73,7 @@ async def serve_photo(
 async def serve_photo_thumb(
     photo_id: int,
     service: PhotoService = Depends(get_photo_service),
-) -> FileResponse | RedirectResponse:
+) -> Response:
     return await service.serve_photo_thumb(photo_id)
 
 

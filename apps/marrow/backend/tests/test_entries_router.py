@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime
 
+import pytest
 from httpx import AsyncClient
 
 from app.services.entries import _period_of_day
@@ -94,12 +95,24 @@ async def test_create_missing_required_field_422(authed_client: AsyncClient) -> 
     assert resp.status_code == 422
 
 
-async def test_create_omits_overall_201(authed_client: AsyncClient) -> None:
+@pytest.mark.parametrize(
+    ("field", "day"),
+    [
+        ("overall", "2026-02-01"),
+        ("bloating", "2026-02-02"),
+        ("sleep_quality", "2026-02-03"),
+        ("stress", "2026-02-04"),
+    ],
+)
+async def test_create_omits_nullable_core_scale_201(
+    authed_client: AsyncClient, field: str, day: str
+) -> None:
     payload = dict(_VALID_PAYLOAD)
-    del payload["overall"]
+    payload["date"] = day
+    del payload[field]
     resp = await authed_client.post("/api/v1/entries", json=payload)
     assert resp.status_code == 201
-    assert resp.json()["overall"] is None
+    assert resp.json()[field] is None
 
 
 # ---------------------------------------------------------------------------

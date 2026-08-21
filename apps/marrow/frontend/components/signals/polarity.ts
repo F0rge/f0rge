@@ -17,6 +17,13 @@ export function polarityTone(delta: number, goodDirection: GoodDirection): strin
   return good ? statusText.ok : statusText.destructive
 }
 
+/** Bar fill for signed contributions — colour follows goodDirection, not sign. */
+export function polarityFill(delta: number, goodDirection: GoodDirection): string {
+  const good = deltaIsGood(delta, goodDirection)
+  if (good === null) return 'bg-muted-foreground/70'
+  return good ? 'bg-ok/70' : 'bg-destructive/70'
+}
+
 export function crossesZero(ciLow: number | null, ciHigh: number | null): boolean {
   if (ciLow === null || ciHigh === null) return false
   return ciLow <= 0 && ciHigh >= 0

@@ -19,7 +19,7 @@ export function SetAside({ mirrors }: Props) {
           '[&::-webkit-details-marker]:hidden',
         )}
       >
-        <span>Set aside ({mirrors.length})</span>
+        <span>Set aside (correlated with this outcome)</span>
         <ChevronDown
           className={cn(
             'size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none',
@@ -31,7 +31,7 @@ export function SetAside({ mirrors }: Props) {
           <li key={m.feature} className="text-xs">
             <p className="font-medium">{m.label}</p>
             <p className="text-muted-foreground">
-              ρ {m.rho != null ? m.rho.toFixed(2) : '—'} · n={m.n}
+              correlation {m.rho != null ? m.rho.toFixed(2) : '—'} · {m.n} days
             </p>
             <p className="text-muted-foreground">{m.reason}</p>
           </li>

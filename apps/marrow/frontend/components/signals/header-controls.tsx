@@ -1,15 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarIcon } from 'lucide-react'
 import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  Label,
   Select,
   SelectContent,
   SelectGroup,
@@ -19,6 +11,7 @@ import {
   SelectValue,
 } from '@f0rge/ui'
 import { useSymptomCatalog } from '@/lib/api/hooks'
+import { SignalsDateRangeDialog } from './date-range-dialog'
 
 const CORE_OUTCOMES = [
   { value: 'overall', label: 'Overall' },
@@ -56,7 +49,18 @@ export function SignalsHeaderControls({
       label: s.label,
     })) ?? []
 
+  function handleDateOpenChange(open: boolean) {
+    if (open) {
+      setDraftStart(start)
+      setDraftEnd(end)
+    }
+    setDateOpen(open)
+  }
+
+  const rangeInvalid = draftStart > draftEnd
+
   function applyDates() {
+    if (rangeInvalid) return
     onStartChange(draftStart)
     onEndChange(draftEnd)
     setDateOpen(false)
@@ -68,44 +72,18 @@ export function SignalsHeaderControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Dialog open={dateOpen} onOpenChange={setDateOpen}>
-        <DialogTrigger
-          render={
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" />
-          }
-        >
-          <CalendarIcon className="size-3.5" />
-          {start} — {end}
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Date range</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Start</Label>
-              <input
-                type="date"
-                value={draftStart}
-                onChange={(e) => setDraftStart(e.target.value)}
-                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">End</Label>
-              <input
-                type="date"
-                value={draftEnd}
-                onChange={(e) => setDraftEnd(e.target.value)}
-                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </div>
-            <Button className="w-full" size="sm" onClick={applyDates}>
-              Apply
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SignalsDateRangeDialog
+        open={dateOpen}
+        start={start}
+        end={end}
+        draftStart={draftStart}
+        draftEnd={draftEnd}
+        rangeInvalid={rangeInvalid}
+        onOpenChange={handleDateOpenChange}
+        onDraftStart={setDraftStart}
+        onDraftEnd={setDraftEnd}
+        onApply={applyDates}
+      />
 
       <Select
         value={outcome}
@@ -113,7 +91,7 @@ export function SignalsHeaderControls({
           if (v !== null) onOutcomeChange(v)
         }}
       >
-        <SelectTrigger className="h-8 w-auto text-xs">
+        <SelectTrigger className="h-8 w-auto text-xs" aria-label="Outcome">
           <SelectValue>{selectedLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>

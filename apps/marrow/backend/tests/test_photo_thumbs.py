@@ -22,6 +22,7 @@ from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
 from app.services.meal_tags import MealTagService
 from app.services.photo_storage import thumb_filename
 from app.services.photos import PHOTO_CACHE_CONTROL, PhotoService
+from botocore.exceptions import ClientError
 
 pytestmark = pytest.mark.asyncio
 
@@ -189,13 +190,58 @@ async def test_delete_removes_thumb(
     assert not os.path.exists(thumb_path)
 
 
-async def test_remote_serve_presigns_without_head_storm(
+def _s3_404(operation: str) -> ClientError:
+    return ClientError(
+        {
+            "Error": {"Code": "404", "Message": "Not Found"},
+            "ResponseMetadata": {"HTTPStatusCode": 404},
+        },
+        operation,
+    )
+
+
+class _MemoryS3:
+    """In-memory S3 for serve-path tests (GET the JPEG, never 307)."""
+
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+        self.head_calls: list[str] = []
+        self.get_calls: list[str] = []
+        self.presign_calls: list[str] = []
+
+    def get_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803
+        self.get_calls.append(Key)
+        if Key not in self.objects:
+            raise _s3_404("GetObject")
+        return {"Body": io.BytesIO(self.objects[Key])}
+
+    def head_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803
+        self.head_calls.append(Key)
+        if Key not in self.objects:
+            raise _s3_404("HeadObject")
+        return {}
+
+    def put_object(self, Bucket: str, Key: str, Body: bytes) -> dict:  # noqa: N803
+        self.objects[Key] = Body if isinstance(Body, bytes) else bytes(Body)
+        return {}
+
+    def generate_presigned_url(
+        self,
+        ClientMethod: str,  # noqa: N803
+        Params: dict,
+        ExpiresIn: int,  # noqa: N803
+    ) -> str:
+        self.presign_calls.append(Params["Key"])
+        return f"https://storage.test/{Params['Bucket']}/{Params['Key']}?e={ExpiresIn}"
+
+
+async def test_remote_serve_returns_jpeg_without_redirect(
     async_db: AsyncSession,
     authed_client: AsyncClient,
     authed_user_id: uuid.UUID,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """GET /file is HEAD-free; GET /thumb does at most one canonical HEAD."""
+    """GET /file and /thumb stream JPEG bytes — never 307 to a 300s Tigris URL."""
     from app.models.meal import Meal
     from app.models.photo import Photo
     from app.services import object_storage
@@ -206,26 +252,13 @@ async def test_remote_serve_presigns_without_head_storm(
     monkeypatch.setattr(settings, "aws_endpoint_url_s3", "http://storage.test")
     monkeypatch.setattr(settings, "food_analysis_enabled", False)
 
-    head_calls: list[str] = []
-
-    class _StubS3:
-        def head_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803
-            head_calls.append(Key)
-            return {}
-
-        def generate_presigned_url(
-            self,
-            ClientMethod: str,
-            Params: dict,
-            ExpiresIn: int,  # noqa: N803
-        ) -> str:
-            return f"https://storage.test/{Params['Bucket']}/{Params['Key']}?e={ExpiresIn}"
-
-    monkeypatch.setattr(object_storage, "_s3_client", lambda: _StubS3())
+    stub = _MemoryS3()
+    monkeypatch.setattr(object_storage, "_s3_client", lambda: stub)
 
     day = datetime.date(2026, 8, 4)
     entry = await _make_entry(async_db, day, authed_user_id)
     filename = "2026-08-04_photo-1.jpg"
+    jpeg = _png_bytes()
     now = datetime.datetime.utcnow()
     meal = Meal(
         owner_user_id=authed_user_id,
@@ -249,18 +282,29 @@ async def test_remote_serve_presigns_without_head_storm(
     await async_db.commit()
     await async_db.refresh(photo)
 
-    head_calls.clear()
-    file_resp = await authed_client.get(f"/api/v1/photos/{photo.id}/file", follow_redirects=False)
-    assert file_resp.status_code == 307
-    assert file_resp.headers.get("cache-control") == PHOTO_CACHE_CONTROL
-    assert f"{authed_user_id}/{filename}" in file_resp.headers.get("location", "")
-    assert head_calls == []
+    file_key = f"{authed_user_id}/{filename}"
+    stub.objects[file_key] = jpeg
+    stub.get_calls.clear()
+    stub.head_calls.clear()
 
-    head_calls.clear()
+    file_resp = await authed_client.get(f"/api/v1/photos/{photo.id}/file", follow_redirects=False)
+    assert file_resp.status_code == 200
+    assert file_resp.headers.get("cache-control") == PHOTO_CACHE_CONTROL
+    assert file_resp.headers.get("content-type", "").startswith("image/jpeg")
+    assert file_resp.content == jpeg
+    assert stub.presign_calls == []
+    assert stub.get_calls == [file_key]
+    assert stub.head_calls == []
+
+    stub.get_calls.clear()
+    stub.head_calls.clear()
     thumb_resp = await authed_client.get(f"/api/v1/photos/{photo.id}/thumb", follow_redirects=False)
-    assert thumb_resp.status_code == 307
+    assert thumb_resp.status_code == 200
     assert thumb_resp.headers.get("cache-control") == PHOTO_CACHE_CONTROL
-    assert thumb_filename(filename) in thumb_resp.headers.get("location", "")
-    # One canonical HEAD for "does thumb exist?" — no multi-layout probe.
-    assert len(head_calls) == 1
-    assert head_calls[0] == f"{authed_user_id}/{thumb_filename(filename)}"
+    assert thumb_resp.headers.get("content-type", "").startswith("image/jpeg")
+    assert stub.presign_calls == []
+    # Thumb missing → canonical GET 404, then full-size GET to lazy-generate.
+    assert file_key in stub.get_calls
+    thumb_key = f"{authed_user_id}/{thumb_filename(filename)}"
+    assert thumb_key in stub.objects
+    assert thumb_resp.content == stub.objects[thumb_key]

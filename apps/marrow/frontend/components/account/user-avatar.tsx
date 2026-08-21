@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Image from 'next/image'
 import { useAccount, useAvatarCacheBust } from '@/lib/api/hooks'
 import { cn } from '@f0rge/ui'
@@ -27,6 +28,7 @@ export function UserAvatar({ size = 'sm', className }: UserAvatarProps) {
   const account = useAccount()
   const cacheBust = useAvatarCacheBust()
   const data = account.data
+  const [failed, setFailed] = useState(false)
 
   if (!data) {
     return (
@@ -41,7 +43,10 @@ export function UserAvatar({ size = 'sm', className }: UserAvatarProps) {
     )
   }
 
-  if (data.has_custom_avatar) {
+  const index = String(data.avatar_default_index).padStart(2, '0')
+  const defaultSrc = `/avatars/defaults/${index}.svg`
+
+  if (data.has_custom_avatar && !failed) {
     return (
       <Image
         src={`/api/v1/account/avatar?v=${cacheBust.data ?? 0}`}
@@ -49,16 +54,15 @@ export function UserAvatar({ size = 'sm', className }: UserAvatarProps) {
         width={SIZE_PX[size]}
         height={SIZE_PX[size]}
         unoptimized
+        onError={() => setFailed(true)}
         className={cn('rounded-full border border-border object-cover', SIZE_CLASS[size], className)}
       />
     )
   }
 
-  const index = String(data.avatar_default_index).padStart(2, '0')
-
   return (
     <Image
-      src={`/avatars/defaults/${index}.svg`}
+      src={defaultSrc}
       alt=""
       width={SIZE_PX[size]}
       height={SIZE_PX[size]}

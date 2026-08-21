@@ -9,6 +9,7 @@ from app.services.signals.unexplained import (
     detect_unexplained,
     has_full_coverage,
     rank_tracker_proposals,
+    residual_is_unexplained_bad,
 )
 
 
@@ -146,3 +147,11 @@ def test_tracker_ranking() -> None:
     proposals = rank_tracker_proposals(flagged)
     assert proposals[0].tracker_id == "travel"
     assert proposals[0].days_covered == 3
+
+
+def test_residual_polarity_follows_good_direction() -> None:
+    assert residual_is_unexplained_bad(-1.0, "up") is True
+    assert residual_is_unexplained_bad(1.0, "up") is False
+    assert residual_is_unexplained_bad(1.0, "down") is True
+    assert residual_is_unexplained_bad(-1.0, "down") is False
+    assert residual_is_unexplained_bad(-1.0, None) is True
