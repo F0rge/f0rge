@@ -614,7 +614,9 @@ class SignalsService:
         )
         noise = estimate_noise_floor(rows, columns, baseline, effects)
         quality = compute_model_quality(rows, columns, baseline, ctx, noise, effects)
-        unexplained = detect_unexplained(rows, columns, baseline, ctx)
+        unexplained = detect_unexplained(
+            rows, columns, baseline, ctx, good_direction=_good_direction(outcome)
+        )
 
         drivers: list[SignalsDriverResponse] = []
         for effect in effects:
