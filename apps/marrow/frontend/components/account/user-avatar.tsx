@@ -28,7 +28,7 @@ export function UserAvatar({ size = 'sm', className }: UserAvatarProps) {
   const account = useAccount()
   const cacheBust = useAvatarCacheBust()
   const data = account.data
-  const [failed, setFailed] = useState(false)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
   if (!data) {
     return (
@@ -45,16 +45,19 @@ export function UserAvatar({ size = 'sm', className }: UserAvatarProps) {
 
   const index = String(data.avatar_default_index).padStart(2, '0')
   const defaultSrc = `/avatars/defaults/${index}.svg`
+  const customSrc = data.has_custom_avatar
+    ? `/api/v1/account/avatar?v=${cacheBust.data ?? 0}`
+    : null
 
-  if (data.has_custom_avatar && !failed) {
+  if (customSrc && failedSrc !== customSrc) {
     return (
       <Image
-        src={`/api/v1/account/avatar?v=${cacheBust.data ?? 0}`}
+        src={customSrc}
         alt=""
         width={SIZE_PX[size]}
         height={SIZE_PX[size]}
         unoptimized
-        onError={() => setFailed(true)}
+        onError={() => setFailedSrc(customSrc)}
         className={cn('rounded-full border border-border object-cover', SIZE_CLASS[size], className)}
       />
     )
