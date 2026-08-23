@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-import datetime
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.diet_tag_catalog import DietTagCatalogService
 from app.services.entries import EntryService
-from app.services.feature_matrix import build_feature_matrix
 from app.services.medication_catalog import MedicationCatalogService
-from app.services.signals.service import SignalsService
 from app.services.supplement_catalog import SupplementCatalogService
 from app.services.symptom_catalog import SymptomCatalogService
 from app.services.trackers import TrackerService
@@ -31,12 +27,4 @@ class CacheWarmService:
         try:
             await EntryService(self.db).get_entry(today)
         except NotFoundError:
-            pass
-
-        start = today - datetime.timedelta(days=90)
-        await build_feature_matrix(self.db, start, today)
-
-        try:
-            await SignalsService(self.db).compute("overall", start, today)
-        except Exception:
             pass
