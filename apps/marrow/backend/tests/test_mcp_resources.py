@@ -29,6 +29,7 @@ def test_list_resources_returns_at_least_five() -> None:
     assert "marrow://schema/overview" in uris
     assert "marrow://schema/entries" in uris
     assert "marrow://schema/photos" in uris
+    assert "marrow://schema/hypotheses" in uris
     assert "marrow://catalog/lab-markers" in uris
     assert "marrow://catalog/dietary-ingredients" in uris
     assert "marrow://meta/embedding-sources" in uris

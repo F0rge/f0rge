@@ -127,6 +127,41 @@ entries 1──* photos *──1 meals 1──0..1 photo_analyses 1──* photo
 Only `photo_analyses.status = 'confirmed'` ingredients contribute to entry diet flags.
 """
 
+_HYPOTHESES_SCHEMA = """# Hypothesis scoreboard
+
+User-owned tracker rows. This is a log of questions and kill-tests, not a diagnosis.
+
+## `hypotheses`
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `id` | uuid | Primary key |
+| `user_id` | uuid | Owner (RLS-scoped) |
+| `slug` | text | Unique per user |
+| `title` | text | Display title |
+| `status` | text | `live` \\| `weakening` \\| `killed` \\| `parked` |
+| `layer` | int | `1`, `2`, or null |
+| `kill_test` | text | What would close this question |
+| `next_move` | text | Optional next action |
+| `last_evidence` | text | Latest note |
+| `cite` | text | Optional citation |
+| `sort_order` | int | List rank |
+| `created_at` / `updated_at` | timestamp | Audit timestamps |
+
+Killed rows are never hard-deleted.
+
+## `n_of_1_slots`
+
+At most one row per user (`UNIQUE(user_id)`).
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `change` | text | What changed |
+| `start` | date | Experiment start |
+| `watch_field` | text | Field being watched |
+| `stop_rule` | text | When to stop |
+"""
+
 
 def register_schema_resources(server: FastMCP) -> None:
     @server.resource(
@@ -167,3 +202,16 @@ def register_schema_resources(server: FastMCP) -> None:
     @instrument_resource("schema_photos")
     async def schema_photos() -> str:
         return _PHOTOS_SCHEMA
+
+    @server.resource(
+        "marrow://schema/hypotheses",
+        name="schema_hypotheses",
+        description=(
+            "Hypothesis scoreboard and n-of-1 slot columns. Load before listing "
+            "or updating tracked questions. This is a tracker, not a diagnosis."
+        ),
+        mime_type="text/markdown",
+    )
+    @instrument_resource("schema_hypotheses")
+    async def schema_hypotheses() -> str:
+        return _HYPOTHESES_SCHEMA
