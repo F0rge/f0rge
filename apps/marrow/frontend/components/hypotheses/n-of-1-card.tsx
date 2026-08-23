@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Button, Input } from '@f0rge/ui'
 import { handleMutationError } from '@f0rge/ui/api'
+import { TextInput } from '@f0rge/ui/forms'
 import { useNOf1, useUpdateNOf1 } from '@/lib/api/hooks'
 import type { NOf1Slot } from '@/lib/api/types'
 
@@ -83,7 +84,13 @@ export function NOf1Card() {
           }}
         >
           <Input required value={change} onChange={(e) => setChange(e.target.value)} placeholder="Change" />
-          <Input required type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+          <TextInput
+            required
+            label="Start"
+            type="date"
+            value={start}
+            onChange={(e) => setStart(e.currentTarget.value)}
+          />
           <Input
             required
             value={watchField}
