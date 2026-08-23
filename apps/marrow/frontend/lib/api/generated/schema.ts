@@ -1059,6 +1059,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hypotheses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Hypotheses */
+        get: operations["list_hypotheses_api_v1_hypotheses_get"];
+        put?: never;
+        /** Create Hypothesis */
+        post: operations["create_hypothesis_api_v1_hypotheses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hypotheses/n-of-1": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get N Of 1 */
+        get: operations["get_n_of_1_api_v1_hypotheses_n_of_1_get"];
+        /** Upsert N Of 1 */
+        put: operations["upsert_n_of_1_api_v1_hypotheses_n_of_1_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hypotheses/{hypothesis_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Hypothesis */
+        get: operations["get_hypothesis_api_v1_hypotheses__hypothesis_id__get"];
+        /** Update Hypothesis */
+        put: operations["update_hypothesis_api_v1_hypotheses__hypothesis_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/export/feature-matrix.csv": {
         parameters: {
             query?: never;
@@ -2840,6 +2894,94 @@ export interface components {
             /** Samples */
             samples: components["schemas"]["HealthMetricCreate"][];
         };
+        /** HypothesisCreate */
+        HypothesisCreate: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @default live
+             * @enum {string}
+             */
+            status: "live" | "weakening" | "killed" | "parked";
+            /** Layer */
+            layer?: (1 | 2) | null;
+            /** Kill Test */
+            kill_test?: string | null;
+            /** Next Move */
+            next_move?: string | null;
+            /** Last Evidence */
+            last_evidence?: string | null;
+            /** Cite */
+            cite?: string | null;
+            /**
+             * Sort Order
+             * @default 0
+             */
+            sort_order: number;
+        };
+        /** HypothesisResponse */
+        HypothesisResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "live" | "weakening" | "killed" | "parked";
+            /** Layer */
+            layer?: (1 | 2) | null;
+            /** Kill Test */
+            kill_test?: string | null;
+            /** Next Move */
+            next_move?: string | null;
+            /** Last Evidence */
+            last_evidence?: string | null;
+            /** Cite */
+            cite?: string | null;
+            /** Sort Order */
+            sort_order: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** HypothesisUpdate */
+        HypothesisUpdate: {
+            /** Slug */
+            slug?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Status */
+            status?: ("live" | "weakening" | "killed" | "parked") | null;
+            /** Layer */
+            layer?: (1 | 2) | null;
+            /** Kill Test */
+            kill_test?: string | null;
+            /** Next Move */
+            next_move?: string | null;
+            /** Last Evidence */
+            last_evidence?: string | null;
+            /** Cite */
+            cite?: string | null;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
         /** IncomingMealTagItem */
         IncomingMealTagItem: {
             /**
@@ -3294,6 +3436,49 @@ export interface components {
             reason?: string | null;
             /** Time */
             time?: string | null;
+        };
+        /** NOf1Response */
+        NOf1Response: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Change */
+            change: string;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** Watch Field */
+            watch_field: string;
+            /** Stop Rule */
+            stop_rule: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** NOf1Upsert */
+        NOf1Upsert: {
+            /** Change */
+            change: string;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** Watch Field */
+            watch_field: string;
+            /** Stop Rule */
+            stop_rule: string;
         };
         /** NotificationResponse */
         NotificationResponse: {
@@ -7053,6 +7238,210 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TreatmentLogResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_hypotheses_api_v1_hypotheses_get: {
+        parameters: {
+            query?: {
+                status?: ("live" | "weakening" | "killed" | "parked") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HypothesisResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_hypothesis_api_v1_hypotheses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HypothesisCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HypothesisResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_n_of_1_api_v1_hypotheses_n_of_1_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NOf1Response"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_n_of_1_api_v1_hypotheses_n_of_1_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NOf1Upsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NOf1Response"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hypothesis_api_v1_hypotheses__hypothesis_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hypothesis_id: string;
+            };
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HypothesisResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_hypothesis_api_v1_hypotheses__hypothesis_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hypothesis_id: string;
+            };
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HypothesisUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HypothesisResponse"];
                 };
             };
             /** @description Validation Error */
