@@ -138,3 +138,42 @@ async def test_verify_uses_hash_lookup_not_decrypt(async_db: AsyncSession) -> No
 
     assert access_token is not None
     assert access_token.client_id == expected_user_id
+
+
+def _route_paths(app) -> list[str]:
+    return [getattr(route, "path", "") or "" for route in app.routes]
+
+
+def test_http_app_does_not_advertise_oauth_discovery() -> None:
+    """Cursor ignores mcp.json Bearer headers if RFC 9728 metadata returns 200."""
+    from starlette.testclient import TestClient
+
+    from app.mcp.server import create_server
+
+    app = create_server().streamable_http_app()
+    assert not any("oauth-protected-resource" in path for path in _route_paths(app))
+    assert not any("oauth-authorization-server" in path for path in _route_paths(app))
+
+    client = TestClient(app)
+    metadata = client.get("/.well-known/oauth-protected-resource")
+    assert metadata.status_code == 404
+    as_meta = client.get("/.well-known/oauth-authorization-server")
+    assert as_meta.status_code == 404
+
+    unauth = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert unauth.status_code == 401
+    www = unauth.headers.get("www-authenticate", "")
+    assert "resource_metadata" not in www
