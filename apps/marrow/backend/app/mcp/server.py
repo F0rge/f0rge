@@ -14,18 +14,23 @@ from app.mcp.tools import register_tools
 def create_server() -> FastMCP:
     """Build the FastMCP server instance for the streamable-http transport.
 
-    The BearerTokenVerifier gates every request.
+    The BearerTokenVerifier gates every request. FastMCP requires AuthSettings
+    whenever token_verifier is set; issuer_url is unused placeholder metadata.
+    resource_server_url stays unset so we do not publish
+    /.well-known/oauth-protected-resource — Cursor treats a 200 there as
+    "use OAuth" and never sends the static Authorization header from mcp.json.
     """
     # FastMCP refuses token_verifier without auth settings. We don't run an
-    # OAuth flow — these URLs are metadata only, never resolved.
-    base = AnyHttpUrl(f"http://{settings.mcp_server_host}:{settings.mcp_server_port}")
+    # OAuth flow. issuer_url must be a syntactically valid URL; clients must
+    # not be told it is a resource server (that mounts RFC 9728 discovery).
+    issuer = AnyHttpUrl("https://mcp.marrow-health.com")
     return FastMCP(
         name="marrow",
         host=settings.mcp_server_host,
         port=settings.mcp_server_port,
         streamable_http_path="/mcp",
         token_verifier=BearerTokenVerifier(),
-        auth=AuthSettings(issuer_url=base, resource_server_url=base),
+        auth=AuthSettings(issuer_url=issuer, resource_server_url=None),
     )
 
 

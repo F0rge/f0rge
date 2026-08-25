@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, ApiError } from '@f0rge/ui/api'
+import { apiGet, ApiError } from '@f0rge/ui/api'
 import { formatLocalDate } from '@f0rge/ui'
 
 export function AppWarmup() {
@@ -12,8 +12,6 @@ export function AppWarmup() {
   useEffect(() => {
     if (warmed.current) return
     warmed.current = true
-
-    void apiPost('/cache/warm', {}).catch(() => {})
 
     const today = formatLocalDate(new Date())
 
