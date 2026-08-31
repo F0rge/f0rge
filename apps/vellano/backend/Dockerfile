@@ -13,6 +13,9 @@ COPY libs/backend/core/pyproject.toml /app/libs/backend/core/pyproject.toml
 COPY libs/backend/core/src /app/libs/backend/core/src
 COPY libs/backend/db/pyproject.toml /app/libs/backend/db/pyproject.toml
 COPY libs/backend/db/src /app/libs/backend/db/src
+# uv.lock records f0rge-testing even for --no-dev; `uv run` at start needs the path.
+COPY libs/backend/testing/pyproject.toml /app/libs/backend/testing/pyproject.toml
+COPY libs/backend/testing/src /app/libs/backend/testing/src
 RUN uv sync --frozen --no-dev
 
 COPY apps/vellano/backend/app ./app
