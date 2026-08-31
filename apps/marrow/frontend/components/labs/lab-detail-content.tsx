@@ -2,6 +2,7 @@
 
 import { Button } from '@f0rge/ui'
 import { cn } from '@f0rge/ui'
+import { LabAttachment } from './lab-attachment'
 import { MarkerSparkline } from './marker-sparkline'
 import type { Lab, LabType } from '@/lib/api/types'
 import { labFlagClass, statusPill } from '@/lib/ui/status'
@@ -89,10 +90,6 @@ export function LabDetailContent({
   onDelete,
   onEdit,
 }: LabDetailContentProps) {
-  const filename = lab.attachment_path
-    ? lab.attachment_path.split('/').pop() ?? lab.attachment_path
-    : null
-
   return (
     <div className="min-w-0 space-y-4 overflow-x-hidden">
       <div className="flex items-start justify-between gap-2">
@@ -114,11 +111,7 @@ export function LabDetailContent({
         <p className="break-words text-sm text-muted-foreground">{lab.notes}</p>
       )}
 
-      {filename && (
-        <div className="break-all text-xs text-muted-foreground">
-          Source: {filename}
-        </div>
-      )}
+      <LabAttachment lab={lab} />
 
       {lab.extraction_model && (
         <div className="break-words text-xs text-muted-foreground">

@@ -4,6 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut, apiDelete, apiPostForm } from '@f0rge/ui/api'
 import type { Lab, LabCreate, LabUpdate, LabMarkerCatalog, MarkerHistoryPoint, ExtractionResult } from '../types'
 
+export function labAttachmentSrc(labId: number, download = false): string {
+  const base = `/api/v1/labs/${labId}/attachment`
+  return download ? `${base}?download=true` : base
+}
+
 export function useLabs(filters?: { start_date?: string; end_date?: string; type?: string }) {
   const params = new URLSearchParams()
   if (filters?.start_date) params.set('start_date', filters.start_date)
