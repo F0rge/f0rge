@@ -27,7 +27,7 @@
     "@nxlv/python": "~22.2.1",
     "@playwright/test": "^1.52.0",
     "@types/react": "^19",
-    "nx": "~22.7.0",
+    "nx": "~23.1.2",
     "typescript": "^5"
   }
 }
