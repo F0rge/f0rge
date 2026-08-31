@@ -176,20 +176,19 @@ export function LabDetailContent({
         <p className="py-4 text-center text-sm text-muted-foreground">No markers recorded.</p>
       )}
 
-      <div className="flex gap-2 pt-2">
+      <div className="flex min-w-0 gap-2 pt-2">
         <Button
           variant="destructive"
-          size="sm"
           onClick={onDelete}
           disabled={deletePending}
-          className="mr-auto"
+          className="mr-auto h-11 min-h-11 min-w-0 px-4"
         >
           {confirmDelete ? 'Confirm delete' : 'Delete'}
         </Button>
         <Button
           variant="outline"
-          size="sm"
           onClick={onEdit}
+          className="h-11 min-h-11 min-w-0 px-4"
         >
           Edit
         </Button>
