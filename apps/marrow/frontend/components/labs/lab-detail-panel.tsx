@@ -65,18 +65,17 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
             translate: 'none',
             transform: 'none',
             animation: 'none',
-            zIndex: 60,
           }}
-          className="fixed z-[60] m-0 flex w-full max-w-none min-w-0 flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:max-w-none"
+          className="fixed m-0 flex w-full max-w-none min-w-0 flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:max-w-none"
         >
-          <div className="relative flex shrink-0 items-center justify-center pt-2">
+          <div className="relative z-10 flex h-11 shrink-0 items-center justify-center">
             <div className="h-1 w-10 rounded-full bg-border" aria-hidden />
             <DialogClose
               render={
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute top-0.5 right-1 size-11"
+                  className="absolute right-1 size-11"
                 />
               }
             >
