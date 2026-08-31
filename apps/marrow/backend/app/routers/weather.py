@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from app.dependencies.weather import get_weather_service
 from app.middleware.auth import get_current_session
 from app.schemas.weather import WeatherDailySummary, WeatherReadingResponse
-from app.services.weather import WeatherService, trigger_weather_fetch
+from app.services.weather import WeatherService
 
 router = APIRouter(
     prefix="/api/v1/weather",
@@ -17,8 +17,10 @@ router = APIRouter(
 
 
 @router.post("/fetch", response_model=WeatherReadingResponse)
-async def trigger_weather_fetch_endpoint():
-    return await trigger_weather_fetch()
+async def trigger_weather_fetch_endpoint(
+    service: WeatherService = Depends(get_weather_service),
+):
+    return await service.fetch_today()
 
 
 @router.get("/{date}", response_model=WeatherDailySummary)

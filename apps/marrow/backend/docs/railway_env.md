@@ -34,9 +34,10 @@ to `postgresql+asyncpg://`.
 ## Secrets to copy from Fly
 
 `JWT_SECRET`, `SETTINGS_ENCRYPTION_KEY`, `HEALTHTRACKER_APP_PASSWORD`,
-`HEALTHTRACKER_RO_PASSWORD`, `OPENROUTER_API_KEY`, `OPENWEATHERMAP_API_KEY`,
-`HEALTH_IMPORT_TOKEN`, APNS keys, `DEFAULT_STORAGE_USER_ID`, optional
-`SENTRY_DSN`.
+`HEALTHTRACKER_RO_PASSWORD`, `OPENROUTER_API_KEY`, `HEALTH_IMPORT_TOKEN`,
+APNS keys, `DEFAULT_STORAGE_USER_ID`, optional `SENTRY_DSN`.
+`OPENWEATHERMAP_API_KEY` is unused (weather is Open-Meteo, no key).
+`OPENWEATHERMAP_CITY` still sets the geocode city (default Luxembourg).
 
 ## Non-secret env
 

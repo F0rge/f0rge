@@ -15,8 +15,8 @@ def register_weather_tools(server: FastMCP) -> None:
     async def get_weather_for_entry(date: str, ctx: Context = None) -> Optional[dict[str, Any]]:
         """Return the daily weather snapshot for an entry date (YYYY-MM-DD).
 
-        Returns null when no readings exist for that date. Aggregates hourly
-        OpenWeatherMap samples (pressure, temperature, humidity). Use get_entry
+        Returns null when no readings exist for that date. Daily Open-Meteo
+        snapshot (pressure, temperature, humidity). Use get_entry
         for symptom scores on the same day; list_health_metrics for wearable data.
         """
         parsed = _validate_date(date, "date")
