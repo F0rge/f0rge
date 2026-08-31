@@ -34,7 +34,13 @@ class User(UUIDPkMixin, TimestampMixin, Base):
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role", native_enum=False, length=32),
+        Enum(
+            UserRole,
+            name="user_role",
+            native_enum=False,
+            length=32,
+            values_callable=lambda members: [member.value for member in members],
+        ),
         nullable=False,
     )
     is_disabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
