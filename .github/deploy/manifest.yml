@@ -49,8 +49,7 @@ components:
     health_url: https://tags.leo-figueiredo.com/
 
   # Vellano: own Railway project (not zoological-fulfillment / not Marrow develop).
-  # Develop only. CoS patches health_url after the Vellano project exists.
-  # Empty URL → planner skips smoke so Marrow develop is not used as a stand-in.
+  # Develop only. Custom hosts on leo-figueiredo.com (one-level SSL).
   vellano-backend:
     nx: vellano-backend
     target: railway
@@ -58,7 +57,7 @@ components:
     railway:
       role: api
       health_url:
-        develop: ""
+        develop: https://vellano-dev-api.leo-figueiredo.com/api/v1/health
 
   vellano-frontend:
     nx: vellano-frontend
@@ -67,4 +66,4 @@ components:
     railway:
       role: frontend
       health_url:
-        develop: ""
+        develop: https://vellano-dev.leo-figueiredo.com/

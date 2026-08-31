@@ -56,7 +56,7 @@ Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested 
 
 ## apps/vellano
 
-Furniture retailer back office. Nested [`apps/vellano/AGENTS.md`](apps/vellano/AGENTS.md). **Own Railway project** — do **not** add Vellano services, Postgres, or buckets to Marrow `zoological-fulfillment` or the Marrow develop environment. Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
+Furniture retailer back office. Nested [`apps/vellano/AGENTS.md`](apps/vellano/AGENTS.md). **Own Railway project** — do **not** add Vellano services, Postgres, or buckets to Marrow `zoological-fulfillment` or the Marrow develop environment. Develop hosts: https://vellano-dev.leo-figueiredo.com and https://vellano-dev-api.leo-figueiredo.com (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
 
 ## Branch workflow
 

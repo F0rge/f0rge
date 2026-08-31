@@ -7,7 +7,13 @@ from f0rge_core.handlers import register_exception_handlers
 from app.config import settings
 from app.routers import health
 
-app = FastAPI(title="Vellano API", version="0.1.0")
+app = FastAPI(
+    title="Vellano API",
+    version="0.1.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
 
 register_exception_handlers(app)
 

@@ -59,15 +59,15 @@ Signup/login is S1. S0 has `GET /api/v1/health` and a Carbon shell only.
 
 ## Railway
 
-**Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos.
+**Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.
 
-This PR is **repo config only**. CoS / Leo provisions the Vellano Railway project and services separately. Do not add `vellano-*` services to the Marrow project.
-
-- Config files: `apps/vellano/{backend,frontend}/railway.toml`
-- No Root Directory. Config File = that `railway.toml`
+- Project: `Vellano` (`c76d8df1-d839-454c-a94a-79b930deaf38`)
+- Environment: `develop` only (`7a8ce6f1-c514-4e5d-9c50-4b7918865321`)
+- Frontend: https://vellano-dev.leo-figueiredo.com
+- API: https://vellano-dev-api.leo-figueiredo.com (`/api/v1/health`, Swagger `/docs`)
+- Config files: `apps/vellano/{backend,frontend}/railway.toml` (no Root Directory)
 - `watchPatterns` = `apps/vellano/**` + libs actually imported
-- Manifest: `branches: [develop]` only. No production, no `main`, no custom DNS in S0
-- CoS patches `railway.health_url.develop` after the Vellano project exists
+- Manifest: `branches: [develop]` only. No production, no `main`
 
 ## Non-goals
 
