@@ -34,7 +34,12 @@ class EntryOrchestrator:
     async def _touch_catalogs(self, entry: Entry) -> None:
         supplement_keys = [s.strip() for s in (entry.supplements or "").split(",") if s.strip()]
         await SupplementCatalogService(self.db).touch(supplement_keys)
-        await SymptomCatalogService(self.db).touch(list((entry.symptoms_json or {}).keys()))
+        symptom_keys = set((entry.symptoms_json or {}).keys())
+        for event in entry.symptom_events_json or []:
+            key = event.get("key") if isinstance(event, dict) else None
+            if key:
+                symptom_keys.add(key)
+        await SymptomCatalogService(self.db).touch(list(symptom_keys))
         await MedicationCatalogService(self.db).touch(
             [m["key"] for m in entry.medications_json if m.get("key")]
         )

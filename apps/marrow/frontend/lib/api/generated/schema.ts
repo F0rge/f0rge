@@ -2366,6 +2366,8 @@ export interface components {
             } | null;
             /** Medications */
             medications?: components["schemas"]["MedicationIntake"][];
+            /** Symptom Events */
+            symptom_events?: components["schemas"]["SymptomEvent"][];
         };
         /** EntryResponse */
         EntryResponse: {
@@ -2427,6 +2429,8 @@ export interface components {
             };
             /** Medications */
             medications?: components["schemas"]["MedicationIntake"][];
+            /** Symptom Events */
+            symptom_events?: components["schemas"]["SymptomEvent"][];
             /**
              * Photos
              * @default []
@@ -2511,6 +2515,8 @@ export interface components {
             } | null;
             /** Medications */
             medications?: components["schemas"]["MedicationIntake"][] | null;
+            /** Symptom Events */
+            symptom_events?: components["schemas"]["SymptomEvent"][] | null;
         };
         /**
          * ExternalTokenResponse
@@ -3922,6 +3928,15 @@ export interface components {
             archived?: boolean | null;
             /** Sort Order */
             sort_order?: number | null;
+        };
+        /** SymptomEvent */
+        SymptomEvent: {
+            /** Key */
+            key: string;
+            /** Severity */
+            severity: number;
+            /** Time */
+            time?: string | null;
         };
         /** SymptomOrderRequest */
         SymptomOrderRequest: {

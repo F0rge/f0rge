@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useSupplementCatalog, useSymptomCatalog, useUserSettings } from '@/lib/api/hooks'
 import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
-import type { Entry, EntryCreate, MedicationIntake, StoolStatus } from '@/lib/api/types'
+import type { Entry, EntryCreate, MedicationIntake, StoolStatus, SymptomEvent } from '@/lib/api/types'
 import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, loadCollapsedCards, saveCollapsedCards, toggleCollapsedCard, type CardId, type CollapseId } from '@/lib/checkin/card-order'
 import { LG_DESKTOP_QUERY, useMediaQuery } from '@f0rge/ui'
 
@@ -129,6 +129,7 @@ export function useCheckinBoardState({
   const [symptomsTouched, setSymptomsTouched] = useState(false)
   const [medications, setMedications] = useState<MedicationIntake[]>([])
   const [symptomsJson, setSymptomsJson] = useState<Record<string, number>>({})
+  const [symptomEvents, setSymptomEvents] = useState<SymptomEvent[]>([])
   const [sick, setSick] = useState(false)
   const [hotShower, setHotShower] = useState(false)
   const [notes, setNotes] = useState('')
@@ -168,6 +169,10 @@ export function useCheckinBoardState({
   )
   const setMedicationsDirty = useCallback(
     (v: MedicationIntake[]) => { markDirty(); setMedications(v) },
+    [markDirty],
+  )
+  const setSymptomEventsDirty = useCallback(
+    (v: SymptomEvent[]) => { markDirty(); setSymptomEvents(v) },
     [markDirty],
   )
   const setAlcoholUnitsDirty = useCallback((v: number) => { markDirty(); setAlcoholUnits(v) }, [markDirty])
@@ -235,6 +240,7 @@ export function useCheckinBoardState({
       setSupplementsTouched(true)
       setMedications(existingEntry.medications ?? [])
       setSymptomsJson(existingEntry.symptoms_json ?? {})
+      setSymptomEvents(existingEntry.symptom_events ?? [])
       setSymptomsTouched(true)
       setSick(existingEntry.sick)
       setHotShower(existingEntry.hot_shower ?? false)
@@ -272,10 +278,11 @@ export function useCheckinBoardState({
     caffeine_servings: caffeineServings,
     symptoms_json: symptomsJson,
     medications,
+    symptom_events: symptomEvents,
   }), [
     date, overall, bloating, stoolStatus, bristolType, stoolCompleteness,
     sleepQuality, stress, dietRisk, supplements, sick, hotShower, notes,
-    alcoholUnits, caffeineServings, symptomsJson, medications,
+    alcoholUnits, caffeineServings, symptomsJson, medications, symptomEvents,
   ])
 
   const autosave = useAutosaveEntry({
@@ -368,6 +375,8 @@ export function useCheckinBoardState({
     setMedicationsDirty,
     symptomsJson,
     setSymptomsJsonDirty,
+    symptomEvents,
+    setSymptomEventsDirty,
     alcoholUnits,
     setAlcoholUnitsDirty,
     caffeineServings,

@@ -46,6 +46,12 @@ export interface MedicationIntake {
   time?: string // wall-clock "HH:MM", stamped client-side at log time
 }
 
+export interface SymptomEvent {
+  key: string
+  severity: number
+  time?: string // wall-clock "HH:MM", stamped client-side at log time
+}
+
 export interface Entry {
   id: number
   date: string // YYYY-MM-DD
@@ -75,6 +81,7 @@ export interface Entry {
   caffeine_servings: number | null
   symptoms_json: Record<string, number> | null
   medications: MedicationIntake[]
+  symptom_events: SymptomEvent[]
   photos: Photo[]
   effective_flags: string[]
   photo_derived_flags: string[]
@@ -107,6 +114,7 @@ export interface EntryCreate {
   caffeine_servings?: number | null
   symptoms_json?: Record<string, number>
   medications?: MedicationIntake[]
+  symptom_events?: SymptomEvent[]
 }
 
 export interface PhotoIngredient {
