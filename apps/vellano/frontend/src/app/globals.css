@@ -4,3 +4,64 @@ body {
   height: 100%;
   margin: 0;
 }
+
+/* Carbon UIShell: SideNav must be a sibling of Content (not nested in Header)
+   for layout offset. Carbon 11 does not always apply margin-left automatically. */
+.vellano-shell .cds--content {
+  margin-top: 3rem;
+  margin-left: 16rem;
+  min-height: calc(100vh - 3rem);
+  padding: 2rem;
+  transition: margin-left 110ms cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+
+.vellano-shell[data-nav-expanded="false"] .cds--content {
+  margin-left: 3rem;
+}
+
+@media (max-width: 65rem) {
+  .vellano-shell .cds--content,
+  .vellano-shell[data-nav-expanded="false"] .cds--content {
+    margin-left: 0;
+  }
+}
+
+.vellano-header-user {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 1rem;
+  color: var(--cds-text-on-color, #fff);
+  font-size: 0.875rem;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vellano-shell-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.vellano-login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background: var(--cds-background, #f4f4f4);
+}
+
+.vellano-login-card {
+  width: 100%;
+  max-width: 24rem;
+  padding: 2rem;
+  background: var(--cds-layer-01, #fff);
+  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+}
+
+.vellano-forbidden {
+  max-width: 32rem;
+}
