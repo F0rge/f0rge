@@ -1,17 +1,32 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
+import os
 import re
 from typing import List, Optional
 
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.labs import LabCRUD
+from app.http_responses import file_response
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from app.schemas.lab import LabCreate, LabUpdate, LabMarkerCreate
+from app.services import object_storage
 from f0rge_db.tenant import current_user_id
+
+LAB_ATTACHMENT_CACHE_CONTROL = "private, max-age=240"
+
+_MIME_BY_EXT = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
 
 _ABNORMAL_REF_RE = re.compile(
     r"\b(positive|elevated|reactive|abnormal|class\s*[>=]\s*\d|high|present)\b",
@@ -129,6 +144,28 @@ class LabsService:
     async def delete_lab(self, lab_id: int) -> None:
         lab = await self.get_lab(lab_id)
         await self.crud.delete_and_commit(lab)
+
+    async def serve_lab_attachment(self, lab_id: int, download: bool = False) -> Response:
+        lab = await self.get_lab(lab_id)
+        if not lab.attachment_path:
+            raise NotFoundError("Lab attachment not found.")
+        try:
+            data = await asyncio.to_thread(object_storage.read_bytes, lab.attachment_path)
+        except FileNotFoundError as exc:
+            raise NotFoundError("Lab attachment not found.") from exc
+        media_type = _MIME_BY_EXT.get(
+            os.path.splitext(lab.attachment_path)[1].lower(),
+            "application/octet-stream",
+        )
+        filename = os.path.basename(lab.attachment_path)
+        disposition = "attachment" if download else "inline"
+        content_disposition = f'{disposition}; filename="{filename}"'
+        return file_response(
+            data,
+            media_type=media_type,
+            cache_control=LAB_ATTACHMENT_CACHE_CONTROL,
+            content_disposition=content_disposition,
+        )
 
     async def _insert_marker(self, lab_id: int, data: LabMarkerCreate) -> None:
         catalog_id = data.catalog_id
