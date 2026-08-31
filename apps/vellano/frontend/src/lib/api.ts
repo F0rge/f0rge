@@ -144,3 +144,52 @@ export const USER_ROLES: { value: UserRole; label: string }[] = [
   { value: "till", label: "Till" },
   { value: "books", label: "Books" },
 ];
+
+export type LocationType = "warehouse" | "showroom";
+
+export type Location = {
+  id: string;
+  name: string;
+  type: LocationType;
+  is_archived: boolean;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateLocationPayload = {
+  name: string;
+  type: LocationType;
+};
+
+export type UpdateLocationPayload = {
+  name?: string;
+  is_archived?: boolean;
+};
+
+export function listLocations(): Promise<Location[]> {
+  return apiFetch<Location[]>("/locations");
+}
+
+export function createLocation(payload: CreateLocationPayload): Promise<Location> {
+  return apiFetch<Location>("/locations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateLocation(id: string, payload: UpdateLocationPayload): Promise<Location> {
+  return apiFetch<Location>(`/locations/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export const LOCATION_TYPES: { value: LocationType; label: string }[] = [
+  { value: "warehouse", label: "Warehouse" },
+  { value: "showroom", label: "Showroom" },
+];
+
+export function isActiveLocation(loc: Location): boolean {
+  return !loc.is_archived;
+}

@@ -16,6 +16,7 @@ import {
 import {
   Finance,
   Home,
+  Location,
   Logout,
   Product,
   Purchase,
@@ -32,6 +33,7 @@ import { SIDE_NAV_ITEMS } from "@/lib/nav";
 
 const ICONS = {
   "/": Home,
+  "/locations": Location,
   "/stock": Product,
   "/purchase-orders": Purchase,
   "/ledger": Finance,

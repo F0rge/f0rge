@@ -10,6 +10,7 @@ from app.database import get_db
 from app.middleware.auth import get_current_user_id
 from app.models.user import UserRole
 from app.services.auth import AuthService
+from app.services.locations import LocationService
 from app.services.users import BootstrapService, ProfileService, UserService
 
 
@@ -29,6 +30,10 @@ def get_bootstrap_service(db: AsyncSession = Depends(get_db)) -> BootstrapServic
     return BootstrapService(db)
 
 
+def get_location_service(db: AsyncSession = Depends(get_db)) -> LocationService:
+    return LocationService(db)
+
+
 async def require_owner(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
@@ -38,5 +43,18 @@ async def require_owner(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner access required",
+        )
+    return user_id
+
+
+async def require_location_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    user = await UserCRUD(db).get_by_id(user_id)
+    if user is None or user.role not in (UserRole.OWNER, UserRole.WAREHOUSE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner or warehouse access required",
         )
     return user_id
