@@ -50,8 +50,9 @@ class EntryOrchestrator:
             entry = await self.entry_service.stage_create(body)
             await self._touch_catalogs(entry)
             await sync_seed_tracker_log_from_entry(self.db, entry)
-        await attach_weather_for_date(self.db, entry.date)
-        await invalidate_user_insights_cache(entry.user_id, entry.date)
+        user_id, entry_date = entry.user_id, entry.date
+        await attach_weather_for_date(self.db, entry_date)
+        await invalidate_user_insights_cache(user_id, entry_date)
         # Unlike every other write path, this one genuinely needs a refresh:
         # ``entry`` was *constructed*, never loaded via a SELECT, so the
         # mapper's ``lazy="selectin"`` companion query for ``photos`` (which
@@ -67,6 +68,7 @@ class EntryOrchestrator:
             entry = await self.entry_service.stage_update(date, body)
             await self._touch_catalogs(entry)
             await sync_seed_tracker_log_from_entry(self.db, entry)
-        await attach_weather_for_date(self.db, entry.date)
-        await invalidate_user_insights_cache(entry.user_id, entry.date)
+        user_id, entry_date = entry.user_id, entry.date
+        await attach_weather_for_date(self.db, entry_date)
+        await invalidate_user_insights_cache(user_id, entry_date)
         return await _build_response(self.db, entry)

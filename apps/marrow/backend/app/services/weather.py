@@ -110,13 +110,13 @@ class WeatherService:
 
 
 async def attach_weather_for_date(db: AsyncSession, target_date: datetime.date) -> None:
-    """Best-effort daily weather after a check-in write. Never raises."""
+    """Best-effort daily weather after a check-in write. Never raises.
+
+    Does not roll back the session: a failed fetch happens before any write, and
+    ``commit_refresh`` already rolls back its own unit of work. A session
+    rollback here would expire the just-committed entry and break the caller.
+    """
     try:
         await WeatherService(db).ensure_for_date(target_date)
     except Exception:
         logger.exception("Weather attach failed for %s; check-in is unchanged", target_date)
-        try:
-            if db.in_transaction():
-                await db.rollback()
-        except Exception:
-            logger.debug("Weather rollback after attach failure also failed", exc_info=True)
