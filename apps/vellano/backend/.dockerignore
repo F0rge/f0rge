@@ -1,0 +1,25 @@
+# Repo-root build context. Whitelist this app + the libs it actually imports.
+*
+!apps
+apps/*
+!apps/vellano
+apps/vellano/*
+!apps/vellano/backend
+!libs
+libs/*
+!libs/backend
+libs/backend/*
+!libs/backend/core
+!libs/backend/db
+
+**/.venv
+apps/vellano/backend/tests
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.env
+**/.env.local

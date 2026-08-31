@@ -22,6 +22,9 @@ apps/marrow/backend/scripts/import_labs.log
 node_modules/
 .next/
 apps/marrow/frontend/.env.local
+apps/vellano/backend/.env
+apps/vellano/frontend/.env.local
+apps/vellano/frontend/.superdesign/tmp/
 
 # OS
 .DS_Store

@@ -5,7 +5,10 @@ Single source of truth for **which Nx projects deploy where**. The orchestrator
 affected`, and delegates to Railway smoke or Coolify executors.
 
 Marrow ships via **Railway GitHub autodeploy**; Actions only plans + smokes.
-dk tag-printer remains on Coolify (Pi).
+dk tag-printer remains on Coolify (Pi). Vellano is a **separate Railway
+project** (not Marrow `zoological-fulfillment` / not Marrow develop),
+**develop only**. Hosts: `vellano-dev.leo-figueiredo.com` /
+`vellano-dev-api.leo-figueiredo.com` (Swagger at `/docs`).
 
 ## Add app #3
 

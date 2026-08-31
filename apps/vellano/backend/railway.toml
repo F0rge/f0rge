@@ -1,0 +1,21 @@
+# Config-as-code for vellano-api in the *Vellano* Railway project
+# (not Marrow zoological-fulfillment / not Marrow develop).
+# Point that service's Config File path here. Do NOT set Root Directory.
+# CoS provisions the Vellano project + services separately; this file is repo config only.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/vellano/backend/Dockerfile"
+watchPatterns = [
+  "apps/vellano/**",
+  "libs/backend/core/**",
+  "libs/backend/db/**",
+]
+
+[deploy]
+startCommand = "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
+preDeployCommand = "/bin/sh -c 'DATABASE_URL=\"${MIGRATION_DATABASE_URL:-$DATABASE_URL}\" uv run alembic upgrade head'"
+healthcheckPath = "/api/v1/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

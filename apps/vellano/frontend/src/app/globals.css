@@ -1,0 +1,6 @@
+/* IBM Carbon is the visual system. Do not add Tailwind or @f0rge/ui skins. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
