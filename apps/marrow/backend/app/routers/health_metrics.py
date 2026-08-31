@@ -12,7 +12,7 @@ from app.schemas.health_metrics import (
     HealthMetricResponse,
     HealthSamplesPayload,
 )
-from app.services.health_metrics import HealthMetricsService
+from app.services.health_metrics import HEALTH_METRICS_LIST_PAGE_SIZE, HealthMetricsService
 
 router = APIRouter(
     prefix="/api/v1/health-metrics",
@@ -50,10 +50,11 @@ async def ingest_health_samples(
 async def list_health_metrics(
     start: datetime.date,
     end: datetime.date,
-    limit: int = Query(default=100, ge=1, le=100),
+    limit: int = Query(HEALTH_METRICS_LIST_PAGE_SIZE, ge=1, le=HEALTH_METRICS_LIST_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
     service: HealthMetricsService = Depends(get_health_metrics_service),
 ):
-    return await service.list_range(start, end, limit)
+    return await service.list_range(start, end, limit, offset)
 
 
 @router.get(

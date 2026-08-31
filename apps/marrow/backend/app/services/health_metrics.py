@@ -4,7 +4,7 @@ import datetime
 import json
 import logging
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,7 @@ from app.services.health_import import parse_health_auto_export
 from f0rge_db.tenant import apply_session_user_id, current_user_id
 
 DEFAULT_SAMPLE_SOURCE = "ios_healthkit"
+HEALTH_METRICS_LIST_PAGE_SIZE = 100
 _MAX_RANGE_DAYS = 366
 
 _logger = logging.getLogger("health_import_debug")
@@ -114,43 +115,34 @@ class HealthMetricsService:
         """
         user_id = current_user_id()
         now = datetime.datetime.utcnow()
+        pending: list[tuple[HealthMetricCreate, str, dict[str, Any]]] = []
+        for sample in samples:
+            source = _resolve_source(sample.source)
+            fields = sample.model_dump(
+                exclude={"date", "source"}, exclude_unset=True, exclude_none=True
+            )
+            if fields:
+                pending.append((sample, source, fields))
+        if not pending:
+            raise ValidationError("each sample must include at least one metric value")
         async with unit_of_work(self.db):
-            for sample in samples:
-                source = _resolve_source(sample.source)
-                fields = sample.model_dump(
-                    exclude={"date", "source"}, exclude_unset=True, exclude_none=True
+            for sample, source, fields in pending:
+                stmt = pg_insert(HealthMetric).values(
+                    user_id=user_id,
+                    date=sample.date,
+                    source=source,
+                    **fields,
                 )
-                if not fields and source == "manual_import":
-                    raise ValidationError(
-                        f"{sample.date.isoformat()} has no recognized health metrics"
-                    )
-                if not fields:
-                    stmt = (
-                        pg_insert(HealthMetric)
-                        .values(
-                            user_id=user_id,
-                            date=sample.date,
-                            source=source,
-                        )
-                        .on_conflict_do_nothing(constraint="uq_health_metrics_user_id_date")
-                    )
-                else:
-                    stmt = pg_insert(HealthMetric).values(
-                        user_id=user_id,
-                        date=sample.date,
-                        source=source,
-                        **fields,
-                    )
-                    set_ = {name: getattr(stmt.excluded, name) for name in fields}
-                    set_["source"] = stmt.excluded.source
-                    set_["updated_at"] = now
-                    stmt = stmt.on_conflict_do_update(
-                        constraint="uq_health_metrics_user_id_date", set_=set_
-                    )
+                set_ = {name: getattr(stmt.excluded, name) for name in fields}
+                set_["source"] = stmt.excluded.source
+                set_["updated_at"] = now
+                stmt = stmt.on_conflict_do_update(
+                    constraint="uq_health_metrics_user_id_date", set_=set_
+                )
                 await self.db.execute(stmt)
         await _invalidate_health_caches(user_id)
         return HealthImportResponse(
-            status="ok", dates_upserted=len({sample.date for sample in samples})
+            status="ok", dates_upserted=len({sample.date for sample, _, _ in pending})
         )
 
     async def get_health_metric(self, date: datetime.date) -> HealthMetric:
@@ -160,13 +152,13 @@ class HealthMetricsService:
         return metric
 
     async def list_range(
-        self, start: datetime.date, end: datetime.date, limit: int
+        self, start: datetime.date, end: datetime.date, limit: int, offset: int
     ) -> list[HealthMetric]:
         if start > end:
             raise ValidationError("start must be on or before end")
         if (end - start).days > _MAX_RANGE_DAYS:
             raise ValidationError(f"range cannot exceed {_MAX_RANGE_DAYS} days")
-        return await self.crud.list_in_range(start, end, limit)
+        return await self.crud.list_in_range(start, end, limit, offset)
 
 
 def _resolve_source(source: Optional[str]) -> str:

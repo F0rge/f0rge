@@ -23,10 +23,28 @@ export function useHealthMetrics(date: string) {
   })
 }
 
+export const HEALTH_METRICS_LIST_PAGE_SIZE = 100
+
 export function useHealthMetricsRange(start: string, end: string) {
   return useQuery<HealthMetricResponse[]>({
     queryKey: ['health-metrics', 'range', start, end],
-    queryFn: () => apiGet(`/health-metrics/range?start=${start}&end=${end}&limit=100`),
+    queryFn: async () => {
+      const all: HealthMetricResponse[] = []
+      let offset = 0
+      while (true) {
+        const params = new URLSearchParams({
+          start,
+          end,
+          limit: String(HEALTH_METRICS_LIST_PAGE_SIZE),
+          offset: String(offset),
+        })
+        const page = (await apiGet(`/health-metrics/range?${params}`)) as HealthMetricResponse[]
+        all.push(...page)
+        if (page.length < HEALTH_METRICS_LIST_PAGE_SIZE) break
+        offset += HEALTH_METRICS_LIST_PAGE_SIZE
+      }
+      return all
+    },
     enabled: !!start && !!end,
   })
 }

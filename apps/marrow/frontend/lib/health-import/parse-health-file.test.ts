@@ -41,11 +41,21 @@ describe('parseHealthImportText', () => {
     expect(result.ok).toBe(false)
   })
 
-  it('rejects a date-only row with no metrics', () => {
-    const result = parseHealthImportText('date,notes\n2026-08-01,oops\n', 'empty.csv')
+  it('rejects date-only rows with no metric values', () => {
+    const result = parseHealthImportText('date\n2026-08-01\n', 'empty.csv')
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.error).toMatch(/no recognized metrics/i)
+    expect(result.error).toMatch(/recognized metric/i)
+  })
+
+  it('rejects unrecognized metric headers', () => {
+    const result = parseHealthImportText(
+      'date,calories\n2026-08-01,2100\n',
+      'unknown.csv',
+    )
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toMatch(/recognized metric/i)
   })
 
   it('accepts spaced headers like Sleep Hours', () => {
@@ -53,5 +63,16 @@ describe('parseHealthImportText', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.samples[0]).toEqual({ date: '2026-08-04', sleep_hours: 7.25 })
+  })
+
+  it('skips empty-metric rows when others have values', () => {
+    const csv = `date,sleep_hours
+2026-08-01,
+2026-08-02,7.5
+`
+    const result = parseHealthImportText(csv, 'mixed.csv')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.samples).toEqual([{ date: '2026-08-02', sleep_hours: 7.5 }])
   })
 })

@@ -25,7 +25,7 @@ class HealthMetricsCRUD(BaseCRUD):
         return await self.get_by_date_owned(date)
 
     async def list_in_range(
-        self, start: datetime.date, end: datetime.date, limit: int
+        self, start: datetime.date, end: datetime.date, limit: int, offset: int
     ) -> list[HealthMetric]:
         stmt = (
             select(HealthMetric)
@@ -35,5 +35,6 @@ class HealthMetricsCRUD(BaseCRUD):
             )
             .order_by(HealthMetric.date.desc())
             .limit(limit)
+            .offset(offset)
         )
         return list((await self.db.execute(stmt)).scalars().all())

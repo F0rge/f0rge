@@ -5638,6 +5638,7 @@ export interface operations {
                 start: string;
                 end: string;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;

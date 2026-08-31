@@ -85,20 +85,19 @@ function parseJson(text: string): ParseHealthFileResult {
   }
 
   const samples: HealthMetricSample[] = []
+  let skippedEmpty = false
   for (const [index, row] of rows.entries()) {
     const sample = normalizeRow(row)
     if (sample == null) {
       return { ok: false, error: `Row ${index + 1} is missing a valid date (YYYY-MM-DD).` }
     }
-    if (!hasMetrics(sample)) {
-      return {
-        ok: false,
-        error: `Row ${index + 1} has a date but no recognized metrics. Use headers like sleep_hours, hrv_mean, or steps.`,
-      }
+    if (!hasMetricFields(sample)) {
+      skippedEmpty = true
+      continue
     }
     samples.push(sample)
   }
-  return finish(samples)
+  return finish(samples, skippedEmpty)
 }
 
 function parseCsv(text: string): ParseHealthFileResult {
@@ -110,6 +109,7 @@ function parseCsv(text: string): ParseHealthFileResult {
   if (dateIdx < 0) return { ok: false, error: 'CSV must include a date column.' }
 
   const samples: HealthMetricSample[] = []
+  let skippedEmpty = false
   for (let i = 1; i < lines.length; i += 1) {
     const cols = lines[i].split(',').map((c) => c.trim())
     const raw: Record<string, string> = {}
@@ -120,19 +120,26 @@ function parseCsv(text: string): ParseHealthFileResult {
     if (sample == null) {
       return { ok: false, error: `Row ${i + 1} is missing a valid date (YYYY-MM-DD).` }
     }
-    if (!hasMetrics(sample)) {
-      return {
-        ok: false,
-        error: `Row ${i + 1} has a date but no recognized metrics. Use headers like sleep_hours, hrv_mean, or steps.`,
-      }
+    if (!hasMetricFields(sample)) {
+      skippedEmpty = true
+      continue
     }
     samples.push(sample)
   }
-  return finish(samples)
+  return finish(samples, skippedEmpty)
 }
 
-function finish(samples: HealthMetricSample[]): ParseHealthFileResult {
-  if (samples.length === 0) return { ok: false, error: 'No daily rows found.' }
+function finish(samples: HealthMetricSample[], skippedEmpty = false): ParseHealthFileResult {
+  if (samples.length === 0) {
+    if (skippedEmpty) {
+      return {
+        ok: false,
+        error:
+          'No recognized metric values. Use headers from the CSV template (sleep_hours, hrv_mean, resting_hr, steps, ...).',
+      }
+    }
+    return { ok: false, error: 'No daily rows found.' }
+  }
   return { ok: true, samples }
 }
 
@@ -157,7 +164,7 @@ function normalizeRow(row: unknown): HealthMetricSample | null {
   return sample
 }
 
-function hasMetrics(sample: HealthMetricSample): boolean {
+function hasMetricFields(sample: HealthMetricSample): boolean {
   return Object.keys(sample).some((key) => key !== 'date' && key !== 'source')
 }
 
