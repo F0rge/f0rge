@@ -47,6 +47,8 @@ function useCreateEntrySilent(date: string) {
       queryClient.setQueryData(['entry', date], serverEntry)
       // Still refresh the list so history view updates.
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['weather'] })
+      queryClient.invalidateQueries({ queryKey: ['enriched'] })
       invalidateSignals(queryClient)
     },
   })
@@ -61,6 +63,8 @@ function useUpdateEntrySilent(date: string) {
     onSuccess: (serverEntry: Entry) => {
       queryClient.setQueryData(['entry', date], serverEntry)
       queryClient.invalidateQueries({ queryKey: ['entries'] })
+      queryClient.invalidateQueries({ queryKey: ['weather'] })
+      queryClient.invalidateQueries({ queryKey: ['enriched'] })
       invalidateSignals(queryClient)
     },
   })

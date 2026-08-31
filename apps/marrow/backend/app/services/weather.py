@@ -1,104 +1,28 @@
+"""Daily weather attach via Open-Meteo (no API key)."""
+
 from __future__ import annotations
 
-import asyncio
 import datetime
 import logging
 from typing import Optional
 
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crud.weather import WeatherCRUD
-from app.database import async_session_maker
 from f0rge_core.exceptions import ExternalServiceError, NotFoundError
-from app.models.user import default_user_id
 from app.models.weather import WeatherReading
 from app.schemas.weather import WeatherDailySummary
-from f0rge_db.tenant import apply_session_user_id
+from app.services.open_meteo import fetch_open_meteo_day
+from app.utils.dates import local_today
+from f0rge_db.tenant import current_user_id
 
 logger = logging.getLogger(__name__)
 
 
-async def fetch_and_store_weather() -> Optional[WeatherReading]:
-    """Fetch current weather from OpenWeatherMap and store it.
-
-    Uses async httpx and its own async SQLAlchemy session — this runs from the
-    background loop (no request context to borrow a session from).
-    Returns the reading or None if the hour was already recorded or the fetch failed.
-    """
-    api_key = settings.openweathermap_api_key
-    city = settings.openweathermap_city
-    if not api_key:
-        logger.warning("No OpenWeatherMap API key configured, skipping fetch")
-        return None
-
-    url = "https://api.openweathermap.org/data/2.5/weather"
-    params = {"q": city, "appid": api_key, "units": "metric"}
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception:
-        logger.exception("Failed to fetch weather data")
-        return None
-
-    now = datetime.datetime.utcnow()
-    truncated = now.replace(minute=0, second=0, microsecond=0)
-
-    try:
-        async with async_session_maker() as db:
-            await apply_session_user_id(db, default_user_id())
-            crud = WeatherCRUD(db)
-            existing = await crud.get_by_timestamp(truncated)
-
-            if existing:
-                logger.debug("Weather reading for %s already exists, skipping", truncated)
-                return existing
-
-            weather_main = None
-            if data.get("weather") and len(data["weather"]) > 0:
-                weather_main = data["weather"][0].get("main")
-
-            main = data.get("main", {})
-            reading = WeatherReading(
-                timestamp=truncated,
-                date=truncated.date(),
-                temperature_c=main.get("temp", 0.0),
-                humidity_pct=main.get("humidity", 0.0),
-                pressure_hpa=main.get("pressure", 0.0),
-                weather_main=weather_main,
-            )
-            crud.add(reading)
-            reading = await crud.commit_refresh(reading)
-            logger.info("Stored weather reading for %s", truncated)
-            return reading
-    except Exception:
-        logger.exception("Failed to store weather reading")
-        return None
-
-
-async def trigger_weather_fetch() -> WeatherReading:
-    """Fetch and store weather; raise ExternalServiceError on failure."""
-    reading = await fetch_and_store_weather()
-    if reading is None:
-        raise ExternalServiceError("Failed to fetch weather data")
-    return reading
-
-
-async def weather_background_loop() -> None:
-    """Run weather fetch every hour in a background task."""
-    while True:
-        try:
-            await fetch_and_store_weather()
-        except Exception:
-            logger.exception("Error in weather background loop")
-        await asyncio.sleep(3600)
-
-
 class WeatherService:
+    """One daily Open-Meteo snapshot per user+date, on check-in."""
+
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.crud = WeatherCRUD(db)
@@ -117,7 +41,6 @@ class WeatherService:
         temp_mean = sum(temps) / len(temps)
         humidity_mean = sum(humidities) / len(humidities)
 
-        # Compute pressure delta vs yesterday
         yesterday = date - datetime.timedelta(days=1)
         yesterday_readings = await self.crud.list_by_date(yesterday)
 
@@ -146,3 +69,54 @@ class WeatherService:
         if summary is None:
             raise NotFoundError(f"No weather data for {date}")
         return summary
+
+    async def ensure_for_date(self, target_date: datetime.date) -> Optional[WeatherReading]:
+        """Fetch and store one daily reading if this user+date has none."""
+        if not settings.weather_fetch_enabled:
+            return None
+
+        existing = await self.crud.list_by_date(target_date)
+        if existing:
+            return existing[0]
+
+        user_id = current_user_id()
+        if user_id is None:
+            logger.warning("Weather attach skipped: no current user")
+            return None
+
+        day = await fetch_open_meteo_day(target_date)
+        if day is None:
+            logger.warning("Open-Meteo returned no data for %s", target_date)
+            return None
+
+        reading = WeatherReading(
+            user_id=user_id,
+            timestamp=datetime.datetime.combine(target_date, datetime.time(12, 0)),
+            date=target_date,
+            temperature_c=round(day.temp_mean, 2),
+            humidity_pct=round(day.humidity_mean, 2),
+            pressure_hpa=round(day.pressure_mean, 2),
+            weather_main=day.weather_main,
+        )
+        self.crud.add(reading)
+        return await self.crud.commit_refresh(reading)
+
+    async def fetch_today(self) -> WeatherReading:
+        """Settings Fetch Now: store today's snapshot for the current user."""
+        reading = await self.ensure_for_date(local_today())
+        if reading is None:
+            raise ExternalServiceError("Failed to fetch weather data")
+        return reading
+
+
+async def attach_weather_for_date(db: AsyncSession, target_date: datetime.date) -> None:
+    """Best-effort daily weather after a check-in write. Never raises."""
+    try:
+        await WeatherService(db).ensure_for_date(target_date)
+    except Exception:
+        logger.exception("Weather attach failed for %s; check-in is unchanged", target_date)
+        try:
+            if db.in_transaction():
+                await db.rollback()
+        except Exception:
+            logger.debug("Weather rollback after attach failure also failed", exc_info=True)

@@ -25,6 +25,7 @@ from app.services.entries import _photo_response, get_or_create_entry
 from app.services.ingredient_lookup import IngredientLookupService
 from app.services.photo_storage import delete_photo, photo_exists, read_photo, save_photo
 from app.services.photos import next_photo_filename
+from app.services.weather import attach_weather_for_date
 from f0rge_db.tenant import current_user_id
 
 
@@ -176,6 +177,7 @@ class MealService:
             )
 
         await self.photo_crud.save()
+        await attach_weather_for_date(self.db, target_date)
         await invalidate_user_insights_cache(user_id, target_date)
         photo.meal = meal
         return _photo_response(photo)
@@ -296,6 +298,7 @@ class MealService:
             raise
         # Mirror PhotoService.upload — otherwise GET /entries/{date} can keep
         # serving a Redis-cached entry missing the clone for up to TTL (300s).
+        await attach_weather_for_date(self.db, target_date)
         await invalidate_user_insights_cache(user_id, target_date)
         if icon_only:
             new_photo.meal = meal

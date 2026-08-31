@@ -13,6 +13,7 @@ from app.services.medication_catalog import MedicationCatalogService
 from app.services.supplement_catalog import SupplementCatalogService
 from app.services.symptom_catalog import SymptomCatalogService
 from app.services.trackers import sync_seed_tracker_log_from_entry
+from app.services.weather import attach_weather_for_date
 
 
 class EntryOrchestrator:
@@ -49,6 +50,7 @@ class EntryOrchestrator:
             entry = await self.entry_service.stage_create(body)
             await self._touch_catalogs(entry)
             await sync_seed_tracker_log_from_entry(self.db, entry)
+        await attach_weather_for_date(self.db, entry.date)
         await invalidate_user_insights_cache(entry.user_id, entry.date)
         # Unlike every other write path, this one genuinely needs a refresh:
         # ``entry`` was *constructed*, never loaded via a SELECT, so the
@@ -65,5 +67,6 @@ class EntryOrchestrator:
             entry = await self.entry_service.stage_update(date, body)
             await self._touch_catalogs(entry)
             await sync_seed_tracker_log_from_entry(self.db, entry)
+        await attach_weather_for_date(self.db, entry.date)
         await invalidate_user_insights_cache(entry.user_id, entry.date)
         return await _build_response(self.db, entry)
