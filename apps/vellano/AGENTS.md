@@ -66,6 +66,17 @@ Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSit
 
 Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally.
 
+## S2 locations
+
+Endpoints: `GET/POST /api/v1/locations`, `PATCH /api/v1/locations/{id}`. Archive via `is_archived`; no DELETE.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List locations | yes | yes | yes | yes | yes |
+| Create / update / archive | yes | yes | no | no | no |
+
+Startup seeds two locations when the table is empty: Kramerville (warehouse), Bedfordview (showroom). Same rows are inserted by migration `003_locations`.
+
 ## Railway
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.
@@ -80,7 +91,7 @@ Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` b
 
 ## Non-goals
 
-The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: SKUs, ledger, till, purchase orders, and other S2–S11 product features.
+The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: SKUs, ledger, till, purchase orders, and other S3–S11 product features.
 
 ## Python
 
