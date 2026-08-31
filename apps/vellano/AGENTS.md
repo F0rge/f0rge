@@ -55,7 +55,16 @@ cd apps/vellano/backend && uv run uvicorn app.main:app --port 8003 --reload
 cd apps/vellano/frontend && npm run dev   # :3003, rewrites /api/* → :8003
 ```
 
-Signup/login is S1. S0 has `GET /api/v1/health` and a Carbon shell only.
+### S1 auth bootstrap
+
+On startup, if the `users` table is empty the API seeds one team (`Vellano`) and one owner from env:
+
+- `SEED_OWNER_EMAIL` (default `owner@example.com`)
+- `SEED_OWNER_PASSWORD` (default `change-me-owner`)
+
+Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSite=Lax, `Path=/`). Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
+
+Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally.
 
 ## Railway
 
@@ -71,7 +80,7 @@ Signup/login is S1. S0 has `GET /api/v1/health` and a Carbon shell only.
 
 ## Non-goals
 
-The app does not send email, pay, file VAT, or open a bank account. Do not implement S1–S11 product features here (auth, SKUs, ledger, till).
+The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: SKUs, ledger, till, purchase orders, and other S2–S11 product features.
 
 ## Python
 
