@@ -19,7 +19,7 @@ import { SettingsAccordionRow } from '@/components/settings/settings-accordion-r
 import { WeatherSection } from '@/components/settings/weather-section'
 import { AiSettingsSection } from '@/components/settings/ai-settings-section'
 import { ExternalTokenSection } from '@/components/settings/external-token-section'
-import { AppleHealthSection } from '@/components/settings/apple-health-section'
+import { HealthDataSection } from '@/components/settings/health-data-section'
 import { DataSourcesSection } from '@/components/settings/data-sources-section'
 import { OnboardingSection } from '@/components/settings/onboarding-section'
 import { TaggedMealsSection } from '@/components/settings/tagged-meals-section'
@@ -128,7 +128,7 @@ export default function SettingsPage() {
       title: 'Integrations',
       rows: [
         accordion('Weather', 'Local weather data for your check-ins', Cloud, <WeatherSection />),
-        accordion('Apple Health', 'Sync health metrics from your iPhone', Heart, <AppleHealthSection />),
+        accordion('Health data', 'Import sleep, HRV, steps, and more', Heart, <HealthDataSection />),
         accordion('External access token', 'API access for external tools', Lock, <ExternalTokenSection />),
       ],
     },

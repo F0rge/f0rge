@@ -36,6 +36,9 @@ class HealthImportResponse(BaseModel):
     dates_upserted: int
 
 
+HEALTH_METRIC_SOURCES = ("ios_healthkit", "manual_import", "health_auto_export")
+
+
 class HealthMetricCreate(BaseModel):
     date: datetime.date
     hrv_mean: Optional[float] = None
@@ -55,10 +58,14 @@ class HealthMetricCreate(BaseModel):
     active_minutes: Optional[float] = None
     spo2: Optional[float] = None
     wrist_temp_deviation: Optional[float] = None
+    source: Optional[str] = Field(
+        default=None,
+        description="ios_healthkit (default), manual_import, or health_auto_export",
+    )
 
 
 class HealthSamplesPayload(BaseModel):
-    """Validated body for POST /health-metrics/samples (iOS HealthKit sync)."""
+    """Validated body for POST /health-metrics/samples (iOS HealthKit or manual import)."""
 
     samples: list[HealthMetricCreate] = Field(min_length=1)
 

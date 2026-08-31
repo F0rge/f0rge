@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.dependencies.health_metrics import get_health_metrics_service, require_health_import_auth
 from app.middleware.auth import get_current_session
@@ -12,7 +12,7 @@ from app.schemas.health_metrics import (
     HealthMetricResponse,
     HealthSamplesPayload,
 )
-from app.services.health_metrics import HealthMetricsService
+from app.services.health_metrics import HEALTH_METRICS_LIST_PAGE_SIZE, HealthMetricsService
 
 router = APIRouter(
     prefix="/api/v1/health-metrics",
@@ -40,6 +40,21 @@ async def ingest_health_samples(
     service: HealthMetricsService = Depends(get_health_metrics_service),
 ):
     return await service.ingest_samples(body.samples)
+
+
+@router.get(
+    "/range",
+    response_model=list[HealthMetricResponse],
+    dependencies=[Depends(get_current_session)],
+)
+async def list_health_metrics(
+    start: datetime.date,
+    end: datetime.date,
+    limit: int = Query(HEALTH_METRICS_LIST_PAGE_SIZE, ge=1, le=HEALTH_METRICS_LIST_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+    service: HealthMetricsService = Depends(get_health_metrics_service),
+):
+    return await service.list_range(start, end, limit, offset)
 
 
 @router.get(

@@ -52,7 +52,7 @@ def register_metrics_tools(server: FastMCP) -> None:
         metric_type: Optional[str] = None,
         ctx: Context = None,
     ) -> dict[str, Any]:
-        """List Apple Health auto-export metrics in an inclusive date range.
+        """List imported health metrics in an inclusive date range.
 
         Optional metric_type filters to rows with data in a category: sleep, hrv,
         activity, or vitals. Capped at 200 rows. For one day combined with entry
