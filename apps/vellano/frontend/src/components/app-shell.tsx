@@ -14,8 +14,11 @@ import {
   Theme,
 } from "@carbon/react";
 import {
+  Catalog,
+  Document,
   Finance,
   Home,
+  Industry,
   Location,
   Logout,
   Product,
@@ -34,6 +37,9 @@ import { SIDE_NAV_ITEMS } from "@/lib/nav";
 const ICONS = {
   "/": Home,
   "/locations": Location,
+  "/suppliers": Industry,
+  "/proformas": Document,
+  "/catalogue": Catalog,
   "/stock": Product,
   "/purchase-orders": Purchase,
   "/ledger": Finance,
