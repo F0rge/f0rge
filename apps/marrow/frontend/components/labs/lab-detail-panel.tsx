@@ -2,8 +2,11 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { X } from 'lucide-react'
 import {
+  Button,
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -20,7 +23,7 @@ interface LabDetailPanelProps {
   onOpenChange: (open: boolean) => void
 }
 
-/** Mobile-only bottom sheet — same Dialog + className recipe as PhotoFocusOverlay. */
+/** Mobile-only bottom sheet — PhotoFocusOverlay geometry; in-flow close row. */
 export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps) {
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -49,9 +52,29 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
           onOpenChange(next)
         }}
       >
-        <DialogContent className="fixed inset-x-0 bottom-0 top-auto m-0 flex max-h-[92vh] w-full max-w-full min-w-0 translate-none flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 duration-200 data-open:slide-in-from-bottom data-closed:slide-out-to-bottom">
-          <div className="flex h-10 shrink-0 items-end justify-center pb-1">
-            <div className="h-1 w-10 rounded-full bg-border" aria-hidden />
+        <DialogContent
+          showCloseButton={false}
+          className="fixed inset-x-0 bottom-0 top-auto m-0 flex max-h-[92vh] w-full max-w-full min-w-0 translate-none flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 duration-200 data-open:slide-in-from-bottom data-closed:slide-out-to-bottom"
+        >
+          <div className="shrink-0 pt-[max(0.5rem,env(safe-area-inset-top))]">
+            <div className="grid h-11 grid-cols-[2.75rem_1fr_2.75rem] items-center px-1">
+              <span aria-hidden />
+              <div className="flex justify-center">
+                <div className="h-1 w-10 rounded-full bg-border" aria-hidden />
+              </div>
+              <DialogClose
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-11 min-h-[44px] min-w-[44px]"
+                  />
+                }
+              >
+                <X className="size-5" />
+                <span className="sr-only">Close</span>
+              </DialogClose>
+            </div>
           </div>
           <DialogHeader className="sr-only">
             <DialogTitle>{lab.name}</DialogTitle>
@@ -71,10 +94,7 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
       <LabFormDialog
         key={`edit-${lab.id}`}
         open={editOpen}
-        onOpenChange={(o) => {
-          setEditOpen(o)
-          if (!o) onOpenChange(false)
-        }}
+        onOpenChange={setEditOpen}
         lab={lab}
       />
     </>
