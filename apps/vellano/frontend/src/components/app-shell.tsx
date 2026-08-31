@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Content,
   Header,
   HeaderGlobalAction,
   HeaderGlobalBar,
@@ -140,7 +139,9 @@ export function AppShell({ children }: AppShellProps) {
             })}
           </SideNavItems>
         </SideNav>
-        <Content id="main-content">{children}</Content>
+        <main id="main-content" className="vellano-main">
+          {children}
+        </main>
       </Theme>
     </div>
   );

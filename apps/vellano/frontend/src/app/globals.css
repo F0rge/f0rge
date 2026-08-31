@@ -5,25 +5,17 @@ body {
   margin: 0;
 }
 
-/* Carbon UIShell: SideNav must be a sibling of Content (not nested in Header)
-   for layout offset. Carbon 11 does not always apply margin-left automatically. */
-.vellano-shell .cds--content {
+/* Vellano-owned main region — do not rely on Carbon Content offset. */
+.vellano-main {
+  box-sizing: border-box;
   margin-top: 3rem;
   margin-left: 16rem;
-  min-height: calc(100vh - 3rem);
   padding: 2rem;
-  transition: margin-left 110ms cubic-bezier(0.2, 0, 0.38, 0.9);
+  min-height: calc(100vh - 3rem);
 }
 
-.vellano-shell[data-nav-expanded="false"] .cds--content {
+.vellano-shell[data-nav-expanded="false"] .vellano-main {
   margin-left: 3rem;
-}
-
-@media (max-width: 65rem) {
-  .vellano-shell .cds--content,
-  .vellano-shell[data-nav-expanded="false"] .cds--content {
-    margin-left: 0;
-  }
 }
 
 .vellano-header-user {
