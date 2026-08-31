@@ -64,8 +64,10 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
             maxHeight: 'none',
             translate: 'none',
             transform: 'none',
+            animation: 'none',
+            zIndex: 60,
           }}
-          className="fixed m-0 flex w-full min-w-0 flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 duration-200 data-closed:slide-out-to-bottom data-closed:zoom-out-95 data-open:slide-in-from-bottom data-open:zoom-in-95 sm:max-w-none"
+          className="fixed z-[60] m-0 flex w-full max-w-none min-w-0 flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:max-w-none"
         >
           <div className="relative flex shrink-0 items-center justify-center pt-2">
             <div className="h-1 w-10 rounded-full bg-border" aria-hidden />
