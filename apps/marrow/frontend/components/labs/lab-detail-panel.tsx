@@ -45,8 +45,9 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
   return (
     <>
       <Dialog
-        open={open}
+        open={open && !editOpen}
         onOpenChange={(next) => {
+          if (editOpen) return
           if (!next) setConfirmDelete(false)
           onOpenChange(next)
         }}
@@ -65,17 +66,21 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
             translate: 'none',
             transform: 'none',
             animation: 'none',
+            zIndex: 60,
           }}
-          className="fixed m-0 flex w-full max-w-none min-w-0 flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:max-w-none"
+          className="fixed z-[60] m-0 flex w-full max-w-none min-w-0 flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:max-w-none"
         >
-          <div className="relative z-10 flex h-11 shrink-0 items-center justify-center">
-            <div className="h-1 w-10 rounded-full bg-border" aria-hidden />
+          <div className="grid shrink-0 grid-cols-[2.75rem_1fr_2.75rem] items-center px-1 pt-2">
+            <span aria-hidden />
+            <div className="flex justify-center">
+              <div className="h-1 w-10 rounded-full bg-border" aria-hidden />
+            </div>
             <DialogClose
               render={
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute right-1 size-11"
+                  className="size-11"
                 />
               }
             >
