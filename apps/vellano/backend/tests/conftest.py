@@ -40,6 +40,13 @@ postgres_container = postgres_container_fixture("postgres:16")
 
 
 @pytest.fixture(autouse=True)
+def patch_storage_dir(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    storage_path = tmp_path / "storage"
+    storage_path.mkdir()
+    monkeypatch.setattr(settings, "storage_dir", str(storage_path))
+
+
+@pytest.fixture(autouse=True)
 def patch_async_session_maker(
     async_engine: AsyncEngine,
     monkeypatch: pytest.MonkeyPatch,

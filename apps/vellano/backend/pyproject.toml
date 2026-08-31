@@ -15,6 +15,7 @@ dependencies = [
     "email-validator>=2.0",
     "f0rge-core",
     "f0rge-db",
+    "f0rge-storage",
 ]
 
 [dependency-groups]
@@ -29,6 +30,7 @@ dev = [
 f0rge-core = { path = "../../../libs/backend/core", editable = true }
 f0rge-db = { path = "../../../libs/backend/db", editable = true }
 f0rge-testing = { path = "../../../libs/backend/testing", editable = true }
+f0rge-storage = { path = "../../../libs/backend/storage", editable = true }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
