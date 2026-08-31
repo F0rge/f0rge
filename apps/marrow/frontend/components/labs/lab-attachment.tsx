@@ -23,6 +23,7 @@ function DownloadButton({ labId, className }: { labId: number; className?: strin
   return (
     <Button
       variant="outline"
+      nativeButton={false}
       className={cn(TOUCH_BTN, className)}
       render={<a href={labAttachmentSrc(labId, true)} />}
     >
@@ -71,7 +72,7 @@ function LabImageAttachment({ lab }: { lab: Lab }) {
   )
 }
 
-function LabPdfAttachment({ lab }: { lab: Lab }) {
+function LabPdfAttachment({ lab, preview }: { lab: Lab; preview: boolean }) {
   const inlineSrc = labAttachmentSrc(lab.id)
 
   return (
@@ -79,6 +80,7 @@ function LabPdfAttachment({ lab }: { lab: Lab }) {
       <SourceFilename filename={humanSourceFilename(lab.source_path)} />
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
         <Button
+          nativeButton={false}
           className={cn(TOUCH_BTN, 'w-full sm:w-auto')}
           render={<a href={inlineSrc} target="_blank" rel="noopener noreferrer" />}
         >
@@ -87,13 +89,15 @@ function LabPdfAttachment({ lab }: { lab: Lab }) {
         </Button>
         <DownloadButton labId={lab.id} className="w-full sm:w-auto" />
       </div>
-      <div className="hidden min-w-0 overflow-hidden rounded-lg border border-border lg:block">
-        <iframe
-          src={inlineSrc}
-          title="Lab PDF preview"
-          className="h-64 w-full bg-muted/30"
-        />
-      </div>
+      {preview ? (
+        <div className="min-w-0 overflow-hidden rounded-lg border border-border">
+          <iframe
+            src={inlineSrc}
+            title="Lab PDF preview"
+            className="h-64 w-full bg-muted/30"
+          />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -109,9 +113,11 @@ function LabFileAttachment({ lab }: { lab: Lab }) {
 interface LabAttachmentProps {
   lab: Lab
   className?: string
+  /** Desktop inline panel only — skip iframe PDF on the mobile sheet. */
+  pdfPreview?: boolean
 }
 
-export function LabAttachment({ lab, className }: LabAttachmentProps) {
+export function LabAttachment({ lab, className, pdfPreview = false }: LabAttachmentProps) {
   if (!lab.attachment_path) return null
 
   const { source_kind, attachment_path } = lab
@@ -121,7 +127,7 @@ export function LabAttachment({ lab, className }: LabAttachmentProps) {
       {isImageAttachment(source_kind, attachment_path) ? (
         <LabImageAttachment lab={lab} />
       ) : isPdfAttachment(source_kind, attachment_path) ? (
-        <LabPdfAttachment lab={lab} />
+        <LabPdfAttachment lab={lab} preview={pdfPreview} />
       ) : (
         <LabFileAttachment lab={lab} />
       )}

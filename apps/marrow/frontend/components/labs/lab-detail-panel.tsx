@@ -53,7 +53,19 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
       >
         <DialogContent
           showCloseButton={false}
-          className="fixed inset-x-0 bottom-0 left-0 top-[max(0.5rem,env(safe-area-inset-top))] m-0 flex h-auto max-h-none w-full max-w-full min-w-0 translate-none flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 duration-200 data-closed:slide-out-to-bottom data-open:slide-in-from-bottom"
+          style={{
+            top: 'max(0.5rem, env(safe-area-inset-top, 0px))',
+            right: 0,
+            bottom: 0,
+            left: 0,
+            width: '100%',
+            maxWidth: 'none',
+            height: 'auto',
+            maxHeight: 'none',
+            translate: 'none',
+            transform: 'none',
+          }}
+          className="fixed m-0 flex w-full min-w-0 flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 duration-200 data-closed:slide-out-to-bottom data-closed:zoom-out-95 data-open:slide-in-from-bottom data-open:zoom-in-95 sm:max-w-none"
         >
           <div className="relative flex shrink-0 items-center justify-center pt-2">
             <div className="h-1 w-10 rounded-full bg-border" aria-hidden />

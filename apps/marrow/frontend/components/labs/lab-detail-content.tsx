@@ -38,6 +38,7 @@ interface LabDetailContentProps {
   deletePending: boolean
   onDelete: () => void
   onEdit: () => void
+  pdfPreview?: boolean
 }
 
 function MarkerMobileCard({
@@ -89,6 +90,7 @@ export function LabDetailContent({
   deletePending,
   onDelete,
   onEdit,
+  pdfPreview = false,
 }: LabDetailContentProps) {
   return (
     <div className="min-w-0 space-y-4 overflow-x-hidden">
@@ -111,7 +113,7 @@ export function LabDetailContent({
         <p className="break-words text-sm text-muted-foreground">{lab.notes}</p>
       )}
 
-      <LabAttachment lab={lab} />
+      <LabAttachment lab={lab} pdfPreview={pdfPreview} />
 
       {lab.extraction_model && (
         <div className="break-words text-xs text-muted-foreground">
