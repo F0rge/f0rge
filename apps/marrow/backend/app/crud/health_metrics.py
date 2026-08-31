@@ -24,7 +24,9 @@ class HealthMetricsCRUD(BaseCRUD):
     async def get_by_date(self, date: datetime.date) -> Optional[HealthMetric]:
         return await self.get_by_date_owned(date)
 
-    async def list_in_range(self, start: datetime.date, end: datetime.date) -> list[HealthMetric]:
+    async def list_in_range(
+        self, start: datetime.date, end: datetime.date, limit: int
+    ) -> list[HealthMetric]:
         stmt = (
             select(HealthMetric)
             .where(
@@ -32,5 +34,6 @@ class HealthMetricsCRUD(BaseCRUD):
                 HealthMetric.date.between(start, end),
             )
             .order_by(HealthMetric.date.desc())
+            .limit(limit)
         )
         return list((await self.db.execute(stmt)).scalars().all())

@@ -195,3 +195,19 @@ async def test_range_rejects_inverted_dates(authed_client: AsyncClient) -> None:
         params={"start": "2026-08-11", "end": "2026-08-10"},
     )
     assert resp.status_code == 400
+
+
+async def test_range_rejects_oversize_limit(authed_client: AsyncClient) -> None:
+    resp = await authed_client.get(
+        "/api/v1/health-metrics/range",
+        params={"start": "2026-08-10", "end": "2026-08-11", "limit": 101},
+    )
+    assert resp.status_code == 422
+
+
+async def test_empty_manual_import_row_rejected(authed_client: AsyncClient) -> None:
+    resp = await authed_client.post(
+        SAMPLES_URL,
+        json={"samples": [{"date": "2026-08-12", "source": "manual_import"}]},
+    )
+    assert resp.status_code == 400

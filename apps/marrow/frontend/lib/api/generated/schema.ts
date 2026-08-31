@@ -5637,6 +5637,7 @@ export interface operations {
             query: {
                 start: string;
                 end: string;
+                limit?: number;
             };
             header?: never;
             path?: never;

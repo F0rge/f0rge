@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.dependencies.health_metrics import get_health_metrics_service, require_health_import_auth
 from app.middleware.auth import get_current_session
@@ -50,9 +50,10 @@ async def ingest_health_samples(
 async def list_health_metrics(
     start: datetime.date,
     end: datetime.date,
+    limit: int = Query(default=100, ge=1, le=100),
     service: HealthMetricsService = Depends(get_health_metrics_service),
 ):
-    return await service.list_range(start, end)
+    return await service.list_range(start, end, limit)
 
 
 @router.get(

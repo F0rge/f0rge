@@ -120,6 +120,10 @@ class HealthMetricsService:
                 fields = sample.model_dump(
                     exclude={"date", "source"}, exclude_unset=True, exclude_none=True
                 )
+                if not fields and source == "manual_import":
+                    raise ValidationError(
+                        f"{sample.date.isoformat()} has no recognized health metrics"
+                    )
                 if not fields:
                     stmt = (
                         pg_insert(HealthMetric)
@@ -155,12 +159,14 @@ class HealthMetricsService:
             raise NotFoundError(f"No health metrics for {date}")
         return metric
 
-    async def list_range(self, start: datetime.date, end: datetime.date) -> list[HealthMetric]:
+    async def list_range(
+        self, start: datetime.date, end: datetime.date, limit: int
+    ) -> list[HealthMetric]:
         if start > end:
             raise ValidationError("start must be on or before end")
         if (end - start).days > _MAX_RANGE_DAYS:
             raise ValidationError(f"range cannot exceed {_MAX_RANGE_DAYS} days")
-        return await self.crud.list_in_range(start, end)
+        return await self.crud.list_in_range(start, end, limit)
 
 
 def _resolve_source(source: Optional[str]) -> str:

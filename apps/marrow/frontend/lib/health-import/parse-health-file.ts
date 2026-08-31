@@ -90,6 +90,12 @@ function parseJson(text: string): ParseHealthFileResult {
     if (sample == null) {
       return { ok: false, error: `Row ${index + 1} is missing a valid date (YYYY-MM-DD).` }
     }
+    if (!hasMetrics(sample)) {
+      return {
+        ok: false,
+        error: `Row ${index + 1} has a date but no recognized metrics. Use headers like sleep_hours, hrv_mean, or steps.`,
+      }
+    }
     samples.push(sample)
   }
   return finish(samples)
@@ -99,7 +105,7 @@ function parseCsv(text: string): ParseHealthFileResult {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
   if (lines.length < 2) return { ok: false, error: 'CSV needs a header row and at least one data row.' }
 
-  const headers = lines[0].split(',').map((h) => h.trim().toLowerCase())
+  const headers = lines[0].split(',').map((h) => normalizeHeader(h))
   const dateIdx = headers.indexOf('date')
   if (dateIdx < 0) return { ok: false, error: 'CSV must include a date column.' }
 
@@ -113,6 +119,12 @@ function parseCsv(text: string): ParseHealthFileResult {
     const sample = normalizeRow(raw)
     if (sample == null) {
       return { ok: false, error: `Row ${i + 1} is missing a valid date (YYYY-MM-DD).` }
+    }
+    if (!hasMetrics(sample)) {
+      return {
+        ok: false,
+        error: `Row ${i + 1} has a date but no recognized metrics. Use headers like sleep_hours, hrv_mean, or steps.`,
+      }
     }
     samples.push(sample)
   }
@@ -143,6 +155,14 @@ function normalizeRow(row: unknown): HealthMetricSample | null {
     if (typeof value === 'string' && value.trim()) sample[key] = value.trim()
   }
   return sample
+}
+
+function hasMetrics(sample: HealthMetricSample): boolean {
+  return Object.keys(sample).some((key) => key !== 'date' && key !== 'source')
+}
+
+function normalizeHeader(header: string): string {
+  return header.trim().toLowerCase().replace(/[\s-]+/g, '_')
 }
 
 function parseNumber(value: unknown): number | null {

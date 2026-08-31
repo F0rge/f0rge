@@ -26,7 +26,7 @@ export function useHealthMetrics(date: string) {
 export function useHealthMetricsRange(start: string, end: string) {
   return useQuery<HealthMetricResponse[]>({
     queryKey: ['health-metrics', 'range', start, end],
-    queryFn: () => apiGet(`/health-metrics/range?start=${start}&end=${end}`),
+    queryFn: () => apiGet(`/health-metrics/range?start=${start}&end=${end}&limit=100`),
     enabled: !!start && !!end,
   })
 }

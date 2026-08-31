@@ -40,4 +40,18 @@ describe('parseHealthImportText', () => {
     const result = parseHealthImportText('sleep_hours\n7.5\n', 'bad.csv')
     expect(result.ok).toBe(false)
   })
+
+  it('rejects a date-only row with no metrics', () => {
+    const result = parseHealthImportText('date,notes\n2026-08-01,oops\n', 'empty.csv')
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toMatch(/no recognized metrics/i)
+  })
+
+  it('accepts spaced headers like Sleep Hours', () => {
+    const result = parseHealthImportText('Date,Sleep Hours\n2026-08-04,7.25\n', 'pretty.csv')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.samples[0]).toEqual({ date: '2026-08-04', sleep_hours: 7.25 })
+  })
 })
