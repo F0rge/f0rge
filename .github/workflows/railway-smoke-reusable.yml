@@ -76,6 +76,13 @@ jobs:
           SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
           SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
         run: |
+          case "$API_BASE" in
+            *marrow-health.com*) ;;
+            *)
+              echo "API URL is not Marrow — skipping Marrow /auth/login + /entries smoke"
+              exit 0
+              ;;
+          esac
           if [ -z "${SMOKE_EMAIL:-}" ] || [ -z "${SMOKE_PASSWORD:-}" ]; then
             echo "SMOKE_EMAIL/SMOKE_PASSWORD not configured — skipping auth smoke"
             exit 0

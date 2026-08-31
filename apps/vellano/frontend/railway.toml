@@ -1,0 +1,20 @@
+# Config-as-code for vellano-frontend (point Railway service Config File path here).
+# Shared monorepo: do NOT set Root Directory — needs root npm workspaces.
+# CoS provisions the Railway service separately; this file is repo config only.
+# Set Docker build-arg API_URL per environment after the API service exists.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/vellano/frontend/Dockerfile"
+watchPatterns = [
+  "apps/vellano/**",
+  "package.json",
+  "package-lock.json",
+]
+
+[deploy]
+startCommand = "node apps/vellano/frontend/server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

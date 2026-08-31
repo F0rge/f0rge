@@ -1,0 +1,250 @@
+<!DOCTYPE html><html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vellano - Home</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cds-ui-shell-header-height: 48px;
+      --cds-ui-shell-side-nav-width: 256px;
+      --cds-blue-60: #0f62fe;
+      --cds-gray-10: #f4f4f4;
+      --cds-gray-20: #e0e0e0;
+      --cds-text-01: #161616;
+      --cds-text-02: #525252;
+      --cds-support-02: #24a148; /* Success notification border */
+      --cds-support-02-bg: #defbe6; /* Success notification background */
+    }
+
+    * {
+      font-family: 'IBM Plex Sans', sans-serif;
+      box-sizing: border-box;
+      border-radius: 0 !important; /* IBM Carbon strict square corners */
+    }
+
+    body {
+      margin: 0;
+      background-color: var(--cds-gray-10);
+      color: var(--cds-text-01);
+    }
+
+    .cds-header {
+      height: var(--cds-ui-shell-header-height);
+      background-color: #161616;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      border-bottom: 1px solid #393939;
+    }
+
+    .cds-header__name {
+      padding: 0 1rem;
+      font-size: 0.875rem;
+      font-weight: 400;
+      line-height: 1.25rem;
+      letter-spacing: 0.1px;
+      display: flex;
+      align-items: center;
+      height: 100%;
+      text-decoration: none;
+      color: #ffffff;
+    }
+
+    .cds-header__name--prefix {
+      font-weight: 600;
+      margin-right: 0.25rem;
+    }
+
+    .cds-header__action {
+      width: var(--cds-ui-shell-header-height);
+      height: var(--cds-ui-shell-header-height);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.11s;
+      color: #ffffff;
+    }
+
+    .cds-header__action:hover {
+      background-color: #353535;
+    }
+
+    .cds-side-nav {
+      width: var(--cds-ui-shell-side-nav-width);
+      height: calc(100vh - var(--cds-ui-shell-header-height));
+      position: fixed;
+      top: var(--cds-ui-shell-header-height);
+      left: 0;
+      background-color: #f4f4f4;
+      border-right: 1px solid var(--cds-gray-20);
+      z-index: 900;
+    }
+
+    .cds-side-nav__link {
+      display: flex;
+      align-items: center;
+      padding: 0 1rem;
+      height: 2.5rem;
+      text-decoration: none;
+      color: var(--cds-text-01);
+      font-size: 0.875rem;
+      transition: background-color 0.11s;
+      border-left: 4px solid transparent;
+    }
+
+    .cds-side-nav__link:hover {
+      background-color: #e5e5e5;
+    }
+
+    .cds-side-nav__link--active {
+      background-color: #e5e5e5;
+      font-weight: 600;
+      border-left-color: var(--cds-blue-60);
+    }
+
+    .cds-side-nav__icon {
+      margin-right: 1rem;
+      font-size: 1.25rem;
+    }
+
+    .cds-content {
+      margin-left: var(--cds-ui-shell-side-nav-width);
+      margin-top: var(--cds-ui-shell-header-height);
+      padding: 3rem 2rem 2rem 2rem;
+      min-height: calc(100vh - var(--cds-ui-shell-header-height));
+    }
+
+    .cds-heading-04 {
+      font-size: 1.75rem;
+      font-weight: 400;
+      line-height: 2.25rem;
+      letter-spacing: 0;
+      margin-bottom: 1rem;
+    }
+
+    .cds-body-01 {
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+      letter-spacing: 0.16px;
+      color: var(--cds-text-02);
+      margin-bottom: 2rem;
+      max-width: 600px;
+    }
+
+    .cds-notification {
+      display: flex;
+      background-color: var(--cds-support-02-bg);
+      border-left: 4px solid var(--cds-support-02);
+      padding: 0.875rem 1rem;
+      max-width: 600px;
+      position: relative;
+    }
+
+    .cds-notification__icon {
+      margin-right: 1rem;
+      color: var(--cds-support-02);
+      font-size: 1.25rem;
+      margin-top: 0.125rem;
+    }
+
+    .cds-notification__text {
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+    }
+
+    .cds-notification__title {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+
+    .cds-notification__subtitle {
+      color: var(--cds-text-01);
+    }
+
+    .cds-menu-button {
+      width: var(--cds-ui-shell-header-height);
+      height: var(--cds-ui-shell-header-height);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid #393939;
+    }
+  </style>
+</head>
+<body>
+  <div class="min-h-screen bg-[#f4f4f4]" data-sd-id="1">
+    <!-- Header -->
+    <header class="cds-header" data-sd-id="2">
+      <div class="cds-menu-button" data-sd-id="3">
+        <iconify-icon icon="carbon:menu" class="text-xl"></iconify-icon>
+      </div>
+      <a href="#" class="cds-header__name" id="header-brand-link" data-sd-id="4">
+        <span class="cds-header__name--prefix" data-sd-id="5">F0rge</span> Vellano
+      </a>
+      <div class="flex-grow" data-sd-id="6"></div>
+      <div class="cds-header__action" id="header-login-btn" data-sd-id="7">
+        <iconify-icon icon="carbon:login" class="text-xl"></iconify-icon>
+      </div>
+    </header>
+
+    <!-- Left Side Nav -->
+    <nav class="cds-side-nav" aria-label="Side navigation" data-sd-id="8">
+      <div class="flex flex-col py-4" data-sd-id="9">
+        <a href="#" class="cds-side-nav__link cds-side-nav__link--active" id="nav-home-link" data-sd-id="10">
+          <iconify-icon icon="carbon:home" class="cds-side-nav__icon"></iconify-icon>
+          Home
+        </a>
+        <a href="#" class="cds-side-nav__link" id="nav-stock-link" data-sd-id="11">
+          <iconify-icon icon="carbon:product" class="cds-side-nav__icon"></iconify-icon>
+          Stock
+        </a>
+        <a href="#" class="cds-side-nav__link" id="nav-po-link" data-sd-id="12">
+          <iconify-icon icon="carbon:purchase" class="cds-side-nav__icon"></iconify-icon>
+          Purchase orders
+        </a>
+        <a href="#" class="cds-side-nav__link" id="nav-ledger-link" data-sd-id="13">
+          <iconify-icon icon="carbon:finance" class="cds-side-nav__icon"></iconify-icon>
+          Ledger
+        </a>
+        <a href="#" class="cds-side-nav__link" id="nav-till-link" data-sd-id="14">
+          <iconify-icon icon="carbon:store" class="cds-side-nav__icon"></iconify-icon>
+          Till
+        </a>
+        <a href="#" class="cds-side-nav__link" id="nav-settings-link" data-sd-id="15">
+          <iconify-icon icon="carbon:settings" class="cds-side-nav__icon"></iconify-icon>
+          Settings
+        </a>
+      </div>
+    </nav>
+
+    <!-- Content Area -->
+    <main class="cds-content" data-sd-id="16">
+      <div class="max-w-4xl" data-sd-id="17">
+        <h1 class="cds-heading-04" data-sd-id="18">Home</h1>
+        <p class="cds-body-01" data-sd-id="19">
+          Vellano back office scaffold. Stock, purchase orders, ledger, and till land in later slices. Side nav items are placeholders.
+        </p>
+
+        <!-- API Health Notification -->
+        <div class="cds-notification" role="alert" data-sd-id="20">
+          <iconify-icon icon="carbon:checkmark-filled" class="cds-notification__icon"></iconify-icon>
+          <div class="cds-notification__text" data-sd-id="21">
+            <span class="cds-notification__title" data-sd-id="22">API</span>
+            <span class="cds-notification__subtitle" data-sd-id="23">Health check returned 200.</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+</body></html>

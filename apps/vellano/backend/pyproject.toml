@@ -1,0 +1,46 @@
+[project]
+name = "vellano-backend"
+version = "0.1.0"
+description = "Vellano back-office API (stock, books, till)"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi[standard]",
+    "sqlalchemy>=2.0",
+    "pydantic-settings>=2.0",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "greenlet>=3.3.2",
+    "f0rge-core",
+    "f0rge-db",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "f0rge-testing",
+]
+
+[tool.uv.sources]
+f0rge-core = { path = "../../../libs/backend/core", editable = true }
+f0rge-db = { path = "../../../libs/backend/db", editable = true }
+f0rge-testing = { path = "../../../libs/backend/testing", editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",
+    "F821",
+]

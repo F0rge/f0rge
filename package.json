@@ -4,6 +4,7 @@
   "workspaces": [
     "apps/marrow/frontend",
     "apps/dk/tag-printer/frontend",
+    "apps/vellano/frontend",
     "libs/ui"
   ],
   "overrides": {

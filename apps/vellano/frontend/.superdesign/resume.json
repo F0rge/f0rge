@@ -1,0 +1,13 @@
+{
+  "targets": {
+    "/": {
+      "projectId": "2f02499f-aa3a-48f2-a0a1-d51b3ac9154b",
+      "activeDraftId": "5973d42e-7761-4fc9-ba76-fa0bb3912c3d",
+      "title": "Vellano S0 home UIShell",
+      "canvas": "https://superdesign.dev/teams/cb0bbbcd-2f7f-4810-9426-2fbdd5577264/projects/2f02499f-aa3a-48f2-a0a1-d51b3ac9154b",
+      "preview": "https://p.superdesign.dev/draft/5973d42e-7761-4fc9-ba76-fa0bb3912c3d",
+      "model": "gemini-3-flash",
+      "creditsConsumed": 2.5
+    }
+  }
+}

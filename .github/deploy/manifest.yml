@@ -47,3 +47,23 @@ components:
       app_uuid: f080ossg88ows8k8csw40c4s
       webhook_secret_env: COOLIFY_WEBHOOK_DK_FRONTEND
     health_url: https://tags.leo-figueiredo.com/
+
+  # Vellano: Railway develop only. CoS patches health_url after services exist.
+  # Do not invent custom DNS (no api-dev.vellano...). Empty URL → planner skips smoke.
+  vellano-backend:
+    nx: vellano-backend
+    target: railway
+    branches: [develop]
+    railway:
+      role: api
+      health_url:
+        develop: ""
+
+  vellano-frontend:
+    nx: vellano-frontend
+    target: railway
+    branches: [develop]
+    railway:
+      role: frontend
+      health_url:
+        develop: ""

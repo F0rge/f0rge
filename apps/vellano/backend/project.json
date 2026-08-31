@@ -1,0 +1,40 @@
+{
+  "name": "vellano-backend",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/vellano/backend",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/vellano/backend",
+        "command": "uvx ruff@0.16.1 check ."
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/vellano/backend",
+        "command": "uvx ruff@0.16.1 format --check ."
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/vellano/backend",
+        "command": "uv run pytest -ra"
+      }
+    },
+    "lock": {
+      "executor": "@nxlv/python:lock",
+      "options": {
+        "update": false
+      }
+    },
+    "sync": {
+      "executor": "@nxlv/python:sync",
+      "options": {}
+    }
+  },
+  "tags": ["platform:py", "scope:vellano"]
+}
