@@ -54,7 +54,14 @@ export function AppShell({ children }: AppShellProps) {
           isActive={expanded}
           onClick={() => setExpanded((current) => !current)}
         />
-        <HeaderName href="/" prefix="F0rge">
+        <HeaderName
+          href="/"
+          prefix="F0rge"
+          onClick={(event) => {
+            event.preventDefault();
+            router.push("/");
+          }}
+        >
           Vellano
         </HeaderName>
         <HeaderGlobalBar>
@@ -76,6 +83,10 @@ export function AppShell({ children }: AppShellProps) {
                   href={item.href}
                   renderIcon={Icon}
                   isActive={pathname === item.href}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    router.push(item.href);
+                  }}
                 >
                   {item.label}
                 </SideNavLink>
