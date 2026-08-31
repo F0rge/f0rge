@@ -9744,6 +9744,13 @@
             },
             "type": "array",
             "title": "Medications"
+          },
+          "symptom_events": {
+            "items": {
+              "$ref": "#/components/schemas/SymptomEvent"
+            },
+            "type": "array",
+            "title": "Symptom Events"
           }
         },
         "type": "object",
@@ -9961,6 +9968,13 @@
             },
             "type": "array",
             "title": "Medications"
+          },
+          "symptom_events": {
+            "items": {
+              "$ref": "#/components/schemas/SymptomEvent"
+            },
+            "type": "array",
+            "title": "Symptom Events"
           },
           "photos": {
             "items": {
@@ -10317,6 +10331,20 @@
               }
             ],
             "title": "Medications"
+          },
+          "symptom_events": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SymptomEvent"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symptom Events"
           }
         },
         "type": "object",
@@ -14839,6 +14867,39 @@
         },
         "type": "object",
         "title": "SymptomCatalogItemUpdate"
+      },
+      "SymptomEvent": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Key"
+          },
+          "severity": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Severity"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "severity"
+        ],
+        "title": "SymptomEvent"
       },
       "SymptomOrderRequest": {
         "properties": {

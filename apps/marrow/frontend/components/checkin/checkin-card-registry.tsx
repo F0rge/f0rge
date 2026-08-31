@@ -92,6 +92,8 @@ export function buildCheckinCardRenderers({
       <SymptomsCard
         value={state.symptomsJson}
         onChange={state.setSymptomsJsonDirty}
+        events={state.symptomEvents}
+        onEventsChange={state.setSymptomEventsDirty}
         {...collapseProps('symptoms')}
       />
     ),

@@ -86,6 +86,7 @@ async def _build_response(db: AsyncSession, entry: Entry) -> EntryResponse:
         {
             **{c.name: getattr(entry, c.name) for c in entry.__table__.columns},
             "medications": entry.medications_json or [],
+            "symptom_events": entry.symptom_events_json or [],
             "photos": [_photo_response(p, companions.get(p.id, [])) for p in entry.photos],
             "photo_signal": signal,
             "photo_derived_flags": sorted(signal.flags),
@@ -186,6 +187,7 @@ class EntryService:
         )
         data["symptoms_json"] = data.get("symptoms_json") or {}
         data["medications_json"] = data.pop("medications", None) or []
+        data["symptom_events_json"] = data.pop("symptom_events", None) or []
 
         # stool_completeness (and every other plain EntryCreate field) flows through here
         # via **data -- Entry(**data) is generic over the schema's fields, unlike
@@ -214,6 +216,8 @@ class EntryService:
         update_data.pop("period_of_day", None)
         if "medications" in update_data:
             update_data["medications_json"] = update_data.pop("medications")
+        if "symptom_events" in update_data:
+            update_data["symptom_events_json"] = update_data.pop("symptom_events")
         for field, value in update_data.items():
             setattr(entry, field, value)
 

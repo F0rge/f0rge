@@ -42,6 +42,14 @@ async def serialize_entry(db: AsyncSession, source_id: int) -> Optional[str]:
     if row.symptoms_json:
         symptom_str = ", ".join(f"{k}: {v}" for k, v in row.symptoms_json.items())
         parts.append(f"Symptoms: {symptom_str}")
+    if row.symptom_events_json:
+        event_str = ", ".join(
+            f"{e.get('key')}:{e.get('severity')}@{e.get('time') or '?'}"
+            for e in row.symptom_events_json
+            if isinstance(e, dict)
+        )
+        if event_str:
+            parts.append(f"Symptom times: {event_str}")
     if row.alcohol_units:
         parts.append(f"Alcohol units: {row.alcohol_units}")
     if row.caffeine_servings:

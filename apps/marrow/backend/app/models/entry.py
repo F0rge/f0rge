@@ -71,6 +71,12 @@ class Entry(Base):
     medications_json: Mapped[list] = mapped_column(
         MutableList.as_mutable(JSONB), nullable=False, default=list, server_default="[]"
     )
+    # Timed symptom stamps for the day, e.g.
+    # [{"key": "vss", "severity": 7, "time": "15:20"}].
+    # `symptoms_json` stays the day's current score; this list is the clock.
+    symptom_events_json: Mapped[list] = mapped_column(
+        MutableList.as_mutable(JSONB), nullable=False, default=list, server_default="[]"
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         default=datetime.datetime.utcnow,
