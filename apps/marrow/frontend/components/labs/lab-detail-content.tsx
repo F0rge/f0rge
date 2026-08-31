@@ -183,14 +183,14 @@ export function LabDetailContent({
           variant="destructive"
           onClick={onDelete}
           disabled={deletePending}
-          className="mr-auto h-11 min-h-11 min-w-0 px-4"
+          className="mr-auto min-h-[44px]"
         >
           {confirmDelete ? 'Confirm delete' : 'Delete'}
         </Button>
         <Button
           variant="outline"
           onClick={onEdit}
-          className="h-11 min-h-11 min-w-0 px-4"
+          className="min-h-[44px]"
         >
           Edit
         </Button>

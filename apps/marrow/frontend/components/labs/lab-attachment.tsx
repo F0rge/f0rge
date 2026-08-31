@@ -9,7 +9,6 @@ import { humanSourceFilename } from './lab-attachment-label'
 
 const IMAGE_EXT = /\.(png|jpe?g|webp)$/i
 const PDF_EXT = /\.pdf$/i
-const TOUCH_BTN = 'h-11 min-h-11 min-w-0'
 
 function isImageAttachment(sourceKind: SourceKind, path: string): boolean {
   return sourceKind === 'image' || IMAGE_EXT.test(path)
@@ -24,7 +23,7 @@ function DownloadButton({ labId, className }: { labId: number; className?: strin
     <Button
       variant="outline"
       nativeButton={false}
-      className={cn(TOUCH_BTN, className)}
+      className={cn('min-h-[44px] w-full sm:w-auto', className)}
       render={<a href={labAttachmentSrc(labId, true)} />}
     >
       <Download />
@@ -81,7 +80,7 @@ function LabPdfAttachment({ lab, preview }: { lab: Lab; preview: boolean }) {
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
         <Button
           nativeButton={false}
-          className={cn(TOUCH_BTN, 'w-full sm:w-auto')}
+          className="min-h-[44px] w-full sm:w-auto"
           render={<a href={inlineSrc} target="_blank" rel="noopener noreferrer" />}
         >
           <FileText />

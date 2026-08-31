@@ -2,11 +2,8 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { X } from 'lucide-react'
 import {
-  Button,
   Dialog,
-  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -23,7 +20,7 @@ interface LabDetailPanelProps {
   onOpenChange: (open: boolean) => void
 }
 
-/** Mobile-only near-full-screen sheet (same Dialog primitive as photo-focus overlay). */
+/** Mobile-only bottom sheet — same Dialog + className recipe as PhotoFocusOverlay. */
 export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps) {
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -52,41 +49,9 @@ export function LabDetailPanel({ lab, open, onOpenChange }: LabDetailPanelProps)
           onOpenChange(next)
         }}
       >
-        <DialogContent
-          showCloseButton={false}
-          style={{
-            top: 'max(0.5rem, env(safe-area-inset-top, 0px))',
-            right: 0,
-            bottom: 0,
-            left: 0,
-            width: '100%',
-            maxWidth: 'none',
-            height: 'auto',
-            maxHeight: 'none',
-            translate: 'none',
-            transform: 'none',
-            animation: 'none',
-            zIndex: 60,
-          }}
-          className="fixed z-[60] m-0 flex w-full max-w-none min-w-0 flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:max-w-none"
-        >
-          <div className="grid shrink-0 grid-cols-[2.75rem_1fr_2.75rem] items-center px-1 pt-2">
-            <span aria-hidden />
-            <div className="flex justify-center">
-              <div className="h-1 w-10 rounded-full bg-border" aria-hidden />
-            </div>
-            <DialogClose
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-11"
-                />
-              }
-            >
-              <X className="size-5" />
-              <span className="sr-only">Close</span>
-            </DialogClose>
+        <DialogContent className="fixed inset-x-0 bottom-0 top-auto m-0 flex max-h-[92vh] w-full max-w-full min-w-0 translate-none flex-col gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 duration-200 data-open:slide-in-from-bottom data-closed:slide-out-to-bottom">
+          <div className="flex h-10 shrink-0 items-end justify-center pb-1">
+            <div className="h-1 w-10 rounded-full bg-border" aria-hidden />
           </div>
           <DialogHeader className="sr-only">
             <DialogTitle>{lab.name}</DialogTitle>
