@@ -12,7 +12,8 @@ Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
 
 | App | Target | Branches | Manifest component |
 |-----|--------|----------|-------------------|
-| marrow | Railway (autodeploy + Actions smoke) | `develop`, `main` | `marrow-backend`, `marrow-frontend` |
+| marrow | Railway project `zoological-fulfillment` (autodeploy + Actions smoke) | `develop`, `main` | `marrow-backend`, `marrow-frontend` |
+| vellano | **Own** Railway project (not Marrow develop). Repo config only until CoS provisions it | `develop` only | `vellano-backend`, `vellano-frontend` |
 | dk tag printer | Pi Coolify | `main` only | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
 
 Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) reads [`.github/deploy/manifest.yml`](../.github/deploy/manifest.yml) + Nx affected. Marrow smoke: [`railway-smoke-reusable.yml`](../.github/workflows/railway-smoke-reusable.yml). Coolify: webhook POST from deploy job (secrets `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DK_*`).

@@ -48,8 +48,9 @@ components:
       webhook_secret_env: COOLIFY_WEBHOOK_DK_FRONTEND
     health_url: https://tags.leo-figueiredo.com/
 
-  # Vellano: Railway develop only. CoS patches health_url after services exist.
-  # Do not invent custom DNS (no api-dev.vellano...). Empty URL → planner skips smoke.
+  # Vellano: own Railway project (not zoological-fulfillment / not Marrow develop).
+  # Develop only. CoS patches health_url after the Vellano project exists.
+  # Empty URL → planner skips smoke so Marrow develop is not used as a stand-in.
   vellano-backend:
     nx: vellano-backend
     target: railway

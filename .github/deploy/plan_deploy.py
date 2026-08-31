@@ -86,7 +86,9 @@ def main() -> None:
                     else:
                         print(
                             f"skip railway smoke for {spec['nx']}: "
-                            f"empty health_url.{environment}"
+                            f"empty health_url.{environment} "
+                            "(Vellano is its own Railway project; "
+                            "do not smoke Marrow develop)"
                         )
                 elif role == "frontend":
                     if is_marrow or url:
@@ -94,7 +96,9 @@ def main() -> None:
                     else:
                         print(
                             f"skip railway smoke for {spec['nx']}: "
-                            f"empty health_url.{environment}"
+                            f"empty health_url.{environment} "
+                            "(Vellano is its own Railway project; "
+                            "do not smoke Marrow develop)"
                         )
             elif spec["target"] == "coolify":
                 coolify.append(

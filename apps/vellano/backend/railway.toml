@@ -1,6 +1,7 @@
-# Config-as-code for vellano-api (point Railway service Config File path here).
-# Shared monorepo: do NOT set Root Directory — build context is the repo root.
-# CoS provisions the Railway service separately; this file is repo config only.
+# Config-as-code for vellano-api in the *Vellano* Railway project
+# (not Marrow zoological-fulfillment / not Marrow develop).
+# Point that service's Config File path here. Do NOT set Root Directory.
+# CoS provisions the Vellano project + services separately; this file is repo config only.
 
 [build]
 builder = "DOCKERFILE"

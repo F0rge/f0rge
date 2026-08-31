@@ -1,7 +1,8 @@
-# Config-as-code for vellano-frontend (point Railway service Config File path here).
-# Shared monorepo: do NOT set Root Directory — needs root npm workspaces.
-# CoS provisions the Railway service separately; this file is repo config only.
-# Set Docker build-arg API_URL per environment after the API service exists.
+# Config-as-code for vellano-frontend in the *Vellano* Railway project
+# (not Marrow zoological-fulfillment / not Marrow develop).
+# Point that service's Config File path here. Do NOT set Root Directory.
+# CoS provisions the Vellano project + services separately; this file is repo config only.
+# Set Docker build-arg API_URL after the Vellano API service exists.
 
 [build]
 builder = "DOCKERFILE"
