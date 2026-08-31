@@ -13,9 +13,11 @@ from f0rge_db.auth_context import user_id_ctx
 from app.config import settings
 from app.crud.base import unit_of_work
 from app.crud.health_metrics import HealthMetricsCRUD
-from f0rge_core.exceptions import NotFoundError, UnauthorizedError
+from f0rge_core.exceptions import NotFoundError, UnauthorizedError, ValidationError
+from app.cache.invalidation import invalidate_feature_matrix_cache, invalidate_signals_cache
 from app.models.health_metrics import HealthMetric
 from app.schemas.health_metrics import (
+    HEALTH_METRIC_SOURCES,
     HealthAutoExportPayload,
     HealthImportResponse,
     HealthMetricCreate,
@@ -23,6 +25,9 @@ from app.schemas.health_metrics import (
 from app.services.auth import decode_access_token
 from app.services.health_import import parse_health_auto_export
 from f0rge_db.tenant import apply_session_user_id, current_user_id
+
+DEFAULT_SAMPLE_SOURCE = "ios_healthkit"
+_MAX_RANGE_DAYS = 366
 
 _logger = logging.getLogger("health_import_debug")
 
@@ -84,20 +89,25 @@ class HealthMetricsService:
 
         for date_key, metric_create in parsed.items():
             existing = await self.crud.get_by_date_owned(metric_create.date)
+            fields = metric_create.model_dump(exclude={"date", "source"}, exclude_none=True)
             if existing:
-                update_data = metric_create.model_dump(exclude={"date"}, exclude_none=True)
-                for field, value in update_data.items():
+                for field, value in fields.items():
                     setattr(existing, field, value)
             else:
-                record = HealthMetric(user_id=user_id, **metric_create.model_dump())
+                record = HealthMetric(
+                    user_id=user_id,
+                    source="health_auto_export",
+                    **metric_create.model_dump(exclude={"source"}, exclude_none=True),
+                )
                 self.crud.add(record)
             upserted += 1
 
         await self.crud.save()
+        await _invalidate_health_caches(user_id)
         return HealthImportResponse(status="ok", dates_upserted=upserted)
 
     async def ingest_samples(self, samples: list[HealthMetricCreate]) -> HealthImportResponse:
-        """Upsert per-user daily HealthKit aggregates posted by the iOS app.
+        """Upsert per-user daily health aggregates (iOS HealthKit or manual import).
 
         Each sample only updates the columns it actually provides, so partial
         batches never null out previously synced fields.
@@ -106,14 +116,17 @@ class HealthMetricsService:
         now = datetime.datetime.utcnow()
         async with unit_of_work(self.db):
             for sample in samples:
-                fields = sample.model_dump(exclude={"date"}, exclude_unset=True, exclude_none=True)
+                source = _resolve_source(sample.source)
+                fields = sample.model_dump(
+                    exclude={"date", "source"}, exclude_unset=True, exclude_none=True
+                )
                 if not fields:
                     stmt = (
                         pg_insert(HealthMetric)
                         .values(
                             user_id=user_id,
                             date=sample.date,
-                            source="ios_healthkit",
+                            source=source,
                         )
                         .on_conflict_do_nothing(constraint="uq_health_metrics_user_id_date")
                     )
@@ -121,7 +134,7 @@ class HealthMetricsService:
                     stmt = pg_insert(HealthMetric).values(
                         user_id=user_id,
                         date=sample.date,
-                        source="ios_healthkit",
+                        source=source,
                         **fields,
                     )
                     set_ = {name: getattr(stmt.excluded, name) for name in fields}
@@ -131,6 +144,7 @@ class HealthMetricsService:
                         constraint="uq_health_metrics_user_id_date", set_=set_
                     )
                 await self.db.execute(stmt)
+        await _invalidate_health_caches(user_id)
         return HealthImportResponse(
             status="ok", dates_upserted=len({sample.date for sample in samples})
         )
@@ -140,3 +154,25 @@ class HealthMetricsService:
         if not metric:
             raise NotFoundError(f"No health metrics for {date}")
         return metric
+
+    async def list_range(self, start: datetime.date, end: datetime.date) -> list[HealthMetric]:
+        if start > end:
+            raise ValidationError("start must be on or before end")
+        if (end - start).days > _MAX_RANGE_DAYS:
+            raise ValidationError(f"range cannot exceed {_MAX_RANGE_DAYS} days")
+        return await self.crud.list_in_range(start, end)
+
+
+def _resolve_source(source: Optional[str]) -> str:
+    resolved = source or DEFAULT_SAMPLE_SOURCE
+    if resolved not in HEALTH_METRIC_SOURCES:
+        allowed = ", ".join(HEALTH_METRIC_SOURCES)
+        raise ValidationError(
+            f"unknown health metric source {resolved!r}; expected one of: {allowed}"
+        )
+    return resolved
+
+
+async def _invalidate_health_caches(user_id: uuid.UUID) -> None:
+    await invalidate_feature_matrix_cache(user_id)
+    await invalidate_signals_cache(user_id)

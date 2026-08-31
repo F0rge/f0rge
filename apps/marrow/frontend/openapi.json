@@ -2061,6 +2061,79 @@
         }
       }
     },
+    "/api/v1/health-metrics/range": {
+      "get": {
+        "tags": [
+          "health-metrics"
+        ],
+        "summary": "List Health Metrics",
+        "operationId": "list_health_metrics_api_v1_health_metrics_range_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "End"
+            }
+          },
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HealthMetricResponse"
+                  },
+                  "title": "Response List Health Metrics Api V1 Health Metrics Range Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health-metrics/{date}": {
       "get": {
         "tags": [
@@ -11264,6 +11337,18 @@
               }
             ],
             "title": "Wrist Temp Deviation"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "ios_healthkit (default), manual_import, or health_auto_export"
           }
         },
         "type": "object",
@@ -11511,7 +11596,7 @@
           "samples"
         ],
         "title": "HealthSamplesPayload",
-        "description": "Validated body for POST /health-metrics/samples (iOS HealthKit sync)."
+        "description": "Validated body for POST /health-metrics/samples (iOS HealthKit or manual import)."
       },
       "IncomingMealTagItem": {
         "properties": {

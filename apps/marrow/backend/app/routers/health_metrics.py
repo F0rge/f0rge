@@ -43,6 +43,19 @@ async def ingest_health_samples(
 
 
 @router.get(
+    "/range",
+    response_model=list[HealthMetricResponse],
+    dependencies=[Depends(get_current_session)],
+)
+async def list_health_metrics(
+    start: datetime.date,
+    end: datetime.date,
+    service: HealthMetricsService = Depends(get_health_metrics_service),
+):
+    return await service.list_range(start, end)
+
+
+@router.get(
     "/{date}",
     response_model=HealthMetricResponse,
     dependencies=[Depends(get_current_session)],

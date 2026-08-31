@@ -137,3 +137,61 @@ async def test_bearer_only_samples_post(async_client: AsyncClient) -> None:
     fetched = await async_client.get("/api/v1/health-metrics/2026-07-06", headers=headers)
     assert fetched.status_code == 200
     assert fetched.json()["steps"] == 8000
+
+
+async def test_manual_import_source_is_stored(authed_client: AsyncClient) -> None:
+    posted = await authed_client.post(
+        SAMPLES_URL,
+        json={
+            "samples": [
+                {
+                    "date": "2026-08-01",
+                    "sleep_hours": 7.5,
+                    "hrv_mean": 45.0,
+                    "source": "manual_import",
+                }
+            ]
+        },
+    )
+    assert posted.status_code == 200
+    row = await authed_client.get("/api/v1/health-metrics/2026-08-01")
+    assert row.status_code == 200
+    body = row.json()
+    assert body["source"] == "manual_import"
+    assert body["sleep_hours"] == 7.5
+    assert body["hrv_mean"] == 45.0
+
+
+async def test_unknown_source_rejected(authed_client: AsyncClient) -> None:
+    resp = await authed_client.post(
+        SAMPLES_URL,
+        json={"samples": [{"date": "2026-08-02", "steps": 100, "source": "fitbit"}]},
+    )
+    assert resp.status_code == 400
+
+
+async def test_range_lists_imported_days(authed_client: AsyncClient) -> None:
+    await authed_client.post(
+        SAMPLES_URL,
+        json={
+            "samples": [
+                {"date": "2026-08-10", "sleep_hours": 8.0, "source": "manual_import"},
+                {"date": "2026-08-11", "steps": 9000, "source": "manual_import"},
+            ]
+        },
+    )
+    resp = await authed_client.get(
+        "/api/v1/health-metrics/range",
+        params={"start": "2026-08-10", "end": "2026-08-11"},
+    )
+    assert resp.status_code == 200
+    dates = {row["date"] for row in resp.json()}
+    assert dates == {"2026-08-10", "2026-08-11"}
+
+
+async def test_range_rejects_inverted_dates(authed_client: AsyncClient) -> None:
+    resp = await authed_client.get(
+        "/api/v1/health-metrics/range",
+        params={"start": "2026-08-11", "end": "2026-08-10"},
+    )
+    assert resp.status_code == 400

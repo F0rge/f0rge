@@ -472,6 +472,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/health-metrics/range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Health Metrics */
+        get: operations["list_health_metrics_api_v1_health_metrics_range_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health-metrics/{date}": {
         parameters: {
             query?: never;
@@ -2798,6 +2815,11 @@ export interface components {
             spo2?: number | null;
             /** Wrist Temp Deviation */
             wrist_temp_deviation?: number | null;
+            /**
+             * Source
+             * @description ios_healthkit (default), manual_import, or health_auto_export
+             */
+            source?: string | null;
         };
         /** HealthMetricResponse */
         HealthMetricResponse: {
@@ -2857,7 +2879,7 @@ export interface components {
         };
         /**
          * HealthSamplesPayload
-         * @description Validated body for POST /health-metrics/samples (iOS HealthKit sync).
+         * @description Validated body for POST /health-metrics/samples (iOS HealthKit or manual import).
          */
         HealthSamplesPayload: {
             /** Samples */
@@ -5597,6 +5619,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_health_metrics_api_v1_health_metrics_range_get: {
+        parameters: {
+            query: {
+                start: string;
+                end: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthMetricResponse"][];
                 };
             };
             /** @description Validation Error */

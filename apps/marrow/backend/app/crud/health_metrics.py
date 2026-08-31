@@ -23,3 +23,14 @@ class HealthMetricsCRUD(BaseCRUD):
 
     async def get_by_date(self, date: datetime.date) -> Optional[HealthMetric]:
         return await self.get_by_date_owned(date)
+
+    async def list_in_range(self, start: datetime.date, end: datetime.date) -> list[HealthMetric]:
+        stmt = (
+            select(HealthMetric)
+            .where(
+                owned_by_user(HealthMetric.user_id),
+                HealthMetric.date.between(start, end),
+            )
+            .order_by(HealthMetric.date.desc())
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
