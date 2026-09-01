@@ -20,6 +20,7 @@ export type DraftQty = number | "";
 const LINE_HEADERS = [
   { key: "our_ref", header: "Our ref" },
   { key: "name", header: "Name" },
+  { key: "category", header: "Category" },
   { key: "our_barcode", header: "Our barcode" },
   { key: "expected_qty", header: "Expected" },
   { key: "counted_qty", header: "Counted" },
@@ -80,6 +81,7 @@ export function StocktakeLinesTable({
         id: line.id,
         our_ref: line.our_ref,
         name: line.name,
+        category: line.category?.trim() || "—",
         our_barcode: line.our_barcode,
         expected_qty: String(line.expected_qty),
         counted_qty: line.id,

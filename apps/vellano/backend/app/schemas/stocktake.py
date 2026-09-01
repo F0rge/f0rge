@@ -27,6 +27,7 @@ class StocktakeLineResponse(BaseModel):
     our_ref: str
     our_barcode: str
     name: str
+    category: Optional[str]
     expected_qty: int
     counted_qty: Optional[int]
     variance: Optional[int]

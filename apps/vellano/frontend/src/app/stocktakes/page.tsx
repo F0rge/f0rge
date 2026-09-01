@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -51,6 +51,7 @@ export default function StocktakesPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sessionDismissedRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,10 +64,11 @@ export default function StocktakesPage() {
       setStocktakes(summaryData);
       setLocations(locationData.filter(isActiveLocation));
       const activeSummary = summaryData.find((entry) => entry.status === "in_progress");
-      if (activeSummary) {
+      if (activeSummary && !sessionDismissedRef.current) {
         setActive(await getStocktake(activeSummary.id));
-      } else {
+      } else if (!activeSummary) {
         setActive(null);
+        sessionDismissedRef.current = false;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load stocktakes.");
@@ -81,6 +83,7 @@ export default function StocktakesPage() {
     }
   }, [user, load]);
 
+  const inProgress = stocktakes.filter((entry) => entry.status === "in_progress");
   const history = stocktakes
     .filter((entry) => entry.status !== "in_progress")
     .slice()
@@ -141,6 +144,10 @@ export default function StocktakesPage() {
           canMutate={canMutate}
           onLinePatched={handleLinePatched}
           onFinished={load}
+          onPause={() => {
+            sessionDismissedRef.current = true;
+            setActive(null);
+          }}
           onError={setError}
         />
       ) : (
@@ -160,6 +167,24 @@ export default function StocktakesPage() {
               hideCloseButton
               lowContrast
             />
+          ) : inProgress.length > 0 ? (
+            <Stack gap={4}>
+              <InlineNotification
+                kind="info"
+                title="Stocktake paused"
+                subtitle={`${inProgress[0].location_name} is still in progress. Resume to continue counting.`}
+                hideCloseButton
+                lowContrast
+              />
+              <Button
+                onClick={() => {
+                  sessionDismissedRef.current = false;
+                  void load();
+                }}
+              >
+                Resume
+              </Button>
+            </Stack>
           ) : (
             <Stack gap={5}>
               <Select

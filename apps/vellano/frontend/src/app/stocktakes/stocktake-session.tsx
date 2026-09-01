@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, InlineNotification, Stack, TextInput } from "@carbon/react";
+import { Button, InlineNotification, Select, SelectItem, Stack, TextInput } from "@carbon/react";
 import { Checkmark } from "@carbon/icons-react";
-import { useRef, useState } from "react";
+import Link from "next/link";
+import { useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -21,8 +22,11 @@ type StocktakeSessionProps = {
   canMutate: boolean;
   onLinePatched: (line: StocktakeLine) => void;
   onFinished: () => Promise<void>;
+  onPause: () => void;
   onError: (message: string) => void;
 };
+
+type LineFilter = "all" | "uncounted" | "variance";
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("en-ZA");
@@ -41,9 +45,11 @@ export function StocktakeSession({
   canMutate,
   onLinePatched,
   onFinished,
+  onPause,
   onError,
 }: StocktakeSessionProps) {
   const [barcode, setBarcode] = useState("");
+  const [lineFilter, setLineFilter] = useState<LineFilter>("all");
   const [drafts, setDrafts] = useState<Record<string, DraftQty>>(() =>
     draftsFromLines(stocktake.lines),
   );
@@ -101,6 +107,20 @@ export function StocktakeSession({
     );
   }
 
+  const visibleLines = useMemo(() => {
+    return stocktake.lines.filter((line) => {
+      const draft = drafts[line.id];
+      const counted = draft === "" ? line.counted_qty : draft;
+      if (lineFilter === "uncounted") {
+        return counted === "" || counted === null;
+      }
+      if (lineFilter === "variance") {
+        return typeof counted === "number" && counted !== line.expected_qty;
+      }
+      return true;
+    });
+  }, [drafts, lineFilter, stocktake.lines]);
+
   async function handleLookup() {
     const trimmed = barcode.trim();
     if (!canMutate || !trimmed) {
@@ -155,6 +175,11 @@ export function StocktakeSession({
 
   return (
     <Stack gap={6}>
+      <p className="cds--type-body-01">
+        <Link href="/stock">Stock</Link>
+        {" / "}
+        <span className="cds--type-helper-text-01">Stocktakes</span>
+      </p>
       <div
         style={{
           display: "flex",
@@ -171,9 +196,12 @@ export function StocktakeSession({
           </p>
         </div>
         {canMutate ? (
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
             <Button kind="danger" disabled={busy} onClick={() => void handleCancel()}>
               Cancel stocktake
+            </Button>
+            <Button kind="secondary" disabled={busy} onClick={onPause}>
+              Pause
             </Button>
             <Button disabled={busy} renderIcon={Checkmark} onClick={() => void handleComplete()}>
               Complete & Adjust
@@ -229,15 +257,27 @@ export function StocktakeSession({
           lowContrast
         />
       ) : (
-        <StocktakeLinesTable
-          lines={stocktake.lines}
-          drafts={drafts}
-          highlightedLineId={highlightedLineId}
-          canMutate={canMutate}
-          busy={busy}
-          onDraftChange={setDraftValue}
-          onCountedBlur={(lineId) => void saveLine(lineId)}
-        />
+        <Stack gap={4}>
+          <Select
+            id="stocktake-line-filter"
+            labelText="Show"
+            value={lineFilter}
+            onChange={(event) => setLineFilter(event.target.value as LineFilter)}
+          >
+            <SelectItem value="all" text="All items" />
+            <SelectItem value="uncounted" text="Uncounted" />
+            <SelectItem value="variance" text="With variances" />
+          </Select>
+          <StocktakeLinesTable
+            lines={visibleLines}
+            drafts={drafts}
+            highlightedLineId={highlightedLineId}
+            canMutate={canMutate}
+            busy={busy}
+            onDraftChange={setDraftValue}
+            onCountedBlur={(lineId) => void saveLine(lineId)}
+          />
+        </Stack>
       )}
     </Stack>
   );

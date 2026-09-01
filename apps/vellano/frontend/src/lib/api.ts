@@ -679,6 +679,7 @@ export type StocktakeLine = {
   our_ref: string;
   our_barcode: string;
   name: string;
+  category: string | null;
   expected_qty: number;
   counted_qty: number | null;
   variance: number | null;
