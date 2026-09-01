@@ -643,6 +643,173 @@ async def test_role_permissions(
     assert recv_warehouse.status_code == 200
 
 
+async def test_land_succeeds_despite_leftover_deterministic_bill_paths(
+    owner_client: AsyncClient,
+) -> None:
+    from pathlib import Path
+
+    from app.config import settings
+
+    supplier_id = await _create_supplier(owner_client, "Retry Land Supplier")
+    sku = await _create_sku(
+        owner_client,
+        "RETRY-R",
+        "RETRY-B",
+        "Retry Item",
+        "RD",
+        "RF",
+    )
+
+    po_resp = await owner_client.post(
+        "/api/v1/purchase-orders",
+        json={
+            "supplier_id": supplier_id,
+            "lines": [{"sku_id": sku["id"], "qty": 2, "factory_unit_amount": "100.00"}],
+        },
+    )
+    assert po_resp.status_code == 201
+    po_id = po_resp.json()["id"]
+    await owner_client.post(f"/api/v1/purchase-orders/{po_id}/on-water")
+
+    leftover_dir = Path(settings.storage_dir) / "landing-bills" / po_id
+    leftover_dir.mkdir(parents=True, exist_ok=True)
+    (leftover_dir / "factory.pdf").write_bytes(MINIMAL_PDF)
+    (leftover_dir / "freight.pdf").write_bytes(MINIMAL_PDF)
+    (leftover_dir / "clearance.pdf").write_bytes(MINIMAL_PDF)
+
+    land_resp = await owner_client.post(
+        f"/api/v1/purchase-orders/{po_id}/land",
+        data={
+            "fx_to_zar": "20.00",
+            "factory_invoice_number": "FAC-RETRY",
+            "factory_amount": "1000.00",
+            "factory_currency": "USD",
+            "freight_invoice_number": "FRE-RETRY",
+            "freight_amount": "500.00",
+            "freight_currency": "ZAR",
+            "clearance_invoice_number": "CLR-RETRY",
+            "clearance_amount": "200.00",
+            "clearance_currency": "USD",
+        },
+        files={
+            "factory_file": ("f.pdf", MINIMAL_PDF, "application/pdf"),
+            "freight_file": ("fr.pdf", MINIMAL_PDF, "application/pdf"),
+            "clearance_file": ("c.pdf", MINIMAL_PDF, "application/pdf"),
+        },
+    )
+    assert land_resp.status_code == 200
+    body = land_resp.json()
+    assert body["status"] == "landed"
+    line = body["lines"][0]
+    assert line["unit_cost_zar"] is not None
+    assert Decimal(line["unit_cost_zar"]) > 0
+
+
+async def test_receive_blends_unit_cost_at_location(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    supplier_id = await _create_supplier(owner_client, "Blend Supplier")
+    sku = await _create_sku(
+        owner_client,
+        "BLEND-R",
+        "BLEND-B",
+        "Blend Item",
+        "BD",
+        "BF",
+    )
+    kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
+    warehouse = await _create_warehouse(async_client, owner_client)
+    await _relogin_owner(owner_client)
+
+    po_a_resp = await owner_client.post(
+        "/api/v1/purchase-orders",
+        json={
+            "supplier_id": supplier_id,
+            "lines": [{"sku_id": sku["id"], "qty": 2, "factory_unit_amount": "100.00"}],
+        },
+    )
+    po_a_id = po_a_resp.json()["id"]
+    await owner_client.post(f"/api/v1/purchase-orders/{po_a_id}/on-water")
+    land_a = await owner_client.post(
+        f"/api/v1/purchase-orders/{po_a_id}/land",
+        data={
+            "fx_to_zar": "20.00",
+            "factory_invoice_number": "FA",
+            "factory_amount": "1000.00",
+            "factory_currency": "USD",
+            "freight_invoice_number": "FRA",
+            "freight_amount": "0.00",
+            "freight_currency": "ZAR",
+            "clearance_invoice_number": "CLA",
+            "clearance_amount": "0.00",
+            "clearance_currency": "USD",
+        },
+        files={
+            "factory_file": ("f.pdf", MINIMAL_PDF, "application/pdf"),
+            "freight_file": ("fr.pdf", MINIMAL_PDF, "application/pdf"),
+            "clearance_file": ("c.pdf", MINIMAL_PDF, "application/pdf"),
+        },
+    )
+    assert land_a.status_code == 200
+    c1 = Decimal(land_a.json()["lines"][0]["unit_cost_zar"])
+    assert c1 == Decimal("10000.0000")
+
+    recv_a = await warehouse.post(
+        "/api/v1/receive",
+        json={"purchase_order_id": po_a_id, "location_id": kramerville_id},
+    )
+    assert recv_a.status_code == 200
+
+    po_b_resp = await owner_client.post(
+        "/api/v1/purchase-orders",
+        json={
+            "supplier_id": supplier_id,
+            "lines": [{"sku_id": sku["id"], "qty": 3, "factory_unit_amount": "100.00"}],
+        },
+    )
+    po_b_id = po_b_resp.json()["id"]
+    await owner_client.post(f"/api/v1/purchase-orders/{po_b_id}/on-water")
+    land_b = await owner_client.post(
+        f"/api/v1/purchase-orders/{po_b_id}/land",
+        data={
+            "fx_to_zar": "20.00",
+            "factory_invoice_number": "FB",
+            "factory_amount": "2250.00",
+            "factory_currency": "USD",
+            "freight_invoice_number": "FRB",
+            "freight_amount": "0.00",
+            "freight_currency": "ZAR",
+            "clearance_invoice_number": "CLB",
+            "clearance_amount": "0.00",
+            "clearance_currency": "USD",
+        },
+        files={
+            "factory_file": ("f.pdf", MINIMAL_PDF, "application/pdf"),
+            "freight_file": ("fr.pdf", MINIMAL_PDF, "application/pdf"),
+            "clearance_file": ("c.pdf", MINIMAL_PDF, "application/pdf"),
+        },
+    )
+    assert land_b.status_code == 200
+    c2 = Decimal(land_b.json()["lines"][0]["unit_cost_zar"])
+    assert c2 == Decimal("15000.0000")
+
+    recv_b = await warehouse.post(
+        "/api/v1/receive",
+        json={"purchase_order_id": po_b_id, "location_id": kramerville_id},
+    )
+    assert recv_b.status_code == 200
+
+    expected_blend = (Decimal(2) * c1 + Decimal(3) * c2) / Decimal(5)
+    inv = await owner_client.get("/api/v1/inventory")
+    row = next(r for r in inv.json() if r["sku_id"] == sku["id"])
+    assert row["on_hand"] == 5
+    kram = next(loc for loc in row["locations"] if loc["location_name"] == "Kramerville")
+    assert kram["on_hand"] == 5
+    assert Decimal(kram["unit_cost_zar"]) == expected_blend
+    assert Decimal(kram["unit_cost_zar"]) == Decimal("13000.0000")
+
+
 async def test_backend_app_has_no_smtp_or_mailer() -> None:
     import pathlib
 
