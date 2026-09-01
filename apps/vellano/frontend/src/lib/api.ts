@@ -2370,6 +2370,47 @@ export function getSalesVat(fromDate: string, toDate: string): Promise<SalesVatR
   );
 }
 
+export type SkuCriticalityLine = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  category: string | null;
+  qty: number;
+  value_zar: string;
+  share_pct: number;
+  cumulative_pct: number;
+  abc_class: "A" | "B" | "C";
+  hits_50pct_band: boolean;
+  is_a: boolean;
+};
+
+export type SkuCriticalityCategoryLine = {
+  category: string;
+  qty: number;
+  value_zar: string;
+  share_pct: number;
+  cumulative_pct: number;
+  abc_class: "A" | "B" | "C";
+};
+
+export type SkuCriticalityReport = {
+  from_date: string;
+  to_date: string;
+  sku_count_for_50pct: number;
+  sku_count_for_80pct: number;
+  top_sku_share_pct: number;
+  lines: SkuCriticalityLine[];
+  categories: SkuCriticalityCategoryLine[];
+};
+
+export function getSkuCriticality(fromDate: string, toDate: string): Promise<SkuCriticalityReport> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  return apiFetch<SkuCriticalityReport>(
+    `/reports/sku-criticality?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+}
+
 export type SupplierLeadTimeRow = {
   supplier_id: string;
   supplier_name: string;
@@ -2477,6 +2518,28 @@ export async function downloadSalesBySkuCsv(fromDate: string, toDate: string): P
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `sales-by-sku-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadSkuCriticalityCsv(fromDate: string, toDate: string): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const response = await fetch(
+    `/api/v1/reports/sku-criticality/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `sku-criticality-${from}-to-${to}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);

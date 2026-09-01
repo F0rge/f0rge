@@ -21,6 +21,7 @@ from app.services.reports_export import (
     build_journals_csv,
     build_sales_by_sku_csv,
     build_sales_vat_csv,
+    build_sku_criticality_csv,
     build_sku_lead_times_csv,
     build_stock_valuation_csv,
     build_supplier_lead_times_csv,
@@ -32,6 +33,7 @@ from app.schemas.reports_books import (
     JournalReport,
     TrialBalanceReport,
 )
+from app.schemas.reports_criticality import SkuCriticalityReport
 from app.schemas.reports_lead import SkuLeadTimesReport, SupplierLeadTimesReport
 from app.schemas.reports_stock import (
     AgedStockReport,
@@ -190,6 +192,33 @@ async def sales_by_sku_csv(
     report = await service.sales_by_sku(from_date, to_date)
     content = build_sales_by_sku_csv(report)
     filename = f"sales-by-sku-{from_date.isoformat()}-to-{to_date.isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/sku-criticality", response_model=SkuCriticalityReport)
+async def sku_criticality(
+    from_date: Optional[datetime.date] = Query(default=None, alias="from"),
+    to_date: Optional[datetime.date] = Query(default=None, alias="to"),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.sku_criticality(from_date, to_date)
+
+
+@reports_router.get("/sku-criticality/csv")
+async def sku_criticality_csv(
+    from_date: Optional[datetime.date] = Query(default=None, alias="from"),
+    to_date: Optional[datetime.date] = Query(default=None, alias="to"),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.sku_criticality(from_date, to_date)
+    content = build_sku_criticality_csv(report)
+    filename = f"sku-criticality-{report.from_date.isoformat()}-to-{report.to_date.isoformat()}.csv"
     return Response(
         content=content,
         media_type="text/csv",

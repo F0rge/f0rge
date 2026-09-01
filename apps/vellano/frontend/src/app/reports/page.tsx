@@ -23,6 +23,7 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { CriticalityReport } from "@/components/criticality-report";
 import { LeadTimesReport } from "@/components/lead-times-report";
 import {
   downloadAgedStockCsv,
@@ -42,6 +43,7 @@ import {
   getProfitLoss,
   getSalesBySku,
   getSalesVat,
+  getSkuCriticality,
   getSkuLeadTimes,
   getStockValuation,
   getSupplierLeadTimes,
@@ -54,6 +56,7 @@ import {
   type ProfitLossReport,
   type SalesBySkuReport,
   type SalesVatReport,
+  type SkuCriticalityReport,
   type SkuLeadTimesReport,
   type StockValuationReport,
   type SupplierLeadTimesReport,
@@ -154,7 +157,9 @@ export default function ReportsPage() {
   const [salesVat, setSalesVat] = useState<SalesVatReport | null>(null);
   const [supplierLeadTimes, setSupplierLeadTimes] = useState<SupplierLeadTimesReport | null>(null);
   const [skuLeadTimes, setSkuLeadTimes] = useState<SkuLeadTimesReport | null>(null);
+  const [skuCriticality, setSkuCriticality] = useState<SkuCriticalityReport | null>(null);
   const [leadTimesError, setLeadTimesError] = useState<string | null>(null);
+  const [criticalityError, setCriticalityError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -170,6 +175,7 @@ export default function ReportsPage() {
     setLoading(true);
     setError(null);
     setLeadTimesError(null);
+    setCriticalityError(null);
     try {
       const [ar, ap, pl, bs, tb, journals, cash, valuation, aged, salesSku, salesVatReport] =
         await Promise.all([
@@ -211,6 +217,14 @@ export default function ReportsPage() {
       setSupplierLeadTimes({ rows: [] });
       setSkuLeadTimes({ rows: [] });
       setLeadTimesError(err instanceof Error ? err.message : "Failed to load lead times.");
+    }
+
+    try {
+      const criticality = await getSkuCriticality(effectiveFrom, effectiveTo);
+      setSkuCriticality(criticality);
+    } catch (err) {
+      setSkuCriticality(null);
+      setCriticalityError(err instanceof Error ? err.message : "Failed to load criticality.");
     } finally {
       setLoading(false);
     }
@@ -335,7 +349,7 @@ export default function ReportsPage() {
         <h1 className="cds--type-productive-heading-04">Reports</h1>
         <p className="cds--type-body-01">
           Financial and stock reports in ZAR — aged AR/AP, P&amp;L, balance sheet, trial balance,
-          journals, cash summary, stock valuation, aged stock, sales, and lead times.
+          journals, cash summary, stock valuation, aged stock, sales, lead times, and criticality.
         </p>
       </div>
 
@@ -392,6 +406,7 @@ export default function ReportsPage() {
           <Tab>Aged stock</Tab>
           <Tab>Sales by SKU</Tab>
           <Tab>Lead times</Tab>
+          <Tab>Criticality</Tab>
           <Tab>Sales VAT</Tab>
         </TabList>
         <TabPanels>
@@ -911,6 +926,25 @@ export default function ReportsPage() {
                 skus={skuLeadTimes.rows}
                 error={leadTimesError}
                 onCsvError={setError}
+              />
+            ) : null}
+          </TabPanel>
+          <TabPanel>
+            {skuCriticality ? (
+              <CriticalityReport
+                report={skuCriticality}
+                fromDate={fromDate}
+                toDate={toDate}
+                error={criticalityError}
+                onCsvError={setError}
+              />
+            ) : criticalityError ? (
+              <InlineNotification
+                kind="error"
+                title="Criticality"
+                subtitle={criticalityError}
+                hideCloseButton
+                lowContrast
               />
             ) : null}
           </TabPanel>

@@ -9,6 +9,7 @@ from app.schemas.reports_books import (
     JournalReport,
     TrialBalanceReport,
 )
+from app.schemas.reports_criticality import SkuCriticalityReport
 from app.schemas.reports_lead import SkuLeadTimesReport, SupplierLeadTimesReport
 from app.schemas.reports_stock import (
     AgedStockReport,
@@ -86,6 +87,76 @@ def build_aged_stock_csv(report: AgedStockReport) -> bytes:
     writer.writerow([])
     writer.writerow(["total_qty", report.total_qty])
     writer.writerow(["total_value_zar", f"{report.total_value_zar:.2f}"])
+    return buffer.getvalue().encode("utf-8")
+
+
+def build_sku_criticality_csv(report: SkuCriticalityReport) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["from", report.from_date.isoformat(), "to", report.to_date.isoformat()])
+    writer.writerow(
+        [
+            "sku_count_for_50pct",
+            report.sku_count_for_50pct,
+            "sku_count_for_80pct",
+            report.sku_count_for_80pct,
+            "top_sku_share_pct",
+            f"{report.top_sku_share_pct:.2f}",
+        ]
+    )
+    writer.writerow(
+        [
+            "sku_id",
+            "our_ref",
+            "name",
+            "category",
+            "qty",
+            "value_zar",
+            "share_pct",
+            "cumulative_pct",
+            "abc_class",
+            "hits_50pct_band",
+            "is_a",
+        ]
+    )
+    for line in report.lines:
+        writer.writerow(
+            [
+                str(line.sku_id),
+                line.our_ref,
+                line.name,
+                line.category or "",
+                line.qty,
+                f"{line.value_zar:.2f}",
+                f"{line.share_pct:.2f}",
+                f"{line.cumulative_pct:.2f}",
+                line.abc_class,
+                line.hits_50pct_band,
+                line.is_a,
+            ]
+        )
+    writer.writerow([])
+    writer.writerow(
+        [
+            "category",
+            "qty",
+            "value_zar",
+            "share_pct",
+            "cumulative_pct",
+            "abc_class",
+        ]
+    )
+    for line in report.categories:
+        writer.writerow(
+            [
+                line.category,
+                line.qty,
+                f"{line.value_zar:.2f}",
+                f"{line.share_pct:.2f}",
+                f"{line.cumulative_pct:.2f}",
+                line.abc_class,
+            ]
+        )
     return buffer.getvalue().encode("utf-8")
 
 

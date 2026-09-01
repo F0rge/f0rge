@@ -439,6 +439,13 @@ Reports (any authenticated — do **not** require `stock.cost.view`):
 
 Include only `status=received` with both `ordered_at` and `received_at`. Calendar days (`received_at.date() − ordered_at.date()`). **Median not mean** (`statistics.median`; `{10,20,100}` → 20). `median_last_3_days` is the median of the three newest by `received_at` (or all if n&lt;3). Multi-SKU POs share the same PO clock. `manual_lead_time_days` is read-only `Sku.lead_time_days` for comparison — **never PATCH** it from receive or reports. Do not change `#542` reorder math. All four stamps are on `PurchaseOrderResponse`.
 
+## F8 SKU ABC / Pareto criticality
+
+Revenue-based ABC on ex-VAT sales (`InvoiceLine.ex_vat`). **No Alembic.** Credit notes are **not** netted (#545 parity). Any authenticated — no `stock.cost.view`.
+
+- `GET /api/v1/reports/sku-criticality?from=&to=` + `/csv` — optional `from`/`to` (same aliases as sales-by-sku); default last 12 calendar months through today inclusive.
+- **A class** = cumulative value share ≤ 80% (value band, not top 20% of SKU count). **B** ≤ 95%, else **C**. `hits_50pct_band` marks the first SKU crossing 50% cumulative share. Header: `sku_count_for_50pct`, `sku_count_for_80pct`, `top_sku_share_pct`. Category rollup uses `Sku.category` (`null` → `Uncategorised`). Pure rank logic in `app/services/abc.py`.
+
 ## S5 prices
 
 Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesale_inc_vat`, `retail_ex_vat`, `retail_inc_vat`. Source of truth columns on `skus`: `wholesale_ex_vat`, `retail_ex_vat` only (ex-VAT stored; inc-VAT derived on read).
