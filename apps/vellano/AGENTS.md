@@ -428,6 +428,17 @@ On receive, blend unit cost at a location by quantity-weighted average: when add
 
 The app does not send email.
 
+## F7 actual lead times
+
+Four nullable timestamptz stamps on `purchase_orders`: `ordered_at`, `on_water_at`, `landed_at`, `received_at`. First write wins (do not overwrite). Create sets `ordered_at` from `created_at` after flush. Migration `035_po_lead_timestamps` backfills `ordered_at` from `created_at` only — **never** invent water/land/received from `updated_at`. Historical received POs may only have `ordered_at`; prefer n=0 over fake days.
+
+Reports (any authenticated — do **not** require `stock.cost.view`):
+
+- `GET /api/v1/reports/supplier-lead-times` + `/csv`
+- `GET /api/v1/reports/sku-lead-times` + `/csv`
+
+Include only `status=received` with both `ordered_at` and `received_at`. Calendar days (`received_at.date() − ordered_at.date()`). **Median not mean** (`statistics.median`; `{10,20,100}` → 20). `median_last_3_days` is the median of the three newest by `received_at` (or all if n&lt;3). Multi-SKU POs share the same PO clock. `manual_lead_time_days` is read-only `Sku.lead_time_days` for comparison — **never PATCH** it from receive or reports. Do not change `#542` reorder math. All four stamps are on `PurchaseOrderResponse`.
+
 ## S5 prices
 
 Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesale_inc_vat`, `retail_ex_vat`, `retail_inc_vat`. Source of truth columns on `skus`: `wholesale_ex_vat`, `retail_ex_vat` only (ex-VAT stored; inc-VAT derived on read).

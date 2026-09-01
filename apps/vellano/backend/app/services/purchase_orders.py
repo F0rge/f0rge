@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import uuid
 from decimal import Decimal
 from typing import Optional
@@ -42,6 +43,21 @@ from app.services.packing_sheet import (
 from app.services.suppliers import SupplierService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+
+
+def _utc_now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def _as_aware_utc(value: datetime.datetime) -> datetime.datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value
+
+
+def _stamp_first(po: PurchaseOrder, field: str, when: datetime.datetime) -> None:
+    if getattr(po, field) is None:
+        setattr(po, field, when)
 
 
 class PurchaseOrderService:
@@ -98,6 +114,7 @@ class PurchaseOrderService:
 
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(po)
+            _stamp_first(po, "ordered_at", _as_aware_utc(po.created_at))
             for line in data.lines:
                 po_line = PoLine(
                     po_id=po.id,
@@ -117,6 +134,7 @@ class PurchaseOrderService:
 
         async with unit_of_work(self.db):
             po.status = PurchaseOrderStatus.ON_WATER
+            _stamp_first(po, "on_water_at", _utc_now())
             for line in po.lines:
                 stock = await self.sku_stock_crud.get_by_sku_id(line.sku_id)
                 if stock is None:
@@ -207,6 +225,7 @@ class PurchaseOrderService:
         async with unit_of_work(self.db):
             po.fx_to_zar = fx_to_zar
             po.status = PurchaseOrderStatus.LANDED
+            _stamp_first(po, "landed_at", _utc_now())
 
             for line, unit_cost in zip(po.lines, unit_costs):
                 if unit_cost <= 0:
@@ -283,6 +302,7 @@ class PurchaseOrderService:
         async with unit_of_work(self.db):
             po.status = PurchaseOrderStatus.RECEIVED
             po.received_location_id = data.location_id
+            _stamp_first(po, "received_at", _utc_now())
 
             for line in po.lines:
                 stock = await self.sku_stock_crud.get_by_sku_id(line.sku_id)
@@ -351,6 +371,10 @@ class PurchaseOrderService:
             lines=lines,
             bills=bills,
             received_location_id=po.received_location_id,
+            ordered_at=po.ordered_at,
+            on_water_at=po.on_water_at,
+            landed_at=po.landed_at,
+            received_at=po.received_at,
             created_at=po.created_at,
             updated_at=po.updated_at,
         )

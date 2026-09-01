@@ -32,16 +32,19 @@ import {
   deleteSku,
   formatPriceAmount,
   formatZarAmount,
+  getSkuLeadTimes,
   listInventory,
   listSkus,
   skuPhotoUrl,
   updateSku,
   type Sku,
+  type SkuLeadTimeRow,
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { isValidCartonCount, skuCartonCount } from "@/lib/carton-helpers";
 import { downloadCsv } from "@/lib/csv";
+import { formatObservedMedianLine, skuLeadTimeById } from "@/lib/lead-times";
 
 const TABLE_HEADERS = [
   { key: "select", header: "" },
@@ -192,6 +195,7 @@ function CataloguePageContent() {
   const canMutate = canMutateCatalogue(user);
   const canViewCost = canViewCostAudit(user);
   const [skus, setSkus] = useState<Sku[]>([]);
+  const [skuLeadTimes, setSkuLeadTimes] = useState<SkuLeadTimeRow[]>([]);
   const [unitCostBySku, setUnitCostBySku] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -213,8 +217,13 @@ function CataloguePageContent() {
     setLoading(true);
     setError(null);
     try {
-      const [skuData, inventoryData] = await Promise.all([listSkus(), listInventory()]);
+      const [skuData, inventoryData, leadReport] = await Promise.all([
+        listSkus(),
+        listInventory(),
+        getSkuLeadTimes().catch(() => ({ rows: [] as SkuLeadTimeRow[] })),
+      ]);
       setSkus(skuData);
+      setSkuLeadTimes(leadReport.rows);
       const costs = new Map<string, string>();
       for (const entry of inventoryData) {
         if (entry.unit_cost_zar) {
@@ -285,6 +294,8 @@ function CataloguePageContent() {
   const tableHeaders = canViewCost
     ? TABLE_HEADERS
     : TABLE_HEADERS.filter((header) => header.key !== "cost_zar");
+
+  const leadBySku = skuLeadTimeById(skuLeadTimes);
 
   const rows: SkuRow[] = pagedSkus.map((entry) => ({
     id: entry.id,
@@ -494,6 +505,7 @@ function CataloguePageContent() {
         readOnly={!canMutate}
         showCostAudit={canViewCost}
         unitCostZar={priceSku ? (unitCostBySku.get(priceSku.id) ?? null) : null}
+        observedLeadTime={priceSku ? (leadBySku.get(priceSku.id) ?? null) : null}
         saving={saving}
         onSavingChange={setSaving}
         onClose={() => setPriceSku(null)}
@@ -746,6 +758,16 @@ function CataloguePageContent() {
                                           </Tag>
                                         ) : null}
                                       </div>
+                                    </div>
+                                  </TableCell>
+                                );
+                              }
+                              if (cell.info.header === "lead_time_days" && entry) {
+                                return (
+                                  <TableCell key={cell.id}>
+                                    <div>{formatLeadTime(entry.lead_time_days)}</div>
+                                    <div className="cds--type-caption-01">
+                                      {formatObservedMedianLine(leadBySku.get(entry.id))}
                                     </div>
                                   </TableCell>
                                 );

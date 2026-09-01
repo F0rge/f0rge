@@ -669,6 +669,10 @@ export type PurchaseOrder = {
   lines: PoLine[];
   bills: LandingBill[];
   received_location_id: string | null;
+  ordered_at: string | null;
+  on_water_at: string | null;
+  landed_at: string | null;
+  received_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -2366,6 +2370,59 @@ export function getSalesVat(fromDate: string, toDate: string): Promise<SalesVatR
   );
 }
 
+export type SupplierLeadTimeRow = {
+  supplier_id: string;
+  supplier_name: string;
+  n: number;
+  median_days: number;
+  median_last_3_days: number;
+  median_water_days: number | null;
+  p90_days: number | null;
+};
+
+export type SkuLeadTimeRow = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  manual_lead_time_days: number | null;
+  n: number;
+  median_days: number;
+  median_last_3_days: number;
+  median_water_days: number | null;
+  p90_days: number | null;
+};
+
+export type SupplierLeadTimesReport = {
+  rows: SupplierLeadTimeRow[];
+};
+
+export type SkuLeadTimesReport = {
+  rows: SkuLeadTimeRow[];
+};
+
+function normalizeLeadTimeRows<T>(
+  payload: { rows?: T[]; lines?: T[] } | T[],
+): T[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  return payload.rows ?? payload.lines ?? [];
+}
+
+export async function getSupplierLeadTimes(): Promise<SupplierLeadTimesReport> {
+  const payload = await apiFetch<
+    { rows?: SupplierLeadTimeRow[]; lines?: SupplierLeadTimeRow[] } | SupplierLeadTimeRow[]
+  >("/reports/supplier-lead-times");
+  return { rows: normalizeLeadTimeRows(payload) };
+}
+
+export async function getSkuLeadTimes(): Promise<SkuLeadTimesReport> {
+  const payload = await apiFetch<
+    { rows?: SkuLeadTimeRow[]; lines?: SkuLeadTimeRow[] } | SkuLeadTimeRow[]
+  >("/reports/sku-lead-times");
+  return { rows: normalizeLeadTimeRows(payload) };
+}
+
 export async function downloadStockValuationCsv(): Promise<void> {
   const response = await fetch("/api/v1/reports/stock-valuation/csv", {
     credentials: "include",
@@ -2442,6 +2499,44 @@ export async function downloadSalesVatCsv(fromDate: string, toDate: string): Pro
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `sales-vat-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadSupplierLeadTimesCsv(): Promise<void> {
+  const response = await fetch("/api/v1/reports/supplier-lead-times/csv", {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `supplier-lead-times-${reportTodayIso()}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadSkuLeadTimesCsv(): Promise<void> {
+  const response = await fetch("/api/v1/reports/sku-lead-times/csv", {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `sku-lead-times-${reportTodayIso()}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);

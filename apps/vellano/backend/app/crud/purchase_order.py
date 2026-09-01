@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.inventory import LocationStock, SkuStock
-from app.models.purchase_order import PoLine, PurchaseOrder
+from app.models.purchase_order import PoLine, PurchaseOrder, PurchaseOrderStatus
 from f0rge_db.crud import BaseCRUD
 
 
@@ -40,6 +40,22 @@ class PurchaseOrderCRUD(BaseCRUD):
             .order_by(PurchaseOrder.po_number)
         )
         return list(result.scalars().all())
+
+    async def list_received_dated(self) -> list[PurchaseOrder]:
+        result = await self.db.execute(
+            select(PurchaseOrder)
+            .options(
+                selectinload(PurchaseOrder.supplier),
+                selectinload(PurchaseOrder.lines).selectinload(PoLine.sku),
+            )
+            .where(
+                PurchaseOrder.status == PurchaseOrderStatus.RECEIVED,
+                PurchaseOrder.ordered_at.isnot(None),
+                PurchaseOrder.received_at.isnot(None),
+            )
+            .order_by(PurchaseOrder.received_at, PurchaseOrder.po_number)
+        )
+        return list(result.scalars().unique().all())
 
     async def get_next_po_number(self) -> str:
         result = await self.db.execute(

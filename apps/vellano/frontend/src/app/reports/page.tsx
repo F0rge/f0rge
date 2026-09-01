@@ -23,6 +23,7 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { LeadTimesReport } from "@/components/lead-times-report";
 import {
   downloadAgedStockCsv,
   downloadCashSummaryCsv,
@@ -41,7 +42,9 @@ import {
   getProfitLoss,
   getSalesBySku,
   getSalesVat,
+  getSkuLeadTimes,
   getStockValuation,
+  getSupplierLeadTimes,
   getTrialBalance,
   type AgedReport,
   type AgedStockReport,
@@ -51,7 +54,9 @@ import {
   type ProfitLossReport,
   type SalesBySkuReport,
   type SalesVatReport,
+  type SkuLeadTimesReport,
   type StockValuationReport,
+  type SupplierLeadTimesReport,
   type TrialBalanceReport,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -147,6 +152,9 @@ export default function ReportsPage() {
   const [agedStock, setAgedStock] = useState<AgedStockReport | null>(null);
   const [salesBySku, setSalesBySku] = useState<SalesBySkuReport | null>(null);
   const [salesVat, setSalesVat] = useState<SalesVatReport | null>(null);
+  const [supplierLeadTimes, setSupplierLeadTimes] = useState<SupplierLeadTimesReport | null>(null);
+  const [skuLeadTimes, setSkuLeadTimes] = useState<SkuLeadTimesReport | null>(null);
+  const [leadTimesError, setLeadTimesError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -161,6 +169,7 @@ export default function ReportsPage() {
 
     setLoading(true);
     setError(null);
+    setLeadTimesError(null);
     try {
       const [ar, ap, pl, bs, tb, journals, cash, valuation, aged, salesSku, salesVatReport] =
         await Promise.all([
@@ -189,6 +198,19 @@ export default function ReportsPage() {
       setSalesVat(salesVatReport);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load reports.");
+    }
+
+    try {
+      const [supplierLead, skuLead] = await Promise.all([
+        getSupplierLeadTimes(),
+        getSkuLeadTimes(),
+      ]);
+      setSupplierLeadTimes(supplierLead);
+      setSkuLeadTimes(skuLead);
+    } catch (err) {
+      setSupplierLeadTimes({ rows: [] });
+      setSkuLeadTimes({ rows: [] });
+      setLeadTimesError(err instanceof Error ? err.message : "Failed to load lead times.");
     } finally {
       setLoading(false);
     }
@@ -313,7 +335,7 @@ export default function ReportsPage() {
         <h1 className="cds--type-productive-heading-04">Reports</h1>
         <p className="cds--type-body-01">
           Financial and stock reports in ZAR — aged AR/AP, P&amp;L, balance sheet, trial balance,
-          journals, cash summary, stock valuation, aged stock, and sales.
+          journals, cash summary, stock valuation, aged stock, sales, and lead times.
         </p>
       </div>
 
@@ -369,6 +391,7 @@ export default function ReportsPage() {
           <Tab>Stock valuation</Tab>
           <Tab>Aged stock</Tab>
           <Tab>Sales by SKU</Tab>
+          <Tab>Lead times</Tab>
           <Tab>Sales VAT</Tab>
         </TabList>
         <TabPanels>
@@ -879,6 +902,16 @@ export default function ReportsPage() {
                   )}
                 </DataTable>
               </Stack>
+            ) : null}
+          </TabPanel>
+          <TabPanel>
+            {supplierLeadTimes && skuLeadTimes ? (
+              <LeadTimesReport
+                suppliers={supplierLeadTimes.rows}
+                skus={skuLeadTimes.rows}
+                error={leadTimesError}
+                onCsvError={setError}
+              />
             ) : null}
           </TabPanel>
           <TabPanel>

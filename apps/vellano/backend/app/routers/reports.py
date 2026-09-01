@@ -21,7 +21,9 @@ from app.services.reports_export import (
     build_journals_csv,
     build_sales_by_sku_csv,
     build_sales_vat_csv,
+    build_sku_lead_times_csv,
     build_stock_valuation_csv,
+    build_supplier_lead_times_csv,
     build_trial_balance_csv,
 )
 from app.services.vat201_export import build_vat201_csv, build_vat201_pdf
@@ -30,6 +32,7 @@ from app.schemas.reports_books import (
     JournalReport,
     TrialBalanceReport,
 )
+from app.schemas.reports_lead import SkuLeadTimesReport, SupplierLeadTimesReport
 from app.schemas.reports_stock import (
     AgedStockReport,
     SalesBySkuReport,
@@ -187,6 +190,52 @@ async def sales_by_sku_csv(
     report = await service.sales_by_sku(from_date, to_date)
     content = build_sales_by_sku_csv(report)
     filename = f"sales-by-sku-{from_date.isoformat()}-to-{to_date.isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/supplier-lead-times", response_model=SupplierLeadTimesReport)
+async def supplier_lead_times(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.supplier_lead_times()
+
+
+@reports_router.get("/supplier-lead-times/csv")
+async def supplier_lead_times_csv(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.supplier_lead_times()
+    content = build_supplier_lead_times_csv(report)
+    filename = f"supplier-lead-times-{datetime.date.today().isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/sku-lead-times", response_model=SkuLeadTimesReport)
+async def sku_lead_times(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.sku_lead_times()
+
+
+@reports_router.get("/sku-lead-times/csv")
+async def sku_lead_times_csv(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.sku_lead_times()
+    content = build_sku_lead_times_csv(report)
+    filename = f"sku-lead-times-{datetime.date.today().isoformat()}.csv"
     return Response(
         content=content,
         media_type="text/csv",

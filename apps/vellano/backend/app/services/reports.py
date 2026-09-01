@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.crud.account import AccountCRUD
+from app.crud.purchase_order import PurchaseOrderCRUD
 from app.models.account import AccountType
 from app.models.bill import Bill
 from app.models.credit_note import CreditNote
@@ -39,6 +40,7 @@ from app.schemas.reports_books import (
     TrialBalanceLine,
     TrialBalanceReport,
 )
+from app.schemas.reports_lead import SkuLeadTimesReport, SupplierLeadTimesReport
 from app.schemas.reports_stock import (
     AgedStockBucket,
     AgedStockLine,
@@ -49,6 +51,7 @@ from app.schemas.reports_stock import (
     StockValuationLine,
     StockValuationReport,
 )
+from app.services.lead_times import build_sku_lead_times, build_supplier_lead_times
 
 AGED_STOCK_BUCKET_SPECS: tuple[tuple[str, str], ...] = (
     ("0-90", "0–90 days"),
@@ -102,6 +105,7 @@ class ReportsService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.account_crud = AccountCRUD(db)
+        self.po_crud = PurchaseOrderCRUD(db)
 
     async def aged_ar(self, as_of: datetime.date) -> AgedReport:
         result = await self.db.execute(
@@ -654,6 +658,14 @@ class ReportsService:
             total_cash_out_zar=total_out,
             total_net_zar=total_in - total_out,
         )
+
+    async def supplier_lead_times(self) -> SupplierLeadTimesReport:
+        orders = await self.po_crud.list_received_dated()
+        return build_supplier_lead_times(orders)
+
+    async def sku_lead_times(self) -> SkuLeadTimesReport:
+        orders = await self.po_crud.list_received_dated()
+        return build_sku_lead_times(orders)
 
     async def _period_debit_credit(
         self,
