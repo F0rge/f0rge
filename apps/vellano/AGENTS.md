@@ -413,7 +413,7 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 | Action | owner | buyer | warehouse | till | books |
 |--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| List accounts, contacts, invoices, bills, payments | yes | yes | yes | yes | yes |
+| List accounts, contacts, invoices, repeating invoices, bills, payments, journals | yes | yes | yes | yes | yes |
 | Mutate CoA, contacts, invoices, repeating invoices, CN, bills, payments, journals | yes | no | no | no | yes |
 
 Example invoice create:
@@ -526,7 +526,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/receive` | `/receive` |
 | `/wms` | `/receive`, `/stocktakes`, `/transfers` |
 | `/reports` | `/reports` |
-| `/vat201` | `/vat201/periods` |
+| `/vat201` | `/vat201/periods` (range preview still `GET /reports/vat201`) |
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
 | `/import` | `/imports` |
