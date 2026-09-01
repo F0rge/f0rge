@@ -455,6 +455,27 @@ export function createProforma(payload: CreateProformaPayload): Promise<Proforma
   return apiUpload<Proforma>("/proformas", formData);
 }
 
+export async function downloadProformaPdf(id: string, invoiceNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/proformas/${id}/file`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${invoiceNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 export type Sku = {
   id: string;
   our_ref: string;
