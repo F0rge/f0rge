@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     seed_books_password: str = "change-me-books"
     seed_warehouse_password: str = "change-me-warehouse"
     seed_buyer_password: str = "change-me-buyer"
+    seed_playground: bool = False
 
     storage_dir: str = "storage"
     bucket_name: str = ""
