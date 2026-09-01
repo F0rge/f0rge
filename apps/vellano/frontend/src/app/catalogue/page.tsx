@@ -306,11 +306,8 @@ function CataloguePageContent() {
         name: editForm.name.trim(),
         design: editForm.design.trim(),
         fabric: editForm.fabric.trim(),
+        category: editForm.category.trim() || null,
       };
-      const category = editForm.category.trim();
-      if (category) {
-        payload.category = category;
-      }
       await updateSku(editSku.id, payload);
       setEditSku(null);
       setEditForm(emptyIdentityForm());
@@ -496,7 +493,7 @@ function CataloguePageContent() {
         <Stack gap={5}>
           <TextInput
             id="edit-sku-our-ref"
-            labelText="Our ref"
+            labelText="Our ref *"
             value={editForm.our_ref}
             onChange={(event) =>
               setEditForm((form) => ({ ...form, our_ref: event.target.value }))
@@ -504,7 +501,7 @@ function CataloguePageContent() {
           />
           <TextInput
             id="edit-sku-our-barcode"
-            labelText="Our barcode"
+            labelText="Our barcode *"
             value={editForm.our_barcode}
             onChange={(event) =>
               setEditForm((form) => ({ ...form, our_barcode: event.target.value }))
@@ -512,13 +509,13 @@ function CataloguePageContent() {
           />
           <TextInput
             id="edit-sku-name"
-            labelText="Name"
+            labelText="Name *"
             value={editForm.name}
             onChange={(event) => setEditForm((form) => ({ ...form, name: event.target.value }))}
           />
           <TextInput
             id="edit-sku-design"
-            labelText="Design"
+            labelText="Design *"
             value={editForm.design}
             onChange={(event) =>
               setEditForm((form) => ({ ...form, design: event.target.value }))
@@ -526,7 +523,7 @@ function CataloguePageContent() {
           />
           <TextInput
             id="edit-sku-fabric"
-            labelText="Fabric"
+            labelText="Fabric *"
             value={editForm.fabric}
             onChange={(event) =>
               setEditForm((form) => ({ ...form, fabric: event.target.value }))

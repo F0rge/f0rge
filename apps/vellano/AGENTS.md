@@ -77,9 +77,9 @@ Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` b
 
 ### Playground seed (develop / local demos)
 
-Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (marker: supplier `Playground Imports` or SKU `PG-TABLE`):
+Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (markers: supplier `Playground Imports` / SKU `PG-TABLE`, then demo pack `PG-SOFA`, then sofa catalogue `VEL-SOFA-LONDON`):
 
-suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → transfer 1 table to Bedfordview → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched).
+suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → transfer 1 table to Bedfordview → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched). A later pack adds high-end sofa SKUs with Unsplash photos (local files under `backend/data/playground_photos/`), extra customers, a trade invoice, a sofa layby, and a Minotti ZAR bill. Idempotent — existing DBs still get the sofa pack on the next boot.
 
 **Railway develop:** on service `vellano-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do not enable on a database you want to keep empty. After it runs, log in as `owner@example.com` / `change-me-owner` (or the role users above) and walk stock → proforma → PO → receive → transfer → till → books.
 
