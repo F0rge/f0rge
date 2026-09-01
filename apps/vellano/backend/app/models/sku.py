@@ -19,6 +19,7 @@ class Sku(UUIDPkMixin, TimestampMixin, Base):
     design: Mapped[str] = mapped_column(String(255), nullable=False)
     fabric: Mapped[str] = mapped_column(String(255), nullable=False)
     supplier_ref: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     wholesale_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     retail_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)

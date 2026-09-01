@@ -138,3 +138,49 @@ body {
   border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   background: var(--cds-layer-01, #fff);
 }
+
+.vellano-catalogue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.vellano-catalogue-panel {
+  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  background: var(--cds-layer-01, #fff);
+}
+
+.vellano-catalogue-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  background: var(--cds-background, #f4f4f4);
+}
+
+.vellano-catalogue-toolbar__left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.vellano-catalogue-toolbar__left .cds--text-input-wrapper {
+  width: min(16rem, 100%);
+}
+
+.vellano-catalogue-toolbar__divider {
+  width: 1px;
+  height: 1.5rem;
+  background: var(--cds-border-subtle-02, #c6c6c6);
+}
+
+.vellano-catalogue-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}

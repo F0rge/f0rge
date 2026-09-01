@@ -82,7 +82,7 @@ async def test_commit_inventory_creates_sku(owner_client: AsyncClient) -> None:
     payload = got.json()
     assert payload["retail_inc_vat"] == "115.00"
     assert payload["design"].startswith("csv:")
-    assert "category" not in payload
+    assert payload["category"] == "Dining"
     assert payload["fabric"] == "-"
 
 

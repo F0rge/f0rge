@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import uuid
+from typing import Optional
 
 from fastapi import UploadFile
 from fastapi.responses import RedirectResponse, Response
@@ -34,8 +35,8 @@ class SkuService:
         self.location_crud = LocationCRUD(db)
         self.stock_movements = StockMovementService(db)
 
-    async def list(self) -> list[SkuResponse]:
-        skus = await self.crud.list_all()
+    async def list(self, category: Optional[str] = None) -> list[SkuResponse]:
+        skus = await self.crud.list_all(category=category)
         return [self._to_response(s) for s in skus]
 
     async def get(self, sku_id: uuid.UUID) -> SkuResponse:
@@ -50,6 +51,9 @@ class SkuService:
             raise NotFoundError("SKU not found")
 
         fields_set = data.model_fields_set
+
+        if "category" in fields_set:
+            sku.category = data.category
 
         if "wholesale_ex_vat" in fields_set and "wholesale_inc_vat" in fields_set:
             raise ValidationError("Cannot set both wholesale_ex_vat and wholesale_inc_vat")
@@ -100,6 +104,7 @@ class SkuService:
             design=data.design,
             fabric=data.fabric,
             supplier_ref=data.supplier_ref,
+            category=data.category,
         )
         try:
             async with unit_of_work(self.db):
@@ -171,6 +176,7 @@ class SkuService:
             design=sku.design,
             fabric=sku.fabric,
             supplier_ref=sku.supplier_ref,
+            category=sku.category,
             photo_storage_key=sku.photo_storage_key,
             wholesale_ex_vat=sku.wholesale_ex_vat,
             wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat),

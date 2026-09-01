@@ -21,16 +21,17 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
+import { Barcode, DocumentImport, Printer } from "@carbon/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { SkuPriceEditor } from "@/components/sku-price-editor";
 import {
   ApiError,
   canMutateCatalogue,
   createSku,
-  displayPrice,
   formatPriceAmount,
+  formatZarAmount,
   isActiveLocation,
   listInventory,
   listLocations,
@@ -44,33 +45,25 @@ import {
 import { useAuth } from "@/lib/auth";
 
 const TABLE_HEADERS = [
-  { key: "name", header: "Name" },
-  { key: "actions", header: "Actions" },
-  { key: "wholesale_ex_vat", header: "Wholesale ex-VAT" },
-  { key: "wholesale_inc_vat", header: "Wholesale inc-VAT" },
-  { key: "retail_ex_vat", header: "Retail ex-VAT" },
-  { key: "retail_inc_vat", header: "Retail inc-VAT" },
-  { key: "design", header: "Design" },
-  { key: "fabric", header: "Fabric" },
-  { key: "our_ref", header: "Our ref" },
+  { key: "select", header: "" },
+  { key: "product", header: "SKU / Product Name" },
+  { key: "category", header: "Category" },
+  { key: "cost_zar", header: "Cost (ZAR)" },
+  { key: "retail_inc_vat", header: "Retail Price" },
+  { key: "wholesale_inc_vat", header: "Trade Price" },
   { key: "our_barcode", header: "Our barcode" },
-  { key: "supplier_ref", header: "Supplier ref" },
-  { key: "photo", header: "Photo" },
+  { key: "actions", header: "Actions" },
 ] as const;
 
 type SkuRow = {
   id: string;
-  name: string;
-  design: string;
-  fabric: string;
-  our_ref: string;
-  our_barcode: string;
-  supplier_ref: string;
-  wholesale_ex_vat: string;
-  wholesale_inc_vat: string;
-  retail_ex_vat: string;
+  product: string;
+  category: string;
+  cost_zar: string;
   retail_inc_vat: string;
-  photo: string;
+  wholesale_inc_vat: string;
+  our_barcode: string;
+  select: string;
   actions: string;
 };
 
@@ -80,8 +73,65 @@ const emptyCreateForm: CreateSkuPayload = {
   name: "",
   design: "",
   fabric: "",
-  supplier_ref: "",
 };
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function formatIncVatPrice(value: string | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return value;
+  }
+  return formatZarAmount(formatPriceAmount(parsed));
+}
+
+function printSkuLabels(targetSkus: Sku[]): void {
+  if (targetSkus.length === 0) {
+    return;
+  }
+  const printWindow = window.open("", "_blank", "noopener,noreferrer");
+  if (!printWindow) {
+    return;
+  }
+  const labelsHtml = targetSkus
+    .map(
+      (sku) => `
+    <div class="label">
+      <div class="name">${escapeHtml(sku.name)}</div>
+      <div class="ref">${escapeHtml(sku.our_ref)}</div>
+      <div class="barcode">${escapeHtml(sku.our_barcode)}</div>
+    </div>`,
+    )
+    .join("");
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Barcode labels</title>
+  <style>
+    body { font-family: "IBM Plex Sans", sans-serif; margin: 1.5rem; color: #161616; }
+    .label { page-break-inside: avoid; margin-bottom: 2rem; padding: 1rem; border: 1px solid #e0e0e0; }
+    .name { font-size: 1rem; margin-bottom: 0.25rem; }
+    .ref { font-weight: 600; margin-bottom: 0.5rem; }
+    .barcode { font-family: monospace; font-size: 1.75rem; font-weight: 600; letter-spacing: 0.05em; }
+    @media print { body { margin: 0; } .label { border: none; } }
+  </style>
+</head>
+<body>${labelsHtml}</body>
+</html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+}
 
 function CataloguePageContent() {
   const { user } = useAuth();
@@ -103,6 +153,9 @@ function CataloguePageContent() {
   const [openingUnitCost, setOpeningUnitCost] = useState("");
   const [openingDate, setOpeningDate] = useState("");
   const [saving, setSaving] = useState(false);
+  const [searchFilter, setSearchFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const loadSkus = useCallback(async () => {
     setLoading(true);
@@ -162,19 +215,46 @@ function CataloguePageContent() {
     router.replace(qs ? `/catalogue?${qs}` : "/catalogue");
   }, [canMutate, searchParams, router]);
 
-  const rows: SkuRow[] = skus.map((entry) => ({
+  const categories = useMemo(() => {
+    const values = new Set<string>();
+    for (const sku of skus) {
+      const category = sku.category?.trim();
+      if (category) {
+        values.add(category);
+      }
+    }
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }, [skus]);
+
+  const filteredSkus = useMemo(() => {
+    const query = searchFilter.trim().toLowerCase();
+    return skus.filter((sku) => {
+      if (categoryFilter && sku.category?.trim() !== categoryFilter) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      return (
+        sku.name.toLowerCase().includes(query) ||
+        sku.our_ref.toLowerCase().includes(query) ||
+        sku.our_barcode.toLowerCase().includes(query)
+      );
+    });
+  }, [skus, categoryFilter, searchFilter]);
+
+  const allFilteredSelected =
+    filteredSkus.length > 0 && filteredSkus.every((sku) => selectedIds.has(sku.id));
+
+  const rows: SkuRow[] = filteredSkus.map((entry) => ({
     id: entry.id,
-    name: entry.name,
-    design: entry.design,
-    fabric: entry.fabric,
-    our_ref: entry.our_ref,
+    product: entry.id,
+    category: entry.category?.trim() || "—",
+    cost_zar: formatZarAmount(unitCostBySku.get(entry.id) ?? null),
+    retail_inc_vat: formatIncVatPrice(entry.retail_inc_vat),
+    wholesale_inc_vat: formatIncVatPrice(entry.wholesale_inc_vat),
     our_barcode: entry.our_barcode,
-    supplier_ref: entry.supplier_ref ?? "—",
-    wholesale_ex_vat: displayPrice(entry.wholesale_ex_vat),
-    wholesale_inc_vat: displayPrice(entry.wholesale_inc_vat),
-    retail_ex_vat: displayPrice(entry.retail_ex_vat),
-    retail_inc_vat: displayPrice(entry.retail_inc_vat),
-    photo: entry.id,
+    select: entry.id,
     actions: entry.id,
   }));
 
@@ -192,6 +272,42 @@ function CataloguePageContent() {
     setPriceSku(entry);
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAllFiltered() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        for (const sku of filteredSkus) {
+          next.delete(sku.id);
+        }
+      } else {
+        for (const sku of filteredSkus) {
+          next.add(sku.id);
+        }
+      }
+      return next;
+    });
+  }
+
+  function handlePrintLabels() {
+    const targetSkus =
+      selectedIds.size > 0
+        ? filteredSkus.filter((sku) => selectedIds.has(sku.id))
+        : filteredSkus;
+    printSkuLabels(targetSkus);
+  }
+
   async function handleCreate() {
     setSaving(true);
     setError(null);
@@ -206,6 +322,10 @@ function CataloguePageContent() {
       const supplierRef = createForm.supplier_ref?.trim();
       if (supplierRef) {
         payload.supplier_ref = supplierRef;
+      }
+      const category = createForm.category?.trim();
+      if (category) {
+        payload.category = category;
       }
       if (recordStockNow) {
         const cost = parsePriceInput(openingUnitCost);
@@ -266,10 +386,21 @@ function CataloguePageContent() {
         <div>
           <h1 className="cds--type-productive-heading-04">Catalogue</h1>
           <p className="cds--type-body-01">
-            SKU catalogue — our refs and barcodes distinct from supplier references.
+            Manage products, pricing tiers, and generate barcode labels.
           </p>
         </div>
-        {canMutate ? <Button onClick={() => setCreateOpen(true)}>Add SKU</Button> : null}
+        {canMutate ? (
+          <div className="vellano-catalogue-actions">
+            <Button
+              kind="secondary"
+              renderIcon={DocumentImport}
+              onClick={() => router.push("/import")}
+            >
+              Import
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>Add SKU</Button>
+          </div>
+        ) : null}
       </div>
 
       {error ? (
@@ -305,79 +436,168 @@ function CataloguePageContent() {
           lowContrast
         />
       ) : (
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Catalogue" description="All Vellano SKUs">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.map((row) => {
-                    const entry = skus.find((sku) => sku.id === row.id);
-                    return (
-                      <TableRow
-                        {...getRowProps({
-                          row,
-                          onClick: () => {
-                            if (entry) {
-                              openPriceEditor(entry);
-                            }
-                          },
-                        })}
-                        key={row.id}
-                        style={{ cursor: entry ? "pointer" : undefined }}
-                      >
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "photo") {
-                            if (entry?.photo_storage_key) {
-                              return (
-                                <TableCell key={cell.id}>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={`/api/v1/skus/${entry.id}/photo`}
-                                    alt={entry.name}
-                                    style={{ maxHeight: "3rem", maxWidth: "3rem", objectFit: "cover" }}
-                                  />
-                                </TableCell>
-                              );
-                            }
-                            return <TableCell key={cell.id}>—</TableCell>;
-                          }
-                          if (cell.info.header === "actions" && entry) {
-                            return (
-                              <TableCell key={cell.id}>
-                                <Button
-                                  type="button"
-                                  kind="ghost"
-                                  size="sm"
-                                  onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    openPriceEditor(entry);
-                                  }}
-                                >
-                                  {canMutate ? "Edit prices" : "View prices"}
-                                </Button>
-                              </TableCell>
-                            );
-                          }
-                          return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                        })}
+        <div className="vellano-catalogue-panel">
+          <div className="vellano-catalogue-toolbar">
+            <div className="vellano-catalogue-toolbar__left">
+              <TextInput
+                id="catalogue-search"
+                labelText="Filter SKUs"
+                hideLabel
+                placeholder="Filter SKUs…"
+                value={searchFilter}
+                onChange={(event) => setSearchFilter(event.target.value)}
+                size="md"
+              />
+              <div className="vellano-catalogue-toolbar__divider" aria-hidden />
+              <div className="vellano-catalogue-chips" role="group" aria-label="Category filter">
+                <Button
+                  kind={categoryFilter === null ? "primary" : "ghost"}
+                  size="sm"
+                  onClick={() => setCategoryFilter(null)}
+                >
+                  All
+                </Button>
+                {categories.map((category) => (
+                  <Button
+                    key={category}
+                    kind={categoryFilter === category ? "primary" : "ghost"}
+                    size="sm"
+                    onClick={() => setCategoryFilter(category)}
+                  >
+                    {category}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <Button kind="ghost" renderIcon={Printer} onClick={handlePrintLabels}>
+              Print labels
+            </Button>
+          </div>
+
+          <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
+            {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+              <TableContainer title="Catalogue" description="All Vellano SKUs">
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                          {header.key === "select" ? (
+                            <Checkbox
+                              id="catalogue-select-all"
+                              labelText="Select all"
+                              hideLabel
+                              checked={allFilteredSelected}
+                              indeterminate={!allFilteredSelected && filteredSkus.some((sku) => selectedIds.has(sku.id))}
+                              onChange={() => toggleSelectAllFiltered()}
+                            />
+                          ) : (
+                            header.header
+                          )}
+                        </TableHeader>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {tableRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={headers.length}>
+                          No SKUs match the current filters.
+                        </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
+                    ) : (
+                      tableRows.map((row) => {
+                        const entry = filteredSkus.find((sku) => sku.id === row.id);
+                        return (
+                          <TableRow
+                            {...getRowProps({
+                              row,
+                              onClick: () => {
+                                if (entry) {
+                                  openPriceEditor(entry);
+                                }
+                              },
+                            })}
+                            key={row.id}
+                            style={{ cursor: entry ? "pointer" : undefined }}
+                          >
+                            {row.cells.map((cell) => {
+                              if (cell.info.header === "select" && entry) {
+                                return (
+                                  <TableCell key={cell.id}>
+                                    <Checkbox
+                                      id={`catalogue-select-${entry.id}`}
+                                      labelText={`Select ${entry.our_ref}`}
+                                      hideLabel
+                                      checked={selectedIds.has(entry.id)}
+                                      onClick={(event) => event.stopPropagation()}
+                                      onChange={() => toggleSelect(entry.id)}
+                                    />
+                                  </TableCell>
+                                );
+                              }
+                              if (cell.info.header === "product" && entry) {
+                                return (
+                                  <TableCell key={cell.id}>
+                                    <div className="cds--type-semibold">{entry.our_ref}</div>
+                                    <div className="cds--type-caption-01">{entry.name}</div>
+                                  </TableCell>
+                                );
+                              }
+                              if (
+                                cell.info.header === "cost_zar" ||
+                                cell.info.header === "retail_inc_vat" ||
+                                cell.info.header === "wholesale_inc_vat"
+                              ) {
+                                return (
+                                  <TableCell key={cell.id} style={{ textAlign: "right" }}>
+                                    {cell.value}
+                                  </TableCell>
+                                );
+                              }
+                              if (cell.info.header === "actions" && entry) {
+                                return (
+                                  <TableCell key={cell.id} style={{ textAlign: "center" }}>
+                                    <Button
+                                      type="button"
+                                      kind="ghost"
+                                      size="sm"
+                                      hasIconOnly
+                                      iconDescription="Print label"
+                                      renderIcon={Barcode}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        printSkuLabels([entry]);
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        openPriceEditor(entry);
+                                      }}
+                                    >
+                                      {canMutate ? "Edit prices" : "View prices"}
+                                    </Button>
+                                  </TableCell>
+                                );
+                              }
+                              return <TableCell key={cell.id}>{cell.value}</TableCell>;
+                            })}
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+        </div>
       )}
 
       <Modal
@@ -417,6 +637,15 @@ function CataloguePageContent() {
               setCreateForm((form) => ({ ...form, name: event.target.value }))
             }
             required
+          />
+          <TextInput
+            id="create-sku-category"
+            labelText="Category"
+            helperText="Optional — e.g. Seating, Tables"
+            value={createForm.category ?? ""}
+            onChange={(event) =>
+              setCreateForm((form) => ({ ...form, category: event.target.value }))
+            }
           />
           <TextInput
             id="create-sku-design"

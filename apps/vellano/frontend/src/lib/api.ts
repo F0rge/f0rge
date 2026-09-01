@@ -284,6 +284,7 @@ export type Sku = {
   name: string;
   design: string;
   fabric: string;
+  category: string | null;
   supplier_ref: string | null;
   photo_storage_key: string | null;
   wholesale_ex_vat: string | null;
@@ -344,6 +345,7 @@ export type CreateSkuPayload = {
   name: string;
   design: string;
   fabric: string;
+  category?: string;
   supplier_ref?: string;
   opening_location_id?: string;
   opening_qty?: number;
@@ -351,12 +353,24 @@ export type CreateSkuPayload = {
   opening_date?: string;
 };
 
-export function listSkus(): Promise<Sku[]> {
-  return apiFetch<Sku[]>("/skus");
+export function listSkus(options?: { category?: string }): Promise<Sku[]> {
+  const params = new URLSearchParams();
+  const category = options?.category?.trim();
+  if (category) {
+    params.set("category", category);
+  }
+  const qs = params.toString();
+  return apiFetch<Sku[]>(`/skus${qs ? `?${qs}` : ""}`);
 }
 
 export function createSku(payload: CreateSkuPayload): Promise<Sku> {
   const body: CreateSkuPayload = { ...payload };
+  const category = body.category?.trim();
+  if (category) {
+    body.category = category;
+  } else {
+    delete body.category;
+  }
   const openingDate = body.opening_date?.trim();
   if (openingDate) {
     body.opening_date = openingDate;

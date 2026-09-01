@@ -285,6 +285,7 @@ class CatalogueImportService:
         if existing is not None:
             existing.name = row.name
             existing.retail_ex_vat = retail_ex
+            existing.category = row.category
             if row.barcode:
                 existing.our_barcode = row.barcode
             return existing
@@ -294,6 +295,7 @@ class CatalogueImportService:
             name=row.name,
             design=f"csv:{row.our_ref}",
             fabric="-",
+            category=row.category,
             retail_ex_vat=retail_ex,
         )
         await self.sku_crud.add_and_flush(sku)

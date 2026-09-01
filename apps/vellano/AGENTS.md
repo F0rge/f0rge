@@ -142,13 +142,20 @@ Endpoints (cookie `vellano_session`): `POST /api/v1/imports/preview`, `POST /api
 
 Preview is in-memory (200 even with row errors; 400 only if a file is unreadable or empty). Commit re-parses the files; any row error → 400; otherwise one transaction: inventory then SOH.
 
-**Inventory columns:** our_ref, name, category, retail_inc_vat required; barcode and cost_zar optional. Category is required for Cin7 parity and **ignored until S8** (not stored). Create-or-update by exact `our_ref`. Create uses `design = csv:{our_ref}`, `fabric = -`, `our_barcode = barcode or csv:{our_ref}`. Retail inc-VAT is stored as `retail_ex_vat` via `inc_to_ex`.
+**Inventory columns:** our_ref, name, category, retail_inc_vat required; barcode and cost_zar optional. Category is required for Cin7 parity and **stored on the SKU** (`skus.category`, max 64). Create-or-update by exact `our_ref`. Create uses `design = csv:{our_ref}`, `fabric = -`, `our_barcode = barcode or csv:{our_ref}`. Retail inc-VAT is stored as `retail_ex_vat` via `inc_to_ex`.
 
 **SOH columns:** our_ref, location, qty required; unit_cost_zar optional. Location is an active case-insensitive name match. SKU must exist in the DB or in the same inventory file. **SET** on-hand to qty (not add). Increase needs a unit cost from the SOH column, inventory `cost_zar`, or existing location cost (`"unit cost required to increase stock"`). Audit source `import`. In-progress stocktake at that location → 409 `"Location is locked for stocktake"`.
 
 | Action | owner | buyer | warehouse | till | books |
 |--------|:-----:|:-----:|:---------:|:----:|:-----:|
 | Preview / commit CSV import | yes | yes | no | no | no |
+
+## V2-S8 SKU category
+
+- **SKUs:** nullable `category` (max 64) on create (`SkuCreate`), PATCH (`SkuUpdate` — set or clear with `null`), and in responses.
+- **List filter:** `GET /skus?category=` — case-insensitive exact match when provided; omit to list all.
+- **CSV import:** inventory `category` column is written on create and update (same as manual create).
+- **Prices:** trade/wholesale = `wholesale_ex_vat`; retail = `retail_ex_vat` (S5, unchanged).
 
 ## V2-S5 returns / RMA
 
