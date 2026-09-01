@@ -18,6 +18,12 @@ from app.models.purchase_order import (
     PurchaseOrderStatus,
 )
 from app.models.sku import Sku
+from app.models.stock_adjustment import (
+    StockAdjustment,
+    StockAdjustmentLine,
+    StockAdjustmentReason,
+    StockAdjustmentStatus,
+)
 from app.models.stocktake import Stocktake, StocktakeLine, StocktakeStatus
 from app.models.supplier import Supplier
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
@@ -52,6 +58,10 @@ __all__ = [
     "PurchaseOrderStatus",
     "Sku",
     "SkuStock",
+    "StockAdjustment",
+    "StockAdjustmentLine",
+    "StockAdjustmentReason",
+    "StockAdjustmentStatus",
     "Stocktake",
     "StocktakeLine",
     "StocktakeStatus",

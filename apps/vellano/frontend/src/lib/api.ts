@@ -680,7 +680,146 @@ export function canMutateBooks(role: UserRole | undefined): boolean {
   return role === "owner" || role === "books";
 }
 
-export type AccountType = "asset" | "liability" | "income" | "expense";
+export type AdjustmentReason = "opening" | "damage" | "theft" | "count_fix" | "write_off";
+
+export type AdjustmentStatus = "draft" | "completed" | "cancelled";
+
+export type AdjustmentLine = {
+  id: string;
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  qty_delta: number;
+  unit_cost_zar: string | null;
+  current_qty?: number;
+  new_qty?: number;
+};
+
+export type AdjustmentSummary = {
+  id: string;
+  location_id: string;
+  location_name?: string;
+  reason: AdjustmentReason;
+  notes?: string | null;
+  status: AdjustmentStatus;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
+  lines?: AdjustmentLine[];
+};
+
+export type Adjustment = AdjustmentSummary & {
+  lines: AdjustmentLine[];
+};
+
+export const ADJUSTMENT_REASON_LABELS: Record<AdjustmentReason, string> = {
+  opening: "Opening Stock (Equity)",
+  damage: "Damage / Breakage (Expense)",
+  theft: "Theft / Shrinkage (Expense)",
+  count_fix: "Count Fix (COGS)",
+  write_off: "Write-off (Expense)",
+};
+
+export const ADJUSTMENT_REASONS: AdjustmentReason[] = [
+  "opening",
+  "damage",
+  "theft",
+  "count_fix",
+  "write_off",
+];
+
+export const ADJUSTMENT_STATUS_LABELS: Record<AdjustmentStatus, string> = {
+  draft: "Draft",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+export type CreateAdjustmentPayload = {
+  location_id: string;
+  reason: AdjustmentReason;
+  notes?: string;
+};
+
+export type CreateAdjustmentLinePayload = {
+  sku_id: string;
+  qty_delta: number;
+  unit_cost_zar?: string;
+};
+
+export function listAdjustments(): Promise<AdjustmentSummary[]> {
+  return apiFetch<AdjustmentSummary[]>("/adjustments");
+}
+
+export function createAdjustment(payload: CreateAdjustmentPayload): Promise<Adjustment> {
+  const notes = payload.notes?.trim();
+  const body: CreateAdjustmentPayload = {
+    location_id: payload.location_id,
+    reason: payload.reason,
+  };
+  if (notes) {
+    body.notes = notes;
+  }
+  return apiFetch<Adjustment>("/adjustments", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getAdjustment(id: string): Promise<Adjustment> {
+  return apiFetch<Adjustment>(`/adjustments/${id}`);
+}
+
+export function addAdjustmentLine(
+  adjustmentId: string,
+  payload: CreateAdjustmentLinePayload,
+): Promise<AdjustmentLine> {
+  const cost = payload.unit_cost_zar?.trim();
+  const body: CreateAdjustmentLinePayload = {
+    sku_id: payload.sku_id,
+    qty_delta: payload.qty_delta,
+  };
+  if (cost) {
+    body.unit_cost_zar = cost;
+  }
+  return apiFetch<AdjustmentLine>(`/adjustments/${adjustmentId}/lines`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchAdjustmentLine(
+  adjustmentId: string,
+  lineId: string,
+  payload: { qty_delta?: number; unit_cost_zar?: string },
+): Promise<AdjustmentLine> {
+  const body: { qty_delta?: number; unit_cost_zar?: string } = {};
+  if (payload.qty_delta !== undefined) {
+    body.qty_delta = payload.qty_delta;
+  }
+  const cost = payload.unit_cost_zar?.trim();
+  if (cost) {
+    body.unit_cost_zar = cost;
+  }
+  return apiFetch<AdjustmentLine>(`/adjustments/${adjustmentId}/lines/${lineId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdjustmentLine(adjustmentId: string, lineId: string): Promise<void> {
+  return apiFetch<void>(`/adjustments/${adjustmentId}/lines/${lineId}`, { method: "DELETE" });
+}
+
+export function completeAdjustment(id: string): Promise<Adjustment> {
+  return apiFetch<Adjustment>(`/adjustments/${id}/complete`, { method: "POST" });
+}
+
+export function cancelAdjustment(id: string): Promise<Adjustment> {
+  return apiFetch<Adjustment>(`/adjustments/${id}/cancel`, { method: "POST" });
+}
+
+export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
 
 export type Account = {
   id: string;
@@ -708,6 +847,7 @@ export type UpdateAccountPayload = {
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: "asset", label: "Asset" },
   { value: "liability", label: "Liability" },
+  { value: "equity", label: "Equity" },
   { value: "income", label: "Income" },
   { value: "expense", label: "Expense" },
 ];

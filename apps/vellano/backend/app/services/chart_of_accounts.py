@@ -18,6 +18,7 @@ CODE_AR = "1200"
 CODE_INVENTORY = "1300"
 CODE_AP = "2100"
 CODE_VAT = "2200"
+CODE_OPENING = "3000"
 CODE_SALES = "4000"
 CODE_COGS = "5000"
 CODE_FX = "6100"
@@ -28,6 +29,7 @@ CHART_OF_ACCOUNTS: tuple[tuple[str, str, AccountType], ...] = (
     (CODE_INVENTORY, "Inventory", AccountType.ASSET),
     (CODE_AP, "Accounts payable", AccountType.LIABILITY),
     (CODE_VAT, "VAT control", AccountType.LIABILITY),
+    (CODE_OPENING, "Opening balances", AccountType.EQUITY),
     (CODE_SALES, "Sales", AccountType.INCOME),
     (CODE_COGS, "Cost of goods sold", AccountType.EXPENSE),
     (CODE_FX, "Foreign exchange gain/loss", AccountType.EXPENSE),
@@ -52,6 +54,19 @@ class ChartOfAccountsSeedService:
                     is_system=True,
                 )
                 await self.crud.add_and_flush(account)
+
+    async def ensure_opening_equity(self) -> None:
+        if await self.crud.get_by_code(CODE_OPENING) is not None:
+            return
+        async with unit_of_work(self.db):
+            await self.crud.add_and_flush(
+                Account(
+                    code=CODE_OPENING,
+                    name="Opening balances",
+                    type=AccountType.EQUITY,
+                    is_system=True,
+                )
+            )
 
 
 class LedgerPostingService:

@@ -113,6 +113,29 @@ Complete only from `in_progress`. Lines with `counted_qty` set apply `delta = co
 | List / get stocktakes | yes | yes | yes | yes | yes |
 | Start, count, lookup, complete, cancel | yes | yes | no | no | no |
 
+## V2-S3 stock adjustments
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Adjustments:** `GET/POST /adjustments`, `GET /adjustments/{id}`, `POST /adjustments/{id}/lines` (`{sku_id, qty_delta, unit_cost_zar?}`), `PATCH /adjustments/{id}/lines/{line_id}`, `DELETE /adjustments/{id}/lines/{line_id}` (204), `POST /adjustments/{id}/complete`, `POST /adjustments/{id}/cancel`.
+
+Draft at a location; complete applies on-hand and one balanced journal. Reasons: `opening`, `damage`, `theft`, `count_fix`, `write_off`. Status: `draft` | `completed` | `cancelled`.
+
+**qty_delta** (service): never 0. `opening` must be > 0; `damage` / `theft` / `write_off` must be < 0; `count_fix` any non-zero.
+
+**GL by sign** (always; CoA includes **3000 Opening balances / equity**):
+
+- Increases: Dr `1300` Inventory, Cr `3000` Opening balances
+- Decreases: Dr `5000` COGS, Cr `1300` Inventory
+- Mixed: both pairs when each total > 0 (skip a pair if that total is 0)
+
+Create and complete return 409 `"Location is locked for stocktake"` while a stocktake is in progress at that location. Archived location → conflict. Cancel from `draft` only; no stock, no GL. `unit_cost_zar` required on complete for increases when location cost is missing, and for decreases when location cost is missing (`"unit cost required"`). Audit source `adjustment`.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get adjustments | yes | yes | yes | yes | yes |
+| Create, lines, complete, cancel | yes | yes | no | no | no |
+
 ## S3 catalogue (suppliers, proformas, SKUs)
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -187,6 +210,7 @@ Document-centric double-entry in ZAR. Every invoice, credit note, bill, and paym
 | 1300 | Inventory | asset |
 | 2100 | Accounts payable | liability |
 | 2200 | VAT control | liability |
+| 3000 | Opening balances | equity |
 | 4000 | Sales | income |
 | 5000 | Cost of goods sold | expense |
 | 6100 | Foreign exchange gain/loss | expense |
@@ -293,8 +317,6 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 | Label | Route | Slice |
 |-------|-------|-------|
-| Stocktakes | `/stocktakes` | V2-S2 |
-| Adjustments | `/adjustments` | V2-S3 |
 | Import | `/import` | V2-S4 |
 | Returns | `/returns` | V2-S5 |
 | Laybys | `/laybys` | V2-S6 |
@@ -321,7 +343,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/receive` | `/receive` |
 | `/reports`, `/vat201` | `/reports` |
 | `/stocktakes` | `/stocktakes` |
-| `/adjustments`, `/import`, `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/adjustments` | `/adjustments` |
+| `/import`, `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
 
 ## Non-goals
 
