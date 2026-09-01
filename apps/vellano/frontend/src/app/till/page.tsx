@@ -399,13 +399,13 @@ export default function TillPage() {
   }
 
   return (
-    <Stack gap={6}>
+    <Stack gap={6} className="vellano-till">
       <div className="vellano-page-header">
         <div>
           <h1 className="cds--type-productive-heading-04">Till</h1>
           <p className="cds--type-body-01">Process sales, returns, and payments.</p>
         </div>
-        <ButtonSet>
+        <div className="vellano-catalogue-actions">
           <Button
             kind="secondary"
             renderIcon={Undo}
@@ -420,7 +420,7 @@ export default function TillPage() {
           >
             Layby Payment
           </Button>
-        </ButtonSet>
+        </div>
       </div>
 
       {error ? (

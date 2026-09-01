@@ -227,6 +227,19 @@ body {
   width: 100%;
 }
 
+/* Left-aligned max-width like WMS / Create SKU. Superdesign till is 1200px;
+   do not center — that reintroduces the PR #554 inset. */
+.vellano-till {
+  max-width: 75rem;
+  width: 100%;
+  margin-inline: 0;
+}
+
+.vellano-till-layout__summary > .cds--tile {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .vellano-muted-text {
   color: var(--cds-text-secondary, #525252);
   font-size: 0.75rem;
