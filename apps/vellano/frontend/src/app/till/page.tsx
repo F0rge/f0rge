@@ -3,9 +3,7 @@
 import {
   Button,
   ButtonSet,
-  Column,
   ComboBox,
-  Grid,
   InlineNotification,
   NumberInput,
   Select,
@@ -388,7 +386,7 @@ export default function TillPage() {
   if (!canSell) {
     return (
       <Stack gap={5}>
-        <h1>Till</h1>
+        <h1 className="cds--type-productive-heading-04">Till</h1>
         <InlineNotification
           kind="error"
           title="Access denied"
@@ -404,8 +402,8 @@ export default function TillPage() {
     <Stack gap={6}>
       <div className="vellano-page-header">
         <div>
-          <h1>Till</h1>
-          <p>Process sales, returns, and payments.</p>
+          <h1 className="cds--type-productive-heading-04">Till</h1>
+          <p className="cds--type-body-01">Process sales, returns, and payments.</p>
         </div>
         <ButtonSet>
           <Button
@@ -438,8 +436,8 @@ export default function TillPage() {
       {loading ? (
         <p>Loading…</p>
       ) : (
-        <Grid>
-          <Column lg={8} md={4} sm={4}>
+        <div className="vellano-till-layout">
+          <div className="vellano-till-layout__main">
             <Stack gap={5}>
               <Tile>
                 <Stack gap={5}>
@@ -588,9 +586,9 @@ export default function TillPage() {
                 )}
               </Tile>
             </Stack>
-          </Column>
+          </div>
 
-          <Column lg={4} md={4} sm={4}>
+          <div className="vellano-till-layout__summary">
             <Tile>
               <Stack gap={5}>
                 <h2>Sale summary</h2>
@@ -681,8 +679,8 @@ export default function TillPage() {
                 </Button>
               </Stack>
             </Tile>
-          </Column>
-        </Grid>
+          </div>
+        </div>
       )}
 
       {lastSale ? (
