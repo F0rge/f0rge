@@ -286,9 +286,57 @@ export type Sku = {
   fabric: string;
   supplier_ref: string | null;
   photo_storage_key: string | null;
+  wholesale_ex_vat: string | null;
+  wholesale_inc_vat: string | null;
+  retail_ex_vat: string | null;
+  retail_inc_vat: string | null;
   created_at: string;
   updated_at: string;
 };
+
+export type UpdateSkuPricePayload = {
+  wholesale_ex_vat?: string | number | null;
+  wholesale_inc_vat?: string | number | null;
+  retail_ex_vat?: string | number | null;
+  retail_inc_vat?: string | number | null;
+};
+
+const VAT_MULTIPLIER = 1.15;
+
+/** Round to cents using ROUND_HALF_UP (ties away from zero). */
+export function roundHalfUp(value: number, decimals = 2): number {
+  const factor = 10 ** decimals;
+  const scaled = value * factor;
+  return (Math.sign(scaled) * Math.round(Math.abs(scaled))) / factor;
+}
+
+export function exVatToIncVat(ex: number): number {
+  return roundHalfUp(ex * VAT_MULTIPLIER, 2);
+}
+
+export function incVatToExVat(inc: number): number {
+  return roundHalfUp(inc / VAT_MULTIPLIER, 2);
+}
+
+export function formatPriceAmount(value: number): string {
+  return value.toFixed(2);
+}
+
+export function parsePriceInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
+export function displayPrice(value: string | null | undefined): string {
+  return value ?? "—";
+}
 
 export type CreateSkuPayload = {
   our_ref: string;
@@ -314,6 +362,13 @@ export function uploadSkuPhoto(id: string, photo: File): Promise<Sku> {
   const formData = new FormData();
   formData.append("photo", photo);
   return apiUpload<Sku>(`/skus/${id}/photo`, formData);
+}
+
+export function updateSku(id: string, payload: UpdateSkuPricePayload): Promise<Sku> {
+  return apiFetch<Sku>(`/skus/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export type PurchaseOrderStatus = "open" | "on_water" | "landed" | "received";
