@@ -124,6 +124,16 @@ On receive, blend unit cost at a location by quantity-weighted average: when add
 
 The app does not send email.
 
+## S5 prices
+
+Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesale_inc_vat`, `retail_ex_vat`, `retail_inc_vat`. Source of truth columns on `skus`: `wholesale_ex_vat`, `retail_ex_vat` only (ex-VAT stored; inc-VAT derived on read).
+
+- **VAT:** 15% hardcoded (V1). Home currency **ZAR**. No SARS API.
+- **Rounding:** store ex-VAT; display inc-VAT = `ex * 1.15` rounded half-up to the cent (`Decimal("0.01")`, `ROUND_HALF_UP`). Editing inc-VAT converts to ex-VAT with `inc / 1.15` rounded half-up to the cent.
+- **Worked examples:** 100.00 ex → 115.00 inc; 2300.00 inc → 2000.00 ex; 2500.00 inc → 2173.91 ex.
+- **Roles:** owner and buyer may PATCH prices; warehouse, till, and books may GET only (PATCH → 403).
+- **Quotes:** out of V1 — no quote entity, table, or routes.
+
 ## Railway
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.

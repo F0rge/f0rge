@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.sku import SkuCRUD
 from app.models.sku import Sku
-from app.schemas.sku import SkuCreate, SkuResponse
+from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
+from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
 from app.services.object_storage import (
     is_remote_storage_ref,
     presigned_get_url,
@@ -28,13 +29,52 @@ class SkuService:
 
     async def list(self) -> list[SkuResponse]:
         skus = await self.crud.list_all()
-        return [SkuResponse.model_validate(s) for s in skus]
+        return [self._to_response(s) for s in skus]
 
     async def get(self, sku_id: uuid.UUID) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
-        return SkuResponse.model_validate(sku)
+        return self._to_response(sku)
+
+    async def update(self, sku_id: uuid.UUID, data: SkuUpdate) -> SkuResponse:
+        sku = await self.crud.get_by_id(sku_id)
+        if sku is None:
+            raise NotFoundError("SKU not found")
+
+        fields_set = data.model_fields_set
+
+        if "wholesale_ex_vat" in fields_set and "wholesale_inc_vat" in fields_set:
+            raise ValidationError("Cannot set both wholesale_ex_vat and wholesale_inc_vat")
+        if "retail_ex_vat" in fields_set and "retail_inc_vat" in fields_set:
+            raise ValidationError("Cannot set both retail_ex_vat and retail_inc_vat")
+
+        if "wholesale_ex_vat" in fields_set:
+            if data.wholesale_ex_vat is not None:
+                validate_non_negative_price(data.wholesale_ex_vat, "wholesale_ex_vat")
+            sku.wholesale_ex_vat = data.wholesale_ex_vat
+        elif "wholesale_inc_vat" in fields_set:
+            if data.wholesale_inc_vat is None:
+                sku.wholesale_ex_vat = None
+            else:
+                validate_non_negative_price(data.wholesale_inc_vat, "wholesale_inc_vat")
+                sku.wholesale_ex_vat = inc_to_ex(data.wholesale_inc_vat)
+
+        if "retail_ex_vat" in fields_set:
+            if data.retail_ex_vat is not None:
+                validate_non_negative_price(data.retail_ex_vat, "retail_ex_vat")
+            sku.retail_ex_vat = data.retail_ex_vat
+        elif "retail_inc_vat" in fields_set:
+            if data.retail_inc_vat is None:
+                sku.retail_ex_vat = None
+            else:
+                validate_non_negative_price(data.retail_inc_vat, "retail_inc_vat")
+                sku.retail_ex_vat = inc_to_ex(data.retail_inc_vat)
+
+        await self.crud.commit_refresh(sku)
+        reloaded = await self.crud.get_by_id(sku.id)
+        assert reloaded is not None
+        return self._to_response(reloaded)
 
     async def create(self, data: SkuCreate) -> SkuResponse:
         await self._ensure_unique_fields(data.design, data.fabric, data.our_ref, data.our_barcode)
@@ -54,7 +94,7 @@ class SkuService:
             await self._raise_integrity_conflict(exc)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return SkuResponse.model_validate(reloaded)
+        return self._to_response(reloaded)
 
     async def upload_photo(self, sku_id: uuid.UUID, file: UploadFile) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
@@ -76,7 +116,7 @@ class SkuService:
         await self.crud.commit_refresh(sku)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return SkuResponse.model_validate(reloaded)
+        return self._to_response(reloaded)
 
     async def serve_photo(self, sku_id: uuid.UUID) -> Response:
         sku = await self.crud.get_by_id(sku_id)
@@ -94,6 +134,24 @@ class SkuService:
         except FileNotFoundError as exc:
             raise NotFoundError("SKU photo not found") from exc
         return Response(content=data, media_type="image/jpeg")
+
+    def _to_response(self, sku: Sku) -> SkuResponse:
+        return SkuResponse(
+            id=sku.id,
+            our_ref=sku.our_ref,
+            our_barcode=sku.our_barcode,
+            name=sku.name,
+            design=sku.design,
+            fabric=sku.fabric,
+            supplier_ref=sku.supplier_ref,
+            photo_storage_key=sku.photo_storage_key,
+            wholesale_ex_vat=sku.wholesale_ex_vat,
+            wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat),
+            retail_ex_vat=sku.retail_ex_vat,
+            retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat),
+            created_at=sku.created_at,
+            updated_at=sku.updated_at,
+        )
 
     async def _ensure_unique_fields(
         self,
