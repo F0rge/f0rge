@@ -16,6 +16,7 @@ import {
   Theme,
 } from "@carbon/react";
 import {
+  Barcode,
   Catalog,
   Delivery,
   DeliveryParcel,
@@ -77,6 +78,7 @@ const ICONS = {
   "/purchase-orders": Purchase,
   "/transit": Delivery,
   "/receive": DeliveryParcel,
+  "/wms": Barcode,
   "/transfers": Movement,
   "/deliveries": DeliveryTruck,
   "/returns": Undo,

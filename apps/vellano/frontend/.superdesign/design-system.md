@@ -18,9 +18,9 @@ IBM Carbon g10 (light productive). Do not invent a second brand.
 
 ## V2 shell (S0) — SideNav labels
 
-Home, Locations, Suppliers, Proformas, Catalogue, **Stock** (menu: Stock, Stocktakes, Adjustments, Import, Reorder), Purchase orders, Transit, Receive, Transfers, Deliveries, Till, Returns, Laybys, Customers, **Books** (menu: Chart of accounts, Contacts, Invoices, Credit notes, Bills, Payments, Bank reconciliation, Reports, VAT201 draft), Users, Profile, Settings.
+Home, Locations, Suppliers, Proformas, Catalogue, **Stock** (menu: Stock, Stocktakes, Adjustments, Import, Reorder), Purchase orders, Transit, Receive, WMS, Transfers, Deliveries, Till, Returns, Laybys, Customers, **Books** (menu: Chart of accounts, Contacts, Invoices, Credit notes, Bills, Payments, Bank reconciliation, Reports, VAT201 draft), Users, Profile, Settings.
 
-Stub routes show “Coming in V2-Sx.” — see `apps/vellano/AGENTS.md` V2 shell table.
+Deliveries, Reorder, WMS, and reports extras are live — see `apps/vellano/AGENTS.md`.
 
 ## S0 screens
 
