@@ -113,7 +113,5 @@ async def test_credit_note_pdf(owner_client: AsyncClient) -> None:
 
 
 async def test_unauthenticated_credit_note_pdf_returns_401(async_client: AsyncClient) -> None:
-    resp = await async_client.get(
-        "/api/v1/credit-notes/00000000-0000-0000-0000-000000000001/pdf"
-    )
+    resp = await async_client.get("/api/v1/credit-notes/00000000-0000-0000-0000-000000000001/pdf")
     assert resp.status_code == 401
