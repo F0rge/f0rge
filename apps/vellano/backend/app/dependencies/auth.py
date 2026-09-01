@@ -29,6 +29,7 @@ from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.skus import SkuService
 from app.services.stock_adjustments import StockAdjustmentService
+from app.services.laybys import LaybysService
 from app.services.stock_returns import StockReturnsService
 from app.services.stocktakes import StocktakeService
 from app.services.suppliers import SupplierService
@@ -145,6 +146,10 @@ def get_adjustment_service(db: AsyncSession = Depends(get_db)) -> StockAdjustmen
 
 def get_stock_returns_service(db: AsyncSession = Depends(get_db)) -> StockReturnsService:
     return StockReturnsService(db)
+
+
+def get_layby_service(db: AsyncSession = Depends(get_db)) -> LaybysService:
+    return LaybysService(db)
 
 
 def get_till_orchestrator(db: AsyncSession = Depends(get_db)) -> TillOrchestrator:

@@ -22,6 +22,7 @@ class UnitCostAuditSource(str, enum.Enum):
     ADJUSTMENT = "adjustment"
     IMPORT = "import"
     RETURN = "return"
+    LAYBY = "layby"
 
 
 class UnitCostAudit(UUIDPkMixin, TimestampMixin, Base):

@@ -1658,3 +1658,114 @@ export function completeReturn(id: string): Promise<StockReturn> {
 export function cancelReturn(id: string): Promise<StockReturn> {
   return apiFetch<StockReturn>(`/returns/${id}/cancel`, { method: "POST" });
 }
+
+export type LaybyStatus = "open" | "ready" | "completed" | "cancelled";
+
+export type LaybyTender = "cash" | "card";
+
+export type LaybyLine = {
+  id: string;
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  qty: number;
+  unit_ex_vat: string;
+};
+
+export type LaybyPayment = {
+  id: string;
+  amount: string;
+  tender: LaybyTender;
+  paid_on: string;
+};
+
+export type Layby = {
+  id: string;
+  layby_number: string;
+  customer_id: string;
+  customer_name: string;
+  location_id: string;
+  location_name: string;
+  invoice_id: string | null;
+  due_date: string;
+  hold_stock: boolean;
+  status: LaybyStatus;
+  subtotal_ex_vat: string;
+  vat_amount: string;
+  total_inc_vat: string;
+  amount_paid: string;
+  balance: string;
+  notes: string | null;
+  lines: LaybyLine[];
+  payments: LaybyPayment[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateLaybyLinePayload = {
+  sku_id: string;
+  qty: number;
+};
+
+export type CreateLaybyPayload = {
+  customer_id: string;
+  location_id: string;
+  due_date: string;
+  hold_stock: boolean;
+  deposit_amount: string;
+  tender: LaybyTender;
+  lines: CreateLaybyLinePayload[];
+  notes?: string;
+};
+
+export type AddLaybyPaymentPayload = {
+  amount: string;
+  tender: LaybyTender;
+};
+
+export function canMutateLaybys(role: UserRole | undefined): boolean {
+  return canUseTill(role);
+}
+
+export function listLaybys(): Promise<Layby[]> {
+  return apiFetch<Layby[]>("/laybys");
+}
+
+export function getLayby(id: string): Promise<Layby> {
+  return apiFetch<Layby>(`/laybys/${id}`);
+}
+
+export function createLayby(payload: CreateLaybyPayload): Promise<Layby> {
+  const notes = payload.notes?.trim();
+  const body: CreateLaybyPayload = {
+    customer_id: payload.customer_id,
+    location_id: payload.location_id,
+    due_date: payload.due_date,
+    hold_stock: payload.hold_stock,
+    deposit_amount: payload.deposit_amount,
+    tender: payload.tender,
+    lines: payload.lines,
+  };
+  if (notes) {
+    body.notes = notes;
+  }
+  return apiFetch<Layby>("/laybys", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function addLaybyPayment(id: string, payload: AddLaybyPaymentPayload): Promise<Layby> {
+  return apiFetch<Layby>(`/laybys/${id}/payments`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function completeLayby(id: string): Promise<Layby> {
+  return apiFetch<Layby>(`/laybys/${id}/complete`, { method: "POST" });
+}
+
+export function cancelLayby(id: string): Promise<Layby> {
+  return apiFetch<Layby>(`/laybys/${id}/cancel`, { method: "POST" });
+}

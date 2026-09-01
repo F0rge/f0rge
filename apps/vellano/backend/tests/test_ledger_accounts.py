@@ -24,6 +24,7 @@ async def test_chart_of_accounts_seeded(owner_client: AsyncClient) -> None:
         "1300",
         "2100",
         "2200",
+        "2300",
         "3000",
         "4000",
         "5000",

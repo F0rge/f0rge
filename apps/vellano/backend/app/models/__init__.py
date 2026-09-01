@@ -7,6 +7,7 @@ from app.models.credit_note import CreditNote
 from app.models.customer import Customer
 from app.models.inventory import LocationStock, SkuStock
 from app.models.journal import JournalDocumentType, JournalEntry, JournalLine
+from app.models.layby import Layby, LaybyLine, LaybyPayment, LaybyStatus
 from app.models.location import Location, LocationType
 from app.models.payment import Payment, PaymentDirection
 from app.models.proforma import Proforma
@@ -54,6 +55,10 @@ __all__ = [
     "JournalLine",
     "LandingBill",
     "LandingBillKind",
+    "Layby",
+    "LaybyLine",
+    "LaybyPayment",
+    "LaybyStatus",
     "Location",
     "LocationStock",
     "LocationType",

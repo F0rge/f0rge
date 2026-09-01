@@ -169,6 +169,27 @@ Complete restock while a stocktake is `in_progress` at that location → 409 `"L
 | List / get returns | yes | yes | yes | yes | yes |
 | Create / complete / cancel | yes | yes | no | yes | no |
 
+## V2-S6 laybys
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Laybys:** `GET/POST /laybys`, `GET /laybys/{id}`, `POST /laybys/{id}/payments`, `POST /laybys/{id}/complete`, `POST /laybys/{id}/cancel`.
+
+Customer layaway with optional stock hold at a showroom. Numbering: `LB-0001`. Status: `open` | `ready` | `completed` | `cancelled` (overdue is derived from `due_date`, not stored).
+
+**Deposits:** `layby_payments` table (not `payments`). GL Dr `1100` Bank, Cr `2300` Customer deposits on create and further payments. Account **2300** seeded via `ensure_customer_deposits()` and migration `014_v2_s6_laybys`.
+
+**hold_stock=true:** showroom only; decrements on-hand at create (`UnitCostAuditSource.layby`); restocked on cancel; no second decrement on complete. **hold_stock=false:** on-hand unchanged until complete.
+
+Complete (from `ready` only): tax invoice, Dr AR / Cr sales / Cr VAT; apply deposits Dr `2300` Cr AR; COGS Dr `5000` Cr `1300`; set `invoice_id`. Cancel: refund Dr `2300` Cr `1100` when `amount_paid > 0`.
+
+Stocktake lock at location → 409 `"Location is locked for stocktake"` on hold create/cancel and on complete when not holding.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get laybys | yes | yes | yes | yes | yes |
+| Create, pay, complete, cancel | yes | yes | no | yes | no |
+
 ## S3 catalogue (suppliers, proformas, SKUs)
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -243,6 +264,7 @@ Document-centric double-entry in ZAR. Every invoice, credit note, bill, and paym
 | 1300 | Inventory | asset |
 | 2100 | Accounts payable | liability |
 | 2200 | VAT control | liability |
+| 2300 | Customer deposits | liability |
 | 3000 | Opening balances | equity |
 | 4000 | Sales | income |
 | 5000 | Cost of goods sold | expense |
@@ -350,7 +372,6 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 | Label | Route | Slice |
 |-------|-------|-------|
-| Laybys | `/laybys` | V2-S6 |
 | Customers | `/customers` | V2-S10 |
 | Deliveries | `/deliveries` | V2-S11 |
 | Reorder | `/reorder` | V2-S12 |
@@ -377,7 +398,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/adjustments` | `/adjustments` |
 | `/import` | `/imports` |
 | `/returns` | `/returns` |
-| `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/laybys` | `/laybys` |
+| `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
 
 ## Non-goals
 
