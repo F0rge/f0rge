@@ -222,21 +222,56 @@ Matching a bank line sets `payments.is_reconciled = true`. Unmatched import line
 | List imports, reports, VAT201 draft | yes | yes | yes | yes | yes |
 | Upload CSV, match lines | yes | no | no | no | yes |
 
-## Railway
+## Railway (S11 — V1 deploy gate)
 
-**Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.
+**Own Railway project** — not Marrow `zoological-fulfillment` (`a633a271-5bb0-461e-8eb5-1acb9e126a59`), not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.
 
-- Project: `Vellano` (`c76d8df1-d839-454c-a94a-79b930deaf38`)
-- Environment: `develop` only (`7a8ce6f1-c514-4e5d-9c50-4b7918865321`)
-- Frontend: https://vellano-dev.leo-figueiredo.com
-- API: https://vellano-dev-api.leo-figueiredo.com (`/api/v1/health`, Swagger `/docs`)
-- Config files: `apps/vellano/{backend,frontend}/railway.toml` (no Root Directory)
-- `watchPatterns` = `apps/vellano/**` + libs actually imported
-- Manifest: `branches: [develop]` only. No production, no `main`
+| Field | Value |
+|-------|-------|
+| Project | **Vellano** `c76d8df1-d839-454c-a94a-79b930deaf38` |
+| Environment (active) | **develop** `7a8ce6f1-c514-4e5d-9c50-4b7918865321` |
+| Environment (empty) | **production** `a639e365-f653-44db-a46d-a6a94e083894` — exists but `vellano-api` / `vellano-frontend` have no service configuration. Do not provision production. |
+
+### Services (develop only, Hobby, 1 replica each)
+
+| Service | ID | Config file |
+|---------|-----|-------------|
+| `vellano-api` | `77a83033-b75e-4da1-88d0-b6db39bcedaf` | `apps/vellano/backend/railway.toml` |
+| `vellano-frontend` | `10838be1-7a37-4dfc-810a-8805d040d5d7` | `apps/vellano/frontend/railway.toml` |
+| Postgres | `a1a6695d-b8fb-4c79-92a6-664b48bc07e4` | Railway plugin (private) |
+
+**No Root Directory** — monorepo build context is repo root. Point each service's Config File at the paths above.
+
+No Redis. No Marrow photos bucket.
+
+### URLs
+
+| Role | Custom host | Railway default |
+|------|-------------|-----------------|
+| Frontend | https://vellano-dev.leo-figueiredo.com | https://vellano-frontend-develop-504f.up.railway.app |
+| API | https://vellano-dev-api.leo-figueiredo.com (`/api/v1/health`, Swagger `/docs`) | https://vellano-api-develop-aba8.up.railway.app |
+
+### Develop env vars (`vellano-api`, names only — no secrets in git)
+
+`COOKIE_SECURE`, `CORS_ORIGINS`, `DATABASE_URL`, `JWT_SECRET`, `PORT`, `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`.
+
+`DATABASE_URL` must use the Vellano Postgres plugin (asyncpg), not Marrow `pgvector`. `CORS_ORIGINS` must include the develop frontend origin.
+
+**Object storage:** Railway develop has **no** `BUCKET_NAME` / `AWS_*` vars — uploads use filesystem `STORAGE_DIR` fallback (ephemeral container disk). **AC deviation from #510:** issue assumed a dedicated Railway bucket; bucket not provisioned. When all four bucket vars are set (see `.env.example`), uploads use S3 instead.
+
+### `watchPatterns` (repo `railway.toml` is source of truth)
+
+Backend: `apps/vellano/**`, `libs/backend/core/**`, `libs/backend/db/**`, `libs/backend/storage/**`. Frontend: `apps/vellano/**`, `package.json`, `package-lock.json`. Live Railway dashboard may drift (e.g. `vellano-api` watchPatterns missing `libs/backend/storage/**`) — align dashboard to toml when convenient; do not shrink repo toml.
+
+### CI manifest
+
+`.github/deploy/manifest.yml`: `vellano-backend` / `vellano-frontend` with `branches: [develop]` only; `health_url.develop` on custom hosts above. No `health_url.main`.
+
+Autodeploy from GitHub branch `develop`. No production deploy, no `main` merge for this epic.
 
 ## Non-goals
 
-The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: till and other S8–S11 product features.
+The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. **S11** is the V1 deploy gate (Railway develop). Production Railway for Vellano is out of scope until a later epic.
 
 ## Python
 
