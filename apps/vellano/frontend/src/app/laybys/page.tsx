@@ -49,6 +49,7 @@ import {
   type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { matchesCustomerQuery } from "@/lib/customer-crm";
 
 const TABLE_HEADERS = [
   { key: "layby_number", header: "Reference" },
@@ -244,6 +245,7 @@ function LaybysPageContent() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const customerFilter = searchParams.get("customer")?.trim() ?? "";
   const canMutate = canMutateLaybys(user);
   const [laybys, setLaybys] = useState<Layby[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -522,6 +524,9 @@ function LaybysPageContent() {
       .slice()
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .filter((entry) => {
+        if (!matchesCustomerQuery(entry.customer_id, entry.customer_name, customerFilter)) {
+          return false;
+        }
         if (!matchesStatusFilter(entry, statusFilter)) {
           return false;
         }
@@ -534,7 +539,7 @@ function LaybysPageContent() {
           entry.location_name.toLowerCase().includes(query)
         );
       });
-  }, [laybys, searchQuery, statusFilter]);
+  }, [laybys, searchQuery, statusFilter, customerFilter]);
 
   const rows: LaybyRow[] = filteredLaybys.map((entry) => ({
     id: entry.id,
@@ -585,6 +590,15 @@ function LaybysPageContent() {
           onCloseButtonClick={() => setError(null)}
           lowContrast
         />
+      ) : null}
+
+      {customerFilter ? (
+        <div className="vellano-catalogue-actions">
+          <p className="cds--type-body-01">Showing laybys for the selected customer.</p>
+          <Button kind="ghost" size="sm" onClick={() => router.replace("/laybys")}>
+            Clear customer filter
+          </Button>
+        </div>
       ) : null}
 
       {loading ? (

@@ -21,6 +21,8 @@ class TillSaleCreate(BaseModel):
     lines: list[TillSaleLineCreate] = Field(min_length=1)
     tender: Literal["cash", "card", "deposit", "eft"]
     customer_id: Optional[uuid.UUID] = None
+    credit_override: bool = False
+    credit_override_reason: Optional[str] = None
 
 
 class TillSaleLocationStock(BaseModel):

@@ -18,8 +18,8 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 
 import {
   canMutateBooks,
@@ -35,6 +35,7 @@ import {
   type Invoice,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { matchesCustomerQuery } from "@/lib/customer-crm";
 
 const TABLE_HEADERS = [
   { key: "invoice_number", header: "Number" },
@@ -76,7 +77,17 @@ function todayIso(): string {
 }
 
 export default function InvoicesPage() {
+  return (
+    <Suspense fallback={<p className="cds--type-body-01">Loading invoices…</p>}>
+      <InvoicesPageContent />
+    </Suspense>
+  );
+}
+
+function InvoicesPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const customerFilter = searchParams.get("customer")?.trim() ?? "";
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -186,7 +197,15 @@ export default function InvoicesPage() {
     }
   }
 
-  const rows: InvoiceRow[] = invoices.map((entry) => ({
+  const visibleInvoices = useMemo(
+    () =>
+      invoices.filter((entry) =>
+        matchesCustomerQuery(entry.customer_id, entry.customer_name, customerFilter),
+      ),
+    [invoices, customerFilter],
+  );
+
+  const rows: InvoiceRow[] = visibleInvoices.map((entry) => ({
     id: entry.id,
     invoice_number: entry.invoice_number,
     customer_name: entry.customer_name,
@@ -227,6 +246,15 @@ export default function InvoicesPage() {
         />
       ) : null}
 
+      {customerFilter ? (
+        <div className="vellano-catalogue-actions">
+          <p className="cds--type-body-01">Showing invoices for the selected customer.</p>
+          <Button kind="ghost" size="sm" onClick={() => router.replace("/invoices")}>
+            Clear customer filter
+          </Button>
+        </div>
+      ) : null}
+
       {loading ? (
         <p className="cds--type-body-01">Loading invoices…</p>
       ) : invoices.length === 0 ? (
@@ -234,6 +262,14 @@ export default function InvoicesPage() {
           kind="info"
           title="No invoices"
           subtitle="No tax invoices have been created yet."
+          hideCloseButton
+          lowContrast
+        />
+      ) : visibleInvoices.length === 0 ? (
+        <InlineNotification
+          kind="info"
+          title="No invoices"
+          subtitle="No invoices match this customer."
           hideCloseButton
           lowContrast
         />

@@ -96,5 +96,8 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
   if (href === "/catalogue" && pathname.startsWith("/catalogue/")) {
     return true;
   }
+  if (href === "/customers" && pathname.startsWith("/customers/")) {
+    return true;
+  }
   return false;
 }

@@ -86,6 +86,10 @@ export function canMutateCustomers(user: PermissionHolder): boolean {
   return can(user, "sales.customers");
 }
 
+export function canManageCustomerCredit(user: PermissionHolder): boolean {
+  return can(user, "users.manage") || can(user, "po.raise");
+}
+
 export function canMutateDeliveries(user: PermissionHolder): boolean {
   return can(user, "sales.deliveries");
 }

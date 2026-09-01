@@ -10,6 +10,7 @@ from app.middleware.auth import get_current_user_id
 from app.permissions import (
     BOOKS_MUTATE,
     CATALOGUE_MUTATE,
+    PO_RAISE,
     SALES_CUSTOMERS,
     SALES_DELIVERIES,
     SALES_LAYBYS,
@@ -340,6 +341,13 @@ async def require_customers_mutate(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (SALES_CUSTOMERS,))
+
+
+async def require_customers_patch(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_CUSTOMERS, USERS_MANAGE, PO_RAISE))
 
 
 async def require_cost_audit_view(

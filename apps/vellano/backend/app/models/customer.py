@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import String, Text
+from sqlalchemy import Boolean, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -29,3 +30,11 @@ class Customer(UUIDPkMixin, TimestampMixin, Base):
         default="standard",
         server_default="standard",
     )
+    credit_limit: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2), nullable=True)
+    on_hold: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+    on_hold_reason: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)

@@ -236,16 +236,24 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 - **Customers:** `GET/POST /customers`, `GET /customers/{id}`, `PATCH /customers/{id}`.
 
-Extends the existing `customers` table (no second customer entity). New columns: `customer_type` (`retail` | `trade`, default `retail`), `price_tier` (default `standard`), `phone` (nullable). `POST /contacts` still creates ledger customers with those defaults.
+Extends the existing `customers` table (no second customer entity). Do **not** merge with `/contacts`. `POST /contacts` still creates ledger customers with CRM defaults; `ContactResponse` omits CRM fields.
 
-`CustomerCrmResponse` includes open invoice and active layby aggregates (`open_invoices_count`, `open_invoices_zar`, `overdue_invoices_count`, `active_laybys_count`, `active_laybys_zar`). `ContactResponse` omits CRM fields.
+**Columns:** `customer_type` (`retail` | `trade`, default `retail`), `price_tier` (default `standard`), `phone` (nullable), `credit_limit` (nullable Numeric 14,2), `on_hold` (bool, default false), `on_hold_reason` (nullable, 512).
+
+**Aggregates** (computed, never stored overdue bit): `open_invoices_count`, `open_invoices_zar`, `overdue_invoices_count`, `overdue_invoices_zar`, `last_purchase_date` (`max(tax_invoices.issue_date)`), `active_laybys_count`, `active_laybys_zar`. Overdue clock is `issue_date + 30` (`as_of − 30 days`). Overdue is false when invoices are paid or no longer past terms. Do not change `GET /reports/aged-ar` math.
+
+**List filters** (AND): `GET /customers?overdue=&active_layby=&on_hold=` — `overdue` = `overdue_invoices_count > 0`, `active_layby` = `active_laybys_count > 0`.
+
+**Till / books credit gate:** named customer `on_hold` → 409 `"Customer is on hold"`; `credit_limit` set and `open_invoices_zar + sale/invoice total_inc_vat > credit_limit` → 409 `"Customer exceeds credit limit"`. Walk-in is skipped. Override keys on till (and books invoice create): `credit_override` + non-empty `credit_override_reason`. Override allowed only with `users.manage` OR `po.raise` (403 otherwise; 400 if override without reason). Audit on the invoice `books_events` CREATED row: `note` = `credit override: {reason}` (no new books action enum).
 
 | Action | Permission |
 |--------|------------|
 | List / get customers | any authenticated |
-| Create / update customers | `sales.customers` |
+| Create customers; PATCH name/phone/type/tier | `sales.customers` |
+| PATCH `credit_limit` / `on_hold` / `on_hold_reason` | `users.manage` OR `po.raise` (till with only `sales.customers` → 403) |
+| Till / invoice credit override | `users.manage` OR `po.raise` |
 
-Migration: `017_v2_s10_customers_crm`.
+Migrations: `017_v2_s10_customers_crm`, `034_customer_credit`.
 
 ## V2-S13 SKU supplier prices
 

@@ -20,6 +20,8 @@ class CustomerInvoiceAgg:
     open_count: int = 0
     open_zar: Decimal = Decimal("0")
     overdue_count: int = 0
+    overdue_zar: Decimal = Decimal("0")
+    last_purchase_date: Optional[datetime.date] = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,19 @@ class CustomerCRUD(BaseCRUD):
                 func.count()
                 .filter(and_(balance > 0, TaxInvoice.issue_date <= overdue_cutoff))
                 .label("overdue_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                and_(balance > 0, TaxInvoice.issue_date <= overdue_cutoff),
+                                balance,
+                            ),
+                            else_=Decimal("0"),
+                        )
+                    ),
+                    Decimal("0"),
+                ).label("overdue_zar"),
+                func.max(TaxInvoice.issue_date).label("last_purchase_date"),
             )
             .where(TaxInvoice.customer_id.in_(customer_ids))
             .group_by(TaxInvoice.customer_id)
@@ -72,6 +87,8 @@ class CustomerCRUD(BaseCRUD):
                 open_count=int(row.open_count),
                 open_zar=Decimal(row.open_zar),
                 overdue_count=int(row.overdue_count),
+                overdue_zar=Decimal(row.overdue_zar),
+                last_purchase_date=row.last_purchase_date,
             )
             for row in rows
         }

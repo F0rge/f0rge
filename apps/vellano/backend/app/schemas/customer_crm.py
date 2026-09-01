@@ -28,6 +28,9 @@ class CustomerCrmUpdate(BaseModel):
     billing_address: Optional[str] = None
     customer_type: Optional[CustomerType] = None
     price_tier: Optional[str] = None
+    credit_limit: Optional[Decimal] = None
+    on_hold: Optional[bool] = None
+    on_hold_reason: Optional[str] = None
 
 
 class CustomerCrmResponse(BaseModel):
@@ -39,9 +42,14 @@ class CustomerCrmResponse(BaseModel):
     billing_address: Optional[str] = None
     customer_type: CustomerType
     price_tier: str
+    credit_limit: Optional[Decimal] = None
+    on_hold: bool
+    on_hold_reason: Optional[str] = None
     open_invoices_count: int
     open_invoices_zar: Decimal
     overdue_invoices_count: int
+    overdue_invoices_zar: Decimal
+    last_purchase_date: Optional[datetime.date] = None
     active_laybys_count: int
     active_laybys_zar: Decimal
     created_at: datetime.datetime

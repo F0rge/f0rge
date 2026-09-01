@@ -3,6 +3,7 @@
 import {
   Button,
   ButtonSet,
+  Checkbox,
   ComboBox,
   InlineNotification,
   NumberInput,
@@ -39,6 +40,7 @@ import { TillScanner } from "@/components/till-scanner";
 import {
   ApiError,
   can,
+  canManageCustomerCredit,
   canUseTill,
   computeInvoicePreview,
   createTillSale,
@@ -63,6 +65,7 @@ import {
   type TillTender,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { isCreditBlockMessage } from "@/lib/customer-crm";
 import {
   isDesktopPointer,
   isProtectedScanField,
@@ -234,6 +237,7 @@ export default function TillPage() {
   const { user } = useAuth();
   const canSell = canUseTill(user);
   const canDiscount = can(user, "till.discount");
+  const canOverrideCredit = canManageCustomerCredit(user);
   const [locations, setLocations] = useState<Location[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
@@ -252,6 +256,9 @@ export default function TillPage() {
   const [lastBuyerName, setLastBuyerName] = useState(WALK_IN_CUSTOMER_NAME);
   const [scanValue, setScanValue] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [creditOverride, setCreditOverride] = useState(false);
+  const [creditOverrideReason, setCreditOverrideReason] = useState("");
+  const [creditBlock, setCreditBlock] = useState<string | null>(null);
   const scanBufferRef = useRef("");
 
   const loadData = useCallback(async () => {
@@ -318,6 +325,12 @@ export default function TillPage() {
 
   const selectedSkuOption = skuOptions.find((sku) => sku.id === skuId) ?? null;
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
+
+  useEffect(() => {
+    setCreditOverride(false);
+    setCreditOverrideReason("");
+    setCreditBlock(null);
+  }, [customerId]);
 
   const numericQty = typeof qty === "number" ? qty : 0;
 
@@ -475,8 +488,13 @@ export default function TillPage() {
     if (!saleValid) {
       return;
     }
+    if (creditOverride && canOverrideCredit && !creditOverrideReason.trim()) {
+      setError("Override reason is required.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
+    setCreditBlock(null);
     setLastSale(null);
     try {
       const result = await createTillSale({
@@ -493,6 +511,12 @@ export default function TillPage() {
         }),
         tender,
         ...(customerId ? { customer_id: customerId } : {}),
+        ...(canOverrideCredit && creditOverride
+          ? {
+              credit_override: true,
+              credit_override_reason: creditOverrideReason.trim(),
+            }
+          : {}),
       });
       setLastBuyerName(selectedCustomer?.name ?? WALK_IN_CUSTOMER_NAME);
       setLastSale(result);
@@ -509,6 +533,9 @@ export default function TillPage() {
             ? err.message
             : "Sale failed.";
       setError(message);
+      if (err instanceof ApiError && err.status === 409 && isCreditBlockMessage(err.message)) {
+        setCreditBlock(err.message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -800,6 +827,38 @@ export default function TillPage() {
                   />
                 </div>
 
+                {selectedCustomer?.on_hold ? (
+                  <InlineNotification
+                    kind="warning"
+                    title="Customer is on hold"
+                    subtitle={
+                      selectedCustomer.on_hold_reason ||
+                      "This customer cannot be sold to until the hold is lifted."
+                    }
+                    hideCloseButton
+                    lowContrast
+                  />
+                ) : null}
+
+                {canOverrideCredit && (selectedCustomer?.on_hold || creditBlock) ? (
+                  <>
+                    <Checkbox
+                      id="till-credit-override"
+                      labelText="Override credit hold / limit"
+                      checked={creditOverride}
+                      onChange={() => setCreditOverride((current) => !current)}
+                    />
+                    {creditOverride ? (
+                      <TextInput
+                        id="till-credit-override-reason"
+                        labelText="Override reason"
+                        value={creditOverrideReason}
+                        onChange={(event) => setCreditOverrideReason(event.target.value)}
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+
                 <div>
                   <h3>Tender</h3>
                   <div className="vellano-tender-grid">
@@ -841,7 +900,11 @@ export default function TillPage() {
 
                 <Button
                   kind="primary"
-                  disabled={!saleValid || submitting}
+                  disabled={
+                    !saleValid ||
+                    submitting ||
+                    (creditOverride && canOverrideCredit && !creditOverrideReason.trim())
+                  }
                   onClick={() => void handleCompleteSale()}
                 >
                   Complete Sale

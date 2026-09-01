@@ -23,6 +23,7 @@ from app.schemas.invoice import InvoiceLineResponse
 from app.schemas.till import TillSaleCreate, TillSaleLocationStock, TillSaleResponse
 from app.services.books_events import BooksEventService
 from app.services.category_posting import CategoryPostingService
+from app.services.customer_credit import CustomerCreditService
 from app.services.stock_movements import StockMovementService
 from app.services.chart_of_accounts import (
     CODE_AR,
@@ -52,6 +53,7 @@ class TillOrchestrator:
         self.posting = LedgerPostingService(db)
         self.category_posting = CategoryPostingService(db)
         self.events = BooksEventService(db)
+        self.credit = CustomerCreditService(db)
         self.stock_movements = StockMovementService(db)
         self.bom_crud = SkuBomLineCRUD(db)
 
@@ -80,6 +82,14 @@ class TillOrchestrator:
                 raise NotFoundError("Customer not found")
         else:
             customer = await self._get_walk_in_customer()
+        override_note = None
+        if not self.credit.is_walk_in(customer):
+            override_note = await self.credit.authorize_override(
+                credit_override=data.credit_override,
+                credit_override_reason=data.credit_override_reason,
+                user_id=user_id,
+            )
+            await self.credit.assert_not_held(customer, credit_override=data.credit_override)
         sale_date = datetime.date.today()
 
         line_inputs: list[tuple] = []
@@ -185,6 +195,11 @@ class TillOrchestrator:
         if subtotal <= 0:
             raise ValidationError("Sale total must be positive")
 
+        if not self.credit.is_walk_in(customer):
+            await self.credit.assert_within_limit(
+                customer, total_inc, credit_override=data.credit_override
+            )
+
         invoice_number = await self.invoice_crud.get_next_invoice_number()
         payment_number = await self.payment_crud.get_next_payment_number()
 
@@ -269,6 +284,7 @@ class TillOrchestrator:
                 invoice.id,
                 BooksEventAction.CREATED,
                 actor_user_id=user_id,
+                note=override_note,
             )
             await self.events.record(
                 BooksDocumentType.PAYMENT,

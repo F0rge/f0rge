@@ -196,6 +196,7 @@ export const USER_ROLES: { value: PresetRole; label: string }[] = [
 
 export {
   can,
+  canManageCustomerCredit,
   canManageLocations,
   canMutateBooks,
   canMutateCatalogue,
@@ -721,6 +722,8 @@ export type TillSalePayload = {
   lines: TillSaleLinePayload[];
   tender: TillTender;
   customer_id?: string;
+  credit_override?: boolean;
+  credit_override_reason?: string;
 };
 
 export type TillSaleResult = {
@@ -2891,10 +2894,21 @@ export type CustomerCrm = {
   open_invoices_count: number;
   open_invoices_zar: string;
   overdue_invoices_count: number;
+  overdue_invoices_zar: string;
   active_laybys_count: number;
   active_laybys_zar: string;
+  last_purchase_date: string | null;
+  credit_limit: string | null;
+  on_hold: boolean;
+  on_hold_reason: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type CustomerListFilters = {
+  overdue?: boolean;
+  active_layby?: boolean;
+  on_hold?: boolean;
 };
 
 export type CreateCustomerPayload = {
@@ -2905,6 +2919,9 @@ export type CreateCustomerPayload = {
   billing_address?: string;
   customer_type?: CustomerType;
   price_tier?: string;
+  credit_limit?: string | null;
+  on_hold?: boolean;
+  on_hold_reason?: string | null;
 };
 
 export type UpdateCustomerPayload = {
@@ -2915,6 +2932,9 @@ export type UpdateCustomerPayload = {
   billing_address?: string;
   customer_type?: CustomerType;
   price_tier?: string;
+  credit_limit?: string | null;
+  on_hold?: boolean;
+  on_hold_reason?: string | null;
 };
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
@@ -2922,8 +2942,19 @@ export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
   trade: "Trade",
 };
 
-export function listCustomers(): Promise<CustomerCrm[]> {
-  return apiFetch<CustomerCrm[]>("/customers");
+export function listCustomers(filters?: CustomerListFilters): Promise<CustomerCrm[]> {
+  const params = new URLSearchParams();
+  if (filters?.overdue) {
+    params.set("overdue", "true");
+  }
+  if (filters?.active_layby) {
+    params.set("active_layby", "true");
+  }
+  if (filters?.on_hold) {
+    params.set("on_hold", "true");
+  }
+  const qs = params.toString();
+  return apiFetch<CustomerCrm[]>(qs ? `/customers?${qs}` : "/customers");
 }
 
 export function getCustomer(id: string): Promise<CustomerCrm> {
@@ -2959,6 +2990,17 @@ function buildCustomerPayload(
   const tier = payload.price_tier?.trim();
   if (tier) {
     body.price_tier = tier;
+  }
+  if (payload.credit_limit !== undefined) {
+    const limit = payload.credit_limit?.trim();
+    body.credit_limit = limit || null;
+  }
+  if (payload.on_hold !== undefined) {
+    body.on_hold = payload.on_hold;
+  }
+  const holdReason = payload.on_hold_reason?.trim();
+  if (holdReason) {
+    body.on_hold_reason = holdReason;
   }
   return body;
 }
