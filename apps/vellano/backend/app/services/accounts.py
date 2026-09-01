@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.account import AccountCRUD
-from app.models.account import Account
+from app.models.account import Account, default_tax_treatment
 from app.schemas.account import AccountCreate, AccountResponse, AccountUpdate
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
@@ -30,11 +30,15 @@ class AccountService:
         if existing is not None:
             raise ConflictError("An account with this code already exists")
 
+        tax_treatment = data.tax_treatment
+        if tax_treatment is None:
+            tax_treatment = default_tax_treatment(data.type)
         account = Account(
             code=data.code,
             name=data.name,
             type=data.type,
             is_system=False,
+            tax_treatment=tax_treatment,
         )
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(account)
@@ -54,6 +58,8 @@ class AccountService:
             account.name = data.name
         if data.is_archived is not None:
             account.is_archived = data.is_archived
+        if data.tax_treatment is not None:
+            account.tax_treatment = data.tax_treatment
 
         await self.crud.commit_refresh(account)
         balances = await self.crud.get_balances()
@@ -68,6 +74,7 @@ class AccountService:
             type=account.type,
             is_system=account.is_system,
             is_archived=account.is_archived,
+            tax_treatment=account.tax_treatment,
             balance_zar=balance_zar,
             created_at=account.created_at,
             updated_at=account.updated_at,

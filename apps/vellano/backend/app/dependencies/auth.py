@@ -24,6 +24,7 @@ from app.services.locations import LocationService
 from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
 from app.services.catalogue_imports import CatalogueImportService
+from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
 from app.services.search import SearchService
 from app.services.settings import SettingsService
@@ -104,6 +105,10 @@ def get_cost_audit_service(db: AsyncSession = Depends(get_db)) -> CostAuditServi
 
 def get_account_service(db: AsyncSession = Depends(get_db)) -> AccountService:
     return AccountService(db)
+
+
+def get_category_map_service(db: AsyncSession = Depends(get_db)) -> CategoryMapService:
+    return CategoryMapService(db)
 
 
 def get_contact_service(db: AsyncSession = Depends(get_db)) -> ContactService:

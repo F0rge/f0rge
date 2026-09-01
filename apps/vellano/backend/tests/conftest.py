@@ -74,6 +74,7 @@ async def async_engine(
         coa = ChartOfAccountsSeedService(session)
         await coa.seed_if_empty()
         await coa.ensure_opening_equity()
+        await coa.ensure_category_chart()
         await TillSeedService(session).seed_if_empty()
     try:
         yield engine

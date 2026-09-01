@@ -17,12 +17,11 @@ from app.models.payment import Payment, PaymentDirection
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import InvoiceLineResponse
 from app.schemas.till import TillSaleCreate, TillSaleLocationStock, TillSaleResponse
+from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
     CODE_AR,
     CODE_BANK,
-    CODE_COGS,
     CODE_INVENTORY,
-    CODE_SALES,
     CODE_VAT,
     LedgerPostingService,
 )
@@ -42,6 +41,7 @@ class TillOrchestrator:
         self.payment_crud = PaymentCRUD(db)
         self.customer_crud = CustomerCRUD(db)
         self.posting = LedgerPostingService(db)
+        self.category_posting = CategoryPostingService(db)
 
     async def create_sale(self, data: TillSaleCreate) -> TillSaleResponse:
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
@@ -64,6 +64,7 @@ class TillOrchestrator:
         sale_date = datetime.date.today()
 
         line_inputs: list[tuple] = []
+        cogs_parts: list[tuple[str, Decimal, Decimal]] = []
         total_cogs = Decimal(0)
 
         for line in data.lines:
@@ -89,12 +90,15 @@ class TillOrchestrator:
                 rounding=ROUND_HALF_UP,
             )
             total_cogs += line_cogs
+            cogs_code = await self.category_posting.cogs_code_for_sku(sku)
+            cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
             line_inputs.append((sku, line.qty, location_stock, line.discount_percent))
 
         subtotal = Decimal(0)
         vat_total = Decimal(0)
         total_inc = Decimal(0)
         invoice_line_models: list[InvoiceLine] = []
+        sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
         for index, (sku, qty, _stock, discount_percent) in enumerate(line_inputs):
             discounted_unit = (
@@ -106,6 +110,8 @@ class TillOrchestrator:
             subtotal += ex_vat
             vat_total += line_vat
             total_inc += inc_vat
+            sales_code = await self.category_posting.sales_code_for_sku(sku)
+            sales_parts.append((sales_code, Decimal(0), ex_vat))
             invoice_line_models.append(
                 InvoiceLine(
                     description=sku.name,
@@ -157,11 +163,13 @@ class TillOrchestrator:
                 JournalDocumentType.INVOICE,
                 invoice.id,
                 f"Till tax invoice {invoice_number}",
-                [
-                    (CODE_AR, total_inc, Decimal(0)),
-                    (CODE_SALES, Decimal(0), subtotal),
-                    (CODE_VAT, Decimal(0), vat_total),
-                ],
+                self.category_posting.collapse(
+                    [
+                        (CODE_AR, total_inc, Decimal(0)),
+                        *sales_parts,
+                        (CODE_VAT, Decimal(0), vat_total),
+                    ]
+                ),
                 entry_date=sale_date,
             )
 
@@ -182,10 +190,12 @@ class TillOrchestrator:
                     JournalDocumentType.INVOICE,
                     invoice.id,
                     f"COGS for till sale {invoice_number}",
-                    [
-                        (CODE_COGS, total_cogs, Decimal(0)),
-                        (CODE_INVENTORY, Decimal(0), total_cogs),
-                    ],
+                    self.category_posting.collapse(
+                        [
+                            *cogs_parts,
+                            (CODE_INVENTORY, Decimal(0), total_cogs),
+                        ]
+                    ),
                     entry_date=sale_date,
                 )
 

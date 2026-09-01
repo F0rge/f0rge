@@ -17,6 +17,7 @@ from app.routers import (
     bank_imports,
     bills,
     catalogue_imports,
+    category_maps,
     contacts,
     cost_audit,
     credit_notes,
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.seed_if_empty()
         await coa.ensure_opening_equity()
         await coa.ensure_customer_deposits()
+        await coa.ensure_category_chart()
         await TillSeedService(session).seed_if_empty()
         await PlaygroundSeedService(session).seed_if_enabled()
     yield
@@ -107,6 +109,7 @@ app.include_router(deliveries.deliveries_router)
 app.include_router(laybys.laybys_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
+app.include_router(category_maps.category_maps_router)
 app.include_router(contacts.contacts_router)
 app.include_router(customers.customers_router)
 app.include_router(invoices.invoices_router)

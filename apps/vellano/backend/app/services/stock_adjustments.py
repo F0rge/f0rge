@@ -25,8 +25,8 @@ from app.schemas.stock_adjustment import (
     StockAdjustmentLineUpdate,
     StockAdjustmentResponse,
 )
+from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
-    CODE_COGS,
     CODE_INVENTORY,
     CODE_OPENING,
     LedgerPostingService,
@@ -57,6 +57,7 @@ class StockAdjustmentService:
         self.stock_movements = StockMovementService(db)
         self.stocktakes = StocktakeService(db)
         self.posting = LedgerPostingService(db)
+        self.category_posting = CategoryPostingService(db)
 
     async def list(self) -> list[StockAdjustmentResponse]:
         rows = await self.crud.list_all()
@@ -180,7 +181,7 @@ class StockAdjustmentService:
 
         async with unit_of_work(self.db):
             increase_total = Decimal(0)
-            decrease_total = Decimal(0)
+            journal_lines: list[tuple[str, Decimal, Decimal]] = []
             for line, unit_cost, is_increase in prepared:
                 amount = (Decimal(abs(line.qty_delta)) * unit_cost).quantize(
                     _CENT,
@@ -207,15 +208,17 @@ class StockAdjustmentService:
                         source=UnitCostAuditSource.ADJUSTMENT,
                         note=note,
                     )
-                    decrease_total += amount
+                    if adjustment.reason == StockAdjustmentReason.COUNT_FIX:
+                        expense_code = await self.category_posting.count_var_code_for_sku(line.sku)
+                    else:
+                        expense_code = await self.category_posting.stock_adj_code_for_sku(line.sku)
+                    journal_lines.append((expense_code, amount, Decimal(0)))
+                    journal_lines.append((CODE_INVENTORY, Decimal(0), amount))
 
-            journal_lines: list[tuple[str, Decimal, Decimal]] = []
             if increase_total > 0:
                 journal_lines.append((CODE_INVENTORY, increase_total, Decimal(0)))
                 journal_lines.append((CODE_OPENING, Decimal(0), increase_total))
-            if decrease_total > 0:
-                journal_lines.append((CODE_COGS, decrease_total, Decimal(0)))
-                journal_lines.append((CODE_INVENTORY, Decimal(0), decrease_total))
+            journal_lines = self.category_posting.collapse(journal_lines)
             if journal_lines:
                 await self.posting.post(
                     JournalDocumentType.STOCK_ADJUSTMENT,

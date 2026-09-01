@@ -6,13 +6,14 @@ from decimal import ROUND_HALF_UP, Decimal
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.sku import SkuCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.models.journal import JournalDocumentType
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import InvoiceCreate, InvoiceLineResponse, InvoiceResponse
+from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
     CODE_AR,
-    CODE_SALES,
     CODE_VAT,
     LedgerPostingService,
 )
@@ -27,8 +28,10 @@ class InvoiceService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.crud = TaxInvoiceCRUD(db)
+        self.sku_crud = SkuCRUD(db)
         self.contact_service = ContactService(db)
         self.posting = LedgerPostingService(db)
+        self.category_posting = CategoryPostingService(db)
 
     async def list(self) -> list[InvoiceResponse]:
         invoices = await self.crud.list_all()
@@ -84,15 +87,24 @@ class InvoiceService:
 
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(invoice)
+            sales_parts: list[tuple[str, Decimal, Decimal]] = []
+            for line in line_models:
+                sku = None
+                if line.sku_id is not None:
+                    sku = await self.sku_crud.get_by_id(line.sku_id)
+                sales_code = await self.category_posting.sales_code_for_sku(sku)
+                sales_parts.append((sales_code, Decimal(0), line.ex_vat))
             await self.posting.post(
                 JournalDocumentType.INVOICE,
                 invoice.id,
                 f"Tax invoice {invoice_number}",
-                [
-                    (CODE_AR, total_inc, Decimal(0)),
-                    (CODE_SALES, Decimal(0), subtotal),
-                    (CODE_VAT, Decimal(0), vat_total),
-                ],
+                self.category_posting.collapse(
+                    [
+                        (CODE_AR, total_inc, Decimal(0)),
+                        *sales_parts,
+                        (CODE_VAT, Decimal(0), vat_total),
+                    ]
+                ),
                 entry_date=invoice.issue_date,
             )
             await self.crud.commit_refresh(invoice)

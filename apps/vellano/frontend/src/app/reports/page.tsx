@@ -350,6 +350,9 @@ export default function ReportsPage() {
                   Net profit: {formatZarAmount(profitLoss.net_profit_zar)} (
                   {profitLoss.from_date} to {profitLoss.to_date})
                 </p>
+                <p className="cds--type-body-01">
+                  Income and expenses are grouped by account, including category sales.
+                </p>
                 <TableContainer title="Income">
                   <Table>
                     <TableHead>

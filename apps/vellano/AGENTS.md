@@ -381,15 +381,22 @@ Document-centric double-entry in ZAR. Every invoice, credit note, bill, and paym
 | 2200 | VAT control | liability |
 | 2300 | Customer deposits | liability |
 | 3000 | Opening balances | equity |
-| 4000 | Sales | income |
-| 5000 | Cost of goods sold | expense |
+| 4000 | Sales (unmapped fallback) | income |
+| 4010–4070 | Sales – Seating/Tables/Storage/Decor/Bedroom/Dining/Outdoor | income |
+| 5000 | Cost of goods sold (unmapped fallback) | expense |
+| 5010–5070 | COGS – same categories | expense |
+| 5110–5170 | Stock adj – same categories | expense |
+| 5210–5270 | Count var – same categories | expense |
 | 6100 | Foreign exchange gain/loss | expense |
+
+SKU `category` maps to those P&L accounts via `GET/PUT /api/v1/category-maps` (seeded; owner/books can upsert). Till/layby/adj/CN post to the mapped codes when the SKU has a category; books invoices without `sku_id` still use 4000. Extra accounts are added by `ensure_category_chart()` on startup.
 
 **Numbering:** `INV-0001`, `CN-0001`, `BILL-0001`, `PAY-0001` (sequential, same algorithm as `PO-0001`).
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
-- **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on journal lines).
+- **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on journal lines) and `tax_treatment` (`none` | `vat15`).
+- **Category maps:** `GET/PUT /category-maps` — SKU category → sales/COGS/stock-adj/count-var codes. Mutate: owner|books.
 - **Contacts:** `GET/POST /contacts` — unified customers (`kind: customer`) and suppliers (`kind: supplier`). `POST` creates customers only; suppliers via `POST /suppliers`.
 - **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf` — 15% VAT on face; journal Dr AR, Cr Sales + VAT control.
 - **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}` — one CN per invoice; reverses AR/sales/VAT.
@@ -495,7 +502,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 |----------|------------------------|
 | `/catalogue` | `/skus` |
 | `/stock` | `/inventory` |
-| `/ledger` | `/accounts` |
+| `/ledger` | `/accounts`, `/category-maps` |
 | `/journals` | `/journals` |
 | `/bank-reconciliation` | `/bank-imports` |
 | `/proformas` | `/proformas` |

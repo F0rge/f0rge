@@ -908,6 +908,8 @@ export function cancelAdjustment(id: string): Promise<Adjustment> {
 
 export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
 
+export type TaxTreatment = "none" | "vat15";
+
 export type Account = {
   id: string;
   code: string;
@@ -915,6 +917,7 @@ export type Account = {
   type: AccountType;
   is_system: boolean;
   is_archived: boolean;
+  tax_treatment: TaxTreatment;
   balance_zar: string;
   created_at: string;
   updated_at: string;
@@ -924,11 +927,13 @@ export type CreateAccountPayload = {
   code: string;
   name: string;
   type: AccountType;
+  tax_treatment?: TaxTreatment;
 };
 
 export type UpdateAccountPayload = {
   name?: string;
   is_archived?: boolean;
+  tax_treatment?: TaxTreatment;
 };
 
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
@@ -938,6 +943,19 @@ export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: "income", label: "Income" },
   { value: "expense", label: "Expense" },
 ];
+
+export const TAX_TREATMENTS: { value: TaxTreatment; label: string }[] = [
+  { value: "vat15", label: "VAT 15%" },
+  { value: "none", label: "None" },
+];
+
+export function defaultTaxTreatment(type: AccountType): TaxTreatment {
+  return type === "income" || type === "expense" ? "vat15" : "none";
+}
+
+export function taxTreatmentLabel(value: TaxTreatment): string {
+  return TAX_TREATMENTS.find((entry) => entry.value === value)?.label ?? value;
+}
 
 export function listAccounts(): Promise<Account[]> {
   return apiFetch<Account[]>("/accounts");
@@ -953,6 +971,34 @@ export function createAccount(payload: CreateAccountPayload): Promise<Account> {
 export function updateAccount(id: string, payload: UpdateAccountPayload): Promise<Account> {
   return apiFetch<Account>(`/accounts/${id}`, {
     method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type CategoryMap = {
+  id: string;
+  category: string;
+  sales_code: string;
+  cogs_code: string;
+  stock_adj_code: string;
+  count_var_code: string;
+};
+
+export type UpsertCategoryMapPayload = {
+  category: string;
+  sales_code: string;
+  cogs_code: string;
+  stock_adj_code: string;
+  count_var_code: string;
+};
+
+export function listCategoryMaps(): Promise<CategoryMap[]> {
+  return apiFetch<CategoryMap[]>("/category-maps");
+}
+
+export function upsertCategoryMap(payload: UpsertCategoryMapPayload): Promise<CategoryMap> {
+  return apiFetch<CategoryMap>("/category-maps", {
+    method: "PUT",
     body: JSON.stringify(payload),
   });
 }
