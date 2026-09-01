@@ -80,3 +80,26 @@ async def test_draft_return_increments_open_returns_count(owner_client: AsyncCli
     after = await owner_client.get("/api/v1/home")
     assert after.status_code == 200
     assert after.json()["open_returns_count"] == 1
+
+
+async def test_low_stock_attention_order_links_to_reorder(owner_client: AsyncClient) -> None:
+    location_id = await _kramerville_id(owner_client)
+    create_resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "HOME-ORDER-REF",
+            "our_barcode": "HOME-ORDER-BAR",
+            "name": "Home order sofa",
+            "design": "Home order design",
+            "fabric": "Home order fabric",
+            "opening_location_id": location_id,
+            "opening_qty": 2,
+            "opening_unit_cost_zar": "50.00",
+        },
+    )
+    assert create_resp.status_code == 201
+
+    home = await owner_client.get("/api/v1/home")
+    assert home.status_code == 200
+    low = next(item for item in home.json()["needs_attention"] if item["kind"] == "low_stock")
+    assert low["href"] == "/reorder"
