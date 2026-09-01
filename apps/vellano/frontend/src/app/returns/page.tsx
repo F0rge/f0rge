@@ -20,7 +20,7 @@ import {
   TextArea,
 } from "@carbon/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -118,6 +118,7 @@ function ReturnsPageContent() {
   const [notes, setNotes] = useState("");
   const [lineQtys, setLineQtys] = useState<Record<string, number | "">>({});
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const invoicePrefillConsumed = useRef(false);
 
   const customerByInvoiceId = useMemo(
     () => Object.fromEntries(invoices.map((entry) => [entry.id, entry.customer_name])),
@@ -165,9 +166,10 @@ function ReturnsPageContent() {
 
   useEffect(() => {
     const prefilled = searchParams.get("invoice");
-    if (!prefilled || !canMutate) {
+    if (!prefilled || !canMutate || invoicePrefillConsumed.current) {
       return;
     }
+    invoicePrefillConsumed.current = true;
     setInvoiceId(prefilled);
     setCreateOpen(true);
     const next = new URLSearchParams(searchParams.toString());

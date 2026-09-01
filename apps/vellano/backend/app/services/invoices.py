@@ -153,6 +153,7 @@ class InvoiceService:
                     inc_vat=line.inc_vat,
                     vat_amount=line.vat_amount,
                     sort_order=line.sort_order,
+                    sku_id=line.sku_id,
                 )
                 for line in invoice.lines
             ],

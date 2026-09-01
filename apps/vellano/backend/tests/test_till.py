@@ -109,7 +109,9 @@ async def test_till_cash_sale_decrements_bedfordview_stock(
 
     invoice = await owner_client.get(f"/api/v1/invoices/{body['invoice_id']}")
     assert invoice.status_code == 200
-    assert invoice.json()["balance"] == "0.00"
+    payload = invoice.json()
+    assert payload["balance"] == "0.00"
+    assert payload["lines"][0]["sku_id"] == sku_id
 
 
 async def test_till_card_sale_records_tender(
