@@ -265,6 +265,52 @@ body {
   overflow: hidden;
 }
 
+.vellano-till-scan-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.vellano-till-scan-row .cds--form-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.vellano-till-thumb-cell {
+  width: 48px;
+  padding-right: 0.5rem;
+  vertical-align: middle;
+}
+
+.vellano-till-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  display: block;
+  flex-shrink: 0;
+}
+
+.vellano-till-thumb--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cds-layer-02, #e0e0e0);
+  color: var(--cds-icon-secondary, #525252);
+}
+
+.vellano-till-scanner__frame {
+  width: 100%;
+  background: #161616;
+}
+
+.vellano-till-scanner__video {
+  display: block;
+  width: 100%;
+  max-height: 16rem;
+  object-fit: cover;
+  background: #161616;
+}
+
 .vellano-till-picker-row {
   display: flex;
   align-items: flex-end;

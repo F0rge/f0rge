@@ -210,6 +210,7 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 - **Tender:** `cash` | `card` | `deposit` — deposit records tender on `payments` only (Dr 1100 / Cr 1200, same as cash/card); no PSP, no 2300 (laybys own deposits).
 - **VAT:** 15% on discounted ex-VAT subtotal (unchanged).
 - **Returns:** process return is UI-only in S9; backend returns API unchanged (V2-S5).
+- **Camera scan:** HTTPS (Railway) or localhost; type-in fallback if camera is denied.
 
 ## V2-S10 customers CRM
 

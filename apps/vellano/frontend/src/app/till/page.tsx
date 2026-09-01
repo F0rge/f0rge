@@ -23,14 +23,18 @@ import {
   Bookmark,
   Building,
   Currency,
+  Image as ImageIcon,
   Money,
   Purchase,
+  Scan,
   TrashCan,
   Undo,
   UserFollow,
 } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { TillScanner } from "@/components/till-scanner";
 
 import {
   ApiError,
@@ -49,6 +53,7 @@ import {
   listSkus,
   parsePriceInput,
   roundHalfUp,
+  skuPhotoUrl,
   type CustomerCrm,
   type InventorySku,
   type Location,
@@ -57,6 +62,13 @@ import {
   type TillTender,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  isDesktopPointer,
+  isProtectedScanField,
+  isQtyOrDiscountField,
+  resolveTillScan,
+  tillScanErrorMessage,
+} from "@/lib/barcode-scan";
 
 const SELLER = {
   name: "Vellano",
@@ -185,6 +197,37 @@ function filterCustomerItem({
   );
 }
 
+function mergeCartBySku(current: CartLine[], sku: Sku, addQty: number): CartLine[] {
+  const existing = current.find((line) => line.sku.id === sku.id);
+  if (existing) {
+    return current.map((line) =>
+      line.sku.id === sku.id ? { ...line, qty: line.qty + addQty } : line,
+    );
+  }
+  return [...current, { key: sku.id, sku, qty: addQty, discountPercent: 0 }];
+}
+
+function SkuThumb({ sku }: { sku: Sku }) {
+  if (!sku.photo_storage_key) {
+    return (
+      <div className="vellano-till-thumb vellano-till-thumb--placeholder" aria-hidden>
+        <ImageIcon size={20} />
+      </div>
+    );
+  }
+  return (
+    // Cookie + 302 Tigris redirect — same as catalogue; not next/image.
+    // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
+    <img
+      className="vellano-till-thumb"
+      src={skuPhotoUrl(sku.id)}
+      alt=""
+      width={48}
+      height={48}
+    />
+  );
+}
+
 export default function TillPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -205,6 +248,9 @@ export default function TillPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<TillSaleResult | null>(null);
   const [lastBuyerName, setLastBuyerName] = useState(WALK_IN_CUSTOMER_NAME);
+  const [scanValue, setScanValue] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const scanBufferRef = useRef("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -300,6 +346,87 @@ export default function TillPage() {
     numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0) &&
     unitExVat(selectedSku ?? ({} as Sku)) > 0;
 
+  const floorOnHandFor = useCallback(
+    (id: string) =>
+      inventoryBySku.get(id)?.locations.find((loc) => loc.location_id === locationId)?.on_hand ??
+      0,
+    [inventoryBySku, locationId],
+  );
+
+  const focusScanField = useCallback(() => {
+    if (!isDesktopPointer()) {
+      return;
+    }
+    document.getElementById("till-scan")?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      focusScanField();
+    }
+  }, [loading, focusScanField]);
+
+  const applyScan = useCallback(
+    (code: string, allowOurRef: boolean, addQty = 1): boolean => {
+      if (!canSell || !locationId) {
+        return false;
+      }
+      const trimmed = code.trim();
+      if (!trimmed) {
+        return false;
+      }
+      const result = resolveTillScan({
+        code: trimmed,
+        skus,
+        allowOurRef,
+        addQty,
+        floorOnHand: floorOnHandFor,
+        cartQty: (id) => cartQtyBySku.get(id) ?? 0,
+      });
+      if (!result.ok) {
+        setError(tillScanErrorMessage(result.error));
+        return false;
+      }
+      setError(null);
+      setCart((current) => mergeCartBySku(current, result.sku, result.qty));
+      setScanValue("");
+      focusScanField();
+      return true;
+    },
+    [canSell, cartQtyBySku, floorOnHandFor, focusScanField, locationId, skus],
+  );
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target instanceof Element ? event.target : document.activeElement;
+      if (isQtyOrDiscountField(target)) {
+        return;
+      }
+      if (isProtectedScanField(target)) {
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      if (event.key === "Enter") {
+        const buffered = scanBufferRef.current;
+        scanBufferRef.current = "";
+        if (buffered.trim()) {
+          event.preventDefault();
+          applyScan(buffered, true);
+        }
+        return;
+      }
+      if (event.key.length === 1) {
+        scanBufferRef.current += event.key;
+      } else if (event.key === "Backspace") {
+        scanBufferRef.current = scanBufferRef.current.slice(0, -1);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [applyScan]);
+
   const saleValid =
     canSell &&
     locationId &&
@@ -316,17 +443,10 @@ export default function TillPage() {
     if (!addValid || !selectedSku) {
       return;
     }
-    setCart((current) => [
-      ...current,
-      {
-        key: `${selectedSku.id}-${Date.now()}`,
-        sku: selectedSku,
-        qty: numericQty,
-        discountPercent: 0,
-      },
-    ]);
-    setSkuId("");
-    setQty(1);
+    if (applyScan(selectedSku.our_barcode, false, numericQty)) {
+      setSkuId("");
+      setQty(1);
+    }
   }
 
   function updateCartLine(key: string, patch: Partial<Pick<CartLine, "qty" | "discountPercent">>) {
@@ -467,6 +587,31 @@ export default function TillPage() {
                     ))}
                   </Select>
 
+                  <div className="vellano-till-scan-row">
+                    <TextInput
+                      id="till-scan"
+                      labelText="Scan barcode"
+                      placeholder="Scan or type our barcode"
+                      value={scanValue}
+                      onChange={(event) => setScanValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          applyScan(scanValue, true);
+                        }
+                      }}
+                      disabled={!locationId}
+                    />
+                    <Button
+                      kind="secondary"
+                      renderIcon={Scan}
+                      disabled={!locationId}
+                      onClick={() => setScannerOpen(true)}
+                    >
+                      Scan
+                    </Button>
+                  </div>
+
                   <div className="vellano-till-picker-row">
                     <ComboBox
                       id="till-sku"
@@ -519,6 +664,9 @@ export default function TillPage() {
                     <Table size="sm">
                       <TableHead>
                         <TableRow>
+                          <TableHeader className="vellano-till-thumb-cell">
+                            <span className="cds--visually-hidden">Photo</span>
+                          </TableHeader>
                           <TableHeader>Item</TableHeader>
                           <TableHeader>Qty</TableHeader>
                           <TableHeader>Unit price (ZAR inc VAT)</TableHeader>
@@ -530,6 +678,9 @@ export default function TillPage() {
                       <TableBody>
                         {cart.map((line) => (
                           <TableRow key={line.key}>
+                            <TableCell className="vellano-till-thumb-cell">
+                              <SkuThumb sku={line.sku} />
+                            </TableCell>
                             <TableCell>
                               <strong>{line.sku.name}</strong>
                               <div className="vellano-muted-text">SKU: {line.sku.our_ref}</div>
@@ -696,6 +847,14 @@ export default function TillPage() {
           </div>
         </div>
       )}
+
+      {scannerOpen ? (
+        <TillScanner
+          onClose={() => setScannerOpen(false)}
+          onDetect={(code) => applyScan(code, false)}
+          onTypeIn={(code) => applyScan(code, true)}
+        />
+      ) : null}
 
       {lastSale ? (
         <Tile className="vellano-tax-invoice">
