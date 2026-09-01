@@ -402,6 +402,7 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}` — one CN per invoice; reverses AR/sales/VAT.
 - **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR).
 - **Payments:** `GET/POST /payments` — `direction: in` (invoice, ZAR) or `out` (bill, foreign FX). Response includes `fx_gain_loss_zar` (positive = gain, negative = loss).
+- **Journal CSV (SimplePay):** on Journals page (`POST /journal-imports/preview` and `/commit`, multipart `file`); source `import:simplepay`; same-month 409.
 
 | Action | owner | buyer | warehouse | till | books |
 |--------|:-----:|:-----:|:---------:|:----:|:-----:|

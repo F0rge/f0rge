@@ -3,6 +3,8 @@
 import {
   Button,
   DataTable,
+  FileUploaderDropContainer,
+  FileUploaderItem,
   InlineNotification,
   Modal,
   Select,
@@ -22,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   canMutateBooks,
+  commitJournalImport,
   createJournal,
   formatPriceAmount,
   formatZarAmount,
@@ -29,11 +32,13 @@ import {
   listJournals,
   parsePriceInput,
   postJournal,
+  previewJournalImport,
   roundHalfUp,
   voidJournal,
   type Account,
   type CreateJournalLinePayload,
   type Journal,
+  type JournalImportPreview,
   type JournalStatus,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -129,6 +134,12 @@ export default function JournalsPage() {
   const [lines, setLines] = useState<JournalLineForm[]>([emptyLine(), emptyLine()]);
   const [viewJournal, setViewJournal] = useState<Journal | null>(null);
   const [voidTarget, setVoidTarget] = useState<Journal | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<JournalImportPreview | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const journalById = useMemo(
     () => Object.fromEntries(journals.map((entry) => [entry.id, entry])),
@@ -197,6 +208,16 @@ export default function JournalsPage() {
     setCreateStatus("posted");
     setLines([emptyLine(), emptyLine()]);
   }
+
+  function resetImport() {
+    setImportFile(null);
+    setImportPreview(null);
+    setImportError(null);
+    setImportBusy(false);
+  }
+
+  const importCanCommit =
+    importPreview !== null && importPreview.balanced && importPreview.errors.length === 0;
 
   function updateLine(index: number, patch: Partial<JournalLineForm>) {
     setLines((current) =>
@@ -269,6 +290,46 @@ export default function JournalsPage() {
     }
   }
 
+  async function handleImportPreview() {
+    if (!importFile) {
+      return;
+    }
+    setImportBusy(true);
+    setImportError(null);
+    try {
+      const data = await previewJournalImport(importFile);
+      setImportPreview(data);
+    } catch (err) {
+      setImportPreview(null);
+      setImportError(err instanceof Error ? err.message : "Failed to preview CSV.");
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function handleImportCommit() {
+    if (!importFile || !importCanCommit) {
+      return;
+    }
+    setImportBusy(true);
+    setImportError(null);
+    try {
+      const journal = await commitJournalImport(importFile);
+      setImportOpen(false);
+      resetImport();
+      setSuccess(
+        journal.journal_number
+          ? `Imported ${journal.journal_number}.`
+          : "Imported SimplePay journal.",
+      );
+      await loadJournals();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Failed to import CSV.");
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   async function handleVoid() {
     if (!voidTarget) {
       return;
@@ -306,14 +367,25 @@ export default function JournalsPage() {
           <p className="cds--type-body-01">Manual and system journal entries.</p>
         </div>
         {canMutate ? (
-          <Button
-            onClick={() => {
-              resetCreateForm();
-              setCreateOpen(true);
-            }}
-          >
-            Create journal
-          </Button>
+          <div className="vellano-catalogue-actions">
+            <Button
+              kind="secondary"
+              onClick={() => {
+                resetImport();
+                setImportOpen(true);
+              }}
+            >
+              Import CSV
+            </Button>
+            <Button
+              onClick={() => {
+                resetCreateForm();
+                setCreateOpen(true);
+              }}
+            >
+              Create journal
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -323,6 +395,16 @@ export default function JournalsPage() {
           title="Error"
           subtitle={error}
           onCloseButtonClick={() => setError(null)}
+          lowContrast
+        />
+      ) : null}
+
+      {success ? (
+        <InlineNotification
+          kind="success"
+          title="Imported"
+          subtitle={success}
+          onCloseButtonClick={() => setSuccess(null)}
           lowContrast
         />
       ) : null}
@@ -433,6 +515,150 @@ export default function JournalsPage() {
           )}
         </DataTable>
       )}
+
+      <Modal
+        open={importOpen}
+        modalHeading="Import CSV"
+        primaryButtonText={
+          importBusy
+            ? importPreview
+              ? "Importing…"
+              : "Previewing…"
+            : importPreview
+              ? "Commit"
+              : "Preview"
+        }
+        secondaryButtonText="Cancel"
+        primaryButtonDisabled={
+          !importFile ||
+          importBusy ||
+          (importPreview !== null && !importCanCommit)
+        }
+        onRequestClose={() => {
+          setImportOpen(false);
+          resetImport();
+        }}
+        onRequestSubmit={() => {
+          if (importPreview) {
+            void handleImportCommit();
+          } else {
+            void handleImportPreview();
+          }
+        }}
+        size="lg"
+      >
+        <Stack gap={5}>
+          <div>
+            <p className="cds--label">SimplePay journal CSV</p>
+            <p className="cds--helper-text">
+              Date, Narration, Account, Debit, and Credit columns. Posted as source
+              import:simplepay. One import per calendar month.
+            </p>
+            <FileUploaderDropContainer
+              accept={[".csv", "text/csv"]}
+              labelText="Drag and drop a CSV here or click to upload"
+              multiple={false}
+              disabled={importBusy}
+              onAddFiles={(_, { addedFiles }) => {
+                const next = addedFiles[0];
+                setImportFile(next ?? null);
+                setImportPreview(null);
+                setImportError(null);
+              }}
+            />
+            {importFile ? (
+              <FileUploaderItem
+                name={importFile.name}
+                status="complete"
+                onDelete={
+                  importBusy
+                    ? undefined
+                    : () => {
+                        setImportFile(null);
+                        setImportPreview(null);
+                        setImportError(null);
+                      }
+                }
+              />
+            ) : null}
+          </div>
+
+          {importError ? (
+            <InlineNotification
+              kind="error"
+              title="Import"
+              subtitle={importError}
+              onCloseButtonClick={() => setImportError(null)}
+              lowContrast
+            />
+          ) : null}
+
+          {importPreview ? (
+            <Stack gap={4}>
+              <p className="cds--type-body-01">
+                Date: {importPreview.entry_date ?? "—"}
+              </p>
+              <p className="cds--type-body-01">
+                Narration: {importPreview.narration || "—"}
+              </p>
+              <p className="cds--type-body-01">
+                Debit {formatZarAmount(importPreview.debit_total)} · Credit{" "}
+                {formatZarAmount(importPreview.credit_total)}
+              </p>
+              <Tag type={importPreview.balanced ? "green" : "red"}>
+                {importPreview.balanced ? "Balanced" : "Unbalanced"}
+              </Tag>
+              {importPreview.errors.length > 0 ? (
+                <TableContainer
+                  title={`Errors (${importPreview.errors.length})`}
+                  description="Fix the CSV and preview again. Commit stays disabled."
+                >
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableHeader>Row</TableHeader>
+                        <TableHeader>Message</TableHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {importPreview.errors.map((entry, index) => (
+                        <TableRow key={`${entry.row}-${index}`}>
+                          <TableCell>{entry.row}</TableCell>
+                          <TableCell>{entry.message}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : null}
+              {importPreview.lines.length > 0 ? (
+                <TableContainer title="Preview lines">
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableHeader>Row</TableHeader>
+                        <TableHeader>Account</TableHeader>
+                        <TableHeader>Debit</TableHeader>
+                        <TableHeader>Credit</TableHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {importPreview.lines.map((line) => (
+                        <TableRow key={`${line.row}-${line.account_code}`}>
+                          <TableCell>{line.row}</TableCell>
+                          <TableCell>{line.account_code}</TableCell>
+                          <TableCell>{formatZarAmount(line.debit_zar)}</TableCell>
+                          <TableCell>{formatZarAmount(line.credit_zar)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : null}
+            </Stack>
+          ) : null}
+        </Stack>
+      </Modal>
 
       <Modal
         open={createOpen}

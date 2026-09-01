@@ -20,6 +20,7 @@ from app.services.home import HomeService
 from app.services.inventory import InventoryService
 from app.services.invoices import InvoiceService
 from app.services.repeating_invoices import RepeatingInvoiceService
+from app.services.journal_imports import JournalImportService
 from app.services.journals import JournalService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
@@ -134,6 +135,12 @@ def get_repeating_invoice_service(
 
 def get_journal_service(db: AsyncSession = Depends(get_db)) -> JournalService:
     return JournalService(db)
+
+
+def get_journal_import_service(
+    db: AsyncSession = Depends(get_db),
+) -> JournalImportService:
+    return JournalImportService(db)
 
 
 def get_credit_note_service(db: AsyncSession = Depends(get_db)) -> CreditNoteService:

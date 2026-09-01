@@ -1419,6 +1419,40 @@ export function voidJournal(id: string): Promise<Journal> {
   return apiFetch<Journal>(`/journals/${id}/void`, { method: "POST" });
 }
 
+export type JournalImportRowError = {
+  row: number;
+  message: string;
+};
+
+export type JournalImportPreviewLine = {
+  row: number;
+  account_code: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type JournalImportPreview = {
+  lines: JournalImportPreviewLine[];
+  errors: JournalImportRowError[];
+  balanced: boolean;
+  debit_total: string;
+  credit_total: string;
+  entry_date: string | null;
+  narration: string;
+};
+
+export function previewJournalImport(file: File): Promise<JournalImportPreview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<JournalImportPreview>("/journal-imports/preview", formData);
+}
+
+export function commitJournalImport(file: File): Promise<Journal> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<Journal>("/journal-imports/commit", formData);
+}
+
 export function formatZarAmount(value: string | null | undefined): string {
   if (!value) {
     return "—";
