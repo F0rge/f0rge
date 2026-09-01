@@ -18,10 +18,11 @@ import {
   TableContainer,
   TableHead,
   TableHeader,
+  Pagination,
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { Barcode, DocumentImport, Printer } from "@carbon/icons-react";
+import { Barcode, DocumentExport, DocumentImport, Printer } from "@carbon/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -44,6 +45,7 @@ import {
   type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { downloadCsv } from "@/lib/csv";
 
 const TABLE_HEADERS = [
   { key: "select", header: "" },
@@ -170,6 +172,8 @@ function CataloguePageContent() {
   const [searchFilter, setSearchFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const loadSkus = useCallback(async () => {
     setLoading(true);
@@ -257,10 +261,19 @@ function CataloguePageContent() {
     });
   }, [skus, categoryFilter, searchFilter]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchFilter, categoryFilter]);
+
+  const pagedSkus = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredSkus.slice(start, start + pageSize);
+  }, [filteredSkus, page, pageSize]);
+
   const allFilteredSelected =
     filteredSkus.length > 0 && filteredSkus.every((sku) => selectedIds.has(sku.id));
 
-  const rows: SkuRow[] = filteredSkus.map((entry) => ({
+  const rows: SkuRow[] = pagedSkus.map((entry) => ({
     id: entry.id,
     product: entry.id,
     category: entry.category?.trim() || "—",
@@ -406,18 +419,56 @@ function CataloguePageContent() {
             Manage products, pricing tiers, and generate barcode labels.
           </p>
         </div>
-        {canMutate ? (
-          <div className="vellano-catalogue-actions">
-            <Button
-              kind="secondary"
-              renderIcon={DocumentImport}
-              onClick={() => router.push("/import")}
-            >
-              Import
-            </Button>
-            <Button onClick={() => setCreateOpen(true)}>Add SKU</Button>
-          </div>
-        ) : null}
+        <div className="vellano-catalogue-actions">
+          <Button
+            kind="secondary"
+            renderIcon={DocumentExport}
+            disabled={filteredSkus.length === 0}
+            onClick={() => {
+              downloadCsv(
+                "vellano-catalogue.csv",
+                [
+                  "Our ref",
+                  "Name",
+                  "Category",
+                  "Preferred supplier",
+                  "Lead time",
+                  "Reorder min",
+                  "Cost (ZAR)",
+                  "Retail inc VAT",
+                  "Trade inc VAT",
+                  "Our barcode",
+                ],
+                filteredSkus.map((sku) => [
+                  sku.our_ref,
+                  sku.name,
+                  sku.category?.trim() || "",
+                  sku.preferred_supplier_name?.trim() || "",
+                  formatLeadTime(sku.lead_time_days),
+                  sku.reorder_min !== null ? String(sku.reorder_min) : "",
+                  unitCostBySku.get(sku.id) ?? "",
+                  sku.retail_inc_vat ?? "",
+                  sku.wholesale_inc_vat ?? "",
+                  sku.our_barcode,
+                ]),
+              );
+            }}
+          >
+            Export CSV
+          </Button>
+          {canMutate ? (
+            <>
+              <Button
+                kind="secondary"
+                renderIcon={DocumentImport}
+                onClick={() => router.push("/import")}
+              >
+                Import
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>New SKU</Button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {error ? (
@@ -525,7 +576,7 @@ function CataloguePageContent() {
                       </TableRow>
                     ) : (
                       tableRows.map((row) => {
-                        const entry = filteredSkus.find((sku) => sku.id === row.id);
+                        const entry = pagedSkus.find((sku) => sku.id === row.id);
                         return (
                           <TableRow
                             {...getRowProps({
@@ -615,6 +666,16 @@ function CataloguePageContent() {
               </TableContainer>
             )}
           </DataTable>
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            pageSizes={[10, 25, 50]}
+            totalItems={filteredSkus.length}
+            onChange={({ page: nextPage, pageSize: nextSize }) => {
+              setPage(nextPage);
+              setPageSize(nextSize);
+            }}
+          />
         </div>
       )}
 
