@@ -3,6 +3,7 @@
 import {
   DataTable,
   InlineNotification,
+  Modal,
   Stack,
   Table,
   TableBody,
@@ -12,8 +13,9 @@ import {
   TableHeader,
   TableRow,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { BooksHistory } from "@/components/books-history";
 import {
   formatFxGainLoss,
   formatZarAmount,
@@ -48,6 +50,7 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [historyPayment, setHistoryPayment] = useState<Payment | null>(null);
 
   const loadPayments = useCallback(async () => {
     setLoading(true);
@@ -67,6 +70,11 @@ export default function PaymentsPage() {
       void loadPayments();
     }
   }, [user, loadPayments]);
+
+  const paymentById = useMemo(
+    () => Object.fromEntries(payments.map((entry) => [entry.id, entry])),
+    [payments],
+  );
 
   const rows: PaymentRow[] = payments.map((entry) => ({
     id: entry.id,
@@ -123,19 +131,45 @@ export default function PaymentsPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {tableRows.map((row) => (
-                    <TableRow {...getRowProps({ row })} key={row.id}>
-                      {row.cells.map((cell) => (
-                        <TableCell key={cell.id}>{cell.value}</TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
+                  {tableRows.map((row) => {
+                    const payment = paymentById[row.id];
+                    return (
+                      <TableRow
+                        {...getRowProps({ row })}
+                        key={row.id}
+                        onClick={() => {
+                          if (payment) {
+                            setHistoryPayment(payment);
+                          }
+                        }}
+                        style={{ cursor: payment ? "pointer" : undefined }}
+                      >
+                        {row.cells.map((cell) => (
+                          <TableCell key={cell.id}>{cell.value}</TableCell>
+                        ))}
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
         </DataTable>
       )}
+
+      <Modal
+        open={historyPayment !== null}
+        modalHeading={
+          historyPayment ? `Payment ${historyPayment.payment_number}` : "History"
+        }
+        passiveModal
+        onRequestClose={() => setHistoryPayment(null)}
+        size="md"
+      >
+        {historyPayment ? (
+          <BooksHistory documentType="payment" documentId={historyPayment.id} />
+        ) : null}
+      </Modal>
     </Stack>
   );
 }

@@ -24,13 +24,12 @@ from app.schemas.layby import (
     LaybyPaymentResponse,
     LaybyResponse,
 )
+from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
     CODE_AR,
     CODE_BANK,
-    CODE_COGS,
     CODE_DEPOSITS,
     CODE_INVENTORY,
-    CODE_SALES,
     CODE_VAT,
     LedgerPostingService,
 )
@@ -53,6 +52,7 @@ class LaybysService:
         self.stock_movements = StockMovementService(db)
         self.stocktakes = StocktakeService(db)
         self.posting = LedgerPostingService(db)
+        self.category_posting = CategoryPostingService(db)
 
     async def list(self) -> list[LaybyResponse]:
         rows = await self.crud.list_all()
@@ -170,6 +170,7 @@ class LaybysService:
         subtotal = Decimal(0)
         vat_total = Decimal(0)
         total_inc = Decimal(0)
+        sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
         for index, line in enumerate(layby.lines):
             ex_vat = (Decimal(line.qty) * line.unit_ex_vat).quantize(CENT, rounding=ROUND_HALF_UP)
@@ -178,6 +179,8 @@ class LaybysService:
             subtotal += ex_vat
             vat_total += line_vat
             total_inc += inc_vat
+            sales_code = await self.category_posting.sales_code_for_sku(line.sku)
+            sales_parts.append((sales_code, Decimal(0), ex_vat))
             invoice_line_models.append(
                 InvoiceLine(
                     description=line.sku.name,
@@ -210,11 +213,14 @@ class LaybysService:
                 JournalDocumentType.INVOICE,
                 invoice.id,
                 f"Layby tax invoice {invoice_number}",
-                [
-                    (CODE_AR, total_inc, Decimal(0)),
-                    (CODE_SALES, Decimal(0), subtotal),
-                    (CODE_VAT, Decimal(0), vat_total),
-                ],
+                self.category_posting.collapse(
+                    [
+                        (CODE_AR, total_inc, Decimal(0)),
+                        *sales_parts,
+                        (CODE_VAT, Decimal(0), vat_total),
+                    ]
+                ),
+                entry_date=issue_date,
             )
 
             await self.posting.post(
@@ -225,9 +231,11 @@ class LaybysService:
                     (CODE_DEPOSITS, total_inc, Decimal(0)),
                     (CODE_AR, Decimal(0), total_inc),
                 ],
+                entry_date=issue_date,
             )
 
             total_cogs = Decimal(0)
+            cogs_parts: list[tuple[str, Decimal, Decimal]] = []
             for line in layby.lines:
                 loc_stock = await self.location_stock_crud.get_by_sku_and_location(
                     line.sku_id,
@@ -235,20 +243,26 @@ class LaybysService:
                 )
                 if loc_stock is None or loc_stock.unit_cost_zar is None:
                     raise ValidationError("unit cost required")
-                total_cogs += (loc_stock.unit_cost_zar * line.qty).quantize(
+                line_cogs = (loc_stock.unit_cost_zar * line.qty).quantize(
                     CENT,
                     rounding=ROUND_HALF_UP,
                 )
+                total_cogs += line_cogs
+                cogs_code = await self.category_posting.cogs_code_for_sku(line.sku)
+                cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
 
             if total_cogs > 0:
                 await self.posting.post(
                     JournalDocumentType.INVOICE,
                     invoice.id,
                     f"COGS for layby {layby.layby_number}",
-                    [
-                        (CODE_COGS, total_cogs, Decimal(0)),
-                        (CODE_INVENTORY, Decimal(0), total_cogs),
-                    ],
+                    self.category_posting.collapse(
+                        [
+                            *cogs_parts,
+                            (CODE_INVENTORY, Decimal(0), total_cogs),
+                        ]
+                    ),
+                    entry_date=issue_date,
                 )
 
             if not layby.hold_stock:
@@ -373,6 +387,7 @@ class LaybysService:
                 (CODE_BANK, payment.amount, Decimal(0)),
                 (CODE_DEPOSITS, Decimal(0), payment.amount),
             ],
+            entry_date=payment.paid_on,
         )
 
     async def _get_or_404(self, layby_id: uuid.UUID) -> Layby:

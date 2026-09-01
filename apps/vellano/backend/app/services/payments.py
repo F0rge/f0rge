@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from typing import Optional
 
@@ -8,9 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.bill import BillCRUD
 from app.crud.payment import PaymentCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
+from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.payment import Payment, PaymentDirection
 from app.schemas.payment import PaymentCreate, PaymentResponse
+from app.services.books_events import BooksEventService
 from app.services.chart_of_accounts import (
     CODE_AP,
     CODE_AR,
@@ -31,22 +34,26 @@ class PaymentService:
         self.invoice_crud = TaxInvoiceCRUD(db)
         self.bill_crud = BillCRUD(db)
         self.posting = LedgerPostingService(db)
+        self.events = BooksEventService(db)
 
     async def list(self) -> list[PaymentResponse]:
         payments = await self.crud.list_all()
         return [self._to_response(payment) for payment in payments]
 
-    async def create(self, data: PaymentCreate) -> PaymentResponse:
+    async def create(
+        self, data: PaymentCreate, user_id: Optional[uuid.UUID] = None
+    ) -> PaymentResponse:
         payment_number = await self.crud.get_next_payment_number()
 
         if data.direction == "in":
-            return await self._create_payment_in(data, payment_number)
-        return await self._create_payment_out(data, payment_number)
+            return await self._create_payment_in(data, payment_number, user_id)
+        return await self._create_payment_out(data, payment_number, user_id)
 
     async def _create_payment_in(
         self,
         data: PaymentCreate,
         payment_number: str,
+        user_id: Optional[uuid.UUID] = None,
     ) -> PaymentResponse:
         if data.invoice_id is None:
             raise ValidationError("invoice_id is required for payment in")
@@ -89,8 +96,15 @@ class PaymentService:
                     (CODE_BANK, data.amount, Decimal(0)),
                     (CODE_AR, Decimal(0), data.amount),
                 ],
+                entry_date=payment.paid_on,
             )
             invoice.amount_paid += data.amount
+            await self.events.record(
+                BooksDocumentType.PAYMENT,
+                payment.id,
+                BooksEventAction.CREATED,
+                actor_user_id=user_id,
+            )
             await self.crud.commit_refresh(payment)
 
         reloaded = await self.crud.get_by_id(payment.id)
@@ -101,6 +115,7 @@ class PaymentService:
         self,
         data: PaymentCreate,
         payment_number: str,
+        user_id: Optional[uuid.UUID] = None,
     ) -> PaymentResponse:
         if data.bill_id is None:
             raise ValidationError("bill_id is required for payment out")
@@ -155,8 +170,15 @@ class PaymentService:
                 payment.id,
                 f"Payment {payment_number} sent",
                 journal_lines,
+                entry_date=payment.paid_on,
             )
             bill.amount_paid_zar = bill.amount_zar
+            await self.events.record(
+                BooksDocumentType.PAYMENT,
+                payment.id,
+                BooksEventAction.CREATED,
+                actor_user_id=user_id,
+            )
             await self.crud.commit_refresh(payment)
 
         reloaded = await self.crud.get_by_id(payment.id)

@@ -11,6 +11,7 @@ from app.middleware.auth import get_current_user_id
 from app.models.user import UserRole
 from app.services.auth import AuthService
 from app.services.bills import BillService
+from app.services.books_events import BooksEventService
 from app.services.contacts import ContactService
 from app.services.credit_notes import CreditNoteService
 from app.services.customers_crm import CustomersCrmService
@@ -19,10 +20,15 @@ from app.services.cost_audit import CostAuditService
 from app.services.home import HomeService
 from app.services.inventory import InventoryService
 from app.services.invoices import InvoiceService
+from app.services.repeating_invoices import RepeatingInvoiceService
+from app.services.journal_imports import JournalImportService
+from app.services.journals import JournalService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
+from app.services.bank_rules import BankRuleService
 from app.services.catalogue_imports import CatalogueImportService
+from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
 from app.services.search import SearchService
 from app.services.settings import SettingsService
@@ -39,6 +45,7 @@ from app.services.suppliers import SupplierService
 from app.services.transfers import TransferService
 from app.services.till_orchestrator import TillOrchestrator
 from app.services.users import BootstrapService, ProfileService, UserService
+from app.services.vat201_periods import Vat201PeriodService
 
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
@@ -105,6 +112,10 @@ def get_account_service(db: AsyncSession = Depends(get_db)) -> AccountService:
     return AccountService(db)
 
 
+def get_category_map_service(db: AsyncSession = Depends(get_db)) -> CategoryMapService:
+    return CategoryMapService(db)
+
+
 def get_contact_service(db: AsyncSession = Depends(get_db)) -> ContactService:
     return ContactService(db)
 
@@ -117,12 +128,32 @@ def get_invoice_service(db: AsyncSession = Depends(get_db)) -> InvoiceService:
     return InvoiceService(db)
 
 
+def get_repeating_invoice_service(
+    db: AsyncSession = Depends(get_db),
+) -> RepeatingInvoiceService:
+    return RepeatingInvoiceService(db)
+
+
+def get_journal_service(db: AsyncSession = Depends(get_db)) -> JournalService:
+    return JournalService(db)
+
+
+def get_journal_import_service(
+    db: AsyncSession = Depends(get_db),
+) -> JournalImportService:
+    return JournalImportService(db)
+
+
 def get_credit_note_service(db: AsyncSession = Depends(get_db)) -> CreditNoteService:
     return CreditNoteService(db)
 
 
 def get_bill_service(db: AsyncSession = Depends(get_db)) -> BillService:
     return BillService(db)
+
+
+def get_books_event_service(db: AsyncSession = Depends(get_db)) -> BooksEventService:
+    return BooksEventService(db)
 
 
 def get_payment_service(db: AsyncSession = Depends(get_db)) -> PaymentService:
@@ -133,6 +164,10 @@ def get_bank_import_service(db: AsyncSession = Depends(get_db)) -> BankImportSer
     return BankImportService(db)
 
 
+def get_bank_rule_service(db: AsyncSession = Depends(get_db)) -> BankRuleService:
+    return BankRuleService(db)
+
+
 def get_catalogue_import_service(
     db: AsyncSession = Depends(get_db),
 ) -> CatalogueImportService:
@@ -141,6 +176,10 @@ def get_catalogue_import_service(
 
 def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:
     return ReportsService(db)
+
+
+def get_vat201_period_service(db: AsyncSession = Depends(get_db)) -> Vat201PeriodService:
+    return Vat201PeriodService(db)
 
 
 def get_transfer_service(db: AsyncSession = Depends(get_db)) -> TransferService:

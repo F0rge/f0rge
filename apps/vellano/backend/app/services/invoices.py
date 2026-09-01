@@ -2,17 +2,21 @@ from __future__ import annotations
 
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Optional
 
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.sku import SkuCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
+from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import InvoiceCreate, InvoiceLineResponse, InvoiceResponse
+from app.services.books_events import BooksEventService
+from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
     CODE_AR,
-    CODE_SALES,
     CODE_VAT,
     LedgerPostingService,
 )
@@ -27,8 +31,11 @@ class InvoiceService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.crud = TaxInvoiceCRUD(db)
+        self.sku_crud = SkuCRUD(db)
         self.contact_service = ContactService(db)
         self.posting = LedgerPostingService(db)
+        self.category_posting = CategoryPostingService(db)
+        self.events = BooksEventService(db)
 
     async def list(self) -> list[InvoiceResponse]:
         invoices = await self.crud.list_all()
@@ -40,7 +47,9 @@ class InvoiceService:
             raise NotFoundError("Invoice not found")
         return self._to_response(invoice)
 
-    async def create(self, data: InvoiceCreate) -> InvoiceResponse:
+    async def create(
+        self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
+    ) -> InvoiceResponse:
         await self.contact_service.get_customer(data.customer_id)
 
         subtotal = Decimal(0)
@@ -84,15 +93,31 @@ class InvoiceService:
 
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(invoice)
+            sales_parts: list[tuple[str, Decimal, Decimal]] = []
+            for line in line_models:
+                sku = None
+                if line.sku_id is not None:
+                    sku = await self.sku_crud.get_by_id(line.sku_id)
+                sales_code = await self.category_posting.sales_code_for_sku(sku)
+                sales_parts.append((sales_code, Decimal(0), line.ex_vat))
             await self.posting.post(
                 JournalDocumentType.INVOICE,
                 invoice.id,
                 f"Tax invoice {invoice_number}",
-                [
-                    (CODE_AR, total_inc, Decimal(0)),
-                    (CODE_SALES, Decimal(0), subtotal),
-                    (CODE_VAT, Decimal(0), vat_total),
-                ],
+                self.category_posting.collapse(
+                    [
+                        (CODE_AR, total_inc, Decimal(0)),
+                        *sales_parts,
+                        (CODE_VAT, Decimal(0), vat_total),
+                    ]
+                ),
+                entry_date=invoice.issue_date,
+            )
+            await self.events.record(
+                BooksDocumentType.INVOICE,
+                invoice.id,
+                BooksEventAction.CREATED,
+                actor_user_id=user_id,
             )
             await self.crud.commit_refresh(invoice)
 

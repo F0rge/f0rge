@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from app.models.account import Account, AccountType
+from app.models.account import Account, AccountType, TaxTreatment
 from app.models.bank_import import BankImport, BankImportLine
+from app.models.bank_rule import BankRule
 from app.models.bill import Bill, BillLine
+from app.models.books_event import BooksDocumentType, BooksEvent, BooksEventAction
+from app.models.category_account_map import CategoryAccountMap
 from app.models.credit_note import CreditNote
 from app.models.delivery import (
     Delivery,
@@ -12,7 +15,7 @@ from app.models.delivery import (
 )
 from app.models.customer import Customer
 from app.models.inventory import LocationStock, SkuStock
-from app.models.journal import JournalDocumentType, JournalEntry, JournalLine
+from app.models.journal import JournalDocumentType, JournalEntry, JournalLine, JournalStatus
 from app.models.layby import Layby, LaybyLine, LaybyPayment, LaybyStatus
 from app.models.location import Location, LocationType
 from app.models.payment import Payment, PaymentDirection
@@ -24,6 +27,7 @@ from app.models.purchase_order import (
     PurchaseOrder,
     PurchaseOrderStatus,
 )
+from app.models.repeating_invoice import RepeatingInvoice, RepeatingInvoiceLine
 from app.models.sku import Sku
 from app.models.stock_adjustment import (
     StockAdjustment,
@@ -45,14 +49,25 @@ from app.models.team_settings import TeamSettings
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
 from app.models.team import Team
 from app.models.user import User, UserRole
+from app.models.vat201_period import (
+    Vat201Period,
+    Vat201PeriodEvent,
+    Vat201PeriodEventAction,
+    Vat201PeriodStatus,
+)
 
 __all__ = [
     "Account",
     "AccountType",
     "BankImport",
     "BankImportLine",
+    "BankRule",
     "Bill",
     "BillLine",
+    "BooksDocumentType",
+    "BooksEvent",
+    "BooksEventAction",
+    "CategoryAccountMap",
     "CreditNote",
     "Customer",
     "Delivery",
@@ -63,6 +78,7 @@ __all__ = [
     "JournalDocumentType",
     "JournalEntry",
     "JournalLine",
+    "JournalStatus",
     "LandingBill",
     "LandingBillKind",
     "Layby",
@@ -78,6 +94,8 @@ __all__ = [
     "Proforma",
     "PurchaseOrder",
     "PurchaseOrderStatus",
+    "RepeatingInvoice",
+    "RepeatingInvoiceLine",
     "Sku",
     "SkuStock",
     "StockAdjustment",
@@ -94,10 +112,15 @@ __all__ = [
     "StocktakeStatus",
     "Supplier",
     "TaxInvoice",
+    "TaxTreatment",
     "TeamSettings",
     "UnitCostAudit",
     "UnitCostAuditSource",
     "Team",
     "User",
     "UserRole",
+    "Vat201Period",
+    "Vat201PeriodEvent",
+    "Vat201PeriodEventAction",
+    "Vat201PeriodStatus",
 ]

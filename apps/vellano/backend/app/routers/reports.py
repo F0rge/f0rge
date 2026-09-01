@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
@@ -16,11 +17,19 @@ from app.schemas.bank_import import (
 from app.services.reports import ReportsService
 from app.services.reports_export import (
     build_aged_stock_csv,
+    build_cash_summary_csv,
+    build_journals_csv,
     build_sales_by_sku_csv,
     build_sales_vat_csv,
     build_stock_valuation_csv,
+    build_trial_balance_csv,
 )
 from app.services.vat201_export import build_vat201_csv, build_vat201_pdf
+from app.schemas.reports_books import (
+    CashSummaryReport,
+    JournalReport,
+    TrialBalanceReport,
+)
 from app.schemas.reports_stock import (
     AgedStockReport,
     SalesBySkuReport,
@@ -205,6 +214,87 @@ async def sales_vat_csv(
     report = await service.sales_vat(from_date, to_date)
     content = build_sales_vat_csv(report)
     filename = f"sales-vat-{from_date.isoformat()}-to-{to_date.isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/trial-balance", response_model=TrialBalanceReport)
+async def trial_balance(
+    as_of: datetime.date = Query(...),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.trial_balance(as_of)
+
+
+@reports_router.get("/trial-balance/csv")
+async def trial_balance_csv(
+    as_of: datetime.date = Query(...),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.trial_balance(as_of)
+    content = build_trial_balance_csv(report)
+    filename = f"trial-balance-{as_of.isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/journals", response_model=JournalReport)
+async def journal_report(
+    from_date: datetime.date = Query(..., alias="from"),
+    to_date: datetime.date = Query(..., alias="to"),
+    source: Optional[str] = Query(default=None),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.journal_report(from_date, to_date, source)
+
+
+@reports_router.get("/journals/csv")
+async def journal_report_csv(
+    from_date: datetime.date = Query(..., alias="from"),
+    to_date: datetime.date = Query(..., alias="to"),
+    source: Optional[str] = Query(default=None),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.journal_report(from_date, to_date, source)
+    content = build_journals_csv(report)
+    filename = f"journals-{from_date.isoformat()}-to-{to_date.isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/cash-summary", response_model=CashSummaryReport)
+async def cash_summary(
+    from_date: datetime.date = Query(..., alias="from"),
+    to_date: datetime.date = Query(..., alias="to"),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.cash_summary(from_date, to_date)
+
+
+@reports_router.get("/cash-summary/csv")
+async def cash_summary_csv(
+    from_date: datetime.date = Query(..., alias="from"),
+    to_date: datetime.date = Query(..., alias="to"),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.cash_summary(from_date, to_date)
+    content = build_cash_summary_csv(report)
+    filename = f"cash-summary-{from_date.isoformat()}-to-{to_date.isoformat()}.csv"
     return Response(
         content=content,
         media_type="text/csv",

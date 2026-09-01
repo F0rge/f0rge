@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import datetime
+import uuid
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,18 +13,19 @@ from app.crud.payment import PaymentCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
+from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.location import LocationType
 from app.models.payment import Payment, PaymentDirection
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import InvoiceLineResponse
 from app.schemas.till import TillSaleCreate, TillSaleLocationStock, TillSaleResponse
+from app.services.books_events import BooksEventService
+from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
     CODE_AR,
     CODE_BANK,
-    CODE_COGS,
     CODE_INVENTORY,
-    CODE_SALES,
     CODE_VAT,
     LedgerPostingService,
 )
@@ -42,8 +45,12 @@ class TillOrchestrator:
         self.payment_crud = PaymentCRUD(db)
         self.customer_crud = CustomerCRUD(db)
         self.posting = LedgerPostingService(db)
+        self.category_posting = CategoryPostingService(db)
+        self.events = BooksEventService(db)
 
-    async def create_sale(self, data: TillSaleCreate) -> TillSaleResponse:
+    async def create_sale(
+        self, data: TillSaleCreate, user_id: Optional[uuid.UUID] = None
+    ) -> TillSaleResponse:
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         from app.crud.location import LocationCRUD
 
@@ -64,6 +71,7 @@ class TillOrchestrator:
         sale_date = datetime.date.today()
 
         line_inputs: list[tuple] = []
+        cogs_parts: list[tuple[str, Decimal, Decimal]] = []
         total_cogs = Decimal(0)
 
         for line in data.lines:
@@ -89,12 +97,15 @@ class TillOrchestrator:
                 rounding=ROUND_HALF_UP,
             )
             total_cogs += line_cogs
+            cogs_code = await self.category_posting.cogs_code_for_sku(sku)
+            cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
             line_inputs.append((sku, line.qty, location_stock, line.discount_percent))
 
         subtotal = Decimal(0)
         vat_total = Decimal(0)
         total_inc = Decimal(0)
         invoice_line_models: list[InvoiceLine] = []
+        sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
         for index, (sku, qty, _stock, discount_percent) in enumerate(line_inputs):
             discounted_unit = (
@@ -106,6 +117,8 @@ class TillOrchestrator:
             subtotal += ex_vat
             vat_total += line_vat
             total_inc += inc_vat
+            sales_code = await self.category_posting.sales_code_for_sku(sku)
+            sales_parts.append((sales_code, Decimal(0), ex_vat))
             invoice_line_models.append(
                 InvoiceLine(
                     description=sku.name,
@@ -157,11 +170,14 @@ class TillOrchestrator:
                 JournalDocumentType.INVOICE,
                 invoice.id,
                 f"Till tax invoice {invoice_number}",
-                [
-                    (CODE_AR, total_inc, Decimal(0)),
-                    (CODE_SALES, Decimal(0), subtotal),
-                    (CODE_VAT, Decimal(0), vat_total),
-                ],
+                self.category_posting.collapse(
+                    [
+                        (CODE_AR, total_inc, Decimal(0)),
+                        *sales_parts,
+                        (CODE_VAT, Decimal(0), vat_total),
+                    ]
+                ),
+                entry_date=sale_date,
             )
 
             await self.payment_crud.add_and_flush(payment)
@@ -173,6 +189,7 @@ class TillOrchestrator:
                     (CODE_BANK, total_inc, Decimal(0)),
                     (CODE_AR, Decimal(0), total_inc),
                 ],
+                entry_date=sale_date,
             )
 
             if total_cogs > 0:
@@ -180,16 +197,31 @@ class TillOrchestrator:
                     JournalDocumentType.INVOICE,
                     invoice.id,
                     f"COGS for till sale {invoice_number}",
-                    [
-                        (CODE_COGS, total_cogs, Decimal(0)),
-                        (CODE_INVENTORY, Decimal(0), total_cogs),
-                    ],
+                    self.category_posting.collapse(
+                        [
+                            *cogs_parts,
+                            (CODE_INVENTORY, Decimal(0), total_cogs),
+                        ]
+                    ),
+                    entry_date=sale_date,
                 )
 
             for sku, qty, location_stock, _discount in line_inputs:
                 location_stock.on_hand -= qty
 
             invoice.amount_paid = total_inc
+            await self.events.record(
+                BooksDocumentType.INVOICE,
+                invoice.id,
+                BooksEventAction.CREATED,
+                actor_user_id=user_id,
+            )
+            await self.events.record(
+                BooksDocumentType.PAYMENT,
+                payment.id,
+                BooksEventAction.CREATED,
+                actor_user_id=user_id,
+            )
             await self.invoice_crud.commit_refresh(invoice)
 
         reloaded = await self.invoice_crud.get_by_id(invoice.id)

@@ -18,7 +18,14 @@ class BankImport(UUIDPkMixin, TimestampMixin, Base):
 
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     line_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
 
+    account: Mapped["Account"] = relationship(lazy="selectin")
     lines: Mapped[list["BankImportLine"]] = relationship(
         back_populates="bank_import",
         cascade="all, delete-orphan",
@@ -45,9 +52,18 @@ class BankImportLine(UUIDPkMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+    matched_journal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("journal_entries.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     bank_import: Mapped["BankImport"] = relationship(back_populates="lines")
     matched_payment: Mapped[Optional["Payment"]] = relationship()
+    matched_journal: Mapped[Optional["JournalEntry"]] = relationship()
 
 
+from app.models.account import Account  # noqa: E402
+from app.models.journal import JournalEntry  # noqa: E402
 from app.models.payment import Payment  # noqa: E402

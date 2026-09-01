@@ -1,13 +1,15 @@
 export const BOOKS_NAV_ITEMS = [
   { href: "/ledger", label: "Chart of accounts" },
+  { href: "/journals", label: "Journals" },
   { href: "/contacts", label: "Contacts" },
   { href: "/invoices", label: "Invoices" },
+  { href: "/repeating-invoices", label: "Repeating invoices" },
   { href: "/credit-notes", label: "Credit notes" },
   { href: "/bills", label: "Bills" },
   { href: "/payments", label: "Payments" },
   { href: "/bank-reconciliation", label: "Bank reconciliation" },
   { href: "/reports", label: "Reports" },
-  { href: "/vat201", label: "VAT201 draft" },
+  { href: "/vat201", label: "VAT201" },
 ] as const;
 
 export type BooksNavItem = (typeof BOOKS_NAV_ITEMS)[number];
@@ -56,7 +58,9 @@ const STOCK_HREFS = new Set<string>(STOCK_NAV_ITEMS.map((item) => item.href));
 export function isBooksPath(pathname: string): boolean {
   return (
     BOOKS_HREFS.has(pathname) ||
+    pathname.startsWith("/journals/") ||
     pathname.startsWith("/invoices/") ||
+    pathname.startsWith("/repeating-invoices/") ||
     pathname.startsWith("/credit-notes/") ||
     pathname.startsWith("/bills/")
   );
@@ -70,7 +74,13 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
   if (pathname === href) {
     return true;
   }
+  if (href === "/journals" && pathname.startsWith("/journals/")) {
+    return true;
+  }
   if (href === "/invoices" && pathname.startsWith("/invoices/")) {
+    return true;
+  }
+  if (href === "/repeating-invoices" && pathname.startsWith("/repeating-invoices/")) {
     return true;
   }
   if (href === "/credit-notes" && pathname.startsWith("/credit-notes/")) {

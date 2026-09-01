@@ -908,6 +908,8 @@ export function cancelAdjustment(id: string): Promise<Adjustment> {
 
 export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
 
+export type TaxTreatment = "none" | "vat15";
+
 export type Account = {
   id: string;
   code: string;
@@ -915,6 +917,8 @@ export type Account = {
   type: AccountType;
   is_system: boolean;
   is_archived: boolean;
+  is_bank: boolean;
+  tax_treatment: TaxTreatment;
   balance_zar: string;
   created_at: string;
   updated_at: string;
@@ -924,11 +928,15 @@ export type CreateAccountPayload = {
   code: string;
   name: string;
   type: AccountType;
+  tax_treatment?: TaxTreatment;
+  is_bank?: boolean;
 };
 
 export type UpdateAccountPayload = {
   name?: string;
   is_archived?: boolean;
+  tax_treatment?: TaxTreatment;
+  is_bank?: boolean;
 };
 
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
@@ -938,6 +946,19 @@ export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: "income", label: "Income" },
   { value: "expense", label: "Expense" },
 ];
+
+export const TAX_TREATMENTS: { value: TaxTreatment; label: string }[] = [
+  { value: "vat15", label: "VAT 15%" },
+  { value: "none", label: "None" },
+];
+
+export function defaultTaxTreatment(type: AccountType): TaxTreatment {
+  return type === "income" || type === "expense" ? "vat15" : "none";
+}
+
+export function taxTreatmentLabel(value: TaxTreatment): string {
+  return TAX_TREATMENTS.find((entry) => entry.value === value)?.label ?? value;
+}
 
 export function listAccounts(): Promise<Account[]> {
   return apiFetch<Account[]>("/accounts");
@@ -953,6 +974,34 @@ export function createAccount(payload: CreateAccountPayload): Promise<Account> {
 export function updateAccount(id: string, payload: UpdateAccountPayload): Promise<Account> {
   return apiFetch<Account>(`/accounts/${id}`, {
     method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type CategoryMap = {
+  id: string;
+  category: string;
+  sales_code: string;
+  cogs_code: string;
+  stock_adj_code: string;
+  count_var_code: string;
+};
+
+export type UpsertCategoryMapPayload = {
+  category: string;
+  sales_code: string;
+  cogs_code: string;
+  stock_adj_code: string;
+  count_var_code: string;
+};
+
+export function listCategoryMaps(): Promise<CategoryMap[]> {
+  return apiFetch<CategoryMap[]>("/category-maps");
+}
+
+export function upsertCategoryMap(payload: UpsertCategoryMapPayload): Promise<CategoryMap> {
+  return apiFetch<CategoryMap>("/category-maps", {
+    method: "PUT",
     body: JSON.stringify(payload),
   });
 }
@@ -1040,6 +1089,59 @@ export function createInvoice(payload: CreateInvoicePayload): Promise<Invoice> {
 
 export function getInvoice(id: string): Promise<Invoice> {
   return apiFetch<Invoice>(`/invoices/${id}`);
+}
+
+export type RepeatingInvoiceLine = {
+  id: string;
+  description: string;
+  qty: number;
+  unit_ex_vat: string;
+  sort_order: number;
+};
+
+export type RepeatingInvoice = {
+  id: string;
+  customer_id: string;
+  name: string | null;
+  day_of_month: number;
+  next_date: string;
+  is_active: boolean;
+  created_by: string | null;
+  lines: RepeatingInvoiceLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateRepeatingInvoicePayload = {
+  customer_id: string;
+  name?: string;
+  day_of_month: number;
+  next_date: string;
+  lines: CreateInvoiceLinePayload[];
+};
+
+export type RepeatingInvoiceRun = {
+  schedule: RepeatingInvoice;
+  invoice: Invoice;
+};
+
+export function listRepeatingInvoices(): Promise<RepeatingInvoice[]> {
+  return apiFetch<RepeatingInvoice[]>("/repeating-invoices");
+}
+
+export function createRepeatingInvoice(
+  payload: CreateRepeatingInvoicePayload,
+): Promise<RepeatingInvoice> {
+  return apiFetch<RepeatingInvoice>("/repeating-invoices", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function runRepeatingInvoice(id: string): Promise<RepeatingInvoiceRun> {
+  return apiFetch<RepeatingInvoiceRun>(`/repeating-invoices/${id}/run`, {
+    method: "POST",
+  });
 }
 
 export async function downloadInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
@@ -1221,11 +1323,160 @@ export function listPayments(): Promise<Payment[]> {
   return apiFetch<Payment[]>("/payments");
 }
 
+export type BooksDocumentType = "invoice" | "bill" | "payment" | "journal";
+
+export type BooksEventAction = "created" | "posted" | "voided";
+
+export type BooksEvent = {
+  id: string;
+  document_type: BooksDocumentType;
+  document_id: string;
+  action: BooksEventAction;
+  actor_user_id: string | null;
+  actor_email: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+export function listBooksEvents(
+  documentType: BooksDocumentType,
+  documentId: string,
+): Promise<BooksEvent[]> {
+  const params = new URLSearchParams({
+    document_type: documentType,
+    document_id: documentId,
+  });
+  return apiFetch<BooksEvent[]>(`/books-events?${params.toString()}`);
+}
+
 export function createPayment(payload: CreatePaymentPayload): Promise<Payment> {
   return apiFetch<Payment>("/payments", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export type JournalStatus = "draft" | "posted" | "voided";
+
+export type JournalDocumentType =
+  | "invoice"
+  | "credit_note"
+  | "bill"
+  | "payment"
+  | "stock_adjustment"
+  | "manual";
+
+export type JournalLine = {
+  id: string;
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type Journal = {
+  id: string;
+  document_type: JournalDocumentType;
+  document_id: string;
+  memo: string | null;
+  status: JournalStatus;
+  source: string | null;
+  journal_number: string | null;
+  entry_date: string;
+  voided_by_id: string | null;
+  debit_total_zar: string;
+  credit_total_zar: string;
+  lines: JournalLine[];
+  created_at: string;
+};
+
+export type CreateJournalLinePayload = {
+  account_id: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type CreateJournalPayload = {
+  entry_date: string;
+  memo?: string;
+  source?: string;
+  status?: "draft" | "posted";
+  lines: CreateJournalLinePayload[];
+};
+
+export function listJournals(): Promise<Journal[]> {
+  return apiFetch<Journal[]>("/journals");
+}
+
+export function getJournal(id: string): Promise<Journal> {
+  return apiFetch<Journal>(`/journals/${id}`);
+}
+
+export function createJournal(payload: CreateJournalPayload): Promise<Journal> {
+  const memo = payload.memo?.trim();
+  const source = payload.source?.trim();
+  const entryDate = payload.entry_date.trim();
+  if (!entryDate) {
+    throw new ApiError(400, "Entry date is required");
+  }
+  const body: CreateJournalPayload = {
+    entry_date: entryDate,
+    source: source || "manual",
+    lines: payload.lines,
+  };
+  if (memo) {
+    body.memo = memo;
+  }
+  if (payload.status) {
+    body.status = payload.status;
+  }
+  return apiFetch<Journal>("/journals", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function postJournal(id: string): Promise<Journal> {
+  return apiFetch<Journal>(`/journals/${id}/post`, { method: "POST" });
+}
+
+export function voidJournal(id: string): Promise<Journal> {
+  return apiFetch<Journal>(`/journals/${id}/void`, { method: "POST" });
+}
+
+export type JournalImportRowError = {
+  row: number;
+  message: string;
+};
+
+export type JournalImportPreviewLine = {
+  row: number;
+  account_code: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type JournalImportPreview = {
+  lines: JournalImportPreviewLine[];
+  errors: JournalImportRowError[];
+  balanced: boolean;
+  debit_total: string;
+  credit_total: string;
+  entry_date: string | null;
+  narration: string;
+};
+
+export function previewJournalImport(file: File): Promise<JournalImportPreview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<JournalImportPreview>("/journal-imports/preview", formData);
+}
+
+export function commitJournalImport(file: File): Promise<Journal> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<Journal>("/journal-imports/commit", formData);
 }
 
 export function formatZarAmount(value: string | null | undefined): string {
@@ -1275,15 +1526,46 @@ export type BankImportLine = {
   reference: string | null;
   amount_zar: string;
   matched_payment_id: string | null;
+  matched_journal_id: string | null;
   matched_payment_number: string | null;
+  matched_journal_number?: string | null;
   suggested_payment_id: string | null;
   suggested_payment_number: string | null;
+  suggested_rule_id?: string | null;
+  suggested_rule_pattern?: string | null;
+  suggested_account_code?: string | null;
+  suggested_account_name?: string | null;
+};
+
+export type BankRule = {
+  id: string;
+  bank_account_id: string;
+  pattern: string;
+  target_account_id: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateBankRulePayload = {
+  bank_account_id: string;
+  pattern: string;
+  target_account_id: string;
+};
+
+export type UpdateBankRulePayload = {
+  pattern?: string;
+  target_account_id?: string;
+  is_active?: boolean;
 };
 
 export type BankImport = {
   id: string;
   filename: string;
   line_count: number;
+  account_id: string;
+  account_code: string;
+  account_name: string;
   lines: BankImportLine[];
   created_at: string;
   updated_at: string;
@@ -1294,8 +1576,21 @@ export type BankImportSummary = {
   filename: string;
   line_count: number;
   matched_count: number;
+  unmatched_count: number;
+  account_id: string;
+  account_code: string;
+  account_name: string;
   created_at: string;
 };
+
+export type BankUnmatchedCount = {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  unmatched_count: number;
+};
+
+export type BankMatchTarget = { payment_id: string } | { journal_id: string };
 
 export type AgedBucket = {
   label: string;
@@ -1372,29 +1667,93 @@ export function getBankImport(id: string): Promise<BankImport> {
   return apiFetch<BankImport>(`/bank-imports/${id}`);
 }
 
-export async function uploadBankImport(file: File): Promise<BankImport> {
+export function listUnmatchedCounts(): Promise<BankUnmatchedCount[]> {
+  return apiFetch<BankUnmatchedCount[]>("/bank-imports/unmatched-counts");
+}
+
+export function listUnmatchedLines(accountId?: string): Promise<BankImportLine[]> {
+  const params = new URLSearchParams();
+  const id = accountId?.trim();
+  if (id) {
+    params.set("account_id", id);
+  }
+  const qs = params.toString();
+  return apiFetch<BankImportLine[]>(`/bank-imports/unmatched-lines${qs ? `?${qs}` : ""}`);
+}
+
+export function uploadBankImport(file: File, accountId?: string): Promise<BankImport> {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch("/api/v1/bank-imports", {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
+  const id = accountId?.trim();
+  if (id) {
+    formData.append("account_id", id);
   }
-  return response.json() as Promise<BankImport>;
+  return apiUpload<BankImport>("/bank-imports", formData);
 }
 
 export function matchBankLine(
   importId: string,
   lineId: string,
-  paymentId: string,
+  target: BankMatchTarget,
 ): Promise<BankImportLine> {
+  const hasPayment = "payment_id" in target;
+  const hasJournal = "journal_id" in target;
+  if (hasPayment === hasJournal) {
+    throw new ApiError(400, "Provide exactly one of payment_id or journal_id");
+  }
   return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/match`, {
     method: "POST",
-    body: JSON.stringify({ payment_id: paymentId }),
+    body: JSON.stringify(target),
+  });
+}
+
+export function listBankRules(bankAccountId?: string): Promise<BankRule[]> {
+  const params = new URLSearchParams();
+  const id = bankAccountId?.trim();
+  if (id) {
+    params.set("bank_account_id", id);
+  }
+  const qs = params.toString();
+  return apiFetch<BankRule[]>(`/bank-rules${qs ? `?${qs}` : ""}`);
+}
+
+export function createBankRule(payload: CreateBankRulePayload): Promise<BankRule> {
+  return apiFetch<BankRule>("/bank-rules", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateBankRule(id: string, payload: UpdateBankRulePayload): Promise<BankRule> {
+  return apiFetch<BankRule>(`/bank-rules/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteBankRule(id: string): Promise<void> {
+  return apiFetch<void>(`/bank-rules/${id}`, { method: "DELETE" });
+}
+
+export function applyRule(
+  importId: string,
+  lineId: string,
+  ruleId: string,
+): Promise<BankImportLine> {
+  return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/apply-rule`, {
+    method: "POST",
+    body: JSON.stringify({ rule_id: ruleId }),
+  });
+}
+
+export function recodeLine(
+  importId: string,
+  lineId: string,
+  accountId: string,
+): Promise<BankImportLine> {
+  return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/recode`, {
+    method: "POST",
+    body: JSON.stringify({ account_id: accountId }),
   });
 }
 
@@ -1488,6 +1847,103 @@ export async function downloadVat201Pdf(fromDate: string, toDate: string): Promi
   URL.revokeObjectURL(url);
 }
 
+export type Vat201PeriodStatus = "draft" | "due" | "locked";
+
+export type Vat201Period = {
+  id: string;
+  period_from: string;
+  period_to: string;
+  status: Vat201PeriodStatus;
+  locked_at: string | null;
+  locked_by_user_id: string | null;
+  reopen_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Vat201PeriodEvent = {
+  action: string;
+  created_at?: string;
+  at?: string;
+  reason?: string | null;
+};
+
+export type Vat201PeriodDetail = Vat201Period & {
+  draft: Vat201Draft;
+  events?: Vat201PeriodEvent[];
+};
+
+export type CreateVat201PeriodPayload = {
+  period_from: string;
+  period_to: string;
+};
+
+export function listVat201Periods(): Promise<Vat201Period[]> {
+  return apiFetch<Vat201Period[]>("/vat201/periods");
+}
+
+export function createVat201Period(
+  payload: CreateVat201PeriodPayload,
+): Promise<Vat201PeriodDetail> {
+  const period_from = payload.period_from.trim();
+  const period_to = payload.period_to.trim();
+  if (!period_from || !period_to) {
+    throw new ApiError(400, "period_from and period_to are required");
+  }
+  return apiFetch<Vat201PeriodDetail>("/vat201/periods", {
+    method: "POST",
+    body: JSON.stringify({ period_from, period_to }),
+  });
+}
+
+export function getVat201Period(id: string): Promise<Vat201PeriodDetail> {
+  return apiFetch<Vat201PeriodDetail>(`/vat201/periods/${id}`);
+}
+
+export function lockVat201Period(id: string): Promise<Vat201PeriodDetail> {
+  return apiFetch<Vat201PeriodDetail>(`/vat201/periods/${id}/lock`, { method: "POST" });
+}
+
+export function reopenVat201Period(id: string, reason: string): Promise<Vat201PeriodDetail> {
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    throw new ApiError(400, "reason is required");
+  }
+  return apiFetch<Vat201PeriodDetail>(`/vat201/periods/${id}/reopen`, {
+    method: "POST",
+    body: JSON.stringify({ reason: trimmed }),
+  });
+}
+
+async function downloadVat201PeriodFile(id: string, kind: "csv" | "pdf"): Promise<void> {
+  const response = await fetch(`/api/v1/vat201/periods/${id}/${kind}`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition");
+  const named = disposition?.match(/filename="([^"]+)"/)?.[1];
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = named ?? `vat201-period-${id}.${kind}`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export function downloadVat201PeriodCsv(id: string): Promise<void> {
+  return downloadVat201PeriodFile(id, "csv");
+}
+
+export function downloadVat201PeriodPdf(id: string): Promise<void> {
+  return downloadVat201PeriodFile(id, "pdf");
+}
+
 export type StockValuationLine = {
   location_id: string;
   location_name: string;
@@ -1557,6 +2013,61 @@ export type SalesVatReport = {
   vat_amount: string;
   total_inc_vat: string;
   amount_paid: string;
+};
+
+export type TrialBalanceLine = {
+  code: string;
+  name: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type TrialBalanceReport = {
+  as_of: string;
+  lines: TrialBalanceLine[];
+  total_debit_zar: string;
+  total_credit_zar: string;
+};
+
+export type JournalReportLine = {
+  account_code: string;
+  account_name: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type JournalReportEntry = {
+  entry_date: string;
+  journal_number: string | null;
+  document_type: JournalDocumentType;
+  source: string | null;
+  memo: string | null;
+  status: JournalStatus;
+  lines: JournalReportLine[];
+};
+
+export type JournalReport = {
+  from_date: string;
+  to_date: string;
+  source: string | null;
+  entries: JournalReportEntry[];
+};
+
+export type CashSummaryAccount = {
+  code: string;
+  name: string;
+  cash_in_zar: string;
+  cash_out_zar: string;
+  net_zar: string;
+};
+
+export type CashSummaryReport = {
+  from_date: string;
+  to_date: string;
+  accounts: CashSummaryAccount[];
+  total_cash_in_zar: string;
+  total_cash_out_zar: string;
+  total_net_zar: string;
 };
 
 export function getStockValuation(): Promise<StockValuationReport> {
@@ -1659,6 +2170,108 @@ export async function downloadSalesVatCsv(fromDate: string, toDate: string): Pro
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `sales-vat-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+function journalsReportQuery(fromDate: string, toDate: string, source?: string): string {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const params = new URLSearchParams({ from, to });
+  const trimmed = source?.trim();
+  if (trimmed) {
+    params.set("source", trimmed);
+  }
+  return params.toString();
+}
+
+export function getTrialBalance(asOf: string): Promise<TrialBalanceReport> {
+  const date = requireIsoDate(asOf, reportTodayIso());
+  return apiFetch<TrialBalanceReport>(
+    `/reports/trial-balance?as_of=${encodeURIComponent(date)}`,
+  );
+}
+
+export function getJournalsReport(
+  fromDate: string,
+  toDate: string,
+  source?: string,
+): Promise<JournalReport> {
+  return apiFetch<JournalReport>(`/reports/journals?${journalsReportQuery(fromDate, toDate, source)}`);
+}
+
+export function getCashSummary(fromDate: string, toDate: string): Promise<CashSummaryReport> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  return apiFetch<CashSummaryReport>(
+    `/reports/cash-summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+}
+
+export async function downloadTrialBalanceCsv(asOf: string): Promise<void> {
+  const date = requireIsoDate(asOf, reportTodayIso());
+  const response = await fetch(
+    `/api/v1/reports/trial-balance/csv?as_of=${encodeURIComponent(date)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `trial-balance-${date}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadJournalsCsv(
+  fromDate: string,
+  toDate: string,
+  source?: string,
+): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const response = await fetch(`/api/v1/reports/journals/csv?${journalsReportQuery(fromDate, toDate, source)}`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `journals-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadCashSummaryCsv(fromDate: string, toDate: string): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const response = await fetch(
+    `/api/v1/reports/cash-summary/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `cash-summary-${from}-to-${to}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);

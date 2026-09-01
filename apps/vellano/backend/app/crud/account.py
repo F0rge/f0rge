@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account
-from app.models.journal import JournalLine
+from app.models.journal import JournalEntry, JournalLine, JournalStatus
 from f0rge_db.crud import BaseCRUD
 
 
@@ -40,6 +40,10 @@ class AccountCRUD(BaseCRUD):
                 JournalLine.account_id,
                 func.coalesce(func.sum(JournalLine.debit_zar), 0)
                 - func.coalesce(func.sum(JournalLine.credit_zar), 0),
-            ).group_by(JournalLine.account_id)
+            )
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+            .where(JournalEntry.status != JournalStatus.DRAFT)
+            .group_by(JournalLine.account_id)
         )
         return {row[0]: Decimal(row[1]) for row in result.all()}

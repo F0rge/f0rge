@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class BankImportLineResponse(BaseModel):
@@ -15,9 +15,14 @@ class BankImportLineResponse(BaseModel):
     reference: Optional[str]
     amount_zar: Decimal
     matched_payment_id: Optional[uuid.UUID]
+    matched_journal_id: Optional[uuid.UUID] = None
     matched_payment_number: Optional[str] = None
     suggested_payment_id: Optional[uuid.UUID] = None
     suggested_payment_number: Optional[str] = None
+    suggested_rule_id: Optional[uuid.UUID] = None
+    suggested_rule_pattern: Optional[str] = None
+    suggested_account_code: Optional[str] = None
+    suggested_account_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -26,6 +31,9 @@ class BankImportResponse(BaseModel):
     id: uuid.UUID
     filename: str
     line_count: int
+    account_id: uuid.UUID
+    account_code: str
+    account_name: str
     lines: list[BankImportLineResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -38,13 +46,39 @@ class BankImportSummary(BaseModel):
     filename: str
     line_count: int
     matched_count: int
+    unmatched_count: int
+    account_id: uuid.UUID
+    account_code: str
+    account_name: str
     created_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
+class BankUnmatchedCount(BaseModel):
+    account_id: uuid.UUID
+    account_code: str
+    account_name: str
+    unmatched_count: int
+
+
 class BankImportMatchRequest(BaseModel):
-    payment_id: uuid.UUID
+    payment_id: Optional[uuid.UUID] = None
+    journal_id: Optional[uuid.UUID] = None
+
+    @model_validator(mode="after")
+    def exactly_one_target(self) -> BankImportMatchRequest:
+        if (self.payment_id is None) == (self.journal_id is None):
+            raise ValueError("Provide exactly one of payment_id or journal_id")
+        return self
+
+
+class BankApplyRuleRequest(BaseModel):
+    rule_id: uuid.UUID
+
+
+class BankRecodeRequest(BaseModel):
+    account_id: uuid.UUID
 
 
 class AgedBucket(BaseModel):

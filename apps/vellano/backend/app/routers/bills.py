@@ -27,10 +27,10 @@ async def list_bills(
 @bills_router.post("", response_model=BillResponse, status_code=status.HTTP_201_CREATED)
 async def create_bill(
     body: BillCreate,
-    _: uuid.UUID = Depends(require_books_mutate),
+    user_id: uuid.UUID = Depends(require_books_mutate),
     service: BillService = Depends(get_bill_service),
 ):
-    return await service.create(body)
+    return await service.create(body, user_id)
 
 
 @bills_router.get("/{bill_id}", response_model=BillResponse)

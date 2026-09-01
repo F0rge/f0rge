@@ -15,8 +15,11 @@ from app.routers import (
     adjustments,
     auth,
     bank_imports,
+    bank_rules,
     bills,
+    books_events,
     catalogue_imports,
+    category_maps,
     contacts,
     cost_audit,
     credit_notes,
@@ -25,11 +28,14 @@ from app.routers import (
     health,
     home,
     invoices,
+    journal_imports,
+    journals,
     locations,
     payments,
     proformas,
     purchase_orders,
     reorder,
+    repeating_invoices,
     returns,
     laybys,
     reports,
@@ -41,6 +47,7 @@ from app.routers import (
     till,
     transfers,
     users,
+    vat201_periods,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
@@ -60,6 +67,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.seed_if_empty()
         await coa.ensure_opening_equity()
         await coa.ensure_customer_deposits()
+        await coa.ensure_category_chart()
+        await coa.ensure_bank_accounts()
         await TillSeedService(session).seed_if_empty()
         await PlaygroundSeedService(session).seed_if_enabled()
     yield
@@ -106,14 +115,21 @@ app.include_router(deliveries.deliveries_router)
 app.include_router(laybys.laybys_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
+app.include_router(category_maps.category_maps_router)
 app.include_router(contacts.contacts_router)
 app.include_router(customers.customers_router)
 app.include_router(invoices.invoices_router)
+app.include_router(repeating_invoices.repeating_invoices_router)
+app.include_router(journals.journals_router)
+app.include_router(journal_imports.journal_imports_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)
+app.include_router(books_events.books_events_router)
 app.include_router(bank_imports.bank_imports_router)
+app.include_router(bank_rules.bank_rules_router)
 app.include_router(reports.reports_router)
+app.include_router(vat201_periods.vat201_periods_router)
 app.include_router(search.search_router)
 app.include_router(home.home_router)
 app.include_router(settings_router.settings_router)

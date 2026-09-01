@@ -27,10 +27,10 @@ async def list_invoices(
 @invoices_router.post("", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_invoice(
     body: InvoiceCreate,
-    _: uuid.UUID = Depends(require_books_mutate),
+    user_id: uuid.UUID = Depends(require_books_mutate),
     service: InvoiceService = Depends(get_invoice_service),
 ):
-    return await service.create(body)
+    return await service.create(body, user_id)
 
 
 @invoices_router.get("/{invoice_id}", response_model=InvoiceResponse)

@@ -374,32 +374,47 @@ Document-centric double-entry in ZAR. Every invoice, credit note, bill, and paym
 
 | code | name | type |
 |------|------|------|
-| 1100 | Bank | asset |
+| 1100 | Bank (`is_bank`; default CSV recon) | asset |
+| 1110 | Credit card (`is_bank`) | asset |
+| 1120 | Petty cash (`is_bank`) | asset |
+| 1130 | Inventory clearing (`is_bank`) | asset |
+| 1140 | Supplier clearing (`is_bank`) | asset |
 | 1200 | Accounts receivable | asset |
 | 1300 | Inventory | asset |
 | 2100 | Accounts payable | liability |
 | 2200 | VAT control | liability |
 | 2300 | Customer deposits | liability |
 | 3000 | Opening balances | equity |
-| 4000 | Sales | income |
-| 5000 | Cost of goods sold | expense |
+| 4000 | Sales (unmapped fallback) | income |
+| 4010–4070 | Sales – Seating/Tables/Storage/Decor/Bedroom/Dining/Outdoor | income |
+| 5000 | Cost of goods sold (unmapped fallback) | expense |
+| 5010–5070 | COGS – same categories | expense |
+| 5110–5170 | Stock adj – same categories | expense |
+| 5210–5270 | Count var – same categories | expense |
 | 6100 | Foreign exchange gain/loss | expense |
 
-**Numbering:** `INV-0001`, `CN-0001`, `BILL-0001`, `PAY-0001` (sequential, same algorithm as `PO-0001`).
+SKU `category` maps to those P&L accounts via `GET/PUT /api/v1/category-maps` (seeded; owner/books can upsert). Till/layby/adj/CN post to the mapped codes when the SKU has a category; books invoices without `sku_id` still use 4000. Extra accounts are added by `ensure_category_chart()` on startup.
+
+**Numbering:** `INV-0001`, `CN-0001`, `BILL-0001`, `PAY-0001`, `JE-0001` (sequential, same algorithm as `PO-0001`).
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
-- **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on journal lines).
+- **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on posted journal lines), `tax_treatment` (`none` | `vat15`), and `is_bank`. Extra bank codes 1110–1140 are seeded by `ensure_bank_accounts()`.
+- **Category maps:** `GET/PUT /category-maps` — SKU category → sales/COGS/stock-adj/count-var codes. Mutate: owner|books.
 - **Contacts:** `GET/POST /contacts` — unified customers (`kind: customer`) and suppliers (`kind: supplier`). `POST` creates customers only; suppliers via `POST /suppliers`.
 - **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf` — 15% VAT on face; journal Dr AR, Cr Sales + VAT control.
+- **Repeating invoices:** `GET/POST /repeating-invoices`, `GET/PATCH /repeating-invoices/{id}`, `POST /repeating-invoices/{id}/run` — run-now only (no cron, no email). Posted invoices have no draft status.
 - **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}` — one CN per invoice; reverses AR/sales/VAT.
 - **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR).
 - **Payments:** `GET/POST /payments` — `direction: in` (invoice, ZAR) or `out` (bill, foreign FX). Response includes `fx_gain_loss_zar` (positive = gain, negative = loss).
+- **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: owner|books.
+- **Journal CSV (SimplePay):** `POST /journal-imports/preview` and `/commit` (multipart `file`); source `import:simplepay`; same-month 409. UI on `/journals`.
+- **Books history:** append-only `GET /books-events?document_type=&document_id=` (`invoice` | `bill` | `payment` | `journal`). Journal post + void = two rows on the original id. No PATCH/DELETE.
 
 | Action | owner | buyer | warehouse | till | books |
 |--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| List accounts, contacts, invoices, bills, payments | yes | yes | yes | yes | yes |
-| Mutate CoA, contacts, invoices, CN, bills, payments | yes | no | no | no | yes |
+| List accounts, contacts, invoices, repeating invoices, bills, payments, journals | yes | yes | yes | yes | yes |
+| Mutate CoA, contacts, invoices, repeating invoices, CN, bills, payments, journals | yes | no | no | no | yes |
 
 Example invoice create:
 
@@ -443,11 +458,12 @@ Date,Description,Reference,Amount
 
 ### Endpoints (all under `/api/v1`, cookie `vellano_session`)
 
-- **Bank imports:** `GET/POST /bank-imports`, `GET /bank-imports/{id}`, `GET /bank-imports/unmatched-lines`, `POST /bank-imports/{import_id}/lines/{line_id}/match` — body `{ "payment_id": "<uuid>" }`.
-- **Reports:** `GET /reports/aged-ar?as_of=`, `GET /reports/aged-ap?as_of=`, `GET /reports/profit-loss?from=&to=`, `GET /reports/balance-sheet?as_of=`.
+- **Bank imports:** `GET/POST /bank-imports`, `GET /bank-imports/{id}`, `GET /bank-imports/unmatched-lines`, `GET /bank-imports/unmatched-counts`, `POST /bank-imports/{import_id}/lines/{line_id}/match` — body `{ "payment_id" }` XOR `{ "journal_id" }`. Bank CSV is per recon account (`account_id` on `POST /bank-imports`; omit defaults to 1100). Bank rules (`GET/POST /bank-rules?bank_account_id=`, PATCH/DELETE `/{id}`) are confirm-to-apply (`POST .../apply-rule` `{ rule_id }`); recode journal-matched lines with `POST .../recode` `{ account_id }`.
+- **Reports:** `GET /reports/aged-ar?as_of=`, `GET /reports/aged-ap?as_of=`, `GET /reports/profit-loss?from=&to=`, `GET /reports/balance-sheet?as_of=`, `GET /reports/trial-balance?as_of=`, `GET /reports/journals?from=&to=&source=` (source optional), `GET /reports/cash-summary?from=&to=` — plus `/csv` on trial-balance, journals, and cash-summary.
 - **VAT201 draft:** `GET /reports/vat201?from=&to=`, `GET /reports/vat201/csv`, `GET /reports/vat201/pdf` — shaped fields for copy/type-in to eFiling only.
+- **VAT201 periods:** `GET/POST /vat201/periods`, `GET /vat201/periods/{id}`, `POST .../lock`, `POST .../reopen` (owner + reason), `GET .../csv` and `/pdf`. Lock snapshots the VAT201 draft for that `from`/`to`. Range `GET /reports/vat201` stays for ad-hoc preview. Never SARS.
 
-Matching a bank line sets `payments.is_reconciled = true`. Unmatched import lines remain visible. Amount+date suggestions are returned when a payment matches within ±3 days.
+Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal matches (manual JE or bank-rule apply) do not mark a payment. Unmatched import lines remain visible. Amount+date suggestions are returned when a payment matches within ±3 days. Per-account unmatched counts: `GET /bank-imports/unmatched-counts`.
 
 | Action | owner | buyer | warehouse | till | books |
 |--------|:-----:|:-----:|:---------:|:----:|:-----:|
@@ -495,15 +511,22 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 |----------|------------------------|
 | `/catalogue` | `/skus` |
 | `/stock` | `/inventory` |
-| `/ledger` | `/accounts` |
-| `/bank-reconciliation` | `/bank-imports` |
+| `/ledger` | `/accounts`, `/category-maps` |
+| `/journals` | `/journals`, `/journal-imports`, `/books-events` |
+| `/contacts` | `/contacts` |
+| `/invoices` | `/invoices`, `/books-events` |
+| `/repeating-invoices` | `/repeating-invoices` |
+| `/bills` | `/bills`, `/books-events` |
+| `/payments` | `/payments`, `/books-events` |
+| `/bank-reconciliation` | `/bank-imports`, `/bank-rules` |
 | `/proformas` | `/proformas` |
 | `/credit-notes` | `/credit-notes` |
 | `/till` | `/till` |
 | `/transfers` | `/transfers` |
 | `/receive` | `/receive` |
 | `/wms` | `/receive`, `/stocktakes`, `/transfers` |
-| `/reports`, `/vat201` | `/reports` |
+| `/reports` | `/reports` |
+| `/vat201` | `/vat201/periods` (range preview still `GET /reports/vat201`) |
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
 | `/import` | `/imports` |
@@ -515,9 +538,9 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 
 ## Non-goals
 
-The app does not send email, originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
+The app does not send email (including repeating invoices), originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
 
-**In V1 (do not treat as future work):** locations, catalogue, proformas, POs, land/receive, prices, ledger, bank import, reports, VAT201 draft, transfers, till, search, home, settings.
+**In V1 (do not treat as future work):** locations, catalogue, proformas, POs, land/receive, prices, ledger, journals, repeating invoices, bank import (multi-account + rules), reports (incl. trial balance / journal / cash), VAT201 periods, books history, transfers, till, search, home, settings.
 
 Still out of scope: production / `main`, Marrow, email, PSP charges, SARS eFiling, raising replicas above hobby 1.
 

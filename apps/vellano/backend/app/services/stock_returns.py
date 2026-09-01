@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +25,8 @@ from app.schemas.stock_return import (
     StockReturnLineResponse,
     StockReturnResponse,
 )
-from app.services.chart_of_accounts import CODE_COGS, CODE_INVENTORY, LedgerPostingService
+from app.services.category_posting import CategoryPostingService
+from app.services.chart_of_accounts import CODE_INVENTORY, LedgerPostingService
 from app.services.credit_notes import CreditNoteService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
@@ -45,6 +47,7 @@ class StockReturnsService:
         self.stocktakes = StocktakeService(db)
         self.posting = LedgerPostingService(db)
         self.credit_notes = CreditNoteService(db)
+        self.category_posting = CategoryPostingService(db)
 
     async def list(self) -> list[StockReturnResponse]:
         rows = await self.crud.list_all()
@@ -107,7 +110,7 @@ class StockReturnsService:
             await self.stocktakes.assert_location_unlocked(stock_return.location_id)
             self._assert_restock_skus(stock_return.lines, invoice_lines_by_id)
 
-        subtotal, vat_amount, total_inc = self._compute_credit_amounts(
+        subtotal, vat_amount, total_inc, sales_splits = self._compute_credit_amounts(
             stock_return.lines,
             invoice_lines_by_id,
         )
@@ -119,12 +122,14 @@ class StockReturnsService:
                 subtotal_ex_vat=subtotal,
                 vat_amount=vat_amount,
                 total_inc_vat=total_inc,
+                sales_splits=sales_splits,
             )
             stock_return.credit_note_id = credit_note.id
             stock_return.status = StockReturnStatus.COMPLETED
 
             if stock_return.disposition == StockReturnDisposition.RESTOCK:
                 total_cogs = Decimal(0)
+                cogs_parts: list[tuple[str, Decimal, Decimal]] = []
                 for line in stock_return.lines:
                     invoice_line = invoice_lines_by_id[line.invoice_line_id]
                     sku_id = invoice_line.sku_id
@@ -145,17 +150,23 @@ class StockReturnsService:
                         source=UnitCostAuditSource.RETURN,
                         note=f"Return {stock_return.return_number} restock",
                     )
-                    total_cogs += (unit_cost * line.qty).quantize(CENT, rounding=ROUND_HALF_UP)
+                    line_cogs = (unit_cost * line.qty).quantize(CENT, rounding=ROUND_HALF_UP)
+                    total_cogs += line_cogs
+                    cogs_code = await self.category_posting.cogs_code_for_sku(line.sku)
+                    cogs_parts.append((cogs_code, Decimal(0), line_cogs))
 
                 if total_cogs > 0:
                     await self.posting.post(
                         JournalDocumentType.CREDIT_NOTE,
                         credit_note.id,
                         f"COGS reverse for return {stock_return.return_number}",
-                        [
-                            (CODE_INVENTORY, total_cogs, Decimal(0)),
-                            (CODE_COGS, Decimal(0), total_cogs),
-                        ],
+                        self.category_posting.collapse(
+                            [
+                                (CODE_INVENTORY, total_cogs, Decimal(0)),
+                                *cogs_parts,
+                            ]
+                        ),
+                        entry_date=credit_note.issue_date,
                     )
 
         return self._to_response(await self._get_or_404(stock_return.id))
@@ -236,10 +247,11 @@ class StockReturnsService:
     def _compute_credit_amounts(
         lines: list[StockReturnLine],
         invoice_lines_by_id: dict[uuid.UUID, InvoiceLine],
-    ) -> tuple[Decimal, Decimal, Decimal]:
+    ) -> tuple[Decimal, Decimal, Decimal, list[tuple[Optional[uuid.UUID], Decimal]]]:
         subtotal = Decimal(0)
         vat_total = Decimal(0)
         total_inc = Decimal(0)
+        sales_splits: list[tuple[Optional[uuid.UUID], Decimal]] = []
         for line in lines:
             invoice_line = invoice_lines_by_id[line.invoice_line_id]
             ex_vat = (Decimal(line.qty) * invoice_line.unit_ex_vat).quantize(
@@ -251,7 +263,8 @@ class StockReturnsService:
             subtotal += ex_vat
             vat_total += line_vat
             total_inc += inc_vat
-        return subtotal, vat_total, total_inc
+            sales_splits.append((invoice_line.sku_id, ex_vat))
+        return subtotal, vat_total, total_inc, sales_splits
 
     def _to_response(self, stock_return: StockReturn) -> StockReturnResponse:
         return StockReturnResponse(

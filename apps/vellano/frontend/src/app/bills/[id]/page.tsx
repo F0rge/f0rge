@@ -19,6 +19,7 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { BooksHistory } from "@/components/books-history";
 import {
   canMutateBooks,
   createPayment,
@@ -260,6 +261,8 @@ export default function BillDetailPage() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <BooksHistory documentType="bill" documentId={bill.id} />
 
       {canMutate ? (
         <Stack gap={4}>
