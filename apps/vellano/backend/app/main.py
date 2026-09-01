@@ -20,6 +20,7 @@ from app.routers import (
     contacts,
     cost_audit,
     credit_notes,
+    customers,
     health,
     home,
     invoices,
@@ -27,6 +28,8 @@ from app.routers import (
     payments,
     proformas,
     purchase_orders,
+    returns,
+    laybys,
     reports,
     search,
     settings as settings_router,
@@ -54,6 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         coa = ChartOfAccountsSeedService(session)
         await coa.seed_if_empty()
         await coa.ensure_opening_equity()
+        await coa.ensure_customer_deposits()
         await TillSeedService(session).seed_if_empty()
         await PlaygroundSeedService(session).seed_if_enabled()
     yield
@@ -94,9 +98,12 @@ app.include_router(purchase_orders.inventory_router)
 app.include_router(transfers.transfers_router)
 app.include_router(stocktakes.stocktakes_router)
 app.include_router(adjustments.adjustments_router)
+app.include_router(returns.returns_router)
+app.include_router(laybys.laybys_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
 app.include_router(contacts.contacts_router)
+app.include_router(customers.customers_router)
 app.include_router(invoices.invoices_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)

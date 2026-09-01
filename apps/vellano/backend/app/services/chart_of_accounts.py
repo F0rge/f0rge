@@ -18,6 +18,7 @@ CODE_AR = "1200"
 CODE_INVENTORY = "1300"
 CODE_AP = "2100"
 CODE_VAT = "2200"
+CODE_DEPOSITS = "2300"
 CODE_OPENING = "3000"
 CODE_SALES = "4000"
 CODE_COGS = "5000"
@@ -29,6 +30,7 @@ CHART_OF_ACCOUNTS: tuple[tuple[str, str, AccountType], ...] = (
     (CODE_INVENTORY, "Inventory", AccountType.ASSET),
     (CODE_AP, "Accounts payable", AccountType.LIABILITY),
     (CODE_VAT, "VAT control", AccountType.LIABILITY),
+    (CODE_DEPOSITS, "Customer deposits", AccountType.LIABILITY),
     (CODE_OPENING, "Opening balances", AccountType.EQUITY),
     (CODE_SALES, "Sales", AccountType.INCOME),
     (CODE_COGS, "Cost of goods sold", AccountType.EXPENSE),
@@ -64,6 +66,19 @@ class ChartOfAccountsSeedService:
                     code=CODE_OPENING,
                     name="Opening balances",
                     type=AccountType.EQUITY,
+                    is_system=True,
+                )
+            )
+
+    async def ensure_customer_deposits(self) -> None:
+        if await self.crud.get_by_code(CODE_DEPOSITS) is not None:
+            return
+        async with unit_of_work(self.db):
+            await self.crud.add_and_flush(
+                Account(
+                    code=CODE_DEPOSITS,
+                    name="Customer deposits",
+                    type=AccountType.LIABILITY,
                     is_system=True,
                 )
             )

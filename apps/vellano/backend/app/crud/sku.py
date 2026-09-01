@@ -17,8 +17,12 @@ class SkuCRUD(BaseCRUD):
     async def get_by_id(self, sku_id: uuid.UUID) -> Optional[Sku]:
         return (await self.db.execute(select(Sku).where(Sku.id == sku_id))).scalar_one_or_none()
 
-    async def list_all(self) -> list[Sku]:
-        result = await self.db.execute(select(Sku).order_by(Sku.our_ref))
+    async def list_all(self, category: Optional[str] = None) -> list[Sku]:
+        stmt = select(Sku)
+        if category is not None:
+            stmt = stmt.where(func.lower(Sku.category) == category.lower())
+        stmt = stmt.order_by(Sku.our_ref)
+        result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
     async def get_by_design_fabric_insensitive(

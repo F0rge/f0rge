@@ -60,6 +60,11 @@ class InvoiceLine(UUIDPkMixin, Base):
     inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sku_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("skus.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
     invoice: Mapped[TaxInvoice] = relationship(back_populates="lines")
 

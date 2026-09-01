@@ -27,6 +27,18 @@ class TaxInvoiceCRUD(BaseCRUD):
             )
         ).scalar_one_or_none()
 
+    async def list_for_customer(self, customer_id: uuid.UUID) -> list[TaxInvoice]:
+        result = await self.db.execute(
+            select(TaxInvoice)
+            .options(
+                selectinload(TaxInvoice.customer),
+                selectinload(TaxInvoice.lines),
+            )
+            .where(TaxInvoice.customer_id == customer_id)
+            .order_by(TaxInvoice.invoice_number)
+        )
+        return list(result.scalars().all())
+
     async def list_all(self) -> list[TaxInvoice]:
         result = await self.db.execute(
             select(TaxInvoice)

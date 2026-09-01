@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,6 +29,7 @@ class InvoiceLineResponse(BaseModel):
     inc_vat: Decimal
     vat_amount: Decimal
     sort_order: int
+    sku_id: Optional[uuid.UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
 

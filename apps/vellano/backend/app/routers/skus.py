@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import Response
@@ -18,10 +19,11 @@ skus_router = APIRouter(prefix="/api/v1/skus", tags=["skus"])
 
 @skus_router.get("", response_model=list[SkuResponse])
 async def list_skus(
+    category: Optional[str] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ):
-    return await service.list()
+    return await service.list(category)
 
 
 @skus_router.post("", response_model=SkuResponse, status_code=status.HTTP_201_CREATED)

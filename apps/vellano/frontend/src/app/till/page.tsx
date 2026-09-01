@@ -3,6 +3,8 @@
 import {
   Button,
   ButtonSet,
+  Column,
+  Grid,
   InlineNotification,
   NumberInput,
   Select,
@@ -17,6 +19,8 @@ import {
   TableRow,
   Tile,
 } from "@carbon/react";
+import { Currency, TrashCan, Undo } from "@carbon/icons-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -25,11 +29,15 @@ import {
   computeInvoicePreview,
   createTillSale,
   downloadInvoicePdf,
+  exVatToIncVat,
+  formatPriceAmount,
   formatZarAmount,
+  incVatToExVat,
   isActiveLocation,
   listInventory,
   listLocations,
   listSkus,
+  roundHalfUp,
   type InventorySku,
   type Location,
   type Sku,
@@ -46,7 +54,81 @@ const SELLER = {
 
 const VAT_RATE_LABEL = "15%";
 
+const TENDER_OPTIONS: { value: TillTender; label: string }[] = [
+  { value: "card", label: "Card" },
+  { value: "cash", label: "Cash" },
+  { value: "deposit", label: "Deposit" },
+];
+
+type CartLine = {
+  key: string;
+  sku: Sku;
+  qty: number;
+  discountPercent: number;
+};
+
+function unitExVat(sku: Sku): number {
+  if (sku.retail_ex_vat) {
+    return Number(sku.retail_ex_vat);
+  }
+  if (sku.retail_inc_vat) {
+    return incVatToExVat(Number(sku.retail_inc_vat));
+  }
+  return 0;
+}
+
+function unitIncVat(sku: Sku): number {
+  if (sku.retail_inc_vat) {
+    return Number(sku.retail_inc_vat);
+  }
+  if (sku.retail_ex_vat) {
+    return exVatToIncVat(Number(sku.retail_ex_vat));
+  }
+  return 0;
+}
+
+function lineDiscountedEx(line: CartLine): number {
+  const factor = 1 - line.discountPercent / 100;
+  return roundHalfUp(unitExVat(line.sku) * factor * line.qty, 2);
+}
+
+function lineIncTotal(line: CartLine): number {
+  const factor = 1 - line.discountPercent / 100;
+  return roundHalfUp(unitIncVat(line.sku) * factor * line.qty, 2);
+}
+
+function cartSummary(lines: CartLine[]) {
+  const subtotalIncBeforeDiscount = lines.reduce(
+    (sum, line) => sum + roundHalfUp(unitIncVat(line.sku) * line.qty, 2),
+    0,
+  );
+  const lineDiscounts = lines.reduce(
+    (sum, line) =>
+      sum + roundHalfUp(unitIncVat(line.sku) * line.qty * (line.discountPercent / 100), 2),
+    0,
+  );
+  const discountedExSubtotal = lines.reduce((sum, line) => sum + lineDiscountedEx(line), 0);
+  const preview = computeInvoicePreview(discountedExSubtotal);
+  return {
+    subtotalIncBeforeDiscount,
+    lineDiscounts,
+    vatIncluded: preview.vat,
+    totalIncVat: preview.totalIncVat,
+  };
+}
+
+function clampDiscount(value: number): number {
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 100) {
+    return 100;
+  }
+  return value;
+}
+
 export default function TillPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const canSell = canUseTill(user?.role);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -55,6 +137,7 @@ export default function TillPage() {
   const [locationId, setLocationId] = useState("");
   const [skuId, setSkuId] = useState("");
   const [qty, setQty] = useState<number | "">(1);
+  const [cart, setCart] = useState<CartLine[]>([]);
   const [tender, setTender] = useState<TillTender>("cash");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -76,15 +159,13 @@ export default function TillPage() {
       setLocations(showrooms);
       setSkus(skuData);
       setInventory(inventoryData);
-      if (!locationId && showrooms.length > 0) {
-        setLocationId(showrooms[0].id);
-      }
+      setLocationId((current) => current || showrooms[0]?.id || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load till data.");
     } finally {
       setLoading(false);
     }
-  }, [locationId]);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -115,19 +196,76 @@ export default function TillPage() {
   });
 
   const numericQty = typeof qty === "number" ? qty : 0;
-  const unitExVat = selectedSku?.retail_ex_vat ? Number(selectedSku.retail_ex_vat) : 0;
-  const preview = computeInvoicePreview(unitExVat * numericQty);
 
-  const formValid =
+  const cartQtyBySku = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const line of cart) {
+      totals.set(line.sku.id, (totals.get(line.sku.id) ?? 0) + line.qty);
+    }
+    return totals;
+  }, [cart]);
+
+  const summary = cartSummary(cart);
+
+  const addValid =
     canSell &&
     locationId &&
     skuId &&
     numericQty > 0 &&
-    numericQty <= floorOnHand &&
-    unitExVat > 0;
+    numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0) &&
+    unitExVat(selectedSku ?? ({} as Sku)) > 0;
 
-  async function handleSale(selectedTender: TillTender) {
-    if (!formValid) {
+  const saleValid =
+    canSell &&
+    locationId &&
+    cart.length > 0 &&
+    cart.every((line) => {
+      const onHand =
+        inventoryBySku
+          .get(line.sku.id)
+          ?.locations.find((loc) => loc.location_id === locationId)?.on_hand ?? 0;
+      return line.qty > 0 && (cartQtyBySku.get(line.sku.id) ?? 0) <= onHand;
+    });
+
+  function handleAddToCart() {
+    if (!addValid || !selectedSku) {
+      return;
+    }
+    setCart((current) => [
+      ...current,
+      {
+        key: `${selectedSku.id}-${Date.now()}`,
+        sku: selectedSku,
+        qty: numericQty,
+        discountPercent: 0,
+      },
+    ]);
+    setSkuId("");
+    setQty(1);
+  }
+
+  function updateCartLine(key: string, patch: Partial<Pick<CartLine, "qty" | "discountPercent">>) {
+    setCart((current) =>
+      current.map((line) => {
+        if (line.key !== key) {
+          return line;
+        }
+        const nextQty = patch.qty ?? line.qty;
+        const nextDiscount =
+          patch.discountPercent !== undefined
+            ? clampDiscount(patch.discountPercent)
+            : line.discountPercent;
+        return { ...line, qty: nextQty, discountPercent: nextDiscount };
+      }),
+    );
+  }
+
+  function removeCartLine(key: string) {
+    setCart((current) => current.filter((line) => line.key !== key));
+  }
+
+  async function handleCompleteSale() {
+    if (!saleValid) {
       return;
     }
     setSubmitting(true);
@@ -136,11 +274,22 @@ export default function TillPage() {
     try {
       const result = await createTillSale({
         location_id: locationId,
-        lines: [{ sku_id: skuId, qty: numericQty }],
-        tender: selectedTender,
+        lines: cart.map((line) => {
+          const payload: { sku_id: string; qty: number; discount_percent?: number } = {
+            sku_id: line.sku.id,
+            qty: line.qty,
+          };
+          if (line.discountPercent > 0) {
+            payload.discount_percent = line.discountPercent;
+          }
+          return payload;
+        }),
+        tender,
       });
       setLastSale(result);
-      setTender(selectedTender);
+      setCart([]);
+      setSkuId("");
+      setQty(1);
       await loadData();
     } catch (err) {
       const message =
@@ -172,9 +321,27 @@ export default function TillPage() {
 
   return (
     <Stack gap={6}>
-      <div>
-        <h1>Till</h1>
-        <p>Process showroom sales with cash or card payment recording.</p>
+      <div className="vellano-page-header">
+        <div>
+          <h1>Till</h1>
+          <p>Process sales, returns, and payments.</p>
+        </div>
+        <ButtonSet>
+          <Button
+            kind="secondary"
+            renderIcon={Undo}
+            onClick={() => router.push("/returns")}
+          >
+            Process Return
+          </Button>
+          <Button
+            kind="secondary"
+            renderIcon={Currency}
+            onClick={() => router.push("/laybys")}
+          >
+            Layby Payment
+          </Button>
+        </ButtonSet>
       </div>
 
       {error ? (
@@ -190,106 +357,210 @@ export default function TillPage() {
       {loading ? (
         <p>Loading…</p>
       ) : (
-        <Tile>
-          <Stack gap={5}>
-            <Select
-              id="till-location"
-              labelText="Showroom"
-              value={locationId}
-              onChange={(event) => {
-                setLocationId(event.target.value);
-                setSkuId("");
-              }}
-            >
-              <SelectItem value="" text="Select showroom" />
-              {locations.map((loc) => (
-                <SelectItem key={loc.id} value={loc.id} text={loc.name} />
-              ))}
-            </Select>
+        <Grid>
+          <Column lg={8} md={4} sm={4}>
+            <Stack gap={5}>
+              <Tile>
+                <Stack gap={5}>
+                  <h2>Add product</h2>
+                  <Select
+                    id="till-location"
+                    labelText="Showroom"
+                    value={locationId}
+                    onChange={(event) => {
+                      setLocationId(event.target.value);
+                      setSkuId("");
+                      setCart([]);
+                    }}
+                  >
+                    <SelectItem value="" text="Select showroom" />
+                    {locations.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id} text={loc.name} />
+                    ))}
+                  </Select>
 
-            <Select
-              id="till-sku"
-              labelText="SKU"
-              value={skuId}
-              onChange={(event) => setSkuId(event.target.value)}
-              disabled={!locationId}
-            >
-              <SelectItem value="" text="Select SKU" />
-              {skuOptions.map((sku) => (
-                <SelectItem
-                  key={sku.id}
-                  value={sku.id}
-                  text={`${sku.our_ref} — ${sku.name}`}
-                />
-              ))}
-            </Select>
+                  <Select
+                    id="till-sku"
+                    labelText="SKU"
+                    value={skuId}
+                    onChange={(event) => setSkuId(event.target.value)}
+                    disabled={!locationId}
+                  >
+                    <SelectItem value="" text="Select SKU" />
+                    {skuOptions.map((sku) => (
+                      <SelectItem
+                        key={sku.id}
+                        value={sku.id}
+                        text={`${sku.our_ref} — ${sku.name}`}
+                      />
+                    ))}
+                  </Select>
 
-            <NumberInput
-              id="till-qty"
-              label="Quantity"
-              min={1}
-              max={floorOnHand || undefined}
-              value={qty}
-              onChange={(_, { value }) => {
-                if (value === "") {
-                  setQty("");
-                } else {
-                  setQty(typeof value === "number" ? value : Number(value));
-                }
-              }}
-              helperText={
-                skuId && locationId
-                  ? `${floorOnHand} on hand at selected showroom`
-                  : undefined
-              }
-              disabled={!skuId}
-            />
+                  <NumberInput
+                    id="till-qty"
+                    label="Quantity"
+                    min={1}
+                    max={Math.max(floorOnHand - (cartQtyBySku.get(skuId) ?? 0), 0) || undefined}
+                    value={qty}
+                    onChange={(_, { value }) => {
+                      if (value === "") {
+                        setQty("");
+                      } else {
+                        setQty(typeof value === "number" ? value : Number(value));
+                      }
+                    }}
+                    helperText={
+                      skuId && locationId
+                        ? `${Math.max(floorOnHand - (cartQtyBySku.get(skuId) ?? 0), 0)} available at showroom`
+                        : undefined
+                    }
+                    disabled={!skuId}
+                  />
 
-            {selectedSku && numericQty > 0 ? (
-              <TableContainer title="Sale preview">
-                <Table size="sm">
-                  <TableHead>
-                    <TableRow>
-                      <TableHeader>Description</TableHeader>
-                      <TableHeader>Qty</TableHeader>
-                      <TableHeader>Unit ex VAT</TableHeader>
-                      <TableHeader>Ex VAT</TableHeader>
-                      <TableHeader>VAT ({VAT_RATE_LABEL})</TableHeader>
-                      <TableHeader>Inc VAT</TableHeader>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell>{selectedSku.name}</TableCell>
-                      <TableCell>{numericQty}</TableCell>
-                      <TableCell>{formatZarAmount(selectedSku.retail_ex_vat)}</TableCell>
-                      <TableCell>{formatZarAmount(String(unitExVat * numericQty))}</TableCell>
-                      <TableCell>{formatZarAmount(String(preview.vat))}</TableCell>
-                      <TableCell>{formatZarAmount(String(preview.totalIncVat))}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            ) : null}
+                  <Button kind="secondary" disabled={!addValid} onClick={handleAddToCart}>
+                    Add to cart
+                  </Button>
+                </Stack>
+              </Tile>
 
-            <ButtonSet>
-              <Button
-                kind="primary"
-                disabled={!formValid || submitting}
-                onClick={() => void handleSale("cash")}
-              >
-                Take cash
-              </Button>
-              <Button
-                kind="secondary"
-                disabled={!formValid || submitting}
-                onClick={() => void handleSale("card")}
-              >
-                Take card
-              </Button>
-            </ButtonSet>
-          </Stack>
-        </Tile>
+              <Tile className="vellano-till-cart">
+                {cart.length === 0 ? (
+                  <p>No items in cart.</p>
+                ) : (
+                  <TableContainer title="Cart">
+                    <Table size="sm">
+                      <TableHead>
+                        <TableRow>
+                          <TableHeader>Item</TableHeader>
+                          <TableHeader>Qty</TableHeader>
+                          <TableHeader>Unit price (ZAR inc VAT)</TableHeader>
+                          <TableHeader>Discount %</TableHeader>
+                          <TableHeader>Total (ZAR)</TableHeader>
+                          <TableHeader />
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {cart.map((line) => (
+                          <TableRow key={line.key}>
+                            <TableCell>
+                              <strong>{line.sku.name}</strong>
+                              <div className="vellano-muted-text">SKU: {line.sku.our_ref}</div>
+                            </TableCell>
+                            <TableCell>
+                              <NumberInput
+                                id={`cart-qty-${line.key}`}
+                                hideLabel
+                                label="Quantity"
+                                size="sm"
+                                min={1}
+                                value={line.qty}
+                                onChange={(_, { value }) => {
+                                  const next =
+                                    value === ""
+                                      ? 1
+                                      : typeof value === "number"
+                                        ? value
+                                        : Number(value);
+                                  updateCartLine(line.key, { qty: Math.max(1, next) });
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>{formatZarAmount(formatPriceAmount(unitIncVat(line.sku)))}</TableCell>
+                            <TableCell>
+                              <NumberInput
+                                id={`cart-discount-${line.key}`}
+                                hideLabel
+                                label="Discount percent"
+                                size="sm"
+                                min={0}
+                                max={100}
+                                value={line.discountPercent}
+                                onChange={(_, { value }) => {
+                                  const next =
+                                    value === ""
+                                      ? 0
+                                      : typeof value === "number"
+                                        ? value
+                                        : Number(value);
+                                  updateCartLine(line.key, { discountPercent: clampDiscount(next) });
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <strong>{formatZarAmount(formatPriceAmount(lineIncTotal(line)))}</strong>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                kind="ghost"
+                                size="sm"
+                                hasIconOnly
+                                renderIcon={TrashCan}
+                                iconDescription="Remove line"
+                                onClick={() => removeCartLine(line.key)}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Tile>
+            </Stack>
+          </Column>
+
+          <Column lg={4} md={4} sm={4}>
+            <Tile>
+              <Stack gap={5}>
+                <h2>Sale summary</h2>
+
+                <dl className="vellano-sale-summary">
+                  <div className="vellano-sale-summary__row">
+                    <dt>Subtotal (before discount)</dt>
+                    <dd>{formatZarAmount(formatPriceAmount(summary.subtotalIncBeforeDiscount))}</dd>
+                  </div>
+                  <div className="vellano-sale-summary__row vellano-sale-summary__row--discount">
+                    <dt>Line discounts</dt>
+                    <dd>
+                      {summary.lineDiscounts > 0
+                        ? `- ${formatZarAmount(formatPriceAmount(summary.lineDiscounts))}`
+                        : formatZarAmount(formatPriceAmount(0))}
+                    </dd>
+                  </div>
+                  <div className="vellano-sale-summary__row">
+                    <dt>VAT ({VAT_RATE_LABEL}) included</dt>
+                    <dd>{formatZarAmount(formatPriceAmount(summary.vatIncluded))}</dd>
+                  </div>
+                  <div className="vellano-sale-summary__row vellano-sale-summary__row--total">
+                    <dt>Total (ZAR)</dt>
+                    <dd>{formatZarAmount(formatPriceAmount(summary.totalIncVat))}</dd>
+                  </div>
+                </dl>
+
+                <div>
+                  <Select
+                    id="till-tender"
+                    labelText="Tender"
+                    value={tender}
+                    onChange={(event) => setTender(event.target.value as TillTender)}
+                  >
+                    {TENDER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} text={option.label} />
+                    ))}
+                  </Select>
+                </div>
+
+                <Button
+                  kind="primary"
+                  disabled={!saleValid || submitting}
+                  onClick={() => void handleCompleteSale()}
+                >
+                  Complete Sale
+                </Button>
+              </Stack>
+            </Tile>
+          </Column>
+        </Grid>
       )}
 
       {lastSale ? (
@@ -358,6 +629,13 @@ export default function TillPage() {
                 onClick={() => void downloadInvoicePdf(lastSale.invoice_id, lastSale.invoice_number)}
               >
                 Download PDF
+              </Button>
+              <Button
+                kind="secondary"
+                renderIcon={Undo}
+                onClick={() => router.push(`/returns?invoice=${lastSale.invoice_id}`)}
+              >
+                Process Return
               </Button>
             </ButtonSet>
           </Stack>

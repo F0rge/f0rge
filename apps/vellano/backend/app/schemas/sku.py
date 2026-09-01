@@ -15,6 +15,7 @@ class SkuCreate(BaseModel):
     design: str = Field(min_length=1)
     fabric: str = Field(min_length=1)
     supplier_ref: Optional[str] = Field(default=None, max_length=64)
+    category: Optional[str] = Field(default=None, max_length=64)
     opening_location_id: Optional[uuid.UUID] = None
     opening_qty: Optional[int] = Field(default=None, ge=1)
     opening_unit_cost_zar: Optional[Decimal] = Field(default=None, gt=0)
@@ -45,6 +46,7 @@ class SkuCreate(BaseModel):
 
 
 class SkuUpdate(BaseModel):
+    category: Optional[str] = Field(default=None, max_length=64)
     wholesale_ex_vat: Optional[Decimal] = None
     wholesale_inc_vat: Optional[Decimal] = None
     retail_ex_vat: Optional[Decimal] = None
@@ -59,6 +61,7 @@ class SkuResponse(BaseModel):
     design: str
     fabric: str
     supplier_ref: Optional[str]
+    category: Optional[str] = None
     photo_storage_key: Optional[str]
     wholesale_ex_vat: Optional[Decimal] = None
     wholesale_inc_vat: Optional[Decimal] = None

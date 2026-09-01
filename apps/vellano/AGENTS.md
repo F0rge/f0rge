@@ -142,13 +142,98 @@ Endpoints (cookie `vellano_session`): `POST /api/v1/imports/preview`, `POST /api
 
 Preview is in-memory (200 even with row errors; 400 only if a file is unreadable or empty). Commit re-parses the files; any row error → 400; otherwise one transaction: inventory then SOH.
 
-**Inventory columns:** our_ref, name, category, retail_inc_vat required; barcode and cost_zar optional. Category is required for Cin7 parity and **ignored until S8** (not stored). Create-or-update by exact `our_ref`. Create uses `design = csv:{our_ref}`, `fabric = -`, `our_barcode = barcode or csv:{our_ref}`. Retail inc-VAT is stored as `retail_ex_vat` via `inc_to_ex`.
+**Inventory columns:** our_ref, name, category, retail_inc_vat required; barcode and cost_zar optional. Category is required for Cin7 parity and **stored on the SKU** (`skus.category`, max 64). Create-or-update by exact `our_ref`. Create uses `design = csv:{our_ref}`, `fabric = -`, `our_barcode = barcode or csv:{our_ref}`. Retail inc-VAT is stored as `retail_ex_vat` via `inc_to_ex`.
 
 **SOH columns:** our_ref, location, qty required; unit_cost_zar optional. Location is an active case-insensitive name match. SKU must exist in the DB or in the same inventory file. **SET** on-hand to qty (not add). Increase needs a unit cost from the SOH column, inventory `cost_zar`, or existing location cost (`"unit cost required to increase stock"`). Audit source `import`. In-progress stocktake at that location → 409 `"Location is locked for stocktake"`.
 
 | Action | owner | buyer | warehouse | till | books |
 |--------|:-----:|:-----:|:---------:|:----:|:-----:|
 | Preview / commit CSV import | yes | yes | no | no | no |
+
+## V2-S8 SKU category
+
+- **SKUs:** nullable `category` (max 64) on create (`SkuCreate`), PATCH (`SkuUpdate` — set or clear with `null`), and in responses.
+- **List filter:** `GET /skus?category=` — case-insensitive exact match when provided; omit to list all.
+- **CSV import:** inventory `category` column is written on create and update (same as manual create).
+- **Prices:** trade/wholesale = `wholesale_ex_vat`; retail = `retail_ex_vat` (S5, unchanged).
+
+## V2-S9 till
+
+- **Line discount:** optional `discount_percent` (0–100, default 0) per sale line; discounted unit price stored on the invoice line.
+- **Tender:** `cash` | `card` | `deposit` — deposit records tender on `payments` only (Dr 1100 / Cr 1200, same as cash/card); no PSP, no 2300 (laybys own deposits).
+- **VAT:** 15% on discounted ex-VAT subtotal (unchanged).
+- **Returns:** process return is UI-only in S9; backend returns API unchanged (V2-S5).
+
+## V2-S10 customers CRM
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Customers:** `GET/POST /customers`, `GET /customers/{id}`, `PATCH /customers/{id}`.
+
+Extends the existing `customers` table (no second customer entity). New columns: `customer_type` (`retail` | `trade`, default `retail`), `price_tier` (default `standard`), `phone` (nullable). `POST /contacts` still creates ledger customers with those defaults.
+
+`CustomerCrmResponse` includes open invoice and active layby aggregates (`open_invoices_count`, `open_invoices_zar`, `overdue_invoices_count`, `active_laybys_count`, `active_laybys_zar`). `ContactResponse` omits CRM fields.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get customers | yes | yes | yes | yes | yes |
+| Create / update customers | yes | no | no | yes | yes |
+
+Migration: `017_v2_s10_customers_crm`.
+
+## V2-S5 returns / RMA
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Returns:** `GET/POST /returns`, `GET /returns/{id}`, `POST /returns/{id}/complete`, `POST /returns/{id}/cancel`.
+
+Draft return against a tax invoice. Complete creates a **partial or full credit note** (one CN per invoice) and optionally restocks till-sale SKUs. Status: `draft` | `completed` | `cancelled`. Numbering: `RTN-0001`.
+
+**Dispositions:** `restock` (till sales only — invoice lines must have `sku_id`) restores on-hand at `location_id` and posts COGS reverse (Dr 1300, Cr 5000) on the same CN journal. `write_off` posts CN sales reverse only (no stock movement).
+
+One non-cancelled return per invoice. Cannot create if invoice already has a credit note. Cancel from `draft` only; no CN; a new return may then be created.
+
+Complete restock while a stocktake is `in_progress` at that location → 409 `"Location is locked for stocktake"`.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get returns | yes | yes | yes | yes | yes |
+| Create / complete / cancel | yes | yes | no | yes | no |
+
+## V2-S6 laybys
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Laybys:** `GET/POST /laybys`, `GET /laybys/{id}`, `POST /laybys/{id}/payments`, `POST /laybys/{id}/complete`, `POST /laybys/{id}/cancel`.
+
+Customer layaway with optional stock hold at a showroom. Numbering: `LB-0001`. Status: `open` | `ready` | `completed` | `cancelled` (overdue is derived from `due_date`, not stored).
+
+**Deposits:** `layby_payments` table (not `payments`). GL Dr `1100` Bank, Cr `2300` Customer deposits on create and further payments. Account **2300** seeded via `ensure_customer_deposits()` and migration `014_v2_s6_laybys`.
+
+**hold_stock=true:** showroom only; decrements on-hand at create (`UnitCostAuditSource.layby`); restocked on cancel; no second decrement on complete. **hold_stock=false:** on-hand unchanged until complete.
+
+Complete (from `ready` only): tax invoice, Dr AR / Cr sales / Cr VAT; apply deposits Dr `2300` Cr AR; COGS Dr `5000` Cr `1300`; set `invoice_id`. Cancel: refund Dr `2300` Cr `1100` when `amount_paid > 0`.
+
+Stocktake lock at location → 409 `"Location is locked for stocktake"` on hold create/cancel and on complete when not holding.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get laybys | yes | yes | yes | yes | yes |
+| Create, pay, complete, cancel | yes | yes | no | yes | no |
+
+## V2-S7 home hub KPIs
+
+`GET /home` (cookie `vellano_session`) extends the S10 summary with hub KPIs and attention lists. Existing fields (`on_order_*`, `on_hand_*`, `home_currency`) unchanged.
+
+**KPI fields:** `aged_stock_value_zar` (on-hand value where `location_stock.updated_at` ≤ now−180 days), `open_laybys_count` / `open_laybys_balance_zar` (status `open`|`ready`), `low_stock_count` (SKUs with total on-hand 1–2 inclusive), `open_returns_count` (returns status `draft`).
+
+**`needs_attention`** (max 8, skip empty groups): low-stock SKUs (3), in-progress stocktakes (2), draft returns, overdue laybys (`open` + `due_date` &lt; today), unmatched bank import lines.
+
+**`recent_movements`** (max 10): newest `unit_cost_audit` rows — `source`, title (`sku.our_ref` or `note`), detail (`source` + location name when present), `created_at`.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| Home summary | yes | yes | yes | yes | yes |
 
 ## S3 catalogue (suppliers, proformas, SKUs)
 
@@ -224,6 +309,7 @@ Document-centric double-entry in ZAR. Every invoice, credit note, bill, and paym
 | 1300 | Inventory | asset |
 | 2100 | Accounts payable | liability |
 | 2200 | VAT control | liability |
+| 2300 | Customer deposits | liability |
 | 3000 | Opening balances | equity |
 | 4000 | Sales | income |
 | 5000 | Cost of goods sold | expense |
@@ -331,13 +417,10 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 | Label | Route | Slice |
 |-------|-------|-------|
-| Returns | `/returns` | V2-S5 |
-| Laybys | `/laybys` | V2-S6 |
-| Customers | `/customers` | V2-S10 |
 | Deliveries | `/deliveries` | V2-S11 |
 | Reorder | `/reorder` | V2-S12 |
 
-V1 routes (stock, till, books, reports, VAT201, etc.) remain live. S7 home hub KPIs/tables are not in S0.
+V1 routes (stock, till, books, reports, VAT201, etc.) remain live. V2-S7 home hub KPIs and needs-attention / recent-movements tables ship on `/` via `GET /home`.
 
 ## Frontend routes vs API paths
 
@@ -358,7 +441,10 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
 | `/import` | `/imports` |
-| `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/returns` | `/returns` |
+| `/laybys` | `/laybys` |
+| `/customers` | `/customers` |
+| `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
 
 ## Non-goals
 

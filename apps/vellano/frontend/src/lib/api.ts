@@ -284,6 +284,7 @@ export type Sku = {
   name: string;
   design: string;
   fabric: string;
+  category: string | null;
   supplier_ref: string | null;
   photo_storage_key: string | null;
   wholesale_ex_vat: string | null;
@@ -344,6 +345,7 @@ export type CreateSkuPayload = {
   name: string;
   design: string;
   fabric: string;
+  category?: string;
   supplier_ref?: string;
   opening_location_id?: string;
   opening_qty?: number;
@@ -351,12 +353,24 @@ export type CreateSkuPayload = {
   opening_date?: string;
 };
 
-export function listSkus(): Promise<Sku[]> {
-  return apiFetch<Sku[]>("/skus");
+export function listSkus(options?: { category?: string }): Promise<Sku[]> {
+  const params = new URLSearchParams();
+  const category = options?.category?.trim();
+  if (category) {
+    params.set("category", category);
+  }
+  const qs = params.toString();
+  return apiFetch<Sku[]>(`/skus${qs ? `?${qs}` : ""}`);
 }
 
 export function createSku(payload: CreateSkuPayload): Promise<Sku> {
   const body: CreateSkuPayload = { ...payload };
+  const category = body.category?.trim();
+  if (category) {
+    body.category = category;
+  } else {
+    delete body.category;
+  }
   const openingDate = body.opening_date?.trim();
   if (openingDate) {
     body.opening_date = openingDate;
@@ -516,11 +530,12 @@ export function canUseTill(role: UserRole | undefined): boolean {
   return role === "owner" || role === "till";
 }
 
-export type TillTender = "cash" | "card";
+export type TillTender = "cash" | "card" | "deposit";
 
 export type TillSaleLinePayload = {
   sku_id: string;
   qty: number;
+  discount_percent?: number;
 };
 
 export type TillSalePayload = {
@@ -956,6 +971,7 @@ export type InvoiceLine = {
   inc_vat: string;
   vat_amount: string;
   sort_order: number;
+  sku_id?: string | null;
 };
 
 export type Invoice = {
@@ -1447,12 +1463,36 @@ export async function downloadVat201Pdf(fromDate: string, toDate: string): Promi
   URL.revokeObjectURL(url);
 }
 
+export type HomeAttentionKind = "low_stock" | "stocktake" | "returns" | "layby" | "bank";
+
+export type HomeAttentionItem = {
+  kind: HomeAttentionKind;
+  title: string;
+  detail: string;
+  status: string;
+  href: string;
+};
+
+export type HomeMovementItem = {
+  source: string;
+  title: string;
+  detail: string;
+  created_at: string;
+};
+
 export type HomeSummary = {
   on_order_qty: number;
   on_order_value_zar: string;
   on_hand_qty: number;
   on_hand_value_zar: string;
   home_currency: string;
+  aged_stock_value_zar: string;
+  open_laybys_count: number;
+  open_laybys_balance_zar: string;
+  low_stock_count: number;
+  open_returns_count: number;
+  needs_attention: HomeAttentionItem[];
+  recent_movements: HomeMovementItem[];
 };
 
 export type SkuSearchHit = {
@@ -1552,4 +1592,326 @@ export function canViewCostAudit(role: UserRole | undefined): boolean {
 
 export function canMutateSettings(role: UserRole | undefined): boolean {
   return role === "owner";
+}
+
+export type StockReturnReason = "damaged" | "unwanted" | "wrong_item" | "other";
+
+export type StockReturnDisposition = "restock" | "write_off";
+
+export type StockReturnStatus = "draft" | "completed" | "cancelled";
+
+export type StockReturnLine = {
+  id: string;
+  invoice_line_id: string;
+  sku_id: string | null;
+  description: string;
+  qty: number;
+  unit_ex_vat: string;
+};
+
+export type StockReturn = {
+  id: string;
+  return_number: string;
+  invoice_id: string;
+  invoice_number: string;
+  location_id: string;
+  location_name: string;
+  credit_note_id: string | null;
+  reason: StockReturnReason;
+  disposition: StockReturnDisposition;
+  status: StockReturnStatus;
+  notes: string | null;
+  lines: StockReturnLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateStockReturnLinePayload = {
+  invoice_line_id: string;
+  sku_id?: string;
+  qty: number;
+};
+
+export type CreateStockReturnPayload = {
+  invoice_id: string;
+  location_id: string;
+  reason: StockReturnReason;
+  disposition: StockReturnDisposition;
+  notes?: string;
+  lines: CreateStockReturnLinePayload[];
+};
+
+export const RETURN_REASON_LABELS: Record<StockReturnReason, string> = {
+  damaged: "Damaged",
+  unwanted: "Unwanted",
+  wrong_item: "Wrong item",
+  other: "Other",
+};
+
+export const RETURN_REASONS: StockReturnReason[] = [
+  "damaged",
+  "unwanted",
+  "wrong_item",
+  "other",
+];
+
+export const RETURN_DISPOSITION_LABELS: Record<StockReturnDisposition, string> = {
+  restock: "Restock",
+  write_off: "Write-off",
+};
+
+export function canMutateReturns(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "warehouse" || role === "till";
+}
+
+export function listReturns(): Promise<StockReturn[]> {
+  return apiFetch<StockReturn[]>("/returns");
+}
+
+export function getReturn(id: string): Promise<StockReturn> {
+  return apiFetch<StockReturn>(`/returns/${id}`);
+}
+
+export function createReturn(payload: CreateStockReturnPayload): Promise<StockReturn> {
+  const notes = payload.notes?.trim();
+  const body: CreateStockReturnPayload = {
+    invoice_id: payload.invoice_id,
+    location_id: payload.location_id,
+    reason: payload.reason,
+    disposition: payload.disposition,
+    lines: payload.lines,
+  };
+  if (notes) {
+    body.notes = notes;
+  }
+  return apiFetch<StockReturn>("/returns", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function completeReturn(id: string): Promise<StockReturn> {
+  return apiFetch<StockReturn>(`/returns/${id}/complete`, { method: "POST" });
+}
+
+export function cancelReturn(id: string): Promise<StockReturn> {
+  return apiFetch<StockReturn>(`/returns/${id}/cancel`, { method: "POST" });
+}
+
+export type LaybyStatus = "open" | "ready" | "completed" | "cancelled";
+
+export type LaybyTender = "cash" | "card";
+
+export type LaybyLine = {
+  id: string;
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  qty: number;
+  unit_ex_vat: string;
+};
+
+export type LaybyPayment = {
+  id: string;
+  amount: string;
+  tender: LaybyTender;
+  paid_on: string;
+};
+
+export type Layby = {
+  id: string;
+  layby_number: string;
+  customer_id: string;
+  customer_name: string;
+  location_id: string;
+  location_name: string;
+  invoice_id: string | null;
+  due_date: string;
+  hold_stock: boolean;
+  status: LaybyStatus;
+  subtotal_ex_vat: string;
+  vat_amount: string;
+  total_inc_vat: string;
+  amount_paid: string;
+  balance: string;
+  notes: string | null;
+  lines: LaybyLine[];
+  payments: LaybyPayment[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateLaybyLinePayload = {
+  sku_id: string;
+  qty: number;
+};
+
+export type CreateLaybyPayload = {
+  customer_id: string;
+  location_id: string;
+  due_date: string;
+  hold_stock: boolean;
+  deposit_amount: string;
+  tender: LaybyTender;
+  lines: CreateLaybyLinePayload[];
+  notes?: string;
+};
+
+export type AddLaybyPaymentPayload = {
+  amount: string;
+  tender: LaybyTender;
+};
+
+export function canMutateLaybys(role: UserRole | undefined): boolean {
+  return canUseTill(role);
+}
+
+export function listLaybys(): Promise<Layby[]> {
+  return apiFetch<Layby[]>("/laybys");
+}
+
+export function getLayby(id: string): Promise<Layby> {
+  return apiFetch<Layby>(`/laybys/${id}`);
+}
+
+export function createLayby(payload: CreateLaybyPayload): Promise<Layby> {
+  const notes = payload.notes?.trim();
+  const body: CreateLaybyPayload = {
+    customer_id: payload.customer_id,
+    location_id: payload.location_id,
+    due_date: payload.due_date,
+    hold_stock: payload.hold_stock,
+    deposit_amount: payload.deposit_amount,
+    tender: payload.tender,
+    lines: payload.lines,
+  };
+  if (notes) {
+    body.notes = notes;
+  }
+  return apiFetch<Layby>("/laybys", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function addLaybyPayment(id: string, payload: AddLaybyPaymentPayload): Promise<Layby> {
+  return apiFetch<Layby>(`/laybys/${id}/payments`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function completeLayby(id: string): Promise<Layby> {
+  return apiFetch<Layby>(`/laybys/${id}/complete`, { method: "POST" });
+}
+
+export function cancelLayby(id: string): Promise<Layby> {
+  return apiFetch<Layby>(`/laybys/${id}/cancel`, { method: "POST" });
+}
+
+export type CustomerType = "retail" | "trade";
+
+export type CustomerCrm = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  vat_number: string | null;
+  billing_address: string | null;
+  customer_type: CustomerType;
+  price_tier: string;
+  open_invoices_count: number;
+  open_invoices_zar: string;
+  overdue_invoices_count: number;
+  active_laybys_count: number;
+  active_laybys_zar: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateCustomerPayload = {
+  name: string;
+  email?: string;
+  phone?: string;
+  vat_number?: string;
+  billing_address?: string;
+  customer_type?: CustomerType;
+  price_tier?: string;
+};
+
+export type UpdateCustomerPayload = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  vat_number?: string;
+  billing_address?: string;
+  customer_type?: CustomerType;
+  price_tier?: string;
+};
+
+export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
+  retail: "Retail",
+  trade: "Trade",
+};
+
+export function canMutateCustomers(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "books" || role === "till";
+}
+
+export function listCustomers(): Promise<CustomerCrm[]> {
+  return apiFetch<CustomerCrm[]>("/customers");
+}
+
+export function getCustomer(id: string): Promise<CustomerCrm> {
+  return apiFetch<CustomerCrm>(`/customers/${id}`);
+}
+
+function buildCustomerPayload(
+  payload: CreateCustomerPayload | UpdateCustomerPayload,
+): CreateCustomerPayload | UpdateCustomerPayload {
+  const body: CreateCustomerPayload | UpdateCustomerPayload = {};
+  if ("name" in payload && payload.name !== undefined) {
+    body.name = payload.name.trim();
+  }
+  const email = payload.email?.trim();
+  if (email) {
+    body.email = email;
+  }
+  const phone = payload.phone?.trim();
+  if (phone) {
+    body.phone = phone;
+  }
+  const vat = payload.vat_number?.trim();
+  if (vat) {
+    body.vat_number = vat;
+  }
+  const billing = payload.billing_address?.trim();
+  if (billing) {
+    body.billing_address = billing;
+  }
+  if (payload.customer_type) {
+    body.customer_type = payload.customer_type;
+  }
+  const tier = payload.price_tier?.trim();
+  if (tier) {
+    body.price_tier = tier;
+  }
+  return body;
+}
+
+export function createCustomer(payload: CreateCustomerPayload): Promise<CustomerCrm> {
+  return apiFetch<CustomerCrm>("/customers", {
+    method: "POST",
+    body: JSON.stringify(buildCustomerPayload(payload)),
+  });
+}
+
+export function updateCustomer(
+  id: string,
+  payload: UpdateCustomerPayload,
+): Promise<CustomerCrm> {
+  return apiFetch<CustomerCrm>(`/customers/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(buildCustomerPayload(payload)),
+  });
 }

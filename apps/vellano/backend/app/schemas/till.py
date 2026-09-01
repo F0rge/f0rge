@@ -13,12 +13,13 @@ from app.schemas.invoice import InvoiceLineResponse
 class TillSaleLineCreate(BaseModel):
     sku_id: uuid.UUID
     qty: int = Field(gt=0)
+    discount_percent: Decimal = Field(default=0, ge=0, le=100)
 
 
 class TillSaleCreate(BaseModel):
     location_id: uuid.UUID
     lines: list[TillSaleLineCreate] = Field(min_length=1)
-    tender: Literal["cash", "card"]
+    tender: Literal["cash", "card", "deposit"]
 
 
 class TillSaleLocationStock(BaseModel):
@@ -32,7 +33,7 @@ class TillSaleResponse(BaseModel):
     invoice_number: str
     payment_id: uuid.UUID
     payment_number: str
-    tender: Literal["cash", "card"]
+    tender: Literal["cash", "card", "deposit"]
     issue_date: datetime.date
     subtotal_ex_vat: Decimal
     vat_amount: Decimal

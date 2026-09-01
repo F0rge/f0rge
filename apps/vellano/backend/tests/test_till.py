@@ -11,7 +11,6 @@ from tests.test_purchase_orders import (
     _create_sku,
     _create_supplier,
     _create_till,
-    _create_warehouse,
     _location_id_by_name,
     _relogin_owner,
 )
@@ -38,6 +37,16 @@ async def _inventory_on_hand(
     return loc["on_hand"]
 
 
+async def _login_warehouse(client: AsyncClient) -> AsyncClient:
+    client.cookies.clear()
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "warehouse-po@example.com", "password": "warehouse-password"},
+    )
+    assert login_resp.status_code == 200
+    return client
+
+
 async def _transfer_to_bedfordview(
     async_client: AsyncClient,
     owner_client: AsyncClient,
@@ -46,7 +55,7 @@ async def _transfer_to_bedfordview(
 ) -> str:
     kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
     bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
-    warehouse = await _create_warehouse(async_client, owner_client)
+    warehouse = await _login_warehouse(async_client)
     await _relogin_owner(owner_client)
     transfer = await warehouse.post(
         "/api/v1/transfers",
@@ -100,7 +109,9 @@ async def test_till_cash_sale_decrements_bedfordview_stock(
 
     invoice = await owner_client.get(f"/api/v1/invoices/{body['invoice_id']}")
     assert invoice.status_code == 200
-    assert invoice.json()["balance"] == "0.00"
+    payload = invoice.json()
+    assert payload["balance"] == "0.00"
+    assert payload["lines"][0]["sku_id"] == sku_id
 
 
 async def test_till_card_sale_records_tender(
@@ -269,6 +280,98 @@ async def test_till_sale_posts_ledger_entries(
     assert balances_after["1100"] > balances_before["1100"]
     assert balances_after["4000"] < balances_before["4000"]
     assert balances_after["2200"] < balances_before["2200"]
+
+
+async def test_till_line_discount_reduces_subtotal(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=1,
+        location_name="Kramerville",
+        our_ref="TILL-DISC",
+    )
+    sku_id = data["sku"]["id"]
+    await _set_retail_price(owner_client, sku_id, "1000.00")
+    bedford_id = await _transfer_to_bedfordview(async_client, owner_client, sku_id, 1)
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1, "discount_percent": "10"}],
+            "tender": "cash",
+        },
+    )
+    assert sale.status_code == 201
+    body = sale.json()
+    assert body["subtotal_ex_vat"] == "900.00"
+    assert body["vat_amount"] == "135.00"
+    assert body["total_inc_vat"] == "1035.00"
+
+
+async def test_till_deposit_tender_records_payment_tender(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=1,
+        location_name="Kramerville",
+        our_ref="TILL-DEP",
+    )
+    sku_id = data["sku"]["id"]
+    await _set_retail_price(owner_client, sku_id, "500.00")
+    bedford_id = await _transfer_to_bedfordview(async_client, owner_client, sku_id, 1)
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1}],
+            "tender": "deposit",
+        },
+    )
+    assert sale.status_code == 201
+    assert sale.json()["tender"] == "deposit"
+
+    payments = await owner_client.get("/api/v1/payments")
+    assert payments.status_code == 200
+    payment = next(p for p in payments.json() if p["id"] == sale.json()["payment_id"])
+    assert payment["tender"] == "deposit"
+
+
+async def test_till_full_discount_rejected(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=1,
+        location_name="Kramerville",
+        our_ref="TILL-FULL-DISC",
+    )
+    sku_id = data["sku"]["id"]
+    await _set_retail_price(owner_client, sku_id, "400.00")
+    bedford_id = await _transfer_to_bedfordview(async_client, owner_client, sku_id, 1)
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1, "discount_percent": "100"}],
+            "tender": "cash",
+        },
+    )
+    assert sale.status_code == 400
+    assert sale.json()["detail"] == "Sale total must be positive"
 
 
 async def test_no_psp_client_in_codebase() -> None:

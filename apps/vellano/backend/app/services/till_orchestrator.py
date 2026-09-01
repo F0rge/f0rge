@@ -84,16 +84,18 @@ class TillOrchestrator:
                 rounding=ROUND_HALF_UP,
             )
             total_cogs += line_cogs
-            line_inputs.append((sku, line.qty, location_stock))
+            line_inputs.append((sku, line.qty, location_stock, line.discount_percent))
 
         subtotal = Decimal(0)
         vat_total = Decimal(0)
         total_inc = Decimal(0)
         invoice_line_models: list[InvoiceLine] = []
 
-        for index, (sku, qty, _stock) in enumerate(line_inputs):
-            unit_ex = sku.retail_ex_vat
-            ex_vat = (Decimal(qty) * unit_ex).quantize(CENT, rounding=ROUND_HALF_UP)
+        for index, (sku, qty, _stock, discount_percent) in enumerate(line_inputs):
+            discounted_unit = (
+                sku.retail_ex_vat * (Decimal(100) - discount_percent) / Decimal(100)
+            ).quantize(CENT, rounding=ROUND_HALF_UP)
+            ex_vat = (Decimal(qty) * discounted_unit).quantize(CENT, rounding=ROUND_HALF_UP)
             inc_vat = ex_to_inc(ex_vat)
             line_vat = inc_vat - ex_vat
             subtotal += ex_vat
@@ -103,13 +105,17 @@ class TillOrchestrator:
                 InvoiceLine(
                     description=sku.name,
                     qty=qty,
-                    unit_ex_vat=unit_ex,
+                    unit_ex_vat=discounted_unit,
                     ex_vat=ex_vat,
                     inc_vat=inc_vat,
                     vat_amount=line_vat,
                     sort_order=index,
+                    sku_id=sku.id,
                 )
             )
+
+        if subtotal <= 0:
+            raise ValidationError("Sale total must be positive")
 
         invoice_number = await self.invoice_crud.get_next_invoice_number()
         payment_number = await self.payment_crud.get_next_payment_number()
@@ -175,7 +181,7 @@ class TillOrchestrator:
                     ],
                 )
 
-            for sku, qty, location_stock in line_inputs:
+            for sku, qty, location_stock, _discount in line_inputs:
                 location_stock.on_hand -= qty
 
             invoice.amount_paid = total_inc
@@ -210,6 +216,7 @@ class TillOrchestrator:
                     inc_vat=line.inc_vat,
                     vat_amount=line.vat_amount,
                     sort_order=line.sort_order,
+                    sku_id=line.sku_id,
                 )
                 for line in reloaded.lines
             ],
