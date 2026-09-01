@@ -24,6 +24,7 @@ from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.skus import SkuService
 from app.services.suppliers import SupplierService
+from app.services.transfers import TransferService
 from app.services.users import BootstrapService, ProfileService, UserService
 
 
@@ -99,6 +100,10 @@ def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:
     return ReportsService(db)
 
 
+def get_transfer_service(db: AsyncSession = Depends(get_db)) -> TransferService:
+    return TransferService(db)
+
+
 async def require_owner(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
@@ -139,6 +144,19 @@ async def require_catalogue_mutate(
 
 
 async def require_receive(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    user = await UserCRUD(db).get_by_id(user_id)
+    if user is None or user.role not in (UserRole.OWNER, UserRole.WAREHOUSE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner or warehouse access required",
+        )
+    return user_id
+
+
+async def require_transfer(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:

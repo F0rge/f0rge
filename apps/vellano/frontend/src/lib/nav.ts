@@ -21,6 +21,7 @@ export const SIDE_NAV_ITEMS = [
   { href: "/purchase-orders", label: "Purchase orders" },
   { href: "/transit", label: "Transit" },
   { href: "/receive", label: "Receive" },
+  { href: "/transfers", label: "Transfers" },
   { href: "/till", label: "Till" },
   { href: "/users", label: "Users", ownerOnly: true },
   { href: "/profile", label: "Profile" },
