@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,6 +17,13 @@ class SkuCreate(BaseModel):
     supplier_ref: Optional[str] = Field(default=None, max_length=64)
 
 
+class SkuUpdate(BaseModel):
+    wholesale_ex_vat: Optional[Decimal] = None
+    wholesale_inc_vat: Optional[Decimal] = None
+    retail_ex_vat: Optional[Decimal] = None
+    retail_inc_vat: Optional[Decimal] = None
+
+
 class SkuResponse(BaseModel):
     id: uuid.UUID
     our_ref: str
@@ -26,6 +33,10 @@ class SkuResponse(BaseModel):
     fabric: str
     supplier_ref: Optional[str]
     photo_storage_key: Optional[str]
+    wholesale_ex_vat: Optional[Decimal] = None
+    wholesale_inc_vat: Optional[Decimal] = None
+    retail_ex_vat: Optional[Decimal] = None
+    retail_inc_vat: Optional[Decimal] = None
     created_at: datetime.datetime
     updated_at: datetime.datetime
 

@@ -19,10 +19,13 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useState } from "react";
 
+import { SkuPriceEditor } from "@/components/sku-price-editor";
 import {
   ApiError,
   canMutateCatalogue,
   createSku,
+  displayPrice,
+  listInventory,
   listSkus,
   uploadSkuPhoto,
   type CreateSkuPayload,
@@ -32,6 +35,11 @@ import { useAuth } from "@/lib/auth";
 
 const TABLE_HEADERS = [
   { key: "name", header: "Name" },
+  { key: "actions", header: "Actions" },
+  { key: "wholesale_ex_vat", header: "Wholesale ex-VAT" },
+  { key: "wholesale_inc_vat", header: "Wholesale inc-VAT" },
+  { key: "retail_ex_vat", header: "Retail ex-VAT" },
+  { key: "retail_inc_vat", header: "Retail inc-VAT" },
   { key: "design", header: "Design" },
   { key: "fabric", header: "Fabric" },
   { key: "our_ref", header: "Our ref" },
@@ -48,7 +56,12 @@ type SkuRow = {
   our_ref: string;
   our_barcode: string;
   supplier_ref: string;
+  wholesale_ex_vat: string;
+  wholesale_inc_vat: string;
+  retail_ex_vat: string;
+  retail_inc_vat: string;
   photo: string;
+  actions: string;
 };
 
 const emptyCreateForm: CreateSkuPayload = {
@@ -64,9 +77,11 @@ export default function CataloguePage() {
   const { user } = useAuth();
   const canMutate = canMutateCatalogue(user?.role);
   const [skus, setSkus] = useState<Sku[]>([]);
+  const [unitCostBySku, setUnitCostBySku] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [priceSku, setPriceSku] = useState<Sku | null>(null);
   const [createForm, setCreateForm] = useState<CreateSkuPayload>(emptyCreateForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -75,8 +90,15 @@ export default function CataloguePage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listSkus();
-      setSkus(data);
+      const [skuData, inventoryData] = await Promise.all([listSkus(), listInventory()]);
+      setSkus(skuData);
+      const costs = new Map<string, string>();
+      for (const entry of inventoryData) {
+        if (entry.unit_cost_zar) {
+          costs.set(entry.sku_id, entry.unit_cost_zar);
+        }
+      }
+      setUnitCostBySku(costs);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load catalogue.");
     } finally {
@@ -98,12 +120,21 @@ export default function CataloguePage() {
     our_ref: entry.our_ref,
     our_barcode: entry.our_barcode,
     supplier_ref: entry.supplier_ref ?? "—",
+    wholesale_ex_vat: displayPrice(entry.wholesale_ex_vat),
+    wholesale_inc_vat: displayPrice(entry.wholesale_inc_vat),
+    retail_ex_vat: displayPrice(entry.retail_ex_vat),
+    retail_inc_vat: displayPrice(entry.retail_inc_vat),
     photo: entry.id,
+    actions: entry.id,
   }));
 
   function resetForm() {
     setCreateForm(emptyCreateForm);
     setPhotoFile(null);
+  }
+
+  function openPriceEditor(entry: Sku) {
+    setPriceSku(entry);
   }
 
   async function handleCreate() {
@@ -168,6 +199,18 @@ export default function CataloguePage() {
         />
       ) : null}
 
+      <SkuPriceEditor
+        sku={priceSku}
+        open={priceSku !== null}
+        readOnly={!canMutate}
+        unitCostZar={priceSku ? (unitCostBySku.get(priceSku.id) ?? null) : null}
+        saving={saving}
+        onSavingChange={setSaving}
+        onClose={() => setPriceSku(null)}
+        onSaved={loadSkus}
+        onError={setError}
+      />
+
       {loading ? (
         <p className="cds--type-body-01">Loading catalogue…</p>
       ) : skus.length === 0 ? (
@@ -196,7 +239,18 @@ export default function CataloguePage() {
                   {tableRows.map((row) => {
                     const entry = skus.find((sku) => sku.id === row.id);
                     return (
-                      <TableRow {...getRowProps({ row })} key={row.id}>
+                      <TableRow
+                        {...getRowProps({
+                          row,
+                          onClick: () => {
+                            if (entry) {
+                              openPriceEditor(entry);
+                            }
+                          },
+                        })}
+                        key={row.id}
+                        style={{ cursor: entry ? "pointer" : undefined }}
+                      >
                         {row.cells.map((cell) => {
                           if (cell.info.header === "photo") {
                             if (entry?.photo_storage_key) {
@@ -212,6 +266,24 @@ export default function CataloguePage() {
                               );
                             }
                             return <TableCell key={cell.id}>—</TableCell>;
+                          }
+                          if (cell.info.header === "actions" && entry) {
+                            return (
+                              <TableCell key={cell.id}>
+                                <Button
+                                  type="button"
+                                  kind="ghost"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    openPriceEditor(entry);
+                                  }}
+                                >
+                                  {canMutate ? "Edit prices" : "View prices"}
+                                </Button>
+                              </TableCell>
+                            );
                           }
                           return <TableCell key={cell.id}>{cell.value}</TableCell>;
                         })}

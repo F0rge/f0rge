@@ -10,7 +10,7 @@ from app.dependencies.auth import (
     get_sku_service,
     require_catalogue_mutate,
 )
-from app.schemas.sku import SkuCreate, SkuResponse
+from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
 from app.services.skus import SkuService
 
 skus_router = APIRouter(prefix="/api/v1/skus", tags=["skus"])
@@ -40,6 +40,16 @@ async def get_sku(
     service: SkuService = Depends(get_sku_service),
 ):
     return await service.get(sku_id)
+
+
+@skus_router.patch("/{sku_id}", response_model=SkuResponse)
+async def update_sku(
+    sku_id: uuid.UUID,
+    body: SkuUpdate,
+    _: uuid.UUID = Depends(require_catalogue_mutate),
+    service: SkuService = Depends(get_sku_service),
+):
+    return await service.update(sku_id, body)
 
 
 @skus_router.post("/{sku_id}/photo", response_model=SkuResponse)
