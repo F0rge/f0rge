@@ -189,7 +189,7 @@ export default function HomePage() {
         >
           Import CSV
         </Button>
-        <Button kind="secondary" onClick={() => router.push("/laybys")}>
+        <Button kind="secondary" onClick={() => router.push("/laybys?new=1")}>
           New layby
         </Button>
         <Button kind="secondary" onClick={() => router.push("/returns")}>
