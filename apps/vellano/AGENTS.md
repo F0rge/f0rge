@@ -157,6 +157,13 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 - **CSV import:** inventory `category` column is written on create and update (same as manual create).
 - **Prices:** trade/wholesale = `wholesale_ex_vat`; retail = `retail_ex_vat` (S5, unchanged).
 
+## V2-S9 till
+
+- **Line discount:** optional `discount_percent` (0–100, default 0) per sale line; discounted unit price stored on the invoice line.
+- **Tender:** `cash` | `card` | `deposit` — deposit records tender on `payments` only (Dr 1100 / Cr 1200, same as cash/card); no PSP, no 2300 (laybys own deposits).
+- **VAT:** 15% on discounted ex-VAT subtotal (unchanged).
+- **Returns:** process return is UI-only in S9; backend returns API unchanged (V2-S5).
+
 ## V2-S5 returns / RMA
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):

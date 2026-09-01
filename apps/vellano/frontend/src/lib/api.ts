@@ -530,11 +530,12 @@ export function canUseTill(role: UserRole | undefined): boolean {
   return role === "owner" || role === "till";
 }
 
-export type TillTender = "cash" | "card";
+export type TillTender = "cash" | "card" | "deposit";
 
 export type TillSaleLinePayload = {
   sku_id: string;
   qty: number;
+  discount_percent?: number;
 };
 
 export type TillSalePayload = {
