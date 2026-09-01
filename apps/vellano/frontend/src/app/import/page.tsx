@@ -150,9 +150,32 @@ export default function ImportPage() {
 
   return (
     <Stack gap={6}>
-      <div>
-        <h1 className="cds--type-productive-heading-04">Import</h1>
-        <p className="cds--type-body-01">Inventory List plus optional Stock on Hand. Accepts `.csv` only.</p>
+      <div className="vellano-page-header">
+        <div>
+          <h1 className="cds--type-productive-heading-04">Import CSV</h1>
+          <p className="cds--type-body-01">
+            Bulk import products and stock on hand (SOH). Required format based on Cin7 standards.
+            Accepts `.csv` only.
+          </p>
+        </div>
+        {inventoryFile || sohFile || preview || result ? (
+          <Button
+            kind="secondary"
+            disabled={busy}
+            onClick={() => {
+              setInventoryFile(null);
+              setSohFile(null);
+              setInventoryMap({});
+              setSohMap({});
+              setPreview(null);
+              setMapsDirty(false);
+              setError(null);
+              setResult(null);
+            }}
+          >
+            Cancel
+          </Button>
+        ) : null}
       </div>
 
       {!canMutate ? (
