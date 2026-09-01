@@ -2,8 +2,6 @@
 
 import {
   Button,
-  Column,
-  Grid,
   InlineNotification,
   Loading,
   Stack,
@@ -164,7 +162,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <Stack gap={6}>
+    <Stack gap={6} className="vellano-home">
       <div>
         <h1 className="cds--type-productive-heading-04">Home</h1>
         <p className="cds--type-body-01">
@@ -204,75 +202,63 @@ export default function HomePage() {
 
       {summary ? (
         <>
-          <Grid condensed fullWidth>
-            <Column lg={5} md={4} sm={4}>
-              <Tile className="vellano-home-tile">
-                <h2 className="cds--type-productive-heading-03">On order</h2>
-                <p className="cds--type-body-01 vellano-home-metric">
-                  {summary.on_order_qty.toLocaleString("en-ZA")} units
-                </p>
-                <p className="cds--type-helper-text-01">
-                  {formatZar(summary.on_order_value_zar, summary.home_currency)} estimated
-                </p>
-              </Tile>
-            </Column>
-            <Column lg={5} md={4} sm={4}>
-              <Tile className="vellano-home-tile">
-                <h2 className="cds--type-productive-heading-03">On hand</h2>
-                <p className="cds--type-body-01 vellano-home-metric">
-                  {summary.on_hand_qty.toLocaleString("en-ZA")} units
-                </p>
-                <p className="cds--type-helper-text-01">
-                  {formatZar(summary.on_hand_value_zar, summary.home_currency)} landed cost
-                </p>
-              </Tile>
-            </Column>
-            <Column lg={5} md={4} sm={4}>
-              <Tile className="vellano-home-tile">
-                <h2 className="cds--type-productive-heading-03">Aged stock value</h2>
-                <p className="cds--type-body-01 vellano-home-metric">
-                  {formatZar(summary.aged_stock_value_zar, summary.home_currency)}
-                </p>
-                <p className="cds--type-helper-text-01">&gt; 180 days</p>
-              </Tile>
-            </Column>
-            <Column lg={5} md={4} sm={4}>
-              <Tile className="vellano-home-tile">
-                <h2 className="cds--type-productive-heading-03">Open laybys</h2>
-                <p className="cds--type-body-01 vellano-home-metric">
-                  {summary.open_laybys_count.toLocaleString("en-ZA")} active
-                </p>
-                <p className="cds--type-helper-text-01">
-                  {formatZar(summary.open_laybys_balance_zar, summary.home_currency)} balance
-                </p>
-              </Tile>
-            </Column>
-            <Column lg={5} md={4} sm={4}>
-              <Tile className="vellano-home-tile">
-                <h2 className="cds--type-productive-heading-03">Low-stock SKUs</h2>
-                <p
-                  className={`cds--type-body-01 vellano-home-metric${
-                    summary.low_stock_count > 0 ? " cds--text-error" : ""
-                  }`}
-                >
-                  {summary.low_stock_count.toLocaleString("en-ZA")} items
-                </p>
-                <p className="cds--type-helper-text-01">Below reorder point</p>
-              </Tile>
-            </Column>
-            <Column lg={5} md={4} sm={4}>
-              <Tile className="vellano-home-tile">
-                <h2 className="cds--type-productive-heading-03">Returns open</h2>
-                <p className="cds--type-body-01 vellano-home-metric">
-                  {summary.open_returns_count.toLocaleString("en-ZA")} pending
-                </p>
-                <p className="cds--type-helper-text-01">Requires processing</p>
-              </Tile>
-            </Column>
-          </Grid>
+          <div className="vellano-home-kpis">
+            <Tile className="vellano-home-tile">
+              <h2 className="cds--type-productive-heading-03">On order</h2>
+              <p className="cds--type-body-01 vellano-home-metric">
+                {summary.on_order_qty.toLocaleString("en-ZA")} units
+              </p>
+              <p className="cds--type-helper-text-01">
+                {formatZar(summary.on_order_value_zar, summary.home_currency)} estimated
+              </p>
+            </Tile>
+            <Tile className="vellano-home-tile">
+              <h2 className="cds--type-productive-heading-03">On hand</h2>
+              <p className="cds--type-body-01 vellano-home-metric">
+                {summary.on_hand_qty.toLocaleString("en-ZA")} units
+              </p>
+              <p className="cds--type-helper-text-01">
+                {formatZar(summary.on_hand_value_zar, summary.home_currency)} landed cost
+              </p>
+            </Tile>
+            <Tile className="vellano-home-tile">
+              <h2 className="cds--type-productive-heading-03">Aged stock value</h2>
+              <p className="cds--type-body-01 vellano-home-metric">
+                {formatZar(summary.aged_stock_value_zar, summary.home_currency)}
+              </p>
+              <p className="cds--type-helper-text-01">&gt; 180 days</p>
+            </Tile>
+            <Tile className="vellano-home-tile">
+              <h2 className="cds--type-productive-heading-03">Open laybys</h2>
+              <p className="cds--type-body-01 vellano-home-metric">
+                {summary.open_laybys_count.toLocaleString("en-ZA")} active
+              </p>
+              <p className="cds--type-helper-text-01">
+                {formatZar(summary.open_laybys_balance_zar, summary.home_currency)} balance
+              </p>
+            </Tile>
+            <Tile className="vellano-home-tile">
+              <h2 className="cds--type-productive-heading-03">Low-stock SKUs</h2>
+              <p
+                className={`cds--type-body-01 vellano-home-metric${
+                  summary.low_stock_count > 0 ? " cds--text-error" : ""
+                }`}
+              >
+                {summary.low_stock_count.toLocaleString("en-ZA")} items
+              </p>
+              <p className="cds--type-helper-text-01">Below reorder point</p>
+            </Tile>
+            <Tile className="vellano-home-tile">
+              <h2 className="cds--type-productive-heading-03">Returns open</h2>
+              <p className="cds--type-body-01 vellano-home-metric">
+                {summary.open_returns_count.toLocaleString("en-ZA")} pending
+              </p>
+              <p className="cds--type-helper-text-01">Requires processing</p>
+            </Tile>
+          </div>
 
-          <Grid condensed fullWidth>
-            <Column lg={8} md={4} sm={4}>
+          <div className="vellano-home-tables">
+            <div>
               <h2 className="cds--type-productive-heading-03">Needs attention</h2>
               <TableContainer>
                 <Table>
@@ -305,8 +291,8 @@ export default function HomePage() {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </Column>
-            <Column lg={8} md={4} sm={4}>
+            </div>
+            <div>
               <h2 className="cds--type-productive-heading-03">Recent movements</h2>
               <TableContainer>
                 <Table>
@@ -339,8 +325,8 @@ export default function HomePage() {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </Column>
-          </Grid>
+            </div>
+          </div>
         </>
       ) : null}
     </Stack>
