@@ -9,9 +9,11 @@ from app.crud.location import LocationCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
+from app.crud.layby import LaybyCRUD
 from app.services.playground_seed import (
     CHAIR_SKU_REF,
     MARKER_SKU_REF,
+    PACK_MARKER_REF,
     PLAYGROUND_SUPPLIER_NAME,
     PROFORMA_INVOICE_NUMBER,
     PlaygroundSeedService,
@@ -73,6 +75,12 @@ async def test_playground_seed_creates_demo_path_and_is_idempotent(
     assert kramerville_chair.on_hand == 2
     assert bedfordview_table is not None
     assert bedfordview_table.on_hand == 0
+
+    sofa = await sku_crud.get_by_our_ref(PACK_MARKER_REF)
+    assert sofa is not None
+    assert sofa.category == "Seating"
+    laybys = await LaybyCRUD(async_db).list_all()
+    assert len(laybys) >= 4
 
     first_supplier_id = playground_suppliers[0].id
     first_table_id = table_sku.id
