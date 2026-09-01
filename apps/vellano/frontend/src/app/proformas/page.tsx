@@ -146,7 +146,7 @@ export default function ProformasPage() {
       resetForm();
       await loadProformas();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to file performing invoice.");
+      setError(err instanceof Error ? err.message : "Failed to file proforma invoice.");
     } finally {
       setSaving(false);
     }
@@ -160,10 +160,10 @@ export default function ProformasPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <h1 className="cds--type-productive-heading-04">Proformas</h1>
-          <p className="cds--type-body-01">Performing invoices filed against suppliers.</p>
+          <p className="cds--type-body-01">Proforma invoices filed against suppliers.</p>
         </div>
         {canMutate ? (
-          <Button onClick={openCreate}>File performing invoice</Button>
+          <Button onClick={openCreate}>File proforma invoice</Button>
         ) : null}
       </div>
 
@@ -183,14 +183,14 @@ export default function ProformasPage() {
         <InlineNotification
           kind="info"
           title="No proformas"
-          subtitle="No performing invoices have been filed yet."
+          subtitle="No proforma invoices have been filed yet."
           hideCloseButton
           lowContrast
         />
       ) : (
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Proformas" description="All filed performing invoices">
+            <TableContainer title="Proformas" description="All filed proforma invoices">
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>
@@ -233,7 +233,7 @@ export default function ProformasPage() {
 
       <Modal
         open={createOpen}
-        modalHeading="File performing invoice"
+        modalHeading="File proforma invoice"
         primaryButtonText={saving ? "Filing…" : "File"}
         secondaryButtonText="Cancel"
         primaryButtonDisabled={saving || !formValid}

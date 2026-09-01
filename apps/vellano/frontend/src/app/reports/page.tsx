@@ -65,14 +65,22 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadReports = useCallback(async () => {
+    const effectiveAsOf = asOf.trim() || todayIso();
+    const effectiveFrom = fromDate.trim() || monthStartIso();
+    const effectiveTo = toDate.trim() || todayIso();
+
+    if (!asOf.trim()) setAsOf(effectiveAsOf);
+    if (!fromDate.trim()) setFromDate(effectiveFrom);
+    if (!toDate.trim()) setToDate(effectiveTo);
+
     setLoading(true);
     setError(null);
     try {
       const [ar, ap, pl, bs] = await Promise.all([
-        getAgedAr(asOf),
-        getAgedAp(asOf),
-        getProfitLoss(fromDate, toDate),
-        getBalanceSheet(asOf),
+        getAgedAr(effectiveAsOf),
+        getAgedAp(effectiveAsOf),
+        getProfitLoss(effectiveFrom, effectiveTo),
+        getBalanceSheet(effectiveAsOf),
       ]);
       setAgedAr(ar);
       setAgedAp(ap);

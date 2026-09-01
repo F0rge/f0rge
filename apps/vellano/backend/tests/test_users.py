@@ -11,7 +11,7 @@ from tests.conftest import OWNER_EMAIL, OWNER_PASSWORD
 
 @pytest.mark.parametrize("role", [r.value for r in UserRole if r != UserRole.OWNER])
 async def test_owner_can_create_each_role(owner_client: AsyncClient, role: str) -> None:
-    email = f"{role}@example.com"
+    email = f"{role}-created@example.com"
     resp = await owner_client.post(
         "/api/v1/users",
         json={
@@ -81,22 +81,14 @@ async def test_non_owner_cannot_list_users(
 
 
 async def test_non_owner_cannot_create_user(
-    async_client: AsyncClient, owner_client: AsyncClient
+    async_client: AsyncClient,
 ) -> None:
-    create_resp = await owner_client.post(
-        "/api/v1/users",
-        json={
-            "email": "buyer@example.com",
-            "password": "buyer-password",
-            "role": "buyer",
-        },
-    )
-    assert create_resp.status_code == 201
+    from app.config import settings
 
     async_client.cookies.clear()
     login_resp = await async_client.post(
         "/api/v1/auth/login",
-        json={"email": "buyer@example.com", "password": "buyer-password"},
+        json={"email": "buyer@example.com", "password": settings.seed_buyer_password},
     )
     assert login_resp.status_code == 200
 

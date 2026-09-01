@@ -1083,35 +1083,57 @@ export function matchBankLine(
   });
 }
 
+function reportTodayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function reportMonthStartIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function requireIsoDate(value: string, fallback: string): string {
+  return value.trim() || fallback;
+}
+
 export function getAgedAr(asOf: string): Promise<AgedReport> {
-  return apiFetch<AgedReport>(`/reports/aged-ar?as_of=${encodeURIComponent(asOf)}`);
+  const date = requireIsoDate(asOf, reportTodayIso());
+  return apiFetch<AgedReport>(`/reports/aged-ar?as_of=${encodeURIComponent(date)}`);
 }
 
 export function getAgedAp(asOf: string): Promise<AgedReport> {
-  return apiFetch<AgedReport>(`/reports/aged-ap?as_of=${encodeURIComponent(asOf)}`);
+  const date = requireIsoDate(asOf, reportTodayIso());
+  return apiFetch<AgedReport>(`/reports/aged-ap?as_of=${encodeURIComponent(date)}`);
 }
 
 export function getProfitLoss(fromDate: string, toDate: string): Promise<ProfitLossReport> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
   return apiFetch<ProfitLossReport>(
-    `/reports/profit-loss?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+    `/reports/profit-loss?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
 }
 
 export function getBalanceSheet(asOf: string): Promise<BalanceSheetReport> {
+  const date = requireIsoDate(asOf, reportTodayIso());
   return apiFetch<BalanceSheetReport>(
-    `/reports/balance-sheet?as_of=${encodeURIComponent(asOf)}`,
+    `/reports/balance-sheet?as_of=${encodeURIComponent(date)}`,
   );
 }
 
 export function getVat201Draft(fromDate: string, toDate: string): Promise<Vat201Draft> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
   return apiFetch<Vat201Draft>(
-    `/reports/vat201?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+    `/reports/vat201?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
 }
 
 export async function downloadVat201Csv(fromDate: string, toDate: string): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
   const response = await fetch(
-    `/api/v1/reports/vat201/csv?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+    `/api/v1/reports/vat201/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     { credentials: "include" },
   );
   if (!response.ok) {
@@ -1122,7 +1144,7 @@ export async function downloadVat201Csv(fromDate: string, toDate: string): Promi
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `vat201-draft-${fromDate}-to-${toDate}.csv`;
+  anchor.download = `vat201-draft-${from}-to-${to}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
@@ -1130,8 +1152,10 @@ export async function downloadVat201Csv(fromDate: string, toDate: string): Promi
 }
 
 export async function downloadVat201Pdf(fromDate: string, toDate: string): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
   const response = await fetch(
-    `/api/v1/reports/vat201/pdf?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+    `/api/v1/reports/vat201/pdf?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     { credentials: "include" },
   );
   if (!response.ok) {
@@ -1142,7 +1166,7 @@ export async function downloadVat201Pdf(fromDate: string, toDate: string): Promi
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `vat201-draft-${fromDate}-to-${toDate}.pdf`;
+  anchor.download = `vat201-draft-${from}-to-${to}.pdf`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);

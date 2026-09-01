@@ -62,9 +62,28 @@ On startup, if the `users` table is empty the API seeds one team (`Vellano`) and
 - `SEED_OWNER_EMAIL` (default `owner@example.com`)
 - `SEED_OWNER_PASSWORD` (default `change-me-owner`)
 
+It then creates these role users if the email is missing (idempotent; owner is never replaced):
+
+| Email | Role | Password env | Default |
+|-------|------|--------------|---------|
+| `till@example.com` | till | `SEED_TILL_PASSWORD` | `change-me-till` |
+| `books@example.com` | books | `SEED_BOOKS_PASSWORD` | `change-me-books` |
+| `warehouse@example.com` | warehouse | `SEED_WAREHOUSE_PASSWORD` | `change-me-warehouse` |
+| `buyer@example.com` | buyer | `SEED_BUYER_PASSWORD` | `change-me-buyer` |
+
 Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSite=Lax, `Path=/`). Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
 
 Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally.
+
+### Playground seed (develop / local demos)
+
+Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (marker: supplier `Playground Imports` or SKU `PG-TABLE`):
+
+suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → transfer 1 table to Bedfordview → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched).
+
+**Railway develop:** on service `vellano-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do not enable on a database you want to keep empty. After it runs, log in as `owner@example.com` / `change-me-owner` (or the role users above) and walk stock → proforma → PO → receive → transfer → till → books.
+
+Local: `SEED_PLAYGROUND=true` in `apps/vellano/backend/.env`, then restart uvicorn.
 
 ## S2 locations
 
@@ -241,12 +260,34 @@ Matching a bank line sets `payments.is_reconciled = true`. Unmatched import line
 - **Config files:** `apps/vellano/{backend,frontend}/railway.toml` — no Root Directory; Config File path points here.
 - **`watchPatterns`:** `apps/vellano/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `vellano-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
 - **Manifest:** `.github/deploy/manifest.yml` — `branches: [develop]` only. No `health_url.main`, no production.
-- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Cookie `vellano_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Every startup also seeds missing role users `till@` / `books@` / `warehouse@` / `buyer@example.com` (`SEED_*_PASSWORD`, defaults `change-me-<role>`). Cookie `vellano_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+- **Playground dataset:** set `SEED_PLAYGROUND=true` on `vellano-api` and redeploy to fill catalogue / PO / till / books for demos. Default off. See [Playground seed](#playground-seed-develop--local-demos).
 - **Object storage:** dedicated Railway Tigris bucket `vellano-dev` in this project only — never Marrow `photos` / `photos-dev`, never Marrow project buckets. On `vellano-api` develop: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{vellano-dev.*}}`; `AWS_ENDPOINT_URL_S3=https://fly.storage.tigris.dev`; `AWS_REGION=auto`. Keep `COOKIE_SECURE`, `JWT_SECRET`, `DATABASE_URL`. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Production is not wired.
+
+## Frontend routes vs API paths
+
+Nav hrefs are not always the API prefix. When debugging network tabs:
+
+| UI route | API prefix (`/api/v1`) |
+|----------|------------------------|
+| `/catalogue` | `/skus` |
+| `/stock` | `/inventory` |
+| `/ledger` | `/accounts` |
+| `/bank-reconciliation` | `/bank-imports` |
+| `/proformas` | `/proformas` |
+| `/credit-notes` | `/credit-notes` |
+| `/till` | `/till` |
+| `/transfers` | `/transfers` |
+| `/receive` | `/receive` |
+| `/reports`, `/vat201` | `/reports` |
 
 ## Non-goals
 
-The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: till and other S8–S11 product features.
+The app does not send email, originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
+
+**In V1 (do not treat as future work):** locations, catalogue, proformas, POs, land/receive, prices, ledger, bank import, reports, VAT201 draft, transfers, till, search, home, settings.
+
+Still out of scope: production / `main`, Marrow, email, PSP charges, SARS eFiling, raising replicas above hobby 1.
 
 ## Python
 

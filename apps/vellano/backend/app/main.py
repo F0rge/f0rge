@@ -36,6 +36,8 @@ from app.routers import (
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
+from app.services.playground_seed import PlaygroundSeedService
+from app.services.role_user_seed import RoleUserSeedService
 from app.services.till_seed import TillSeedService
 from app.services.users import BootstrapService
 
@@ -44,9 +46,11 @@ from app.services.users import BootstrapService
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with async_session_maker() as session:
         await BootstrapService(session).seed_if_empty()
+        await RoleUserSeedService(session).seed()
         await LocationSeedService(session).seed_if_empty()
         await ChartOfAccountsSeedService(session).seed_if_empty()
         await TillSeedService(session).seed_if_empty()
+        await PlaygroundSeedService(session).seed_if_enabled()
     yield
 
 

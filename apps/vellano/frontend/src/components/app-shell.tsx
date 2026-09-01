@@ -35,6 +35,7 @@ import {
   UserMultiple,
   Wallet,
   ChartLine,
+  DocumentSubtract,
   DocumentTasks,
 } from "@carbon/icons-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -58,6 +59,7 @@ const ICONS = {
   "/ledger": Finance,
   "/contacts": UserMultiple,
   "/invoices": Receipt,
+  "/credit-notes": DocumentSubtract,
   "/bills": Purchase,
   "/payments": Wallet,
   "/bank-reconciliation": DocumentTasks,
@@ -75,6 +77,7 @@ function isBooksPath(pathname: string): boolean {
   return (
     BOOKS_HREFS.has(pathname) ||
     pathname.startsWith("/invoices/") ||
+    pathname.startsWith("/credit-notes/") ||
     pathname.startsWith("/bills/")
   );
 }
@@ -193,6 +196,8 @@ export function AppShell({ children }: AppShellProps) {
                 const active =
                   pathname === booksItem.href ||
                   (booksItem.href === "/invoices" && pathname.startsWith("/invoices/")) ||
+                  (booksItem.href === "/credit-notes" &&
+                    pathname.startsWith("/credit-notes/")) ||
                   (booksItem.href === "/bills" && pathname.startsWith("/bills/"));
                 return (
                   <SideNavMenuItem

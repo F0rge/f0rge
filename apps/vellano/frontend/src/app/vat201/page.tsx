@@ -43,18 +43,48 @@ export default function Vat201Page() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const resolvePeriod = useCallback(() => {
+    const effectiveFrom = fromDate.trim() || monthStartIso();
+    const effectiveTo = toDate.trim() || todayIso();
+
+    if (!fromDate.trim()) setFromDate(effectiveFrom);
+    if (!toDate.trim()) setToDate(effectiveTo);
+
+    return { effectiveFrom, effectiveTo };
+  }, [fromDate, toDate]);
+
   const loadDraft = useCallback(async () => {
+    const { effectiveFrom, effectiveTo } = resolvePeriod();
+
     setLoading(true);
     setError(null);
     try {
-      const result = await getVat201Draft(fromDate, toDate);
+      const result = await getVat201Draft(effectiveFrom, effectiveTo);
       setDraft(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load VAT201 draft.");
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate]);
+  }, [resolvePeriod]);
+
+  const handleDownloadCsv = useCallback(async () => {
+    const { effectiveFrom, effectiveTo } = resolvePeriod();
+    try {
+      await downloadVat201Csv(effectiveFrom, effectiveTo);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download CSV.");
+    }
+  }, [resolvePeriod]);
+
+  const handleDownloadPdf = useCallback(async () => {
+    const { effectiveFrom, effectiveTo } = resolvePeriod();
+    try {
+      await downloadVat201Pdf(effectiveFrom, effectiveTo);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download PDF.");
+    }
+  }, [resolvePeriod]);
 
   useEffect(() => {
     if (user) {
@@ -205,10 +235,10 @@ export default function Vat201Page() {
           </p>
 
           <Stack gap={4} orientation="horizontal">
-            <Button kind="secondary" onClick={() => void downloadVat201Csv(fromDate, toDate)}>
+            <Button kind="secondary" onClick={() => void handleDownloadCsv()}>
               Download CSV
             </Button>
-            <Button kind="tertiary" onClick={() => void downloadVat201Pdf(fromDate, toDate)}>
+            <Button kind="tertiary" onClick={() => void handleDownloadPdf()}>
               Download PDF
             </Button>
           </Stack>

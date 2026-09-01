@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     seed_owner_email: str = "owner@example.com"
     seed_owner_password: str = "change-me-owner"
+    seed_till_password: str = "change-me-till"
+    seed_books_password: str = "change-me-books"
+    seed_warehouse_password: str = "change-me-warehouse"
+    seed_buyer_password: str = "change-me-buyer"
+    seed_playground: bool = False
 
     storage_dir: str = "storage"
     bucket_name: str = ""
