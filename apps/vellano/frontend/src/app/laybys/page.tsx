@@ -1,5 +1,6 @@
 "use client";
 
+import { Printer } from "@carbon/icons-react";
 import {
   Button,
   Checkbox,
@@ -62,6 +63,8 @@ const TABLE_HEADERS = [
 
 const VAT_RATE_LABEL = "15%";
 const SUGGESTED_DEPOSIT_RATE = 0.2;
+
+type StatusFilter = "all" | "active" | "overdue" | "ready";
 
 type LaybyRow = {
   id: string;
@@ -155,6 +158,66 @@ function emptyLine(): LineForm {
   return { sku_id: "", qty: 1 };
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function matchesStatusFilter(layby: Layby, filter: StatusFilter): boolean {
+  if (filter === "all") {
+    return true;
+  }
+  if (filter === "overdue") {
+    return isOverdue(layby);
+  }
+  if (filter === "ready") {
+    return layby.status === "ready";
+  }
+  return layby.status === "open" && !isOverdue(layby);
+}
+
+function printLaybyReceipt(layby: Layby): void {
+  const printWindow = window.open("", "_blank", "noopener,noreferrer");
+  if (!printWindow) {
+    return;
+  }
+  const itemsHtml =
+    layby.lines.length === 0
+      ? "<p>—</p>"
+      : `<ul>${layby.lines
+          .map((line) => `<li>${escapeHtml(line.name)} × ${line.qty}</li>`)
+          .join("")}</ul>`;
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Layby ${escapeHtml(layby.layby_number)}</title>
+  <style>
+    body { font-family: "IBM Plex Sans", sans-serif; margin: 1.5rem; color: #161616; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
+    .row { margin-bottom: 0.5rem; }
+    .label { color: #525252; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>
+  <h1>Layby ${escapeHtml(layby.layby_number)}</h1>
+  <div class="row"><span class="label">Customer:</span> ${escapeHtml(layby.customer_name)}</div>
+  <div class="row"><span class="label">Items:</span></div>
+  ${itemsHtml}
+  <div class="row"><span class="label">Paid:</span> ${escapeHtml(formatZarAmount(layby.amount_paid))}</div>
+  <div class="row"><span class="label">Balance:</span> ${escapeHtml(formatZarAmount(layby.balance))}</div>
+  <div class="row"><span class="label">Due date:</span> ${escapeHtml(formatDate(layby.due_date))}</div>
+</body>
+</html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+}
+
 function sumLinesExVat(lines: LineForm[], skusById: Map<string, Sku>): number {
   return lines.reduce((sum, line) => {
     if (!line.sku_id || typeof line.qty !== "number" || line.qty <= 0) {
@@ -193,6 +256,8 @@ export default function LaybysPage() {
   const [tender, setTender] = useState<LaybyTender>("cash");
   const [paymentAmount, setPaymentAmount] = useState<number | "">("");
   const [paymentTender, setPaymentTender] = useState<LaybyTender>("cash");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const customers = useMemo(
     () => contacts.filter((entry) => entry.kind === "customer"),
@@ -216,6 +281,8 @@ export default function LaybysPage() {
   const suggestedDeposit = roundHalfUp(preview.totalIncVat * SUGGESTED_DEPOSIT_RATE, 2);
   const numericDeposit = typeof depositAmount === "number" ? depositAmount : 0;
   const remainingBalance = Math.max(roundHalfUp(preview.totalIncVat - numericDeposit, 2), 0);
+  const durationCount = durationMonths === "3" ? 3 : 6;
+  const monthlyInstallment = roundHalfUp(remainingBalance / durationCount, 2);
 
   const validLines = lines
     .map((line) => {
@@ -428,21 +495,37 @@ export default function LaybysPage() {
     [laybys],
   );
 
-  const rows: LaybyRow[] = laybys
-    .slice()
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .map((entry) => ({
-      id: entry.id,
-      layby_number: entry.layby_number,
-      customer_name: entry.customer_name,
-      items: formatItems(entry),
-      total_inc_vat: formatZarAmount(entry.total_inc_vat),
-      amount_paid: formatZarAmount(entry.amount_paid),
-      balance: formatZarAmount(entry.balance),
-      due_date: formatDate(entry.due_date),
-      status: entry.status,
-      actions: entry.id,
-    }));
+  const filteredLaybys = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return laybys
+      .slice()
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .filter((entry) => {
+        if (!matchesStatusFilter(entry, statusFilter)) {
+          return false;
+        }
+        if (!query) {
+          return true;
+        }
+        return (
+          entry.layby_number.toLowerCase().includes(query) ||
+          entry.customer_name.toLowerCase().includes(query)
+        );
+      });
+  }, [laybys, searchQuery, statusFilter]);
+
+  const rows: LaybyRow[] = filteredLaybys.map((entry) => ({
+    id: entry.id,
+    layby_number: entry.layby_number,
+    customer_name: entry.customer_name,
+    items: formatItems(entry),
+    total_inc_vat: formatZarAmount(entry.total_inc_vat),
+    amount_paid: formatZarAmount(entry.amount_paid),
+    balance: formatZarAmount(entry.balance),
+    due_date: formatDate(entry.due_date),
+    status: entry.status,
+    actions: entry.id,
+  }));
 
   const paymentFormValid =
     selectedLayby &&
@@ -484,71 +567,112 @@ export default function LaybysPage() {
 
       {loading ? (
         <p className="cds--type-body-01">Loading laybys…</p>
-      ) : laybys.length === 0 ? (
-        <InlineNotification
-          kind="info"
-          title="No laybys"
-          subtitle="No laybys have been recorded yet."
-          hideCloseButton
-          lowContrast
-        />
       ) : (
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Laybys" description="Open laybys and payment progress">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.map((row) => {
-                    const entry = laybyById[row.id];
-                    return (
-                      <TableRow {...getRowProps({ row })} key={row.id}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "status" && entry) {
-                            return (
-                              <TableCell key={cell.id}>
-                                <Tag type={statusTagType(entry)}>{statusLabel(entry)}</Tag>
-                              </TableCell>
-                            );
-                          }
-                          if (cell.info.header === "actions" && entry) {
-                            if (
-                              canMutate &&
-                              entry.status !== "completed" &&
-                              entry.status !== "cancelled"
-                            ) {
-                              return (
-                                <TableCell key={cell.id}>
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={() => void openManage(entry.id)}
-                                  >
-                                    Manage
-                                  </Button>
-                                </TableCell>
-                              );
-                            }
-                            return <TableCell key={cell.id}>—</TableCell>;
-                          }
-                          return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                        })}
+        <div className="vellano-catalogue-panel">
+          <div className="vellano-catalogue-toolbar">
+            <div className="vellano-catalogue-toolbar__left">
+              <TextInput
+                id="laybys-search"
+                labelText="Search laybys"
+                hideLabel
+                placeholder="Search by number or customer…"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                size="md"
+              />
+              <span className="vellano-catalogue-toolbar__divider" aria-hidden />
+              <Select
+                id="laybys-status-filter"
+                labelText="Status"
+                hideLabel
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                style={{ width: "min(14rem, 100%)" }}
+              >
+                <SelectItem value="all" text="All" />
+                <SelectItem value="active" text="Active" />
+                <SelectItem value="overdue" text="Overdue" />
+                <SelectItem value="ready" text="Ready for collection" />
+              </Select>
+            </div>
+          </div>
+
+          {laybys.length === 0 ? (
+            <InlineNotification
+              kind="info"
+              title="No laybys"
+              subtitle="No laybys have been recorded yet."
+              hideCloseButton
+              lowContrast
+              style={{ margin: "1rem" }}
+            />
+          ) : (
+            <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
+              {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Laybys" description="Open laybys and payment progress">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                    </TableHead>
+                    <TableBody>
+                      {tableRows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={headers.length}>
+                            No laybys match the current filters.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        tableRows.map((row) => {
+                          const entry = laybyById[row.id];
+                          return (
+                            <TableRow {...getRowProps({ row })} key={row.id}>
+                              {row.cells.map((cell) => {
+                                if (cell.info.header === "status" && entry) {
+                                  return (
+                                    <TableCell key={cell.id}>
+                                      <Tag type={statusTagType(entry)}>{statusLabel(entry)}</Tag>
+                                    </TableCell>
+                                  );
+                                }
+                                if (cell.info.header === "actions" && entry) {
+                                  if (
+                                    canMutate &&
+                                    entry.status !== "completed" &&
+                                    entry.status !== "cancelled"
+                                  ) {
+                                    return (
+                                      <TableCell key={cell.id}>
+                                        <Button
+                                          kind="ghost"
+                                          size="sm"
+                                          onClick={() => void openManage(entry.id)}
+                                        >
+                                          Manage
+                                        </Button>
+                                      </TableCell>
+                                    );
+                                  }
+                                  return <TableCell key={cell.id}>—</TableCell>;
+                                }
+                                return <TableCell key={cell.id}>{cell.value}</TableCell>;
+                              })}
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
           )}
-        </DataTable>
+        </div>
       )}
 
       <Modal
@@ -703,6 +827,10 @@ export default function LaybysPage() {
                 Remaining balance:{" "}
                 <strong>{formatZarAmount(formatPriceAmount(remainingBalance))}</strong>
               </p>
+              <p className="cds--type-body-01">
+                Monthly installment ({durationCount} months):{" "}
+                <strong>{formatZarAmount(formatPriceAmount(monthlyInstallment))}</strong>
+              </p>
               <Select
                 id="layby-tender"
                 labelText="Deposit tender"
@@ -742,6 +870,14 @@ export default function LaybysPage() {
                 Due: {formatDate(selectedLayby.due_date)} ·{" "}
                 <Tag type={statusTagType(selectedLayby)}>{statusLabel(selectedLayby)}</Tag>
               </p>
+              <Button
+                kind="ghost"
+                size="sm"
+                renderIcon={Printer}
+                onClick={() => printLaybyReceipt(selectedLayby)}
+              >
+                Print receipt
+              </Button>
             </Stack>
 
             <TableContainer title="Payment history">
