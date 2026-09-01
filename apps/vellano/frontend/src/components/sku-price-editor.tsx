@@ -38,6 +38,15 @@ type SkuPriceEditorProps = {
   onError: (message: string) => void;
 };
 
+const emptyForm: PriceFormState = {
+  wholesaleEx: "",
+  wholesaleInc: "",
+  retailEx: "",
+  retailInc: "",
+  lastEditedWholesale: null,
+  lastEditedRetail: null,
+};
+
 function formFromSku(sku: Sku): PriceFormState {
   return {
     wholesaleEx: sku.wholesale_ex_vat ?? "",
@@ -78,19 +87,19 @@ export function SkuPriceEditor({
   onSaved,
   onError,
 }: SkuPriceEditorProps) {
-  const [form, setForm] = useState<PriceFormState | null>(null);
+  const [form, setForm] = useState<PriceFormState>(emptyForm);
 
   useEffect(() => {
     if (sku && open) {
       setForm(formFromSku(sku));
     }
+    if (!open) {
+      setForm(emptyForm);
+    }
   }, [sku, open]);
 
   function updateWholesaleEx(value: string) {
     setForm((current) => {
-      if (!current) {
-        return current;
-      }
       const parsed = parsePriceInput(value);
       return {
         ...current,
@@ -103,9 +112,6 @@ export function SkuPriceEditor({
 
   function updateWholesaleInc(value: string) {
     setForm((current) => {
-      if (!current) {
-        return current;
-      }
       const parsed = parsePriceInput(value);
       return {
         ...current,
@@ -118,9 +124,6 @@ export function SkuPriceEditor({
 
   function updateRetailEx(value: string) {
     setForm((current) => {
-      if (!current) {
-        return current;
-      }
       const parsed = parsePriceInput(value);
       return {
         ...current,
@@ -133,9 +136,6 @@ export function SkuPriceEditor({
 
   function updateRetailInc(value: string) {
     setForm((current) => {
-      if (!current) {
-        return current;
-      }
       const parsed = parsePriceInput(value);
       return {
         ...current,
@@ -146,11 +146,10 @@ export function SkuPriceEditor({
     });
   }
 
-  const hasEdits =
-    form?.lastEditedWholesale !== null || form?.lastEditedRetail !== null;
+  const hasEdits = form.lastEditedWholesale !== null || form.lastEditedRetail !== null;
 
   async function handleSave() {
-    if (!sku || !form || readOnly) {
+    if (!sku || readOnly) {
       return;
     }
     const payload = buildPayload(form);
@@ -175,23 +174,20 @@ export function SkuPriceEditor({
     }
   }
 
-  if (!sku || !form) {
-    return null;
-  }
-
   return (
     <Modal
       open={open}
       modalHeading={readOnly ? "SKU prices" : "Edit prices"}
-      primaryButtonText={readOnly ? undefined : saving ? "Saving…" : "Save"}
-      secondaryButtonText={readOnly ? "Close" : "Cancel"}
-      primaryButtonDisabled={readOnly || saving || !hasEdits}
+      primaryButtonText={readOnly ? "Close" : saving ? "Saving…" : "Save"}
+      secondaryButtonText={readOnly ? undefined : "Cancel"}
+      primaryButtonDisabled={readOnly ? false : saving || !hasEdits}
       onRequestClose={onClose}
       onRequestSubmit={() => (readOnly ? onClose() : void handleSave())}
     >
       <Stack gap={5}>
         <p className="cds--type-body-01">
-          <strong>{sku.our_ref}</strong> — {sku.name}
+          <strong>{sku?.our_ref ?? ""}</strong>
+          {sku ? ` — ${sku.name}` : ""}
         </p>
         {unitCostZar ? (
           <InlineNotification

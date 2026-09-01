@@ -257,9 +257,11 @@ export default function CataloguePage() {
                             return (
                               <TableCell key={cell.id}>
                                 <Button
+                                  type="button"
                                   kind="ghost"
                                   size="sm"
                                   onClick={(event) => {
+                                    event.preventDefault();
                                     event.stopPropagation();
                                     openPriceEditor(entry);
                                   }}
