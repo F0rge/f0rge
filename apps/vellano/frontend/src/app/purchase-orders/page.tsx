@@ -155,7 +155,7 @@ export default function PurchaseOrdersPage() {
   }
 
   function removeLine(index: number) {
-    setLines((current) => (current.length > 2 ? current.filter((_, i) => i !== index) : current));
+    setLines((current) => (current.length > 1 ? current.filter((_, i) => i !== index) : current));
   }
 
   const linesValid = lines.every(
@@ -165,7 +165,7 @@ export default function PurchaseOrdersPage() {
       line.qty > 0 &&
       line.factory_unit_amount.trim() !== "",
   );
-  const formValid = supplierId && lines.length >= 2 && linesValid;
+  const formValid = supplierId && lines.length >= 1 && linesValid;
 
   async function handleCreate() {
     if (!formValid) {
@@ -345,7 +345,8 @@ export default function PurchaseOrdersPage() {
             ))}
           </Select>
           <div>
-            <p className="cds--label">Lines (minimum 2)</p>
+            <p className="cds--label">Lines</p>
+            <p className="cds--helper-text">At least one SKU line.</p>
             <Stack gap={4}>
               {lines.map((line, index) => (
                 <div
@@ -392,7 +393,7 @@ export default function PurchaseOrdersPage() {
                       updateLine(index, { factory_unit_amount: event.target.value })
                     }
                   />
-                  {lines.length > 2 ? (
+                  {lines.length > 1 ? (
                     <Button
                       kind="ghost"
                       size="sm"
