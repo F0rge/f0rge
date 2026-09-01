@@ -193,3 +193,125 @@ export const LOCATION_TYPES: { value: LocationType; label: string }[] = [
 export function isActiveLocation(loc: Location): boolean {
   return !loc.is_archived;
 }
+
+export function canMutateCatalogue(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "buyer";
+}
+
+async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const response = await fetch(`/api/v1${path}`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export type Supplier = {
+  id: string;
+  name: string;
+  default_currency: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateSupplierPayload = {
+  name: string;
+  default_currency?: string;
+};
+
+export function listSuppliers(): Promise<Supplier[]> {
+  return apiFetch<Supplier[]>("/suppliers");
+}
+
+export function createSupplier(payload: CreateSupplierPayload): Promise<Supplier> {
+  return apiFetch<Supplier>("/suppliers", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type Proforma = {
+  id: string;
+  supplier_id: string;
+  supplier_name: string;
+  invoice_number: string;
+  invoice_date: string;
+  currency: string;
+  pdf_storage_key: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateProformaPayload = {
+  supplier_id: string;
+  invoice_number: string;
+  invoice_date: string;
+  currency?: string;
+  file: File;
+};
+
+export function listProformas(): Promise<Proforma[]> {
+  return apiFetch<Proforma[]>("/proformas");
+}
+
+export function createProforma(payload: CreateProformaPayload): Promise<Proforma> {
+  const formData = new FormData();
+  formData.append("supplier_id", payload.supplier_id);
+  formData.append("invoice_number", payload.invoice_number);
+  formData.append("invoice_date", payload.invoice_date);
+  if (payload.currency) {
+    formData.append("currency", payload.currency);
+  }
+  formData.append("file", payload.file);
+  return apiUpload<Proforma>("/proformas", formData);
+}
+
+export type Sku = {
+  id: string;
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  design: string;
+  fabric: string;
+  supplier_ref: string | null;
+  photo_storage_key: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateSkuPayload = {
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  design: string;
+  fabric: string;
+  supplier_ref?: string;
+};
+
+export function listSkus(): Promise<Sku[]> {
+  return apiFetch<Sku[]>("/skus");
+}
+
+export function createSku(payload: CreateSkuPayload): Promise<Sku> {
+  return apiFetch<Sku>("/skus", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function uploadSkuPhoto(id: string, photo: File): Promise<Sku> {
+  const formData = new FormData();
+  formData.append("photo", photo);
+  return apiUpload<Sku>(`/skus/${id}/photo`, formData);
+}

@@ -11,6 +11,9 @@ from app.middleware.auth import get_current_user_id
 from app.models.user import UserRole
 from app.services.auth import AuthService
 from app.services.locations import LocationService
+from app.services.proformas import ProformaService
+from app.services.skus import SkuService
+from app.services.suppliers import SupplierService
 from app.services.users import BootstrapService, ProfileService, UserService
 
 
@@ -32,6 +35,18 @@ def get_bootstrap_service(db: AsyncSession = Depends(get_db)) -> BootstrapServic
 
 def get_location_service(db: AsyncSession = Depends(get_db)) -> LocationService:
     return LocationService(db)
+
+
+def get_supplier_service(db: AsyncSession = Depends(get_db)) -> SupplierService:
+    return SupplierService(db)
+
+
+def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:
+    return ProformaService(db)
+
+
+def get_sku_service(db: AsyncSession = Depends(get_db)) -> SkuService:
+    return SkuService(db)
 
 
 async def require_owner(
@@ -56,5 +71,18 @@ async def require_location_mutate(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner or warehouse access required",
+        )
+    return user_id
+
+
+async def require_catalogue_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    user = await UserCRUD(db).get_by_id(user_id)
+    if user is None or user.role not in (UserRole.OWNER, UserRole.BUYER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner or buyer access required",
         )
     return user_id

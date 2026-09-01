@@ -77,6 +77,23 @@ Endpoints: `GET/POST /api/v1/locations`, `PATCH /api/v1/locations/{id}`. Archive
 
 Startup seeds two locations when the table is empty: Kramerville (warehouse), Bedfordview (showroom). Same rows are inserted by migration `003_locations`.
 
+## S3 catalogue (suppliers, proformas, SKUs)
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Suppliers:** `GET/POST /suppliers` — `{ name, default_currency? }` (currency defaults to USD).
+- **Proformas:** `GET /proformas`, `POST /proformas` (multipart: `supplier_id`, `invoice_number`, `invoice_date`, optional `currency`, file field `file`), `GET /proformas/{id}`, `GET /proformas/{id}/file` (PDF).
+- **SKUs:** `GET/POST /skus`, `POST /skus/{id}/photo` (field `photo`), `GET /skus/{id}`, `GET /skus/{id}/photo`.
+
+UI labels distinguish **Our barcode** from **Supplier ref** — never conflate them.
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| List suppliers / proformas / catalogue | yes | yes | yes | yes | yes |
+| Create supplier / file proforma / add SKU | yes | yes | no | no | no |
+
+No purchase orders, landed cost, quantities, or wholesale/retail pricing in S3.
+
 ## Railway
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.
@@ -91,7 +108,7 @@ Startup seeds two locations when the table is empty: Kramerville (warehouse), Be
 
 ## Non-goals
 
-The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: SKUs, ledger, till, purchase orders, and other S3–S11 product features.
+The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: ledger, till, purchase orders, and other S4–S11 product features.
 
 ## Python
 

@@ -11,6 +11,7 @@ venv/
 
 # Backend data
 apps/marrow/backend/photos/
+apps/vellano/backend/storage/
 apps/marrow/backend/lab_attachments/
 apps/marrow/backend/.env
 
