@@ -208,11 +208,9 @@ class PurchaseOrderService:
                 line.unit_cost_zar = unit_cost
 
             for kind, invoice_number, amount, currency, pdf_bytes, kind_slug in bill_specs:
-                relative_path = f"landing-bills/{po_id}/{kind_slug}.pdf"
-                try:
-                    storage_key = await asyncio.to_thread(save_bytes, relative_path, pdf_bytes)
-                except FileExistsError as exc:
-                    raise ConflictError("Landing bill file already exists") from exc
+                bill_id = uuid.uuid4()
+                relative_path = f"landing-bills/{po_id}/{kind_slug}-{bill_id}.pdf"
+                storage_key = await asyncio.to_thread(save_bytes, relative_path, pdf_bytes)
 
                 bill = LandingBill(
                     po_id=po_id,
@@ -288,8 +286,17 @@ class PurchaseOrderService:
                     )
                     await self.location_stock_crud.add_and_flush(loc_stock)
 
-                loc_stock.on_hand += line.qty
-                loc_stock.unit_cost_zar = line.unit_cost_zar
+                old_on_hand = loc_stock.on_hand
+                old_cost = loc_stock.unit_cost_zar
+                incoming_qty = line.qty
+                incoming_cost = line.unit_cost_zar
+                new_on_hand = old_on_hand + incoming_qty
+                if old_on_hand == 0 or old_cost is None:
+                    blended = incoming_cost
+                else:
+                    blended = (old_on_hand * old_cost + incoming_qty * incoming_cost) / new_on_hand
+                loc_stock.on_hand = new_on_hand
+                loc_stock.unit_cost_zar = blended
 
         reloaded = await self._get_po_or_404(data.purchase_order_id)
         return self._to_response(reloaded)
