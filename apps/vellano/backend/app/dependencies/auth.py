@@ -27,6 +27,7 @@ from app.services.settings import SettingsService
 from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.skus import SkuService
+from app.services.stocktakes import StocktakeService
 from app.services.suppliers import SupplierService
 from app.services.transfers import TransferService
 from app.services.till_orchestrator import TillOrchestrator
@@ -123,6 +124,10 @@ def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:
 
 def get_transfer_service(db: AsyncSession = Depends(get_db)) -> TransferService:
     return TransferService(db)
+
+
+def get_stocktake_service(db: AsyncSession = Depends(get_db)) -> StocktakeService:
+    return StocktakeService(db)
 
 
 def get_till_orchestrator(db: AsyncSession = Depends(get_db)) -> TillOrchestrator:

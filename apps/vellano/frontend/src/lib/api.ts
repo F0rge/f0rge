@@ -600,6 +600,82 @@ export function createTransfer(payload: TransferPayload): Promise<TransferResult
   });
 }
 
+export type StocktakeStatus = "in_progress" | "completed" | "cancelled";
+
+export type StocktakeLine = {
+  id: string;
+  sku_id: string;
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  expected_qty: number;
+  counted_qty: number | null;
+  variance: number | null;
+};
+
+export type StocktakeSummary = {
+  id: string;
+  location_id: string;
+  location_name: string;
+  status: StocktakeStatus;
+  started_at: string;
+  completed_at: string | null;
+};
+
+export type Stocktake = StocktakeSummary & {
+  lines: StocktakeLine[];
+};
+
+export const STOCKTAKE_STATUS_LABELS: Record<StocktakeStatus, string> = {
+  in_progress: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+export function listStocktakes(): Promise<StocktakeSummary[]> {
+  return apiFetch<StocktakeSummary[]>("/stocktakes");
+}
+
+export function startStocktake(payload: { location_id: string }): Promise<Stocktake> {
+  return apiFetch<Stocktake>("/stocktakes", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getStocktake(id: string): Promise<Stocktake> {
+  return apiFetch<Stocktake>(`/stocktakes/${id}`);
+}
+
+export function patchStocktakeLine(
+  stocktakeId: string,
+  lineId: string,
+  payload: { counted_qty: number },
+): Promise<StocktakeLine> {
+  return apiFetch<StocktakeLine>(`/stocktakes/${stocktakeId}/lines/${lineId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function lookupStocktakeBarcode(
+  stocktakeId: string,
+  payload: { barcode: string },
+): Promise<StocktakeLine> {
+  return apiFetch<StocktakeLine>(`/stocktakes/${stocktakeId}/lookup`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function completeStocktake(id: string): Promise<Stocktake> {
+  return apiFetch<Stocktake>(`/stocktakes/${id}/complete`, { method: "POST" });
+}
+
+export function cancelStocktake(id: string): Promise<Stocktake> {
+  return apiFetch<Stocktake>(`/stocktakes/${id}/cancel`, { method: "POST" });
+}
+
 export function canMutateBooks(role: UserRole | undefined): boolean {
   return role === "owner" || role === "books";
 }

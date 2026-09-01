@@ -29,6 +29,7 @@ from app.routers import (
     search,
     settings as settings_router,
     skus,
+    stocktakes,
     suppliers,
     till,
     transfers,
@@ -86,6 +87,7 @@ app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
 app.include_router(transfers.transfers_router)
+app.include_router(stocktakes.stocktakes_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
 app.include_router(contacts.contacts_router)

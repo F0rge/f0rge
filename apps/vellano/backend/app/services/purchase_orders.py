@@ -32,6 +32,7 @@ from app.schemas.purchase_order import (
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.services.cost_audit import CostAuditService
 from app.services.object_storage import save_bytes
+from app.services.stocktakes import StocktakeService
 from app.services.packing_sheet import (
     build_packing_sheet_pdf,
     compute_landed_unit_costs,
@@ -262,6 +263,7 @@ class PurchaseOrderService:
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def receive(self, data: ReceiveRequest, user_id: uuid.UUID) -> PurchaseOrderResponse:
+        await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         po = await self._get_po_or_404(data.purchase_order_id)
 
         if po.status == PurchaseOrderStatus.RECEIVED:

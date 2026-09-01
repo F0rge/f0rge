@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +10,7 @@ from app.crud.purchase_order import LocationStockCRUD
 from app.models.inventory import LocationStock
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.services.cost_audit import CostAuditService
+from f0rge_core.exceptions import ConflictError, ValidationError
 
 
 class StockMovementService:
@@ -55,3 +57,66 @@ class StockMovementService:
             note=note,
         )
         return loc_stock
+
+    async def apply_outgoing_qty(
+        self,
+        sku_id: uuid.UUID,
+        location_id: uuid.UUID,
+        qty: int,
+        user_id: uuid.UUID,
+        source: UnitCostAuditSource,
+        note: str,
+    ) -> LocationStock:
+        loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
+        if loc_stock is None or loc_stock.on_hand < qty:
+            raise ConflictError("Insufficient on-hand quantity")
+        old_cost = loc_stock.unit_cost_zar
+        loc_stock.on_hand -= qty
+        if old_cost is not None:
+            await self.cost_audit.record(
+                sku_id=sku_id,
+                location_id=location_id,
+                old_cost_zar=old_cost,
+                new_cost_zar=old_cost,
+                changed_by_user_id=user_id,
+                source=source,
+                note=note,
+            )
+        return loc_stock
+
+    async def apply_qty_delta(
+        self,
+        sku_id: uuid.UUID,
+        location_id: uuid.UUID,
+        delta: int,
+        user_id: uuid.UUID,
+        source: UnitCostAuditSource,
+        note: str,
+    ) -> Optional[LocationStock]:
+        if delta == 0:
+            return await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
+        if delta > 0:
+            loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                sku_id,
+                location_id,
+            )
+            unit_cost = loc_stock.unit_cost_zar if loc_stock is not None else None
+            if unit_cost is None:
+                raise ValidationError("unit cost required to increase stock")
+            return await self.apply_incoming_qty(
+                sku_id,
+                location_id,
+                delta,
+                unit_cost,
+                user_id,
+                source,
+                note,
+            )
+        return await self.apply_outgoing_qty(
+            sku_id,
+            location_id,
+            -delta,
+            user_id,
+            source,
+            note,
+        )

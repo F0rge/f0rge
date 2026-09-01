@@ -96,6 +96,23 @@ Endpoints: `GET/POST /api/v1/locations`, `PATCH /api/v1/locations/{id}`. Archive
 
 Startup seeds two locations when the table is empty: Kramerville (warehouse), Bedfordview (showroom). Same rows are inserted by migration `003_locations`.
 
+## V2-S2 stocktakes
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Stocktakes:** `GET/POST /stocktakes`, `GET /stocktakes/{id}`, `PATCH /stocktakes/{id}/lines/{line_id}` (`{counted_qty}` ≥ 0), `POST /stocktakes/{id}/lookup` (`{barcode}` exact `our_barcode`), `POST /stocktakes/{id}/complete`, `POST /stocktakes/{id}/cancel`. No pause endpoint.
+
+Start snapshots **every SKU** at that location (`expected_qty` = on-hand or 0). Status `in_progress`. 409 if that location already has an in-progress stocktake.
+
+**Location lock:** while `in_progress`, receive into the location, transfer from **or** to the location, and till sale at the location return 409 `"Location is locked for stocktake"`.
+
+Complete only from `in_progress`. Lines with `counted_qty` set apply `delta = counted - expected` via stock movements (audit source `stocktake`); **uncounted lines are skipped** (on-hand unchanged). Then `completed` and unlock. Cancel only from `in_progress` → `cancelled`, no stock writes. No GL.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get stocktakes | yes | yes | yes | yes | yes |
+| Start, count, lookup, complete, cancel | yes | yes | no | no | no |
+
 ## S3 catalogue (suppliers, proformas, SKUs)
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -303,7 +320,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/transfers` | `/transfers` |
 | `/receive` | `/receive` |
 | `/reports`, `/vat201` | `/reports` |
-| `/stocktakes`, `/adjustments`, `/import`, `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/stocktakes` | `/stocktakes` |
+| `/adjustments`, `/import`, `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
 
 ## Non-goals
 
