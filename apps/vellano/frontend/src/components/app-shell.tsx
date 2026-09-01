@@ -33,6 +33,8 @@ import {
   User,
   UserMultiple,
   Wallet,
+  ChartLine,
+  DocumentTasks,
 } from "@carbon/icons-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
@@ -55,6 +57,9 @@ const ICONS = {
   "/invoices": Receipt,
   "/bills": Purchase,
   "/payments": Wallet,
+  "/bank-reconciliation": DocumentTasks,
+  "/reports": ChartLine,
+  "/vat201": Document,
   "/till": Store,
   "/users": UserMultiple,
   "/profile": User,
@@ -64,7 +69,11 @@ const ICONS = {
 const BOOKS_HREFS = new Set<string>(BOOKS_NAV_ITEMS.map((item) => item.href));
 
 function isBooksPath(pathname: string): boolean {
-  return BOOKS_HREFS.has(pathname) || pathname.startsWith("/invoices/") || pathname.startsWith("/bills/");
+  return (
+    BOOKS_HREFS.has(pathname) ||
+    pathname.startsWith("/invoices/") ||
+    pathname.startsWith("/bills/")
+  );
 }
 
 type AppShellProps = {

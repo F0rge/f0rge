@@ -30,6 +30,8 @@ class PaymentResponse(BaseModel):
     amount_zar: Decimal
     fx_gain_loss_zar: Decimal
     paid_on: datetime.date
+    is_reconciled: bool = False
+    reconciled_at: Optional[datetime.datetime] = None
     created_at: datetime.datetime
     updated_at: datetime.datetime
 

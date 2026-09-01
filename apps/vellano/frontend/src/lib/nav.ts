@@ -4,6 +4,9 @@ export const BOOKS_NAV_ITEMS = [
   { href: "/invoices", label: "Invoices" },
   { href: "/bills", label: "Bills" },
   { href: "/payments", label: "Payments" },
+  { href: "/bank-reconciliation", label: "Bank reconciliation" },
+  { href: "/reports", label: "Reports" },
+  { href: "/vat201", label: "VAT201 draft" },
 ] as const;
 
 export type BooksNavItem = (typeof BOOKS_NAV_ITEMS)[number];
