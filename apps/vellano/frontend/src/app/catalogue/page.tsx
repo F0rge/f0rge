@@ -35,17 +35,17 @@ import { useAuth } from "@/lib/auth";
 
 const TABLE_HEADERS = [
   { key: "name", header: "Name" },
+  { key: "actions", header: "Actions" },
+  { key: "wholesale_ex_vat", header: "Wholesale ex-VAT" },
+  { key: "wholesale_inc_vat", header: "Wholesale inc-VAT" },
+  { key: "retail_ex_vat", header: "Retail ex-VAT" },
+  { key: "retail_inc_vat", header: "Retail inc-VAT" },
   { key: "design", header: "Design" },
   { key: "fabric", header: "Fabric" },
   { key: "our_ref", header: "Our ref" },
   { key: "our_barcode", header: "Our barcode" },
   { key: "supplier_ref", header: "Supplier ref" },
-  { key: "wholesale_ex_vat", header: "Wholesale ex-VAT" },
-  { key: "wholesale_inc_vat", header: "Wholesale inc-VAT" },
-  { key: "retail_ex_vat", header: "Retail ex-VAT" },
-  { key: "retail_inc_vat", header: "Retail inc-VAT" },
   { key: "photo", header: "Photo" },
-  { key: "actions", header: "Actions" },
 ] as const;
 
 type SkuRow = {
@@ -228,13 +228,15 @@ export default function CataloguePage() {
                     const entry = skus.find((sku) => sku.id === row.id);
                     return (
                       <TableRow
-                        {...getRowProps({ row })}
+                        {...getRowProps({
+                          row,
+                          onClick: () => {
+                            if (entry) {
+                              openPriceEditor(entry);
+                            }
+                          },
+                        })}
                         key={row.id}
-                        onClick={() => {
-                          if (entry) {
-                            openPriceEditor(entry);
-                          }
-                        }}
                         style={{ cursor: entry ? "pointer" : undefined }}
                       >
                         {row.cells.map((cell) => {
