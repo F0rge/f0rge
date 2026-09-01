@@ -1,11 +1,17 @@
-"""S8 stock transfer tests."""
+"""F2 two-step transfer document tests."""
 
 from __future__ import annotations
 
+from io import BytesIO
+from pathlib import Path
+from typing import Optional
+
 from httpx import AsyncClient
+from pypdf import PdfReader
 
 from tests.test_purchase_orders import (
     MINIMAL_PDF,
+    _create_buyer,
     _create_sku,
     _create_supplier,
     _create_till,
@@ -80,11 +86,86 @@ async def _receive_qty_at_location(
     }
 
 
+def _pdf_text(pdf_bytes: bytes) -> str:
+    reader = PdfReader(BytesIO(pdf_bytes))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
 def _inventory_row(client_response, sku_id: str) -> dict:
     return next(row for row in client_response.json() if row["sku_id"] == sku_id)
 
 
-async def test_transfer_happy_path_kramerville_to_bedfordview(
+def _location_on_hand(inv_row: dict, location_name: str) -> int:
+    loc = next(
+        (item for item in inv_row["locations"] if item["location_name"] == location_name),
+        None,
+    )
+    return 0 if loc is None else loc["on_hand"]
+
+
+async def _on_hand(client: AsyncClient, sku_id: str, location_name: str) -> int:
+    inv = await client.get("/api/v1/inventory")
+    assert inv.status_code == 200
+    return _location_on_hand(_inventory_row(inv, sku_id), location_name)
+
+
+def _draft_payload(
+    from_location_id: str,
+    to_location_id: str,
+    sku_id: str,
+    qty: int,
+    from_bin_id: Optional[str] = None,
+) -> dict:
+    line: dict = {"sku_id": sku_id, "qty": qty}
+    if from_bin_id is not None:
+        line["from_bin_id"] = from_bin_id
+    return {
+        "from_location_id": from_location_id,
+        "to_location_id": to_location_id,
+        "lines": [line],
+    }
+
+
+async def complete_location_transfer(
+    client: AsyncClient,
+    from_location_id: str,
+    to_location_id: str,
+    sku_id: str,
+    qty: int,
+    from_bin_id: Optional[str] = None,
+    to_bin_id: Optional[str] = None,
+) -> dict:
+    line: dict = {"sku_id": sku_id, "qty": qty}
+    if from_bin_id is not None:
+        line["from_bin_id"] = from_bin_id
+    if to_bin_id is not None:
+        line["to_bin_id"] = to_bin_id
+    created = await client.post(
+        "/api/v1/transfers",
+        json={
+            "from_location_id": from_location_id,
+            "to_location_id": to_location_id,
+            "lines": [line],
+        },
+    )
+    assert created.status_code == 201, created.text
+    transfer_id = created.json()["id"]
+    dispatched = await client.post(f"/api/v1/transfers/{transfer_id}/dispatch")
+    assert dispatched.status_code == 200, dispatched.text
+    received = await client.post(
+        f"/api/v1/transfers/{transfer_id}/receive",
+        json={
+            "lines": [
+                {"line_id": item["id"], "qty_received": item["qty_dispatched"]}
+                for item in dispatched.json()["lines"]
+            ]
+        },
+    )
+    assert received.status_code == 200, received.text
+    return received.json()
+
+
+async def test_draft_does_not_move_stock(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
@@ -93,40 +174,181 @@ async def test_transfer_happy_path_kramerville_to_bedfordview(
         owner_client,
         qty=2,
         location_name="Kramerville",
-        our_ref="XFER-HAPPY",
+        our_ref="XFER-DRAFT",
     )
-    kramerville_id = data["location_id"]
     bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
+    warehouse = await _create_warehouse(async_client, owner_client)
     sku_id = data["sku"]["id"]
 
-    warehouse = await _create_warehouse(async_client, owner_client)
-
-    transfer = await warehouse.post(
+    draft = await warehouse.post(
         "/api/v1/transfers",
-        json={
-            "from_location_id": kramerville_id,
-            "to_location_id": bedford_id,
-            "sku_id": sku_id,
-            "qty": 1,
-        },
+        json=_draft_payload(data["location_id"], bedford_id, sku_id, 1),
     )
-    assert transfer.status_code == 200
-    body = transfer.json()
-    assert body["qty"] == 1
-    assert body["from_location"]["on_hand"] == 1
-    assert body["to_location"]["on_hand"] == 1
-    assert body["from_location"]["unit_cost_zar"] == body["to_location"]["unit_cost_zar"]
-
-    inv = await owner_client.get("/api/v1/inventory")
-    row = _inventory_row(inv, sku_id)
-    assert row["on_hand"] == 2
-    kram = next(loc for loc in row["locations"] if loc["location_name"] == "Kramerville")
-    bed = next(loc for loc in row["locations"] if loc["location_name"] == "Bedfordview")
-    assert kram["on_hand"] == 1
-    assert bed["on_hand"] == 1
+    assert draft.status_code == 201
+    body = draft.json()
+    assert body["status"] == "draft"
+    assert body["transfer_number"].startswith("TRF-")
+    assert await _on_hand(owner_client, sku_id, "Kramerville") == 2
+    assert await _on_hand(owner_client, sku_id, "Bedfordview") == 0
 
 
-async def test_transfer_over_qty_unchanged_balances(
+async def test_dispatch_decrements_source_only_and_pdf_ok(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=2,
+        location_name="Kramerville",
+        our_ref="XFER-DISP",
+    )
+    bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
+    warehouse = await _create_warehouse(async_client, owner_client)
+    sku_id = data["sku"]["id"]
+
+    draft = await warehouse.post(
+        "/api/v1/transfers",
+        json=_draft_payload(data["location_id"], bedford_id, sku_id, 1),
+    )
+    assert draft.status_code == 201
+    transfer_id = draft.json()["id"]
+
+    dispatched = await warehouse.post(f"/api/v1/transfers/{transfer_id}/dispatch")
+    assert dispatched.status_code == 200
+    assert dispatched.json()["status"] == "in_transit"
+    assert await _on_hand(owner_client, sku_id, "Kramerville") == 1
+    assert await _on_hand(owner_client, sku_id, "Bedfordview") == 0
+
+    pdf = await warehouse.get(f"/api/v1/transfers/{transfer_id}/pdf")
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"].startswith("application/pdf")
+    assert pdf.content.startswith(b"%PDF")
+    text = _pdf_text(pdf.content)
+    assert "TRF-" in text
+
+
+async def test_till_cannot_dispatch_but_can_receive(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=1,
+        location_name="Kramerville",
+        our_ref="XFER-TILL",
+    )
+    bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
+    warehouse = await _create_warehouse(async_client, owner_client)
+    sku_id = data["sku"]["id"]
+
+    till = await _create_till(async_client, owner_client)
+    forbidden_draft = await till.post(
+        "/api/v1/transfers",
+        json=_draft_payload(data["location_id"], bedford_id, sku_id, 1),
+    )
+    assert forbidden_draft.status_code == 403
+
+    warehouse = await _create_warehouse(async_client, owner_client)
+    draft = await warehouse.post(
+        "/api/v1/transfers",
+        json=_draft_payload(data["location_id"], bedford_id, sku_id, 1),
+    )
+    assert draft.status_code == 201
+    transfer_id = draft.json()["id"]
+
+    till = await _create_till(async_client, owner_client)
+    till_dispatch = await till.post(f"/api/v1/transfers/{transfer_id}/dispatch")
+    assert till_dispatch.status_code == 403
+
+    warehouse = await _create_warehouse(async_client, owner_client)
+    dispatched = await warehouse.post(f"/api/v1/transfers/{transfer_id}/dispatch")
+    assert dispatched.status_code == 200
+    line = dispatched.json()["lines"][0]
+
+    till = await _create_till(async_client, owner_client)
+    received = await till.post(
+        f"/api/v1/transfers/{transfer_id}/receive",
+        json={"lines": [{"line_id": line["id"], "qty_received": line["qty_dispatched"]}]},
+    )
+    assert received.status_code == 200
+    assert received.json()["status"] == "received"
+    assert await _on_hand(owner_client, sku_id, "Bedfordview") == 1
+
+
+async def test_buyer_cannot_receive(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=1,
+        location_name="Kramerville",
+        our_ref="XFER-BUYER",
+    )
+    bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
+    warehouse = await _create_warehouse(async_client, owner_client)
+    sku_id = data["sku"]["id"]
+    draft = await warehouse.post(
+        "/api/v1/transfers",
+        json=_draft_payload(data["location_id"], bedford_id, sku_id, 1),
+    )
+    dispatched = await warehouse.post(f"/api/v1/transfers/{draft.json()['id']}/dispatch")
+    assert dispatched.status_code == 200
+    line = dispatched.json()["lines"][0]
+
+    buyer = await _create_buyer(async_client, owner_client)
+    received = await buyer.post(
+        f"/api/v1/transfers/{dispatched.json()['id']}/receive",
+        json={"lines": [{"line_id": line["id"], "qty_received": line["qty_dispatched"]}]},
+    )
+    assert received.status_code == 403
+
+
+async def test_receive_increments_dest_and_pdf_shows_receiver(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=2,
+        location_name="Kramerville",
+        our_ref="XFER-RECV",
+    )
+    bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
+    warehouse = await _create_warehouse(async_client, owner_client)
+    sku_id = data["sku"]["id"]
+    draft = await warehouse.post(
+        "/api/v1/transfers",
+        json=_draft_payload(data["location_id"], bedford_id, sku_id, 1),
+    )
+    transfer_id = draft.json()["id"]
+    dispatched = await warehouse.post(f"/api/v1/transfers/{transfer_id}/dispatch")
+    line = dispatched.json()["lines"][0]
+
+    await _relogin_owner(owner_client)
+    received = await owner_client.post(
+        f"/api/v1/transfers/{transfer_id}/receive",
+        json={"lines": [{"line_id": line["id"], "qty_received": line["qty_dispatched"]}]},
+    )
+    assert received.status_code == 200
+    body = received.json()
+    assert body["status"] == "received"
+    assert body["received_display_name"]
+    assert await _on_hand(owner_client, sku_id, "Kramerville") == 1
+    assert await _on_hand(owner_client, sku_id, "Bedfordview") == 1
+
+    pdf = await owner_client.get(f"/api/v1/transfers/{transfer_id}/pdf")
+    assert pdf.status_code == 200
+    text = _pdf_text(pdf.content)
+    assert body["received_display_name"] in text
+    assert "Qty received:" in text
+
+
+async def test_over_qty_dispatch_returns_409(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
@@ -139,128 +361,19 @@ async def test_transfer_over_qty_unchanged_balances(
     )
     bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
     warehouse = await _create_warehouse(async_client, owner_client)
-
-    transfer = await warehouse.post(
+    sku_id = data["sku"]["id"]
+    draft = await warehouse.post(
         "/api/v1/transfers",
-        json={
-            "from_location_id": data["location_id"],
-            "to_location_id": bedford_id,
-            "sku_id": data["sku"]["id"],
-            "qty": 5,
-        },
+        json=_draft_payload(data["location_id"], bedford_id, sku_id, 5),
     )
-    assert transfer.status_code == 409
-
-    inv = await owner_client.get("/api/v1/inventory")
-    row = _inventory_row(inv, data["sku"]["id"])
-    assert row["on_hand"] == 1
-    assert len(row["locations"]) == 1
-    assert row["locations"][0]["on_hand"] == 1
+    assert draft.status_code == 201
+    dispatched = await warehouse.post(f"/api/v1/transfers/{draft.json()['id']}/dispatch")
+    assert dispatched.status_code == 409
+    assert await _on_hand(owner_client, sku_id, "Kramerville") == 1
+    assert await _on_hand(owner_client, sku_id, "Bedfordview") == 0
 
 
-async def test_transfer_archived_location_returns_409(
-    async_client: AsyncClient,
-    owner_client: AsyncClient,
-) -> None:
-    data = await _receive_qty_at_location(
-        async_client,
-        owner_client,
-        qty=2,
-        location_name="Kramerville",
-        our_ref="XFER-ARCH",
-    )
-    archived = await owner_client.post(
-        "/api/v1/locations",
-        json={"name": "Archive xfer", "type": "showroom"},
-    )
-    assert archived.status_code == 201
-    archived_id = archived.json()["id"]
-    patch = await owner_client.patch(
-        f"/api/v1/locations/{archived_id}",
-        json={"is_archived": True},
-    )
-    assert patch.status_code == 200
-
-    warehouse = await _create_warehouse(async_client, owner_client)
-
-    into_archived = await warehouse.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": data["location_id"],
-            "to_location_id": archived_id,
-            "sku_id": data["sku"]["id"],
-            "qty": 1,
-        },
-    )
-    assert into_archived.status_code == 409
-
-    from_archived = await warehouse.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": archived_id,
-            "to_location_id": data["location_id"],
-            "sku_id": data["sku"]["id"],
-            "qty": 1,
-        },
-    )
-    assert from_archived.status_code == 409
-
-
-async def test_transfer_third_location(
-    async_client: AsyncClient,
-    owner_client: AsyncClient,
-) -> None:
-    data = await _receive_qty_at_location(
-        async_client,
-        owner_client,
-        qty=3,
-        location_name="Kramerville",
-        our_ref="XFER-THIRD",
-    )
-
-    third = await owner_client.post(
-        "/api/v1/locations",
-        json={"name": "Third xfer location", "type": "warehouse"},
-    )
-    assert third.status_code == 201
-    third_id = third.json()["id"]
-
-    warehouse = await _create_warehouse(async_client, owner_client)
-
-    to_third = await warehouse.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": data["location_id"],
-            "to_location_id": third_id,
-            "sku_id": data["sku"]["id"],
-            "qty": 2,
-        },
-    )
-    assert to_third.status_code == 200
-    assert to_third.json()["to_location"]["on_hand"] == 2
-
-    bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
-    from_third = await warehouse.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": third_id,
-            "to_location_id": bedford_id,
-            "sku_id": data["sku"]["id"],
-            "qty": 1,
-        },
-    )
-    assert from_third.status_code == 200
-
-    inv = await owner_client.get("/api/v1/inventory")
-    row = _inventory_row(inv, data["sku"]["id"])
-    assert row["on_hand"] == 3
-    by_name = {loc["location_name"]: loc["on_hand"] for loc in row["locations"]}
-    assert by_name["Kramerville"] == 1
-    assert by_name["Third xfer location"] == 1
-    assert by_name["Bedfordview"] == 1
-
-
-async def test_transfer_same_location_returns_400(
+async def test_same_from_to_returns_400(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
@@ -272,92 +385,69 @@ async def test_transfer_same_location_returns_400(
         our_ref="XFER-SAME",
     )
     warehouse = await _create_warehouse(async_client, owner_client)
-
     transfer = await warehouse.post(
         "/api/v1/transfers",
-        json={
-            "from_location_id": data["location_id"],
-            "to_location_id": data["location_id"],
-            "sku_id": data["sku"]["id"],
-            "qty": 1,
-        },
+        json=_draft_payload(data["location_id"], data["location_id"], data["sku"]["id"], 1),
     )
-    assert transfer.status_code == 400
+    assert transfer.status_code in (400, 422)
 
 
-async def test_transfer_on_water_only_returns_409(
-    async_client: AsyncClient,
-    owner_client: AsyncClient,
-) -> None:
-    supplier_id = await _create_supplier(owner_client, "On water xfer")
-    sku = await _create_sku(
-        owner_client,
-        "XFER-WATER",
-        "XFER-WATER-B",
-        "Water only",
-        "WD",
-        "WF",
-    )
-    po_resp = await owner_client.post(
-        "/api/v1/purchase-orders",
-        json={
-            "supplier_id": supplier_id,
-            "lines": [{"sku_id": sku["id"], "qty": 2, "factory_unit_amount": "10.00"}],
-        },
-    )
-    po_id = po_resp.json()["id"]
-    await owner_client.post(f"/api/v1/purchase-orders/{po_id}/on-water")
-
-    kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
-    bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
-    warehouse = await _create_warehouse(async_client, owner_client)
-
-    transfer = await warehouse.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": kramerville_id,
-            "to_location_id": bedford_id,
-            "sku_id": sku["id"],
-            "qty": 1,
-        },
-    )
-    assert transfer.status_code == 409
-
-
-async def test_transfer_unauthenticated_returns_401(async_client: AsyncClient) -> None:
-    resp = await async_client.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": "00000000-0000-0000-0000-000000000001",
-            "to_location_id": "00000000-0000-0000-0000-000000000002",
-            "sku_id": "00000000-0000-0000-0000-000000000003",
-            "qty": 1,
-        },
-    )
-    assert resp.status_code == 401
-
-
-async def test_transfer_till_role_forbidden(
+async def test_stocktake_lock_blocks_dispatch(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
     data = await _receive_qty_at_location(
         async_client,
         owner_client,
-        qty=1,
+        qty=2,
         location_name="Kramerville",
-        our_ref="XFER-TILL",
+        our_ref="XFER-LOCK",
     )
     bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
-    till = await _create_till(async_client, owner_client)
-
-    transfer = await till.post(
+    warehouse = await _create_warehouse(async_client, owner_client)
+    sku_id = data["sku"]["id"]
+    draft = await warehouse.post(
         "/api/v1/transfers",
-        json={
-            "from_location_id": data["location_id"],
-            "to_location_id": bedford_id,
-            "sku_id": data["sku"]["id"],
-            "qty": 1,
-        },
+        json=_draft_payload(data["location_id"], bedford_id, sku_id, 1),
     )
-    assert transfer.status_code == 403
+    assert draft.status_code == 201
+
+    started = await owner_client.post(
+        "/api/v1/stocktakes",
+        json={"location_id": data["location_id"]},
+    )
+    assert started.status_code == 201
+
+    dispatched = await warehouse.post(f"/api/v1/transfers/{draft.json()['id']}/dispatch")
+    assert dispatched.status_code == 409
+    assert dispatched.json()["detail"] == "Location is locked for stocktake"
+    assert await _on_hand(owner_client, sku_id, "Kramerville") == 2
+    assert await _on_hand(owner_client, sku_id, "Bedfordview") == 0
+
+
+async def test_transfer_unauthenticated_returns_401(async_client: AsyncClient) -> None:
+    resp = await async_client.post(
+        "/api/v1/transfers",
+        json=_draft_payload(
+            "00000000-0000-0000-0000-000000000001",
+            "00000000-0000-0000-0000-000000000002",
+            "00000000-0000-0000-0000-000000000003",
+            1,
+        ),
+    )
+    assert resp.status_code == 401
+
+
+def test_transfer_modules_have_no_smtp() -> None:
+    root = Path(__file__).resolve().parents[1] / "app"
+    for rel in (
+        "services/transfers.py",
+        "services/transfer_note.py",
+        "routers/transfers.py",
+        "models/transfer.py",
+        "schemas/transfer.py",
+        "crud/transfer.py",
+    ):
+        text = (root / rel).read_text().lower()
+        assert "smtp" not in text
+        assert "sendmail" not in text

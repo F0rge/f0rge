@@ -31,7 +31,12 @@ from app.schemas.purchase_order import PoLineCreate, PurchaseOrderCreate, Receiv
 from app.schemas.sku import SkuCreate, SkuUpdate
 from app.schemas.supplier import SupplierCreate
 from app.schemas.till import TillSaleCreate, TillSaleLineCreate
-from app.schemas.transfer import TransferCreate
+from app.schemas.transfer import (
+    TransferCreate,
+    TransferLineCreate,
+    TransferReceive,
+    TransferReceiveLine,
+)
 from app.services.bank_imports import BankImportService
 from app.services.bills import BillService
 from app.services.contacts import ContactService
@@ -202,13 +207,30 @@ class PlaygroundSeedService:
             user_id=owner.id,
         )
 
-        await transfer_service.transfer(
+        await self._ensure_transaction()
+        draft = await transfer_service.create(
             TransferCreate(
                 from_location_id=kramerville.id,
                 to_location_id=bedfordview.id,
-                sku_id=table_sku.id,
-                qty=1,
-            )
+                lines=[TransferLineCreate(sku_id=table_sku.id, qty=1)],
+            ),
+            owner.id,
+        )
+        await self._ensure_transaction()
+        dispatched = await transfer_service.dispatch(draft.id, owner.id)
+        await self._ensure_transaction()
+        await transfer_service.receive(
+            dispatched.id,
+            TransferReceive(
+                lines=[
+                    TransferReceiveLine(
+                        line_id=line.id,
+                        qty_received=line.qty_dispatched,
+                    )
+                    for line in dispatched.lines
+                ]
+            ),
+            owner.id,
         )
 
         # Services that nest commit_refresh inside unit_of_work need an

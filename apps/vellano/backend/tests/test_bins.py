@@ -14,6 +14,7 @@ from tests.test_purchase_orders import (
     _create_supplier,
     _location_id_by_name,
 )
+from tests.test_transfers import complete_location_transfer
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> AsyncClient:
@@ -210,18 +211,14 @@ async def test_transfer_without_bin_fields_uses_defaults(owner_client: AsyncClie
     kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
     bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
     sku = await _land_and_receive(owner_client, "BIN-XDEF", qty=2, location_id=kramerville_id)
-    transfer = await owner_client.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": kramerville_id,
-            "to_location_id": bedford_id,
-            "sku_id": sku["id"],
-            "qty": 1,
-        },
+    transfer = await complete_location_transfer(
+        owner_client,
+        kramerville_id,
+        bedford_id,
+        sku["id"],
+        1,
     )
-    assert transfer.status_code == 200
-    assert transfer.json()["from_location"]["on_hand"] == 1
-    assert transfer.json()["to_location"]["on_hand"] == 1
+    assert transfer["status"] == "received"
 
     inv = await owner_client.get("/api/v1/inventory")
     kram = _inventory_location(inv.json(), sku["id"], kramerville_id)
@@ -241,16 +238,22 @@ async def test_transfer_from_bin_insufficient_returns_409(owner_client: AsyncCli
     )
     assert empty.status_code == 201
     sku = await _land_and_receive(owner_client, "BIN-XINS", qty=2, location_id=kramerville_id)
-    transfer = await owner_client.post(
+    draft = await owner_client.post(
         "/api/v1/transfers",
         json={
             "from_location_id": kramerville_id,
             "to_location_id": bedford_id,
-            "sku_id": sku["id"],
-            "qty": 1,
-            "from_bin_id": empty.json()["id"],
+            "lines": [
+                {
+                    "sku_id": sku["id"],
+                    "qty": 1,
+                    "from_bin_id": empty.json()["id"],
+                }
+            ],
         },
     )
+    assert draft.status_code == 201
+    transfer = await owner_client.post(f"/api/v1/transfers/{draft.json()['id']}/dispatch")
     assert transfer.status_code == 409
     inv = await owner_client.get("/api/v1/inventory")
     kram = _inventory_location(inv.json(), sku["id"], kramerville_id)

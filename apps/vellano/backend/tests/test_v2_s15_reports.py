@@ -16,7 +16,7 @@ from tests.test_purchase_orders import (
     _location_id_by_name,
     _relogin_owner,
 )
-from tests.test_transfers import _receive_qty_at_location
+from tests.test_transfers import _receive_qty_at_location, complete_location_transfer
 
 
 async def _kramerville_id(client: AsyncClient) -> str:
@@ -46,16 +46,14 @@ async def _transfer_to_bedfordview(
     )
     assert login_resp.status_code == 200
     await _relogin_owner(owner_client)
-    transfer = await async_client.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": kramerville_id,
-            "to_location_id": bedford_id,
-            "sku_id": sku_id,
-            "qty": qty,
-        },
+    transfer = await complete_location_transfer(
+        async_client,
+        kramerville_id,
+        bedford_id,
+        sku_id,
+        qty,
     )
-    assert transfer.status_code == 200
+    assert transfer["status"] == "received"
     return bedford_id
 
 

@@ -15,7 +15,7 @@ from tests.test_purchase_orders import (
     _location_id_by_name,
     _relogin_owner,
 )
-from tests.test_transfers import _receive_qty_at_location
+from tests.test_transfers import _receive_qty_at_location, complete_location_transfer
 
 
 async def _set_retail_price(client: AsyncClient, sku_id: str, retail_ex: str) -> None:
@@ -58,16 +58,13 @@ async def _transfer_to_bedfordview(
     bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
     warehouse = await _login_warehouse(async_client)
     await _relogin_owner(owner_client)
-    transfer = await warehouse.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": kramerville_id,
-            "to_location_id": bedford_id,
-            "sku_id": sku_id,
-            "qty": qty,
-        },
+    await complete_location_transfer(
+        warehouse,
+        kramerville_id,
+        bedford_id,
+        sku_id,
+        qty,
     )
-    assert transfer.status_code == 200
     return bedford_id
 
 

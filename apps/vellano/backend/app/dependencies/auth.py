@@ -324,6 +324,23 @@ async def require_transfer(
     return user_id
 
 
+async def require_transfer_receive(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    user = await UserCRUD(db).get_by_id(user_id)
+    if user is None or user.role not in (
+        UserRole.OWNER,
+        UserRole.WAREHOUSE,
+        UserRole.TILL,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner, warehouse, or till access required",
+        )
+    return user_id
+
+
 async def require_books_mutate(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),

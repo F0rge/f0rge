@@ -134,15 +134,16 @@ async def test_transfer_from_locked_location_returns_409(owner_client: AsyncClie
     started = await owner_client.post("/api/v1/stocktakes", json={"location_id": from_id})
     assert started.status_code == 201
 
-    transfer = await owner_client.post(
+    draft = await owner_client.post(
         "/api/v1/transfers",
         json={
             "from_location_id": from_id,
             "to_location_id": to_id,
-            "sku_id": sku["id"],
-            "qty": 1,
+            "lines": [{"sku_id": sku["id"], "qty": 1}],
         },
     )
+    assert draft.status_code == 201
+    transfer = await owner_client.post(f"/api/v1/transfers/{draft.json()['id']}/dispatch")
     assert transfer.status_code == 409
     assert transfer.json()["detail"] == "Location is locked for stocktake"
 

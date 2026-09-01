@@ -48,6 +48,7 @@ from app.models.stocktake import Stocktake, StocktakeLine, StocktakeStatus
 from app.models.supplier import Supplier
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.models.team_settings import TeamSettings
+from app.models.transfer import Transfer, TransferLine, TransferStatus
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
 from app.models.team import Team
 from app.models.user import User, UserRole
@@ -119,6 +120,9 @@ __all__ = [
     "TaxInvoice",
     "TaxTreatment",
     "TeamSettings",
+    "Transfer",
+    "TransferLine",
+    "TransferStatus",
     "UnitCostAudit",
     "UnitCostAuditSource",
     "Team",

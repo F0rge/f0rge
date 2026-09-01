@@ -79,7 +79,7 @@ Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` b
 
 Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (markers: supplier `Playground Imports` / SKU `PG-TABLE`, then demo pack `PG-SOFA`, then sofa catalogue `VEL-SOFA-LONDON`):
 
-suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → transfer 1 table to Bedfordview → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched). A later pack adds high-end sofa SKUs with Unsplash photos (local files under `backend/data/playground_photos/`), extra customers, a trade invoice, a sofa layby, and a Minotti ZAR bill. Idempotent — existing DBs still get the sofa pack on the next boot.
+suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → two-step transfer 1 table to Bedfordview (draft → dispatch → receive) → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched). A later pack adds high-end sofa SKUs with Unsplash photos (local files under `backend/data/playground_photos/`), extra customers, a trade invoice, a sofa layby, and a Minotti ZAR bill. Idempotent — existing DBs still get the sofa pack on the next boot.
 
 **Railway develop:** on service `vellano-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do not enable on a database you want to keep empty. After it runs, log in as `owner@example.com` / `change-me-owner` (or the role users above) and walk stock → proforma → PO → receive → transfer → till → books.
 
@@ -106,12 +106,36 @@ Every location has a default **FLOOR** bin (`code=FLOOR`, `row_code=F`, `bay=1`,
 - **Grid codes:** `{row}-{bay:02d}-{level}` e.g. `A-01-1`.
 - **Print / scan:** bin labels via `printHtml` (blob URL + `window.open(url, "_blank")` — never `noopener`) + JsBarcode CODE128 of `code`. Receive/WMS type-or-scan matches `code` (case-insensitive).
 - **Stock:** omitted `bin_id` / `from_bin_id` / `to_bin_id` uses the active default. Archived bins cannot receive. Cannot archive the default without assigning another first. Same-location bin-to-bin is out of v1.
+- **Transfers:** optional `from_bin_id` / `to_bin_id` on each line; dest on-hand rises only on dest receive (F2).
 - **Stocktake** stays location-scoped; variance applies to the default bin (no `stocktake_lines.bin_id`).
 
 | Action | owner | warehouse | buyer | till | books |
 |--------|:-----:|:---------:|:-----:|:----:|:-----:|
 | List bins | yes | yes | yes | yes | yes |
 | Create / grid / archive / set default | yes | yes | no | no | no |
+
+## F2 two-step transfers
+
+Internal stock move is a **document**, not a one-shot qty swap. Dest on-hand rises **only** on dest receive. In-app Transfer Note PDF (`GET /{id}/pdf`). **No email.**
+
+Endpoints (cookie `vellano_session`): `GET/POST /api/v1/transfers`, `GET /transfers/{id}`, `POST /transfers/{id}/dispatch`, `GET /transfers/{id}/pdf`, `POST /transfers/{id}/receive`, `POST /transfers/{id}/cancel`.
+
+Numbering: `TRF-0001`. Status: `draft` | `in_transit` | `received` | `cancelled`. Cancel is a status change (no DELETE).
+
+- **Create draft** (`require_transfer` = owner|warehouse): no stock movement. Same from/to → 400. Till cannot create or dispatch (403).
+- **Dispatch:** draft → in_transit. Decrements **source** only (`apply_outgoing_qty`, bin or default). Does **not** increment dest. Captures dispatcher + timestamp and source `unit_cost_zar` on each line. Stocktake lock either end → 409. Over-qty / archived → 409.
+- **Receive** (`require_transfer_receive` = owner|warehouse|**till**): v1 qty_received must equal qty_dispatched. Increments dest via `apply_incoming_qty` using the dispatch unit cost. Stamps receiver + `received_display_name`. Buyer/books → 403.
+- **Cancel:** draft = `require_transfer`, no stock. in_transit = owner only, restock source. received = reject.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get / PDF | yes | yes | yes | yes | yes |
+| Create draft / dispatch | yes | yes | no | no | no |
+| Receive | yes | yes | no | yes | no |
+| Cancel draft | yes | yes | no | no | no |
+| Cancel in transit | yes | no | no | no | no |
+
+Migration: `031_two_step_transfers`.
 
 ## Shop-floor qty patterns (A / B / C)
 

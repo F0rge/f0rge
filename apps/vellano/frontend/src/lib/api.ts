@@ -660,6 +660,10 @@ export function canTransfer(role: UserRole | undefined): boolean {
   return role === "owner" || role === "warehouse";
 }
 
+export function canReceiveTransfer(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "warehouse" || role === "till";
+}
+
 export function canUseTill(role: UserRole | undefined): boolean {
   return role === "owner" || role === "till";
 }
@@ -777,53 +781,142 @@ export function listInventory(): Promise<InventorySku[]> {
   return apiFetch<InventorySku[]>("/inventory");
 }
 
-export type TransferPayload = {
+export type TransferStatus = "draft" | "in_transit" | "received" | "cancelled";
+
+export type TransferLine = {
+  id: string;
+  sku_id: string;
+  sku_our_ref: string;
+  sku_name: string;
+  qty_dispatched: number;
+  qty_received: number | null;
+  from_bin_id: string | null;
+  to_bin_id: string | null;
+};
+
+export type Transfer = {
+  id: string;
+  transfer_number: string;
+  status: TransferStatus;
   from_location_id: string;
+  from_location_name: string;
   to_location_id: string;
+  to_location_name: string;
+  notes: string | null;
+  dispatched_at: string | null;
+  received_at: string | null;
+  received_display_name: string | null;
+  lines: TransferLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type TransferLinePayload = {
   sku_id: string;
   qty: number;
   from_bin_id?: string;
   to_bin_id?: string;
 };
 
-export type TransferResult = {
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  qty: number;
-  from_location: {
-    location_id: string;
-    location_name: string;
-    on_hand: number;
-    unit_cost_zar: string | null;
-  };
-  to_location: {
-    location_id: string;
-    location_name: string;
-    on_hand: number;
-    unit_cost_zar: string | null;
-  };
+export type CreateTransferPayload = {
+  from_location_id: string;
+  to_location_id: string;
+  notes?: string;
+  lines: TransferLinePayload[];
 };
 
-export function createTransfer(payload: TransferPayload): Promise<TransferResult> {
-  const body: TransferPayload = {
+export type TransferReceivePayload = {
+  lines: { line_id: string; qty_received: number }[];
+};
+
+export const TRANSFER_STATUS_LABELS: Record<TransferStatus, string> = {
+  draft: "Draft",
+  in_transit: "In transit",
+  received: "Received",
+  cancelled: "Cancelled",
+};
+
+export function listTransfers(options?: {
+  status?: TransferStatus;
+  to_location_id?: string;
+}): Promise<Transfer[]> {
+  const params = new URLSearchParams();
+  if (options?.status) {
+    params.set("status", options.status);
+  }
+  const toLocationId = options?.to_location_id?.trim();
+  if (toLocationId) {
+    params.set("to_location_id", toLocationId);
+  }
+  const qs = params.toString();
+  return apiFetch<Transfer[]>(`/transfers${qs ? `?${qs}` : ""}`);
+}
+
+export function getTransfer(id: string): Promise<Transfer> {
+  return apiFetch<Transfer>(`/transfers/${id}`);
+}
+
+export function createTransfer(payload: CreateTransferPayload): Promise<Transfer> {
+  const notes = payload.notes?.trim();
+  const body: CreateTransferPayload = {
     from_location_id: payload.from_location_id,
     to_location_id: payload.to_location_id,
-    sku_id: payload.sku_id,
-    qty: payload.qty,
+    lines: payload.lines.map((line) => {
+      const next: TransferLinePayload = { sku_id: line.sku_id, qty: line.qty };
+      const fromBin = line.from_bin_id?.trim();
+      if (fromBin) {
+        next.from_bin_id = fromBin;
+      }
+      const toBin = line.to_bin_id?.trim();
+      if (toBin) {
+        next.to_bin_id = toBin;
+      }
+      return next;
+    }),
   };
-  const fromBin = payload.from_bin_id?.trim();
-  if (fromBin) {
-    body.from_bin_id = fromBin;
+  if (notes) {
+    body.notes = notes;
   }
-  const toBin = payload.to_bin_id?.trim();
-  if (toBin) {
-    body.to_bin_id = toBin;
-  }
-  return apiFetch<TransferResult>("/transfers", {
+  return apiFetch<Transfer>("/transfers", {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export function dispatchTransfer(id: string): Promise<Transfer> {
+  return apiFetch<Transfer>(`/transfers/${id}/dispatch`, { method: "POST" });
+}
+
+export function receiveTransfer(id: string, payload: TransferReceivePayload): Promise<Transfer> {
+  return apiFetch<Transfer>(`/transfers/${id}/receive`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function cancelTransfer(id: string): Promise<Transfer> {
+  return apiFetch<Transfer>(`/transfers/${id}/cancel`, { method: "POST" });
+}
+
+export async function downloadTransferPdf(id: string, transferNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/transfers/${id}/pdf`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${transferNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }
 
 export type StocktakeStatus = "in_progress" | "completed" | "cancelled";
