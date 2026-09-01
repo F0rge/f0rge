@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import { listInventory, type InventorySku } from "@/lib/api";
+import { CostAuditPanel } from "@/components/cost-audit-panel";
 import { useAuth } from "@/lib/auth";
 
 const TABLE_HEADERS = [
@@ -149,6 +150,13 @@ export default function StockPage() {
           )}
         </DataTable>
       )}
+
+      <CostAuditPanel
+        skuOptions={inventory.map((entry) => ({
+          id: entry.sku_id,
+          label: `${entry.our_ref} — ${entry.name}`,
+        }))}
+      />
     </Stack>
   );
 }

@@ -1148,3 +1148,110 @@ export async function downloadVat201Pdf(fromDate: string, toDate: string): Promi
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 }
+
+export type HomeSummary = {
+  on_order_qty: number;
+  on_order_value_zar: string;
+  on_hand_qty: number;
+  on_hand_value_zar: string;
+  home_currency: string;
+};
+
+export type SkuSearchHit = {
+  id: string;
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+};
+
+export type PurchaseOrderSearchHit = {
+  id: string;
+  po_number: string;
+  status: string;
+  supplier_name: string;
+};
+
+export type InvoiceSearchHit = {
+  id: string;
+  invoice_number: string;
+  customer_name: string;
+};
+
+export type SearchResponse = {
+  q: string;
+  skus: SkuSearchHit[];
+  purchase_orders: PurchaseOrderSearchHit[];
+  invoices: InvoiceSearchHit[];
+};
+
+export type AppSettings = {
+  vat_rate: string;
+  vat_percent: string;
+  home_currency: string;
+  defaults_locked: boolean;
+  warning: string | null;
+};
+
+export type UnitCostAuditEntry = {
+  id: string;
+  sku_id: string;
+  location_id: string | null;
+  location_name: string | null;
+  po_id: string | null;
+  old_cost_zar: string | null;
+  new_cost_zar: string;
+  changed_by_user_id: string;
+  changed_by_email: string;
+  changed_by_display_name: string | null;
+  source: string;
+  note: string | null;
+  created_at: string;
+};
+
+export function getHomeSummary(): Promise<HomeSummary> {
+  return apiFetch<HomeSummary>("/home");
+}
+
+export function searchAll(q: string): Promise<SearchResponse> {
+  return apiFetch<SearchResponse>(`/search?q=${encodeURIComponent(q)}`);
+}
+
+export function getSettings(): Promise<AppSettings> {
+  return apiFetch<AppSettings>("/settings");
+}
+
+export function updateSettings(payload: {
+  vat_rate?: string;
+  home_currency?: string;
+}): Promise<AppSettings> {
+  return apiFetch<AppSettings>("/settings", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listCostAudit(
+  skuId: string,
+  locationId?: string,
+): Promise<UnitCostAuditEntry[]> {
+  const query = locationId ? `?location_id=${encodeURIComponent(locationId)}` : "";
+  return apiFetch<UnitCostAuditEntry[]>(`/skus/${skuId}/cost-audit${query}`);
+}
+
+export function correctUnitCost(
+  skuId: string,
+  payload: { location_id: string; unit_cost_zar: string },
+): Promise<UnitCostAuditEntry> {
+  return apiFetch<UnitCostAuditEntry>(`/skus/${skuId}/unit-cost`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function canViewCostAudit(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "books" || role === "buyer";
+}
+
+export function canMutateSettings(role: UserRole | undefined): boolean {
+  return role === "owner";
+}
