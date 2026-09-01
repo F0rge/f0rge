@@ -639,21 +639,26 @@ export default function TillPage() {
                 <div>
                   <h3>Tender</h3>
                   <div className="vellano-tender-grid">
-                    {TENDER_OPTIONS.map((option) => (
-                      <Button
-                        key={option.value}
-                        kind={tender === option.value ? "tertiary" : "ghost"}
-                        className={
-                          tender === option.value
-                            ? "vellano-tender-tile vellano-tender-tile--selected"
-                            : "vellano-tender-tile"
-                        }
-                        renderIcon={option.icon}
-                        onClick={() => setTender(option.value)}
-                      >
-                        {option.label}
-                      </Button>
-                    ))}
+                    {TENDER_OPTIONS.map((option) => {
+                      const Icon = option.icon;
+                      const isSelected = tender === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={
+                            isSelected
+                              ? "vellano-tender-tile vellano-tender-tile--selected"
+                              : "vellano-tender-tile"
+                          }
+                          aria-pressed={isSelected}
+                          onClick={() => setTender(option.value)}
+                        >
+                          <Icon size={20} aria-hidden />
+                          <span>{option.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

@@ -263,25 +263,66 @@ body {
   min-width: 0;
 }
 
+.vellano-till-layout__summary .cds--form-item,
+.vellano-till-layout__summary .cds--list-box__wrapper,
+.vellano-till-layout__summary .cds--text-input,
+.vellano-till-layout__summary .cds--combo-box,
+.vellano-till-layout__summary .cds--dropdown {
+  width: 100%;
+  max-width: none;
+}
+
 .vellano-tender-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
+  width: 100%;
 }
 
 .vellano-tender-tile {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
   width: 100%;
+  min-width: 0;
   max-width: none;
   min-height: 4.5rem;
-  flex-direction: column;
-  justify-content: center;
-  row-gap: 0.25rem;
+  margin: 0;
+  padding: 0.75rem 0.5rem;
+  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  border-radius: 0;
+  background: var(--cds-layer-01, #fff);
+  color: var(--cds-text-primary, #161616);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  transition: background 70ms cubic-bezier(0, 0, 0.38, 0.9);
+}
+
+.vellano-tender-tile:hover:not(.vellano-tender-tile--selected) {
+  background: var(--cds-layer-hover-01, #f4f4f4);
+}
+
+.vellano-tender-tile:focus-visible {
+  outline: 2px solid var(--cds-focus, #0f62fe);
+  outline-offset: -2px;
 }
 
 .vellano-tender-tile--selected {
   border-color: var(--cds-button-tertiary, #0f62fe);
   background: var(--cds-highlight, #e5f6ff);
   color: var(--cds-link-primary, #00539a);
+  font-weight: 500;
+}
+
+.vellano-tender-tile--selected:hover {
+  background: #cceaff;
 }
 
 .vellano-sale-summary {
