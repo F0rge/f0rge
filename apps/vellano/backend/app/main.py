@@ -21,6 +21,7 @@ from app.routers import (
     cost_audit,
     credit_notes,
     customers,
+    deliveries,
     health,
     home,
     invoices,
@@ -28,6 +29,7 @@ from app.routers import (
     payments,
     proformas,
     purchase_orders,
+    reorder,
     returns,
     laybys,
     reports,
@@ -95,10 +97,12 @@ app.include_router(catalogue_imports.catalogue_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
+app.include_router(reorder.reorder_router)
 app.include_router(transfers.transfers_router)
 app.include_router(stocktakes.stocktakes_router)
 app.include_router(adjustments.adjustments_router)
 app.include_router(returns.returns_router)
+app.include_router(deliveries.deliveries_router)
 app.include_router(laybys.laybys_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)

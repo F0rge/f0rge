@@ -286,6 +286,11 @@ export type Sku = {
   fabric: string;
   category: string | null;
   supplier_ref: string | null;
+  preferred_supplier_id: string | null;
+  preferred_supplier_name: string | null;
+  lead_time_days: number | null;
+  reorder_min: number | null;
+  last_landed_cost_zar: string | null;
   photo_storage_key: string | null;
   wholesale_ex_vat: string | null;
   wholesale_inc_vat: string | null;
@@ -300,6 +305,10 @@ export type UpdateSkuPricePayload = {
   wholesale_inc_vat?: string | number | null;
   retail_ex_vat?: string | number | null;
   retail_inc_vat?: string | number | null;
+  preferred_supplier_id?: string | null;
+  lead_time_days?: number | null;
+  reorder_min?: number | null;
+  supplier_ref?: string | null;
 };
 
 const VAT_MULTIPLIER = 1.15;
@@ -1463,6 +1472,183 @@ export async function downloadVat201Pdf(fromDate: string, toDate: string): Promi
   URL.revokeObjectURL(url);
 }
 
+export type StockValuationLine = {
+  location_id: string;
+  location_name: string;
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  on_hand: number;
+  unit_cost_zar: string | null;
+  value_zar: string;
+};
+
+export type StockValuationReport = {
+  total_on_hand: number;
+  total_value_zar: string;
+  lines: StockValuationLine[];
+};
+
+export type AgedStockLine = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  location_id: string;
+  location_name: string;
+  on_hand: number;
+  value_zar: string;
+  days: number;
+  bucket: string;
+};
+
+export type AgedStockBucket = {
+  bucket: string;
+  label: string;
+  qty: number;
+  value_zar: string;
+  lines: AgedStockLine[];
+};
+
+export type AgedStockReport = {
+  buckets: AgedStockBucket[];
+  total_qty: number;
+  total_value_zar: string;
+};
+
+export type SalesBySkuLine = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  qty: number;
+  ex_vat_zar: string;
+  inc_vat_zar: string;
+};
+
+export type SalesBySkuReport = {
+  from_date: string;
+  to_date: string;
+  lines: SalesBySkuLine[];
+  total_qty: number;
+  total_ex_vat_zar: string;
+  total_inc_vat_zar: string;
+};
+
+export type SalesVatReport = {
+  from_date: string;
+  to_date: string;
+  invoice_count: number;
+  subtotal_ex_vat: string;
+  vat_amount: string;
+  total_inc_vat: string;
+  amount_paid: string;
+};
+
+export function getStockValuation(): Promise<StockValuationReport> {
+  return apiFetch<StockValuationReport>("/reports/stock-valuation");
+}
+
+export function getAgedStock(): Promise<AgedStockReport> {
+  return apiFetch<AgedStockReport>("/reports/aged-stock");
+}
+
+export function getSalesBySku(fromDate: string, toDate: string): Promise<SalesBySkuReport> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  return apiFetch<SalesBySkuReport>(
+    `/reports/sales-by-sku?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+}
+
+export function getSalesVat(fromDate: string, toDate: string): Promise<SalesVatReport> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  return apiFetch<SalesVatReport>(
+    `/reports/sales-vat?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+}
+
+export async function downloadStockValuationCsv(): Promise<void> {
+  const response = await fetch("/api/v1/reports/stock-valuation/csv", {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `stock-valuation-${reportTodayIso()}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadAgedStockCsv(): Promise<void> {
+  const response = await fetch("/api/v1/reports/aged-stock/csv", {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `aged-stock-${reportTodayIso()}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadSalesBySkuCsv(fromDate: string, toDate: string): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const response = await fetch(
+    `/api/v1/reports/sales-by-sku/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `sales-by-sku-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadSalesVatCsv(fromDate: string, toDate: string): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const response = await fetch(
+    `/api/v1/reports/sales-vat/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `sales-vat-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 export type HomeAttentionKind = "low_stock" | "stocktake" | "returns" | "layby" | "bank";
 
 export type HomeAttentionItem = {
@@ -1913,5 +2099,147 @@ export function updateCustomer(
   return apiFetch<CustomerCrm>(`/customers/${id}`, {
     method: "PATCH",
     body: JSON.stringify(buildCustomerPayload(payload)),
+  });
+}
+
+export type DeliveryStatus = "draft" | "packed" | "delivered" | "cancelled";
+
+export type DeliverySourceType = "invoice" | "layby";
+
+export type DeliveryLine = {
+  id: string;
+  sku_id: string | null;
+  description: string;
+  qty: number;
+};
+
+export type Delivery = {
+  id: string;
+  delivery_number: string;
+  source_type: DeliverySourceType;
+  invoice_id: string | null;
+  invoice_number: string | null;
+  layby_id: string | null;
+  layby_number: string | null;
+  customer_name: string;
+  location_id: string;
+  location_name: string;
+  status: DeliveryStatus;
+  delivery_date: string | null;
+  notes: string | null;
+  lines: DeliveryLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateDeliveryPayload = {
+  source_type: DeliverySourceType;
+  invoice_id?: string;
+  layby_id?: string;
+  location_id: string;
+  notes?: string;
+};
+
+export type CompleteDeliveryPayload = {
+  delivery_date?: string;
+};
+
+export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
+  draft: "Draft",
+  packed: "Packed",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+
+export function canMutateDeliveries(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "warehouse" || role === "till";
+}
+
+export function listDeliveries(): Promise<Delivery[]> {
+  return apiFetch<Delivery[]>("/deliveries");
+}
+
+export function getDelivery(id: string): Promise<Delivery> {
+  return apiFetch<Delivery>(`/deliveries/${id}`);
+}
+
+export function createDelivery(payload: CreateDeliveryPayload): Promise<Delivery> {
+  const notes = payload.notes?.trim();
+  const body: CreateDeliveryPayload = {
+    source_type: payload.source_type,
+    location_id: payload.location_id,
+  };
+  if (payload.source_type === "invoice" && payload.invoice_id) {
+    body.invoice_id = payload.invoice_id;
+  }
+  if (payload.source_type === "layby" && payload.layby_id) {
+    body.layby_id = payload.layby_id;
+  }
+  if (notes) {
+    body.notes = notes;
+  }
+  return apiFetch<Delivery>("/deliveries", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function packDelivery(id: string): Promise<Delivery> {
+  return apiFetch<Delivery>(`/deliveries/${id}/pack`, { method: "POST" });
+}
+
+export function completeDelivery(
+  id: string,
+  payload?: CompleteDeliveryPayload,
+): Promise<Delivery> {
+  const deliveryDate = payload?.delivery_date?.trim();
+  const body: CompleteDeliveryPayload = {};
+  if (deliveryDate) {
+    body.delivery_date = deliveryDate;
+  }
+  return apiFetch<Delivery>(`/deliveries/${id}/complete`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function cancelDelivery(id: string): Promise<Delivery> {
+  return apiFetch<Delivery>(`/deliveries/${id}/cancel`, { method: "POST" });
+}
+
+export function isInvoiceFullyPaid(invoice: Invoice): boolean {
+  if (invoice.amount_paid === invoice.total_inc_vat) {
+    return true;
+  }
+  const paid = Number(invoice.amount_paid);
+  const total = Number(invoice.total_inc_vat);
+  return Number.isFinite(paid) && Number.isFinite(total) && paid === total;
+}
+
+export type ReorderRow = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  reorder_min: number;
+  on_hand: number;
+  on_order: number;
+  suggested_qty: number;
+  preferred_supplier_id: string | null;
+  preferred_supplier_name: string | null;
+  last_landed_cost_zar: string | null;
+};
+
+export type CreateReorderDraftPoResponse = {
+  purchase_orders: PurchaseOrder[];
+};
+
+export function listReorder(): Promise<ReorderRow[]> {
+  return apiFetch<ReorderRow[]>("/reorder");
+}
+
+export function createReorderDraftPo(skuIds: string[]): Promise<CreateReorderDraftPoResponse> {
+  return apiFetch<CreateReorderDraftPoResponse>("/reorder/draft-po", {
+    method: "POST",
+    body: JSON.stringify({ sku_ids: skuIds }),
   });
 }

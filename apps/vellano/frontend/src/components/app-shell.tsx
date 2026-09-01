@@ -16,6 +16,7 @@ import {
   Theme,
 } from "@carbon/react";
 import {
+  Barcode,
   Catalog,
   Delivery,
   DeliveryParcel,
@@ -77,6 +78,7 @@ const ICONS = {
   "/purchase-orders": Purchase,
   "/transit": Delivery,
   "/receive": DeliveryParcel,
+  "/wms": Barcode,
   "/transfers": Movement,
   "/deliveries": DeliveryTruck,
   "/returns": Undo,
@@ -210,23 +212,19 @@ export function AppShell({ children }: AppShellProps) {
                 defaultExpanded={isStockPath(pathname)}
                 isActive={isStockPath(pathname)}
               >
-                {STOCK_NAV_ITEMS.map((stockItem) => {
-                  const StockIcon = navIcon(stockItem.href);
-                  return (
-                    <SideNavMenuItem
-                      key={stockItem.href}
-                      href={stockItem.href}
-                      renderIcon={StockIcon}
-                      isActive={isNavLinkActive(pathname, stockItem.href)}
-                      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-                        event.preventDefault();
-                        router.push(stockItem.href);
-                      }}
-                    >
-                      {stockItem.label}
-                    </SideNavMenuItem>
-                  );
-                })}
+                {STOCK_NAV_ITEMS.map((stockItem) => (
+                  <SideNavMenuItem
+                    key={stockItem.href}
+                    href={stockItem.href}
+                    isActive={isNavLinkActive(pathname, stockItem.href)}
+                    onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                      event.preventDefault();
+                      router.push(stockItem.href);
+                    }}
+                  >
+                    {stockItem.label}
+                  </SideNavMenuItem>
+                ))}
               </SideNavMenu>
               {OPERATIONS_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
               {SALES_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
@@ -237,23 +235,19 @@ export function AppShell({ children }: AppShellProps) {
                 defaultExpanded={isBooksPath(pathname)}
                 isActive={isBooksPath(pathname)}
               >
-                {BOOKS_NAV_ITEMS.map((booksItem) => {
-                  const BooksIcon = navIcon(booksItem.href);
-                  return (
-                    <SideNavMenuItem
-                      key={booksItem.href}
-                      href={booksItem.href}
-                      renderIcon={BooksIcon}
-                      isActive={isNavLinkActive(pathname, booksItem.href)}
-                      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-                        event.preventDefault();
-                        router.push(booksItem.href);
-                      }}
-                    >
-                      {booksItem.label}
-                    </SideNavMenuItem>
-                  );
-                })}
+                {BOOKS_NAV_ITEMS.map((booksItem) => (
+                  <SideNavMenuItem
+                    key={booksItem.href}
+                    href={booksItem.href}
+                    isActive={isNavLinkActive(pathname, booksItem.href)}
+                    onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                      event.preventDefault();
+                      router.push(booksItem.href);
+                    }}
+                  >
+                    {booksItem.label}
+                  </SideNavMenuItem>
+                ))}
               </SideNavMenu>
               {accountItems.map((item) => renderNavLink(item.href, item.label))}
             </SideNavItems>

@@ -27,3 +27,11 @@ class SupplierCRUD(BaseCRUD):
         return (
             await self.db.execute(select(Supplier).where(func.lower(Supplier.name) == name.lower()))
         ).scalar_one_or_none()
+
+    async def names_by_ids(self, supplier_ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
+        if not supplier_ids:
+            return {}
+        result = await self.db.execute(
+            select(Supplier.id, Supplier.name).where(Supplier.id.in_(supplier_ids))
+        )
+        return {row[0]: row[1] for row in result.all()}

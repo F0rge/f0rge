@@ -47,6 +47,10 @@ class SkuCreate(BaseModel):
 
 class SkuUpdate(BaseModel):
     category: Optional[str] = Field(default=None, max_length=64)
+    preferred_supplier_id: Optional[uuid.UUID] = None
+    lead_time_days: Optional[int] = Field(default=None, ge=0)
+    reorder_min: Optional[int] = Field(default=None, ge=1)
+    supplier_ref: Optional[str] = Field(default=None, max_length=64)
     wholesale_ex_vat: Optional[Decimal] = None
     wholesale_inc_vat: Optional[Decimal] = None
     retail_ex_vat: Optional[Decimal] = None
@@ -61,6 +65,11 @@ class SkuResponse(BaseModel):
     design: str
     fabric: str
     supplier_ref: Optional[str]
+    preferred_supplier_id: Optional[uuid.UUID] = None
+    preferred_supplier_name: Optional[str] = None
+    lead_time_days: Optional[int] = None
+    reorder_min: Optional[int] = None
+    last_landed_cost_zar: Optional[Decimal] = None
     category: Optional[str] = None
     photo_storage_key: Optional[str]
     wholesale_ex_vat: Optional[Decimal] = None

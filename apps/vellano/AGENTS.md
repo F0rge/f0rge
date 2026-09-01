@@ -181,6 +181,76 @@ Extends the existing `customers` table (no second customer entity). New columns:
 
 Migration: `017_v2_s10_customers_crm`.
 
+## V2-S13 SKU supplier prices
+
+Extends `skus` (no second table). Columns: nullable `preferred_supplier_id` (FK `suppliers.id`, `ON DELETE SET NULL`), nullable `lead_time_days`. `supplier_ref` already exists — PATCH via `SkuUpdate` (set or clear with `null`).
+
+`last_landed_cost_zar` is **computed** on read from the latest `unit_cost_audit` row for that SKU where `source` is `land` or `receive` only (opening, correction, import, etc. do not count). `SkuResponse` also includes `preferred_supplier_name` (lookup).
+
+`PATCH /api/v1/skus/{id}` fields: `preferred_supplier_id`, `lead_time_days`, `supplier_ref` (plus existing price/category fields). Unknown `preferred_supplier_id` → 404 `"Supplier not found"`. Null clears via `model_fields_set`.
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| List / get SKUs (incl. supplier fields) | yes | yes | yes | yes | yes |
+| PATCH supplier / lead time / supplier_ref | yes | yes | no | no | no |
+
+Migration: `018_v2_s13_sku_supplier`.
+
+## V2-S11 deliveries
+
+Fulfillment tracking only — till/layby already moved stock. **No stock movement. No journal.**
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Deliveries:** `GET/POST /deliveries`, `GET /deliveries/{id}`, `POST /deliveries/{id}/pack`, `POST /deliveries/{id}/complete` (optional `{delivery_date}`, default today), `POST /deliveries/{id}/cancel`.
+
+Numbering: `DLV-0001`. Status: `draft` | `packed` | `delivered` | `cancelled`. Source: paid **invoice** (`amount_paid == total_inc_vat`) or non-cancelled **layby**. One non-cancelled delivery per source. Create copies all source lines (no client-supplied lines). Pack: draft → packed. Complete: packed → delivered. Cancel: draft only.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get deliveries | yes | yes | yes | yes | yes |
+| Create, pack, complete, cancel | yes | yes | no | yes | no |
+
+Migration: `019_v2_s11_deliveries`.
+
+## V2-S12 reorder
+
+Nullable `skus.reorder_min` (Integer). PATCH via `SkuUpdate` — set with `ge=1`, clear with `null`. Included on `SkuResponse`.
+
+**Reorder math:** `on_hand` = SUM(`location_stock.on_hand`); `on_order` = (`sku_stock.on_order` or 0) + SUM(`po_lines.qty`) on purchase orders with status **`open`** (draft POs count; on-water qty lives in `sku_stock` only). Listed when `reorder_min IS NOT NULL` and `(on_hand + on_order) < reorder_min`. `suggested_qty = reorder_min - on_hand - on_order`.
+
+Endpoints (cookie `vellano_session`):
+
+- **Reorder:** `GET /reorder`, `POST /reorder/draft-po` body `{ sku_ids: [uuid, ...] }` (min 1).
+
+`POST /reorder/draft-po` groups by `preferred_supplier_id`, one `PurchaseOrderService.create` per supplier (`proforma_id=null`, status `open`). Line `qty` = `suggested_qty`; `factory_unit_amount` = `last_landed_cost_zar` or `1`. Each SKU must be on the reorder list and have a preferred supplier.
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| GET reorder list | yes | yes | yes | yes | yes |
+| POST draft PO | yes | yes | no | no | no |
+
+Migration: `020_v2_s12_reorder_min`.
+
+## V2-S14 mobile WMS
+
+Frontend-only `/wms` warehouse console (no new API). Carbon ContentSwitcher: Receive | Count | Transfer. Wraps existing `POST /receive`, stocktake lookup/count/complete, and `POST /transfers`. Mutate: owner|warehouse (`canReceive` / `canTransfer`). Nav: Operations → WMS.
+
+## V2-S15 reports (stock and sales)
+
+Richer stock and sales reports under `/api/v1/reports` (cookie `vellano_session`). JSON + CSV export for each. All authenticated roles (same as existing S7 reports).
+
+- **Stock valuation:** `GET /reports/stock-valuation`, `GET /reports/stock-valuation/csv` — on-hand &gt; 0 by location × SKU (`on_hand × unit_cost_zar`).
+- **Aged stock:** `GET /reports/aged-stock`, `GET /reports/aged-stock/csv` — buckets `0-90`, `91-180`, `180+` days from `location_stock.updated_at` (180+ cutoff matches home `aged_stock_value_zar`).
+- **Sales by SKU:** `GET /reports/sales-by-sku?from=&to=`, `GET /reports/sales-by-sku/csv` — invoice lines with non-null `sku_id` in date range (till + books). Books lines without `sku_id` are omitted.
+- **Sales VAT summary:** `GET /reports/sales-vat?from=&to=`, `GET /reports/sales-vat/csv` — period totals from all `tax_invoices` (`invoice_count`, `subtotal_ex_vat`, `vat_amount`, `total_inc_vat`, `amount_paid`).
+
+**No sales-by-location:** `tax_invoices` have no `location_id` — location-scoped sales reporting would need a schema change (out of scope).
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| All V2-S15 reports + CSV | yes | yes | yes | yes | yes |
+
 ## V2-S5 returns / RMA
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -413,12 +483,7 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 - **UI:** IBM Carbon only — never `@f0rge/ui`, Tailwind, shadcn, or Mantine in this app.
 - **Chrome:** Carbon UIShell; content `g10`; SideNav dark via `Theme g100`; main offset `.vellano-main` **16rem expanded / 3rem collapsed** (`data-nav-expanded`).
-- **Stub pages** (placeholder copy only — no API):
-
-| Label | Route | Slice |
-|-------|-------|-------|
-| Deliveries | `/deliveries` | V2-S11 |
-| Reorder | `/reorder` | V2-S12 |
+- **Stub pages:** none remaining (Deliveries and Reorder shipped in V2-S11 / V2-S12).
 
 V1 routes (stock, till, books, reports, VAT201, etc.) remain live. V2-S7 home hub KPIs and needs-attention / recent-movements tables ship on `/` via `GET /home`.
 
@@ -437,6 +502,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/till` | `/till` |
 | `/transfers` | `/transfers` |
 | `/receive` | `/receive` |
+| `/wms` | `/receive`, `/stocktakes`, `/transfers` |
 | `/reports`, `/vat201` | `/reports` |
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
@@ -444,7 +510,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/returns` | `/returns` |
 | `/laybys` | `/laybys` |
 | `/customers` | `/customers` |
-| `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/deliveries` | `/deliveries` |
+| `/reorder` | `/reorder` |
 
 ## Non-goals
 

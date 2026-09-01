@@ -14,7 +14,19 @@ from app.schemas.bank_import import (
     Vat201Draft,
 )
 from app.services.reports import ReportsService
+from app.services.reports_export import (
+    build_aged_stock_csv,
+    build_sales_by_sku_csv,
+    build_sales_vat_csv,
+    build_stock_valuation_csv,
+)
 from app.services.vat201_export import build_vat201_csv, build_vat201_pdf
+from app.schemas.reports_stock import (
+    AgedStockReport,
+    SalesBySkuReport,
+    SalesVatReport,
+    StockValuationReport,
+)
 
 reports_router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
 
@@ -96,5 +108,105 @@ async def vat201_pdf(
     return Response(
         content=content,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/stock-valuation", response_model=StockValuationReport)
+async def stock_valuation(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.stock_valuation()
+
+
+@reports_router.get("/stock-valuation/csv")
+async def stock_valuation_csv(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.stock_valuation()
+    content = build_stock_valuation_csv(report)
+    filename = f"stock-valuation-{datetime.date.today().isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/aged-stock", response_model=AgedStockReport)
+async def aged_stock(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.aged_stock()
+
+
+@reports_router.get("/aged-stock/csv")
+async def aged_stock_csv(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.aged_stock()
+    content = build_aged_stock_csv(report)
+    filename = f"aged-stock-{datetime.date.today().isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/sales-by-sku", response_model=SalesBySkuReport)
+async def sales_by_sku(
+    from_date: datetime.date = Query(..., alias="from"),
+    to_date: datetime.date = Query(..., alias="to"),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.sales_by_sku(from_date, to_date)
+
+
+@reports_router.get("/sales-by-sku/csv")
+async def sales_by_sku_csv(
+    from_date: datetime.date = Query(..., alias="from"),
+    to_date: datetime.date = Query(..., alias="to"),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.sales_by_sku(from_date, to_date)
+    content = build_sales_by_sku_csv(report)
+    filename = f"sales-by-sku-{from_date.isoformat()}-to-{to_date.isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_router.get("/sales-vat", response_model=SalesVatReport)
+async def sales_vat(
+    from_date: datetime.date = Query(..., alias="from"),
+    to_date: datetime.date = Query(..., alias="to"),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    return await service.sales_vat(from_date, to_date)
+
+
+@reports_router.get("/sales-vat/csv")
+async def sales_vat_csv(
+    from_date: datetime.date = Query(..., alias="from"),
+    to_date: datetime.date = Query(..., alias="to"),
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: ReportsService = Depends(get_reports_service),
+):
+    report = await service.sales_vat(from_date, to_date)
+    content = build_sales_vat_csv(report)
+    filename = f"sales-vat-{from_date.isoformat()}-to-{to_date.isoformat()}.csv"
+    return Response(
+        content=content,
+        media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
