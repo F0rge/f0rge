@@ -1091,6 +1091,59 @@ export function getInvoice(id: string): Promise<Invoice> {
   return apiFetch<Invoice>(`/invoices/${id}`);
 }
 
+export type RepeatingInvoiceLine = {
+  id: string;
+  description: string;
+  qty: number;
+  unit_ex_vat: string;
+  sort_order: number;
+};
+
+export type RepeatingInvoice = {
+  id: string;
+  customer_id: string;
+  name: string | null;
+  day_of_month: number;
+  next_date: string;
+  is_active: boolean;
+  created_by: string | null;
+  lines: RepeatingInvoiceLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateRepeatingInvoicePayload = {
+  customer_id: string;
+  name?: string;
+  day_of_month: number;
+  next_date: string;
+  lines: CreateInvoiceLinePayload[];
+};
+
+export type RepeatingInvoiceRun = {
+  schedule: RepeatingInvoice;
+  invoice: Invoice;
+};
+
+export function listRepeatingInvoices(): Promise<RepeatingInvoice[]> {
+  return apiFetch<RepeatingInvoice[]>("/repeating-invoices");
+}
+
+export function createRepeatingInvoice(
+  payload: CreateRepeatingInvoicePayload,
+): Promise<RepeatingInvoice> {
+  return apiFetch<RepeatingInvoice>("/repeating-invoices", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function runRepeatingInvoice(id: string): Promise<RepeatingInvoiceRun> {
+  return apiFetch<RepeatingInvoiceRun>(`/repeating-invoices/${id}/run`, {
+    method: "POST",
+  });
+}
+
 export async function downloadInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
   const response = await fetch(`/api/v1/invoices/${id}/pdf`, {
     credentials: "include",

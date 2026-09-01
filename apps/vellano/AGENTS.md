@@ -508,6 +508,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/bank-reconciliation` | `/bank-imports`, `/bank-rules` |
 | `/proformas` | `/proformas` |
 | `/credit-notes` | `/credit-notes` |
+| `/repeating-invoices` | `/repeating-invoices` |
 | `/till` | `/till` |
 | `/transfers` | `/transfers` |
 | `/receive` | `/receive` |
@@ -525,7 +526,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 
 ## Non-goals
 
-The app does not send email, originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
+The app does not send email (including repeating invoices), originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
 
 **In V1 (do not treat as future work):** locations, catalogue, proformas, POs, land/receive, prices, ledger, bank import, reports, VAT201 draft, transfers, till, search, home, settings.
 

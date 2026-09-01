@@ -19,6 +19,7 @@ from app.services.cost_audit import CostAuditService
 from app.services.home import HomeService
 from app.services.inventory import InventoryService
 from app.services.invoices import InvoiceService
+from app.services.repeating_invoices import RepeatingInvoiceService
 from app.services.journals import JournalService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
@@ -123,6 +124,12 @@ def get_customers_crm_service(db: AsyncSession = Depends(get_db)) -> CustomersCr
 
 def get_invoice_service(db: AsyncSession = Depends(get_db)) -> InvoiceService:
     return InvoiceService(db)
+
+
+def get_repeating_invoice_service(
+    db: AsyncSession = Depends(get_db),
+) -> RepeatingInvoiceService:
+    return RepeatingInvoiceService(db)
 
 
 def get_journal_service(db: AsyncSession = Depends(get_db)) -> JournalService:

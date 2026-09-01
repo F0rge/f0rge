@@ -33,6 +33,7 @@ from app.routers import (
     proformas,
     purchase_orders,
     reorder,
+    repeating_invoices,
     returns,
     laybys,
     reports,
@@ -116,6 +117,7 @@ app.include_router(category_maps.category_maps_router)
 app.include_router(contacts.contacts_router)
 app.include_router(customers.customers_router)
 app.include_router(invoices.invoices_router)
+app.include_router(repeating_invoices.repeating_invoices_router)
 app.include_router(journals.journals_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)

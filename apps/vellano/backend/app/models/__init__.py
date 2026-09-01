@@ -26,6 +26,7 @@ from app.models.purchase_order import (
     PurchaseOrder,
     PurchaseOrderStatus,
 )
+from app.models.repeating_invoice import RepeatingInvoice, RepeatingInvoiceLine
 from app.models.sku import Sku
 from app.models.stock_adjustment import (
     StockAdjustment,
@@ -89,6 +90,8 @@ __all__ = [
     "Proforma",
     "PurchaseOrder",
     "PurchaseOrderStatus",
+    "RepeatingInvoice",
+    "RepeatingInvoiceLine",
     "Sku",
     "SkuStock",
     "StockAdjustment",

@@ -3,6 +3,7 @@ export const BOOKS_NAV_ITEMS = [
   { href: "/journals", label: "Journals" },
   { href: "/contacts", label: "Contacts" },
   { href: "/invoices", label: "Invoices" },
+  { href: "/repeating-invoices", label: "Repeating invoices" },
   { href: "/credit-notes", label: "Credit notes" },
   { href: "/bills", label: "Bills" },
   { href: "/payments", label: "Payments" },
@@ -59,6 +60,7 @@ export function isBooksPath(pathname: string): boolean {
     BOOKS_HREFS.has(pathname) ||
     pathname.startsWith("/journals/") ||
     pathname.startsWith("/invoices/") ||
+    pathname.startsWith("/repeating-invoices/") ||
     pathname.startsWith("/credit-notes/") ||
     pathname.startsWith("/bills/")
   );
@@ -76,6 +78,9 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
     return true;
   }
   if (href === "/invoices" && pathname.startsWith("/invoices/")) {
+    return true;
+  }
+  if (href === "/repeating-invoices" && pathname.startsWith("/repeating-invoices/")) {
     return true;
   }
   if (href === "/credit-notes" && pathname.startsWith("/credit-notes/")) {
