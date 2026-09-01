@@ -29,6 +29,7 @@ from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.skus import SkuService
 from app.services.stock_adjustments import StockAdjustmentService
+from app.services.stock_returns import StockReturnsService
 from app.services.stocktakes import StocktakeService
 from app.services.suppliers import SupplierService
 from app.services.transfers import TransferService
@@ -142,6 +143,10 @@ def get_adjustment_service(db: AsyncSession = Depends(get_db)) -> StockAdjustmen
     return StockAdjustmentService(db)
 
 
+def get_stock_returns_service(db: AsyncSession = Depends(get_db)) -> StockReturnsService:
+    return StockReturnsService(db)
+
+
 def get_till_orchestrator(db: AsyncSession = Depends(get_db)) -> TillOrchestrator:
     return TillOrchestrator(db)
 
@@ -194,6 +199,19 @@ async def require_catalogue_mutate(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner or buyer access required",
+        )
+    return user_id
+
+
+async def require_returns_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    user = await UserCRUD(db).get_by_id(user_id)
+    if user is None or user.role not in (UserRole.OWNER, UserRole.WAREHOUSE, UserRole.TILL):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner, warehouse, or till access required",
         )
     return user_id
 

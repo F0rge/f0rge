@@ -956,6 +956,7 @@ export type InvoiceLine = {
   inc_vat: string;
   vat_amount: string;
   sort_order: number;
+  sku_id?: string | null;
 };
 
 export type Invoice = {
@@ -1552,4 +1553,108 @@ export function canViewCostAudit(role: UserRole | undefined): boolean {
 
 export function canMutateSettings(role: UserRole | undefined): boolean {
   return role === "owner";
+}
+
+export type StockReturnReason = "damaged" | "unwanted" | "wrong_item" | "other";
+
+export type StockReturnDisposition = "restock" | "write_off";
+
+export type StockReturnStatus = "draft" | "completed" | "cancelled";
+
+export type StockReturnLine = {
+  id: string;
+  invoice_line_id: string;
+  sku_id: string | null;
+  description: string;
+  qty: number;
+  unit_ex_vat: string;
+};
+
+export type StockReturn = {
+  id: string;
+  return_number: string;
+  invoice_id: string;
+  invoice_number: string;
+  location_id: string;
+  location_name: string;
+  credit_note_id: string | null;
+  reason: StockReturnReason;
+  disposition: StockReturnDisposition;
+  status: StockReturnStatus;
+  notes: string | null;
+  lines: StockReturnLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateStockReturnLinePayload = {
+  invoice_line_id: string;
+  sku_id?: string;
+  qty: number;
+};
+
+export type CreateStockReturnPayload = {
+  invoice_id: string;
+  location_id: string;
+  reason: StockReturnReason;
+  disposition: StockReturnDisposition;
+  notes?: string;
+  lines: CreateStockReturnLinePayload[];
+};
+
+export const RETURN_REASON_LABELS: Record<StockReturnReason, string> = {
+  damaged: "Damaged",
+  unwanted: "Unwanted",
+  wrong_item: "Wrong item",
+  other: "Other",
+};
+
+export const RETURN_REASONS: StockReturnReason[] = [
+  "damaged",
+  "unwanted",
+  "wrong_item",
+  "other",
+];
+
+export const RETURN_DISPOSITION_LABELS: Record<StockReturnDisposition, string> = {
+  restock: "Restock",
+  write_off: "Write-off",
+};
+
+export function canMutateReturns(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "warehouse" || role === "till";
+}
+
+export function listReturns(): Promise<StockReturn[]> {
+  return apiFetch<StockReturn[]>("/returns");
+}
+
+export function getReturn(id: string): Promise<StockReturn> {
+  return apiFetch<StockReturn>(`/returns/${id}`);
+}
+
+export function createReturn(payload: CreateStockReturnPayload): Promise<StockReturn> {
+  const notes = payload.notes?.trim();
+  const body: CreateStockReturnPayload = {
+    invoice_id: payload.invoice_id,
+    location_id: payload.location_id,
+    reason: payload.reason,
+    disposition: payload.disposition,
+    lines: payload.lines,
+  };
+  if (notes) {
+    body.notes = notes;
+  }
+  return apiFetch<StockReturn>("/returns", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function completeReturn(id: string): Promise<StockReturn> {
+  return apiFetch<StockReturn>(`/returns/${id}/complete`, { method: "POST" });
+}
+
+export function cancelReturn(id: string): Promise<StockReturn> {
+  return apiFetch<StockReturn>(`/returns/${id}/cancel`, { method: "POST" });
 }

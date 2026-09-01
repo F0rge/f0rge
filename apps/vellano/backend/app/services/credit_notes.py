@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,7 @@ from app.crud.credit_note import CreditNoteCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.models.credit_note import CreditNote
 from app.models.journal import JournalDocumentType
+from app.models.tax_invoice import TaxInvoice
 from app.schemas.credit_note import CreditNoteCreate, CreditNoteResponse
 from app.services.chart_of_accounts import (
     CODE_AR,
@@ -47,34 +49,67 @@ class CreditNoteService:
         if existing is not None:
             raise ConflictError("This invoice has already been credited")
 
-        credit_note_number = await self.crud.get_next_credit_note_number()
-        credit_note = CreditNote(
-            credit_note_number=credit_note_number,
-            invoice_id=invoice.id,
-            reason=data.reason,
-            issue_date=datetime.date.today(),
-            subtotal_ex_vat=invoice.subtotal_ex_vat,
-            vat_amount=invoice.vat_amount,
-            total_inc_vat=invoice.total_inc_vat,
-        )
-
         async with unit_of_work(self.db):
-            await self.crud.add_and_flush(credit_note)
-            await self.posting.post(
-                JournalDocumentType.CREDIT_NOTE,
-                credit_note.id,
-                f"Credit note {credit_note_number}",
-                [
-                    (CODE_SALES, invoice.subtotal_ex_vat, Decimal(0)),
-                    (CODE_VAT, invoice.vat_amount, Decimal(0)),
-                    (CODE_AR, Decimal(0), invoice.total_inc_vat),
-                ],
+            credit_note = await self._create_and_post(
+                invoice=invoice,
+                reason=data.reason,
+                subtotal_ex_vat=invoice.subtotal_ex_vat,
+                vat_amount=invoice.vat_amount,
+                total_inc_vat=invoice.total_inc_vat,
             )
             await self.crud.commit_refresh(credit_note)
 
         reloaded = await self.crud.get_by_id(credit_note.id)
         assert reloaded is not None
         return self._to_response(reloaded)
+
+    async def create_for_return(
+        self,
+        invoice: TaxInvoice,
+        reason: Optional[str],
+        subtotal_ex_vat: Decimal,
+        vat_amount: Decimal,
+        total_inc_vat: Decimal,
+    ) -> CreditNote:
+        """Create and post a credit note inside the caller's unit_of_work."""
+        return await self._create_and_post(
+            invoice=invoice,
+            reason=reason,
+            subtotal_ex_vat=subtotal_ex_vat,
+            vat_amount=vat_amount,
+            total_inc_vat=total_inc_vat,
+        )
+
+    async def _create_and_post(
+        self,
+        invoice: TaxInvoice,
+        reason: Optional[str],
+        subtotal_ex_vat: Decimal,
+        vat_amount: Decimal,
+        total_inc_vat: Decimal,
+    ) -> CreditNote:
+        credit_note_number = await self.crud.get_next_credit_note_number()
+        credit_note = CreditNote(
+            credit_note_number=credit_note_number,
+            invoice_id=invoice.id,
+            reason=reason,
+            issue_date=datetime.date.today(),
+            subtotal_ex_vat=subtotal_ex_vat,
+            vat_amount=vat_amount,
+            total_inc_vat=total_inc_vat,
+        )
+        await self.crud.add_and_flush(credit_note)
+        await self.posting.post(
+            JournalDocumentType.CREDIT_NOTE,
+            credit_note.id,
+            f"Credit note {credit_note_number}",
+            [
+                (CODE_SALES, subtotal_ex_vat, Decimal(0)),
+                (CODE_VAT, vat_amount, Decimal(0)),
+                (CODE_AR, Decimal(0), total_inc_vat),
+            ],
+        )
+        return credit_note
 
     @staticmethod
     def _to_response(credit_note: CreditNote) -> CreditNoteResponse:

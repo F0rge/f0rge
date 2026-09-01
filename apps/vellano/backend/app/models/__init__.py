@@ -24,6 +24,13 @@ from app.models.stock_adjustment import (
     StockAdjustmentReason,
     StockAdjustmentStatus,
 )
+from app.models.stock_return import (
+    StockReturn,
+    StockReturnDisposition,
+    StockReturnLine,
+    StockReturnReason,
+    StockReturnStatus,
+)
 from app.models.stocktake import Stocktake, StocktakeLine, StocktakeStatus
 from app.models.supplier import Supplier
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
@@ -62,6 +69,11 @@ __all__ = [
     "StockAdjustmentLine",
     "StockAdjustmentReason",
     "StockAdjustmentStatus",
+    "StockReturn",
+    "StockReturnDisposition",
+    "StockReturnLine",
+    "StockReturnReason",
+    "StockReturnStatus",
     "Stocktake",
     "StocktakeLine",
     "StocktakeStatus",

@@ -150,6 +150,25 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 |--------|:-----:|:-----:|:---------:|:----:|:-----:|
 | Preview / commit CSV import | yes | yes | no | no | no |
 
+## V2-S5 returns / RMA
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Returns:** `GET/POST /returns`, `GET /returns/{id}`, `POST /returns/{id}/complete`, `POST /returns/{id}/cancel`.
+
+Draft return against a tax invoice. Complete creates a **partial or full credit note** (one CN per invoice) and optionally restocks till-sale SKUs. Status: `draft` | `completed` | `cancelled`. Numbering: `RTN-0001`.
+
+**Dispositions:** `restock` (till sales only — invoice lines must have `sku_id`) restores on-hand at `location_id` and posts COGS reverse (Dr 1300, Cr 5000) on the same CN journal. `write_off` posts CN sales reverse only (no stock movement).
+
+One non-cancelled return per invoice. Cannot create if invoice already has a credit note. Cancel from `draft` only; no CN; a new return may then be created.
+
+Complete restock while a stocktake is `in_progress` at that location → 409 `"Location is locked for stocktake"`.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get returns | yes | yes | yes | yes | yes |
+| Create / complete / cancel | yes | yes | no | yes | no |
+
 ## S3 catalogue (suppliers, proformas, SKUs)
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -331,7 +350,6 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 | Label | Route | Slice |
 |-------|-------|-------|
-| Returns | `/returns` | V2-S5 |
 | Laybys | `/laybys` | V2-S6 |
 | Customers | `/customers` | V2-S10 |
 | Deliveries | `/deliveries` | V2-S11 |
@@ -358,7 +376,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
 | `/import` | `/imports` |
-| `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/returns` | `/returns` |
+| `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
 
 ## Non-goals
 

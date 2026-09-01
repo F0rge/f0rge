@@ -21,6 +21,7 @@ class UnitCostAuditSource(str, enum.Enum):
     STOCKTAKE = "stocktake"
     ADJUSTMENT = "adjustment"
     IMPORT = "import"
+    RETURN = "return"
 
 
 class UnitCostAudit(UUIDPkMixin, TimestampMixin, Base):

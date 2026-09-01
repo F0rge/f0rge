@@ -108,6 +108,7 @@ class TillOrchestrator:
                     inc_vat=inc_vat,
                     vat_amount=line_vat,
                     sort_order=index,
+                    sku_id=sku.id,
                 )
             )
 
@@ -210,6 +211,7 @@ class TillOrchestrator:
                     inc_vat=line.inc_vat,
                     vat_amount=line.vat_amount,
                     sort_order=line.sort_order,
+                    sku_id=line.sku_id,
                 )
                 for line in reloaded.lines
             ],

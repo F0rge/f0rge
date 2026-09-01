@@ -27,6 +27,7 @@ from app.routers import (
     payments,
     proformas,
     purchase_orders,
+    returns,
     reports,
     search,
     settings as settings_router,
@@ -94,6 +95,7 @@ app.include_router(purchase_orders.inventory_router)
 app.include_router(transfers.transfers_router)
 app.include_router(stocktakes.stocktakes_router)
 app.include_router(adjustments.adjustments_router)
+app.include_router(returns.returns_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
 app.include_router(contacts.contacts_router)

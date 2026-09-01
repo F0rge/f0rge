@@ -11,7 +11,6 @@ from tests.test_purchase_orders import (
     _create_sku,
     _create_supplier,
     _create_till,
-    _create_warehouse,
     _location_id_by_name,
     _relogin_owner,
 )
@@ -38,6 +37,16 @@ async def _inventory_on_hand(
     return loc["on_hand"]
 
 
+async def _login_warehouse(client: AsyncClient) -> AsyncClient:
+    client.cookies.clear()
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "warehouse-po@example.com", "password": "warehouse-password"},
+    )
+    assert login_resp.status_code == 200
+    return client
+
+
 async def _transfer_to_bedfordview(
     async_client: AsyncClient,
     owner_client: AsyncClient,
@@ -46,7 +55,7 @@ async def _transfer_to_bedfordview(
 ) -> str:
     kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
     bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
-    warehouse = await _create_warehouse(async_client, owner_client)
+    warehouse = await _login_warehouse(async_client)
     await _relogin_owner(owner_client)
     transfer = await warehouse.post(
         "/api/v1/transfers",
