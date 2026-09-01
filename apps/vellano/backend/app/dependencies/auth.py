@@ -41,6 +41,7 @@ from app.services.suppliers import SupplierService
 from app.services.transfers import TransferService
 from app.services.till_orchestrator import TillOrchestrator
 from app.services.users import BootstrapService, ProfileService, UserService
+from app.services.vat201_periods import Vat201PeriodService
 
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
@@ -151,6 +152,10 @@ def get_catalogue_import_service(
 
 def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:
     return ReportsService(db)
+
+
+def get_vat201_period_service(db: AsyncSession = Depends(get_db)) -> Vat201PeriodService:
+    return Vat201PeriodService(db)
 
 
 def get_transfer_service(db: AsyncSession = Depends(get_db)) -> TransferService:

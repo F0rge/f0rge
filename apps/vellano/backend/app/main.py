@@ -43,6 +43,7 @@ from app.routers import (
     till,
     transfers,
     users,
+    vat201_periods,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
@@ -120,6 +121,7 @@ app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)
 app.include_router(bank_imports.bank_imports_router)
 app.include_router(reports.reports_router)
+app.include_router(vat201_periods.vat201_periods_router)
 app.include_router(search.search_router)
 app.include_router(home.home_router)
 app.include_router(settings_router.settings_router)

@@ -1658,6 +1658,103 @@ export async function downloadVat201Pdf(fromDate: string, toDate: string): Promi
   URL.revokeObjectURL(url);
 }
 
+export type Vat201PeriodStatus = "draft" | "due" | "locked";
+
+export type Vat201Period = {
+  id: string;
+  period_from: string;
+  period_to: string;
+  status: Vat201PeriodStatus;
+  locked_at: string | null;
+  locked_by_user_id: string | null;
+  reopen_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Vat201PeriodEvent = {
+  action: string;
+  created_at?: string;
+  at?: string;
+  reason?: string | null;
+};
+
+export type Vat201PeriodDetail = Vat201Period & {
+  draft: Vat201Draft;
+  events?: Vat201PeriodEvent[];
+};
+
+export type CreateVat201PeriodPayload = {
+  period_from: string;
+  period_to: string;
+};
+
+export function listVat201Periods(): Promise<Vat201Period[]> {
+  return apiFetch<Vat201Period[]>("/vat201/periods");
+}
+
+export function createVat201Period(
+  payload: CreateVat201PeriodPayload,
+): Promise<Vat201PeriodDetail> {
+  const period_from = payload.period_from.trim();
+  const period_to = payload.period_to.trim();
+  if (!period_from || !period_to) {
+    throw new ApiError(400, "period_from and period_to are required");
+  }
+  return apiFetch<Vat201PeriodDetail>("/vat201/periods", {
+    method: "POST",
+    body: JSON.stringify({ period_from, period_to }),
+  });
+}
+
+export function getVat201Period(id: string): Promise<Vat201PeriodDetail> {
+  return apiFetch<Vat201PeriodDetail>(`/vat201/periods/${id}`);
+}
+
+export function lockVat201Period(id: string): Promise<Vat201PeriodDetail> {
+  return apiFetch<Vat201PeriodDetail>(`/vat201/periods/${id}/lock`, { method: "POST" });
+}
+
+export function reopenVat201Period(id: string, reason: string): Promise<Vat201PeriodDetail> {
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    throw new ApiError(400, "reason is required");
+  }
+  return apiFetch<Vat201PeriodDetail>(`/vat201/periods/${id}/reopen`, {
+    method: "POST",
+    body: JSON.stringify({ reason: trimmed }),
+  });
+}
+
+async function downloadVat201PeriodFile(id: string, kind: "csv" | "pdf"): Promise<void> {
+  const response = await fetch(`/api/v1/vat201/periods/${id}/${kind}`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition");
+  const named = disposition?.match(/filename="([^"]+)"/)?.[1];
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = named ?? `vat201-period-${id}.${kind}`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export function downloadVat201PeriodCsv(id: string): Promise<void> {
+  return downloadVat201PeriodFile(id, "csv");
+}
+
+export function downloadVat201PeriodPdf(id: string): Promise<void> {
+  return downloadVat201PeriodFile(id, "pdf");
+}
+
 export type StockValuationLine = {
   location_id: string;
   location_name: string;

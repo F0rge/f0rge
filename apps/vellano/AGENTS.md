@@ -453,6 +453,7 @@ Date,Description,Reference,Amount
 - **Bank imports:** `GET/POST /bank-imports`, `GET /bank-imports/{id}`, `GET /bank-imports/unmatched-lines`, `GET /bank-imports/unmatched-counts`, `POST /bank-imports/{import_id}/lines/{line_id}/match` — body `{ "payment_id" }` XOR `{ "journal_id" }`. Bank CSV is per recon account (`account_id` on `POST /bank-imports`; omit defaults to 1100).
 - **Reports:** `GET /reports/aged-ar?as_of=`, `GET /reports/aged-ap?as_of=`, `GET /reports/profit-loss?from=&to=`, `GET /reports/balance-sheet?as_of=`, `GET /reports/trial-balance?as_of=`, `GET /reports/journals?from=&to=&source=` (source optional), `GET /reports/cash-summary?from=&to=` — plus `/csv` on trial-balance, journals, and cash-summary.
 - **VAT201 draft:** `GET /reports/vat201?from=&to=`, `GET /reports/vat201/csv`, `GET /reports/vat201/pdf` — shaped fields for copy/type-in to eFiling only.
+- **VAT201 periods:** `GET/POST /vat201/periods`, lock snapshot, owner-only reopen; CSV/PDF by period id. Never SARS.
 
 Matching a bank line sets `payments.is_reconciled = true`. Unmatched import lines remain visible. Amount+date suggestions are returned when a payment matches within ±3 days.
 
@@ -511,7 +512,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/transfers` | `/transfers` |
 | `/receive` | `/receive` |
 | `/wms` | `/receive`, `/stocktakes`, `/transfers` |
-| `/reports`, `/vat201` | `/reports` |
+| `/reports` | `/reports` |
+| `/vat201` | `/vat201/periods` |
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
 | `/import` | `/imports` |

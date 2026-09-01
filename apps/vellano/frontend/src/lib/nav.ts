@@ -8,7 +8,7 @@ export const BOOKS_NAV_ITEMS = [
   { href: "/payments", label: "Payments" },
   { href: "/bank-reconciliation", label: "Bank reconciliation" },
   { href: "/reports", label: "Reports" },
-  { href: "/vat201", label: "VAT201 draft" },
+  { href: "/vat201", label: "VAT201" },
 ] as const;
 
 export type BooksNavItem = (typeof BOOKS_NAV_ITEMS)[number];

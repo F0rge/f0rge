@@ -46,6 +46,12 @@ from app.models.team_settings import TeamSettings
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
 from app.models.team import Team
 from app.models.user import User, UserRole
+from app.models.vat201_period import (
+    Vat201Period,
+    Vat201PeriodEvent,
+    Vat201PeriodEventAction,
+    Vat201PeriodStatus,
+)
 
 __all__ = [
     "Account",
@@ -104,4 +110,8 @@ __all__ = [
     "Team",
     "User",
     "UserRole",
+    "Vat201Period",
+    "Vat201PeriodEvent",
+    "Vat201PeriodEventAction",
+    "Vat201PeriodStatus",
 ]
