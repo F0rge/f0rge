@@ -5,6 +5,7 @@ import {
   DataTable,
   InlineNotification,
   Modal,
+  Pagination,
   Select,
   SelectItem,
   Stack,
@@ -19,6 +20,7 @@ import {
   TextArea,
   TextInput,
 } from "@carbon/react";
+import { DocumentExport, Edit } from "@carbon/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -27,11 +29,13 @@ import {
   createCustomer,
   formatZarAmount,
   listCustomers,
+  updateCustomer,
   type CreateCustomerPayload,
   type CustomerCrm,
   type CustomerType,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { downloadCsv } from "@/lib/csv";
 
 const TABLE_HEADERS = [
   { key: "customer", header: "Customer" },
@@ -40,6 +44,18 @@ const TABLE_HEADERS = [
   { key: "open_invoices", header: "Open Invoices" },
   { key: "active_laybys", header: "Active Laybys" },
 ] as const;
+
+const ACTIONS_HEADER = { key: "actions", header: "" };
+
+const CSV_HEADERS = [
+  "Customer",
+  "Type",
+  "Tier",
+  "Email",
+  "Phone",
+  "Open invoices",
+  "Active laybys",
+];
 
 type TypeFilter = "all" | CustomerType;
 type BalanceFilter = "any" | "open_invoices" | "active_laybys";
@@ -51,9 +67,10 @@ type CustomerRow = {
   contact: string;
   open_invoices: string;
   active_laybys: string;
+  actions: string;
 };
 
-const emptyCreateForm: CreateCustomerPayload = {
+const emptyCustomerForm: CreateCustomerPayload = {
   name: "",
   customer_type: "retail",
   price_tier: "standard",
@@ -91,6 +108,93 @@ function customerTypeTagType(type: CustomerType): "blue" | "purple" {
   return type === "retail" ? "blue" : "purple";
 }
 
+function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
+  return {
+    name: customer.name,
+    customer_type: customer.customer_type,
+    price_tier: customer.price_tier,
+    email: customer.email ?? "",
+    phone: customer.phone ?? "",
+    vat_number: customer.vat_number ?? "",
+    billing_address: customer.billing_address ?? "",
+  };
+}
+
+function csvMoney(count: number, amount: string): string {
+  return count > 0 ? formatZarAmount(amount) : "";
+}
+
+function CustomerFormFields({
+  idPrefix,
+  form,
+  onChange,
+  disabled,
+}: {
+  idPrefix: string;
+  form: CreateCustomerPayload;
+  onChange: (patch: Partial<CreateCustomerPayload>) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Stack gap={5}>
+      <TextInput
+        id={`${idPrefix}-name`}
+        labelText="Name"
+        value={form.name}
+        onChange={(event) => onChange({ name: event.target.value })}
+        required
+        disabled={disabled}
+      />
+      <Select
+        id={`${idPrefix}-type`}
+        labelText="Customer type"
+        value={form.customer_type ?? "retail"}
+        onChange={(event) => onChange({ customer_type: event.target.value as CustomerType })}
+        disabled={disabled}
+      >
+        <SelectItem value="retail" text="Retail" />
+        <SelectItem value="trade" text="Trade" />
+      </Select>
+      <TextInput
+        id={`${idPrefix}-tier`}
+        labelText="Price tier"
+        value={form.price_tier ?? "standard"}
+        onChange={(event) => onChange({ price_tier: event.target.value })}
+        disabled={disabled}
+      />
+      <TextInput
+        id={`${idPrefix}-email`}
+        labelText="Email"
+        type="email"
+        value={form.email ?? ""}
+        onChange={(event) => onChange({ email: event.target.value })}
+        disabled={disabled}
+      />
+      <TextInput
+        id={`${idPrefix}-phone`}
+        labelText="Phone"
+        value={form.phone ?? ""}
+        onChange={(event) => onChange({ phone: event.target.value })}
+        disabled={disabled}
+      />
+      <TextInput
+        id={`${idPrefix}-vat`}
+        labelText="VAT number"
+        value={form.vat_number ?? ""}
+        onChange={(event) => onChange({ vat_number: event.target.value })}
+        disabled={disabled}
+      />
+      <TextArea
+        id={`${idPrefix}-billing`}
+        labelText="Billing address"
+        value={form.billing_address ?? ""}
+        onChange={(event) => onChange({ billing_address: event.target.value })}
+        disabled={disabled}
+      />
+    </Stack>
+  );
+}
+
 export default function CustomersPage() {
   const { user } = useAuth();
   const canMutate = canMutateCustomers(user?.role);
@@ -100,8 +204,12 @@ export default function CustomersPage() {
   const [searchFilter, setSearchFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>("any");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState<CreateCustomerPayload>(emptyCreateForm);
+  const [createForm, setCreateForm] = useState<CreateCustomerPayload>(emptyCustomerForm);
+  const [editCustomer, setEditCustomer] = useState<CustomerCrm | null>(null);
+  const [editForm, setEditForm] = useState<CreateCustomerPayload>(emptyCustomerForm);
   const [saving, setSaving] = useState(false);
 
   const loadCustomers = useCallback(async () => {
@@ -146,14 +254,47 @@ export default function CustomersPage() {
     });
   }, [customers, searchFilter, typeFilter, balanceFilter]);
 
-  const rows: CustomerRow[] = filteredCustomers.map((entry) => ({
+  useEffect(() => {
+    setPage(1);
+  }, [searchFilter, typeFilter, balanceFilter]);
+
+  const pagedCustomers = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredCustomers.slice(start, start + pageSize);
+  }, [filteredCustomers, page, pageSize]);
+
+  const tableHeaders = canMutate ? [...TABLE_HEADERS, ACTIONS_HEADER] : [...TABLE_HEADERS];
+
+  const rows: CustomerRow[] = pagedCustomers.map((entry) => ({
     id: entry.id,
     customer: entry.id,
     type_tier: entry.id,
     contact: entry.id,
     open_invoices: entry.id,
     active_laybys: entry.id,
+    actions: entry.id,
   }));
+
+  function openCustomer(entry: CustomerCrm) {
+    setEditCustomer(entry);
+    setEditForm(formFromCustomer(entry));
+  }
+
+  function handleExport() {
+    downloadCsv(
+      "vellano-customers.csv",
+      CSV_HEADERS,
+      filteredCustomers.map((customer) => [
+        customer.name,
+        CUSTOMER_TYPE_LABELS[customer.customer_type],
+        customer.price_tier,
+        customer.email ?? "",
+        customer.phone ?? "",
+        csvMoney(customer.open_invoices_count, customer.open_invoices_zar),
+        csvMoney(customer.active_laybys_count, customer.active_laybys_zar),
+      ]),
+    );
+  }
 
   async function handleCreate() {
     const name = createForm.name.trim();
@@ -174,10 +315,41 @@ export default function CustomersPage() {
         billing_address: createForm.billing_address,
       });
       setCreateOpen(false);
-      setCreateForm(emptyCreateForm);
+      setCreateForm(emptyCustomerForm);
       await loadCustomers();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create customer.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUpdate() {
+    if (!editCustomer || !canMutate) {
+      return;
+    }
+    const name = editForm.name.trim();
+    if (!name) {
+      setError("Customer name is required.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await updateCustomer(editCustomer.id, {
+        name,
+        customer_type: editForm.customer_type ?? "retail",
+        price_tier: editForm.price_tier?.trim() || "standard",
+        email: editForm.email,
+        phone: editForm.phone,
+        vat_number: editForm.vat_number,
+        billing_address: editForm.billing_address,
+      });
+      setEditCustomer(null);
+      setEditForm(emptyCustomerForm);
+      await loadCustomers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update customer.");
     } finally {
       setSaving(false);
     }
@@ -192,9 +364,19 @@ export default function CustomersPage() {
             Manage retail and trade customers, view balances, laybys, and pricing tiers.
           </p>
         </div>
-        {canMutate ? (
-          <Button onClick={() => setCreateOpen(true)}>New customer</Button>
-        ) : null}
+        <div className="vellano-catalogue-actions">
+          <Button
+            kind="secondary"
+            renderIcon={DocumentExport}
+            disabled={filteredCustomers.length === 0}
+            onClick={handleExport}
+          >
+            Export CSV
+          </Button>
+          {canMutate ? (
+            <Button onClick={() => setCreateOpen(true)}>New customer</Button>
+          ) : null}
+        </div>
       </div>
 
       {error ? (
@@ -283,93 +465,128 @@ export default function CustomersPage() {
             style={{ margin: "1rem" }}
           />
         ) : (
-          <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-            {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-              <TableContainer title="Customers" description="Retail and trade customer balances">
-                <Table {...getTableProps()}>
-                  <TableHead>
-                    <TableRow>
-                      {headers.map((header) => (
-                        <TableHeader
-                          {...getHeaderProps({ header })}
-                          key={header.key}
-                          isSortable={false}
-                        >
-                          {header.header}
-                        </TableHeader>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {tableRows.length === 0 ? (
+          <>
+            <DataTable rows={rows} headers={tableHeaders}>
+              {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer title="Customers" description="Retail and trade customer balances">
+                  <Table {...getTableProps()}>
+                    <TableHead>
                       <TableRow>
-                        <TableCell colSpan={headers.length}>
-                          No customers match the current filters.
-                        </TableCell>
+                        {headers.map((header) => (
+                          <TableHeader
+                            {...getHeaderProps({ header })}
+                            key={header.key}
+                            isSortable={false}
+                          >
+                            {header.header}
+                          </TableHeader>
+                        ))}
                       </TableRow>
-                    ) : (
-                      tableRows.map((row) => {
-                        const entry = filteredCustomers.find((customer) => customer.id === row.id);
-                        if (!entry) {
-                          return null;
-                        }
-                        const invoices = formatOpenInvoices(entry);
-                        const laybys = formatActiveLaybys(entry);
-                        return (
-                          <TableRow {...getRowProps({ row })} key={row.id}>
-                            <TableCell>
-                              <div className="cds--type-body-compact-01" style={{ fontWeight: 600 }}>
-                                {entry.name}
-                              </div>
-                              <div className="vellano-muted-text">{entry.id}</div>
-                            </TableCell>
-                            <TableCell>
-                              <Tag type={customerTypeTagType(entry.customer_type)} size="sm">
-                                {CUSTOMER_TYPE_LABELS[entry.customer_type]}
-                              </Tag>
-                              <div className="vellano-muted-text" style={{ marginTop: "0.25rem" }}>
-                                Tier: {entry.price_tier}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="cds--type-body-compact-01">{formatContact(entry)}</div>
-                            </TableCell>
-                            <TableCell style={{ textAlign: "right" }}>
-                              <div
-                                className="cds--type-body-compact-01"
-                                style={{ fontWeight: invoices.amount === "—" ? 400 : 600 }}
-                              >
-                                {invoices.amount}
-                              </div>
-                              {invoices.detail ? (
-                                <div
-                                  className="vellano-muted-text"
-                                  style={{ color: "var(--cds-support-error, #da1e28)" }}
+                    </TableHead>
+                    <TableBody>
+                      {tableRows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={headers.length}>
+                            No customers match the current filters.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        tableRows.map((row) => {
+                          const entry = pagedCustomers.find((customer) => customer.id === row.id);
+                          if (!entry) {
+                            return null;
+                          }
+                          const invoices = formatOpenInvoices(entry);
+                          const laybys = formatActiveLaybys(entry);
+                          return (
+                            <TableRow {...getRowProps({ row })} key={row.id}>
+                              <TableCell>
+                                <Button
+                                  type="button"
+                                  kind="ghost"
+                                  size="sm"
+                                  onClick={() => openCustomer(entry)}
+                                  style={{ paddingInlineStart: 0 }}
                                 >
-                                  {invoices.detail}
+                                  {entry.name}
+                                </Button>
+                                <div className="vellano-muted-text">{entry.id}</div>
+                              </TableCell>
+                              <TableCell>
+                                <Tag type={customerTypeTagType(entry.customer_type)} size="sm">
+                                  {CUSTOMER_TYPE_LABELS[entry.customer_type]}
+                                </Tag>
+                                <div className="vellano-muted-text" style={{ marginTop: "0.25rem" }}>
+                                  Tier: {entry.price_tier}
                                 </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="cds--type-body-compact-01">{formatContact(entry)}</div>
+                              </TableCell>
+                              <TableCell style={{ textAlign: "right" }}>
+                                <div
+                                  className="cds--type-body-compact-01"
+                                  style={{ fontWeight: invoices.amount === "—" ? 400 : 600 }}
+                                >
+                                  {invoices.amount}
+                                </div>
+                                {invoices.detail ? (
+                                  <div
+                                    className="vellano-muted-text"
+                                    style={{ color: "var(--cds-support-error, #da1e28)" }}
+                                  >
+                                    {invoices.detail}
+                                  </div>
+                                ) : null}
+                              </TableCell>
+                              <TableCell style={{ textAlign: "right" }}>
+                                <div
+                                  className="cds--type-body-compact-01"
+                                  style={{ fontWeight: laybys.amount === "—" ? 400 : 600 }}
+                                >
+                                  {laybys.amount}
+                                </div>
+                                {laybys.detail ? (
+                                  <div className="vellano-muted-text">{laybys.detail}</div>
+                                ) : null}
+                              </TableCell>
+                              {canMutate ? (
+                                <TableCell style={{ textAlign: "center" }}>
+                                  <Button
+                                    type="button"
+                                    kind="ghost"
+                                    size="sm"
+                                    hasIconOnly
+                                    iconDescription="Edit customer"
+                                    renderIcon={Edit}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      openCustomer(entry);
+                                    }}
+                                  />
+                                </TableCell>
                               ) : null}
-                            </TableCell>
-                            <TableCell style={{ textAlign: "right" }}>
-                              <div
-                                className="cds--type-body-compact-01"
-                                style={{ fontWeight: laybys.amount === "—" ? 400 : 600 }}
-                              >
-                                {laybys.amount}
-                              </div>
-                              {laybys.detail ? (
-                                <div className="vellano-muted-text">{laybys.detail}</div>
-                              ) : null}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </DataTable>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              pageSizes={[10, 25, 50]}
+              totalItems={filteredCustomers.length}
+              onChange={({ page: nextPage, pageSize: nextSize }) => {
+                setPage(nextPage);
+                setPageSize(nextSize);
+              }}
+            />
+          </>
         )}
       </div>
 
@@ -383,72 +600,33 @@ export default function CustomersPage() {
         primaryButtonDisabled={saving || !createForm.name.trim()}
         size="md"
       >
-        <Stack gap={5}>
-          <TextInput
-            id="create-customer-name"
-            labelText="Name"
-            value={createForm.name}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, name: event.target.value }))
-            }
-            required
-          />
-          <Select
-            id="create-customer-type"
-            labelText="Customer type"
-            value={createForm.customer_type ?? "retail"}
-            onChange={(event) =>
-              setCreateForm((form) => ({
-                ...form,
-                customer_type: event.target.value as CustomerType,
-              }))
-            }
-          >
-            <SelectItem value="retail" text="Retail" />
-            <SelectItem value="trade" text="Trade" />
-          </Select>
-          <TextInput
-            id="create-customer-tier"
-            labelText="Price tier"
-            value={createForm.price_tier ?? "standard"}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, price_tier: event.target.value }))
-            }
-          />
-          <TextInput
-            id="create-customer-email"
-            labelText="Email"
-            type="email"
-            value={createForm.email ?? ""}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, email: event.target.value }))
-            }
-          />
-          <TextInput
-            id="create-customer-phone"
-            labelText="Phone"
-            value={createForm.phone ?? ""}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, phone: event.target.value }))
-            }
-          />
-          <TextInput
-            id="create-customer-vat"
-            labelText="VAT number"
-            value={createForm.vat_number ?? ""}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, vat_number: event.target.value }))
-            }
-          />
-          <TextArea
-            id="create-customer-billing"
-            labelText="Billing address"
-            value={createForm.billing_address ?? ""}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, billing_address: event.target.value }))
-            }
-          />
-        </Stack>
+        <CustomerFormFields
+          idPrefix="create-customer"
+          form={createForm}
+          onChange={(patch) => setCreateForm((form) => ({ ...form, ...patch }))}
+        />
+      </Modal>
+
+      <Modal
+        open={editCustomer !== null}
+        modalHeading={canMutate ? "Edit customer" : "Customer details"}
+        primaryButtonText="Save"
+        secondaryButtonText="Cancel"
+        onRequestClose={() => {
+          setEditCustomer(null);
+          setEditForm(emptyCustomerForm);
+        }}
+        onRequestSubmit={() => void handleUpdate()}
+        primaryButtonDisabled={saving || !editForm.name.trim()}
+        passiveModal={!canMutate}
+        size="md"
+      >
+        <CustomerFormFields
+          idPrefix="edit-customer"
+          form={editForm}
+          onChange={(patch) => setEditForm((form) => ({ ...form, ...patch }))}
+          disabled={!canMutate}
+        />
       </Modal>
     </Stack>
   );
