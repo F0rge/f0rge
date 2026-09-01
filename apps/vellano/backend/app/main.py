@@ -25,6 +25,7 @@ from app.routers import (
     health,
     home,
     invoices,
+    journals,
     locations,
     payments,
     proformas,
@@ -109,6 +110,7 @@ app.include_router(accounts.accounts_router)
 app.include_router(contacts.contacts_router)
 app.include_router(customers.customers_router)
 app.include_router(invoices.invoices_router)
+app.include_router(journals.journals_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)

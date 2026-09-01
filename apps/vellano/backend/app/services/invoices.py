@@ -93,6 +93,7 @@ class InvoiceService:
                     (CODE_SALES, Decimal(0), subtotal),
                     (CODE_VAT, Decimal(0), vat_total),
                 ],
+                entry_date=invoice.issue_date,
             )
             await self.crud.commit_refresh(invoice)
 

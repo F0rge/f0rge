@@ -98,6 +98,7 @@ class BillService:
                     (CODE_INVENTORY, amount_zar, Decimal(0)),
                     (CODE_AP, Decimal(0), amount_zar),
                 ],
+                entry_date=bill.issue_date,
             )
             await self.crud.commit_refresh(bill)
 

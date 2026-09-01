@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from decimal import Decimal
 from typing import Optional
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.account import AccountCRUD
 from app.models.account import Account, AccountType
-from app.models.journal import JournalDocumentType, JournalEntry, JournalLine
+from app.models.journal import JournalDocumentType, JournalEntry, JournalLine, JournalStatus
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -95,6 +96,9 @@ class LedgerPostingService:
         document_id: uuid.UUID,
         memo: Optional[str],
         lines: list[tuple[str, Decimal, Decimal]],
+        *,
+        entry_date: Optional[datetime.date] = None,
+        source: Optional[str] = None,
     ) -> JournalEntry:
         """Post a balanced journal. Each line: (account_code, debit_zar, credit_zar)."""
         total_debit = Decimal(0)
@@ -110,6 +114,9 @@ class LedgerPostingService:
             document_type=document_type,
             document_id=document_id,
             memo=memo,
+            status=JournalStatus.POSTED,
+            entry_date=entry_date or datetime.date.today(),
+            source=source,
         )
         await self.account_crud.add_and_flush(entry)
 

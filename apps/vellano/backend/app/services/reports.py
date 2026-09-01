@@ -14,7 +14,7 @@ from app.models.bill import Bill
 from app.models.credit_note import CreditNote
 from app.models.customer import Customer
 from app.models.inventory import LocationStock
-from app.models.journal import JournalEntry, JournalLine
+from app.models.journal import JournalEntry, JournalLine, JournalStatus
 from app.models.location import Location
 from app.models.sku import Sku
 from app.models.supplier import Supplier
@@ -529,9 +529,6 @@ class ReportsService:
         *,
         credit_minus_debit: bool,
     ) -> Decimal:
-        start_dt = datetime.datetime.combine(from_date, datetime.time.min)
-        end_dt = datetime.datetime.combine(to_date, datetime.time.max)
-
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(JournalLine.debit_zar), 0),
@@ -542,8 +539,9 @@ class ReportsService:
             .where(
                 and_(
                     JournalLine.account_id == account_id,
-                    JournalEntry.created_at >= start_dt,
-                    JournalEntry.created_at <= end_dt,
+                    JournalEntry.status != JournalStatus.DRAFT,
+                    JournalEntry.entry_date >= from_date,
+                    JournalEntry.entry_date <= to_date,
                 )
             )
         )
@@ -555,7 +553,6 @@ class ReportsService:
         return debits - credits
 
     async def _balance_as_of(self, account_id: uuid.UUID, as_of: datetime.date) -> Decimal:
-        end_dt = datetime.datetime.combine(as_of, datetime.time.max)
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(JournalLine.debit_zar), 0)
@@ -566,7 +563,8 @@ class ReportsService:
             .where(
                 and_(
                     JournalLine.account_id == account_id,
-                    JournalEntry.created_at <= end_dt,
+                    JournalEntry.status != JournalStatus.DRAFT,
+                    JournalEntry.entry_date <= as_of,
                 )
             )
         )

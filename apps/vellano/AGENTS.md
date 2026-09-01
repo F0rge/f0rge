@@ -496,6 +496,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/catalogue` | `/skus` |
 | `/stock` | `/inventory` |
 | `/ledger` | `/accounts` |
+| `/journals` | `/journals` |
 | `/bank-reconciliation` | `/bank-imports` |
 | `/proformas` | `/proformas` |
 | `/credit-notes` | `/credit-notes` |

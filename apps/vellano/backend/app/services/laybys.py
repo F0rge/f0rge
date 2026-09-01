@@ -215,6 +215,7 @@ class LaybysService:
                     (CODE_SALES, Decimal(0), subtotal),
                     (CODE_VAT, Decimal(0), vat_total),
                 ],
+                entry_date=issue_date,
             )
 
             await self.posting.post(
@@ -225,6 +226,7 @@ class LaybysService:
                     (CODE_DEPOSITS, total_inc, Decimal(0)),
                     (CODE_AR, Decimal(0), total_inc),
                 ],
+                entry_date=issue_date,
             )
 
             total_cogs = Decimal(0)
@@ -249,6 +251,7 @@ class LaybysService:
                         (CODE_COGS, total_cogs, Decimal(0)),
                         (CODE_INVENTORY, Decimal(0), total_cogs),
                     ],
+                    entry_date=issue_date,
                 )
 
             if not layby.hold_stock:
@@ -373,6 +376,7 @@ class LaybysService:
                 (CODE_BANK, payment.amount, Decimal(0)),
                 (CODE_DEPOSITS, Decimal(0), payment.amount),
             ],
+            entry_date=payment.paid_on,
         )
 
     async def _get_or_404(self, layby_id: uuid.UUID) -> Layby:

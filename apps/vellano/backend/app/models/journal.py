@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import datetime
 import enum
 import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Numeric, String, func
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,6 +30,13 @@ class JournalDocumentType(str, enum.Enum):
     BILL = "bill"
     PAYMENT = "payment"
     STOCK_ADJUSTMENT = "stock_adjustment"
+    MANUAL = "manual"
+
+
+class JournalStatus(str, enum.Enum):
+    DRAFT = "draft"
+    POSTED = "posted"
+    VOIDED = "voided"
 
 
 class JournalEntry(UUIDPkMixin, Base):
@@ -36,6 +54,30 @@ class JournalEntry(UUIDPkMixin, Base):
     )
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     memo: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    status: Mapped[JournalStatus] = mapped_column(
+        Enum(
+            JournalStatus,
+            name="journal_status",
+            native_enum=False,
+            length=32,
+            values_callable=lambda members: [member.value for member in members],
+        ),
+        nullable=False,
+        default=JournalStatus.POSTED,
+        server_default="posted",
+    )
+    entry_date: Mapped[datetime.date] = mapped_column(
+        Date,
+        nullable=False,
+        default=datetime.date.today,
+    )
+    source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    journal_number: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    voided_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("journal_entries.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[DateTime] = mapped_column(
         DateTime,
         nullable=False,
@@ -45,6 +87,16 @@ class JournalEntry(UUIDPkMixin, Base):
     lines: Mapped[list["JournalLine"]] = relationship(
         back_populates="entry",
         cascade="all, delete-orphan",
+        lazy="selectin",
+        foreign_keys="JournalLine.entry_id",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'posted', 'voided')",
+            name="ck_journal_entries_status",
+        ),
+        UniqueConstraint("journal_number", name="uq_journal_entries_journal_number"),
     )
 
 
@@ -66,8 +118,11 @@ class JournalLine(UUIDPkMixin, Base):
     debit_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     credit_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
 
-    entry: Mapped[JournalEntry] = relationship(back_populates="lines")
-    account: Mapped["Account"] = relationship()
+    entry: Mapped[JournalEntry] = relationship(
+        back_populates="lines",
+        foreign_keys=[entry_id],
+    )
+    account: Mapped["Account"] = relationship(lazy="selectin")
 
     __table_args__ = (
         CheckConstraint(

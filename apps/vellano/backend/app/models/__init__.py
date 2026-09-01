@@ -12,7 +12,7 @@ from app.models.delivery import (
 )
 from app.models.customer import Customer
 from app.models.inventory import LocationStock, SkuStock
-from app.models.journal import JournalDocumentType, JournalEntry, JournalLine
+from app.models.journal import JournalDocumentType, JournalEntry, JournalLine, JournalStatus
 from app.models.layby import Layby, LaybyLine, LaybyPayment, LaybyStatus
 from app.models.location import Location, LocationType
 from app.models.payment import Payment, PaymentDirection
@@ -63,6 +63,7 @@ __all__ = [
     "JournalDocumentType",
     "JournalEntry",
     "JournalLine",
+    "JournalStatus",
     "LandingBill",
     "LandingBillKind",
     "Layby",

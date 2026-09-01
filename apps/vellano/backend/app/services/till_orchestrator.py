@@ -162,6 +162,7 @@ class TillOrchestrator:
                     (CODE_SALES, Decimal(0), subtotal),
                     (CODE_VAT, Decimal(0), vat_total),
                 ],
+                entry_date=sale_date,
             )
 
             await self.payment_crud.add_and_flush(payment)
@@ -173,6 +174,7 @@ class TillOrchestrator:
                     (CODE_BANK, total_inc, Decimal(0)),
                     (CODE_AR, Decimal(0), total_inc),
                 ],
+                entry_date=sale_date,
             )
 
             if total_cogs > 0:
@@ -184,6 +186,7 @@ class TillOrchestrator:
                         (CODE_COGS, total_cogs, Decimal(0)),
                         (CODE_INVENTORY, Decimal(0), total_cogs),
                     ],
+                    entry_date=sale_date,
                 )
 
             for sku, qty, location_stock, _discount in line_inputs:

@@ -19,6 +19,7 @@ from app.services.cost_audit import CostAuditService
 from app.services.home import HomeService
 from app.services.inventory import InventoryService
 from app.services.invoices import InvoiceService
+from app.services.journals import JournalService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
@@ -115,6 +116,10 @@ def get_customers_crm_service(db: AsyncSession = Depends(get_db)) -> CustomersCr
 
 def get_invoice_service(db: AsyncSession = Depends(get_db)) -> InvoiceService:
     return InvoiceService(db)
+
+
+def get_journal_service(db: AsyncSession = Depends(get_db)) -> JournalService:
+    return JournalService(db)
 
 
 def get_credit_note_service(db: AsyncSession = Depends(get_db)) -> CreditNoteService:

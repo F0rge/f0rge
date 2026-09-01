@@ -89,6 +89,7 @@ class PaymentService:
                     (CODE_BANK, data.amount, Decimal(0)),
                     (CODE_AR, Decimal(0), data.amount),
                 ],
+                entry_date=payment.paid_on,
             )
             invoice.amount_paid += data.amount
             await self.crud.commit_refresh(payment)
@@ -155,6 +156,7 @@ class PaymentService:
                 payment.id,
                 f"Payment {payment_number} sent",
                 journal_lines,
+                entry_date=payment.paid_on,
             )
             bill.amount_paid_zar = bill.amount_zar
             await self.crud.commit_refresh(payment)

@@ -156,6 +156,7 @@ class StockReturnsService:
                             (CODE_INVENTORY, total_cogs, Decimal(0)),
                             (CODE_COGS, Decimal(0), total_cogs),
                         ],
+                        entry_date=credit_note.issue_date,
                     )
 
         return self._to_response(await self._get_or_404(stock_return.id))

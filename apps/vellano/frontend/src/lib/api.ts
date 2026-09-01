@@ -1228,6 +1228,95 @@ export function createPayment(payload: CreatePaymentPayload): Promise<Payment> {
   });
 }
 
+export type JournalStatus = "draft" | "posted" | "voided";
+
+export type JournalDocumentType =
+  | "invoice"
+  | "credit_note"
+  | "bill"
+  | "payment"
+  | "stock_adjustment"
+  | "manual";
+
+export type JournalLine = {
+  id: string;
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type Journal = {
+  id: string;
+  document_type: JournalDocumentType;
+  document_id: string;
+  memo: string | null;
+  status: JournalStatus;
+  source: string | null;
+  journal_number: string | null;
+  entry_date: string;
+  voided_by_id: string | null;
+  debit_total_zar: string;
+  credit_total_zar: string;
+  lines: JournalLine[];
+  created_at: string;
+};
+
+export type CreateJournalLinePayload = {
+  account_id: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type CreateJournalPayload = {
+  entry_date: string;
+  memo?: string;
+  source?: string;
+  status?: "draft" | "posted";
+  lines: CreateJournalLinePayload[];
+};
+
+export function listJournals(): Promise<Journal[]> {
+  return apiFetch<Journal[]>("/journals");
+}
+
+export function getJournal(id: string): Promise<Journal> {
+  return apiFetch<Journal>(`/journals/${id}`);
+}
+
+export function createJournal(payload: CreateJournalPayload): Promise<Journal> {
+  const memo = payload.memo?.trim();
+  const source = payload.source?.trim();
+  const entryDate = payload.entry_date.trim();
+  if (!entryDate) {
+    throw new ApiError(400, "Entry date is required");
+  }
+  const body: CreateJournalPayload = {
+    entry_date: entryDate,
+    source: source || "manual",
+    lines: payload.lines,
+  };
+  if (memo) {
+    body.memo = memo;
+  }
+  if (payload.status) {
+    body.status = payload.status;
+  }
+  return apiFetch<Journal>("/journals", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function postJournal(id: string): Promise<Journal> {
+  return apiFetch<Journal>(`/journals/${id}/post`, { method: "POST" });
+}
+
+export function voidJournal(id: string): Promise<Journal> {
+  return apiFetch<Journal>(`/journals/${id}/void`, { method: "POST" });
+}
+
 export function formatZarAmount(value: string | null | undefined): string {
   if (!value) {
     return "—";

@@ -108,6 +108,7 @@ class CreditNoteService:
                 (CODE_VAT, vat_amount, Decimal(0)),
                 (CODE_AR, Decimal(0), total_inc_vat),
             ],
+            entry_date=credit_note.issue_date,
         )
         return credit_note
 
