@@ -104,6 +104,8 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Proformas:** `GET /proformas`, `POST /proformas` (multipart: `supplier_id`, `invoice_number`, `invoice_date`, optional `currency`, file field `file`), `GET /proformas/{id}`, `GET /proformas/{id}/file` (PDF).
 - **SKUs:** `GET/POST /skus`, `POST /skus/{id}/photo` (field `photo`), `GET /skus/{id}`, `GET /skus/{id}/photo`.
 
+**S1 opening stock:** optional on `POST /skus`: `opening_location_id`, `opening_qty` (≥ 1), `opening_unit_cost_zar` (> 0), `opening_date` (defaults to today). If any opening field is set, location, qty, and unit cost are required. Owner/buyer. Writes location on-hand and cost audit source `opening`; no GL. Unit-cost blend matches receive. Omit all opening fields for a catalogue-only create (SKU is not in `GET /inventory`).
+
 UI labels distinguish **Our barcode** from **Supplier ref** — never conflate them.
 
 | Action | owner | buyer | warehouse | till | books |

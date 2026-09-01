@@ -17,6 +17,7 @@ class UnitCostAuditSource(str, enum.Enum):
     LAND = "land"
     RECEIVE = "receive"
     CORRECTION = "correction"
+    OPENING = "opening"
 
 
 class UnitCostAudit(UUIDPkMixin, TimestampMixin, Base):

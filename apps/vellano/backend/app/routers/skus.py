@@ -27,10 +27,10 @@ async def list_skus(
 @skus_router.post("", response_model=SkuResponse, status_code=status.HTTP_201_CREATED)
 async def create_sku(
     body: SkuCreate,
-    _: uuid.UUID = Depends(require_catalogue_mutate),
+    user_id: uuid.UUID = Depends(require_catalogue_mutate),
     service: SkuService = Depends(get_sku_service),
 ):
-    return await service.create(body)
+    return await service.create(body, user_id)
 
 
 @skus_router.get("/{sku_id}", response_model=SkuResponse)

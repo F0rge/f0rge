@@ -345,6 +345,10 @@ export type CreateSkuPayload = {
   design: string;
   fabric: string;
   supplier_ref?: string;
+  opening_location_id?: string;
+  opening_qty?: number;
+  opening_unit_cost_zar?: string;
+  opening_date?: string;
 };
 
 export function listSkus(): Promise<Sku[]> {
@@ -352,9 +356,16 @@ export function listSkus(): Promise<Sku[]> {
 }
 
 export function createSku(payload: CreateSkuPayload): Promise<Sku> {
+  const body: CreateSkuPayload = { ...payload };
+  const openingDate = body.opening_date?.trim();
+  if (openingDate) {
+    body.opening_date = openingDate;
+  } else {
+    delete body.opening_date;
+  }
   return apiFetch<Sku>("/skus", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 }
 
