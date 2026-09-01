@@ -5,13 +5,23 @@ body {
   margin: 0;
 }
 
-/* Vellano-owned main region — do not rely on Carbon Content offset. */
+/* Vellano-owned main region — do not rely on Carbon Content offset.
+   2rem padding is the page inset for every screen. Nested Carbon Grids are
+   viewport-page layouts (auto margins, 99rem max, extra --cds-grid-margin)
+   and must not add a second inset inside this region. */
 .vellano-main {
   box-sizing: border-box;
   margin-top: 3rem;
   margin-left: 16rem;
   padding: 2rem;
   min-height: calc(100vh - 3rem);
+}
+
+.vellano-main .cds--css-grid {
+  --cds-grid-margin: 0;
+  margin-inline: 0;
+  max-inline-size: none;
+  width: 100%;
 }
 
 .vellano-shell[data-nav-expanded="false"] .vellano-main {
@@ -209,15 +219,32 @@ body {
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
+  width: 100%;
 }
 
 .vellano-sku-form {
   max-width: 50rem;
+  width: 100%;
 }
 
 .vellano-muted-text {
   color: var(--cds-text-secondary, #525252);
   font-size: 0.75rem;
+}
+
+.vellano-till-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  width: 100%;
+  margin-inline: 0;
+}
+
+@media (min-width: 66rem) {
+  .vellano-till-layout {
+    grid-template-columns: minmax(0, 1.4fr) minmax(20rem, 1fr);
+    align-items: start;
+  }
 }
 
 .vellano-till-cart {
@@ -356,8 +383,9 @@ body {
 }
 
 .vellano-wms {
-  max-width: 42rem;
-  margin: 0 auto;
+  max-width: 50rem;
+  width: 100%;
+  margin-inline: 0;
 }
 
 .vellano-wms-content {
