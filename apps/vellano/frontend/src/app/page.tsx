@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Button,
   Column,
   Grid,
   InlineNotification,
@@ -8,6 +9,8 @@ import {
   Stack,
   Tile,
 } from "@carbon/react";
+import { Add, DocumentImport } from "@carbon/icons-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ApiError, getHomeSummary, type HomeSummary } from "@/lib/api";
@@ -24,6 +27,7 @@ function formatZar(value: string, currency: string): string {
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const [summary, setSummary] = useState<HomeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,8 +60,33 @@ export default function HomePage() {
       <div>
         <h1 className="cds--type-productive-heading-04">Home</h1>
         <p className="cds--type-body-01">
-          Stock cockpit — on-order (in transit) versus on-hand (received at locations).
+          Stock cockpit — overview of operations, inventory, and laybys.
         </p>
+      </div>
+
+      <div className="vellano-home-actions">
+        <Button kind="primary" renderIcon={Add} onClick={() => router.push("/catalogue")}>
+          New stock
+        </Button>
+        <Button kind="secondary" onClick={() => router.push("/stocktakes")}>
+          Stocktake
+        </Button>
+        <Button kind="secondary" onClick={() => router.push("/adjustments")}>
+          Stock adjustment
+        </Button>
+        <Button
+          kind="secondary"
+          renderIcon={DocumentImport}
+          onClick={() => router.push("/import")}
+        >
+          Import CSV
+        </Button>
+        <Button kind="secondary" onClick={() => router.push("/laybys")}>
+          New layby
+        </Button>
+        <Button kind="secondary" onClick={() => router.push("/returns")}>
+          Process return
+        </Button>
       </div>
 
       {loading ? <Loading withOverlay={false} description="Loading summary…" /> : null}

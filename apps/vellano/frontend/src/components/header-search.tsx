@@ -69,7 +69,7 @@ export function HeaderSearch({ className }: HeaderSearchProps) {
       <Search
         size="sm"
         labelText="Search SKUs, POs, invoices"
-        placeholder="Search barcode, PO, invoice…"
+        placeholder="Search..."
         closeButtonLabelText="Clear search"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
