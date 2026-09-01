@@ -18,6 +18,8 @@ from app.services.inventory import InventoryService
 from app.services.invoices import InvoiceService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
+from app.services.bank_imports import BankImportService
+from app.services.reports import ReportsService
 from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.skus import SkuService
@@ -87,6 +89,14 @@ def get_bill_service(db: AsyncSession = Depends(get_db)) -> BillService:
 
 def get_payment_service(db: AsyncSession = Depends(get_db)) -> PaymentService:
     return PaymentService(db)
+
+
+def get_bank_import_service(db: AsyncSession = Depends(get_db)) -> BankImportService:
+    return BankImportService(db)
+
+
+def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:
+    return ReportsService(db)
 
 
 async def require_owner(

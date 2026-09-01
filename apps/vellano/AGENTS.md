@@ -182,6 +182,46 @@ POST /api/v1/invoices
 
 PDF: `GET /api/v1/invoices/{id}/pdf`
 
+## S7 bank reconciliation, reports, VAT201 draft
+
+Bank CSV import, payment matching, financial reports, and VAT201-shaped draft for manual eFiling entry. **Never** calls SARS or eFiling APIs.
+
+### SA bank CSV column map
+
+The importer accepts UTF-8 CSV with a header row. Column names are matched case-insensitively:
+
+| Purpose | Accepted headers |
+|---------|------------------|
+| Date | `Date`, `Transaction Date`, `Posting Date`, `Value Date` |
+| Description | `Description`, `Narrative`, `Details`, `Transaction Description` |
+| Reference (optional) | `Reference`, `Ref`, `Transaction Reference` |
+| Signed amount | `Amount`, `Transaction Amount`, `Signed Amount` — positive = money in, negative = money out |
+| Debit / credit | `Debit` + `Credit` (or `Debit Amount` / `Credit Amount`) — credit minus debit |
+
+Date formats: `YYYY-MM-DD`, `DD/MM/YYYY`, `DD-MM-YYYY`. Either a signed **Amount** column **or** separate **Debit** and **Credit** columns is required.
+
+Example fixture:
+
+```csv
+Date,Description,Reference,Amount
+2026-09-02,Customer payment INV-0001,REF001,1150.00
+2026-09-03,Supplier payment BILL-0001,REF002,-1800.00
+2026-09-04,Unmatched deposit,REF003,500.00
+```
+
+### Endpoints (all under `/api/v1`, cookie `vellano_session`)
+
+- **Bank imports:** `GET/POST /bank-imports`, `GET /bank-imports/{id}`, `GET /bank-imports/unmatched-lines`, `POST /bank-imports/{import_id}/lines/{line_id}/match` — body `{ "payment_id": "<uuid>" }`.
+- **Reports:** `GET /reports/aged-ar?as_of=`, `GET /reports/aged-ap?as_of=`, `GET /reports/profit-loss?from=&to=`, `GET /reports/balance-sheet?as_of=`.
+- **VAT201 draft:** `GET /reports/vat201?from=&to=`, `GET /reports/vat201/csv`, `GET /reports/vat201/pdf` — shaped fields for copy/type-in to eFiling only.
+
+Matching a bank line sets `payments.is_reconciled = true`. Unmatched import lines remain visible. Amount+date suggestions are returned when a payment matches within ±3 days.
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| List imports, reports, VAT201 draft | yes | yes | yes | yes | yes |
+| Upload CSV, match lines | yes | no | no | no | yes |
+
 ## Railway
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.
@@ -196,7 +236,7 @@ PDF: `GET /api/v1/invoices/{id}/pdf`
 
 ## Non-goals
 
-The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: till and other S7–S11 product features.
+The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: till and other S8–S11 product features.
 
 ## Python
 

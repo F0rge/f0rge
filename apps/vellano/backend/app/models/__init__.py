@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.models.account import Account, AccountType
+from app.models.bank_import import BankImport, BankImportLine
 from app.models.bill import Bill, BillLine
 from app.models.credit_note import CreditNote
 from app.models.customer import Customer
@@ -25,6 +26,8 @@ from app.models.user import User, UserRole
 __all__ = [
     "Account",
     "AccountType",
+    "BankImport",
+    "BankImportLine",
     "Bill",
     "BillLine",
     "CreditNote",

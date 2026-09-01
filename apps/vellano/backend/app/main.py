@@ -13,6 +13,7 @@ from app.middleware.auth import AuthContextMiddleware
 from app.routers import (
     accounts,
     auth,
+    bank_imports,
     bills,
     contacts,
     credit_notes,
@@ -22,6 +23,7 @@ from app.routers import (
     payments,
     proformas,
     purchase_orders,
+    reports,
     skus,
     suppliers,
     users,
@@ -77,3 +79,5 @@ app.include_router(invoices.invoices_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)
+app.include_router(bank_imports.bank_imports_router)
+app.include_router(reports.reports_router)

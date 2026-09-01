@@ -798,6 +798,8 @@ export type Payment = {
   amount_zar: string;
   fx_gain_loss_zar: string;
   paid_on: string;
+  is_reconciled: boolean;
+  reconciled_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -870,4 +872,200 @@ export function formatFxGainLoss(value: string): string {
   }
   const prefix = amount > 0 ? "Gain " : "Loss ";
   return `${prefix}R ${Math.abs(amount).toFixed(2)}`;
+}
+
+export type BankImportLine = {
+  id: string;
+  transaction_date: string;
+  description: string;
+  reference: string | null;
+  amount_zar: string;
+  matched_payment_id: string | null;
+  matched_payment_number: string | null;
+  suggested_payment_id: string | null;
+  suggested_payment_number: string | null;
+};
+
+export type BankImport = {
+  id: string;
+  filename: string;
+  line_count: number;
+  lines: BankImportLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type BankImportSummary = {
+  id: string;
+  filename: string;
+  line_count: number;
+  matched_count: number;
+  created_at: string;
+};
+
+export type AgedBucket = {
+  label: string;
+  amount_zar: string;
+};
+
+export type AgedLine = {
+  document_number: string;
+  contact_name: string;
+  issue_date: string;
+  balance_zar: string;
+  days_outstanding: number;
+  bucket: string;
+};
+
+export type AgedReport = {
+  as_of: string;
+  total_zar: string;
+  buckets: AgedBucket[];
+  lines: AgedLine[];
+};
+
+export type ProfitLossLine = {
+  code: string;
+  name: string;
+  amount_zar: string;
+};
+
+export type ProfitLossReport = {
+  from_date: string;
+  to_date: string;
+  income: ProfitLossLine[];
+  expenses: ProfitLossLine[];
+  total_income_zar: string;
+  total_expenses_zar: string;
+  net_profit_zar: string;
+};
+
+export type BalanceSheetLine = {
+  code: string;
+  name: string;
+  type: string;
+  balance_zar: string;
+};
+
+export type BalanceSheetReport = {
+  as_of: string;
+  assets: BalanceSheetLine[];
+  liabilities: BalanceSheetLine[];
+  equity_zar: string;
+  total_assets_zar: string;
+  total_liabilities_zar: string;
+};
+
+export type Vat201Draft = {
+  period_from: string;
+  period_to: string;
+  vendor_name: string;
+  vendor_vat_number: string;
+  standard_rated_supplies_ex_vat: string;
+  output_tax: string;
+  input_tax: string;
+  net_vat_payable: string;
+  invoice_count: number;
+  credit_note_count: number;
+  disclaimer: string;
+};
+
+export function listBankImports(): Promise<BankImportSummary[]> {
+  return apiFetch<BankImportSummary[]>("/bank-imports");
+}
+
+export function getBankImport(id: string): Promise<BankImport> {
+  return apiFetch<BankImport>(`/bank-imports/${id}`);
+}
+
+export async function uploadBankImport(file: File): Promise<BankImport> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch("/api/v1/bank-imports", {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  return response.json() as Promise<BankImport>;
+}
+
+export function matchBankLine(
+  importId: string,
+  lineId: string,
+  paymentId: string,
+): Promise<BankImportLine> {
+  return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/match`, {
+    method: "POST",
+    body: JSON.stringify({ payment_id: paymentId }),
+  });
+}
+
+export function getAgedAr(asOf: string): Promise<AgedReport> {
+  return apiFetch<AgedReport>(`/reports/aged-ar?as_of=${encodeURIComponent(asOf)}`);
+}
+
+export function getAgedAp(asOf: string): Promise<AgedReport> {
+  return apiFetch<AgedReport>(`/reports/aged-ap?as_of=${encodeURIComponent(asOf)}`);
+}
+
+export function getProfitLoss(fromDate: string, toDate: string): Promise<ProfitLossReport> {
+  return apiFetch<ProfitLossReport>(
+    `/reports/profit-loss?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+  );
+}
+
+export function getBalanceSheet(asOf: string): Promise<BalanceSheetReport> {
+  return apiFetch<BalanceSheetReport>(
+    `/reports/balance-sheet?as_of=${encodeURIComponent(asOf)}`,
+  );
+}
+
+export function getVat201Draft(fromDate: string, toDate: string): Promise<Vat201Draft> {
+  return apiFetch<Vat201Draft>(
+    `/reports/vat201?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+  );
+}
+
+export async function downloadVat201Csv(fromDate: string, toDate: string): Promise<void> {
+  const response = await fetch(
+    `/api/v1/reports/vat201/csv?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `vat201-draft-${fromDate}-to-${toDate}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadVat201Pdf(fromDate: string, toDate: string): Promise<void> {
+  const response = await fetch(
+    `/api/v1/reports/vat201/pdf?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `vat201-draft-${fromDate}-to-${toDate}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }
