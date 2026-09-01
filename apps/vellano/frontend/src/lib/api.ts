@@ -509,3 +509,365 @@ export function receivePurchaseOrder(payload: {
 export function listInventory(): Promise<InventorySku[]> {
   return apiFetch<InventorySku[]>("/inventory");
 }
+
+export function canMutateBooks(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "books";
+}
+
+export type AccountType = "asset" | "liability" | "income" | "expense";
+
+export type Account = {
+  id: string;
+  code: string;
+  name: string;
+  type: AccountType;
+  is_system: boolean;
+  is_archived: boolean;
+  balance_zar: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateAccountPayload = {
+  code: string;
+  name: string;
+  type: AccountType;
+};
+
+export type UpdateAccountPayload = {
+  name?: string;
+  is_archived?: boolean;
+};
+
+export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
+  { value: "asset", label: "Asset" },
+  { value: "liability", label: "Liability" },
+  { value: "income", label: "Income" },
+  { value: "expense", label: "Expense" },
+];
+
+export function listAccounts(): Promise<Account[]> {
+  return apiFetch<Account[]>("/accounts");
+}
+
+export function createAccount(payload: CreateAccountPayload): Promise<Account> {
+  return apiFetch<Account>("/accounts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAccount(id: string, payload: UpdateAccountPayload): Promise<Account> {
+  return apiFetch<Account>(`/accounts/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type ContactKind = "customer" | "supplier";
+
+export type Contact = {
+  id: string;
+  kind: ContactKind;
+  name: string;
+  currency: string | null;
+  email: string | null;
+  vat_number: string | null;
+  billing_address: string | null;
+};
+
+export type CreateContactPayload = {
+  name: string;
+  email?: string;
+  vat_number?: string;
+  billing_address?: string;
+};
+
+export function listContacts(): Promise<Contact[]> {
+  return apiFetch<Contact[]>("/contacts");
+}
+
+export function createContact(payload: CreateContactPayload): Promise<Contact> {
+  return apiFetch<Contact>("/contacts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type InvoiceLine = {
+  id: string;
+  description: string;
+  qty: number;
+  unit_ex_vat: string;
+  ex_vat: string;
+  inc_vat: string;
+  vat_amount: string;
+  sort_order: number;
+};
+
+export type Invoice = {
+  id: string;
+  invoice_number: string;
+  customer_id: string;
+  customer_name: string;
+  issue_date: string;
+  subtotal_ex_vat: string;
+  vat_amount: string;
+  total_inc_vat: string;
+  amount_paid: string;
+  balance: string;
+  lines: InvoiceLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateInvoiceLinePayload = {
+  description: string;
+  qty: number;
+  unit_ex_vat: string;
+};
+
+export type CreateInvoicePayload = {
+  customer_id: string;
+  issue_date: string;
+  lines: CreateInvoiceLinePayload[];
+};
+
+export function listInvoices(): Promise<Invoice[]> {
+  return apiFetch<Invoice[]>("/invoices");
+}
+
+export function createInvoice(payload: CreateInvoicePayload): Promise<Invoice> {
+  return apiFetch<Invoice>("/invoices", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getInvoice(id: string): Promise<Invoice> {
+  return apiFetch<Invoice>(`/invoices/${id}`);
+}
+
+export async function downloadInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/invoices/${id}/pdf`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${invoiceNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export type CreditNote = {
+  id: string;
+  credit_note_number: string;
+  invoice_id: string;
+  invoice_number: string;
+  reason: string | null;
+  issue_date: string;
+  subtotal_ex_vat: string;
+  vat_amount: string;
+  total_inc_vat: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateCreditNotePayload = {
+  invoice_id: string;
+  reason?: string;
+};
+
+export function listCreditNotes(): Promise<CreditNote[]> {
+  return apiFetch<CreditNote[]>("/credit-notes");
+}
+
+export function createCreditNote(payload: CreateCreditNotePayload): Promise<CreditNote> {
+  return apiFetch<CreditNote>("/credit-notes", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type BillLine = {
+  id: string;
+  description: string;
+  qty: number;
+  unit_amount: string;
+  amount_foreign: string;
+  sort_order: number;
+};
+
+export type Bill = {
+  id: string;
+  bill_number: string;
+  supplier_id: string;
+  supplier_name: string;
+  supplier_ref: string;
+  issue_date: string;
+  currency: string;
+  fx_to_zar: string;
+  amount_foreign: string;
+  amount_zar: string;
+  amount_paid_zar: string;
+  balance_zar: string;
+  pdf_storage_key: string | null;
+  lines: BillLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateBillLinePayload = {
+  description: string;
+  qty: number;
+  unit_amount: string;
+};
+
+export type CreateBillPayload = {
+  supplier_id: string;
+  supplier_ref: string;
+  issue_date: string;
+  currency: string;
+  fx_to_zar?: string;
+  lines: CreateBillLinePayload[];
+};
+
+export function listBills(): Promise<Bill[]> {
+  return apiFetch<Bill[]>("/bills");
+}
+
+export function createBill(payload: CreateBillPayload): Promise<Bill> {
+  return apiFetch<Bill>("/bills", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getBill(id: string): Promise<Bill> {
+  return apiFetch<Bill>(`/bills/${id}`);
+}
+
+export function uploadBillAttachment(id: string, file: File): Promise<Bill> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<Bill>(`/bills/${id}/attachment`, formData);
+}
+
+export async function downloadBillAttachment(id: string, billNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/bills/${id}/attachment`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${billNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export type PaymentDirection = "in" | "out";
+
+export type Payment = {
+  id: string;
+  payment_number: string;
+  direction: PaymentDirection;
+  invoice_id: string | null;
+  bill_id: string | null;
+  amount: string;
+  currency: string;
+  fx_to_zar: string;
+  amount_zar: string;
+  fx_gain_loss_zar: string;
+  paid_on: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreatePaymentInPayload = {
+  direction: "in";
+  invoice_id: string;
+  amount: string;
+  currency: "ZAR";
+  paid_on: string;
+};
+
+export type CreatePaymentOutPayload = {
+  direction: "out";
+  bill_id: string;
+  amount: string;
+  currency: string;
+  fx_to_zar?: string;
+  paid_on: string;
+};
+
+export type CreatePaymentPayload = CreatePaymentInPayload | CreatePaymentOutPayload;
+
+export function listPayments(): Promise<Payment[]> {
+  return apiFetch<Payment[]>("/payments");
+}
+
+export function createPayment(payload: CreatePaymentPayload): Promise<Payment> {
+  return apiFetch<Payment>("/payments", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function formatZarAmount(value: string | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+  return `R ${value}`;
+}
+
+export function sumInvoiceLinesExVat(
+  lines: { qty: number | ""; unit_ex_vat: string }[],
+): number {
+  return lines.reduce((sum, line) => {
+    if (typeof line.qty !== "number" || line.qty <= 0) {
+      return sum;
+    }
+    const unit = parsePriceInput(line.unit_ex_vat);
+    if (unit === null || unit <= 0) {
+      return sum;
+    }
+    return sum + line.qty * unit;
+  }, 0);
+}
+
+export function computeInvoicePreview(subtotalExVat: number): {
+  vat: number;
+  totalIncVat: number;
+} {
+  const vat = roundHalfUp(subtotalExVat * 0.15, 2);
+  const totalIncVat = roundHalfUp(subtotalExVat + vat, 2);
+  return { vat, totalIncVat };
+}
+
+export function formatFxGainLoss(value: string): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount === 0) {
+    return "R 0.00";
+  }
+  const prefix = amount > 0 ? "Gain " : "Loss ";
+  return `${prefix}R ${Math.abs(amount).toFixed(2)}`;
+}

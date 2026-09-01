@@ -10,6 +10,8 @@ import {
   SideNav,
   SideNavItems,
   SideNavLink,
+  SideNavMenu,
+  SideNavMenuItem,
   SkipToContent,
   Theme,
 } from "@carbon/react";
@@ -25,16 +27,18 @@ import {
   Logout,
   Product,
   Purchase,
+  Receipt,
   Settings,
   Store,
   User,
   UserMultiple,
+  Wallet,
 } from "@carbon/icons-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { useAuth } from "@/lib/auth";
-import { SIDE_NAV_ITEMS } from "@/lib/nav";
+import { BOOKS_NAV_ITEMS, SIDE_NAV_ITEMS } from "@/lib/nav";
 
 const ICONS = {
   "/": Home,
@@ -47,11 +51,21 @@ const ICONS = {
   "/transit": Delivery,
   "/receive": DeliveryParcel,
   "/ledger": Finance,
+  "/contacts": UserMultiple,
+  "/invoices": Receipt,
+  "/bills": Purchase,
+  "/payments": Wallet,
   "/till": Store,
   "/users": UserMultiple,
   "/profile": User,
   "/settings": Settings,
 } as const;
+
+const BOOKS_HREFS = new Set<string>(BOOKS_NAV_ITEMS.map((item) => item.href));
+
+function isBooksPath(pathname: string): boolean {
+  return BOOKS_HREFS.has(pathname) || pathname.startsWith("/invoices/") || pathname.startsWith("/bills/");
+}
 
 type AppShellProps = {
   children: ReactNode;
@@ -91,6 +105,27 @@ export function AppShell({ children }: AppShellProps) {
   const navItems = SIDE_NAV_ITEMS.filter(
     (item) => !("ownerOnly" in item && item.ownerOnly) || user.role === "owner",
   );
+  const tillIndex = navItems.findIndex((item) => item.href === "/till");
+  const navBeforeBooks = tillIndex === -1 ? navItems : navItems.slice(0, tillIndex);
+  const navAfterBooks = tillIndex === -1 ? [] : navItems.slice(tillIndex);
+
+  function renderNavLink(item: (typeof navItems)[number]) {
+    const Icon = ICONS[item.href];
+    return (
+      <SideNavLink
+        key={item.href}
+        href={item.href}
+        renderIcon={Icon}
+        isActive={pathname === item.href}
+        onClick={(event) => {
+          event.preventDefault();
+          router.push(item.href);
+        }}
+      >
+        {item.label}
+      </SideNavLink>
+    );
+  }
 
   async function handleLogout() {
     await logout();
@@ -132,23 +167,37 @@ export function AppShell({ children }: AppShellProps) {
         </Header>
         <SideNav aria-label="Vellano sections" expanded={expanded} isPersistent>
           <SideNavItems>
-            {navItems.map((item) => {
-              const Icon = ICONS[item.href];
-              return (
-                <SideNavLink
-                  key={item.href}
-                  href={item.href}
-                  renderIcon={Icon}
-                  isActive={pathname === item.href}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    router.push(item.href);
-                  }}
-                >
-                  {item.label}
-                </SideNavLink>
-              );
-            })}
+            {navBeforeBooks.map(renderNavLink)}
+            <SideNavMenu
+              key="books-menu"
+              renderIcon={Finance}
+              title="Books"
+              defaultExpanded={isBooksPath(pathname)}
+              isActive={isBooksPath(pathname)}
+            >
+              {BOOKS_NAV_ITEMS.map((booksItem) => {
+                const BooksIcon = ICONS[booksItem.href];
+                const active =
+                  pathname === booksItem.href ||
+                  (booksItem.href === "/invoices" && pathname.startsWith("/invoices/")) ||
+                  (booksItem.href === "/bills" && pathname.startsWith("/bills/"));
+                return (
+                  <SideNavMenuItem
+                    key={booksItem.href}
+                    href={booksItem.href}
+                    renderIcon={BooksIcon}
+                    isActive={active}
+                    onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                      event.preventDefault();
+                      router.push(booksItem.href);
+                    }}
+                  >
+                    {booksItem.label}
+                  </SideNavMenuItem>
+                );
+              })}
+            </SideNavMenu>
+            {navAfterBooks.map(renderNavLink)}
           </SideNavItems>
         </SideNav>
         <main id="main-content" className="vellano-main">
