@@ -88,6 +88,12 @@ class LocationStockCRUD(BaseCRUD):
             )
         ).scalar_one_or_none()
 
+    async def list_by_location_id(self, location_id: uuid.UUID) -> list[LocationStock]:
+        result = await self.db.execute(
+            select(LocationStock).where(LocationStock.location_id == location_id)
+        )
+        return list(result.scalars().all())
+
     async def list_by_sku_id(self, sku_id: uuid.UUID) -> list[LocationStock]:
         result = await self.db.execute(
             select(LocationStock)

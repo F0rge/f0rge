@@ -71,7 +71,9 @@ async def async_engine(
         await BootstrapService(session).seed_if_empty()
         await RoleUserSeedService(session).seed()
         await LocationSeedService(session).seed_if_empty()
-        await ChartOfAccountsSeedService(session).seed_if_empty()
+        coa = ChartOfAccountsSeedService(session)
+        await coa.seed_if_empty()
+        await coa.ensure_opening_equity()
         await TillSeedService(session).seed_if_empty()
     try:
         yield engine

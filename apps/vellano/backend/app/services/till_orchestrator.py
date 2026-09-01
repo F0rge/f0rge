@@ -26,6 +26,7 @@ from app.services.chart_of_accounts import (
     CODE_VAT,
     LedgerPostingService,
 )
+from app.services.stocktakes import StocktakeService
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -43,6 +44,7 @@ class TillOrchestrator:
         self.posting = LedgerPostingService(db)
 
     async def create_sale(self, data: TillSaleCreate) -> TillSaleResponse:
+        await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         from app.crud.location import LocationCRUD
 
         location = await LocationCRUD(self.db).get_by_id(data.location_id)

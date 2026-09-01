@@ -2,11 +2,15 @@
 
 import {
   Button,
+  Checkbox,
   DataTable,
   FileUploaderDropContainer,
   FileUploaderItem,
   InlineNotification,
   Modal,
+  NumberInput,
+  Select,
+  SelectItem,
   Stack,
   Table,
   TableBody,
@@ -17,7 +21,8 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 
 import { SkuPriceEditor } from "@/components/sku-price-editor";
 import {
@@ -25,10 +30,15 @@ import {
   canMutateCatalogue,
   createSku,
   displayPrice,
+  formatPriceAmount,
+  isActiveLocation,
   listInventory,
+  listLocations,
   listSkus,
+  parsePriceInput,
   uploadSkuPhoto,
   type CreateSkuPayload,
+  type Location,
   type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -73,10 +83,13 @@ const emptyCreateForm: CreateSkuPayload = {
   supplier_ref: "",
 };
 
-export default function CataloguePage() {
+function CataloguePageContent() {
   const { user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const canMutate = canMutateCatalogue(user?.role);
   const [skus, setSkus] = useState<Sku[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [unitCostBySku, setUnitCostBySku] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +97,11 @@ export default function CataloguePage() {
   const [priceSku, setPriceSku] = useState<Sku | null>(null);
   const [createForm, setCreateForm] = useState<CreateSkuPayload>(emptyCreateForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [recordStockNow, setRecordStockNow] = useState(false);
+  const [openingLocationId, setOpeningLocationId] = useState("");
+  const [openingQty, setOpeningQty] = useState<number | "">(1);
+  const [openingUnitCost, setOpeningUnitCost] = useState("");
+  const [openingDate, setOpeningDate] = useState("");
   const [saving, setSaving] = useState(false);
 
   const loadSkus = useCallback(async () => {
@@ -112,6 +130,38 @@ export default function CataloguePage() {
     }
   }, [user, loadSkus]);
 
+  useEffect(() => {
+    if (!user || !canMutate) {
+      return;
+    }
+    let cancelled = false;
+    listLocations()
+      .then((data) => {
+        if (!cancelled) {
+          setLocations(data.filter(isActiveLocation));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLocations([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, canMutate]);
+
+  useEffect(() => {
+    if (!canMutate || searchParams.get("new") !== "1") {
+      return;
+    }
+    setCreateOpen(true);
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("new");
+    const qs = next.toString();
+    router.replace(qs ? `/catalogue?${qs}` : "/catalogue");
+  }, [canMutate, searchParams, router]);
+
   const rows: SkuRow[] = skus.map((entry) => ({
     id: entry.id,
     name: entry.name,
@@ -131,6 +181,11 @@ export default function CataloguePage() {
   function resetForm() {
     setCreateForm(emptyCreateForm);
     setPhotoFile(null);
+    setRecordStockNow(false);
+    setOpeningLocationId("");
+    setOpeningQty(1);
+    setOpeningUnitCost("");
+    setOpeningDate("");
   }
 
   function openPriceEditor(entry: Sku) {
@@ -152,6 +207,21 @@ export default function CataloguePage() {
       if (supplierRef) {
         payload.supplier_ref = supplierRef;
       }
+      if (recordStockNow) {
+        const cost = parsePriceInput(openingUnitCost);
+        if (!openingLocationId || openingQty === "" || cost === null) {
+          setError("Location, quantity, and unit cost are required to record stock.");
+          setSaving(false);
+          return;
+        }
+        payload.opening_location_id = openingLocationId;
+        payload.opening_qty = Number(openingQty);
+        payload.opening_unit_cost_zar = formatPriceAmount(cost);
+        const date = openingDate.trim();
+        if (date) {
+          payload.opening_date = date;
+        }
+      }
       const created = await createSku(payload);
       if (photoFile) {
         await uploadSkuPhoto(created.id, photoFile);
@@ -170,12 +240,25 @@ export default function CataloguePage() {
     }
   }
 
-  const formValid =
+  const skuFieldsValid = Boolean(
     createForm.our_ref.trim() &&
-    createForm.our_barcode.trim() &&
-    createForm.name.trim() &&
-    createForm.design.trim() &&
-    createForm.fabric.trim();
+      createForm.our_barcode.trim() &&
+      createForm.name.trim() &&
+      createForm.design.trim() &&
+      createForm.fabric.trim(),
+  );
+  const parsedOpeningCost = parsePriceInput(openingUnitCost);
+  const openingValid =
+    !recordStockNow ||
+    Boolean(
+      openingLocationId &&
+        typeof openingQty === "number" &&
+        Number.isFinite(openingQty) &&
+        openingQty >= 1 &&
+        parsedOpeningCost !== null &&
+        parsedOpeningCost > 0,
+    );
+  const formValid = skuFieldsValid && openingValid;
 
   return (
     <Stack gap={6}>
@@ -305,6 +388,7 @@ export default function CataloguePage() {
         primaryButtonDisabled={saving || !formValid}
         onRequestClose={() => setCreateOpen(false)}
         onRequestSubmit={() => void handleCreate()}
+        size="lg"
       >
         <Stack gap={5}>
           <TextInput
@@ -382,8 +466,74 @@ export default function CataloguePage() {
               />
             ) : null}
           </div>
+          <Stack gap={4}>
+            <div>
+              <h2 className="cds--type-productive-heading-02">Initial Opening Stock (Optional)</h2>
+              <p className="cds--type-body-01">Optional day-one stock without a PO.</p>
+            </div>
+            <Checkbox
+              id="create-sku-record-stock"
+              labelText="Record stock now"
+              checked={recordStockNow}
+              onChange={(_, { checked }) => setRecordStockNow(checked)}
+            />
+            {recordStockNow ? (
+              <Stack gap={4}>
+                <Select
+                  id="create-sku-opening-location"
+                  labelText="Location"
+                  value={openingLocationId}
+                  onChange={(event) => setOpeningLocationId(event.target.value)}
+                  helperText={
+                    locations.length === 0 ? "No active locations available" : undefined
+                  }
+                >
+                  <SelectItem value="" text="Select location" />
+                  {locations.map((entry) => (
+                    <SelectItem key={entry.id} value={entry.id} text={entry.name} />
+                  ))}
+                </Select>
+                <NumberInput
+                  id="create-sku-opening-qty"
+                  label="Quantity on Hand"
+                  min={1}
+                  step={1}
+                  value={openingQty}
+                  onChange={(_event, { value }) => {
+                    if (value === "") {
+                      setOpeningQty("");
+                    } else {
+                      setOpeningQty(Number(value));
+                    }
+                  }}
+                />
+                <TextInput
+                  id="create-sku-opening-unit-cost"
+                  labelText="Unit Cost (ZAR)"
+                  helperText="Used for inventory valuation"
+                  value={openingUnitCost}
+                  onChange={(event) => setOpeningUnitCost(event.target.value)}
+                />
+                <TextInput
+                  id="create-sku-opening-date"
+                  labelText="Received Date"
+                  type="date"
+                  value={openingDate}
+                  onChange={(event) => setOpeningDate(event.target.value)}
+                />
+              </Stack>
+            ) : null}
+          </Stack>
         </Stack>
       </Modal>
     </Stack>
+  );
+}
+
+export default function CataloguePage() {
+  return (
+    <Suspense fallback={<p className="cds--type-body-01">Loading catalogue…</p>}>
+      <CataloguePageContent />
+    </Suspense>
   );
 }

@@ -18,6 +18,7 @@ class JournalDocumentType(str, enum.Enum):
     CREDIT_NOTE = "credit_note"
     BILL = "bill"
     PAYMENT = "payment"
+    STOCK_ADJUSTMENT = "stock_adjustment"
 
 
 class JournalEntry(UUIDPkMixin, Base):

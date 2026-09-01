@@ -96,6 +96,60 @@ Endpoints: `GET/POST /api/v1/locations`, `PATCH /api/v1/locations/{id}`. Archive
 
 Startup seeds two locations when the table is empty: Kramerville (warehouse), Bedfordview (showroom). Same rows are inserted by migration `003_locations`.
 
+## V2-S2 stocktakes
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Stocktakes:** `GET/POST /stocktakes`, `GET /stocktakes/{id}`, `PATCH /stocktakes/{id}/lines/{line_id}` (`{counted_qty}` ≥ 0), `POST /stocktakes/{id}/lookup` (`{barcode}` exact `our_barcode`), `POST /stocktakes/{id}/complete`, `POST /stocktakes/{id}/cancel`. No pause endpoint.
+
+Start snapshots **every SKU** at that location (`expected_qty` = on-hand or 0). Status `in_progress`. 409 if that location already has an in-progress stocktake.
+
+**Location lock:** while `in_progress`, receive into the location, transfer from **or** to the location, and till sale at the location return 409 `"Location is locked for stocktake"`.
+
+Complete only from `in_progress`. Lines with `counted_qty` set apply `delta = counted - expected` via stock movements (audit source `stocktake`); **uncounted lines are skipped** (on-hand unchanged). Then `completed` and unlock. Cancel only from `in_progress` → `cancelled`, no stock writes. No GL.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get stocktakes | yes | yes | yes | yes | yes |
+| Start, count, lookup, complete, cancel | yes | yes | no | no | no |
+
+## V2-S3 stock adjustments
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Adjustments:** `GET/POST /adjustments`, `GET /adjustments/{id}`, `POST /adjustments/{id}/lines` (`{sku_id, qty_delta, unit_cost_zar?}`), `PATCH /adjustments/{id}/lines/{line_id}`, `DELETE /adjustments/{id}/lines/{line_id}` (204), `POST /adjustments/{id}/complete`, `POST /adjustments/{id}/cancel`.
+
+Draft at a location; complete applies on-hand and one balanced journal. Reasons: `opening`, `damage`, `theft`, `count_fix`, `write_off`. Status: `draft` | `completed` | `cancelled`.
+
+**qty_delta** (service): never 0. `opening` must be > 0; `damage` / `theft` / `write_off` must be < 0; `count_fix` any non-zero.
+
+**GL by sign** (always; CoA includes **3000 Opening balances / equity**):
+
+- Increases: Dr `1300` Inventory, Cr `3000` Opening balances
+- Decreases: Dr `5000` COGS, Cr `1300` Inventory
+- Mixed: both pairs when each total > 0 (skip a pair if that total is 0)
+
+Create and complete return 409 `"Location is locked for stocktake"` while a stocktake is in progress at that location. Archived location → conflict. Cancel from `draft` only; no stock, no GL. `unit_cost_zar` required on complete for increases when location cost is missing, and for decreases when location cost is missing (`"unit cost required"`). Audit source `adjustment`.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get adjustments | yes | yes | yes | yes | yes |
+| Create, lines, complete, cancel | yes | yes | no | no | no |
+
+## V2-S4 CSV import
+
+Endpoints (cookie `vellano_session`): `POST /api/v1/imports/preview`, `POST /api/v1/imports/commit`. Multipart: `inventory` CSV required, `soh` CSV optional, optional JSON strings `inventory_map` / `soh_map`. No GET. **owner|buyer** (`require_catalogue_mutate`). Warehouse-only SOH import is deferred.
+
+Preview is in-memory (200 even with row errors; 400 only if a file is unreadable or empty). Commit re-parses the files; any row error → 400; otherwise one transaction: inventory then SOH.
+
+**Inventory columns:** our_ref, name, category, retail_inc_vat required; barcode and cost_zar optional. Category is required for Cin7 parity and **ignored until S8** (not stored). Create-or-update by exact `our_ref`. Create uses `design = csv:{our_ref}`, `fabric = -`, `our_barcode = barcode or csv:{our_ref}`. Retail inc-VAT is stored as `retail_ex_vat` via `inc_to_ex`.
+
+**SOH columns:** our_ref, location, qty required; unit_cost_zar optional. Location is an active case-insensitive name match. SKU must exist in the DB or in the same inventory file. **SET** on-hand to qty (not add). Increase needs a unit cost from the SOH column, inventory `cost_zar`, or existing location cost (`"unit cost required to increase stock"`). Audit source `import`. In-progress stocktake at that location → 409 `"Location is locked for stocktake"`.
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| Preview / commit CSV import | yes | yes | no | no | no |
+
 ## S3 catalogue (suppliers, proformas, SKUs)
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -103,6 +157,8 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Suppliers:** `GET/POST /suppliers` — `{ name, default_currency? }` (currency defaults to USD).
 - **Proformas:** `GET /proformas`, `POST /proformas` (multipart: `supplier_id`, `invoice_number`, `invoice_date`, optional `currency`, file field `file`), `GET /proformas/{id}`, `GET /proformas/{id}/file` (PDF).
 - **SKUs:** `GET/POST /skus`, `POST /skus/{id}/photo` (field `photo`), `GET /skus/{id}`, `GET /skus/{id}/photo`.
+
+**S1 opening stock:** optional on `POST /skus`: `opening_location_id`, `opening_qty` (≥ 1), `opening_unit_cost_zar` (> 0), `opening_date` (defaults to today). If any opening field is set, location, qty, and unit cost are required. Owner/buyer. Writes location on-hand and cost audit source `opening`; no GL. Unit-cost blend matches receive. Omit all opening fields for a catalogue-only create (SKU is not in `GET /inventory`).
 
 UI labels distinguish **Our barcode** from **Supplier ref** — never conflate them.
 
@@ -168,6 +224,7 @@ Document-centric double-entry in ZAR. Every invoice, credit note, bill, and paym
 | 1300 | Inventory | asset |
 | 2100 | Accounts payable | liability |
 | 2200 | VAT control | liability |
+| 3000 | Opening balances | equity |
 | 4000 | Sales | income |
 | 5000 | Cost of goods sold | expense |
 | 6100 | Foreign exchange gain/loss | expense |
@@ -274,9 +331,6 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 | Label | Route | Slice |
 |-------|-------|-------|
-| Stocktakes | `/stocktakes` | V2-S2 |
-| Adjustments | `/adjustments` | V2-S3 |
-| Import | `/import` | V2-S4 |
 | Returns | `/returns` | V2-S5 |
 | Laybys | `/laybys` | V2-S6 |
 | Customers | `/customers` | V2-S10 |
@@ -301,7 +355,10 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/transfers` | `/transfers` |
 | `/receive` | `/receive` |
 | `/reports`, `/vat201` | `/reports` |
-| `/stocktakes`, `/adjustments`, `/import`, `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/stocktakes` | `/stocktakes` |
+| `/adjustments` | `/adjustments` |
+| `/import` | `/imports` |
+| `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
 
 ## Non-goals
 

@@ -7,6 +7,7 @@ from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.models.inventory import LocationStock
 from app.schemas.transfer import TransferCreate, TransferLocationStock, TransferResponse
+from app.services.stocktakes import StocktakeService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -19,6 +20,9 @@ class TransferService:
         self.location_stock_crud = LocationStockCRUD(db)
 
     async def transfer(self, data: TransferCreate) -> TransferResponse:
+        stocktakes = StocktakeService(self.db)
+        await stocktakes.assert_location_unlocked(data.from_location_id)
+        await stocktakes.assert_location_unlocked(data.to_location_id)
         if data.from_location_id == data.to_location_id:
             raise ValidationError("Source and destination locations must differ")
 

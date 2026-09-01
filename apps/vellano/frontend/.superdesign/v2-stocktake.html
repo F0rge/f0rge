@@ -1,0 +1,480 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vellano - Stocktake</title>
+  <meta name="view-transition" content="same-origin">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cds-background: #f4f4f4;
+      --cds-layer-01: #ffffff;
+      --cds-layer-02: #393939;
+      --cds-text-primary: #161616;
+      --cds-text-secondary: #525252;
+      --cds-interactive: #0f62fe;
+      --cds-border: #e0e0e0;
+      --cds-border-strong: #8d8d8d;
+      --cds-nav-bg: #161616;
+      --cds-nav-text: #c6c6c6;
+      --cds-nav-active: #ffffff;
+      --cds-nav-active-bg: #393939;
+    }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background-color: var(--cds-background);
+      color: var(--cds-text-primary);
+      margin: 0;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1.28572;
+    }
+    /* View Transitions */
+    html { background-color: #f4f4f4; }
+    @view-transition { navigation: auto; }
+    ::view-transition { background-color: #f4f4f4; }
+    
+    ::view-transition-old(header),
+    ::view-transition-new(header),
+    ::view-transition-old(sidenav),
+    ::view-transition-new(sidenav) {
+        animation: none;
+        mix-blend-mode: normal;
+    }
+
+    ::view-transition-old(main-content) {
+        animation: 0.25s ease-out both fade-out;
+    }
+    ::view-transition-new(main-content) {
+        animation: 0.25s ease-in 0.1s both fade-in;
+    }
+    @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    ::view-transition-old(root),
+    ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+    .header {
+      height: 48px;
+      background-color: var(--cds-nav-bg);
+      color: var(--cds-nav-active);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      border-bottom: 1px solid var(--cds-layer-02);
+    }
+    .sidenav {
+      width: 16rem;
+      background-color: var(--cds-nav-bg);
+      position: fixed;
+      top: 48px;
+      bottom: 0;
+      left: 0;
+      overflow-y: auto;
+      z-index: 40;
+      border-right: 1px solid var(--cds-layer-02);
+    }
+    .sidenav-item {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 16px;
+      color: var(--cds-nav-text);
+      text-decoration: none;
+      border-left: 4px solid transparent;
+    }
+    .sidenav-item:hover {
+      background-color: var(--cds-layer-02);
+      color: var(--cds-nav-active);
+    }
+    .sidenav-item.active {
+      background-color: var(--cds-nav-active-bg);
+      color: var(--cds-nav-active);
+      border-left-color: var(--cds-interactive);
+    }
+    .sidenav-icon {
+      margin-right: 16px;
+      font-size: 16px;
+    }
+    .main-content {
+      margin-top: 48px;
+      margin-left: 16rem;
+      padding: 24px;
+      min-height: calc(100vh - 48px);
+    }
+    .tile {
+      background-color: var(--cds-layer-01);
+      border: 1px solid var(--cds-border);
+      padding: 16px;
+    }
+    .btn-primary {
+      background-color: var(--cds-interactive);
+      color: #fff;
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-primary:hover {
+      background-color: #0353e9;
+    }
+    .btn-secondary {
+      background-color: #393939;
+      color: #fff;
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-secondary:hover {
+      background-color: #4c4c4c;
+    }
+    .btn-danger {
+      background-color: #da1e28;
+      color: #fff;
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-danger:hover {
+      background-color: #ba1b23;
+    }
+    .header-search {
+      background-color: var(--cds-layer-02);
+      border: none;
+      border-bottom: 1px solid var(--cds-border-strong);
+      color: #fff;
+      height: 32px;
+      padding: 0 16px 0 40px;
+      width: 280px;
+      font-family: inherit;
+    }
+    .header-search:focus {
+      outline: 2px solid #fff;
+      outline-offset: -2px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: var(--cds-layer-01);
+    }
+    .data-table th {
+      text-align: left;
+      padding: 8px 16px;
+      background-color: var(--cds-border);
+      font-weight: 600;
+      border-bottom: 1px solid var(--cds-border-strong);
+    }
+    .data-table td {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--cds-border);
+      vertical-align: middle;
+    }
+    .input-field {
+      border: none;
+      border-bottom: 1px solid var(--cds-border-strong);
+      background-color: var(--cds-background);
+      padding: 8px 16px;
+      height: 40px;
+      font-family: inherit;
+      font-size: 14px;
+      width: 100%;
+    }
+    .input-field:focus {
+      outline: 2px solid var(--cds-interactive);
+      outline-offset: -2px;
+    }
+    .qty-input {
+      width: 80px;
+      text-align: right;
+    }
+    .banner {
+      background-color: #fff1f1;
+      border-left: 4px solid #da1e28;
+      padding: 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <!-- Header -->
+    <header class="header" style="view-transition-name: header">
+      <div class="flex items-center h-full">
+        <button class="w-12 h-12 flex items-center justify-center border-r border-[#393939] hover:bg-[#393939]">
+          <iconify-icon icon="carbon:menu" class="text-xl"></iconify-icon>
+        </button>
+        <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" id="nav-home" class="px-4 text-[14px] font-semibold text-white tracking-wide flex items-center h-full">
+          <span class="font-normal mr-1">F0rge</span> Vellano
+        </a>
+      </div>
+      <div class="flex items-center h-full">
+        <div class="relative flex items-center h-full border-l border-[#393939]">
+          <iconify-icon icon="carbon:search" class="absolute left-4 text-white"></iconify-icon>
+          <input type="text" class="header-search" placeholder="Search...">
+        </div>
+        <div class="px-4 flex items-center border-l border-[#393939] h-full">
+          <span class="text-[14px]">admin@vellano.co.za</span>
+        </div>
+        <button class="w-12 h-12 flex items-center justify-center border-l border-[#393939] hover:bg-[#393939]">
+          <iconify-icon icon="carbon:logout" class="text-xl"></iconify-icon>
+        </button>
+      </div>
+    </header>
+
+    <!-- SideNav -->
+    <nav class="sidenav" style="view-transition-name: sidenav">
+      <div class="py-2">
+        <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" id="sn-home" class="sidenav-item">
+          <iconify-icon icon="carbon:home" class="sidenav-icon"></iconify-icon>
+          Home
+        </a>
+        <a href="#locations" id="sn-locations" class="sidenav-item">
+          <iconify-icon icon="carbon:location" class="sidenav-icon"></iconify-icon>
+          Locations
+        </a>
+        <a href="#suppliers" id="sn-suppliers" class="sidenav-item">
+          <iconify-icon icon="carbon:industry" class="sidenav-icon"></iconify-icon>
+          Suppliers
+        </a>
+        <a href="#proformas" id="sn-proformas" class="sidenav-item">
+          <iconify-icon icon="carbon:document" class="sidenav-icon"></iconify-icon>
+          Proformas
+        </a>
+        <a href="https://p.superdesign.dev/draft/85c3d7eb-f0b5-44fc-85f3-5223dd62f364" id="sn-catalogue" class="sidenav-item">
+          <iconify-icon icon="carbon:catalog" class="sidenav-icon"></iconify-icon>
+          Catalogue
+        </a>
+        <a href="#stock" id="sn-stock" class="sidenav-item">
+          <iconify-icon icon="carbon:product" class="sidenav-icon"></iconify-icon>
+          Stock
+        </a>
+        <a href="https://p.superdesign.dev/draft/4853836c-39e8-47d5-89dc-2ef9943e03bb" id="sn-stocktakes" class="sidenav-item pl-12 active">
+          Stocktakes
+        </a>
+        <a href="https://p.superdesign.dev/draft/1ef5ed63-3050-4bc4-ae65-a3307b5a8378" id="sn-adjustments" class="sidenav-item pl-12">
+          Adjustments
+        </a>
+        <a href="https://p.superdesign.dev/draft/7dc0776c-8ae6-4f9c-803d-2dad50346c36" id="sn-import" class="sidenav-item pl-12">
+          Import
+        </a>
+        <a href="#purchase-orders" id="sn-po" class="sidenav-item">
+          <iconify-icon icon="carbon:purchase" class="sidenav-icon"></iconify-icon>
+          Purchase orders
+        </a>
+        <a href="#transit" id="sn-transit" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery" class="sidenav-icon"></iconify-icon>
+          Transit
+        </a>
+        <a href="#receive" id="sn-receive" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery-parcel" class="sidenav-icon"></iconify-icon>
+          Receive
+        </a>
+        <a href="#transfers" id="sn-transfers" class="sidenav-item">
+          <iconify-icon icon="carbon:movement" class="sidenav-icon"></iconify-icon>
+          Transfers
+        </a>
+        <a href="https://p.superdesign.dev/draft/bc6b9795-edc3-403d-bc9e-a1adc644e3d0" id="sn-deliveries" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery-truck" class="sidenav-icon"></iconify-icon>
+          Deliveries
+        </a>
+        <a href="https://p.superdesign.dev/draft/3b26c41b-a7bd-4a1a-91b2-4605848cd20d" id="sn-till" class="sidenav-item">
+          <iconify-icon icon="carbon:store" class="sidenav-icon"></iconify-icon>
+          Till
+        </a>
+        <a href="https://p.superdesign.dev/draft/cc5ffaf0-b29e-4e81-9923-db9b813e318c" id="sn-customers" class="sidenav-item">
+          <iconify-icon icon="carbon:user-multiple" class="sidenav-icon"></iconify-icon>
+          Customers
+        </a>
+        <div class="mt-4 mb-2 px-4 text-xs font-semibold uppercase text-[#8d8d8d] tracking-wider">Books</div>
+        <a href="#chart-of-accounts" id="sn-coa" class="sidenav-item">
+          <iconify-icon icon="carbon:finance" class="sidenav-icon"></iconify-icon>
+          Chart of accounts
+        </a>
+        <a href="#contacts" id="sn-contacts" class="sidenav-item pl-12">Contacts</a>
+        <a href="#invoices" id="sn-invoices" class="sidenav-item pl-12">Invoices</a>
+        <a href="#credit-notes" id="sn-credit-notes" class="sidenav-item pl-12">Credit notes</a>
+        <a href="#bills" id="sn-bills" class="sidenav-item pl-12">Bills</a>
+        <a href="#payments" id="sn-payments" class="sidenav-item pl-12">Payments</a>
+        <a href="#bank-reconciliation" id="sn-bank-rec" class="sidenav-item pl-12">Bank reconciliation</a>
+        <a href="#reports" id="sn-reports" class="sidenav-item pl-12">Reports</a>
+        <a href="#vat201" id="sn-vat201" class="sidenav-item pl-12">VAT201</a>
+        
+        <div class="mt-4 border-t border-[#393939] pt-2">
+          <a href="#users" id="sn-users" class="sidenav-item">
+            <iconify-icon icon="carbon:user-admin" class="sidenav-icon"></iconify-icon>
+            Users
+          </a>
+          <a href="#profile" id="sn-profile" class="sidenav-item">
+            <iconify-icon icon="carbon:user" class="sidenav-icon"></iconify-icon>
+            Profile
+          </a>
+          <a href="#settings" id="sn-settings" class="sidenav-item">
+            <iconify-icon icon="carbon:settings" class="sidenav-icon"></iconify-icon>
+            Settings
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" style="view-transition-name: main-content">
+      <div class="max-w-[1200px]">
+        
+        <div class="flex items-center gap-2 text-[14px] text-[#0f62fe] mb-4">
+          <a href="#stock" id="bc-stock" class="hover:underline">Stock</a>
+          <iconify-icon icon="carbon:chevron-right"></iconify-icon>
+          <span class="text-[#525252]">Stocktakes</span>
+        </div>
+
+        <div class="flex justify-between items-end mb-6">
+          <div>
+            <h1 class="text-[28px] font-light text-[#161616] mb-2">Sandton Warehouse Stocktake</h1>
+            <p class="text-[14px] text-[#525252]">Started Oct 14, 2024 at 08:30 AM • In Progress</p>
+          </div>
+          <div class="flex gap-4">
+            <button class="btn-danger">
+              Cancel stocktake
+            </button>
+            <button class="btn-secondary">
+              Pause
+            </button>
+            <button class="btn-primary">
+              Complete & Adjust
+              <iconify-icon icon="carbon:checkmark" class="ml-2"></iconify-icon>
+            </button>
+          </div>
+        </div>
+
+        <div class="banner mb-6">
+          <iconify-icon icon="carbon:warning-alt" class="text-[#da1e28] text-xl mt-0.5"></iconify-icon>
+          <div>
+            <h3 class="font-semibold text-[#161616] mb-1">Location Locked</h3>
+            <p class="text-[#161616]">Sandton Warehouse is currently locked for inventory movements. No transfers or sales can be fulfilled from this location until the stocktake is completed or cancelled.</p>
+          </div>
+        </div>
+
+        <div class="tile p-4 mb-6">
+          <div class="flex gap-4 items-end">
+            <div class="flex-1 max-w-md">
+              <label class="block text-[12px] text-[#525252] mb-2">Scan Barcode / SKU</label>
+              <div class="relative">
+                <iconify-icon icon="carbon:barcode" class="absolute left-3 top-1/2 -translate-y-1/2 text-[#525252] text-lg"></iconify-icon>
+                <input type="text" class="input-field pl-10" placeholder="e.g. 8412993041" autofocus>
+              </div>
+            </div>
+            <button class="btn-primary mb-1">
+              Lookup
+            </button>
+          </div>
+        </div>
+
+        <div class="mb-4 flex justify-between items-center">
+          <h2 class="text-[16px] font-semibold text-[#161616]">Inventory List (4 items counted, 12 pending)</h2>
+          <div class="flex gap-2">
+            <select class="input-field h-8 py-0 w-48 text-[12px]">
+              <option>All items</option>
+              <option>Uncounted</option>
+              <option>With variances</option>
+            </select>
+          </div>
+        </div>
+
+        <table class="data-table mb-8">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Description</th>
+              <th>Category</th>
+              <th class="text-right">Expected Qty</th>
+              <th class="text-right w-40">Counted Qty</th>
+              <th class="text-right">Variance</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="font-mono text-[#0f62fe]">DC-VB-001</span></td>
+              <td class="font-medium">Dining Chair - Velvet Blue</td>
+              <td>Seating</td>
+              <td class="text-right">14</td>
+              <td class="text-right">
+                <input type="number" class="input-field qty-input h-8 py-1" value="14">
+              </td>
+              <td class="text-right"><span class="text-[#24a148]">0</span></td>
+            </tr>
+            <tr class="bg-[#fff8f8]">
+              <td><span class="font-mono text-[#0f62fe]">DC-VG-002</span></td>
+              <td class="font-medium">Dining Chair - Velvet Green</td>
+              <td>Seating</td>
+              <td class="text-right">12</td>
+              <td class="text-right">
+                <input type="number" class="input-field qty-input h-8 py-1" value="10">
+              </td>
+              <td class="text-right"><span class="text-[#da1e28] font-semibold">-2</span></td>
+            </tr>
+            <tr class="bg-[#f2f8ff]">
+              <td><span class="font-mono text-[#0f62fe]">CT-0W-104</span></td>
+              <td class="font-medium">Coffee Table - Oak Wood</td>
+              <td>Tables</td>
+              <td class="text-right">5</td>
+              <td class="text-right">
+                <input type="number" class="input-field qty-input h-8 py-1" value="6">
+              </td>
+              <td class="text-right"><span class="text-[#0f62fe] font-semibold">+1</span></td>
+            </tr>
+            <tr>
+              <td><span class="font-mono text-[#0f62fe]">CT-GW-105</span></td>
+              <td class="font-medium">Coffee Table - Glass/Metal</td>
+              <td>Tables</td>
+              <td class="text-right">8</td>
+              <td class="text-right">
+                <input type="number" class="input-field qty-input h-8 py-1" value="8">
+              </td>
+              <td class="text-right"><span class="text-[#24a148]">0</span></td>
+            </tr>
+            <tr>
+              <td><span class="font-mono text-[#0f62fe]">SF-L3-221</span></td>
+              <td class="font-medium text-[#525252]">Sofa 3-Seater - Leather Brown</td>
+              <td class="text-[#525252]">Sofas</td>
+              <td class="text-right text-[#525252]">3</td>
+              <td class="text-right">
+                <input type="number" class="input-field qty-input h-8 py-1" placeholder="-">
+              </td>
+              <td class="text-right">-</td>
+            </tr>
+            <tr>
+              <td><span class="font-mono text-[#0f62fe]">SF-F2-225</span></td>
+              <td class="font-medium text-[#525252]">Sofa 2-Seater - Fabric Grey</td>
+              <td class="text-[#525252]">Sofas</td>
+              <td class="text-right text-[#525252]">6</td>
+              <td class="text-right">
+                <input type="number" class="input-field qty-input h-8 py-1" placeholder="-">
+              </td>
+              <td class="text-right">-</td>
+            </tr>
+          </tbody>
+        </table>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

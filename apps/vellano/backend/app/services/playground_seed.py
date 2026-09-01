@@ -103,7 +103,8 @@ class PlaygroundSeedService:
                 name="Playground dining table",
                 design="Playground table design",
                 fabric="Playground oak",
-            )
+            ),
+            owner.id,
         )
         await sku_service.update(
             table_sku.id,
@@ -117,7 +118,8 @@ class PlaygroundSeedService:
                 name="Playground dining chair",
                 design="Playground chair design",
                 fabric="Playground fabric",
-            )
+            ),
+            owner.id,
         )
         await sku_service.update(
             chair_sku.id,

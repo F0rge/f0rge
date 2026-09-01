@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import uuid
 
 from fastapi import UploadFile
@@ -8,9 +9,12 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
 from app.models.sku import Sku
+from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
+from app.services.stock_movements import StockMovementService
 from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
 from app.services.object_storage import (
     is_remote_storage_ref,
@@ -19,6 +23,7 @@ from app.services.object_storage import (
     save_bytes,
 )
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_db.crud import unit_of_work
 from f0rge_storage.images import resize_image
 
 
@@ -26,6 +31,8 @@ class SkuService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.crud = SkuCRUD(db)
+        self.location_crud = LocationCRUD(db)
+        self.stock_movements = StockMovementService(db)
 
     async def list(self) -> list[SkuResponse]:
         skus = await self.crud.list_all()
@@ -76,8 +83,15 @@ class SkuService:
         assert reloaded is not None
         return self._to_response(reloaded)
 
-    async def create(self, data: SkuCreate) -> SkuResponse:
+    async def create(self, data: SkuCreate, user_id: uuid.UUID) -> SkuResponse:
         await self._ensure_unique_fields(data.design, data.fabric, data.our_ref, data.our_barcode)
+
+        if data.opening_location_id is not None:
+            location = await self.location_crud.get_by_id(data.opening_location_id)
+            if location is None:
+                raise NotFoundError("Location not found")
+            if location.is_archived:
+                raise ConflictError("Cannot set opening stock at archived location")
 
         sku = Sku(
             our_ref=data.our_ref,
@@ -87,9 +101,22 @@ class SkuService:
             fabric=data.fabric,
             supplier_ref=data.supplier_ref,
         )
-        await self.crud.add_and_flush(sku)
         try:
-            await self.crud.commit_refresh(sku)
+            async with unit_of_work(self.db):
+                await self.crud.add_and_flush(sku)
+                if data.opening_location_id is not None:
+                    assert data.opening_qty is not None
+                    assert data.opening_unit_cost_zar is not None
+                    opening_date = data.opening_date or datetime.date.today()
+                    await self.stock_movements.apply_incoming_qty(
+                        sku_id=sku.id,
+                        location_id=data.opening_location_id,
+                        qty=data.opening_qty,
+                        unit_cost_zar=data.opening_unit_cost_zar,
+                        user_id=user_id,
+                        source=UnitCostAuditSource.OPENING,
+                        note=f"Opening stock {opening_date.isoformat()}",
+                    )
         except IntegrityError as exc:
             await self._raise_integrity_conflict(exc)
         reloaded = await self.crud.get_by_id(sku.id)

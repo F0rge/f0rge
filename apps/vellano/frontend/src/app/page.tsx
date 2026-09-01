@@ -65,7 +65,7 @@ export default function HomePage() {
       </div>
 
       <div className="vellano-home-actions">
-        <Button kind="primary" renderIcon={Add} onClick={() => router.push("/catalogue")}>
+        <Button kind="primary" renderIcon={Add} onClick={() => router.push("/catalogue?new=1")}>
           New stock
         </Button>
         <Button kind="secondary" onClick={() => router.push("/stocktakes")}>

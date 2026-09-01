@@ -12,9 +12,11 @@ from app.database import async_session_maker
 from app.middleware.auth import AuthContextMiddleware
 from app.routers import (
     accounts,
+    adjustments,
     auth,
     bank_imports,
     bills,
+    catalogue_imports,
     contacts,
     cost_audit,
     credit_notes,
@@ -29,6 +31,7 @@ from app.routers import (
     search,
     settings as settings_router,
     skus,
+    stocktakes,
     suppliers,
     till,
     transfers,
@@ -48,7 +51,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await BootstrapService(session).seed_if_empty()
         await RoleUserSeedService(session).seed()
         await LocationSeedService(session).seed_if_empty()
-        await ChartOfAccountsSeedService(session).seed_if_empty()
+        coa = ChartOfAccountsSeedService(session)
+        await coa.seed_if_empty()
+        await coa.ensure_opening_equity()
         await TillSeedService(session).seed_if_empty()
         await PlaygroundSeedService(session).seed_if_enabled()
     yield
@@ -82,10 +87,13 @@ app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
 app.include_router(proformas.proformas_router)
 app.include_router(skus.skus_router)
+app.include_router(catalogue_imports.catalogue_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
 app.include_router(transfers.transfers_router)
+app.include_router(stocktakes.stocktakes_router)
+app.include_router(adjustments.adjustments_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
 app.include_router(contacts.contacts_router)

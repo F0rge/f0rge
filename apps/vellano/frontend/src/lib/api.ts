@@ -345,6 +345,10 @@ export type CreateSkuPayload = {
   design: string;
   fabric: string;
   supplier_ref?: string;
+  opening_location_id?: string;
+  opening_qty?: number;
+  opening_unit_cost_zar?: string;
+  opening_date?: string;
 };
 
 export function listSkus(): Promise<Sku[]> {
@@ -352,9 +356,16 @@ export function listSkus(): Promise<Sku[]> {
 }
 
 export function createSku(payload: CreateSkuPayload): Promise<Sku> {
+  const body: CreateSkuPayload = { ...payload };
+  const openingDate = body.opening_date?.trim();
+  if (openingDate) {
+    body.opening_date = openingDate;
+  } else {
+    delete body.opening_date;
+  }
   return apiFetch<Sku>("/skus", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 }
 
@@ -369,6 +380,53 @@ export function updateSku(id: string, payload: UpdateSkuPricePayload): Promise<S
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export type CatalogueImportFileKind = "inventory" | "soh";
+
+export type CatalogueImportError = {
+  file: CatalogueImportFileKind;
+  row: number;
+  message: string;
+};
+
+export type CatalogueImportInventoryPreview = {
+  headers: string[];
+  suggested_map: Record<string, string>;
+  applied_map: Record<string, string>;
+  sample_row: Record<string, string> | null;
+  row_count: number;
+  create_count: number;
+  update_count: number;
+};
+
+export type CatalogueImportSohPreview = {
+  headers: string[];
+  suggested_map: Record<string, string>;
+  applied_map: Record<string, string>;
+  sample_row: Record<string, string> | null;
+  row_count: number;
+};
+
+export type CatalogueImportPreview = {
+  ok: boolean;
+  errors: CatalogueImportError[];
+  inventory: CatalogueImportInventoryPreview;
+  soh: CatalogueImportSohPreview | null;
+};
+
+export type CatalogueImportCommit = {
+  created_skus: number;
+  updated_skus: number;
+  soh_rows: number;
+};
+
+export function previewCatalogueImport(formData: FormData): Promise<CatalogueImportPreview> {
+  return apiUpload<CatalogueImportPreview>("/imports/preview", formData);
+}
+
+export function commitCatalogueImport(formData: FormData): Promise<CatalogueImportCommit> {
+  return apiUpload<CatalogueImportCommit>("/imports/commit", formData);
 }
 
 export type PurchaseOrderStatus = "open" | "on_water" | "landed" | "received";
@@ -589,11 +647,226 @@ export function createTransfer(payload: TransferPayload): Promise<TransferResult
   });
 }
 
+export type StocktakeStatus = "in_progress" | "completed" | "cancelled";
+
+export type StocktakeLine = {
+  id: string;
+  sku_id: string;
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  expected_qty: number;
+  counted_qty: number | null;
+  variance: number | null;
+};
+
+export type StocktakeSummary = {
+  id: string;
+  location_id: string;
+  location_name: string;
+  status: StocktakeStatus;
+  started_at: string;
+  completed_at: string | null;
+};
+
+export type Stocktake = StocktakeSummary & {
+  lines: StocktakeLine[];
+};
+
+export const STOCKTAKE_STATUS_LABELS: Record<StocktakeStatus, string> = {
+  in_progress: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+export function listStocktakes(): Promise<StocktakeSummary[]> {
+  return apiFetch<StocktakeSummary[]>("/stocktakes");
+}
+
+export function startStocktake(payload: { location_id: string }): Promise<Stocktake> {
+  return apiFetch<Stocktake>("/stocktakes", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getStocktake(id: string): Promise<Stocktake> {
+  return apiFetch<Stocktake>(`/stocktakes/${id}`);
+}
+
+export function patchStocktakeLine(
+  stocktakeId: string,
+  lineId: string,
+  payload: { counted_qty: number },
+): Promise<StocktakeLine> {
+  return apiFetch<StocktakeLine>(`/stocktakes/${stocktakeId}/lines/${lineId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function lookupStocktakeBarcode(
+  stocktakeId: string,
+  payload: { barcode: string },
+): Promise<StocktakeLine> {
+  return apiFetch<StocktakeLine>(`/stocktakes/${stocktakeId}/lookup`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function completeStocktake(id: string): Promise<Stocktake> {
+  return apiFetch<Stocktake>(`/stocktakes/${id}/complete`, { method: "POST" });
+}
+
+export function cancelStocktake(id: string): Promise<Stocktake> {
+  return apiFetch<Stocktake>(`/stocktakes/${id}/cancel`, { method: "POST" });
+}
+
 export function canMutateBooks(role: UserRole | undefined): boolean {
   return role === "owner" || role === "books";
 }
 
-export type AccountType = "asset" | "liability" | "income" | "expense";
+export type AdjustmentReason = "opening" | "damage" | "theft" | "count_fix" | "write_off";
+
+export type AdjustmentStatus = "draft" | "completed" | "cancelled";
+
+export type AdjustmentLine = {
+  id: string;
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  qty_delta: number;
+  unit_cost_zar: string | null;
+  current_qty?: number;
+  new_qty?: number;
+};
+
+export type AdjustmentSummary = {
+  id: string;
+  location_id: string;
+  location_name?: string;
+  reason: AdjustmentReason;
+  notes?: string | null;
+  status: AdjustmentStatus;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
+  lines?: AdjustmentLine[];
+};
+
+export type Adjustment = AdjustmentSummary & {
+  lines: AdjustmentLine[];
+};
+
+export const ADJUSTMENT_REASON_LABELS: Record<AdjustmentReason, string> = {
+  opening: "Opening Stock (Equity)",
+  damage: "Damage / Breakage (Expense)",
+  theft: "Theft / Shrinkage (Expense)",
+  count_fix: "Count Fix (COGS)",
+  write_off: "Write-off (Expense)",
+};
+
+export const ADJUSTMENT_REASONS: AdjustmentReason[] = [
+  "opening",
+  "damage",
+  "theft",
+  "count_fix",
+  "write_off",
+];
+
+export const ADJUSTMENT_STATUS_LABELS: Record<AdjustmentStatus, string> = {
+  draft: "Draft",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+export type CreateAdjustmentPayload = {
+  location_id: string;
+  reason: AdjustmentReason;
+  notes?: string;
+};
+
+export type CreateAdjustmentLinePayload = {
+  sku_id: string;
+  qty_delta: number;
+  unit_cost_zar?: string;
+};
+
+export function listAdjustments(): Promise<AdjustmentSummary[]> {
+  return apiFetch<AdjustmentSummary[]>("/adjustments");
+}
+
+export function createAdjustment(payload: CreateAdjustmentPayload): Promise<Adjustment> {
+  const notes = payload.notes?.trim();
+  const body: CreateAdjustmentPayload = {
+    location_id: payload.location_id,
+    reason: payload.reason,
+  };
+  if (notes) {
+    body.notes = notes;
+  }
+  return apiFetch<Adjustment>("/adjustments", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getAdjustment(id: string): Promise<Adjustment> {
+  return apiFetch<Adjustment>(`/adjustments/${id}`);
+}
+
+export function addAdjustmentLine(
+  adjustmentId: string,
+  payload: CreateAdjustmentLinePayload,
+): Promise<AdjustmentLine> {
+  const cost = payload.unit_cost_zar?.trim();
+  const body: CreateAdjustmentLinePayload = {
+    sku_id: payload.sku_id,
+    qty_delta: payload.qty_delta,
+  };
+  if (cost) {
+    body.unit_cost_zar = cost;
+  }
+  return apiFetch<AdjustmentLine>(`/adjustments/${adjustmentId}/lines`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchAdjustmentLine(
+  adjustmentId: string,
+  lineId: string,
+  payload: { qty_delta?: number; unit_cost_zar?: string },
+): Promise<AdjustmentLine> {
+  const body: { qty_delta?: number; unit_cost_zar?: string } = {};
+  if (payload.qty_delta !== undefined) {
+    body.qty_delta = payload.qty_delta;
+  }
+  const cost = payload.unit_cost_zar?.trim();
+  if (cost) {
+    body.unit_cost_zar = cost;
+  }
+  return apiFetch<AdjustmentLine>(`/adjustments/${adjustmentId}/lines/${lineId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdjustmentLine(adjustmentId: string, lineId: string): Promise<void> {
+  return apiFetch<void>(`/adjustments/${adjustmentId}/lines/${lineId}`, { method: "DELETE" });
+}
+
+export function completeAdjustment(id: string): Promise<Adjustment> {
+  return apiFetch<Adjustment>(`/adjustments/${id}/complete`, { method: "POST" });
+}
+
+export function cancelAdjustment(id: string): Promise<Adjustment> {
+  return apiFetch<Adjustment>(`/adjustments/${id}/cancel`, { method: "POST" });
+}
+
+export type AccountType = "asset" | "liability" | "equity" | "income" | "expense";
 
 export type Account = {
   id: string;
@@ -621,6 +894,7 @@ export type UpdateAccountPayload = {
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: "asset", label: "Asset" },
   { value: "liability", label: "Liability" },
+  { value: "equity", label: "Equity" },
   { value: "income", label: "Income" },
   { value: "expense", label: "Expense" },
 ];

@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class SkuCreate(BaseModel):
@@ -15,6 +15,33 @@ class SkuCreate(BaseModel):
     design: str = Field(min_length=1)
     fabric: str = Field(min_length=1)
     supplier_ref: Optional[str] = Field(default=None, max_length=64)
+    opening_location_id: Optional[uuid.UUID] = None
+    opening_qty: Optional[int] = Field(default=None, ge=1)
+    opening_unit_cost_zar: Optional[Decimal] = Field(default=None, gt=0)
+    opening_date: Optional[datetime.date] = None
+
+    @model_validator(mode="after")
+    def opening_fields_together(self) -> SkuCreate:
+        any_opening = any(
+            [
+                self.opening_location_id is not None,
+                self.opening_qty is not None,
+                self.opening_unit_cost_zar is not None,
+                self.opening_date is not None,
+            ]
+        )
+        if not any_opening:
+            return self
+        if (
+            self.opening_location_id is None
+            or self.opening_qty is None
+            or self.opening_unit_cost_zar is None
+        ):
+            raise ValueError(
+                "opening_location_id, opening_qty, and opening_unit_cost_zar "
+                "are required when any opening field is set"
+            )
+        return self
 
 
 class SkuUpdate(BaseModel):
