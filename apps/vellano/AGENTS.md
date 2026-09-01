@@ -224,15 +224,24 @@ Matching a bank line sets `payments.is_reconciled = true`. Unmatched import line
 
 ## Railway
 
-**Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.
+**Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project. Production has no Vellano services; the Marrow project has no Vellano config.
 
-- Project: `Vellano` (`c76d8df1-d839-454c-a94a-79b930deaf38`)
-- Environment: `develop` only (`7a8ce6f1-c514-4e5d-9c50-4b7918865321`)
-- Frontend: https://vellano-dev.leo-figueiredo.com
-- API: https://vellano-dev-api.leo-figueiredo.com (`/api/v1/health`, Swagger `/docs`)
-- Config files: `apps/vellano/{backend,frontend}/railway.toml` (no Root Directory)
-- `watchPatterns` = `apps/vellano/**` + libs actually imported
-- Manifest: `branches: [develop]` only. No production, no `main`
+| Resource | ID / URL |
+|----------|----------|
+| Project `Vellano` | `c76d8df1-d839-454c-a94a-79b930deaf38` |
+| Environment `develop` | `7a8ce6f1-c514-4e5d-9c50-4b7918865321` |
+| Service `vellano-api` | `77a83033-b75e-4da1-88d0-b6db39bcedaf` |
+| Service `vellano-frontend` | `10838be1-7a37-4dfc-810a-8805d040d5d7` |
+| Postgres (own, not Marrow pgvector) | `a1a6695d-b8fb-4c79-92a6-664b48bc07e4` |
+| API | https://vellano-dev-api.leo-figueiredo.com (`/api/v1/health`, Swagger `/docs`) |
+| Frontend | https://vellano-dev.leo-figueiredo.com |
+
+- **Replicas:** 1 each (hobby tier, `sfo` region).
+- **Config files:** `apps/vellano/{backend,frontend}/railway.toml` — no Root Directory; Config File path points here.
+- **`watchPatterns`:** `apps/vellano/**` + imported libs (`libs/backend/core`, `db`, `storage` in backend toml). Live API service may omit `libs/backend/storage/**` until next redeploy; repo toml includes it.
+- **Manifest:** `.github/deploy/manifest.yml` — `branches: [develop]` only. No `health_url.main`, no production.
+- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Cookie `vellano_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+- **Object storage:** develop `vellano-api` has no `BUCKET_NAME` / `AWS_*` yet — uploads use filesystem `STORAGE_DIR` fallback (not Marrow `photos` / `photos-dev`). Wire a dedicated Vellano bucket in a follow-up when needed.
 
 ## Non-goals
 
