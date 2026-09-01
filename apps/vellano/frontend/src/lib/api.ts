@@ -1802,6 +1802,27 @@ export function createPayment(payload: CreatePaymentPayload): Promise<Payment> {
   });
 }
 
+export async function downloadPaymentPdf(id: string, paymentNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/payments/${id}/pdf`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${paymentNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 export type JournalStatus = "draft" | "posted" | "voided";
 
 export type JournalDocumentType =
