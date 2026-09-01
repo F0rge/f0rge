@@ -233,13 +233,20 @@ export default function InvoiceDetailPage() {
       </Stack>
 
       {creditNote ? (
-        <InlineNotification
-          kind="info"
-          title="Credit note"
-          subtitle={`${creditNote.credit_note_number} issued on ${creditNote.issue_date}.`}
-          hideCloseButton
-          lowContrast
-        />
+        <Stack gap={3}>
+          <InlineNotification
+            kind="info"
+            title="Credit note"
+            subtitle={`${creditNote.credit_note_number} issued on ${creditNote.issue_date}.`}
+            hideCloseButton
+            lowContrast
+          />
+          <div>
+            <Button kind="ghost" size="sm" onClick={() => router.push("/credit-notes")}>
+              View credit notes
+            </Button>
+          </div>
+        </Stack>
       ) : null}
 
       <section className="vellano-tax-invoice">

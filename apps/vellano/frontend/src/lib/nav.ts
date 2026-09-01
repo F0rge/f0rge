@@ -2,6 +2,7 @@ export const BOOKS_NAV_ITEMS = [
   { href: "/ledger", label: "Chart of accounts" },
   { href: "/contacts", label: "Contacts" },
   { href: "/invoices", label: "Invoices" },
+  { href: "/credit-notes", label: "Credit notes" },
   { href: "/bills", label: "Bills" },
   { href: "/payments", label: "Payments" },
   { href: "/bank-reconciliation", label: "Bank reconciliation" },
