@@ -14,9 +14,7 @@ class TeamSettingsCRUD(BaseCRUD):
         super().__init__(db)
 
     async def get_by_team_id(self, team_id: uuid.UUID) -> TeamSettings | None:
-        result = await self.db.execute(
-            select(TeamSettings).where(TeamSettings.team_id == team_id)
-        )
+        result = await self.db.execute(select(TeamSettings).where(TeamSettings.team_id == team_id))
         return result.scalar_one_or_none()
 
     async def get_or_create_for_team(self, team_id: uuid.UUID) -> TeamSettings:

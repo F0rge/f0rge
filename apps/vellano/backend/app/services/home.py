@@ -57,9 +57,7 @@ class HomeService:
                 selectinload(PurchaseOrder.supplier),
             )
             .where(
-                PurchaseOrder.status.in_(
-                    [PurchaseOrderStatus.ON_WATER, PurchaseOrderStatus.LANDED]
-                )
+                PurchaseOrder.status.in_([PurchaseOrderStatus.ON_WATER, PurchaseOrderStatus.LANDED])
             )
         )
         orders = list(result.scalars().all())

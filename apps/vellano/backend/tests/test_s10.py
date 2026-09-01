@@ -121,9 +121,7 @@ async def test_search_finds_sku_barcode_po_and_invoice(owner_client: AsyncClient
 
     inv_search = await owner_client.get("/api/v1/search", params={"q": invoice_number})
     assert inv_search.status_code == 200
-    assert any(
-        hit["invoice_number"] == invoice_number for hit in inv_search.json()["invoices"]
-    )
+    assert any(hit["invoice_number"] == invoice_number for hit in inv_search.json()["invoices"])
 
 
 async def test_home_on_order_differs_from_on_hand_when_on_water(owner_client: AsyncClient) -> None:
@@ -193,7 +191,9 @@ async def test_settings_default_vat_is_15_percent(owner_client: AsyncClient) -> 
     assert body["defaults_locked"] is True
 
 
-async def test_settings_mutate_owner_only(owner_client: AsyncClient, async_client: AsyncClient) -> None:
+async def test_settings_mutate_owner_only(
+    owner_client: AsyncClient, async_client: AsyncClient
+) -> None:
     books_resp = await owner_client.post(
         "/api/v1/users",
         json={

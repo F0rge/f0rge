@@ -37,9 +37,7 @@ class SettingsService:
 
         new_vat = data.vat_rate if data.vat_rate is not None else settings.vat_rate
         new_currency = (
-            data.home_currency.upper()
-            if data.home_currency is not None
-            else settings.home_currency
+            data.home_currency.upper() if data.home_currency is not None else settings.home_currency
         )
 
         if new_vat <= 0 or new_vat > 1:
@@ -63,9 +61,7 @@ class SettingsService:
         *,
         include_warning: bool = False,
     ) -> SettingsResponse:
-        defaults_locked = (
-            vat_rate == DEFAULT_VAT_RATE and home_currency == DEFAULT_HOME_CURRENCY
-        )
+        defaults_locked = vat_rate == DEFAULT_VAT_RATE and home_currency == DEFAULT_HOME_CURRENCY
         warning = None
         if not defaults_locked:
             warning = self.DEFAULT_WARNING
