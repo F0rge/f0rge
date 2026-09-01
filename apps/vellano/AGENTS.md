@@ -196,6 +196,23 @@ Extends `skus` (no second table). Columns: nullable `preferred_supplier_id` (FK 
 
 Migration: `018_v2_s13_sku_supplier`.
 
+## V2-S11 deliveries
+
+Fulfillment tracking only — till/layby already moved stock. **No stock movement. No journal.**
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Deliveries:** `GET/POST /deliveries`, `GET /deliveries/{id}`, `POST /deliveries/{id}/pack`, `POST /deliveries/{id}/complete` (optional `{delivery_date}`, default today), `POST /deliveries/{id}/cancel`.
+
+Numbering: `DLV-0001`. Status: `draft` | `packed` | `delivered` | `cancelled`. Source: paid **invoice** (`amount_paid == total_inc_vat`) or non-cancelled **layby**. One non-cancelled delivery per source. Create copies all source lines (no client-supplied lines). Pack: draft → packed. Complete: packed → delivered. Cancel: draft only.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get deliveries | yes | yes | yes | yes | yes |
+| Create, pack, complete, cancel | yes | yes | no | yes | no |
+
+Migration: `019_v2_s11_deliveries`.
+
 ## V2-S5 returns / RMA
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -432,7 +449,6 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 | Label | Route | Slice |
 |-------|-------|-------|
-| Deliveries | `/deliveries` | V2-S11 |
 | Reorder | `/reorder` | V2-S12 |
 
 V1 routes (stock, till, books, reports, VAT201, etc.) remain live. V2-S7 home hub KPIs and needs-attention / recent-movements tables ship on `/` via `GET /home`.
@@ -459,7 +475,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/returns` | `/returns` |
 | `/laybys` | `/laybys` |
 | `/customers` | `/customers` |
-| `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/deliveries` | `/deliveries` |
+| `/reorder` | *(none yet — V2 stub)* |
 
 ## Non-goals
 

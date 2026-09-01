@@ -21,6 +21,7 @@ from app.routers import (
     cost_audit,
     credit_notes,
     customers,
+    deliveries,
     health,
     home,
     invoices,
@@ -99,6 +100,7 @@ app.include_router(transfers.transfers_router)
 app.include_router(stocktakes.stocktakes_router)
 app.include_router(adjustments.adjustments_router)
 app.include_router(returns.returns_router)
+app.include_router(deliveries.deliveries_router)
 app.include_router(laybys.laybys_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)

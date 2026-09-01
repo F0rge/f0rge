@@ -4,6 +4,12 @@ from app.models.account import Account, AccountType
 from app.models.bank_import import BankImport, BankImportLine
 from app.models.bill import Bill, BillLine
 from app.models.credit_note import CreditNote
+from app.models.delivery import (
+    Delivery,
+    DeliveryLine,
+    DeliverySourceType,
+    DeliveryStatus,
+)
 from app.models.customer import Customer
 from app.models.inventory import LocationStock, SkuStock
 from app.models.journal import JournalDocumentType, JournalEntry, JournalLine
@@ -49,6 +55,10 @@ __all__ = [
     "BillLine",
     "CreditNote",
     "Customer",
+    "Delivery",
+    "DeliveryLine",
+    "DeliverySourceType",
+    "DeliveryStatus",
     "InvoiceLine",
     "JournalDocumentType",
     "JournalEntry",

@@ -1922,3 +1922,117 @@ export function updateCustomer(
     body: JSON.stringify(buildCustomerPayload(payload)),
   });
 }
+
+export type DeliveryStatus = "draft" | "packed" | "delivered" | "cancelled";
+
+export type DeliverySourceType = "invoice" | "layby";
+
+export type DeliveryLine = {
+  id: string;
+  sku_id: string | null;
+  description: string;
+  qty: number;
+};
+
+export type Delivery = {
+  id: string;
+  delivery_number: string;
+  source_type: DeliverySourceType;
+  invoice_id: string | null;
+  invoice_number: string | null;
+  layby_id: string | null;
+  layby_number: string | null;
+  customer_name: string;
+  location_id: string;
+  location_name: string;
+  status: DeliveryStatus;
+  delivery_date: string | null;
+  notes: string | null;
+  lines: DeliveryLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateDeliveryPayload = {
+  source_type: DeliverySourceType;
+  invoice_id?: string;
+  layby_id?: string;
+  location_id: string;
+  notes?: string;
+};
+
+export type CompleteDeliveryPayload = {
+  delivery_date?: string;
+};
+
+export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
+  draft: "Draft",
+  packed: "Packed",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
+
+export function canMutateDeliveries(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "warehouse" || role === "till";
+}
+
+export function listDeliveries(): Promise<Delivery[]> {
+  return apiFetch<Delivery[]>("/deliveries");
+}
+
+export function getDelivery(id: string): Promise<Delivery> {
+  return apiFetch<Delivery>(`/deliveries/${id}`);
+}
+
+export function createDelivery(payload: CreateDeliveryPayload): Promise<Delivery> {
+  const notes = payload.notes?.trim();
+  const body: CreateDeliveryPayload = {
+    source_type: payload.source_type,
+    location_id: payload.location_id,
+  };
+  if (payload.source_type === "invoice" && payload.invoice_id) {
+    body.invoice_id = payload.invoice_id;
+  }
+  if (payload.source_type === "layby" && payload.layby_id) {
+    body.layby_id = payload.layby_id;
+  }
+  if (notes) {
+    body.notes = notes;
+  }
+  return apiFetch<Delivery>("/deliveries", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function packDelivery(id: string): Promise<Delivery> {
+  return apiFetch<Delivery>(`/deliveries/${id}/pack`, { method: "POST" });
+}
+
+export function completeDelivery(
+  id: string,
+  payload?: CompleteDeliveryPayload,
+): Promise<Delivery> {
+  const deliveryDate = payload?.delivery_date?.trim();
+  const body: CompleteDeliveryPayload = {};
+  if (deliveryDate) {
+    body.delivery_date = deliveryDate;
+  }
+  return apiFetch<Delivery>(`/deliveries/${id}/complete`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function cancelDelivery(id: string): Promise<Delivery> {
+  return apiFetch<Delivery>(`/deliveries/${id}/cancel`, { method: "POST" });
+}
+
+export function isInvoiceFullyPaid(invoice: Invoice): boolean {
+  if (invoice.amount_paid === invoice.total_inc_vat) {
+    return true;
+  }
+  const paid = Number(invoice.amount_paid);
+  const total = Number(invoice.total_inc_vat);
+  return Number.isFinite(paid) && Number.isFinite(total) && paid === total;
+}
