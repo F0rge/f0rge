@@ -94,6 +94,34 @@ UI labels distinguish **Our barcode** from **Supplier ref** — never conflate t
 
 No purchase orders, landed cost, quantities, or wholesale/retail pricing in S3.
 
+## S4 purchase orders (PO, packing sheet, transit, land, receive)
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Purchase orders:** `GET/POST /purchase-orders`, `GET /purchase-orders/{id}`, `GET /purchase-orders/{id}/packing-sheet` (PDF), `POST /purchase-orders/{id}/on-water`, `POST /purchase-orders/{id}/land` (multipart: `fx_to_zar`, three bill fields + PDFs).
+- **Receive:** `POST /receive` — JSON `purchase_order_id`, `location_id`.
+- **Inventory:** `GET /inventory` — on-order, on-hand, sellable, unit costs per location.
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| List/get PO, packing sheet, inventory | yes | yes | yes | yes | yes |
+| Create PO, on-water, land | yes | yes | no | no | no |
+| Receive | yes | no | yes | no | no |
+
+PO numbers are sequential `PO-0001` (our ref, not supplier). Optional `proforma_id` must match PO supplier.
+
+**Landed cost allocation (value-weighted by factory line):**
+
+1. Convert factory, freight, and clearance **bill amounts** to ZAR. If a bill's currency is `ZAR`, use the amount as-is. Otherwise multiply by `fx_to_zar` (ZAR per 1 unit of that currency).
+2. Each PO line has `factory_unit_amount` (supplier/factory currency) and `qty`. Line weight = `qty * factory_unit_amount` (must be > 0).
+3. `line_share = line_weight / sum(line_weights)`.
+4. `line_landed_zar = line_share * (factory_zar + freight_zar + clearance_zar)`.
+5. `unit_cost_zar = line_landed_zar / qty` — must be a positive Decimal.
+
+Factory bills default to `supplier.default_currency` (else USD). Freight/clearance store currency per bill. Home currency ZAR. Inventory unit cost lives on received units / location stock. `sellable` is true only when `on_hand > 0` (on-order is never sellable).
+
+The app does not send email.
+
 ## Railway
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.
@@ -108,7 +136,7 @@ No purchase orders, landed cost, quantities, or wholesale/retail pricing in S3.
 
 ## Non-goals
 
-The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: ledger, till, purchase orders, and other S4–S11 product features.
+The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: ledger, till, and other S5–S11 product features.
 
 ## Python
 

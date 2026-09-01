@@ -6,6 +6,8 @@ export const SIDE_NAV_ITEMS = [
   { href: "/catalogue", label: "Catalogue" },
   { href: "/stock", label: "Stock" },
   { href: "/purchase-orders", label: "Purchase orders" },
+  { href: "/transit", label: "Transit" },
+  { href: "/receive", label: "Receive" },
   { href: "/ledger", label: "Ledger" },
   { href: "/till", label: "Till" },
   { href: "/users", label: "Users", ownerOnly: true },

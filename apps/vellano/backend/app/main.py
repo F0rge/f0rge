@@ -10,7 +10,16 @@ from f0rge_core.handlers import register_exception_handlers
 from app.config import settings
 from app.database import async_session_maker
 from app.middleware.auth import AuthContextMiddleware
-from app.routers import auth, health, locations, proformas, skus, suppliers, users
+from app.routers import (
+    auth,
+    health,
+    locations,
+    proformas,
+    purchase_orders,
+    skus,
+    suppliers,
+    users,
+)
 from app.services.locations import LocationSeedService
 from app.services.users import BootstrapService
 
@@ -51,3 +60,6 @@ app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
 app.include_router(proformas.proformas_router)
 app.include_router(skus.skus_router)
+app.include_router(purchase_orders.purchase_orders_router)
+app.include_router(purchase_orders.receive_router)
+app.include_router(purchase_orders.inventory_router)

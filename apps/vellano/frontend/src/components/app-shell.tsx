@@ -15,6 +15,8 @@ import {
 } from "@carbon/react";
 import {
   Catalog,
+  Delivery,
+  DeliveryParcel,
   Document,
   Finance,
   Home,
@@ -42,6 +44,8 @@ const ICONS = {
   "/catalogue": Catalog,
   "/stock": Product,
   "/purchase-orders": Purchase,
+  "/transit": Delivery,
+  "/receive": DeliveryParcel,
   "/ledger": Finance,
   "/till": Store,
   "/users": UserMultiple,

@@ -30,8 +30,8 @@ export default function HomePage() {
     <Stack gap={6}>
       <h1 className="cds--type-productive-heading-04">Home</h1>
       <p className="cds--type-body-01">
-        Vellano back office scaffold. Stock, purchase orders, ledger, and till land in later
-        slices. Side nav items are placeholders.
+        Vellano back office. S4 purchase-order flow: raise PO, on water, land costs, receive into
+        locations. Ledger and till land in later slices.
       </p>
       {health === "loading" ? (
         <InlineNotification kind="info" title="API" subtitle="Checking /api/v1/health…" hideCloseButton />
