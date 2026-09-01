@@ -4,6 +4,7 @@ import {
   Button,
   ButtonSet,
   Column,
+  ComboBox,
   Grid,
   InlineNotification,
   NumberInput,
@@ -17,9 +18,19 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TextInput,
   Tile,
 } from "@carbon/react";
-import { Currency, TrashCan, Undo } from "@carbon/icons-react";
+import {
+  Bookmark,
+  Building,
+  Currency,
+  Money,
+  Purchase,
+  TrashCan,
+  Undo,
+  UserFollow,
+} from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -34,10 +45,13 @@ import {
   formatZarAmount,
   incVatToExVat,
   isActiveLocation,
+  listCustomers,
   listInventory,
   listLocations,
   listSkus,
+  parsePriceInput,
   roundHalfUp,
+  type CustomerCrm,
   type InventorySku,
   type Location,
   type Sku,
@@ -53,11 +67,13 @@ const SELLER = {
 };
 
 const VAT_RATE_LABEL = "15%";
+const WALK_IN_CUSTOMER_NAME = "Walk-in customer";
 
-const TENDER_OPTIONS: { value: TillTender; label: string }[] = [
-  { value: "card", label: "Card" },
-  { value: "cash", label: "Cash" },
-  { value: "deposit", label: "Deposit" },
+const TENDER_OPTIONS: { value: TillTender; label: string; icon: typeof Purchase }[] = [
+  { value: "card", label: "Card", icon: Purchase },
+  { value: "cash", label: "Cash", icon: Money },
+  { value: "eft", label: "EFT", icon: Building },
+  { value: "deposit", label: "Layby Deposit", icon: Bookmark },
 ];
 
 type CartLine = {
@@ -127,6 +143,50 @@ function clampDiscount(value: number): number {
   return value;
 }
 
+function skuItemToString(item: Sku | null): string {
+  return item ? `${item.our_ref} — ${item.name}` : "";
+}
+
+function filterSkuItem({
+  item,
+  inputValue,
+}: {
+  item: Sku;
+  inputValue: string | null;
+}): boolean {
+  const query = (inputValue ?? "").trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+  return (
+    item.name.toLowerCase().includes(query) ||
+    item.our_ref.toLowerCase().includes(query) ||
+    item.our_barcode.toLowerCase().includes(query)
+  );
+}
+
+function customerItemToString(item: CustomerCrm | null): string {
+  return item ? item.name : "";
+}
+
+function filterCustomerItem({
+  item,
+  inputValue,
+}: {
+  item: CustomerCrm;
+  inputValue: string | null;
+}): boolean {
+  const query = (inputValue ?? "").trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+  return (
+    item.name.toLowerCase().includes(query) ||
+    (item.email ?? "").toLowerCase().includes(query) ||
+    (item.phone ?? "").toLowerCase().includes(query)
+  );
+}
+
 export default function TillPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -134,24 +194,29 @@ export default function TillPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
+  const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [locationId, setLocationId] = useState("");
   const [skuId, setSkuId] = useState("");
+  const [customerId, setCustomerId] = useState("");
   const [qty, setQty] = useState<number | "">(1);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [tender, setTender] = useState<TillTender>("cash");
+  const [amountTendered, setAmountTendered] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<TillSaleResult | null>(null);
+  const [lastBuyerName, setLastBuyerName] = useState(WALK_IN_CUSTOMER_NAME);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [locationData, skuData, inventoryData] = await Promise.all([
+      const [locationData, skuData, inventoryData, customerData] = await Promise.all([
         listLocations(),
         listSkus(),
         listInventory(),
+        listCustomers(),
       ]);
       const showrooms = locationData.filter(
         (loc) => isActiveLocation(loc) && loc.type === "showroom",
@@ -159,6 +224,7 @@ export default function TillPage() {
       setLocations(showrooms);
       setSkus(skuData);
       setInventory(inventoryData);
+      setCustomers(customerData);
       setLocationId((current) => current || showrooms[0]?.id || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load till data.");
@@ -195,6 +261,9 @@ export default function TillPage() {
     return (atLocation?.on_hand ?? 0) > 0;
   });
 
+  const selectedSkuOption = skuOptions.find((sku) => sku.id === skuId) ?? null;
+  const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
+
   const numericQty = typeof qty === "number" ? qty : 0;
 
   const cartQtyBySku = useMemo(() => {
@@ -206,6 +275,15 @@ export default function TillPage() {
   }, [cart]);
 
   const summary = cartSummary(cart);
+  const totalIncLabel = formatPriceAmount(summary.totalIncVat);
+
+  useEffect(() => {
+    setAmountTendered(totalIncLabel);
+  }, [totalIncLabel]);
+
+  const tenderedAmount = parsePriceInput(amountTendered) ?? summary.totalIncVat;
+  const changeAmount = Math.max(0, tenderedAmount - summary.totalIncVat);
+  const showChange = tender === "cash" || tender === "eft";
 
   const addValid =
     canSell &&
@@ -285,10 +363,13 @@ export default function TillPage() {
           return payload;
         }),
         tender,
+        ...(customerId ? { customer_id: customerId } : {}),
       });
+      setLastBuyerName(selectedCustomer?.name ?? WALK_IN_CUSTOMER_NAME);
       setLastSale(result);
       setCart([]);
       setSkuId("");
+      setCustomerId("");
       setQty(1);
       await loadData();
     } catch (err) {
@@ -379,22 +460,22 @@ export default function TillPage() {
                     ))}
                   </Select>
 
-                  <Select
-                    id="till-sku"
-                    labelText="SKU"
-                    value={skuId}
-                    onChange={(event) => setSkuId(event.target.value)}
-                    disabled={!locationId}
-                  >
-                    <SelectItem value="" text="Select SKU" />
-                    {skuOptions.map((sku) => (
-                      <SelectItem
-                        key={sku.id}
-                        value={sku.id}
-                        text={`${sku.our_ref} — ${sku.name}`}
-                      />
-                    ))}
-                  </Select>
+                  <div className="vellano-till-picker-row">
+                    <ComboBox
+                      id="till-sku"
+                      titleText="SKU"
+                      placeholder="Search by SKU, barcode, or name..."
+                      items={skuOptions}
+                      itemToString={skuItemToString}
+                      selectedItem={selectedSkuOption}
+                      shouldFilterItem={filterSkuItem}
+                      onChange={({ selectedItem }) => setSkuId(selectedItem?.id ?? "")}
+                      disabled={!locationId}
+                    />
+                    <Button kind="secondary" onClick={() => router.push("/catalogue")}>
+                      Browse Catalogue
+                    </Button>
+                  </div>
 
                   <NumberInput
                     id="till-qty"
@@ -537,18 +618,59 @@ export default function TillPage() {
                   </div>
                 </dl>
 
-                <div>
-                  <Select
-                    id="till-tender"
-                    labelText="Tender"
-                    value={tender}
-                    onChange={(event) => setTender(event.target.value as TillTender)}
-                  >
-                    {TENDER_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value} text={option.label} />
-                    ))}
-                  </Select>
+                <div className="vellano-till-picker-row">
+                  <ComboBox
+                    id="till-customer"
+                    titleText="Customer (optional)"
+                    placeholder="Search customer..."
+                    items={customers}
+                    itemToString={customerItemToString}
+                    selectedItem={selectedCustomer}
+                    shouldFilterItem={filterCustomerItem}
+                    onChange={({ selectedItem }) => setCustomerId(selectedItem?.id ?? "")}
+                  />
+                  <Button
+                    kind="ghost"
+                    hasIconOnly
+                    renderIcon={UserFollow}
+                    iconDescription="Add customer"
+                    onClick={() => router.push("/customers")}
+                  />
                 </div>
+
+                <div>
+                  <h3>Tender</h3>
+                  <div className="vellano-tender-grid">
+                    {TENDER_OPTIONS.map((option) => (
+                      <Button
+                        key={option.value}
+                        kind={tender === option.value ? "tertiary" : "ghost"}
+                        className={
+                          tender === option.value
+                            ? "vellano-tender-tile vellano-tender-tile--selected"
+                            : "vellano-tender-tile"
+                        }
+                        renderIcon={option.icon}
+                        onClick={() => setTender(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <TextInput
+                  id="till-amount-tendered"
+                  labelText="Amount Tendered"
+                  value={amountTendered}
+                  onChange={(event) => setAmountTendered(event.target.value)}
+                />
+
+                {showChange ? (
+                  <p className="vellano-muted-text">
+                    Change: {formatZarAmount(formatPriceAmount(changeAmount))}
+                  </p>
+                ) : null}
 
                 <Button
                   kind="primary"
@@ -582,7 +704,7 @@ export default function TillPage() {
               </div>
               <div>
                 <strong>Buyer</strong>
-                <p>Walk-in customer</p>
+                <p>{lastBuyerName}</p>
               </div>
             </div>
 
