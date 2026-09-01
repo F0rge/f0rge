@@ -57,3 +57,37 @@ body {
 .vellano-forbidden {
   max-width: 32rem;
 }
+
+.vellano-invoice-preview {
+  padding: 1rem;
+  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  background: var(--cds-layer-01, #fff);
+}
+
+.vellano-tax-invoice {
+  padding: 1.5rem;
+  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  background: var(--cds-layer-01, #fff);
+}
+
+.vellano-tax-invoice__header {
+  margin-bottom: 1.5rem;
+}
+
+.vellano-tax-invoice__parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.vellano-tax-invoice__totals {
+  margin-top: 1.5rem;
+  text-align: right;
+}
+
+.vellano-bill-summary {
+  padding: 1rem;
+  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  background: var(--cds-layer-01, #fff);
+}

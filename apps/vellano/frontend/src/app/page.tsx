@@ -31,7 +31,8 @@ export default function HomePage() {
       <h1 className="cds--type-productive-heading-04">Home</h1>
       <p className="cds--type-body-01">
         Vellano back office. S4 purchase-order flow: raise PO, on water, land costs, receive into
-        locations. Ledger and till land in later slices.
+        locations. S6 books: chart of accounts, contacts, invoices, bills, and payments under Books
+        in the side nav. Till lands in a later slice.
       </p>
       {health === "loading" ? (
         <InlineNotification kind="info" title="API" subtitle="Checking /api/v1/health…" hideCloseButton />
