@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
+from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.supplier import SupplierCRUD
 from app.crud.unit_cost_audit import UnitCostAuditCRUD
 from app.models.sku import Sku
@@ -38,6 +39,7 @@ class SkuService:
         self.location_crud = LocationCRUD(db)
         self.supplier_crud = SupplierCRUD(db)
         self.unit_cost_audit_crud = UnitCostAuditCRUD(db)
+        self.bom_crud = SkuBomLineCRUD(db)
         self.stock_movements = StockMovementService(db)
 
     async def list(self, category: Optional[str] = None) -> list[SkuResponse]:
@@ -111,6 +113,10 @@ class SkuService:
         if "supplier_ref" in fields_set:
             sku.supplier_ref = data.supplier_ref
 
+        if "carton_count" in fields_set:
+            assert data.carton_count is not None
+            sku.carton_count = data.carton_count
+
         if "wholesale_ex_vat" in fields_set and "wholesale_inc_vat" in fields_set:
             raise ValidationError("Cannot set both wholesale_ex_vat and wholesale_inc_vat")
         if "retail_ex_vat" in fields_set and "retail_inc_vat" in fields_set:
@@ -175,6 +181,7 @@ class SkuService:
             fabric=data.fabric,
             supplier_ref=data.supplier_ref,
             category=data.category,
+            carton_count=data.carton_count,
         )
         try:
             async with unit_of_work(self.db):
@@ -247,6 +254,7 @@ class SkuService:
         ]
         landed_costs = await self.unit_cost_audit_crud.latest_landed_costs_by_sku_ids(sku_ids)
         supplier_names = await self.supplier_crud.names_by_ids(supplier_ids)
+        kit_ids = await self.bom_crud.parent_ids_with_bom(sku_ids)
 
         return [
             self._to_response(
@@ -257,6 +265,7 @@ class SkuService:
                     else None
                 ),
                 last_landed_cost_zar=landed_costs.get(sku.id),
+                is_kit=sku.id in kit_ids,
             )
             for sku in skus
         ]
@@ -267,6 +276,7 @@ class SkuService:
         *,
         preferred_supplier_name: Optional[str] = None,
         last_landed_cost_zar: Optional[Decimal] = None,
+        is_kit: bool = False,
     ) -> SkuResponse:
         return SkuResponse(
             id=sku.id,
@@ -287,6 +297,8 @@ class SkuService:
             wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat),
             retail_ex_vat=sku.retail_ex_vat,
             retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat),
+            carton_count=sku.carton_count,
+            is_kit=is_kit,
             created_at=sku.created_at,
             updated_at=sku.updated_at,
         )

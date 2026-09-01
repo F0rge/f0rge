@@ -288,6 +288,8 @@ class CatalogueImportService:
             existing.category = row.category
             if row.barcode:
                 existing.our_barcode = row.barcode
+            if row.carton_count is not None:
+                existing.carton_count = row.carton_count
             return existing
         sku = Sku(
             our_ref=row.our_ref,
@@ -297,6 +299,7 @@ class CatalogueImportService:
             fabric="-",
             category=row.category,
             retail_ex_vat=retail_ex,
+            carton_count=row.carton_count if row.carton_count is not None else 1,
         )
         await self.sku_crud.add_and_flush(sku)
         return sku

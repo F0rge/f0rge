@@ -250,6 +250,7 @@ class PurchaseOrderService:
                 line.sku.name,
                 line.sku.fabric,
                 line.qty,
+                line.sku.carton_count,
             )
             for line in po.lines
         ]

@@ -480,6 +480,39 @@ async def test_till_omit_customer_id_uses_walk_in(
     assert invoice.json()["customer_name"] == WALK_IN_CUSTOMER_NAME
 
 
+async def test_till_carton_count_decrements_sellable_units(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=2,
+        location_name="Kramerville",
+        our_ref="TILL-CARTON",
+    )
+    sku_id = data["sku"]["id"]
+    patch = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={"retail_ex_vat": "4000.00", "carton_count": 3},
+    )
+    assert patch.status_code == 200
+    bedford_id = await _transfer_to_bedfordview(async_client, owner_client, sku_id, 2)
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1}],
+            "tender": "cash",
+        },
+    )
+    assert sale.status_code == 201
+    on_hand = await _inventory_on_hand(owner_client, sku_id, bedford_id)
+    assert on_hand == 1
+
+
 async def test_no_psp_client_in_codebase() -> None:
     import pathlib
 

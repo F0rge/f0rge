@@ -113,6 +113,12 @@ Every location has a default **FLOOR** bin (`code=FLOOR`, `row_code=F`, `bay=1`,
 | List bins | yes | yes | yes | yes | yes |
 | Create / grid / archive / set default | yes | yes | no | no | no |
 
+## Shop-floor qty patterns (A / B / C)
+
+- **A carton_count**: same SKU ships in N cartons; qty is sellable units. Stock, till, PO qty, and books qty stay sellable. Packing sheet and invoice PDF may print a generated carton total when `carton_count > 1`.
+- **B kit BOM**: virtual parent (`sku_bom_lines`); stock/pick are components; till explodes the BOM and consumes components at the posted showroom. Invoice is one line at the parent price. A SKU is a kit if it has ≥1 BOM line. Parent has no `on_hand` write on till.
+- **C inner pack**: supplier carton of N eaches — **not in this ticket** (PO line later).
+
 ## V2-S2 stocktakes
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):

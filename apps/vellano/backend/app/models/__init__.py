@@ -30,6 +30,7 @@ from app.models.purchase_order import (
 )
 from app.models.repeating_invoice import RepeatingInvoice, RepeatingInvoiceLine
 from app.models.sku import Sku
+from app.models.sku_bom_line import SkuBomLine
 from app.models.stock_adjustment import (
     StockAdjustment,
     StockAdjustmentLine,
@@ -100,6 +101,7 @@ __all__ = [
     "RepeatingInvoice",
     "RepeatingInvoiceLine",
     "Sku",
+    "SkuBomLine",
     "SkuStock",
     "StockAdjustment",
     "StockAdjustmentLine",

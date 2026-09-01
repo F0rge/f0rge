@@ -8,10 +8,13 @@ from fastapi.responses import Response
 
 from app.dependencies.auth import (
     get_current_user_id,
+    get_sku_bom_service,
     get_sku_service,
     require_catalogue_mutate,
 )
 from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
+from app.schemas.sku_bom import SkuBomLineResponse, SkuBomReplace
+from app.services.sku_bom import SkuBomService
 from app.services.skus import SkuService
 
 skus_router = APIRouter(prefix="/api/v1/skus", tags=["skus"])
@@ -80,3 +83,22 @@ async def get_sku_photo(
     service: SkuService = Depends(get_sku_service),
 ) -> Response:
     return await service.serve_photo(sku_id)
+
+
+@skus_router.get("/{sku_id}/bom", response_model=list[SkuBomLineResponse])
+async def get_sku_bom(
+    sku_id: uuid.UUID,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: SkuBomService = Depends(get_sku_bom_service),
+):
+    return await service.list(sku_id)
+
+
+@skus_router.put("/{sku_id}/bom", response_model=list[SkuBomLineResponse])
+async def replace_sku_bom(
+    sku_id: uuid.UUID,
+    body: SkuBomReplace,
+    _: uuid.UUID = Depends(require_catalogue_mutate),
+    service: SkuBomService = Depends(get_sku_bom_service),
+):
+    return await service.replace(sku_id, body)

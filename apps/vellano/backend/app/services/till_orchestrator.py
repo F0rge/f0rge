@@ -12,6 +12,7 @@ from app.crud.customer import CustomerCRUD
 from app.crud.payment import PaymentCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
+from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
@@ -49,6 +50,7 @@ class TillOrchestrator:
         self.category_posting = CategoryPostingService(db)
         self.events = BooksEventService(db)
         self.stock_movements = StockMovementService(db)
+        self.bom_crud = SkuBomLineCRUD(db)
 
     async def create_sale(
         self, data: TillSaleCreate, user_id: Optional[uuid.UUID] = None
@@ -74,6 +76,8 @@ class TillOrchestrator:
 
         line_inputs: list[tuple] = []
         cogs_parts: list[tuple[str, Decimal, Decimal]] = []
+        stock_decrements: list[tuple[uuid.UUID, int]] = []
+        reserved: dict[uuid.UUID, int] = {}
         total_cogs = Decimal(0)
 
         for line in data.lines:
@@ -83,25 +87,61 @@ class TillOrchestrator:
             if sku.retail_ex_vat is None or sku.retail_ex_vat <= 0:
                 raise ValidationError(f"SKU {sku.our_ref} has no retail price")
 
-            location_stock = await self.location_stock_crud.get_by_sku_and_location(
-                line.sku_id,
-                data.location_id,
-            )
-            if location_stock is None or location_stock.on_hand < line.qty:
-                raise ConflictError(
-                    f"Insufficient on-hand quantity for {sku.our_ref} at this location"
+            bom_lines = await self.bom_crud.list_by_parent(sku.id)
+            if bom_lines:
+                line_cogs = Decimal(0)
+                for bom in bom_lines:
+                    need = bom.qty * line.qty
+                    component = await self.sku_crud.get_by_id(bom.component_sku_id)
+                    if component is None:
+                        raise NotFoundError("SKU not found")
+                    loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                        bom.component_sku_id,
+                        data.location_id,
+                    )
+                    available = (loc_stock.on_hand if loc_stock is not None else 0) - reserved.get(
+                        bom.component_sku_id, 0
+                    )
+                    if loc_stock is None or available < need:
+                        raise ConflictError(
+                            f"Insufficient on-hand quantity for {component.our_ref} "
+                            "at this location"
+                        )
+                    if loc_stock.unit_cost_zar is None:
+                        raise ConflictError(
+                            f"No unit cost for {component.our_ref} at this location"
+                        )
+                    line_cogs += (loc_stock.unit_cost_zar * need).quantize(
+                        CENT,
+                        rounding=ROUND_HALF_UP,
+                    )
+                    reserved[bom.component_sku_id] = reserved.get(bom.component_sku_id, 0) + need
+                    stock_decrements.append((bom.component_sku_id, need))
+            else:
+                location_stock = await self.location_stock_crud.get_by_sku_and_location(
+                    line.sku_id,
+                    data.location_id,
                 )
-            if location_stock.unit_cost_zar is None:
-                raise ConflictError(f"No unit cost for {sku.our_ref} at this location")
+                available = (
+                    location_stock.on_hand if location_stock is not None else 0
+                ) - reserved.get(sku.id, 0)
+                if location_stock is None or available < line.qty:
+                    raise ConflictError(
+                        f"Insufficient on-hand quantity for {sku.our_ref} at this location"
+                    )
+                if location_stock.unit_cost_zar is None:
+                    raise ConflictError(f"No unit cost for {sku.our_ref} at this location")
+                line_cogs = (location_stock.unit_cost_zar * line.qty).quantize(
+                    CENT,
+                    rounding=ROUND_HALF_UP,
+                )
+                reserved[sku.id] = reserved.get(sku.id, 0) + line.qty
+                stock_decrements.append((sku.id, line.qty))
 
-            line_cogs = (location_stock.unit_cost_zar * line.qty).quantize(
-                CENT,
-                rounding=ROUND_HALF_UP,
-            )
             total_cogs += line_cogs
             cogs_code = await self.category_posting.cogs_code_for_sku(sku)
             cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
-            line_inputs.append((sku, line.qty, location_stock, line.discount_percent))
+            line_inputs.append((sku, line.qty, line.discount_percent))
 
         subtotal = Decimal(0)
         vat_total = Decimal(0)
@@ -109,7 +149,7 @@ class TillOrchestrator:
         invoice_line_models: list[InvoiceLine] = []
         sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
-        for index, (sku, qty, _stock, discount_percent) in enumerate(line_inputs):
+        for index, (sku, qty, discount_percent) in enumerate(line_inputs):
             discounted_unit = (
                 sku.retail_ex_vat * (Decimal(100) - discount_percent) / Decimal(100)
             ).quantize(CENT, rounding=ROUND_HALF_UP)
@@ -208,9 +248,9 @@ class TillOrchestrator:
                     entry_date=sale_date,
                 )
 
-            for sku, qty, _location_stock, _discount in line_inputs:
+            for sku_id, qty in stock_decrements:
                 await self.stock_movements.apply_bin_qty_delta(
-                    sku_id=sku.id,
+                    sku_id=sku_id,
                     location_id=data.location_id,
                     qty_delta=-qty,
                 )

@@ -20,6 +20,7 @@ class SkuCreate(BaseModel):
     opening_qty: Optional[int] = Field(default=None, ge=1)
     opening_unit_cost_zar: Optional[Decimal] = Field(default=None, gt=0)
     opening_date: Optional[datetime.date] = None
+    carton_count: int = Field(default=1, ge=1)
 
     @model_validator(mode="after")
     def opening_fields_together(self) -> SkuCreate:
@@ -60,6 +61,7 @@ class SkuUpdate(BaseModel):
     wholesale_inc_vat: Optional[Decimal] = None
     retail_ex_vat: Optional[Decimal] = None
     retail_inc_vat: Optional[Decimal] = None
+    carton_count: Optional[int] = Field(default=None, ge=1)
 
 
 class SkuResponse(BaseModel):
@@ -81,6 +83,8 @@ class SkuResponse(BaseModel):
     wholesale_inc_vat: Optional[Decimal] = None
     retail_ex_vat: Optional[Decimal] = None
     retail_inc_vat: Optional[Decimal] = None
+    carton_count: int
+    is_kit: bool = False
     created_at: datetime.datetime
     updated_at: datetime.datetime
 

@@ -40,6 +40,7 @@ import {
   type StocktakeLine,
 } from "@/lib/api";
 import { optionalMovementBinId } from "@/lib/bin-helpers";
+import { formatExpectedCartons } from "@/lib/carton-helpers";
 import { useAuth } from "@/lib/auth";
 
 type WmsTab = "receive" | "count" | "transfer";
@@ -329,6 +330,9 @@ function ReceiveTab({
           />
         ))}
       </Select>
+      {selectedPo ? (
+        <p className="cds--type-body-01">{formatExpectedCartons(selectedPo, skus)}</p>
+      ) : null}
       {landedOrders.length === 0 ? (
         <InlineNotification
           kind="info"

@@ -370,6 +370,8 @@ export type Sku = {
   wholesale_inc_vat: string | null;
   retail_ex_vat: string | null;
   retail_inc_vat: string | null;
+  carton_count: number;
+  is_kit: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -389,6 +391,7 @@ export type UpdateSkuPricePayload = {
   lead_time_days?: number | null;
   reorder_min?: number | null;
   supplier_ref?: string | null;
+  carton_count?: number;
 };
 
 const VAT_MULTIPLIER = 1.15;
@@ -440,6 +443,7 @@ export type CreateSkuPayload = {
   opening_qty?: number;
   opening_unit_cost_zar?: string;
   opening_date?: string;
+  carton_count?: number;
 };
 
 export function listSkus(options?: { category?: string }): Promise<Sku[]> {
@@ -466,6 +470,9 @@ export function createSku(payload: CreateSkuPayload): Promise<Sku> {
   } else {
     delete body.opening_date;
   }
+  if (body.carton_count === undefined || body.carton_count < 1) {
+    delete body.carton_count;
+  }
   return apiFetch<Sku>("/skus", {
     method: "POST",
     body: JSON.stringify(body),
@@ -491,6 +498,35 @@ export function deleteSku(id: string): Promise<void> {
 
 export function skuPhotoUrl(id: string): string {
   return `/api/v1/skus/${id}/photo`;
+}
+
+export type SkuBomLine = {
+  id: string;
+  parent_sku_id: string;
+  component_sku_id: string;
+  qty: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SkuBomLineWrite = {
+  component_sku_id: string;
+  qty: number;
+};
+
+export type ReplaceSkuBomPayload = {
+  lines: SkuBomLineWrite[];
+};
+
+export function listSkuBom(skuId: string): Promise<SkuBomLine[]> {
+  return apiFetch<SkuBomLine[]>(`/skus/${skuId}/bom`);
+}
+
+export function replaceSkuBom(skuId: string, payload: ReplaceSkuBomPayload): Promise<SkuBomLine[]> {
+  return apiFetch<SkuBomLine[]>(`/skus/${skuId}/bom`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export type CatalogueImportFileKind = "inventory" | "soh";

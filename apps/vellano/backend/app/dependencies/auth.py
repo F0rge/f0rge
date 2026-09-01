@@ -36,6 +36,7 @@ from app.services.settings import SettingsService
 from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.reorder import ReorderService
+from app.services.sku_bom import SkuBomService
 from app.services.skus import SkuService
 from app.services.stock_adjustments import StockAdjustmentService
 from app.services.laybys import LaybysService
@@ -83,6 +84,10 @@ def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:
 
 def get_sku_service(db: AsyncSession = Depends(get_db)) -> SkuService:
     return SkuService(db)
+
+
+def get_sku_bom_service(db: AsyncSession = Depends(get_db)) -> SkuBomService:
+    return SkuBomService(db)
 
 
 def get_purchase_order_service(db: AsyncSession = Depends(get_db)) -> PurchaseOrderService:

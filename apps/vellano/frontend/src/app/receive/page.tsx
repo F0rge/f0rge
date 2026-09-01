@@ -27,12 +27,15 @@ import {
   listInventory,
   listLocations,
   listPurchaseOrders,
+  listSkus,
   receivePurchaseOrder,
   type InventorySku,
   type Location,
   type PurchaseOrder,
+  type Sku,
 } from "@/lib/api";
 import { optionalMovementBinId } from "@/lib/bin-helpers";
+import { formatExpectedCartons } from "@/lib/carton-helpers";
 import { useAuth } from "@/lib/auth";
 
 function ReceivePageContent() {
@@ -43,6 +46,7 @@ function ReceivePageContent() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
+  const [skus, setSkus] = useState<Sku[]>([]);
   const [poId, setPoId] = useState("");
   const [locationId, setLocationId] = useState("");
   const [binId, setBinId] = useState("");
@@ -55,14 +59,16 @@ function ReceivePageContent() {
     setLoading(true);
     setError(null);
     try {
-      const [orderData, locationData, inventoryData] = await Promise.all([
+      const [orderData, locationData, inventoryData, skuData] = await Promise.all([
         listPurchaseOrders(),
         listLocations(),
         listInventory(),
+        listSkus(),
       ]);
       setOrders(orderData);
       setLocations(locationData.filter(isActiveLocation));
       setInventory(inventoryData);
+      setSkus(skuData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load receive data.");
     } finally {
@@ -192,6 +198,9 @@ function ReceivePageContent() {
               hideCloseButton
               lowContrast
             />
+          ) : null}
+          {selectedPo && selectedPo.status === "landed" ? (
+            <p className="cds--type-body-01">{formatExpectedCartons(selectedPo, skus)}</p>
           ) : null}
           <Select
             id="receive-location"

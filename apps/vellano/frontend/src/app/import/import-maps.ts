@@ -5,6 +5,7 @@ export const INVENTORY_FIELDS = [
   { key: "retail_inc_vat", label: "Retail Price", required: true },
   { key: "barcode", label: "Barcode", required: false },
   { key: "cost_zar", label: "Cost Price", required: false },
+  { key: "carton_count", label: "Cartons", required: false },
 ] as const;
 
 export const SOH_FIELDS = [

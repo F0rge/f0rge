@@ -130,17 +130,24 @@ class InvoiceService:
         if invoice is None:
             raise NotFoundError("Invoice not found")
 
-        lines = [
-            (
-                line.description,
-                line.qty,
-                f"{line.unit_ex_vat:.2f}",
-                f"{line.ex_vat:.2f}",
-                f"{line.vat_amount:.2f}",
-                f"{line.inc_vat:.2f}",
+        lines = []
+        for line in invoice.lines:
+            description = line.description
+            if line.sku_id is not None:
+                sku = await self.sku_crud.get_by_id(line.sku_id)
+                if sku is not None and sku.carton_count > 1:
+                    cartons = line.qty * sku.carton_count
+                    description = f"{description} - Ships in {cartons} cartons"
+            lines.append(
+                (
+                    description,
+                    line.qty,
+                    f"{line.unit_ex_vat:.2f}",
+                    f"{line.ex_vat:.2f}",
+                    f"{line.vat_amount:.2f}",
+                    f"{line.inc_vat:.2f}",
+                )
             )
-            for line in invoice.lines
-        ]
         pdf_bytes = build_tax_invoice_pdf(
             invoice_number=invoice.invoice_number,
             issue_date=invoice.issue_date.isoformat(),

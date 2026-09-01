@@ -460,3 +460,35 @@ async def test_till_cannot_patch_identity_or_delete(
 
     delete_resp = await async_client.delete(f"/api/v1/skus/{sku_id}")
     assert delete_resp.status_code == 403
+
+
+async def test_create_sku_defaults_carton_count_one(owner_client: AsyncClient) -> None:
+    resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-CARTON-DEF",
+            "our_barcode": "BAR-CARTON-DEF",
+            "name": "Default carton sofa",
+            "design": "Carton default",
+            "fabric": "Linen",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["carton_count"] == 1
+    assert body["is_kit"] is False
+
+
+async def test_create_sku_rejects_carton_count_zero(owner_client: AsyncClient) -> None:
+    resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-CARTON-ZERO",
+            "our_barcode": "BAR-CARTON-ZERO",
+            "name": "Zero carton",
+            "design": "Carton zero",
+            "fabric": "Wool",
+            "carton_count": 0,
+        },
+    )
+    assert resp.status_code == 422
