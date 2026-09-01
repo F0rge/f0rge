@@ -1620,6 +1620,27 @@ export function createCreditNote(payload: CreateCreditNotePayload): Promise<Cred
   });
 }
 
+export async function downloadCreditNotePdf(id: string, creditNoteNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/credit-notes/${id}/pdf`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${creditNoteNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 export type BillLine = {
   id: string;
   description: string;
