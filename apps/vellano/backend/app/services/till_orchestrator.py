@@ -55,7 +55,12 @@ class TillOrchestrator:
         if location.type != LocationType.SHOWROOM:
             raise ConflictError("Till sales are only allowed at showroom locations")
 
-        customer = await self._get_walk_in_customer()
+        if data.customer_id is not None:
+            customer = await self.customer_crud.get_by_id(data.customer_id)
+            if customer is None:
+                raise NotFoundError("Customer not found")
+        else:
+            customer = await self._get_walk_in_customer()
         sale_date = datetime.date.today()
 
         line_inputs: list[tuple] = []

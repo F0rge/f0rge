@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,7 +19,8 @@ class TillSaleLineCreate(BaseModel):
 class TillSaleCreate(BaseModel):
     location_id: uuid.UUID
     lines: list[TillSaleLineCreate] = Field(min_length=1)
-    tender: Literal["cash", "card", "deposit"]
+    tender: Literal["cash", "card", "deposit", "eft"]
+    customer_id: Optional[uuid.UUID] = None
 
 
 class TillSaleLocationStock(BaseModel):
@@ -33,7 +34,7 @@ class TillSaleResponse(BaseModel):
     invoice_number: str
     payment_id: uuid.UUID
     payment_number: str
-    tender: Literal["cash", "card", "deposit"]
+    tender: Literal["cash", "card", "deposit", "eft"]
     issue_date: datetime.date
     subtotal_ex_vat: Decimal
     vat_amount: Decimal

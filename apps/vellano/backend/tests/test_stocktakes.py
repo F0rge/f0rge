@@ -165,6 +165,7 @@ async def test_lookup_by_our_barcode_returns_line(owner_client: AsyncClient) -> 
     assert body["id"] == expected_line["id"]
     assert body["sku_id"] == sku["id"]
     assert body["our_barcode"] == sku["our_barcode"]
+    assert "category" in body
 
 
 async def test_till_role_cannot_start_stocktake(

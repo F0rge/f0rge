@@ -3,6 +3,7 @@
 import {
   Button,
   DataTable,
+  NumberInput,
   Table,
   TableBody,
   TableCell,
@@ -14,14 +15,26 @@ import {
 import { TrashCan } from "@carbon/icons-react";
 import { useMemo } from "react";
 
-import { formatPriceAmount, type AdjustmentLine, type InventorySku } from "@/lib/api";
+import {
+  formatPriceAmount,
+  formatZarAmount,
+  type AdjustmentLine,
+  type InventorySku,
+} from "@/lib/api";
+
+export type LineDraftValue = number | "";
+
+export type LineDraft = {
+  qty_delta: LineDraftValue;
+  unit_cost: LineDraftValue;
+};
 
 const LINE_HEADERS = [
   { key: "product", header: "Product" },
   { key: "current_qty", header: "Current Qty" },
   { key: "qty_delta", header: "Delta" },
   { key: "new_qty", header: "New Qty" },
-  { key: "unit_cost_zar", header: "Unit Cost" },
+  { key: "unit_cost_zar", header: "Unit Cost (ZAR)" },
   { key: "actions", header: "" },
 ] as const;
 
@@ -31,6 +44,9 @@ type AdjustmentLinesTableProps = {
   inventory: InventorySku[];
   canMutate: boolean;
   busy: boolean;
+  drafts?: Record<string, LineDraft>;
+  onDraftChange?: (lineId: string, field: keyof LineDraft, value: LineDraftValue) => void;
+  onLineBlur?: (lineId: string) => void;
   onRemove?: (lineId: string) => void;
 };
 
@@ -44,6 +60,24 @@ export function onHandAtLocation(
   return loc?.on_hand ?? 0;
 }
 
+export function unitCostAtLocation(
+  inventory: InventorySku[],
+  skuId: string,
+  locationId: string,
+): string | null {
+  const sku = inventory.find((entry) => entry.sku_id === skuId);
+  const loc = sku?.locations.find((entry) => entry.location_id === locationId);
+  return loc?.unit_cost_zar ?? sku?.unit_cost_zar ?? null;
+}
+
+export function parseCostAmount(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function lineCurrentQty(
   line: AdjustmentLine,
   inventory: InventorySku[],
@@ -55,11 +89,50 @@ export function lineCurrentQty(
   return onHandAtLocation(inventory, line.sku_id, locationId);
 }
 
-export function lineNewQty(line: AdjustmentLine, currentQty: number): number {
-  if (typeof line.new_qty === "number") {
+export function lineNewQty(line: AdjustmentLine, currentQty: number, qtyDelta?: number): number {
+  if (qtyDelta === undefined && typeof line.new_qty === "number") {
     return line.new_qty;
   }
-  return currentQty + line.qty_delta;
+  return currentQty + (qtyDelta ?? line.qty_delta);
+}
+
+export function lineEffectiveCost(
+  line: AdjustmentLine,
+  inventory: InventorySku[],
+  locationId: string,
+  draftCost?: LineDraftValue,
+): number | null {
+  if (typeof draftCost === "number" && Number.isFinite(draftCost)) {
+    return draftCost;
+  }
+  const fromLine = parseCostAmount(line.unit_cost_zar);
+  if (fromLine !== null) {
+    return fromLine;
+  }
+  return parseCostAmount(unitCostAtLocation(inventory, line.sku_id, locationId));
+}
+
+export function draftFromLine(
+  line: AdjustmentLine,
+  inventory: InventorySku[],
+  locationId: string,
+): LineDraft {
+  const cost = lineEffectiveCost(line, inventory, locationId);
+  return {
+    qty_delta: line.qty_delta,
+    unit_cost: cost ?? "",
+  };
+}
+
+export function formatValueImpact(total: number): string {
+  const body = formatZarAmount(formatPriceAmount(Math.abs(total)));
+  if (total > 0) {
+    return `+${body}`;
+  }
+  if (total < 0) {
+    return `-${body}`;
+  }
+  return body;
 }
 
 function formatDelta(delta: number): string {
@@ -69,15 +142,15 @@ function formatDelta(delta: number): string {
   return String(delta);
 }
 
-function formatCost(value: string | null): string {
-  if (!value) {
+function formatCost(value: number | null): string {
+  if (value === null) {
     return "—";
   }
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return value;
-  }
-  return formatPriceAmount(parsed);
+  return formatZarAmount(formatPriceAmount(value));
+}
+
+function numberFromInput(value: string | number): LineDraftValue {
+  return value === "" ? "" : Number(value);
 }
 
 export function AdjustmentLinesTable({
@@ -86,9 +159,13 @@ export function AdjustmentLinesTable({
   inventory,
   canMutate,
   busy,
+  drafts,
+  onDraftChange,
+  onLineBlur,
   onRemove,
 }: AdjustmentLinesTableProps) {
   const showActions = Boolean(canMutate && onRemove);
+  const editable = Boolean(canMutate && drafts && onDraftChange && onLineBlur);
   const headers = useMemo(
     () => (showActions ? [...LINE_HEADERS] : LINE_HEADERS.filter((header) => header.key !== "actions")),
     [showActions],
@@ -97,17 +174,35 @@ export function AdjustmentLinesTable({
     () =>
       lines.map((line) => {
         const currentQty = lineCurrentQty(line, inventory, locationId);
+        const draft = drafts?.[line.id];
+        const delta =
+          typeof draft?.qty_delta === "number" ? draft.qty_delta : line.qty_delta;
+        const cost = lineEffectiveCost(line, inventory, locationId, draft?.unit_cost);
         return {
           id: line.id,
           product: line.id,
           current_qty: String(currentQty),
-          qty_delta: formatDelta(line.qty_delta),
-          new_qty: String(lineNewQty(line, currentQty)),
-          unit_cost_zar: formatCost(line.unit_cost_zar),
+          qty_delta: formatDelta(delta),
+          new_qty: String(lineNewQty(line, currentQty, delta)),
+          unit_cost_zar: formatCost(cost),
           actions: line.id,
         };
       }),
-    [inventory, lines, locationId],
+    [drafts, inventory, lines, locationId],
+  );
+  const totalImpact = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        const draft = drafts?.[line.id];
+        const delta =
+          typeof draft?.qty_delta === "number" ? draft.qty_delta : line.qty_delta;
+        const cost = lineEffectiveCost(line, inventory, locationId, draft?.unit_cost);
+        if (cost === null) {
+          return sum;
+        }
+        return sum + delta * cost;
+      }, 0),
+    [drafts, inventory, lines, locationId],
   );
 
   if (lines.length === 0) {
@@ -133,6 +228,7 @@ export function AdjustmentLinesTable({
             <TableBody>
               {tableRows.map((row) => {
                 const line = lines.find((entry) => entry.id === row.id);
+                const draft = drafts?.[row.id];
                 return (
                   <TableRow {...getRowProps({ row })} key={row.id}>
                     {row.cells.map((cell) => {
@@ -141,6 +237,51 @@ export function AdjustmentLinesTable({
                           <TableCell key={cell.id}>
                             <div>{line.name}</div>
                             <div className="cds--type-label-01">{line.our_ref}</div>
+                          </TableCell>
+                        );
+                      }
+                      if (cell.info.header === "qty_delta" && editable) {
+                        return (
+                          <TableCell key={cell.id}>
+                            <div style={{ maxWidth: "6.5rem" }}>
+                              <NumberInput
+                                id={`adjustment-delta-${row.id}`}
+                                label="Delta"
+                                hideLabel
+                                allowEmpty
+                                step={1}
+                                size="sm"
+                                value={draft?.qty_delta ?? ""}
+                                disabled={busy}
+                                onChange={(_event, { value }) => {
+                                  onDraftChange?.(row.id, "qty_delta", numberFromInput(value));
+                                }}
+                                onBlur={() => onLineBlur?.(row.id)}
+                              />
+                            </div>
+                          </TableCell>
+                        );
+                      }
+                      if (cell.info.header === "unit_cost_zar" && editable) {
+                        return (
+                          <TableCell key={cell.id}>
+                            <div style={{ maxWidth: "8rem" }}>
+                              <NumberInput
+                                id={`adjustment-cost-${row.id}`}
+                                label="Unit cost"
+                                hideLabel
+                                allowEmpty
+                                min={0}
+                                step={0.01}
+                                size="sm"
+                                value={draft?.unit_cost ?? ""}
+                                disabled={busy}
+                                onChange={(_event, { value }) => {
+                                  onDraftChange?.(row.id, "unit_cost", numberFromInput(value));
+                                }}
+                                onBlur={() => onLineBlur?.(row.id)}
+                              />
+                            </div>
                           </TableCell>
                         );
                       }
@@ -169,6 +310,21 @@ export function AdjustmentLinesTable({
               })}
             </TableBody>
           </Table>
+          <div
+            style={{
+              padding: "1rem",
+              textAlign: "right",
+              backgroundColor: "var(--cds-layer-02, #f4f4f4)",
+              borderTop: "1px solid var(--cds-border-subtle-01, #e0e0e0)",
+            }}
+          >
+            <p className="cds--type-label-01" style={{ marginBottom: "0.25rem" }}>
+              Total Value Impact (ZAR)
+            </p>
+            <p className="cds--type-productive-heading-03" style={{ margin: 0 }}>
+              {formatValueImpact(totalImpact)}
+            </p>
+          </div>
         </TableContainer>
       )}
     </DataTable>

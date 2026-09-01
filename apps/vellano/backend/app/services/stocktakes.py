@@ -174,6 +174,7 @@ class StocktakeService:
             our_ref=line.sku.our_ref,
             our_barcode=line.sku.our_barcode,
             name=line.sku.name,
+            category=line.sku.category,
             expected_qty=line.expected_qty,
             counted_qty=line.counted_qty,
             variance=variance,

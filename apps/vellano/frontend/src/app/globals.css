@@ -119,6 +119,10 @@ body {
   gap: 1rem;
 }
 
+.vellano-sku-form {
+  max-width: 50rem;
+}
+
 .vellano-muted-text {
   color: var(--cds-text-secondary, #525252);
   font-size: 0.75rem;
@@ -127,6 +131,38 @@ body {
 .vellano-till-cart {
   padding: 0;
   overflow: hidden;
+}
+
+.vellano-till-picker-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.vellano-till-picker-row .cds--list-box__wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.vellano-tender-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.vellano-tender-tile {
+  width: 100%;
+  max-width: none;
+  min-height: 4.5rem;
+  flex-direction: column;
+  justify-content: center;
+  row-gap: 0.25rem;
+}
+
+.vellano-tender-tile--selected {
+  border-color: var(--cds-button-tertiary, #0f62fe);
+  background: var(--cds-highlight, #e5f6ff);
+  color: var(--cds-link-primary, #00539a);
 }
 
 .vellano-sale-summary {

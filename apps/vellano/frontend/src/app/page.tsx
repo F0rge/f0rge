@@ -14,6 +14,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tag,
   Tile,
 } from "@carbon/react";
 import { Add, DocumentImport } from "@carbon/icons-react";
@@ -39,8 +40,60 @@ function formatZar(value: string, currency: string): string {
   })} ${currency}`;
 }
 
-function formatDateTime(iso: string): string {
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) {
+    return iso;
+  }
+  const minutes = Math.round((Date.now() - then) / 60000);
+  if (minutes < 1) {
+    return "Just now";
+  }
+  if (minutes < 60) {
+    return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
+  }
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  }
+  const days = Math.round(hours / 24);
+  if (days === 1) {
+    return "Yesterday";
+  }
+  if (days < 7) {
+    return `${days} days ago`;
+  }
   return new Date(iso).toLocaleString("en-ZA");
+}
+
+type MovementTag = {
+  type: "green" | "cyan" | "purple" | "gray" | "teal" | "blue" | "red" | "magenta";
+  label: string;
+};
+
+function movementTag(source: string): MovementTag {
+  switch (source) {
+    case "receive":
+      return { type: "cyan", label: "Receive" };
+    case "land":
+      return { type: "purple", label: "Land" };
+    case "adjustment":
+      return { type: "gray", label: "Adjustment" };
+    case "stocktake":
+      return { type: "teal", label: "Stocktake" };
+    case "opening":
+      return { type: "blue", label: "Opening" };
+    case "import":
+      return { type: "blue", label: "Import" };
+    case "return":
+      return { type: "red", label: "Return" };
+    case "layby":
+      return { type: "magenta", label: "Layby" };
+    case "correction":
+      return { type: "gray", label: "Correction" };
+    default:
+      return { type: "gray", label: source };
+  }
 }
 
 function attentionActionLabel(kind: HomeAttentionKind): string {
@@ -52,10 +105,19 @@ function attentionActionLabel(kind: HomeAttentionKind): string {
     case "returns":
       return "Process";
     case "layby":
-      return "View";
+      return "Review";
     case "bank":
       return "Reconcile";
   }
+}
+
+function MovementTypeTag({ source }: { source: string }) {
+  const tag = movementTag(source);
+  return (
+    <Tag type={tag.type} size="sm">
+      {tag.label}
+    </Tag>
+  );
 }
 
 function AttentionAction({
@@ -111,7 +173,7 @@ export default function HomePage() {
       </div>
 
       <div className="vellano-home-actions">
-        <Button kind="primary" renderIcon={Add} onClick={() => router.push("/catalogue?new=1")}>
+        <Button kind="primary" renderIcon={Add} onClick={() => router.push("/catalogue/new")}>
           New stock
         </Button>
         <Button kind="secondary" onClick={() => router.push("/stocktakes")}>
@@ -161,7 +223,7 @@ export default function HomePage() {
                   {summary.on_hand_qty.toLocaleString("en-ZA")} units
                 </p>
                 <p className="cds--type-helper-text-01">
-                  {formatZar(summary.on_hand_value_zar, summary.home_currency)} at landed cost
+                  {formatZar(summary.on_hand_value_zar, summary.home_currency)} landed cost
                 </p>
               </Tile>
             </Column>
@@ -263,12 +325,14 @@ export default function HomePage() {
                     ) : (
                       summary.recent_movements.map((movement, index) => (
                         <TableRow key={`${movement.source}-${movement.created_at}-${index}`}>
-                          <TableCell>{movement.source}</TableCell>
+                          <TableCell>
+                            <MovementTypeTag source={movement.source} />
+                          </TableCell>
                           <TableCell>
                             <div className="cds--type-body-compact-01">{movement.title}</div>
                             <div className="cds--type-helper-text-01">{movement.detail}</div>
                           </TableCell>
-                          <TableCell>{formatDateTime(movement.created_at)}</TableCell>
+                          <TableCell>{formatRelativeTime(movement.created_at)}</TableCell>
                         </TableRow>
                       ))
                     )}

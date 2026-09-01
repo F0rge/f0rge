@@ -539,7 +539,7 @@ export function canUseTill(role: UserRole | undefined): boolean {
   return role === "owner" || role === "till";
 }
 
-export type TillTender = "cash" | "card" | "deposit";
+export type TillTender = "cash" | "card" | "deposit" | "eft";
 
 export type TillSaleLinePayload = {
   sku_id: string;
@@ -551,6 +551,7 @@ export type TillSalePayload = {
   location_id: string;
   lines: TillSaleLinePayload[];
   tender: TillTender;
+  customer_id?: string;
 };
 
 export type TillSaleResult = {
@@ -679,6 +680,7 @@ export type StocktakeLine = {
   our_ref: string;
   our_barcode: string;
   name: string;
+  category: string | null;
   expected_qty: number;
   counted_qty: number | null;
   variance: number | null;

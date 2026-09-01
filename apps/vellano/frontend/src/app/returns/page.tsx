@@ -19,6 +19,7 @@ import {
   Tag,
   TextArea,
 } from "@carbon/react";
+import { DocumentExport } from "@carbon/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -44,6 +45,7 @@ import {
   type StockReturnStatus,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { downloadCsv } from "@/lib/csv";
 
 const TABLE_HEADERS = [
   { key: "return_number", header: "Return ID" },
@@ -336,16 +338,39 @@ function ReturnsPageContent() {
             Process customer returns from till sales or invoices.
           </p>
         </div>
-        {canMutate ? (
+        <div className="vellano-catalogue-actions">
           <Button
+            kind="secondary"
+            renderIcon={DocumentExport}
+            disabled={returns.length === 0}
             onClick={() => {
-              resetCreateForm();
-              setCreateOpen(true);
+              downloadCsv(
+                "vellano-returns.csv",
+                ["Return ID", "Original Sale", "Customer", "Status", "Date", "Location"],
+                returns.map((entry) => [
+                  entry.return_number,
+                  entry.invoice_number,
+                  customerByInvoiceId[entry.invoice_id] ?? "",
+                  statusLabel(entry.status),
+                  formatDate(entry.created_at),
+                  entry.location_name,
+                ]),
+              );
             }}
           >
-            New Return
+            Export List
           </Button>
-        ) : null}
+          {canMutate ? (
+            <Button
+              onClick={() => {
+                resetCreateForm();
+                setCreateOpen(true);
+              }}
+            >
+              New Return
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {error ? (

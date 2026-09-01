@@ -4,13 +4,7 @@ import {
   Button,
   Checkbox,
   DataTable,
-  FileUploaderDropContainer,
-  FileUploaderItem,
   InlineNotification,
-  Modal,
-  NumberInput,
-  Select,
-  SelectItem,
   Stack,
   Table,
   TableBody,
@@ -18,32 +12,26 @@ import {
   TableContainer,
   TableHead,
   TableHeader,
+  Pagination,
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { Barcode, DocumentImport, Printer } from "@carbon/icons-react";
+import { Barcode, DocumentExport, DocumentImport, Printer } from "@carbon/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { SkuPriceEditor } from "@/components/sku-price-editor";
 import {
-  ApiError,
   canMutateCatalogue,
   canViewCostAudit,
-  createSku,
   formatPriceAmount,
   formatZarAmount,
-  isActiveLocation,
   listInventory,
-  listLocations,
   listSkus,
-  parsePriceInput,
-  uploadSkuPhoto,
-  type CreateSkuPayload,
-  type Location,
   type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { downloadCsv } from "@/lib/csv";
 
 const TABLE_HEADERS = [
   { key: "select", header: "" },
@@ -80,14 +68,6 @@ function formatLeadTime(days: number | null | undefined): string {
   }
   return `${days} days`;
 }
-
-const emptyCreateForm: CreateSkuPayload = {
-  our_ref: "",
-  our_barcode: "",
-  name: "",
-  design: "",
-  fabric: "",
-};
 
 function escapeHtml(value: string): string {
   return value
@@ -153,23 +133,16 @@ function CataloguePageContent() {
   const searchParams = useSearchParams();
   const canMutate = canMutateCatalogue(user?.role);
   const [skus, setSkus] = useState<Sku[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
   const [unitCostBySku, setUnitCostBySku] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [priceSku, setPriceSku] = useState<Sku | null>(null);
-  const [createForm, setCreateForm] = useState<CreateSkuPayload>(emptyCreateForm);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [recordStockNow, setRecordStockNow] = useState(false);
-  const [openingLocationId, setOpeningLocationId] = useState("");
-  const [openingQty, setOpeningQty] = useState<number | "">(1);
-  const [openingUnitCost, setOpeningUnitCost] = useState("");
-  const [openingDate, setOpeningDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const loadSkus = useCallback(async () => {
     setLoading(true);
@@ -198,36 +171,11 @@ function CataloguePageContent() {
   }, [user, loadSkus]);
 
   useEffect(() => {
-    if (!user || !canMutate) {
+    if (searchParams.get("new") !== "1") {
       return;
     }
-    let cancelled = false;
-    listLocations()
-      .then((data) => {
-        if (!cancelled) {
-          setLocations(data.filter(isActiveLocation));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLocations([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, canMutate]);
-
-  useEffect(() => {
-    if (!canMutate || searchParams.get("new") !== "1") {
-      return;
-    }
-    setCreateOpen(true);
-    const next = new URLSearchParams(searchParams.toString());
-    next.delete("new");
-    const qs = next.toString();
-    router.replace(qs ? `/catalogue?${qs}` : "/catalogue");
-  }, [canMutate, searchParams, router]);
+    router.replace("/catalogue/new");
+  }, [searchParams, router]);
 
   const categories = useMemo(() => {
     const values = new Set<string>();
@@ -257,10 +205,19 @@ function CataloguePageContent() {
     });
   }, [skus, categoryFilter, searchFilter]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchFilter, categoryFilter]);
+
+  const pagedSkus = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredSkus.slice(start, start + pageSize);
+  }, [filteredSkus, page, pageSize]);
+
   const allFilteredSelected =
     filteredSkus.length > 0 && filteredSkus.every((sku) => selectedIds.has(sku.id));
 
-  const rows: SkuRow[] = filteredSkus.map((entry) => ({
+  const rows: SkuRow[] = pagedSkus.map((entry) => ({
     id: entry.id,
     product: entry.id,
     category: entry.category?.trim() || "—",
@@ -274,16 +231,6 @@ function CataloguePageContent() {
     select: entry.id,
     actions: entry.id,
   }));
-
-  function resetForm() {
-    setCreateForm(emptyCreateForm);
-    setPhotoFile(null);
-    setRecordStockNow(false);
-    setOpeningLocationId("");
-    setOpeningQty(1);
-    setOpeningUnitCost("");
-    setOpeningDate("");
-  }
 
   function openPriceEditor(entry: Sku) {
     setPriceSku(entry);
@@ -325,78 +272,6 @@ function CataloguePageContent() {
     printSkuLabels(targetSkus);
   }
 
-  async function handleCreate() {
-    setSaving(true);
-    setError(null);
-    try {
-      const payload: CreateSkuPayload = {
-        our_ref: createForm.our_ref.trim(),
-        our_barcode: createForm.our_barcode.trim(),
-        name: createForm.name.trim(),
-        design: createForm.design.trim(),
-        fabric: createForm.fabric.trim(),
-      };
-      const supplierRef = createForm.supplier_ref?.trim();
-      if (supplierRef) {
-        payload.supplier_ref = supplierRef;
-      }
-      const category = createForm.category?.trim();
-      if (category) {
-        payload.category = category;
-      }
-      if (recordStockNow) {
-        const cost = parsePriceInput(openingUnitCost);
-        if (!openingLocationId || openingQty === "" || cost === null) {
-          setError("Location, quantity, and unit cost are required to record stock.");
-          setSaving(false);
-          return;
-        }
-        payload.opening_location_id = openingLocationId;
-        payload.opening_qty = Number(openingQty);
-        payload.opening_unit_cost_zar = formatPriceAmount(cost);
-        const date = openingDate.trim();
-        if (date) {
-          payload.opening_date = date;
-        }
-      }
-      const created = await createSku(payload);
-      if (photoFile) {
-        await uploadSkuPhoto(created.id, photoFile);
-      }
-      setCreateOpen(false);
-      resetForm();
-      await loadSkus();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setError(err.message);
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to add SKU.");
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const skuFieldsValid = Boolean(
-    createForm.our_ref.trim() &&
-      createForm.our_barcode.trim() &&
-      createForm.name.trim() &&
-      createForm.design.trim() &&
-      createForm.fabric.trim(),
-  );
-  const parsedOpeningCost = parsePriceInput(openingUnitCost);
-  const openingValid =
-    !recordStockNow ||
-    Boolean(
-      openingLocationId &&
-        typeof openingQty === "number" &&
-        Number.isFinite(openingQty) &&
-        openingQty >= 1 &&
-        parsedOpeningCost !== null &&
-        parsedOpeningCost > 0,
-    );
-  const formValid = skuFieldsValid && openingValid;
-
   return (
     <Stack gap={6}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -406,18 +281,56 @@ function CataloguePageContent() {
             Manage products, pricing tiers, and generate barcode labels.
           </p>
         </div>
-        {canMutate ? (
-          <div className="vellano-catalogue-actions">
-            <Button
-              kind="secondary"
-              renderIcon={DocumentImport}
-              onClick={() => router.push("/import")}
-            >
-              Import
-            </Button>
-            <Button onClick={() => setCreateOpen(true)}>Add SKU</Button>
-          </div>
-        ) : null}
+        <div className="vellano-catalogue-actions">
+          <Button
+            kind="secondary"
+            renderIcon={DocumentExport}
+            disabled={filteredSkus.length === 0}
+            onClick={() => {
+              downloadCsv(
+                "vellano-catalogue.csv",
+                [
+                  "Our ref",
+                  "Name",
+                  "Category",
+                  "Preferred supplier",
+                  "Lead time",
+                  "Reorder min",
+                  "Cost (ZAR)",
+                  "Retail inc VAT",
+                  "Trade inc VAT",
+                  "Our barcode",
+                ],
+                filteredSkus.map((sku) => [
+                  sku.our_ref,
+                  sku.name,
+                  sku.category?.trim() || "",
+                  sku.preferred_supplier_name?.trim() || "",
+                  formatLeadTime(sku.lead_time_days),
+                  sku.reorder_min !== null ? String(sku.reorder_min) : "",
+                  unitCostBySku.get(sku.id) ?? "",
+                  sku.retail_inc_vat ?? "",
+                  sku.wholesale_inc_vat ?? "",
+                  sku.our_barcode,
+                ]),
+              );
+            }}
+          >
+            Export CSV
+          </Button>
+          {canMutate ? (
+            <>
+              <Button
+                kind="secondary"
+                renderIcon={DocumentImport}
+                onClick={() => router.push("/import")}
+              >
+                Import
+              </Button>
+              <Button onClick={() => router.push("/catalogue/new")}>New SKU</Button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {error ? (
@@ -525,7 +438,7 @@ function CataloguePageContent() {
                       </TableRow>
                     ) : (
                       tableRows.map((row) => {
-                        const entry = filteredSkus.find((sku) => sku.id === row.id);
+                        const entry = pagedSkus.find((sku) => sku.id === row.id);
                         return (
                           <TableRow
                             {...getRowProps({
@@ -615,164 +528,18 @@ function CataloguePageContent() {
               </TableContainer>
             )}
           </DataTable>
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            pageSizes={[10, 25, 50]}
+            totalItems={filteredSkus.length}
+            onChange={({ page: nextPage, pageSize: nextSize }) => {
+              setPage(nextPage);
+              setPageSize(nextSize);
+            }}
+          />
         </div>
       )}
-
-      <Modal
-        open={createOpen}
-        modalHeading="Add SKU"
-        primaryButtonText={saving ? "Adding…" : "Add"}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={saving || !formValid}
-        onRequestClose={() => setCreateOpen(false)}
-        onRequestSubmit={() => void handleCreate()}
-        size="lg"
-      >
-        <Stack gap={5}>
-          <TextInput
-            id="create-sku-our-ref"
-            labelText="Our ref"
-            value={createForm.our_ref}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, our_ref: event.target.value }))
-            }
-            required
-          />
-          <TextInput
-            id="create-sku-our-barcode"
-            labelText="Our barcode"
-            value={createForm.our_barcode}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, our_barcode: event.target.value }))
-            }
-            required
-          />
-          <TextInput
-            id="create-sku-name"
-            labelText="Name"
-            value={createForm.name}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, name: event.target.value }))
-            }
-            required
-          />
-          <TextInput
-            id="create-sku-category"
-            labelText="Category"
-            helperText="Optional — e.g. Seating, Tables"
-            value={createForm.category ?? ""}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, category: event.target.value }))
-            }
-          />
-          <TextInput
-            id="create-sku-design"
-            labelText="Design"
-            value={createForm.design}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, design: event.target.value }))
-            }
-            required
-          />
-          <TextInput
-            id="create-sku-fabric"
-            labelText="Fabric"
-            value={createForm.fabric}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, fabric: event.target.value }))
-            }
-            required
-          />
-          <TextInput
-            id="create-sku-supplier-ref"
-            labelText="Supplier ref"
-            helperText="Supplier's reference — not our barcode"
-            value={createForm.supplier_ref ?? ""}
-            onChange={(event) =>
-              setCreateForm((form) => ({ ...form, supplier_ref: event.target.value }))
-            }
-          />
-          <div>
-            <p className="cds--label">Photo (optional)</p>
-            <FileUploaderDropContainer
-              accept={["image/*"]}
-              labelText="Drag and drop an image here or click to upload"
-              multiple={false}
-              onAddFiles={(_, { addedFiles }) => {
-                const file = addedFiles[0];
-                if (file && !file.invalidFileType) {
-                  setPhotoFile(file);
-                }
-              }}
-            />
-            {photoFile ? (
-              <FileUploaderItem
-                name={photoFile.name}
-                status="complete"
-                onDelete={() => setPhotoFile(null)}
-              />
-            ) : null}
-          </div>
-          <Stack gap={4}>
-            <div>
-              <h2 className="cds--type-productive-heading-02">Initial Opening Stock (Optional)</h2>
-              <p className="cds--type-body-01">Optional day-one stock without a PO.</p>
-            </div>
-            <Checkbox
-              id="create-sku-record-stock"
-              labelText="Record stock now"
-              checked={recordStockNow}
-              onChange={(_, { checked }) => setRecordStockNow(checked)}
-            />
-            {recordStockNow ? (
-              <Stack gap={4}>
-                <Select
-                  id="create-sku-opening-location"
-                  labelText="Location"
-                  value={openingLocationId}
-                  onChange={(event) => setOpeningLocationId(event.target.value)}
-                  helperText={
-                    locations.length === 0 ? "No active locations available" : undefined
-                  }
-                >
-                  <SelectItem value="" text="Select location" />
-                  {locations.map((entry) => (
-                    <SelectItem key={entry.id} value={entry.id} text={entry.name} />
-                  ))}
-                </Select>
-                <NumberInput
-                  id="create-sku-opening-qty"
-                  label="Quantity on Hand"
-                  min={1}
-                  step={1}
-                  value={openingQty}
-                  onChange={(_event, { value }) => {
-                    if (value === "") {
-                      setOpeningQty("");
-                    } else {
-                      setOpeningQty(Number(value));
-                    }
-                  }}
-                />
-                <TextInput
-                  id="create-sku-opening-unit-cost"
-                  labelText="Unit Cost (ZAR)"
-                  helperText="Used for inventory valuation"
-                  value={openingUnitCost}
-                  onChange={(event) => setOpeningUnitCost(event.target.value)}
-                />
-                <TextInput
-                  id="create-sku-opening-date"
-                  labelText="Received Date"
-                  type="date"
-                  value={openingDate}
-                  onChange={(event) => setOpeningDate(event.target.value)}
-                />
-              </Stack>
-            ) : null}
-          </Stack>
-        </Stack>
-      </Modal>
     </Stack>
   );
 }
