@@ -917,6 +917,7 @@ export type Account = {
   type: AccountType;
   is_system: boolean;
   is_archived: boolean;
+  is_bank: boolean;
   tax_treatment: TaxTreatment;
   balance_zar: string;
   created_at: string;
@@ -928,12 +929,14 @@ export type CreateAccountPayload = {
   name: string;
   type: AccountType;
   tax_treatment?: TaxTreatment;
+  is_bank?: boolean;
 };
 
 export type UpdateAccountPayload = {
   name?: string;
   is_archived?: boolean;
   tax_treatment?: TaxTreatment;
+  is_bank?: boolean;
 };
 
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
@@ -1410,7 +1413,9 @@ export type BankImportLine = {
   reference: string | null;
   amount_zar: string;
   matched_payment_id: string | null;
+  matched_journal_id: string | null;
   matched_payment_number: string | null;
+  matched_journal_number?: string | null;
   suggested_payment_id: string | null;
   suggested_payment_number: string | null;
 };
@@ -1419,6 +1424,9 @@ export type BankImport = {
   id: string;
   filename: string;
   line_count: number;
+  account_id: string;
+  account_code: string;
+  account_name: string;
   lines: BankImportLine[];
   created_at: string;
   updated_at: string;
@@ -1429,8 +1437,21 @@ export type BankImportSummary = {
   filename: string;
   line_count: number;
   matched_count: number;
+  unmatched_count: number;
+  account_id: string;
+  account_code: string;
+  account_name: string;
   created_at: string;
 };
+
+export type BankUnmatchedCount = {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  unmatched_count: number;
+};
+
+export type BankMatchTarget = { payment_id: string } | { journal_id: string };
 
 export type AgedBucket = {
   label: string;
@@ -1507,29 +1528,43 @@ export function getBankImport(id: string): Promise<BankImport> {
   return apiFetch<BankImport>(`/bank-imports/${id}`);
 }
 
-export async function uploadBankImport(file: File): Promise<BankImport> {
+export function listUnmatchedCounts(): Promise<BankUnmatchedCount[]> {
+  return apiFetch<BankUnmatchedCount[]>("/bank-imports/unmatched-counts");
+}
+
+export function listUnmatchedLines(accountId?: string): Promise<BankImportLine[]> {
+  const params = new URLSearchParams();
+  const id = accountId?.trim();
+  if (id) {
+    params.set("account_id", id);
+  }
+  const qs = params.toString();
+  return apiFetch<BankImportLine[]>(`/bank-imports/unmatched-lines${qs ? `?${qs}` : ""}`);
+}
+
+export function uploadBankImport(file: File, accountId?: string): Promise<BankImport> {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch("/api/v1/bank-imports", {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
+  const id = accountId?.trim();
+  if (id) {
+    formData.append("account_id", id);
   }
-  return response.json() as Promise<BankImport>;
+  return apiUpload<BankImport>("/bank-imports", formData);
 }
 
 export function matchBankLine(
   importId: string,
   lineId: string,
-  paymentId: string,
+  target: BankMatchTarget,
 ): Promise<BankImportLine> {
+  const hasPayment = "payment_id" in target;
+  const hasJournal = "journal_id" in target;
+  if (hasPayment === hasJournal) {
+    throw new ApiError(400, "Provide exactly one of payment_id or journal_id");
+  }
   return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/match`, {
     method: "POST",
-    body: JSON.stringify({ payment_id: paymentId }),
+    body: JSON.stringify(target),
   });
 }
 

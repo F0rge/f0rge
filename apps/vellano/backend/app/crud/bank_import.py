@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,7 +20,8 @@ class BankImportCRUD(BaseCRUD):
             await self.db.execute(
                 select(BankImport)
                 .options(
-                    selectinload(BankImport.lines).selectinload(BankImportLine.matched_payment)
+                    selectinload(BankImport.account),
+                    selectinload(BankImport.lines).selectinload(BankImportLine.matched_payment),
                 )
                 .where(BankImport.id == import_id)
             )
@@ -29,7 +30,10 @@ class BankImportCRUD(BaseCRUD):
     async def list_all(self) -> list[BankImport]:
         result = await self.db.execute(
             select(BankImport)
-            .options(selectinload(BankImport.lines))
+            .options(
+                selectinload(BankImport.account),
+                selectinload(BankImport.lines),
+            )
             .order_by(BankImport.created_at.desc())
         )
         return list(result.scalars().all())
@@ -57,10 +61,30 @@ class BankImportLineCRUD(BaseCRUD):
             )
         ).scalar_one_or_none()
 
-    async def list_unmatched(self) -> list[BankImportLine]:
-        result = await self.db.execute(
+    async def list_unmatched(self, account_id: Optional[uuid.UUID] = None) -> list[BankImportLine]:
+        stmt = (
             select(BankImportLine)
-            .where(BankImportLine.matched_payment_id.is_(None))
+            .join(BankImport, BankImportLine.import_id == BankImport.id)
+            .where(
+                BankImportLine.matched_payment_id.is_(None),
+                BankImportLine.matched_journal_id.is_(None),
+            )
             .order_by(BankImportLine.transaction_date.desc())
         )
+        if account_id is not None:
+            stmt = stmt.where(BankImport.account_id == account_id)
+        result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def unmatched_counts_by_account(self) -> dict[uuid.UUID, int]:
+        result = await self.db.execute(
+            select(BankImport.account_id, func.count())
+            .select_from(BankImportLine)
+            .join(BankImport, BankImportLine.import_id == BankImport.id)
+            .where(
+                BankImportLine.matched_payment_id.is_(None),
+                BankImportLine.matched_journal_id.is_(None),
+            )
+            .group_by(BankImport.account_id)
+        )
+        return {row[0]: int(row[1]) for row in result.all()}

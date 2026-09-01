@@ -45,6 +45,9 @@ class Account(UUIDPkMixin, TimestampMixin, Base):
     )
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_bank: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     tax_treatment: Mapped[TaxTreatment] = mapped_column(
         Enum(
             TaxTreatment,

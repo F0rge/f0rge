@@ -15,12 +15,14 @@ class AccountCreate(BaseModel):
     name: str = Field(min_length=1)
     type: AccountType
     tax_treatment: Optional[TaxTreatment] = None
+    is_bank: bool = False
 
 
 class AccountUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1)
     is_archived: Optional[bool] = None
     tax_treatment: Optional[TaxTreatment] = None
+    is_bank: Optional[bool] = None
 
 
 class AccountResponse(BaseModel):
@@ -30,6 +32,7 @@ class AccountResponse(BaseModel):
     type: AccountType
     is_system: bool
     is_archived: bool
+    is_bank: bool
     tax_treatment: TaxTreatment
     balance_zar: Decimal
     created_at: datetime.datetime

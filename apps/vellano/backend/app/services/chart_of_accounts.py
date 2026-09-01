@@ -17,6 +17,10 @@ from f0rge_db.crud import unit_of_work
 
 # Seeded chart-of-accounts codes (S6).
 CODE_BANK = "1100"
+CODE_CREDIT_CARD = "1110"
+CODE_PETTY_CASH = "1120"
+CODE_INVENTORY_CLEARING = "1130"
+CODE_SUPPLIER_CLEARING = "1140"
 CODE_AR = "1200"
 CODE_INVENTORY = "1300"
 CODE_AP = "2100"
@@ -83,6 +87,13 @@ CATEGORY_MAPS: tuple[tuple[str, str, str, str, str], ...] = (
     ("Outdoor", "4070", "5070", "5170", "5270"),
 )
 
+BANK_ACCOUNT_SEEDS: tuple[tuple[str, str], ...] = (
+    (CODE_CREDIT_CARD, "Credit card"),
+    (CODE_PETTY_CASH, "Petty cash"),
+    (CODE_INVENTORY_CLEARING, "Inventory clearing"),
+    (CODE_SUPPLIER_CLEARING, "Supplier clearing"),
+)
+
 
 class ChartOfAccountsSeedService:
     def __init__(self, db: AsyncSession) -> None:
@@ -131,13 +142,34 @@ class ChartOfAccountsSeedService:
                         )
                     )
 
+    async def ensure_bank_accounts(self) -> None:
+        async with unit_of_work(self.db):
+            bank = await self.crud.get_by_code(CODE_BANK)
+            if bank is not None:
+                bank.is_bank = True
+            for code, name in BANK_ACCOUNT_SEEDS:
+                existing = await self.crud.get_by_code(code)
+                if existing is None:
+                    await self.crud.add_and_flush(
+                        self._system_account(code, name, AccountType.ASSET, is_bank=True)
+                    )
+                else:
+                    existing.is_bank = True
+
     @staticmethod
-    def _system_account(code: str, name: str, account_type: AccountType) -> Account:
+    def _system_account(
+        code: str,
+        name: str,
+        account_type: AccountType,
+        *,
+        is_bank: bool = False,
+    ) -> Account:
         return Account(
             code=code,
             name=name,
             type=account_type,
             is_system=True,
+            is_bank=is_bank,
             tax_treatment=default_tax_treatment(account_type),
         )
 

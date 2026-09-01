@@ -63,6 +63,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.ensure_opening_equity()
         await coa.ensure_customer_deposits()
         await coa.ensure_category_chart()
+        await coa.ensure_bank_accounts()
         await TillSeedService(session).seed_if_empty()
         await PlaygroundSeedService(session).seed_if_enabled()
     yield

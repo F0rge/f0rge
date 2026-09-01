@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 
 from app.dependencies.auth import (
     get_bank_import_service,
@@ -14,6 +15,7 @@ from app.schemas.bank_import import (
     BankImportMatchRequest,
     BankImportResponse,
     BankImportSummary,
+    BankUnmatchedCount,
 )
 from app.services.bank_imports import BankImportService
 
@@ -33,20 +35,30 @@ async def list_bank_imports(
 )
 async def upload_bank_import(
     file: UploadFile = File(...),
+    account_id: Optional[uuid.UUID] = Form(None),
     _: uuid.UUID = Depends(require_books_mutate),
     service: BankImportService = Depends(get_bank_import_service),
 ):
     content = await file.read()
     filename = file.filename or "import.csv"
-    return await service.create_from_csv(filename, content)
+    return await service.create_from_csv(filename, content, account_id)
 
 
 @bank_imports_router.get("/unmatched-lines", response_model=list[BankImportLineResponse])
 async def list_unmatched_lines(
+    account_id: Optional[uuid.UUID] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: BankImportService = Depends(get_bank_import_service),
 ):
-    return await service.list_unmatched_lines()
+    return await service.list_unmatched_lines(account_id)
+
+
+@bank_imports_router.get("/unmatched-counts", response_model=list[BankUnmatchedCount])
+async def list_unmatched_counts(
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: BankImportService = Depends(get_bank_import_service),
+):
+    return await service.unmatched_counts()
 
 
 @bank_imports_router.get("/{import_id}", response_model=BankImportResponse)

@@ -7,9 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.account import AccountCRUD
-from app.models.account import Account, default_tax_treatment
+from app.models.account import Account, AccountType, default_tax_treatment
 from app.schemas.account import AccountCreate, AccountResponse, AccountUpdate
-from f0rge_core.exceptions import ConflictError, NotFoundError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
 
@@ -33,11 +33,13 @@ class AccountService:
         tax_treatment = data.tax_treatment
         if tax_treatment is None:
             tax_treatment = default_tax_treatment(data.type)
+        self._require_bank_flag_allowed(data.type, data.is_bank)
         account = Account(
             code=data.code,
             name=data.name,
             type=data.type,
             is_system=False,
+            is_bank=data.is_bank,
             tax_treatment=tax_treatment,
         )
         async with unit_of_work(self.db):
@@ -60,6 +62,9 @@ class AccountService:
             account.is_archived = data.is_archived
         if data.tax_treatment is not None:
             account.tax_treatment = data.tax_treatment
+        if data.is_bank is not None:
+            self._require_bank_flag_allowed(account.type, data.is_bank)
+            account.is_bank = data.is_bank
 
         await self.crud.commit_refresh(account)
         balances = await self.crud.get_balances()
@@ -74,8 +79,14 @@ class AccountService:
             type=account.type,
             is_system=account.is_system,
             is_archived=account.is_archived,
+            is_bank=account.is_bank,
             tax_treatment=account.tax_treatment,
             balance_zar=balance_zar,
             created_at=account.created_at,
             updated_at=account.updated_at,
         )
+
+    @staticmethod
+    def _require_bank_flag_allowed(account_type: AccountType, is_bank: bool) -> None:
+        if is_bank and account_type != AccountType.ASSET:
+            raise ValidationError("Only asset accounts can be bank reconciliation targets")
