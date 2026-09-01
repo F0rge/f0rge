@@ -18,6 +18,8 @@ from app.crud.supplier import SupplierCRUD
 from app.crud.unit_cost_audit import UnitCostAuditCRUD
 from app.models.sku import Sku
 from app.models.unit_cost_audit import UnitCostAuditSource
+from app.permissions import STOCK_COST_VIEW
+from app.services.permissions import PermissionService
 from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
 from app.services.stock_movements import StockMovementService
 from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
@@ -42,17 +44,21 @@ class SkuService:
         self.bom_crud = SkuBomLineCRUD(db)
         self.stock_movements = StockMovementService(db)
 
-    async def list(self, category: Optional[str] = None) -> list[SkuResponse]:
+    async def list(
+        self, category: Optional[str] = None, user_id: Optional[uuid.UUID] = None
+    ) -> list[SkuResponse]:
         skus = await self.crud.list_all(category=category)
-        return await self._to_responses(skus)
+        return await self._to_responses(skus, user_id)
 
-    async def get(self, sku_id: uuid.UUID) -> SkuResponse:
+    async def get(self, sku_id: uuid.UUID, user_id: Optional[uuid.UUID] = None) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
-        return (await self._to_responses([sku]))[0]
+        return (await self._to_responses([sku], user_id))[0]
 
-    async def update(self, sku_id: uuid.UUID, data: SkuUpdate) -> SkuResponse:
+    async def update(
+        self, sku_id: uuid.UUID, data: SkuUpdate, user_id: Optional[uuid.UUID] = None
+    ) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
@@ -150,7 +156,7 @@ class SkuService:
             await self._raise_integrity_conflict(exc)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return (await self._to_responses([reloaded]))[0]
+        return (await self._to_responses([reloaded], user_id))[0]
 
     async def delete(self, sku_id: uuid.UUID) -> None:
         sku = await self.crud.get_by_id(sku_id)
@@ -203,9 +209,11 @@ class SkuService:
             await self._raise_integrity_conflict(exc)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return (await self._to_responses([reloaded]))[0]
+        return (await self._to_responses([reloaded], user_id))[0]
 
-    async def upload_photo(self, sku_id: uuid.UUID, file: UploadFile) -> SkuResponse:
+    async def upload_photo(
+        self, sku_id: uuid.UUID, file: UploadFile, user_id: Optional[uuid.UUID] = None
+    ) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
@@ -225,7 +233,7 @@ class SkuService:
         await self.crud.commit_refresh(sku)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return (await self._to_responses([reloaded]))[0]
+        return (await self._to_responses([reloaded], user_id))[0]
 
     async def serve_photo(self, sku_id: uuid.UUID) -> Response:
         sku = await self.crud.get_by_id(sku_id)
@@ -244,9 +252,17 @@ class SkuService:
             raise NotFoundError("SKU photo not found") from exc
         return Response(content=data, media_type="image/jpeg")
 
-    async def _to_responses(self, skus: list[Sku]) -> list[SkuResponse]:
+    async def _to_responses(
+        self, skus: list[Sku], user_id: Optional[uuid.UUID] = None
+    ) -> list[SkuResponse]:
         if not skus:
             return []
+
+        hide_cost = True
+        if user_id is not None:
+            hide_cost = not await PermissionService(self.db).has_permission(
+                user_id, STOCK_COST_VIEW
+            )
 
         sku_ids = [sku.id for sku in skus]
         supplier_ids = [
@@ -264,7 +280,7 @@ class SkuService:
                     if sku.preferred_supplier_id is not None
                     else None
                 ),
-                last_landed_cost_zar=landed_costs.get(sku.id),
+                last_landed_cost_zar=None if hide_cost else landed_costs.get(sku.id),
                 is_kit=sku.id in kit_ids,
             )
             for sku in skus

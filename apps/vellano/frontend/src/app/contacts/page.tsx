@@ -50,7 +50,7 @@ const emptyCreateForm: CreateContactPayload = {
 
 export default function ContactsPage() {
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

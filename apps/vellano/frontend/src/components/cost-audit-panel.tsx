@@ -38,7 +38,7 @@ type CostAuditPanelProps = {
 
 export function CostAuditPanel({ skuOptions }: CostAuditPanelProps) {
   const { user } = useAuth();
-  const canView = canViewCostAudit(user?.role);
+  const canView = canViewCostAudit(user);
   const [skuId, setSkuId] = useState("");
   const [entries, setEntries] = useState<UnitCostAuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -93,7 +93,7 @@ export function CostAuditPanel({ skuOptions }: CostAuditPanelProps) {
       <div>
         <h2 className="cds--type-productive-heading-03">Unit cost history</h2>
         <p className="cds--type-body-01">
-          Audit trail for landed and corrected unit costs (owner, books, buyer).
+          Audit trail for landed and corrected unit costs.
         </p>
       </div>
       {skuOptions.length === 0 ? (

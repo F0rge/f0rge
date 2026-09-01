@@ -38,6 +38,7 @@ import { TillScanner } from "@/components/till-scanner";
 
 import {
   ApiError,
+  can,
   canUseTill,
   computeInvoicePreview,
   createTillSale,
@@ -231,7 +232,8 @@ function SkuThumb({ sku }: { sku: Sku }) {
 export default function TillPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const canSell = canUseTill(user?.role);
+  const canSell = canUseTill(user);
+  const canDiscount = can(user, "till.discount");
   const [locations, setLocations] = useState<Location[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
@@ -670,7 +672,7 @@ export default function TillPage() {
                           <TableHeader>Item</TableHeader>
                           <TableHeader>Qty</TableHeader>
                           <TableHeader>Unit price (ZAR inc VAT)</TableHeader>
-                          <TableHeader>Discount %</TableHeader>
+                          {canDiscount ? <TableHeader>Discount %</TableHeader> : null}
                           <TableHeader>Total (ZAR)</TableHeader>
                           <TableHeader />
                         </TableRow>
@@ -705,26 +707,28 @@ export default function TillPage() {
                               />
                             </TableCell>
                             <TableCell>{formatZarAmount(formatPriceAmount(unitIncVat(line.sku)))}</TableCell>
-                            <TableCell>
-                              <NumberInput
-                                id={`cart-discount-${line.key}`}
-                                hideLabel
-                                label="Discount percent"
-                                size="sm"
-                                min={0}
-                                max={100}
-                                value={line.discountPercent}
-                                onChange={(_, { value }) => {
-                                  const next =
-                                    value === ""
-                                      ? 0
-                                      : typeof value === "number"
-                                        ? value
-                                        : Number(value);
-                                  updateCartLine(line.key, { discountPercent: clampDiscount(next) });
-                                }}
-                              />
-                            </TableCell>
+                            {canDiscount ? (
+                              <TableCell>
+                                <NumberInput
+                                  id={`cart-discount-${line.key}`}
+                                  hideLabel
+                                  label="Discount percent"
+                                  size="sm"
+                                  min={0}
+                                  max={100}
+                                  value={line.discountPercent}
+                                  onChange={(_, { value }) => {
+                                    const next =
+                                      value === ""
+                                        ? 0
+                                        : typeof value === "number"
+                                          ? value
+                                          : Number(value);
+                                    updateCartLine(line.key, { discountPercent: clampDiscount(next) });
+                                  }}
+                                />
+                              </TableCell>
+                            ) : null}
                             <TableCell>
                               <strong>{formatZarAmount(formatPriceAmount(lineIncTotal(line)))}</strong>
                             </TableCell>

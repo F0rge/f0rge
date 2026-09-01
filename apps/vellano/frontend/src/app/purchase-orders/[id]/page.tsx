@@ -51,8 +51,8 @@ export default function PurchaseOrderDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const canRaise = canRaisePo(user?.role);
-  const canRecv = canReceive(user?.role);
+  const canRaise = canRaisePo(user);
+  const canRecv = canReceive(user);
   const [order, setOrder] = useState<PurchaseOrder | null>(null);
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [loading, setLoading] = useState(true);

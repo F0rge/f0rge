@@ -75,7 +75,7 @@ function todayIso(): string {
 export default function BillsPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [bills, setBills] = useState<Bill[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);

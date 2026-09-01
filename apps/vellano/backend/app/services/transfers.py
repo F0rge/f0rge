@@ -14,7 +14,9 @@ from app.crud.transfer import TransferCRUD
 from app.crud.user import UserCRUD
 from app.models.transfer import Transfer, TransferLine, TransferStatus
 from app.models.unit_cost_audit import UnitCostAuditSource
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.permissions import USERS_MANAGE
+from app.services.permissions import PermissionService
 from app.schemas.transfer import (
     TransferCreate,
     TransferLineResponse,
@@ -201,8 +203,7 @@ class TransferService:
             raise ConflictError("Transfer is already cancelled")
 
         if transfer.status == TransferStatus.IN_TRANSIT:
-            user = await self.user_crud.get_by_id(user_id)
-            if user is None or user.role != UserRole.OWNER:
+            if not await PermissionService(self.db).has_permission(user_id, USERS_MANAGE):
                 raise ConflictError("Owner access required")
             await self.stocktakes.assert_location_unlocked(transfer.from_location_id)
             from_location = await self._active_location(transfer.from_location_id, "Source")

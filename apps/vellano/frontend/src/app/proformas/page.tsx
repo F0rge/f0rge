@@ -64,7 +64,7 @@ const emptyForm: ProformaForm = {
 
 export default function ProformasPage() {
   const { user } = useAuth();
-  const canMutate = canMutateCatalogue(user?.role);
+  const canMutate = canMutateCatalogue(user);
   const [proformas, setProformas] = useState<Proforma[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);

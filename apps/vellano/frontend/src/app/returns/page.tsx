@@ -103,7 +103,7 @@ function ReturnsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const canMutate = canMutateReturns(user?.role);
+  const canMutate = canMutateReturns(user);
   const [returns, setReturns] = useState<StockReturn[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);

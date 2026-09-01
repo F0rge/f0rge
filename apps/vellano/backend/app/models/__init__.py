@@ -51,6 +51,7 @@ from app.models.team_settings import TeamSettings
 from app.models.transfer import Transfer, TransferLine, TransferStatus
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
 from app.models.team import Team
+from app.models.role import Role, RolePermission
 from app.models.user import User, UserRole
 from app.models.vat201_period import (
     Vat201Period,
@@ -101,6 +102,8 @@ __all__ = [
     "PurchaseOrderStatus",
     "RepeatingInvoice",
     "RepeatingInvoiceLine",
+    "Role",
+    "RolePermission",
     "Sku",
     "SkuBomLine",
     "SkuStock",

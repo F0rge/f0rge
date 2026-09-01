@@ -59,7 +59,7 @@ function parseOptionalIncVat(value: string, label: string): string | null {
 export default function NewSkuPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const canMutate = canMutateCatalogue(user?.role);
+  const canMutate = canMutateCatalogue(user);
   const [createForm, setCreateForm] = useState<CreateSkuPayload>(emptyCreateForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [retailIncVat, setRetailIncVat] = useState("");

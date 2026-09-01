@@ -364,7 +364,7 @@ export function SkuPriceEditor({
             <strong>{sku.our_ref}</strong> — {sku.name}
           </p>
         </div>
-        {unitCostZar ? (
+        {showCostAudit && unitCostZar ? (
           <InlineNotification
             kind="info"
             title="Unit cost"
@@ -373,16 +373,18 @@ export function SkuPriceEditor({
             lowContrast
           />
         ) : null}
-        <TextInput
-          id="sku-last-landed-cost"
-          labelText="Last landed cost"
-          value={
-            sku.last_landed_cost_zar
-              ? `${displayPrice(sku.last_landed_cost_zar)} ZAR`
-              : "—"
-          }
-          readOnly
-        />
+        {showCostAudit ? (
+          <TextInput
+            id="sku-last-landed-cost"
+            labelText="Last landed cost"
+            value={
+              sku.last_landed_cost_zar
+                ? `${displayPrice(sku.last_landed_cost_zar)} ZAR`
+                : "—"
+            }
+            readOnly
+          />
+        ) : null}
         {readOnly ? (
           <>
             <TextInput

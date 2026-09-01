@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, status
 
-from app.dependencies.auth import get_current_user_id, get_layby_service, require_till
+from app.dependencies.auth import get_current_user_id, get_layby_service, require_laybys
 from app.schemas.layby import LaybyCreate, LaybyPaymentCreate, LaybyResponse
 from app.services.laybys import LaybysService
 
@@ -26,7 +26,7 @@ async def list_laybys(
 )
 async def create_layby(
     body: LaybyCreate,
-    user_id: uuid.UUID = Depends(require_till),
+    user_id: uuid.UUID = Depends(require_laybys),
     service: LaybysService = Depends(get_layby_service),
 ):
     return await service.create(body, user_id)
@@ -49,7 +49,7 @@ async def get_layby(
 async def add_layby_payment(
     layby_id: uuid.UUID,
     body: LaybyPaymentCreate,
-    user_id: uuid.UUID = Depends(require_till),
+    user_id: uuid.UUID = Depends(require_laybys),
     service: LaybysService = Depends(get_layby_service),
 ):
     return await service.add_payment(layby_id, body, user_id)
@@ -58,7 +58,7 @@ async def add_layby_payment(
 @laybys_router.post("/{layby_id}/complete", response_model=LaybyResponse)
 async def complete_layby(
     layby_id: uuid.UUID,
-    user_id: uuid.UUID = Depends(require_till),
+    user_id: uuid.UUID = Depends(require_laybys),
     service: LaybysService = Depends(get_layby_service),
 ):
     return await service.complete(layby_id, user_id)
@@ -67,7 +67,7 @@ async def complete_layby(
 @laybys_router.post("/{layby_id}/cancel", response_model=LaybyResponse)
 async def cancel_layby(
     layby_id: uuid.UUID,
-    user_id: uuid.UUID = Depends(require_till),
+    user_id: uuid.UUID = Depends(require_laybys),
     service: LaybysService = Depends(get_layby_service),
 ):
     return await service.cancel(layby_id, user_id)

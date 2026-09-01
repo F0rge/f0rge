@@ -189,7 +189,8 @@ function CataloguePageContent() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const canMutate = canMutateCatalogue(user?.role);
+  const canMutate = canMutateCatalogue(user);
+  const canViewCost = canViewCostAudit(user);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [unitCostBySku, setUnitCostBySku] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -280,6 +281,10 @@ function CataloguePageContent() {
 
   const allFilteredSelected =
     filteredSkus.length > 0 && filteredSkus.every((sku) => selectedIds.has(sku.id));
+
+  const tableHeaders = canViewCost
+    ? TABLE_HEADERS
+    : TABLE_HEADERS.filter((header) => header.key !== "cost_zar");
 
   const rows: SkuRow[] = pagedSkus.map((entry) => ({
     id: entry.id,
@@ -435,7 +440,7 @@ function CataloguePageContent() {
                   "Preferred supplier",
                   "Lead time",
                   "Reorder min",
-                  "Cost (ZAR)",
+                  ...(canViewCost ? ["Cost (ZAR)"] : []),
                   "Retail inc VAT",
                   "Trade inc VAT",
                   "Our barcode",
@@ -448,7 +453,7 @@ function CataloguePageContent() {
                   sku.preferred_supplier_name?.trim() || "",
                   formatLeadTime(sku.lead_time_days),
                   sku.reorder_min !== null ? String(sku.reorder_min) : "",
-                  unitCostBySku.get(sku.id) ?? "",
+                  ...(canViewCost ? [unitCostBySku.get(sku.id) ?? ""] : []),
                   sku.retail_inc_vat ?? "",
                   sku.wholesale_inc_vat ?? "",
                   sku.our_barcode,
@@ -487,7 +492,7 @@ function CataloguePageContent() {
         sku={priceSku}
         open={priceSku !== null}
         readOnly={!canMutate}
-        showCostAudit={canViewCostAudit(user?.role)}
+        showCostAudit={canViewCost}
         unitCostZar={priceSku ? (unitCostBySku.get(priceSku.id) ?? null) : null}
         saving={saving}
         onSavingChange={setSaving}
@@ -651,7 +656,7 @@ function CataloguePageContent() {
             </Button>
           </div>
 
-          <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
+          <DataTable rows={rows} headers={[...tableHeaders]}>
             {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
               <TableContainer title="Catalogue" description="All Vellano SKUs">
                 <Table {...getTableProps()}>

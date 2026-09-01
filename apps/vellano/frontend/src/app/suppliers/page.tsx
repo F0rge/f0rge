@@ -44,7 +44,7 @@ const emptyCreateForm: CreateSupplierPayload = {
 
 export default function SuppliersPage() {
   const { user } = useAuth();
-  const canMutate = canMutateCatalogue(user?.role);
+  const canMutate = canMutateCatalogue(user);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -33,6 +33,9 @@ from app.services.chart_of_accounts import (
 )
 from app.services.stocktakes import StocktakeService
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
+from app.exceptions import ForbiddenError
+from app.permissions import TILL_DISCOUNT
+from app.services.permissions import PermissionService
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -55,6 +58,11 @@ class TillOrchestrator:
     async def create_sale(
         self, data: TillSaleCreate, user_id: Optional[uuid.UUID] = None
     ) -> TillSaleResponse:
+        if user_id is not None and any(line.discount_percent > 0 for line in data.lines):
+            allowed = await PermissionService(self.db).has_permission(user_id, TILL_DISCOUNT)
+            if not allowed:
+                raise ForbiddenError("Till discount permission required")
+
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         from app.crud.location import LocationCRUD
 

@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends
 
-from app.dependencies.auth import get_current_user_id, get_settings_service, require_owner
+from app.dependencies.auth import get_current_user_id, get_settings_service, require_settings
 from app.schemas.settings import SettingsResponse, SettingsUpdate
 from app.services.settings import SettingsService
 
@@ -22,7 +22,7 @@ async def get_settings(
 @settings_router.patch("", response_model=SettingsResponse)
 async def update_settings(
     data: SettingsUpdate,
-    user_id: uuid.UUID = Depends(require_owner),
+    user_id: uuid.UUID = Depends(require_settings),
     service: SettingsService = Depends(get_settings_service),
 ) -> SettingsResponse:
     return await service.update(user_id, data)

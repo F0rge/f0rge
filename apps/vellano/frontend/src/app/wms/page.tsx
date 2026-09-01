@@ -80,8 +80,8 @@ function parsePositiveInt(value: string): number | null {
 
 export default function WmsPage() {
   const { user } = useAuth();
-  const canRecv = canReceive(user?.role);
-  const canXfer = canTransfer(user?.role);
+  const canRecv = canReceive(user);
+  const canXfer = canTransfer(user);
 
   const [tab, setTab] = useState<WmsTab>("receive");
   const [loading, setLoading] = useState(true);

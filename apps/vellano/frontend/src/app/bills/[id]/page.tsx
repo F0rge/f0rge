@@ -45,7 +45,7 @@ export default function BillDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [bill, setBill] = useState<Bill | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

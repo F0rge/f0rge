@@ -22,7 +22,7 @@ import { useAuth } from "@/lib/auth";
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const canMutate = canMutateSettings(user?.role);
+  const canMutate = canMutateSettings(user);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [vatPercent, setVatPercent] = useState("15");
   const [currency, setCurrency] = useState("ZAR");

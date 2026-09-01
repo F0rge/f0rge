@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import AsyncIterator, cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.types import ExceptionHandler
 from f0rge_core.handlers import register_exception_handlers
+
+from app.exceptions import ForbiddenError
 
 from app.config import settings
 from app.database import async_session_maker
@@ -39,6 +43,7 @@ from app.routers import (
     returns,
     laybys,
     reports,
+    roles,
     search,
     settings as settings_router,
     skus,
@@ -53,6 +58,7 @@ from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
 from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
+from app.services.roles import RoleSeedService
 from app.services.till_seed import TillSeedService
 from app.services.users import BootstrapService
 
@@ -60,6 +66,7 @@ from app.services.users import BootstrapService
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with async_session_maker() as session:
+        await RoleSeedService(session).seed()
         await BootstrapService(session).seed_if_empty()
         await LocationSeedService(session).seed_if_empty()
         await RoleUserSeedService(session).seed()
@@ -85,6 +92,17 @@ app = FastAPI(
 
 register_exception_handlers(app)
 
+
+async def _forbidden_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, ForbiddenError)
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={"detail": exc.detail},
+    )
+
+
+app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -98,6 +116,7 @@ app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router)
 app.include_router(users.users_router)
 app.include_router(users.profile_router)
+app.include_router(roles.roles_router)
 app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
 app.include_router(proformas.proformas_router)

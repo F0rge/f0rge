@@ -1,4 +1,6 @@
-export type UserRole = "owner" | "buyer" | "warehouse" | "till" | "books";
+export type PresetRole = "owner" | "buyer" | "warehouse" | "till" | "books";
+/** Role slug — five presets plus custom slugs from GET /roles. */
+export type UserRole = string;
 
 export type Team = {
   id: string;
@@ -9,6 +11,7 @@ export type AuthUser = {
   id: string;
   email: string;
   role: UserRole;
+  permissions: string[];
   team: Team;
   display_name: string | null;
   default_location_id: string | null;
@@ -23,6 +26,25 @@ export type User = {
   team_id: string;
   team: Team;
   default_location_id: string | null;
+};
+
+export type Role = {
+  id: string;
+  slug: string;
+  name: string;
+  is_system: boolean;
+  is_owner_preset: boolean;
+  permissions: string[];
+};
+
+export type RoleCreatePayload = {
+  name: string;
+  permissions: string[];
+};
+
+export type RoleUpdatePayload = {
+  name?: string;
+  permissions?: string[];
 };
 
 export type LoginResponse = {
@@ -135,6 +157,28 @@ export function updateUser(id: string, payload: UpdateUserPayload): Promise<User
   });
 }
 
+export function listRoles(): Promise<Role[]> {
+  return apiFetch<Role[]>("/roles");
+}
+
+export function createRole(payload: RoleCreatePayload): Promise<Role> {
+  return apiFetch<Role>("/roles", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateRole(id: string, payload: RoleUpdatePayload): Promise<Role> {
+  return apiFetch<Role>(`/roles/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteRole(id: string): Promise<void> {
+  return apiFetch<void>(`/roles/${id}`, { method: "DELETE" });
+}
+
 export function updateProfile(payload: UpdateProfilePayload): Promise<AuthUser> {
   return apiFetch<AuthUser>("/profile", {
     method: "PATCH",
@@ -142,13 +186,32 @@ export function updateProfile(payload: UpdateProfilePayload): Promise<AuthUser> 
   });
 }
 
-export const USER_ROLES: { value: UserRole; label: string }[] = [
+export const USER_ROLES: { value: PresetRole; label: string }[] = [
   { value: "owner", label: "Owner" },
   { value: "buyer", label: "Buyer" },
   { value: "warehouse", label: "Warehouse" },
   { value: "till", label: "Till" },
   { value: "books", label: "Books" },
 ];
+
+export {
+  can,
+  canManageLocations,
+  canMutateBooks,
+  canMutateCatalogue,
+  canMutateCustomers,
+  canMutateDeliveries,
+  canMutateLaybys,
+  canMutateReturns,
+  canMutateSettings,
+  canRaisePo,
+  canReceive,
+  canReceiveTransfer,
+  canTransfer,
+  canUseTill,
+  canViewCostAudit,
+  hasPermission,
+} from "./permissions";
 
 export type LocationType = "warehouse" | "showroom";
 
@@ -267,14 +330,6 @@ export function updateLocationBin(
     method: "PATCH",
     body: JSON.stringify(payload),
   });
-}
-
-export function canManageLocations(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse";
-}
-
-export function canMutateCatalogue(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "buyer";
 }
 
 async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
@@ -653,26 +708,6 @@ export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   received: "Received",
 };
 
-export function canRaisePo(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "buyer";
-}
-
-export function canReceive(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse";
-}
-
-export function canTransfer(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse";
-}
-
-export function canReceiveTransfer(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse" || role === "till";
-}
-
-export function canUseTill(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "till";
-}
-
 export type TillTender = "cash" | "card" | "deposit" | "eft";
 
 export type TillSaleLinePayload = {
@@ -999,10 +1034,6 @@ export function completeStocktake(id: string): Promise<Stocktake> {
 
 export function cancelStocktake(id: string): Promise<Stocktake> {
   return apiFetch<Stocktake>(`/stocktakes/${id}/cancel`, { method: "POST" });
-}
-
-export function canMutateBooks(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "books";
 }
 
 export type AdjustmentReason = "opening" | "damage" | "theft" | "count_fix" | "write_off";
@@ -2639,14 +2670,6 @@ export function correctUnitCost(
   });
 }
 
-export function canViewCostAudit(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "books" || role === "buyer";
-}
-
-export function canMutateSettings(role: UserRole | undefined): boolean {
-  return role === "owner";
-}
-
 export type StockReturnReason = "damaged" | "unwanted" | "wrong_item" | "other";
 
 export type StockReturnDisposition = "restock" | "write_off";
@@ -2712,10 +2735,6 @@ export const RETURN_DISPOSITION_LABELS: Record<StockReturnDisposition, string> =
   restock: "Restock",
   write_off: "Write-off",
 };
-
-export function canMutateReturns(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse" || role === "till";
-}
 
 export function listReturns(): Promise<StockReturn[]> {
   return apiFetch<StockReturn[]>("/returns");
@@ -2815,10 +2834,6 @@ export type AddLaybyPaymentPayload = {
   tender: LaybyTender;
 };
 
-export function canMutateLaybys(role: UserRole | undefined): boolean {
-  return canUseTill(role);
-}
-
 export function listLaybys(): Promise<Layby[]> {
   return apiFetch<Layby[]>("/laybys");
 }
@@ -2906,10 +2921,6 @@ export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
   retail: "Retail",
   trade: "Trade",
 };
-
-export function canMutateCustomers(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "books" || role === "till";
-}
 
 export function listCustomers(): Promise<CustomerCrm[]> {
   return apiFetch<CustomerCrm[]>("/customers");
@@ -3017,10 +3028,6 @@ export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
-
-export function canMutateDeliveries(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse" || role === "till";
-}
 
 export function listDeliveries(): Promise<Delivery[]> {
   return apiFetch<Delivery[]>("/deliveries");

@@ -197,7 +197,7 @@ function CustomerFormFields({
 
 export default function CustomersPage() {
   const { user } = useAuth();
-  const canMutate = canMutateCustomers(user?.role);
+  const canMutate = canMutateCustomers(user);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

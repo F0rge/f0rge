@@ -121,7 +121,7 @@ function statusTagType(status: JournalStatus): "blue" | "green" | "gray" {
 
 export default function JournalsPage() {
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [journals, setJournals] = useState<Journal[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);

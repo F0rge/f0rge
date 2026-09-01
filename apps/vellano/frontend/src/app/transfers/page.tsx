@@ -27,6 +27,7 @@ import { useLocationBins } from "@/hooks/use-location-bins";
 import {
   ApiError,
   TRANSFER_STATUS_LABELS,
+  can,
   canReceiveTransfer,
   canTransfer,
   cancelTransfer,
@@ -157,9 +158,9 @@ function sourceOnHandForSku(
 
 export default function TransfersPage() {
   const { user } = useAuth();
-  const canXfer = canTransfer(user?.role);
-  const canRecvXfer = canReceiveTransfer(user?.role);
-  const canCancelInTransit = user?.role === "owner";
+  const canXfer = canTransfer(user);
+  const canRecvXfer = canReceiveTransfer(user);
+  const canCancelInTransit = can(user, "users.manage");
 
   const [tab, setTab] = useState<ListTab>("draft");
   const [locations, setLocations] = useState<Location[]>([]);

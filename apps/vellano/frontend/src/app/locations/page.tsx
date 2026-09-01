@@ -58,7 +58,7 @@ function locationTypeLabel(type: LocationType): string {
 
 export default function LocationsPage() {
   const { user } = useAuth();
-  const canMutate = canManageLocations(user?.role);
+  const canMutate = canManageLocations(user);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import uuid
+from typing import Optional
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -8,9 +11,11 @@ from app.crud.location_bin import BinStockCRUD
 from app.crud.purchase_order import LocationStockCRUD, SkuStockCRUD
 from app.models.inventory import LocationStock
 from app.models.sku import Sku
+from app.permissions import STOCK_COST_VIEW
 from app.schemas.inventory import InventorySkuResponse, LocationStockResponse
 from app.schemas.location_bin import BinOnHandResponse
 from app.services.packing_sheet import sku_level_unit_cost
+from app.services.permissions import PermissionService
 
 
 class InventoryService:
@@ -20,7 +25,12 @@ class InventoryService:
         self.location_stock_crud = LocationStockCRUD(db)
         self.bin_stock_crud = BinStockCRUD(db)
 
-    async def list(self) -> list[InventorySkuResponse]:
+    async def list(self, user_id: Optional[uuid.UUID] = None) -> list[InventorySkuResponse]:
+        hide_cost = True
+        if user_id is not None:
+            hide_cost = not await PermissionService(self.db).has_permission(
+                user_id, STOCK_COST_VIEW
+            )
         sku_ids_with_movement: set = set()
 
         on_order_rows = await self.sku_stock_crud.list_with_movement()
@@ -52,7 +62,7 @@ class InventoryService:
                     location_id=ls.location_id,
                     location_name=ls.location.name,
                     on_hand=ls.on_hand,
-                    unit_cost_zar=ls.unit_cost_zar,
+                    unit_cost_zar=None if hide_cost else ls.unit_cost_zar,
                     bins=[
                         BinOnHandResponse(
                             bin_id=row.bin_id,
@@ -67,6 +77,8 @@ class InventoryService:
             ]
 
             unit_cost = sku_level_unit_cost([(ls.on_hand, ls.unit_cost_zar) for ls in loc_stocks])
+            if hide_cost:
+                unit_cost = None
 
             responses.append(
                 InventorySkuResponse(

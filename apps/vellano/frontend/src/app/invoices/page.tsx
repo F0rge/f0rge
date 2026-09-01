@@ -78,7 +78,7 @@ function todayIso(): string {
 export default function InvoicesPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);

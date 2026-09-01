@@ -42,7 +42,7 @@ function ReceivePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const canRecv = canReceive(user?.role);
+  const canRecv = canReceive(user);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);

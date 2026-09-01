@@ -53,7 +53,7 @@ export default function InvoiceDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [customer, setCustomer] = useState<Contact | null>(null);
   const [creditNote, setCreditNote] = useState<CreditNote | null>(null);

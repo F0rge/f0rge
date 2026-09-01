@@ -79,7 +79,7 @@ function defaultDayOfMonth(): number {
 
 export default function RepeatingInvoicesPage() {
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [schedules, setSchedules] = useState<RepeatingInvoice[]>([]);
   const [customers, setCustomers] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);

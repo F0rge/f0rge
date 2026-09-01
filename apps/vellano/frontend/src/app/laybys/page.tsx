@@ -244,7 +244,7 @@ function LaybysPageContent() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const canMutate = canMutateLaybys(user?.role);
+  const canMutate = canMutateLaybys(user);
   const [laybys, setLaybys] = useState<Layby[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);

@@ -21,16 +21,17 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  USER_ROLES,
+  can,
   createUser,
   isActiveLocation,
   listLocations,
+  listRoles,
   listUsers,
   updateUser,
   type CreateUserPayload,
   type Location,
+  type Role,
   type User,
-  type UserRole,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -62,7 +63,9 @@ const emptyCreateForm: CreateUserPayload = {
 
 export default function UsersPage() {
   const { user } = useAuth();
+  const canManageUsers = can(user, "users.manage");
   const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +75,7 @@ export default function UsersPage() {
   const [editForm, setEditForm] = useState({
     email: "",
     display_name: "",
-    role: "buyer" as UserRole,
+    role: "buyer",
     password: "",
     default_location_id: "",
   });
@@ -92,32 +95,37 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => {
-    if (user?.role === "owner") {
+    if (canManageUsers) {
       void loadUsers();
+      void listRoles()
+        .then((data) => setRoles(data))
+        .catch(() => setRoles([]));
       void listLocations()
         .then((data) => setLocations(data.filter(isActiveLocation)))
         .catch(() => setLocations([]));
     }
-  }, [user, loadUsers]);
+  }, [canManageUsers, loadUsers]);
 
-  if (user?.role !== "owner") {
+  if (!user || !canManageUsers) {
     return (
       <section className="vellano-forbidden">
         <InlineNotification
           kind="error"
           title="Forbidden"
-          subtitle="Only owners can manage users."
+          subtitle="You do not have permission to manage users."
           hideCloseButton
         />
       </section>
     );
   }
 
+  const roleNameBySlug = Object.fromEntries(roles.map((role) => [role.slug, role.name]));
+
   const rows: UserRow[] = users.map((entry) => ({
     id: entry.id,
     email: entry.email,
     display_name: entry.display_name,
-    role: entry.role,
+    role: roleNameBySlug[entry.role] ?? entry.role,
     team: entry.team.name,
     status: entry.is_disabled ? "Disabled" : "Active",
     actions: entry.id,
@@ -336,11 +344,11 @@ export default function UsersPage() {
             labelText="Role"
             value={createForm.role}
             onChange={(event) =>
-              setCreateForm((f) => ({ ...f, role: event.target.value as UserRole }))
+              setCreateForm((f) => ({ ...f, role: event.target.value }))
             }
           >
-            {USER_ROLES.map((role) => (
-              <SelectItem key={role.value} value={role.value} text={role.label} />
+            {roles.map((role) => (
+              <SelectItem key={role.slug} value={role.slug} text={role.name} />
             ))}
           </Select>
           {defaultLocationSelect(
@@ -382,11 +390,11 @@ export default function UsersPage() {
             labelText="Role"
             value={editForm.role}
             onChange={(event) =>
-              setEditForm((f) => ({ ...f, role: event.target.value as UserRole }))
+              setEditForm((f) => ({ ...f, role: event.target.value }))
             }
           >
-            {USER_ROLES.map((role) => (
-              <SelectItem key={role.value} value={role.value} text={role.label} />
+            {roles.map((role) => (
+              <SelectItem key={role.slug} value={role.slug} text={role.name} />
             ))}
           </Select>
           {defaultLocationSelect(

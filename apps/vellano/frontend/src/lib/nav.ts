@@ -47,7 +47,8 @@ export const SALES_NAV_ITEMS = [
 ] as const;
 
 export const ACCOUNT_NAV_ITEMS = [
-  { href: "/users", label: "Users", ownerOnly: true as const },
+  { href: "/users", label: "Users", permission: "users.manage" as const },
+  { href: "/roles", label: "Roles", permission: "users.manage" as const },
   { href: "/profile", label: "Profile" },
   { href: "/settings", label: "Settings" },
 ] as const;
