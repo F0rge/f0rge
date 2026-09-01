@@ -454,6 +454,48 @@ export function canTransfer(role: UserRole | undefined): boolean {
   return role === "owner" || role === "warehouse";
 }
 
+export function canUseTill(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "till";
+}
+
+export type TillTender = "cash" | "card";
+
+export type TillSaleLinePayload = {
+  sku_id: string;
+  qty: number;
+};
+
+export type TillSalePayload = {
+  location_id: string;
+  lines: TillSaleLinePayload[];
+  tender: TillTender;
+};
+
+export type TillSaleResult = {
+  invoice_id: string;
+  invoice_number: string;
+  payment_id: string;
+  payment_number: string;
+  tender: TillTender;
+  issue_date: string;
+  subtotal_ex_vat: string;
+  vat_amount: string;
+  total_inc_vat: string;
+  lines: InvoiceLine[];
+  location: {
+    location_id: string;
+    location_name: string;
+    on_hand: number;
+  };
+};
+
+export function createTillSale(payload: TillSalePayload): Promise<TillSaleResult> {
+  return apiFetch<TillSaleResult>("/till/sales", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listPurchaseOrders(): Promise<PurchaseOrder[]> {
   return apiFetch<PurchaseOrder[]>("/purchase-orders");
 }

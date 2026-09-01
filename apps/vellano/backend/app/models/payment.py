@@ -51,6 +51,7 @@ class Payment(UUIDPkMixin, TimestampMixin, Base):
     amount_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     fx_gain_loss_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     paid_on: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    tender: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
     is_reconciled: Mapped[bool] = mapped_column(nullable=False, default=False)
     reconciled_at: Mapped[Optional[datetime.datetime]] = mapped_column(nullable=True)
 

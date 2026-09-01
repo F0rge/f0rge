@@ -32,6 +32,7 @@ from app.main import app  # noqa: E402
 from app.services.auth import JWT_COOKIE_NAME  # noqa: E402
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService  # noqa: E402
+from app.services.till_seed import TillSeedService  # noqa: E402
 from app.services.users import BootstrapService  # noqa: E402
 
 OWNER_EMAIL = settings.seed_owner_email
@@ -69,6 +70,7 @@ async def async_engine(
         await BootstrapService(session).seed_if_empty()
         await LocationSeedService(session).seed_if_empty()
         await ChartOfAccountsSeedService(session).seed_if_empty()
+        await TillSeedService(session).seed_if_empty()
     try:
         yield engine
     finally:
