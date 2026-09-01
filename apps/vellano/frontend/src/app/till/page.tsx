@@ -418,7 +418,7 @@ export default function TillPage() {
           <Button
             kind="secondary"
             renderIcon={Currency}
-            onClick={() => router.push("/laybys")}
+            onClick={() => router.push("/laybys?new=1")}
           >
             Layby Payment
           </Button>

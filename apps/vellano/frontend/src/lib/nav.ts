@@ -36,11 +36,11 @@ export const OPERATIONS_NAV_ITEMS = [
   { href: "/transfers", label: "Transfers" },
   { href: "/deliveries", label: "Deliveries" },
   { href: "/till", label: "Till" },
+  { href: "/laybys", label: "Laybys" },
 ] as const;
 
 export const SALES_NAV_ITEMS = [
   { href: "/returns", label: "Returns" },
-  { href: "/laybys", label: "Laybys" },
   { href: "/customers", label: "Customers" },
 ] as const;
 

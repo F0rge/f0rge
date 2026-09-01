@@ -24,9 +24,22 @@ body {
   margin-right: 0.5rem;
 }
 
-.vellano-header-search .cds--search-input {
-  background-color: var(--cds-layer-02, #393939);
-  color: var(--cds-text-on-color, #fff);
+.vellano-header-search .cds--search-input,
+.vellano-header-search .cds--search-input:focus,
+.vellano-header-search .cds--search-input:active {
+  background-color: #393939;
+  color: #f4f4f4;
+  -webkit-text-fill-color: #f4f4f4;
+}
+
+.vellano-header-search .cds--search-input::placeholder {
+  color: #c6c6c6;
+  opacity: 1;
+}
+
+.vellano-header-search .cds--search-magnifier svg,
+.vellano-header-search .cds--search-close svg {
+  fill: #f4f4f4;
 }
 
 .vellano-header-search__panel {
@@ -38,11 +51,46 @@ body {
   max-height: 24rem;
   overflow: auto;
   padding: 0.75rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  background: #ffffff;
+  color: #161616;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+.vellano-header-search__group {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #525252;
+}
+
+.vellano-header-search__hits {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.vellano-header-search__hit {
+  display: block;
+  width: 100%;
+  margin: 0 0 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  background: #f4f4f4;
+  color: #161616;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vellano-header-search__hit:hover,
+.vellano-header-search__hit:focus {
+  background: #e8e8e8;
 }
 
 .vellano-header-search__empty {
   padding: 0.75rem;
+  background: #ffffff;
+  color: #161616;
 }
 
 .vellano-home-tile {
@@ -69,12 +117,25 @@ body {
   display: inline-flex;
   align-items: center;
   padding: 0 1rem;
-  color: var(--cds-text-on-color, #fff);
+  color: #f4f4f4;
   font-size: 0.875rem;
   max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.vellano-shell .cds--header {
+  background-color: #161616;
+  border-bottom: 1px solid #393939;
+}
+
+.vellano-shell .cds--side-nav {
+  background-color: #161616;
+}
+
+.vellano-shell .cds--side-nav__items {
+  overflow-y: auto;
 }
 
 .vellano-shell-loading {

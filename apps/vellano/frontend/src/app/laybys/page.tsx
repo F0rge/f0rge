@@ -21,7 +21,8 @@ import {
   Tag,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   ApiError,
@@ -232,7 +233,17 @@ function sumLinesExVat(lines: LineForm[], skusById: Map<string, Sku>): number {
 }
 
 export default function LaybysPage() {
+  return (
+    <Suspense fallback={<p className="cds--type-body-01">Loading laybys…</p>}>
+      <LaybysPageContent />
+    </Suspense>
+  );
+}
+
+function LaybysPageContent() {
   const { user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const canMutate = canMutateLaybys(user?.role);
   const [laybys, setLaybys] = useState<Layby[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -346,7 +357,7 @@ export default function LaybysPage() {
     }
   }, [locationOptions, locationId]);
 
-  function resetCreateForm() {
+  const resetCreateForm = useCallback(() => {
     setCustomerId("");
     setNewCustomerName("");
     setLines([emptyLine()]);
@@ -357,7 +368,16 @@ export default function LaybysPage() {
     const active = locations.filter(isActiveLocation);
     const showrooms = active.filter((entry) => entry.type === "showroom");
     setLocationId(defaultLocationId(showrooms.length > 0 ? showrooms : active));
-  }
+  }, [locations]);
+
+  useEffect(() => {
+    if (!canMutate || searchParams.get("new") !== "1" || locations.length === 0) {
+      return;
+    }
+    resetCreateForm();
+    setCreateOpen(true);
+    router.replace("/laybys", { scroll: false });
+  }, [canMutate, searchParams, router, locations.length, resetCreateForm]);
 
   function resetManageForm() {
     setPaymentAmount("");

@@ -169,11 +169,11 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="vellano-shell" data-nav-expanded={expanded ? "true" : "false"}>
-      <Theme theme="g10">
+      <Theme theme="g100">
         <Header aria-label="Vellano">
           <SkipToContent />
           <HeaderMenuButton
-            aria-label={expanded ? "Close menu" : "Open menu"}
+            aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
             isActive={expanded}
             onClick={() => setExpanded((current) => !current)}
           />
@@ -201,58 +201,64 @@ export function AppShell({ children }: AppShellProps) {
             </HeaderGlobalAction>
           </HeaderGlobalBar>
         </Header>
-        <Theme theme="g100">
-          <SideNav aria-label="Vellano sections" expanded={expanded} isPersistent>
-            <SideNavItems>
-              {PRIMARY_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
-              <SideNavMenu
-                key={isStockPath(pathname) ? "stock-open" : "stock-closed"}
-                renderIcon={Product}
-                title="Stock"
-                defaultExpanded={isStockPath(pathname)}
-                isActive={isStockPath(pathname)}
-              >
-                {STOCK_NAV_ITEMS.map((stockItem) => (
-                  <SideNavMenuItem
-                    key={stockItem.href}
-                    href={stockItem.href}
-                    isActive={isNavLinkActive(pathname, stockItem.href)}
-                    onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-                      event.preventDefault();
-                      router.push(stockItem.href);
-                    }}
-                  >
-                    {stockItem.label}
-                  </SideNavMenuItem>
-                ))}
-              </SideNavMenu>
-              {OPERATIONS_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
-              {SALES_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
-              <SideNavMenu
-                key={isBooksPath(pathname) ? "books-open" : "books-closed"}
-                renderIcon={Finance}
-                title="Books"
-                defaultExpanded={isBooksPath(pathname)}
-                isActive={isBooksPath(pathname)}
-              >
-                {BOOKS_NAV_ITEMS.map((booksItem) => (
-                  <SideNavMenuItem
-                    key={booksItem.href}
-                    href={booksItem.href}
-                    isActive={isNavLinkActive(pathname, booksItem.href)}
-                    onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-                      event.preventDefault();
-                      router.push(booksItem.href);
-                    }}
-                  >
-                    {booksItem.label}
-                  </SideNavMenuItem>
-                ))}
-              </SideNavMenu>
-              {accountItems.map((item) => renderNavLink(item.href, item.label))}
-            </SideNavItems>
-          </SideNav>
-        </Theme>
+        <SideNav
+          aria-label="Vellano sections"
+          expanded={expanded}
+          isRail
+          isPersistent
+          onOverlayClick={() => setExpanded(false)}
+        >
+          <SideNavItems>
+            {PRIMARY_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
+            <SideNavMenu
+              key={isStockPath(pathname) ? "stock-open" : "stock-closed"}
+              renderIcon={Product}
+              title="Stock"
+              defaultExpanded={isStockPath(pathname)}
+              isActive={isStockPath(pathname)}
+            >
+              {STOCK_NAV_ITEMS.map((stockItem) => (
+                <SideNavMenuItem
+                  key={stockItem.href}
+                  href={stockItem.href}
+                  isActive={isNavLinkActive(pathname, stockItem.href)}
+                  onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                    event.preventDefault();
+                    router.push(stockItem.href);
+                  }}
+                >
+                  {stockItem.label}
+                </SideNavMenuItem>
+              ))}
+            </SideNavMenu>
+            {OPERATIONS_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
+            {SALES_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
+            <SideNavMenu
+              key={isBooksPath(pathname) ? "books-open" : "books-closed"}
+              renderIcon={Finance}
+              title="Books"
+              defaultExpanded={isBooksPath(pathname)}
+              isActive={isBooksPath(pathname)}
+            >
+              {BOOKS_NAV_ITEMS.map((booksItem) => (
+                <SideNavMenuItem
+                  key={booksItem.href}
+                  href={booksItem.href}
+                  isActive={isNavLinkActive(pathname, booksItem.href)}
+                  onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                    event.preventDefault();
+                    router.push(booksItem.href);
+                  }}
+                >
+                  {booksItem.label}
+                </SideNavMenuItem>
+              ))}
+            </SideNavMenu>
+            {accountItems.map((item) => renderNavLink(item.href, item.label))}
+          </SideNavItems>
+        </SideNav>
+      </Theme>
+      <Theme theme="g10">
         <main id="main-content" className="vellano-main">
           {children}
         </main>
