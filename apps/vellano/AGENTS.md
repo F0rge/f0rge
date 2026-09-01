@@ -233,15 +233,16 @@ Matching a bank line sets `payments.is_reconciled = true`. Unmatched import line
 | Service `vellano-api` | `77a83033-b75e-4da1-88d0-b6db39bcedaf` |
 | Service `vellano-frontend` | `10838be1-7a37-4dfc-810a-8805d040d5d7` |
 | Postgres (own, not Marrow pgvector) | `a1a6695d-b8fb-4c79-92a6-664b48bc07e4` |
+| Bucket `vellano-dev` (Tigris, develop only) | `49435225-4849-4132-bb87-66a23c67cdf1` |
 | API | https://vellano-dev-api.leo-figueiredo.com (`/api/v1/health`, Swagger `/docs`) |
 | Frontend | https://vellano-dev.leo-figueiredo.com |
 
 - **Replicas:** 1 each (hobby tier, `sfo` region).
 - **Config files:** `apps/vellano/{backend,frontend}/railway.toml` — no Root Directory; Config File path points here.
-- **`watchPatterns`:** `apps/vellano/**` + imported libs (`libs/backend/core`, `db`, `storage` in backend toml). Live API service may omit `libs/backend/storage/**` until next redeploy; repo toml includes it.
+- **`watchPatterns`:** `apps/vellano/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `vellano-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
 - **Manifest:** `.github/deploy/manifest.yml` — `branches: [develop]` only. No `health_url.main`, no production.
 - **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Cookie `vellano_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
-- **Object storage:** develop `vellano-api` has no `BUCKET_NAME` / `AWS_*` yet — uploads use filesystem `STORAGE_DIR` fallback (not Marrow `photos` / `photos-dev`). Wire a dedicated Vellano bucket in a follow-up when needed.
+- **Object storage:** dedicated Railway Tigris bucket `vellano-dev` in this project only — never Marrow `photos` / `photos-dev`, never Marrow project buckets. On `vellano-api` develop: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{vellano-dev.*}}`; `AWS_ENDPOINT_URL_S3=https://fly.storage.tigris.dev`; `AWS_REGION=auto`. Keep `COOKIE_SECURE`, `JWT_SECRET`, `DATABASE_URL`. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Production is not wired.
 
 ## Non-goals
 
