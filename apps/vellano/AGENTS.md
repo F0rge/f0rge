@@ -136,6 +136,20 @@ Create and complete return 409 `"Location is locked for stocktake"` while a stoc
 | List / get adjustments | yes | yes | yes | yes | yes |
 | Create, lines, complete, cancel | yes | yes | no | no | no |
 
+## V2-S4 CSV import
+
+Endpoints (cookie `vellano_session`): `POST /api/v1/imports/preview`, `POST /api/v1/imports/commit`. Multipart: `inventory` CSV required, `soh` CSV optional, optional JSON strings `inventory_map` / `soh_map`. No GET. **owner|buyer** (`require_catalogue_mutate`). Warehouse-only SOH import is deferred.
+
+Preview is in-memory (200 even with row errors; 400 only if a file is unreadable or empty). Commit re-parses the files; any row error → 400; otherwise one transaction: inventory then SOH.
+
+**Inventory columns:** our_ref, name, category, retail_inc_vat required; barcode and cost_zar optional. Category is required for Cin7 parity and **ignored until S8** (not stored). Create-or-update by exact `our_ref`. Create uses `design = csv:{our_ref}`, `fabric = -`, `our_barcode = barcode or csv:{our_ref}`. Retail inc-VAT is stored as `retail_ex_vat` via `inc_to_ex`.
+
+**SOH columns:** our_ref, location, qty required; unit_cost_zar optional. Location is an active case-insensitive name match. SKU must exist in the DB or in the same inventory file. **SET** on-hand to qty (not add). Increase needs a unit cost from the SOH column, inventory `cost_zar`, or existing location cost (`"unit cost required to increase stock"`). Audit source `import`. In-progress stocktake at that location → 409 `"Location is locked for stocktake"`.
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| Preview / commit CSV import | yes | yes | no | no | no |
+
 ## S3 catalogue (suppliers, proformas, SKUs)
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -317,7 +331,6 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 | Label | Route | Slice |
 |-------|-------|-------|
-| Import | `/import` | V2-S4 |
 | Returns | `/returns` | V2-S5 |
 | Laybys | `/laybys` | V2-S6 |
 | Customers | `/customers` | V2-S10 |
@@ -344,7 +357,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/reports`, `/vat201` | `/reports` |
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
-| `/import`, `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/import` | `/imports` |
+| `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
 
 ## Non-goals
 

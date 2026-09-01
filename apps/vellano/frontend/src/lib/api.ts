@@ -382,6 +382,53 @@ export function updateSku(id: string, payload: UpdateSkuPricePayload): Promise<S
   });
 }
 
+export type CatalogueImportFileKind = "inventory" | "soh";
+
+export type CatalogueImportError = {
+  file: CatalogueImportFileKind;
+  row: number;
+  message: string;
+};
+
+export type CatalogueImportInventoryPreview = {
+  headers: string[];
+  suggested_map: Record<string, string>;
+  applied_map: Record<string, string>;
+  sample_row: Record<string, string> | null;
+  row_count: number;
+  create_count: number;
+  update_count: number;
+};
+
+export type CatalogueImportSohPreview = {
+  headers: string[];
+  suggested_map: Record<string, string>;
+  applied_map: Record<string, string>;
+  sample_row: Record<string, string> | null;
+  row_count: number;
+};
+
+export type CatalogueImportPreview = {
+  ok: boolean;
+  errors: CatalogueImportError[];
+  inventory: CatalogueImportInventoryPreview;
+  soh: CatalogueImportSohPreview | null;
+};
+
+export type CatalogueImportCommit = {
+  created_skus: number;
+  updated_skus: number;
+  soh_rows: number;
+};
+
+export function previewCatalogueImport(formData: FormData): Promise<CatalogueImportPreview> {
+  return apiUpload<CatalogueImportPreview>("/imports/preview", formData);
+}
+
+export function commitCatalogueImport(formData: FormData): Promise<CatalogueImportCommit> {
+  return apiUpload<CatalogueImportCommit>("/imports/commit", formData);
+}
+
 export type PurchaseOrderStatus = "open" | "on_water" | "landed" | "received";
 
 export type PoLine = {

@@ -120,3 +120,42 @@ class StockMovementService:
             source,
             note,
         )
+
+    async def set_on_hand(
+        self,
+        sku_id: uuid.UUID,
+        location_id: uuid.UUID,
+        qty: int,
+        user_id: uuid.UUID,
+        source: UnitCostAuditSource,
+        note: str,
+        unit_cost_zar: Optional[Decimal] = None,
+    ) -> Optional[LocationStock]:
+        loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
+        current = loc_stock.on_hand if loc_stock is not None else 0
+        delta = qty - current
+        if delta == 0:
+            return loc_stock
+        if delta > 0:
+            cost = unit_cost_zar
+            if cost is None and loc_stock is not None:
+                cost = loc_stock.unit_cost_zar
+            if cost is None:
+                raise ValidationError("unit cost required to increase stock")
+            return await self.apply_incoming_qty(
+                sku_id,
+                location_id,
+                delta,
+                cost,
+                user_id,
+                source,
+                note,
+            )
+        return await self.apply_outgoing_qty(
+            sku_id,
+            location_id,
+            -delta,
+            user_id,
+            source,
+            note,
+        )

@@ -20,6 +20,7 @@ class UnitCostAuditSource(str, enum.Enum):
     OPENING = "opening"
     STOCKTAKE = "stocktake"
     ADJUSTMENT = "adjustment"
+    IMPORT = "import"
 
 
 class UnitCostAudit(UUIDPkMixin, TimestampMixin, Base):

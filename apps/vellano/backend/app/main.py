@@ -16,6 +16,7 @@ from app.routers import (
     auth,
     bank_imports,
     bills,
+    catalogue_imports,
     contacts,
     cost_audit,
     credit_notes,
@@ -86,6 +87,7 @@ app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
 app.include_router(proformas.proformas_router)
 app.include_router(skus.skus_router)
+app.include_router(catalogue_imports.catalogue_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
