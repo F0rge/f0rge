@@ -75,9 +75,7 @@ class ReorderService:
 
         sku_ids = [row.sku_id for row in rows]
         supplier_ids = [
-            row.preferred_supplier_id
-            for row in rows
-            if row.preferred_supplier_id is not None
+            row.preferred_supplier_id for row in rows if row.preferred_supplier_id is not None
         ]
         landed_costs = await self.unit_cost_audit_crud.latest_landed_costs_by_sku_ids(sku_ids)
         supplier_names = await self.supplier_crud.names_by_ids(supplier_ids)
