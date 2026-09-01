@@ -254,7 +254,7 @@ class HomeService:
                     title=name,
                     detail=our_ref,
                     status=f"{on_hand} on hand",
-                    href="/catalogue",
+                    href="/reorder",
                 )
             )
 

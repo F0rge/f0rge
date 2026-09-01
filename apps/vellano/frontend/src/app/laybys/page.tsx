@@ -390,7 +390,7 @@ export default function LaybysPage() {
     setSaving(true);
     setError(null);
     try {
-      await createLayby({
+      const created = await createLayby({
         customer_id: customerId,
         location_id: locationId,
         due_date: dueDate,
@@ -402,6 +402,7 @@ export default function LaybysPage() {
       setCreateOpen(false);
       resetCreateForm();
       await loadLaybys();
+      printLaybyReceipt(created);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create layby.");
     } finally {
@@ -509,7 +510,8 @@ export default function LaybysPage() {
         }
         return (
           entry.layby_number.toLowerCase().includes(query) ||
-          entry.customer_name.toLowerCase().includes(query)
+          entry.customer_name.toLowerCase().includes(query) ||
+          entry.location_name.toLowerCase().includes(query)
         );
       });
   }, [laybys, searchQuery, statusFilter]);
@@ -633,6 +635,16 @@ export default function LaybysPage() {
                           return (
                             <TableRow {...getRowProps({ row })} key={row.id}>
                               {row.cells.map((cell) => {
+                                if (cell.info.header === "customer_name" && entry) {
+                                  return (
+                                    <TableCell key={cell.id}>
+                                      <div className="cds--type-body-compact-01">
+                                        {entry.customer_name}
+                                      </div>
+                                      <div className="vellano-muted-text">{entry.location_name}</div>
+                                    </TableCell>
+                                  );
+                                }
                                 if (cell.info.header === "status" && entry) {
                                   return (
                                     <TableCell key={cell.id}>
@@ -678,7 +690,7 @@ export default function LaybysPage() {
       <Modal
         open={createOpen}
         modalHeading="New layby"
-        primaryButtonText={saving ? "Creating…" : "Confirm Layby"}
+        primaryButtonText={saving ? "Creating…" : "Confirm Layby & Print Receipt"}
         secondaryButtonText="Cancel"
         primaryButtonDisabled={saving || !createFormValid}
         onRequestClose={() => setCreateOpen(false)}

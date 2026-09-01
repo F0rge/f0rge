@@ -414,6 +414,16 @@ function ReturnsPageContent() {
                     return (
                       <TableRow {...getRowProps({ row })} key={row.id}>
                         {row.cells.map((cell) => {
+                          if (cell.info.header === "return_number" && entry) {
+                            return (
+                              <TableCell key={cell.id}>
+                                <div className="cds--type-body-compact-01">{entry.return_number}</div>
+                                <div className="vellano-muted-text">
+                                  {RETURN_REASON_LABELS[entry.reason]}
+                                </div>
+                              </TableCell>
+                            );
+                          }
                           if (cell.info.header === "status" && entry) {
                             return (
                               <TableCell key={cell.id}>

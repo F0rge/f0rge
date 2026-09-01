@@ -510,7 +510,6 @@ export default function CustomersPage() {
                                 >
                                   {entry.name}
                                 </Button>
-                                <div className="vellano-muted-text">{entry.id}</div>
                               </TableCell>
                               <TableCell>
                                 <Tag type={customerTypeTagType(entry.customer_type)} size="sm">
