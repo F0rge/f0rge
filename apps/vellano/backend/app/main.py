@@ -26,6 +26,7 @@ from app.routers import (
     reports,
     skus,
     suppliers,
+    transfers,
     users,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
@@ -73,6 +74,7 @@ app.include_router(skus.skus_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
+app.include_router(transfers.transfers_router)
 app.include_router(accounts.accounts_router)
 app.include_router(contacts.contacts_router)
 app.include_router(invoices.invoices_router)

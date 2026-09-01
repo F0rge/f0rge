@@ -450,6 +450,10 @@ export function canReceive(role: UserRole | undefined): boolean {
   return role === "owner" || role === "warehouse";
 }
 
+export function canTransfer(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "warehouse";
+}
+
 export function listPurchaseOrders(): Promise<PurchaseOrder[]> {
   return apiFetch<PurchaseOrder[]>("/purchase-orders");
 }
@@ -508,6 +512,39 @@ export function receivePurchaseOrder(payload: {
 
 export function listInventory(): Promise<InventorySku[]> {
   return apiFetch<InventorySku[]>("/inventory");
+}
+
+export type TransferPayload = {
+  from_location_id: string;
+  to_location_id: string;
+  sku_id: string;
+  qty: number;
+};
+
+export type TransferResult = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  qty: number;
+  from_location: {
+    location_id: string;
+    location_name: string;
+    on_hand: number;
+    unit_cost_zar: string | null;
+  };
+  to_location: {
+    location_id: string;
+    location_name: string;
+    on_hand: number;
+    unit_cost_zar: string | null;
+  };
+};
+
+export function createTransfer(payload: TransferPayload): Promise<TransferResult> {
+  return apiFetch<TransferResult>("/transfers", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function canMutateBooks(role: UserRole | undefined): boolean {
