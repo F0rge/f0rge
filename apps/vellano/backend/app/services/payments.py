@@ -4,6 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.bill import BillCRUD
@@ -22,6 +23,7 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.packing_sheet import convert_bill_to_zar
+from app.services.payment_pdf import build_payment_receipt_pdf
 from app.services.suppliers import SupplierService
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -184,6 +186,28 @@ class PaymentService:
         reloaded = await self.crud.get_by_id(payment.id)
         assert reloaded is not None
         return self._to_response(reloaded)
+
+    async def serve_pdf(self, payment_id: uuid.UUID) -> Response:
+        payment = await self.crud.get_by_id(payment_id)
+        if payment is None:
+            raise NotFoundError("Payment not found")
+        direction_label = "Received" if payment.direction == PaymentDirection.IN else "Paid"
+        linked_document: Optional[str] = None
+        if payment.invoice is not None:
+            linked_document = f"Invoice: {payment.invoice.invoice_number}"
+        elif payment.bill is not None:
+            linked_document = f"Bill: {payment.bill.bill_number}"
+        pdf_bytes = build_payment_receipt_pdf(
+            payment_number=payment.payment_number,
+            direction_label=direction_label,
+            paid_on=payment.paid_on.isoformat(),
+            amount=f"{payment.amount:.2f}",
+            currency=payment.currency,
+            amount_zar=f"{payment.amount_zar:.2f}",
+            tender=payment.tender,
+            linked_document=linked_document,
+        )
+        return Response(content=pdf_bytes, media_type="application/pdf")
 
     @staticmethod
     def _resolve_fx(currency: str, fx_to_zar: Optional[Decimal]) -> Decimal:
