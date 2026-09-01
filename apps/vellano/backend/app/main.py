@@ -26,11 +26,13 @@ from app.routers import (
     reports,
     skus,
     suppliers,
+    till,
     transfers,
     users,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
+from app.services.till_seed import TillSeedService
 from app.services.users import BootstrapService
 
 
@@ -40,6 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await BootstrapService(session).seed_if_empty()
         await LocationSeedService(session).seed_if_empty()
         await ChartOfAccountsSeedService(session).seed_if_empty()
+        await TillSeedService(session).seed_if_empty()
     yield
 
 
@@ -75,6 +78,7 @@ app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
 app.include_router(transfers.transfers_router)
+app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
 app.include_router(contacts.contacts_router)
 app.include_router(invoices.invoices_router)

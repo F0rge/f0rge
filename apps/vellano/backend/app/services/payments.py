@@ -185,6 +185,7 @@ class PaymentService:
             amount_zar=payment.amount_zar,
             fx_gain_loss_zar=payment.fx_gain_loss_zar,
             paid_on=payment.paid_on,
+            tender=payment.tender,
             is_reconciled=payment.is_reconciled,
             reconciled_at=payment.reconciled_at,
             created_at=payment.created_at,
