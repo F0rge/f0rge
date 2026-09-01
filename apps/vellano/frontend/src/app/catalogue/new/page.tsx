@@ -243,7 +243,7 @@ export default function NewSkuPage() {
                 <Column lg={8} md={4} sm={4}>
                   <TextInput
                     id="new-sku-our-ref"
-                    labelText="Our ref"
+                    labelText="Our ref *"
                     value={createForm.our_ref}
                     onChange={(event) =>
                       setCreateForm((form) => ({ ...form, our_ref: event.target.value }))
@@ -254,7 +254,7 @@ export default function NewSkuPage() {
                 <Column lg={8} md={4} sm={4}>
                   <TextInput
                     id="new-sku-our-barcode"
-                    labelText="Our barcode"
+                    labelText="Our barcode *"
                     helperText="Internal barcode — not the supplier's reference"
                     value={createForm.our_barcode}
                     onChange={(event) =>
@@ -266,7 +266,7 @@ export default function NewSkuPage() {
                 <Column lg={16} md={8} sm={4}>
                   <TextInput
                     id="new-sku-name"
-                    labelText="Name"
+                    labelText="Name *"
                     value={createForm.name}
                     onChange={(event) =>
                       setCreateForm((form) => ({ ...form, name: event.target.value }))
@@ -299,7 +299,7 @@ export default function NewSkuPage() {
                 <Column lg={8} md={4} sm={4}>
                   <TextInput
                     id="new-sku-design"
-                    labelText="Design"
+                    labelText="Design *"
                     value={createForm.design}
                     onChange={(event) =>
                       setCreateForm((form) => ({ ...form, design: event.target.value }))
@@ -310,7 +310,7 @@ export default function NewSkuPage() {
                 <Column lg={8} md={4} sm={4}>
                   <TextInput
                     id="new-sku-fabric"
-                    labelText="Fabric"
+                    labelText="Fabric *"
                     value={createForm.fabric}
                     onChange={(event) =>
                       setCreateForm((form) => ({ ...form, fabric: event.target.value }))
@@ -388,9 +388,10 @@ export default function NewSkuPage() {
                   <Column lg={8} md={4} sm={4}>
                     <Select
                       id="new-sku-opening-location"
-                      labelText="Location"
+                      labelText="Location *"
                       value={openingLocationId}
                       onChange={(event) => setOpeningLocationId(event.target.value)}
+                      required
                       helperText={
                         locations.length === 0 ? "No active locations available" : undefined
                       }
@@ -404,9 +405,10 @@ export default function NewSkuPage() {
                   <Column lg={8} md={4} sm={4}>
                     <NumberInput
                       id="new-sku-opening-qty"
-                      label="Quantity on Hand"
+                      label="Quantity on Hand *"
                       min={1}
                       step={1}
+                      required
                       value={openingQty}
                       onChange={(_event, { value }) => {
                         if (value === "") {
@@ -420,10 +422,11 @@ export default function NewSkuPage() {
                   <Column lg={8} md={4} sm={4}>
                     <TextInput
                       id="new-sku-opening-unit-cost"
-                      labelText="Unit Cost (ZAR)"
+                      labelText="Unit Cost (ZAR) *"
                       helperText="Used for inventory valuation"
                       value={openingUnitCost}
                       onChange={(event) => setOpeningUnitCost(event.target.value)}
+                      required
                     />
                   </Column>
                   <Column lg={8} md={4} sm={4}>
