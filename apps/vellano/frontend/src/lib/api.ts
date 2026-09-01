@@ -301,6 +301,12 @@ export type Sku = {
 };
 
 export type UpdateSkuPricePayload = {
+  our_ref?: string;
+  our_barcode?: string;
+  name?: string;
+  design?: string;
+  fabric?: string;
+  category?: string;
   wholesale_ex_vat?: string | number | null;
   wholesale_inc_vat?: string | number | null;
   retail_ex_vat?: string | number | null;
@@ -403,6 +409,14 @@ export function updateSku(id: string, payload: UpdateSkuPricePayload): Promise<S
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export function deleteSku(id: string): Promise<void> {
+  return apiFetch<void>(`/skus/${id}`, { method: "DELETE" });
+}
+
+export function skuPhotoUrl(id: string): string {
+  return `/api/v1/skus/${id}/photo`;
 }
 
 export type CatalogueImportFileKind = "inventory" | "soh";
