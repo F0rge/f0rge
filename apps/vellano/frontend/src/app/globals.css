@@ -119,6 +119,10 @@ body {
   gap: 1rem;
 }
 
+.vellano-sku-form {
+  max-width: 50rem;
+}
+
 .vellano-muted-text {
   color: var(--cds-text-secondary, #525252);
   font-size: 0.75rem;

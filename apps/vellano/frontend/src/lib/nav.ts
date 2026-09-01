@@ -82,5 +82,8 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
   if (href === "/purchase-orders" && pathname.startsWith("/purchase-orders/")) {
     return true;
   }
+  if (href === "/catalogue" && pathname.startsWith("/catalogue/")) {
+    return true;
+  }
   return false;
 }
