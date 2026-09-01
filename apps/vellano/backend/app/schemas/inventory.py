@@ -6,12 +6,15 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.schemas.location_bin import BinOnHandResponse
+
 
 class LocationStockResponse(BaseModel):
     location_id: uuid.UUID
     location_name: str
     on_hand: int
     unit_cost_zar: Optional[Decimal] = None
+    bins: list[BinOnHandResponse] = []
 
 
 class InventorySkuResponse(BaseModel):

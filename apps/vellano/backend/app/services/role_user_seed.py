@@ -6,6 +6,7 @@ from app.config import settings
 from app.crud.user import TeamCRUD, UserCRUD
 from app.models.user import User, UserRole
 from app.services.auth import hash_password
+from app.services.user_default_location import bedfordview_default_location_id
 from f0rge_db.crud import unit_of_work
 
 ROLE_USER_SPECS: tuple[tuple[str, UserRole, str], ...] = (
@@ -27,16 +28,24 @@ class RoleUserSeedService:
         if team is None:
             return
 
+        bedfordview_id = await bedfordview_default_location_id(self.db)
+
         async with unit_of_work(self.db):
             for email, role, password_setting in ROLE_USER_SPECS:
                 if await self.user_crud.get_by_email(email) is not None:
                     continue
                 password = getattr(settings, password_setting)
+                default_location_id = bedfordview_id if role == UserRole.TILL else None
                 user = User(
                     team_id=team.id,
                     email=email,
                     password_hash=hash_password(password),
                     display_name=role.value.title(),
                     role=role,
+                    default_location_id=default_location_id,
                 )
                 await self.user_crud.add_and_flush(user)
+
+            if bedfordview_id is not None:
+                for user in await self.user_crud.list_till_with_null_default():
+                    user.default_location_id = bedfordview_id

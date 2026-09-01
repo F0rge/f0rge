@@ -50,6 +50,10 @@ class PurchaseOrderResponse(BaseModel):
     lines: list[PoLineResponse]
     bills: list[LandingBillResponse]
     received_location_id: Optional[uuid.UUID] = None
+    ordered_at: Optional[datetime.datetime] = None
+    on_water_at: Optional[datetime.datetime] = None
+    landed_at: Optional[datetime.datetime] = None
+    received_at: Optional[datetime.datetime] = None
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
@@ -57,3 +61,4 @@ class PurchaseOrderResponse(BaseModel):
 class ReceiveRequest(BaseModel):
     purchase_order_id: uuid.UUID
     location_id: uuid.UUID
+    bin_id: Optional[uuid.UUID] = None

@@ -3,6 +3,7 @@
 import {
   Button,
   ButtonSet,
+  Checkbox,
   ComboBox,
   InlineNotification,
   NumberInput,
@@ -23,21 +24,28 @@ import {
   Bookmark,
   Building,
   Currency,
+  Image as ImageIcon,
   Money,
   Purchase,
+  Scan,
   TrashCan,
   Undo,
   UserFollow,
 } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { TillScanner } from "@/components/till-scanner";
 
 import {
   ApiError,
+  can,
+  canManageCustomerCredit,
   canUseTill,
   computeInvoicePreview,
   createTillSale,
   downloadInvoicePdf,
+  listPicks,
   exVatToIncVat,
   formatPriceAmount,
   formatZarAmount,
@@ -49,14 +57,25 @@ import {
   listSkus,
   parsePriceInput,
   roundHalfUp,
+  skuPhotoUrl,
   type CustomerCrm,
   type InventorySku,
   type Location,
   type Sku,
+  type PickDocument,
   type TillSaleResult,
   type TillTender,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { isCreditBlockMessage } from "@/lib/customer-crm";
+import { isKitRequiresPickMessage, picksCreateHref } from "@/lib/picks";
+import {
+  isDesktopPointer,
+  isProtectedScanField,
+  isQtyOrDiscountField,
+  resolveTillScan,
+  tillScanErrorMessage,
+} from "@/lib/barcode-scan";
 
 const SELLER = {
   name: "Vellano",
@@ -185,10 +204,43 @@ function filterCustomerItem({
   );
 }
 
+function mergeCartBySku(current: CartLine[], sku: Sku, addQty: number): CartLine[] {
+  const existing = current.find((line) => line.sku.id === sku.id);
+  if (existing) {
+    return current.map((line) =>
+      line.sku.id === sku.id ? { ...line, qty: line.qty + addQty } : line,
+    );
+  }
+  return [...current, { key: sku.id, sku, qty: addQty, discountPercent: 0 }];
+}
+
+function SkuThumb({ sku }: { sku: Sku }) {
+  if (!sku.photo_storage_key) {
+    return (
+      <div className="vellano-till-thumb vellano-till-thumb--placeholder" aria-hidden>
+        <ImageIcon size={20} />
+      </div>
+    );
+  }
+  return (
+    // Cookie + 302 Tigris redirect — same as catalogue; not next/image.
+    // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
+    <img
+      className="vellano-till-thumb"
+      src={skuPhotoUrl(sku.id)}
+      alt=""
+      width={48}
+      height={48}
+    />
+  );
+}
+
 export default function TillPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const canSell = canUseTill(user?.role);
+  const canSell = canUseTill(user);
+  const canDiscount = can(user, "till.discount");
+  const canOverrideCredit = canManageCustomerCredit(user);
   const [locations, setLocations] = useState<Location[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
@@ -205,6 +257,15 @@ export default function TillPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<TillSaleResult | null>(null);
   const [lastBuyerName, setLastBuyerName] = useState(WALK_IN_CUSTOMER_NAME);
+  const [scanValue, setScanValue] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [creditOverride, setCreditOverride] = useState(false);
+  const [creditOverrideReason, setCreditOverrideReason] = useState("");
+  const [creditBlock, setCreditBlock] = useState<string | null>(null);
+  const [pickId, setPickId] = useState("");
+  const [confirmedPicks, setConfirmedPicks] = useState<PickDocument[]>([]);
+  const [kitRequiresPick, setKitRequiresPick] = useState(false);
+  const scanBufferRef = useRef("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -223,13 +284,22 @@ export default function TillPage() {
       setSkus(skuData);
       setInventory(inventoryData);
       setCustomers(customerData);
-      setLocationId((current) => current || showrooms[0]?.id || "");
+      setLocationId((current) => {
+        if (current) {
+          return current;
+        }
+        const defaultId = user?.default_location_id;
+        if (defaultId && showrooms.some((loc) => loc.id === defaultId)) {
+          return defaultId;
+        }
+        return showrooms[0]?.id ?? "";
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load till data.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -251,6 +321,9 @@ export default function TillPage() {
     if (!locationId || !sku.retail_ex_vat) {
       return false;
     }
+    if (sku.is_kit) {
+      return true;
+    }
     const row = inventoryBySku.get(sku.id);
     if (!row) {
       return false;
@@ -262,6 +335,12 @@ export default function TillPage() {
   const selectedSkuOption = skuOptions.find((sku) => sku.id === skuId) ?? null;
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
 
+  useEffect(() => {
+    setCreditOverride(false);
+    setCreditOverrideReason("");
+    setCreditBlock(null);
+  }, [customerId]);
+
   const numericQty = typeof qty === "number" ? qty : 0;
 
   const cartQtyBySku = useMemo(() => {
@@ -271,6 +350,40 @@ export default function TillPage() {
     }
     return totals;
   }, [cart]);
+
+  const cartKits = useMemo(() => cart.filter((line) => line.sku.is_kit), [cart]);
+  const firstCartKit = cartKits[0];
+  const cartKitKey = cartKits
+    .map((line) => line.sku.id)
+    .sort()
+    .join(",");
+
+  useEffect(() => {
+    setPickId("");
+    setKitRequiresPick(false);
+    if (!cartKitKey) {
+      setConfirmedPicks([]);
+      return;
+    }
+    const kitIds = new Set(cartKitKey.split(","));
+    let cancelled = false;
+    listPicks()
+      .then((picks) => {
+        if (!cancelled) {
+          setConfirmedPicks(
+            picks.filter((entry) => entry.status === "confirmed" && kitIds.has(entry.sku_id)),
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConfirmedPicks([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cartKitKey]);
 
   const summary = cartSummary(cart);
   const totalIncLabel = formatPriceAmount(summary.totalIncVat);
@@ -288,14 +401,99 @@ export default function TillPage() {
     locationId &&
     skuId &&
     numericQty > 0 &&
-    numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0) &&
+    (selectedSku?.is_kit ||
+      numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0)) &&
     unitExVat(selectedSku ?? ({} as Sku)) > 0;
+
+  const floorOnHandFor = useCallback(
+    (id: string) =>
+      inventoryBySku.get(id)?.locations.find((loc) => loc.location_id === locationId)?.on_hand ??
+      0,
+    [inventoryBySku, locationId],
+  );
+
+  const focusScanField = useCallback(() => {
+    if (!isDesktopPointer()) {
+      return;
+    }
+    document.getElementById("till-scan")?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      focusScanField();
+    }
+  }, [loading, focusScanField]);
+
+  const applyScan = useCallback(
+    (code: string, allowOurRef: boolean, addQty = 1): boolean => {
+      if (!canSell || !locationId) {
+        return false;
+      }
+      const trimmed = code.trim();
+      if (!trimmed) {
+        return false;
+      }
+      const result = resolveTillScan({
+        code: trimmed,
+        skus,
+        allowOurRef,
+        addQty,
+        floorOnHand: floorOnHandFor,
+        cartQty: (id) => cartQtyBySku.get(id) ?? 0,
+      });
+      if (!result.ok) {
+        setError(tillScanErrorMessage(result.error));
+        return false;
+      }
+      setError(null);
+      setCart((current) => mergeCartBySku(current, result.sku, result.qty));
+      setScanValue("");
+      focusScanField();
+      return true;
+    },
+    [canSell, cartQtyBySku, floorOnHandFor, focusScanField, locationId, skus],
+  );
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target instanceof Element ? event.target : document.activeElement;
+      if (isQtyOrDiscountField(target)) {
+        return;
+      }
+      if (isProtectedScanField(target)) {
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      if (event.key === "Enter") {
+        const buffered = scanBufferRef.current;
+        scanBufferRef.current = "";
+        if (buffered.trim()) {
+          event.preventDefault();
+          applyScan(buffered, true);
+        }
+        return;
+      }
+      if (event.key.length === 1) {
+        scanBufferRef.current += event.key;
+      } else if (event.key === "Backspace") {
+        scanBufferRef.current = scanBufferRef.current.slice(0, -1);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [applyScan]);
 
   const saleValid =
     canSell &&
     locationId &&
     cart.length > 0 &&
     cart.every((line) => {
+      if (line.sku.is_kit) {
+        return line.qty > 0;
+      }
       const onHand =
         inventoryBySku
           .get(line.sku.id)
@@ -307,17 +505,17 @@ export default function TillPage() {
     if (!addValid || !selectedSku) {
       return;
     }
-    setCart((current) => [
-      ...current,
-      {
-        key: `${selectedSku.id}-${Date.now()}`,
-        sku: selectedSku,
-        qty: numericQty,
-        discountPercent: 0,
-      },
-    ]);
-    setSkuId("");
-    setQty(1);
+    if (selectedSku.is_kit) {
+      setError(null);
+      setCart((current) => mergeCartBySku(current, selectedSku, numericQty));
+      setSkuId("");
+      setQty(1);
+      return;
+    }
+    if (applyScan(selectedSku.our_barcode, false, numericQty)) {
+      setSkuId("");
+      setQty(1);
+    }
   }
 
   function updateCartLine(key: string, patch: Partial<Pick<CartLine, "qty" | "discountPercent">>) {
@@ -344,8 +542,14 @@ export default function TillPage() {
     if (!saleValid) {
       return;
     }
+    if (creditOverride && canOverrideCredit && !creditOverrideReason.trim()) {
+      setError("Override reason is required.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
+    setCreditBlock(null);
+    setKitRequiresPick(false);
     setLastSale(null);
     try {
       const result = await createTillSale({
@@ -362,12 +566,20 @@ export default function TillPage() {
         }),
         tender,
         ...(customerId ? { customer_id: customerId } : {}),
+        ...(pickId ? { pick_id: pickId } : {}),
+        ...(canOverrideCredit && creditOverride
+          ? {
+              credit_override: true,
+              credit_override_reason: creditOverrideReason.trim(),
+            }
+          : {}),
       });
       setLastBuyerName(selectedCustomer?.name ?? WALK_IN_CUSTOMER_NAME);
       setLastSale(result);
       setCart([]);
       setSkuId("");
       setCustomerId("");
+      setPickId("");
       setQty(1);
       await loadData();
     } catch (err) {
@@ -378,6 +590,12 @@ export default function TillPage() {
             ? err.message
             : "Sale failed.";
       setError(message);
+      if (err instanceof ApiError && err.status === 409 && isCreditBlockMessage(err.message)) {
+        setCreditBlock(err.message);
+      }
+      if (err instanceof ApiError && err.status === 409 && isKitRequiresPickMessage(err.message)) {
+        setKitRequiresPick(true);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -433,6 +651,24 @@ export default function TillPage() {
         />
       ) : null}
 
+      {kitRequiresPick && firstCartKit ? (
+        <Stack gap={3}>
+          <InlineNotification
+            kind="warning"
+            title="Kit requires pick"
+            subtitle="Create and confirm a pick before selling this kit. A split kit cannot be sold from the till."
+            hideCloseButton
+            lowContrast
+          />
+          <Button
+            kind="ghost"
+            onClick={() => router.push(picksCreateHref(firstCartKit.sku.id, firstCartKit.qty))}
+          >
+            Open picks
+          </Button>
+        </Stack>
+      ) : null}
+
       {loading ? (
         <p>Loading…</p>
       ) : (
@@ -457,6 +693,31 @@ export default function TillPage() {
                       <SelectItem key={loc.id} value={loc.id} text={loc.name} />
                     ))}
                   </Select>
+
+                  <div className="vellano-till-scan-row">
+                    <TextInput
+                      id="till-scan"
+                      labelText="Scan barcode"
+                      placeholder="Scan or type our barcode"
+                      value={scanValue}
+                      onChange={(event) => setScanValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          applyScan(scanValue, true);
+                        }
+                      }}
+                      disabled={!locationId}
+                    />
+                    <Button
+                      kind="secondary"
+                      renderIcon={Scan}
+                      disabled={!locationId}
+                      onClick={() => setScannerOpen(true)}
+                    >
+                      Scan
+                    </Button>
+                  </div>
 
                   <div className="vellano-till-picker-row">
                     <ComboBox
@@ -510,10 +771,13 @@ export default function TillPage() {
                     <Table size="sm">
                       <TableHead>
                         <TableRow>
+                          <TableHeader className="vellano-till-thumb-cell">
+                            <span className="cds--visually-hidden">Photo</span>
+                          </TableHeader>
                           <TableHeader>Item</TableHeader>
                           <TableHeader>Qty</TableHeader>
                           <TableHeader>Unit price (ZAR inc VAT)</TableHeader>
-                          <TableHeader>Discount %</TableHeader>
+                          {canDiscount ? <TableHeader>Discount %</TableHeader> : null}
                           <TableHeader>Total (ZAR)</TableHeader>
                           <TableHeader />
                         </TableRow>
@@ -521,6 +785,9 @@ export default function TillPage() {
                       <TableBody>
                         {cart.map((line) => (
                           <TableRow key={line.key}>
+                            <TableCell className="vellano-till-thumb-cell">
+                              <SkuThumb sku={line.sku} />
+                            </TableCell>
                             <TableCell>
                               <strong>{line.sku.name}</strong>
                               <div className="vellano-muted-text">SKU: {line.sku.our_ref}</div>
@@ -545,26 +812,28 @@ export default function TillPage() {
                               />
                             </TableCell>
                             <TableCell>{formatZarAmount(formatPriceAmount(unitIncVat(line.sku)))}</TableCell>
-                            <TableCell>
-                              <NumberInput
-                                id={`cart-discount-${line.key}`}
-                                hideLabel
-                                label="Discount percent"
-                                size="sm"
-                                min={0}
-                                max={100}
-                                value={line.discountPercent}
-                                onChange={(_, { value }) => {
-                                  const next =
-                                    value === ""
-                                      ? 0
-                                      : typeof value === "number"
-                                        ? value
-                                        : Number(value);
-                                  updateCartLine(line.key, { discountPercent: clampDiscount(next) });
-                                }}
-                              />
-                            </TableCell>
+                            {canDiscount ? (
+                              <TableCell>
+                                <NumberInput
+                                  id={`cart-discount-${line.key}`}
+                                  hideLabel
+                                  label="Discount percent"
+                                  size="sm"
+                                  min={0}
+                                  max={100}
+                                  value={line.discountPercent}
+                                  onChange={(_, { value }) => {
+                                    const next =
+                                      value === ""
+                                        ? 0
+                                        : typeof value === "number"
+                                          ? value
+                                          : Number(value);
+                                    updateCartLine(line.key, { discountPercent: clampDiscount(next) });
+                                  }}
+                                />
+                              </TableCell>
+                            ) : null}
                             <TableCell>
                               <strong>{formatZarAmount(formatPriceAmount(lineIncTotal(line)))}</strong>
                             </TableCell>
@@ -636,6 +905,56 @@ export default function TillPage() {
                   />
                 </div>
 
+                {selectedCustomer?.on_hold ? (
+                  <InlineNotification
+                    kind="warning"
+                    title="Customer is on hold"
+                    subtitle={
+                      selectedCustomer.on_hold_reason ||
+                      "This customer cannot be sold to until the hold is lifted."
+                    }
+                    hideCloseButton
+                    lowContrast
+                  />
+                ) : null}
+
+                {confirmedPicks.length > 0 ? (
+                  <Select
+                    id="till-pick"
+                    labelText="Confirmed pick"
+                    value={pickId}
+                    onChange={(event) => setPickId(event.target.value)}
+                  >
+                    <SelectItem value="" text="Select pick" />
+                    {confirmedPicks.map((entry) => (
+                      <SelectItem
+                        key={entry.id}
+                        value={entry.id}
+                        text={`${entry.pick_number || entry.id} · ${entry.sku_our_ref || entry.sku_id} × ${entry.qty}`}
+                      />
+                    ))}
+                  </Select>
+                ) : null}
+
+                {canOverrideCredit && (selectedCustomer?.on_hold || creditBlock) ? (
+                  <>
+                    <Checkbox
+                      id="till-credit-override"
+                      labelText="Override credit hold / limit"
+                      checked={creditOverride}
+                      onChange={() => setCreditOverride((current) => !current)}
+                    />
+                    {creditOverride ? (
+                      <TextInput
+                        id="till-credit-override-reason"
+                        labelText="Override reason"
+                        value={creditOverrideReason}
+                        onChange={(event) => setCreditOverrideReason(event.target.value)}
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+
                 <div>
                   <h3>Tender</h3>
                   <div className="vellano-tender-grid">
@@ -677,7 +996,11 @@ export default function TillPage() {
 
                 <Button
                   kind="primary"
-                  disabled={!saleValid || submitting}
+                  disabled={
+                    !saleValid ||
+                    submitting ||
+                    (creditOverride && canOverrideCredit && !creditOverrideReason.trim())
+                  }
                   onClick={() => void handleCompleteSale()}
                 >
                   Complete Sale
@@ -687,6 +1010,14 @@ export default function TillPage() {
           </div>
         </div>
       )}
+
+      {scannerOpen ? (
+        <TillScanner
+          onClose={() => setScannerOpen(false)}
+          onDetect={(code) => applyScan(code, false)}
+          onTypeIn={(code) => applyScan(code, true)}
+        />
+      ) : null}
 
       {lastSale ? (
         <Tile className="vellano-tax-invoice">

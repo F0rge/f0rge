@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import datetime
 import enum
 import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Enum, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -50,6 +51,18 @@ class PurchaseOrder(UUIDPkMixin, TimestampMixin, Base):
         UUID(as_uuid=True),
         ForeignKey("locations.id", ondelete="RESTRICT"),
         nullable=True,
+    )
+    ordered_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    on_water_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    landed_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    received_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     supplier: Mapped["Supplier"] = relationship()

@@ -5,11 +5,25 @@ import uuid
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.user import UserCRUD
 from app.database import get_db
 from app.middleware.auth import get_current_user_id
-from app.models.user import UserRole
+from app.permissions import (
+    BOOKS_MUTATE,
+    CATALOGUE_MUTATE,
+    PO_RAISE,
+    SALES_CUSTOMERS,
+    SALES_DELIVERIES,
+    SALES_LAYBYS,
+    SALES_RETURNS,
+    SETTINGS_MUTATE,
+    STOCK_COST_VIEW,
+    STOCK_RECEIVE,
+    STOCK_TRANSFER,
+    TILL_SELL,
+    USERS_MANAGE,
+)
 from app.services.auth import AuthService
+from app.services.permissions import PermissionService
 from app.services.bills import BillService
 from app.services.books_events import BooksEventService
 from app.services.contacts import ContactService
@@ -23,6 +37,7 @@ from app.services.invoices import InvoiceService
 from app.services.repeating_invoices import RepeatingInvoiceService
 from app.services.journal_imports import JournalImportService
 from app.services.journals import JournalService
+from app.services.location_bins import LocationBinService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
@@ -35,6 +50,7 @@ from app.services.settings import SettingsService
 from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.reorder import ReorderService
+from app.services.sku_bom import SkuBomService
 from app.services.skus import SkuService
 from app.services.stock_adjustments import StockAdjustmentService
 from app.services.laybys import LaybysService
@@ -43,7 +59,9 @@ from app.services.stock_returns import StockReturnsService
 from app.services.stocktakes import StocktakeService
 from app.services.suppliers import SupplierService
 from app.services.transfers import TransferService
+from app.services.picks import PickService
 from app.services.till_orchestrator import TillOrchestrator
+from app.services.roles import RoleService
 from app.services.users import BootstrapService, ProfileService, UserService
 from app.services.vat201_periods import Vat201PeriodService
 
@@ -68,6 +86,10 @@ def get_location_service(db: AsyncSession = Depends(get_db)) -> LocationService:
     return LocationService(db)
 
 
+def get_location_bin_service(db: AsyncSession = Depends(get_db)) -> LocationBinService:
+    return LocationBinService(db)
+
+
 def get_supplier_service(db: AsyncSession = Depends(get_db)) -> SupplierService:
     return SupplierService(db)
 
@@ -78,6 +100,10 @@ def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:
 
 def get_sku_service(db: AsyncSession = Depends(get_db)) -> SkuService:
     return SkuService(db)
+
+
+def get_sku_bom_service(db: AsyncSession = Depends(get_db)) -> SkuBomService:
+    return SkuBomService(db)
 
 
 def get_purchase_order_service(db: AsyncSession = Depends(get_db)) -> PurchaseOrderService:
@@ -210,148 +236,134 @@ def get_till_orchestrator(db: AsyncSession = Depends(get_db)) -> TillOrchestrato
     return TillOrchestrator(db)
 
 
+def get_pick_service(db: AsyncSession = Depends(get_db)) -> PickService:
+    return PickService(db)
+
+
+def get_role_service(db: AsyncSession = Depends(get_db)) -> RoleService:
+    return RoleService(db)
+
+
+async def _require_keys(
+    user_id: uuid.UUID,
+    db: AsyncSession,
+    keys: tuple[str, ...],
+) -> uuid.UUID:
+    if not await PermissionService(db).has_any(user_id, keys):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden",
+        )
+    return user_id
+
+
 async def require_till(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (UserRole.OWNER, UserRole.TILL):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner or till access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (TILL_SELL,))
+
+
+async def require_laybys(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_LAYBYS,))
 
 
 async def require_owner(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role != UserRole.OWNER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (USERS_MANAGE,))
+
+
+async def require_settings(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SETTINGS_MUTATE,))
 
 
 async def require_location_mutate(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (UserRole.OWNER, UserRole.WAREHOUSE):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner or warehouse access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (STOCK_RECEIVE,))
 
 
 async def require_catalogue_mutate(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (UserRole.OWNER, UserRole.BUYER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner or buyer access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (CATALOGUE_MUTATE,))
 
 
 async def require_returns_mutate(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (UserRole.OWNER, UserRole.WAREHOUSE, UserRole.TILL):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner, warehouse, or till access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (SALES_RETURNS,))
 
 
 async def require_deliveries_mutate(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (UserRole.OWNER, UserRole.WAREHOUSE, UserRole.TILL):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner, warehouse, or till access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (SALES_DELIVERIES,))
 
 
 async def require_receive(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (UserRole.OWNER, UserRole.WAREHOUSE):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner or warehouse access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (STOCK_RECEIVE,))
 
 
 async def require_transfer(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (UserRole.OWNER, UserRole.WAREHOUSE):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner or warehouse access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (STOCK_TRANSFER,))
+
+
+async def require_transfer_receive(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL))
 
 
 async def require_books_mutate(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (UserRole.OWNER, UserRole.BOOKS):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner or books access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (BOOKS_MUTATE,))
 
 
 async def require_customers_mutate(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (UserRole.OWNER, UserRole.BOOKS, UserRole.TILL):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner, books, or till access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (SALES_CUSTOMERS,))
+
+
+async def require_customers_patch(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_CUSTOMERS, USERS_MANAGE, PO_RAISE))
 
 
 async def require_cost_audit_view(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    user = await UserCRUD(db).get_by_id(user_id)
-    if user is None or user.role not in (
-        UserRole.OWNER,
-        UserRole.BOOKS,
-        UserRole.BUYER,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owner, books, or buyer access required",
-        )
-    return user_id
+    return await _require_keys(user_id, db, (STOCK_COST_VIEW,))
+
+
+async def require_picks_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES))

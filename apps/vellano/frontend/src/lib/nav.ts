@@ -36,6 +36,7 @@ export const OPERATIONS_NAV_ITEMS = [
   { href: "/receive", label: "Receive" },
   { href: "/wms", label: "WMS" },
   { href: "/transfers", label: "Transfers" },
+  { href: "/picks", label: "Picks" },
   { href: "/deliveries", label: "Deliveries" },
   { href: "/till", label: "Till" },
   { href: "/laybys", label: "Laybys" },
@@ -47,7 +48,8 @@ export const SALES_NAV_ITEMS = [
 ] as const;
 
 export const ACCOUNT_NAV_ITEMS = [
-  { href: "/users", label: "Users", ownerOnly: true as const },
+  { href: "/users", label: "Users", permission: "users.manage" as const },
+  { href: "/roles", label: "Roles", permission: "users.manage" as const },
   { href: "/profile", label: "Profile" },
   { href: "/settings", label: "Settings" },
 ] as const;
@@ -93,6 +95,12 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
     return true;
   }
   if (href === "/catalogue" && pathname.startsWith("/catalogue/")) {
+    return true;
+  }
+  if (href === "/customers" && pathname.startsWith("/customers/")) {
+    return true;
+  }
+  if (href === "/picks" && pathname.startsWith("/picks/")) {
     return true;
   }
   return false;

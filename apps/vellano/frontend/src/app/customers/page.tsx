@@ -6,8 +6,6 @@ import {
   InlineNotification,
   Modal,
   Pagination,
-  Select,
-  SelectItem,
   Stack,
   Table,
   TableBody,
@@ -17,14 +15,22 @@ import {
   TableHeader,
   TableRow,
   Tag,
-  TextArea,
   TextInput,
 } from "@carbon/react";
 import { DocumentExport, Edit } from "@carbon/icons-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CustomerCrmBadges } from "@/components/customer-crm-badges";
+import {
+  CustomerFormFields,
+  customerWritePayload,
+  emptyCustomerForm,
+  formFromCustomer,
+} from "@/components/customer-form-fields";
 import {
   CUSTOMER_TYPE_LABELS,
+  canManageCustomerCredit,
   canMutateCustomers,
   createCustomer,
   formatZarAmount,
@@ -36,6 +42,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { downloadCsv } from "@/lib/csv";
+import { formatIsoDate, laybyActiveBadgeLabel, overdueBadgeLabel } from "@/lib/customer-crm";
 
 const TABLE_HEADERS = [
   { key: "customer", header: "Customer" },
@@ -55,6 +62,9 @@ const CSV_HEADERS = [
   "Phone",
   "Open invoices",
   "Active laybys",
+  "Overdue",
+  "Layby active",
+  "Last purchase",
 ];
 
 type TypeFilter = "all" | CustomerType;
@@ -70,16 +80,6 @@ type CustomerRow = {
   actions: string;
 };
 
-const emptyCustomerForm: CreateCustomerPayload = {
-  name: "",
-  customer_type: "retail",
-  price_tier: "standard",
-  email: "",
-  phone: "",
-  vat_number: "",
-  billing_address: "",
-};
-
 function formatContact(customer: CustomerCrm): string {
   const parts = [customer.email, customer.phone].filter(Boolean);
   return parts.length > 0 ? parts.join(" • ") : "—";
@@ -89,11 +89,7 @@ function formatOpenInvoices(customer: CustomerCrm): { amount: string; detail: st
   if (customer.open_invoices_count === 0) {
     return { amount: "—", detail: null };
   }
-  const detail =
-    customer.overdue_invoices_count > 0
-      ? `${customer.overdue_invoices_count} overdue`
-      : null;
-  return { amount: formatZarAmount(customer.open_invoices_zar), detail };
+  return { amount: formatZarAmount(customer.open_invoices_zar), detail: null };
 }
 
 function formatActiveLaybys(customer: CustomerCrm): { amount: string; detail: string | null } {
@@ -108,102 +104,24 @@ function customerTypeTagType(type: CustomerType): "blue" | "purple" {
   return type === "retail" ? "blue" : "purple";
 }
 
-function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
-  return {
-    name: customer.name,
-    customer_type: customer.customer_type,
-    price_tier: customer.price_tier,
-    email: customer.email ?? "",
-    phone: customer.phone ?? "",
-    vat_number: customer.vat_number ?? "",
-    billing_address: customer.billing_address ?? "",
-  };
-}
-
 function csvMoney(count: number, amount: string): string {
   return count > 0 ? formatZarAmount(amount) : "";
 }
 
-function CustomerFormFields({
-  idPrefix,
-  form,
-  onChange,
-  disabled,
-}: {
-  idPrefix: string;
-  form: CreateCustomerPayload;
-  onChange: (patch: Partial<CreateCustomerPayload>) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Stack gap={5}>
-      <TextInput
-        id={`${idPrefix}-name`}
-        labelText="Name"
-        value={form.name}
-        onChange={(event) => onChange({ name: event.target.value })}
-        required
-        disabled={disabled}
-      />
-      <Select
-        id={`${idPrefix}-type`}
-        labelText="Customer type"
-        value={form.customer_type ?? "retail"}
-        onChange={(event) => onChange({ customer_type: event.target.value as CustomerType })}
-        disabled={disabled}
-      >
-        <SelectItem value="retail" text="Retail" />
-        <SelectItem value="trade" text="Trade" />
-      </Select>
-      <TextInput
-        id={`${idPrefix}-tier`}
-        labelText="Price tier"
-        value={form.price_tier ?? "standard"}
-        onChange={(event) => onChange({ price_tier: event.target.value })}
-        disabled={disabled}
-      />
-      <TextInput
-        id={`${idPrefix}-email`}
-        labelText="Email"
-        type="email"
-        value={form.email ?? ""}
-        onChange={(event) => onChange({ email: event.target.value })}
-        disabled={disabled}
-      />
-      <TextInput
-        id={`${idPrefix}-phone`}
-        labelText="Phone"
-        value={form.phone ?? ""}
-        onChange={(event) => onChange({ phone: event.target.value })}
-        disabled={disabled}
-      />
-      <TextInput
-        id={`${idPrefix}-vat`}
-        labelText="VAT number"
-        value={form.vat_number ?? ""}
-        onChange={(event) => onChange({ vat_number: event.target.value })}
-        disabled={disabled}
-      />
-      <TextArea
-        id={`${idPrefix}-billing`}
-        labelText="Billing address"
-        value={form.billing_address ?? ""}
-        onChange={(event) => onChange({ billing_address: event.target.value })}
-        disabled={disabled}
-      />
-    </Stack>
-  );
-}
-
 export default function CustomersPage() {
+  const router = useRouter();
   const { user } = useAuth();
-  const canMutate = canMutateCustomers(user?.role);
+  const canMutate = canMutateCustomers(user);
+  const canEditCredit = canManageCustomerCredit(user);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [balanceFilter, setBalanceFilter] = useState<BalanceFilter>("any");
+  const [overdueFilter, setOverdueFilter] = useState(false);
+  const [activeLaybyFilter, setActiveLaybyFilter] = useState(false);
+  const [onHoldFilter, setOnHoldFilter] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [createOpen, setCreateOpen] = useState(false);
@@ -216,14 +134,18 @@ export default function CustomersPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listCustomers();
+      const data = await listCustomers({
+        overdue: overdueFilter || undefined,
+        active_layby: activeLaybyFilter || undefined,
+        on_hold: onHoldFilter || undefined,
+      });
       setCustomers(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load customers.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [overdueFilter, activeLaybyFilter, onHoldFilter]);
 
   useEffect(() => {
     if (user) {
@@ -256,7 +178,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchFilter, typeFilter, balanceFilter]);
+  }, [searchFilter, typeFilter, balanceFilter, overdueFilter, activeLaybyFilter, onHoldFilter]);
 
   const pagedCustomers = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -292,6 +214,9 @@ export default function CustomersPage() {
         customer.phone ?? "",
         csvMoney(customer.open_invoices_count, customer.open_invoices_zar),
         csvMoney(customer.active_laybys_count, customer.active_laybys_zar),
+        customer.overdue_invoices_count > 0 ? overdueBadgeLabel(customer) : "",
+        customer.active_laybys_count > 0 ? laybyActiveBadgeLabel(customer) : "",
+        formatIsoDate(customer.last_purchase_date),
       ]),
     );
   }
@@ -305,15 +230,7 @@ export default function CustomersPage() {
     setSaving(true);
     setError(null);
     try {
-      await createCustomer({
-        name,
-        customer_type: createForm.customer_type ?? "retail",
-        price_tier: createForm.price_tier?.trim() || "standard",
-        email: createForm.email,
-        phone: createForm.phone,
-        vat_number: createForm.vat_number,
-        billing_address: createForm.billing_address,
-      });
+      await createCustomer(customerWritePayload(createForm, canEditCredit));
       setCreateOpen(false);
       setCreateForm(emptyCustomerForm);
       await loadCustomers();
@@ -336,15 +253,7 @@ export default function CustomersPage() {
     setSaving(true);
     setError(null);
     try {
-      await updateCustomer(editCustomer.id, {
-        name,
-        customer_type: editForm.customer_type ?? "retail",
-        price_tier: editForm.price_tier?.trim() || "standard",
-        email: editForm.email,
-        phone: editForm.phone,
-        vat_number: editForm.vat_number,
-        billing_address: editForm.billing_address,
-      });
+      await updateCustomer(editCustomer.id, customerWritePayload(editForm, canEditCredit));
       setEditCustomer(null);
       setEditForm(emptyCustomerForm);
       await loadCustomers();
@@ -374,7 +283,14 @@ export default function CustomersPage() {
             Export CSV
           </Button>
           {canMutate ? (
-            <Button onClick={() => setCreateOpen(true)}>New customer</Button>
+            <Button
+              onClick={() => {
+                setCreateForm(emptyCustomerForm);
+                setCreateOpen(true);
+              }}
+            >
+              New customer
+            </Button>
           ) : null}
         </div>
       </div>
@@ -448,6 +364,30 @@ export default function CustomersPage() {
                 Has active laybys
               </Button>
             </div>
+            <span className="vellano-catalogue-toolbar__divider" aria-hidden />
+            <div className="vellano-catalogue-chips" role="group" aria-label="CRM filters">
+              <Button
+                kind={overdueFilter ? "primary" : "ghost"}
+                size="sm"
+                onClick={() => setOverdueFilter((current) => !current)}
+              >
+                Overdue
+              </Button>
+              <Button
+                kind={activeLaybyFilter ? "primary" : "ghost"}
+                size="sm"
+                onClick={() => setActiveLaybyFilter((current) => !current)}
+              >
+                Active layby
+              </Button>
+              <Button
+                kind={onHoldFilter ? "primary" : "ghost"}
+                size="sm"
+                onClick={() => setOnHoldFilter((current) => !current)}
+              >
+                On hold
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -459,7 +399,7 @@ export default function CustomersPage() {
           <InlineNotification
             kind="info"
             title="No customers"
-            subtitle="No customers have been added yet."
+            subtitle="No customers match the current filters."
             hideCloseButton
             lowContrast
             style={{ margin: "1rem" }}
@@ -505,11 +445,12 @@ export default function CustomersPage() {
                                   type="button"
                                   kind="ghost"
                                   size="sm"
-                                  onClick={() => openCustomer(entry)}
+                                  onClick={() => router.push(`/customers/${entry.id}`)}
                                   style={{ paddingInlineStart: 0 }}
                                 >
                                   {entry.name}
                                 </Button>
+                                <CustomerCrmBadges customer={entry} />
                               </TableCell>
                               <TableCell>
                                 <Tag type={customerTypeTagType(entry.customer_type)} size="sm">
@@ -529,14 +470,6 @@ export default function CustomersPage() {
                                 >
                                   {invoices.amount}
                                 </div>
-                                {invoices.detail ? (
-                                  <div
-                                    className="vellano-muted-text"
-                                    style={{ color: "var(--cds-support-error, #da1e28)" }}
-                                  >
-                                    {invoices.detail}
-                                  </div>
-                                ) : null}
                               </TableCell>
                               <TableCell style={{ textAlign: "right" }}>
                                 <div
@@ -603,12 +536,13 @@ export default function CustomersPage() {
           idPrefix="create-customer"
           form={createForm}
           onChange={(patch) => setCreateForm((form) => ({ ...form, ...patch }))}
+          showCreditFields={canEditCredit}
         />
       </Modal>
 
       <Modal
         open={editCustomer !== null}
-        modalHeading={canMutate ? "Edit customer" : "Customer details"}
+        modalHeading="Edit customer"
         primaryButtonText="Save"
         secondaryButtonText="Cancel"
         onRequestClose={() => {
@@ -617,14 +551,13 @@ export default function CustomersPage() {
         }}
         onRequestSubmit={() => void handleUpdate()}
         primaryButtonDisabled={saving || !editForm.name.trim()}
-        passiveModal={!canMutate}
         size="md"
       >
         <CustomerFormFields
           idPrefix="edit-customer"
           form={editForm}
           onChange={(patch) => setEditForm((form) => ({ ...form, ...patch }))}
-          disabled={!canMutate}
+          showCreditFields={canEditCredit}
         />
       </Modal>
     </Stack>

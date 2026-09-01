@@ -43,7 +43,7 @@ function formatDateTime(iso: string | null): string {
 
 export default function StocktakesPage() {
   const { user } = useAuth();
-  const canMutate = canReceive(user?.role);
+  const canMutate = canReceive(user);
   const [stocktakes, setStocktakes] = useState<StocktakeSummary[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [active, setActive] = useState<Stocktake | null>(null);

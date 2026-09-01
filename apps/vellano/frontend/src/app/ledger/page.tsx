@@ -104,7 +104,7 @@ function accountsOfType(accounts: Account[], type: AccountType): Account[] {
 
 export default function ChartOfAccountsPage() {
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [maps, setMaps] = useState<CategoryMap[]>([]);
   const [loading, setLoading] = useState(true);

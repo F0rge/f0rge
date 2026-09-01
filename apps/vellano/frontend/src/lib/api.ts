@@ -1,4 +1,17 @@
-export type UserRole = "owner" | "buyer" | "warehouse" | "till" | "books";
+import {
+  normalizePick,
+  normalizePickList,
+  normalizePickSettings,
+  normalizePreview,
+  type CreatePickPayload,
+  type PickDocument,
+  type PickPreview,
+  type UpdatePickPayload,
+} from "./picks";
+
+export type PresetRole = "owner" | "buyer" | "warehouse" | "till" | "books";
+/** Role slug — five presets plus custom slugs from GET /roles. */
+export type UserRole = string;
 
 export type Team = {
   id: string;
@@ -9,8 +22,10 @@ export type AuthUser = {
   id: string;
   email: string;
   role: UserRole;
+  permissions: string[];
   team: Team;
   display_name: string | null;
+  default_location_id: string | null;
 };
 
 export type User = {
@@ -21,6 +36,26 @@ export type User = {
   is_disabled: boolean;
   team_id: string;
   team: Team;
+  default_location_id: string | null;
+};
+
+export type Role = {
+  id: string;
+  slug: string;
+  name: string;
+  is_system: boolean;
+  is_owner_preset: boolean;
+  permissions: string[];
+};
+
+export type RoleCreatePayload = {
+  name: string;
+  permissions: string[];
+};
+
+export type RoleUpdatePayload = {
+  name?: string;
+  permissions?: string[];
 };
 
 export type LoginResponse = {
@@ -32,6 +67,7 @@ export type CreateUserPayload = {
   password: string;
   role: UserRole;
   display_name?: string;
+  default_location_id?: string | null;
 };
 
 export type UpdateUserPayload = {
@@ -40,12 +76,14 @@ export type UpdateUserPayload = {
   role?: UserRole;
   display_name?: string;
   is_disabled?: boolean;
+  default_location_id?: string | null;
 };
 
 export type UpdateProfilePayload = {
   email?: string;
   display_name?: string;
   password?: string;
+  default_location_id?: string | null;
 };
 
 export class ApiError extends Error {
@@ -130,6 +168,28 @@ export function updateUser(id: string, payload: UpdateUserPayload): Promise<User
   });
 }
 
+export function listRoles(): Promise<Role[]> {
+  return apiFetch<Role[]>("/roles");
+}
+
+export function createRole(payload: RoleCreatePayload): Promise<Role> {
+  return apiFetch<Role>("/roles", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateRole(id: string, payload: RoleUpdatePayload): Promise<Role> {
+  return apiFetch<Role>(`/roles/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteRole(id: string): Promise<void> {
+  return apiFetch<void>(`/roles/${id}`, { method: "DELETE" });
+}
+
 export function updateProfile(payload: UpdateProfilePayload): Promise<AuthUser> {
   return apiFetch<AuthUser>("/profile", {
     method: "PATCH",
@@ -137,13 +197,45 @@ export function updateProfile(payload: UpdateProfilePayload): Promise<AuthUser> 
   });
 }
 
-export const USER_ROLES: { value: UserRole; label: string }[] = [
+export const USER_ROLES: { value: PresetRole; label: string }[] = [
   { value: "owner", label: "Owner" },
   { value: "buyer", label: "Buyer" },
   { value: "warehouse", label: "Warehouse" },
   { value: "till", label: "Till" },
   { value: "books", label: "Books" },
 ];
+
+export {
+  can,
+  canManageCustomerCredit,
+  canManageLocations,
+  canMutateBooks,
+  canMutateCatalogue,
+  canMutateCustomers,
+  canMutateDeliveries,
+  canMutateLaybys,
+  canMutatePicks,
+  canMutateReturns,
+  canMutateSettings,
+  canRaisePo,
+  canReceive,
+  canReceiveTransfer,
+  canTransfer,
+  canUseTill,
+  canViewCostAudit,
+  hasPermission,
+} from "./permissions";
+
+export type {
+  CreatePickPayload,
+  PickAllocation,
+  PickDocument,
+  PickLine,
+  PickPreview,
+  PickPreviewLine,
+  PickStatus,
+  UpdatePickPayload,
+} from "./picks";
 
 export type LocationType = "warehouse" | "showroom";
 
@@ -194,8 +286,74 @@ export function isActiveLocation(loc: Location): boolean {
   return !loc.is_archived;
 }
 
-export function canMutateCatalogue(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "buyer";
+export type LocationBin = {
+  id: string;
+  location_id: string;
+  code: string;
+  row_code: string;
+  bay: number;
+  level: number;
+  is_default: boolean;
+  is_archived: boolean;
+  archived_at: string | null;
+};
+
+export type CreateLocationBinPayload = {
+  row_code: string;
+  bay: number;
+  level: number;
+};
+
+export type LocationBinGridPayload = {
+  rows: string[];
+  bays: number;
+  levels: number;
+};
+
+export type UpdateLocationBinPayload = {
+  is_archived?: boolean;
+  is_default?: boolean;
+};
+
+export type InventoryBinOnHand = {
+  bin_id: string;
+  code: string;
+  on_hand: number;
+};
+
+export function listLocationBins(locationId: string): Promise<LocationBin[]> {
+  return apiFetch<LocationBin[]>(`/locations/${locationId}/bins`);
+}
+
+export function createLocationBin(
+  locationId: string,
+  payload: CreateLocationBinPayload,
+): Promise<LocationBin> {
+  return apiFetch<LocationBin>(`/locations/${locationId}/bins`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function generateLocationBinGrid(
+  locationId: string,
+  payload: LocationBinGridPayload,
+): Promise<LocationBin[]> {
+  return apiFetch<LocationBin[]>(`/locations/${locationId}/bins/grid`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateLocationBin(
+  locationId: string,
+  binId: string,
+  payload: UpdateLocationBinPayload,
+): Promise<LocationBin> {
+  return apiFetch<LocationBin>(`/locations/${locationId}/bins/${binId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
@@ -296,6 +454,8 @@ export type Sku = {
   wholesale_inc_vat: string | null;
   retail_ex_vat: string | null;
   retail_inc_vat: string | null;
+  carton_count: number;
+  is_kit: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -315,6 +475,7 @@ export type UpdateSkuPricePayload = {
   lead_time_days?: number | null;
   reorder_min?: number | null;
   supplier_ref?: string | null;
+  carton_count?: number;
 };
 
 const VAT_MULTIPLIER = 1.15;
@@ -366,6 +527,7 @@ export type CreateSkuPayload = {
   opening_qty?: number;
   opening_unit_cost_zar?: string;
   opening_date?: string;
+  carton_count?: number;
 };
 
 export function listSkus(options?: { category?: string }): Promise<Sku[]> {
@@ -392,6 +554,9 @@ export function createSku(payload: CreateSkuPayload): Promise<Sku> {
   } else {
     delete body.opening_date;
   }
+  if (body.carton_count === undefined || body.carton_count < 1) {
+    delete body.carton_count;
+  }
   return apiFetch<Sku>("/skus", {
     method: "POST",
     body: JSON.stringify(body),
@@ -417,6 +582,35 @@ export function deleteSku(id: string): Promise<void> {
 
 export function skuPhotoUrl(id: string): string {
   return `/api/v1/skus/${id}/photo`;
+}
+
+export type SkuBomLine = {
+  id: string;
+  parent_sku_id: string;
+  component_sku_id: string;
+  qty: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SkuBomLineWrite = {
+  component_sku_id: string;
+  qty: number;
+};
+
+export type ReplaceSkuBomPayload = {
+  lines: SkuBomLineWrite[];
+};
+
+export function listSkuBom(skuId: string): Promise<SkuBomLine[]> {
+  return apiFetch<SkuBomLine[]>(`/skus/${skuId}/bom`);
+}
+
+export function replaceSkuBom(skuId: string, payload: ReplaceSkuBomPayload): Promise<SkuBomLine[]> {
+  return apiFetch<SkuBomLine[]>(`/skus/${skuId}/bom`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export type CatalogueImportFileKind = "inventory" | "soh";
@@ -498,6 +692,10 @@ export type PurchaseOrder = {
   lines: PoLine[];
   bills: LandingBill[];
   received_location_id: string | null;
+  ordered_at: string | null;
+  on_water_at: string | null;
+  landed_at: string | null;
+  received_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -527,6 +725,7 @@ export type InventorySku = {
     location_name: string;
     on_hand: number;
     unit_cost_zar: string | null;
+    bins: InventoryBinOnHand[];
   }[];
 };
 
@@ -536,22 +735,6 @@ export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   landed: "Landed",
   received: "Received",
 };
-
-export function canRaisePo(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "buyer";
-}
-
-export function canReceive(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse";
-}
-
-export function canTransfer(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse";
-}
-
-export function canUseTill(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "till";
-}
 
 export type TillTender = "cash" | "card" | "deposit" | "eft";
 
@@ -566,6 +749,9 @@ export type TillSalePayload = {
   lines: TillSaleLinePayload[];
   tender: TillTender;
   customer_id?: string;
+  pick_id?: string;
+  credit_override?: boolean;
+  credit_override_reason?: string;
 };
 
 export type TillSaleResult = {
@@ -642,10 +828,23 @@ export function landPurchaseOrder(id: string, formData: FormData): Promise<Purch
 export function receivePurchaseOrder(payload: {
   purchase_order_id: string;
   location_id: string;
+  bin_id?: string;
 }): Promise<void> {
+  const body: {
+    purchase_order_id: string;
+    location_id: string;
+    bin_id?: string;
+  } = {
+    purchase_order_id: payload.purchase_order_id,
+    location_id: payload.location_id,
+  };
+  const binId = payload.bin_id?.trim();
+  if (binId) {
+    body.bin_id = binId;
+  }
   return apiFetch<void>("/receive", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 }
 
@@ -653,36 +852,225 @@ export function listInventory(): Promise<InventorySku[]> {
   return apiFetch<InventorySku[]>("/inventory");
 }
 
-export type TransferPayload = {
+export type TransferStatus = "draft" | "in_transit" | "received" | "cancelled";
+
+export type TransferLine = {
+  id: string;
+  sku_id: string;
+  sku_our_ref: string;
+  sku_name: string;
+  qty_dispatched: number;
+  qty_received: number | null;
+  from_bin_id: string | null;
+  to_bin_id: string | null;
+};
+
+export type Transfer = {
+  id: string;
+  transfer_number: string;
+  status: TransferStatus;
+  from_location_id: string;
+  from_location_name: string;
+  to_location_id: string;
+  to_location_name: string;
+  notes: string | null;
+  dispatched_at: string | null;
+  received_at: string | null;
+  received_display_name: string | null;
+  lines: TransferLine[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type TransferLinePayload = {
+  sku_id: string;
+  qty: number;
+  from_bin_id?: string;
+  to_bin_id?: string;
+};
+
+export type CreateTransferPayload = {
   from_location_id: string;
   to_location_id: string;
-  sku_id: string;
-  qty: number;
+  notes?: string;
+  lines: TransferLinePayload[];
 };
 
-export type TransferResult = {
-  sku_id: string;
-  our_ref: string;
-  name: string;
-  qty: number;
-  from_location: {
-    location_id: string;
-    location_name: string;
-    on_hand: number;
-    unit_cost_zar: string | null;
-  };
-  to_location: {
-    location_id: string;
-    location_name: string;
-    on_hand: number;
-    unit_cost_zar: string | null;
-  };
+export type TransferReceivePayload = {
+  lines: { line_id: string; qty_received: number }[];
 };
 
-export function createTransfer(payload: TransferPayload): Promise<TransferResult> {
-  return apiFetch<TransferResult>("/transfers", {
+export const TRANSFER_STATUS_LABELS: Record<TransferStatus, string> = {
+  draft: "Draft",
+  in_transit: "In transit",
+  received: "Received",
+  cancelled: "Cancelled",
+};
+
+export function listTransfers(options?: {
+  status?: TransferStatus;
+  to_location_id?: string;
+}): Promise<Transfer[]> {
+  const params = new URLSearchParams();
+  if (options?.status) {
+    params.set("status", options.status);
+  }
+  const toLocationId = options?.to_location_id?.trim();
+  if (toLocationId) {
+    params.set("to_location_id", toLocationId);
+  }
+  const qs = params.toString();
+  return apiFetch<Transfer[]>(`/transfers${qs ? `?${qs}` : ""}`);
+}
+
+export function getTransfer(id: string): Promise<Transfer> {
+  return apiFetch<Transfer>(`/transfers/${id}`);
+}
+
+export function createTransfer(payload: CreateTransferPayload): Promise<Transfer> {
+  const notes = payload.notes?.trim();
+  const body: CreateTransferPayload = {
+    from_location_id: payload.from_location_id,
+    to_location_id: payload.to_location_id,
+    lines: payload.lines.map((line) => {
+      const next: TransferLinePayload = { sku_id: line.sku_id, qty: line.qty };
+      const fromBin = line.from_bin_id?.trim();
+      if (fromBin) {
+        next.from_bin_id = fromBin;
+      }
+      const toBin = line.to_bin_id?.trim();
+      if (toBin) {
+        next.to_bin_id = toBin;
+      }
+      return next;
+    }),
+  };
+  if (notes) {
+    body.notes = notes;
+  }
+  return apiFetch<Transfer>("/transfers", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function dispatchTransfer(id: string): Promise<Transfer> {
+  return apiFetch<Transfer>(`/transfers/${id}/dispatch`, { method: "POST" });
+}
+
+export function receiveTransfer(id: string, payload: TransferReceivePayload): Promise<Transfer> {
+  return apiFetch<Transfer>(`/transfers/${id}/receive`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function cancelTransfer(id: string): Promise<Transfer> {
+  return apiFetch<Transfer>(`/transfers/${id}/cancel`, { method: "POST" });
+}
+
+export async function downloadTransferPdf(id: string, transferNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/transfers/${id}/pdf`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${transferNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export function listPicks(): Promise<PickDocument[]> {
+  return apiFetch<unknown>("/picks").then(normalizePickList);
+}
+
+export function getPick(id: string): Promise<PickDocument> {
+  return apiFetch<unknown>(`/picks/${id}`).then(normalizePick);
+}
+
+export function previewPick(payload: { sku_id: string; qty: number }): Promise<PickPreview> {
+  return apiFetch<unknown>("/picks/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }).then(normalizePreview);
+}
+
+export function createPick(payload: CreatePickPayload): Promise<PickDocument> {
+  return apiFetch<unknown>("/picks", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }).then(normalizePick);
+}
+
+export function updatePick(id: string, payload: UpdatePickPayload): Promise<PickDocument> {
+  return apiFetch<unknown>(`/picks/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  }).then(normalizePick);
+}
+
+export function confirmPick(id: string, confirmSplit?: boolean): Promise<PickDocument> {
+  const body: { confirm_split?: boolean } = {};
+  if (confirmSplit) {
+    body.confirm_split = true;
+  }
+  return apiFetch<unknown>(`/picks/${id}/confirm`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }).then(normalizePick);
+}
+
+export function completePick(
+  id: string,
+  payload: { staging_location_id?: string; collect_from_showroom?: boolean } = {},
+): Promise<PickDocument> {
+  const body: { staging_location_id?: string; collect_from_showroom?: boolean } = {};
+  if (payload.staging_location_id) {
+    body.staging_location_id = payload.staging_location_id;
+  }
+  if (payload.collect_from_showroom) {
+    body.collect_from_showroom = true;
+  }
+  return apiFetch<unknown>(`/picks/${id}/complete`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }).then(normalizePick);
+}
+
+export function cancelPick(id: string): Promise<PickDocument> {
+  return apiFetch<unknown>(`/picks/${id}/cancel`, { method: "POST" }).then(normalizePick);
+}
+
+export async function downloadPickPdf(id: string, _pickNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/picks/${id}/pdf`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank");
+  if (!opened) {
+    URL.revokeObjectURL(url);
+    window.alert("Allow pop-ups to print.");
+    return;
+  }
+  opened.addEventListener("load", () => {
+    URL.revokeObjectURL(url);
   });
 }
 
@@ -761,10 +1149,6 @@ export function completeStocktake(id: string): Promise<Stocktake> {
 
 export function cancelStocktake(id: string): Promise<Stocktake> {
   return apiFetch<Stocktake>(`/stocktakes/${id}/cancel`, { method: "POST" });
-}
-
-export function canMutateBooks(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "books";
 }
 
 export type AdjustmentReason = "opening" | "damage" | "theft" | "count_fix" | "write_off";
@@ -2094,6 +2478,100 @@ export function getSalesVat(fromDate: string, toDate: string): Promise<SalesVatR
   );
 }
 
+export type SkuCriticalityLine = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  category: string | null;
+  qty: number;
+  value_zar: string;
+  share_pct: number;
+  cumulative_pct: number;
+  abc_class: "A" | "B" | "C";
+  hits_50pct_band: boolean;
+  is_a: boolean;
+};
+
+export type SkuCriticalityCategoryLine = {
+  category: string;
+  qty: number;
+  value_zar: string;
+  share_pct: number;
+  cumulative_pct: number;
+  abc_class: "A" | "B" | "C";
+};
+
+export type SkuCriticalityReport = {
+  from_date: string;
+  to_date: string;
+  sku_count_for_50pct: number;
+  sku_count_for_80pct: number;
+  top_sku_share_pct: number;
+  lines: SkuCriticalityLine[];
+  categories: SkuCriticalityCategoryLine[];
+};
+
+export function getSkuCriticality(fromDate: string, toDate: string): Promise<SkuCriticalityReport> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  return apiFetch<SkuCriticalityReport>(
+    `/reports/sku-criticality?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+}
+
+export type SupplierLeadTimeRow = {
+  supplier_id: string;
+  supplier_name: string;
+  n: number;
+  median_days: number;
+  median_last_3_days: number;
+  median_water_days: number | null;
+  p90_days: number | null;
+};
+
+export type SkuLeadTimeRow = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  manual_lead_time_days: number | null;
+  n: number;
+  median_days: number;
+  median_last_3_days: number;
+  median_water_days: number | null;
+  p90_days: number | null;
+};
+
+export type SupplierLeadTimesReport = {
+  rows: SupplierLeadTimeRow[];
+};
+
+export type SkuLeadTimesReport = {
+  rows: SkuLeadTimeRow[];
+};
+
+function normalizeLeadTimeRows<T>(
+  payload: { rows?: T[]; lines?: T[] } | T[],
+): T[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  return payload.rows ?? payload.lines ?? [];
+}
+
+export async function getSupplierLeadTimes(): Promise<SupplierLeadTimesReport> {
+  const payload = await apiFetch<
+    { rows?: SupplierLeadTimeRow[]; lines?: SupplierLeadTimeRow[] } | SupplierLeadTimeRow[]
+  >("/reports/supplier-lead-times");
+  return { rows: normalizeLeadTimeRows(payload) };
+}
+
+export async function getSkuLeadTimes(): Promise<SkuLeadTimesReport> {
+  const payload = await apiFetch<
+    { rows?: SkuLeadTimeRow[]; lines?: SkuLeadTimeRow[] } | SkuLeadTimeRow[]
+  >("/reports/sku-lead-times");
+  return { rows: normalizeLeadTimeRows(payload) };
+}
+
 export async function downloadStockValuationCsv(): Promise<void> {
   const response = await fetch("/api/v1/reports/stock-valuation/csv", {
     credentials: "include",
@@ -2154,6 +2632,28 @@ export async function downloadSalesBySkuCsv(fromDate: string, toDate: string): P
   URL.revokeObjectURL(url);
 }
 
+export async function downloadSkuCriticalityCsv(fromDate: string, toDate: string): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const response = await fetch(
+    `/api/v1/reports/sku-criticality/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `sku-criticality-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 export async function downloadSalesVatCsv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
   const to = requireIsoDate(toDate, reportTodayIso());
@@ -2170,6 +2670,44 @@ export async function downloadSalesVatCsv(fromDate: string, toDate: string): Pro
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `sales-vat-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadSupplierLeadTimesCsv(): Promise<void> {
+  const response = await fetch("/api/v1/reports/supplier-lead-times/csv", {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `supplier-lead-times-${reportTodayIso()}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadSkuLeadTimesCsv(): Promise<void> {
+  const response = await fetch("/api/v1/reports/sku-lead-times/csv", {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `sku-lead-times-${reportTodayIso()}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
@@ -2343,6 +2881,8 @@ export type AppSettings = {
   home_currency: string;
   defaults_locked: boolean;
   warning: string | null;
+  always_prefer_warehouse: boolean;
+  pick_priority: string[];
 };
 
 export type UnitCostAuditEntry = {
@@ -2361,6 +2901,15 @@ export type UnitCostAuditEntry = {
   created_at: string;
 };
 
+function withPickSettings(raw: AppSettings): AppSettings {
+  const pick = normalizePickSettings(raw);
+  return {
+    ...raw,
+    always_prefer_warehouse: pick.always_prefer_warehouse,
+    pick_priority: pick.pick_priority,
+  };
+}
+
 export function getHomeSummary(): Promise<HomeSummary> {
   return apiFetch<HomeSummary>("/home");
 }
@@ -2370,17 +2919,19 @@ export function searchAll(q: string): Promise<SearchResponse> {
 }
 
 export function getSettings(): Promise<AppSettings> {
-  return apiFetch<AppSettings>("/settings");
+  return apiFetch<AppSettings>("/settings").then(withPickSettings);
 }
 
 export function updateSettings(payload: {
   vat_rate?: string;
   home_currency?: string;
+  always_prefer_warehouse?: boolean;
+  pick_priority?: string[];
 }): Promise<AppSettings> {
   return apiFetch<AppSettings>("/settings", {
     method: "PATCH",
     body: JSON.stringify(payload),
-  });
+  }).then(withPickSettings);
 }
 
 export function listCostAudit(
@@ -2399,14 +2950,6 @@ export function correctUnitCost(
     method: "PATCH",
     body: JSON.stringify(payload),
   });
-}
-
-export function canViewCostAudit(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "books" || role === "buyer";
-}
-
-export function canMutateSettings(role: UserRole | undefined): boolean {
-  return role === "owner";
 }
 
 export type StockReturnReason = "damaged" | "unwanted" | "wrong_item" | "other";
@@ -2474,10 +3017,6 @@ export const RETURN_DISPOSITION_LABELS: Record<StockReturnDisposition, string> =
   restock: "Restock",
   write_off: "Write-off",
 };
-
-export function canMutateReturns(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse" || role === "till";
-}
 
 export function listReturns(): Promise<StockReturn[]> {
   return apiFetch<StockReturn[]>("/returns");
@@ -2577,10 +3116,6 @@ export type AddLaybyPaymentPayload = {
   tender: LaybyTender;
 };
 
-export function canMutateLaybys(role: UserRole | undefined): boolean {
-  return canUseTill(role);
-}
-
 export function listLaybys(): Promise<Layby[]> {
   return apiFetch<Layby[]>("/laybys");
 }
@@ -2638,10 +3173,21 @@ export type CustomerCrm = {
   open_invoices_count: number;
   open_invoices_zar: string;
   overdue_invoices_count: number;
+  overdue_invoices_zar: string;
   active_laybys_count: number;
   active_laybys_zar: string;
+  last_purchase_date: string | null;
+  credit_limit: string | null;
+  on_hold: boolean;
+  on_hold_reason: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type CustomerListFilters = {
+  overdue?: boolean;
+  active_layby?: boolean;
+  on_hold?: boolean;
 };
 
 export type CreateCustomerPayload = {
@@ -2652,6 +3198,9 @@ export type CreateCustomerPayload = {
   billing_address?: string;
   customer_type?: CustomerType;
   price_tier?: string;
+  credit_limit?: string | null;
+  on_hold?: boolean;
+  on_hold_reason?: string | null;
 };
 
 export type UpdateCustomerPayload = {
@@ -2662,6 +3211,9 @@ export type UpdateCustomerPayload = {
   billing_address?: string;
   customer_type?: CustomerType;
   price_tier?: string;
+  credit_limit?: string | null;
+  on_hold?: boolean;
+  on_hold_reason?: string | null;
 };
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
@@ -2669,12 +3221,19 @@ export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
   trade: "Trade",
 };
 
-export function canMutateCustomers(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "books" || role === "till";
-}
-
-export function listCustomers(): Promise<CustomerCrm[]> {
-  return apiFetch<CustomerCrm[]>("/customers");
+export function listCustomers(filters?: CustomerListFilters): Promise<CustomerCrm[]> {
+  const params = new URLSearchParams();
+  if (filters?.overdue) {
+    params.set("overdue", "true");
+  }
+  if (filters?.active_layby) {
+    params.set("active_layby", "true");
+  }
+  if (filters?.on_hold) {
+    params.set("on_hold", "true");
+  }
+  const qs = params.toString();
+  return apiFetch<CustomerCrm[]>(qs ? `/customers?${qs}` : "/customers");
 }
 
 export function getCustomer(id: string): Promise<CustomerCrm> {
@@ -2710,6 +3269,17 @@ function buildCustomerPayload(
   const tier = payload.price_tier?.trim();
   if (tier) {
     body.price_tier = tier;
+  }
+  if (payload.credit_limit !== undefined) {
+    const limit = payload.credit_limit?.trim();
+    body.credit_limit = limit || null;
+  }
+  if (payload.on_hold !== undefined) {
+    body.on_hold = payload.on_hold;
+  }
+  const holdReason = payload.on_hold_reason?.trim();
+  if (holdReason) {
+    body.on_hold_reason = holdReason;
   }
   return body;
 }
@@ -2779,10 +3349,6 @@ export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
-
-export function canMutateDeliveries(role: UserRole | undefined): boolean {
-  return role === "owner" || role === "warehouse" || role === "till";
-}
 
 export function listDeliveries(): Promise<Delivery[]> {
   return apiFetch<Delivery[]>("/deliveries");

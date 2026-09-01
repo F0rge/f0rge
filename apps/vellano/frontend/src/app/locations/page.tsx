@@ -17,10 +17,12 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 
+import { LocationBinsPanel } from "@/components/location-bins-panel";
 import {
   LOCATION_TYPES,
+  canManageLocations,
   createLocation,
   listLocations,
   updateLocation,
@@ -50,17 +52,13 @@ const emptyCreateForm: CreateLocationPayload = {
   type: "warehouse",
 };
 
-function canManageLocations(role: string | undefined): boolean {
-  return role === "owner" || role === "warehouse";
-}
-
 function locationTypeLabel(type: LocationType): string {
   return LOCATION_TYPES.find((entry) => entry.value === type)?.label ?? type;
 }
 
 export default function LocationsPage() {
   const { user } = useAuth();
-  const canMutate = canManageLocations(user?.role);
+  const canMutate = canManageLocations(user);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +68,7 @@ export default function LocationsPage() {
   const [createForm, setCreateForm] = useState<CreateLocationPayload>(emptyCreateForm);
   const [renameName, setRenameName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadLocations = useCallback(async () => {
     setLoading(true);
@@ -203,41 +202,59 @@ export default function LocationsPage() {
                 <TableBody>
                   {tableRows.map((row) => {
                     const entry = locations.find((loc) => loc.id === row.id);
+                    const isExpanded = expandedId === row.id;
                     return (
-                      <TableRow {...getRowProps({ row })} key={row.id}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "actions" && entry && canMutate) {
-                            return (
-                              <TableCell key={cell.id}>
-                                <Stack gap={3} orientation="horizontal">
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    disabled={saving}
-                                    onClick={() => openRename(entry)}
-                                  >
-                                    Rename
-                                  </Button>
-                                  {!entry.is_archived ? (
+                      <Fragment key={row.id}>
+                        <TableRow {...getRowProps({ row })}>
+                          {row.cells.map((cell) => {
+                            if (cell.info.header === "actions") {
+                              return (
+                                <TableCell key={cell.id}>
+                                  <Stack gap={3} orientation="horizontal">
                                     <Button
-                                      kind="danger--ghost"
+                                      kind="ghost"
                                       size="sm"
-                                      disabled={saving}
-                                      onClick={() => setArchiveLocation(entry)}
+                                      onClick={() => setExpandedId(isExpanded ? null : row.id)}
                                     >
-                                      Archive
+                                      {isExpanded ? "Hide bins" : "Bins"}
                                     </Button>
-                                  ) : null}
-                                </Stack>
-                              </TableCell>
-                            );
-                          }
-                          if (cell.info.header === "actions") {
-                            return <TableCell key={cell.id}>—</TableCell>;
-                          }
-                          return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                        })}
-                      </TableRow>
+                                    {entry && canMutate ? (
+                                      <>
+                                        <Button
+                                          kind="ghost"
+                                          size="sm"
+                                          disabled={saving}
+                                          onClick={() => openRename(entry)}
+                                        >
+                                          Rename
+                                        </Button>
+                                        {!entry.is_archived ? (
+                                          <Button
+                                            kind="danger--ghost"
+                                            size="sm"
+                                            disabled={saving}
+                                            onClick={() => setArchiveLocation(entry)}
+                                          >
+                                            Archive
+                                          </Button>
+                                        ) : null}
+                                      </>
+                                    ) : null}
+                                  </Stack>
+                                </TableCell>
+                              );
+                            }
+                            return <TableCell key={cell.id}>{cell.value}</TableCell>;
+                          })}
+                        </TableRow>
+                        {isExpanded && entry ? (
+                          <TableRow>
+                            <TableCell colSpan={TABLE_HEADERS.length}>
+                              <LocationBinsPanel location={entry} canMutate={canMutate} />
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
                     );
                   })}
                 </TableBody>

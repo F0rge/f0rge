@@ -75,11 +75,29 @@ Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSit
 
 Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally.
 
+### Permissions (F5)
+
+Authorisation is a **permission catalog**, not role-tuple checks. `users.role` is a string slug matching `roles.slug`. Five built-in roles are **presets**. Owner is immutable (`is_system`, `is_owner_preset`); `has_permission` short-circuits for owner. Custom roles are named bundles (`POST /api/v1/roles`). Cookie remains `vellano_session`.
+
+**Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.deliveries`, `sales.customers`, `books.mutate`, `books.journals`.
+
+| Preset | Keys |
+|--------|------|
+| **owner** | all catalog keys; cannot strip; cannot demote last owner |
+| **buyer** | `catalogue.mutate`, `po.raise`, `stock.cost.view` |
+| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.deliveries` (no `stock.cost.view`, no till) |
+| **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.deliveries`, `sales.customers` (no `stock.cost.view`) |
+| **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view` (no `till.sell`) |
+
+`GET /auth/me` returns `role` plus `permissions: list[str]`. Missing `stock.cost.view` nulls inventory `unit_cost_zar` and SKU `last_landed_cost_zar`; cost-audit is 403. Any till line `discount_percent > 0` requires `till.discount`.
+
+Reads (list/get/PDF/reports) stay **any authenticated** unless noted. Mutate keys below replace the old owner\|warehouse\|… matrices.
+
 ### Playground seed (develop / local demos)
 
 Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (markers: supplier `Playground Imports` / SKU `PG-TABLE`, then demo pack `PG-SOFA`, then sofa catalogue `VEL-SOFA-LONDON`):
 
-suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → transfer 1 table to Bedfordview → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched). A later pack adds high-end sofa SKUs with Unsplash photos (local files under `backend/data/playground_photos/`), extra customers, a trade invoice, a sofa layby, and a Minotti ZAR bill. Idempotent — existing DBs still get the sofa pack on the next boot.
+suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → two-step transfer 1 table to Bedfordview (draft → dispatch → receive) → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched). A later pack adds high-end sofa SKUs with Unsplash photos (local files under `backend/data/playground_photos/`), extra customers, a trade invoice, a sofa layby, and a Minotti ZAR bill. Idempotent — existing DBs still get the sofa pack on the next boot.
 
 **Railway develop:** on service `vellano-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do not enable on a database you want to keep empty. After it runs, log in as `owner@example.com` / `change-me-owner` (or the role users above) and walk stock → proforma → PO → receive → transfer → till → books.
 
@@ -89,12 +107,59 @@ Local: `SEED_PLAYGROUND=true` in `apps/vellano/backend/.env`, then restart uvico
 
 Endpoints: `GET/POST /api/v1/locations`, `PATCH /api/v1/locations/{id}`. Archive via `is_archived`; no DELETE.
 
-| Action | owner | warehouse | buyer | till | books |
-|--------|:-----:|:---------:|:-----:|:----:|:-----:|
-| List locations | yes | yes | yes | yes | yes |
-| Create / update / archive | yes | yes | no | no | no |
+| Action | Permission |
+|--------|------------|
+| List locations | any authenticated |
+| Create / update / archive | `stock.receive` |
 
 Startup seeds two locations when the table is empty: Kramerville (warehouse), Bedfordview (showroom). Same rows are inserted by migration `003_locations`.
+
+## F0 warehouse bins
+
+Bins are children of a location (row × bay × level). Quantity lives on `bin_stock`; `location_stock.on_hand` is always the rollup. **Unit cost stays on `location_stock.unit_cost_zar`** (weighted average) — no per-bin cost.
+
+Every location has a default **FLOOR** bin (`code=FLOOR`, `row_code=F`, `bay=1`, `level=1`). Seed and `LocationService.create` add it; migration `029_warehouse_bins` backfills existing locations and copies `location_stock.on_hand` onto that bin.
+
+- **API:** `GET/POST /locations/{id}/bins`, `POST /locations/{id}/bins/grid` (idempotent; skip existing row/bay/level), `PATCH /locations/{id}/bins/{bin_id}` (`is_archived` / `is_default`). Scan payload is bin `code`. List includes archived. Mutate: `stock.receive`. Read: any authenticated role.
+- **Grid codes:** `{row}-{bay:02d}-{level}` e.g. `A-01-1`.
+- **Print / scan:** bin labels via `printHtml` (blob URL + `window.open(url, "_blank")` — never `noopener`) + JsBarcode CODE128 of `code`. Receive/WMS type-or-scan matches `code` (case-insensitive).
+- **Stock:** omitted `bin_id` / `from_bin_id` / `to_bin_id` uses the active default. Archived bins cannot receive. Cannot archive the default without assigning another first. Same-location bin-to-bin is out of v1.
+- **Transfers:** optional `from_bin_id` / `to_bin_id` on each line; dest on-hand rises only on dest receive (F2).
+- **Stocktake** stays location-scoped; variance applies to the default bin (no `stocktake_lines.bin_id`).
+
+| Action | Permission |
+|--------|------------|
+| List bins | any authenticated |
+| Create / grid / archive / set default | `stock.receive` |
+
+## F2 two-step transfers
+
+Internal stock move is a **document**, not a one-shot qty swap. Dest on-hand rises **only** on dest receive. In-app Transfer Note PDF (`GET /{id}/pdf`). **No email.**
+
+Endpoints (cookie `vellano_session`): `GET/POST /api/v1/transfers`, `GET /transfers/{id}`, `POST /transfers/{id}/dispatch`, `GET /transfers/{id}/pdf`, `POST /transfers/{id}/receive`, `POST /transfers/{id}/cancel`.
+
+Numbering: `TRF-0001`. Status: `draft` | `in_transit` | `received` | `cancelled`. Cancel is a status change (no DELETE).
+
+- **Create draft** (`require_transfer` = `stock.transfer`): no stock movement. Same from/to → 400. Till cannot create or dispatch (403).
+- **Dispatch:** draft → in_transit. Decrements **source** only (`apply_outgoing_qty`, bin or default). Does **not** increment dest. Captures dispatcher + timestamp and source `unit_cost_zar` on each line. Stocktake lock either end → 409. Over-qty / archived → 409.
+- **Receive** (`require_transfer_receive` = `stock.transfer` or `till.sell`): v1 qty_received must equal qty_dispatched. Increments dest via `apply_incoming_qty` using the dispatch unit cost. Stamps receiver + `received_display_name`. Buyer/books → 403.
+- **Cancel:** draft = `require_transfer`, no stock. in_transit = owner only, restock source. received = reject.
+
+| Action | Permission |
+|--------|------------|
+| List / get / PDF | any authenticated |
+| Create draft / dispatch | `stock.transfer` |
+| Receive | `stock.transfer` or `till.sell` |
+| Cancel draft | `stock.transfer` |
+| Cancel in transit | `users.manage` |
+
+Migration: `031_two_step_transfers`.
+
+## Shop-floor qty patterns (A / B / C)
+
+- **A carton_count**: same SKU ships in N cartons; qty is sellable units. Stock, till, PO qty, and books qty stay sellable. Packing sheet and invoice PDF may print a generated carton total when `carton_count > 1`.
+- **B kit BOM**: virtual parent (`sku_bom_lines`); stock/pick are components. Till explodes the BOM: if **100% of every component** is at the posted showroom, consume there (F1). Otherwise `ConflictError("Kit requires pick")` unless a confirmed/picking/staged pick for the same kit×qty is posted (`pick_id` on the sale). Invoice is one line at the parent price. A SKU is a kit if it has ≥1 BOM line. Parent has no `on_hand` write on till.
+- **C inner pack**: supplier carton of N eaches — **not in this ticket** (PO line later).
 
 ## V2-S2 stocktakes
 
@@ -108,10 +173,10 @@ Start snapshots **every SKU** at that location (`expected_qty` = on-hand or 0). 
 
 Complete only from `in_progress`. Lines with `counted_qty` set apply `delta = counted - expected` via stock movements (audit source `stocktake`); **uncounted lines are skipped** (on-hand unchanged). Then `completed` and unlock. Cancel only from `in_progress` → `cancelled`, no stock writes. No GL.
 
-| Action | owner | warehouse | buyer | till | books |
-|--------|:-----:|:---------:|:-----:|:----:|:-----:|
-| List / get stocktakes | yes | yes | yes | yes | yes |
-| Start, count, lookup, complete, cancel | yes | yes | no | no | no |
+| Action | Permission |
+|--------|------------|
+| List / get stocktakes | any authenticated |
+| Start, count, lookup, complete, cancel | `stock.receive` |
 
 ## V2-S3 stock adjustments
 
@@ -131,14 +196,14 @@ Draft at a location; complete applies on-hand and one balanced journal. Reasons:
 
 Create and complete return 409 `"Location is locked for stocktake"` while a stocktake is in progress at that location. Archived location → conflict. Cancel from `draft` only; no stock, no GL. `unit_cost_zar` required on complete for increases when location cost is missing, and for decreases when location cost is missing (`"unit cost required"`). Audit source `adjustment`.
 
-| Action | owner | warehouse | buyer | till | books |
-|--------|:-----:|:---------:|:-----:|:----:|:-----:|
-| List / get adjustments | yes | yes | yes | yes | yes |
-| Create, lines, complete, cancel | yes | yes | no | no | no |
+| Action | Permission |
+|--------|------------|
+| List / get adjustments | any authenticated |
+| Create, lines, complete, cancel | `stock.receive` |
 
 ## V2-S4 CSV import
 
-Endpoints (cookie `vellano_session`): `POST /api/v1/imports/preview`, `POST /api/v1/imports/commit`. Multipart: `inventory` CSV required, `soh` CSV optional, optional JSON strings `inventory_map` / `soh_map`. No GET. **owner|buyer** (`require_catalogue_mutate`). Warehouse-only SOH import is deferred.
+Endpoints (cookie `vellano_session`): `POST /api/v1/imports/preview`, `POST /api/v1/imports/commit`. Multipart: `inventory` CSV required, `soh` CSV optional, optional JSON strings `inventory_map` / `soh_map`. No GET. **`catalogue.mutate`** (`require_catalogue_mutate`). Warehouse-only SOH import is deferred.
 
 Preview is in-memory (200 even with row errors; 400 only if a file is unreadable or empty). Commit re-parses the files; any row error → 400; otherwise one transaction: inventory then SOH.
 
@@ -146,9 +211,9 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 
 **SOH columns:** our_ref, location, qty required; unit_cost_zar optional. Location is an active case-insensitive name match. SKU must exist in the DB or in the same inventory file. **SET** on-hand to qty (not add). Increase needs a unit cost from the SOH column, inventory `cost_zar`, or existing location cost (`"unit cost required to increase stock"`). Audit source `import`. In-progress stocktake at that location → 409 `"Location is locked for stocktake"`.
 
-| Action | owner | buyer | warehouse | till | books |
-|--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| Preview / commit CSV import | yes | yes | no | no | no |
+| Action | Permission |
+|--------|------------|
+| Preview / commit CSV import | `catalogue.mutate` |
 
 ## V2-S8 SKU category
 
@@ -163,6 +228,7 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 - **Tender:** `cash` | `card` | `deposit` — deposit records tender on `payments` only (Dr 1100 / Cr 1200, same as cash/card); no PSP, no 2300 (laybys own deposits).
 - **VAT:** 15% on discounted ex-VAT subtotal (unchanged).
 - **Returns:** process return is UI-only in S9; backend returns API unchanged (V2-S5).
+- **Camera scan:** HTTPS (Railway) or localhost; type-in fallback if camera is denied.
 
 ## V2-S10 customers CRM
 
@@ -170,16 +236,24 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 - **Customers:** `GET/POST /customers`, `GET /customers/{id}`, `PATCH /customers/{id}`.
 
-Extends the existing `customers` table (no second customer entity). New columns: `customer_type` (`retail` | `trade`, default `retail`), `price_tier` (default `standard`), `phone` (nullable). `POST /contacts` still creates ledger customers with those defaults.
+Extends the existing `customers` table (no second customer entity). Do **not** merge with `/contacts`. `POST /contacts` still creates ledger customers with CRM defaults; `ContactResponse` omits CRM fields.
 
-`CustomerCrmResponse` includes open invoice and active layby aggregates (`open_invoices_count`, `open_invoices_zar`, `overdue_invoices_count`, `active_laybys_count`, `active_laybys_zar`). `ContactResponse` omits CRM fields.
+**Columns:** `customer_type` (`retail` | `trade`, default `retail`), `price_tier` (default `standard`), `phone` (nullable), `credit_limit` (nullable Numeric 14,2), `on_hold` (bool, default false), `on_hold_reason` (nullable, 512).
 
-| Action | owner | warehouse | buyer | till | books |
-|--------|:-----:|:---------:|:-----:|:----:|:-----:|
-| List / get customers | yes | yes | yes | yes | yes |
-| Create / update customers | yes | no | no | yes | yes |
+**Aggregates** (computed, never stored overdue bit): `open_invoices_count`, `open_invoices_zar`, `overdue_invoices_count`, `overdue_invoices_zar`, `last_purchase_date` (`max(tax_invoices.issue_date)`), `active_laybys_count`, `active_laybys_zar`. Overdue clock is `issue_date + 30` (`as_of − 30 days`). Overdue is false when invoices are paid or no longer past terms. Do not change `GET /reports/aged-ar` math.
 
-Migration: `017_v2_s10_customers_crm`.
+**List filters** (AND): `GET /customers?overdue=&active_layby=&on_hold=` — `overdue` = `overdue_invoices_count > 0`, `active_layby` = `active_laybys_count > 0`.
+
+**Till / books credit gate:** named customer `on_hold` → 409 `"Customer is on hold"`; `credit_limit` set and `open_invoices_zar + sale/invoice total_inc_vat > credit_limit` → 409 `"Customer exceeds credit limit"`. Walk-in is skipped. Override keys on till (and books invoice create): `credit_override` + non-empty `credit_override_reason`. Override allowed only with `users.manage` OR `po.raise` (403 otherwise; 400 if override without reason). Audit on the invoice `books_events` CREATED row: `note` = `credit override: {reason}` (no new books action enum).
+
+| Action | Permission |
+|--------|------------|
+| List / get customers | any authenticated |
+| Create customers; PATCH name/phone/type/tier | `sales.customers` |
+| PATCH `credit_limit` / `on_hold` / `on_hold_reason` | `users.manage` OR `po.raise` (till with only `sales.customers` → 403) |
+| Till / invoice credit override | `users.manage` OR `po.raise` |
+
+Migrations: `017_v2_s10_customers_crm`, `034_customer_credit`.
 
 ## V2-S13 SKU supplier prices
 
@@ -189,10 +263,10 @@ Extends `skus` (no second table). Columns: nullable `preferred_supplier_id` (FK 
 
 `PATCH /api/v1/skus/{id}` fields: identity (`our_ref`, `our_barcode`, `name`, `design`, `fabric`), `category`, `preferred_supplier_id`, `lead_time_days`, `supplier_ref`, plus price fields. Duplicate `our_ref` / `our_barcode` / design+fabric → 409. Unknown `preferred_supplier_id` → 404 `"Supplier not found"`. Null clears nullable fields via `model_fields_set`. Identity uniqueness checks pass `exclude_id` so unchanged values are not treated as collisions.
 
-| Action | owner | buyer | warehouse | till | books |
-|--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| List / get SKUs (incl. supplier fields) | yes | yes | yes | yes | yes |
-| PATCH supplier / lead time / supplier_ref | yes | yes | no | no | no |
+| Action | Permission |
+|--------|------------|
+| List / get SKUs (incl. supplier fields) | any authenticated (`last_landed_cost_zar` needs `stock.cost.view`) |
+| PATCH supplier / lead time / supplier_ref | `catalogue.mutate` |
 
 Migration: `018_v2_s13_sku_supplier`.
 
@@ -206,10 +280,10 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 Numbering: `DLV-0001`. Status: `draft` | `packed` | `delivered` | `cancelled`. Source: paid **invoice** (`amount_paid == total_inc_vat`) or non-cancelled **layby**. One non-cancelled delivery per source. Create copies all source lines (no client-supplied lines). Pack: draft → packed. Complete: packed → delivered. Cancel: draft only.
 
-| Action | owner | warehouse | buyer | till | books |
-|--------|:-----:|:---------:|:-----:|:----:|:-----:|
-| List / get deliveries | yes | yes | yes | yes | yes |
-| Create, pack, complete, cancel | yes | yes | no | yes | no |
+| Action | Permission |
+|--------|------------|
+| List / get deliveries | any authenticated |
+| Create, pack, complete, cancel | `sales.deliveries` |
 
 Migration: `019_v2_s11_deliveries`.
 
@@ -225,16 +299,16 @@ Endpoints (cookie `vellano_session`):
 
 `POST /reorder/draft-po` groups by `preferred_supplier_id`, one `PurchaseOrderService.create` per supplier (`proforma_id=null`, status `open`). Line `qty` = `suggested_qty`; `factory_unit_amount` = `last_landed_cost_zar` or `1`. Each SKU must be on the reorder list and have a preferred supplier.
 
-| Action | owner | buyer | warehouse | till | books |
-|--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| GET reorder list | yes | yes | yes | yes | yes |
-| POST draft PO | yes | yes | no | no | no |
+| Action | Permission |
+|--------|------------|
+| GET reorder list | any authenticated |
+| POST draft PO | `catalogue.mutate` |
 
 Migration: `020_v2_s12_reorder_min`.
 
 ## V2-S14 mobile WMS
 
-Frontend-only `/wms` warehouse console (no new API). Carbon ContentSwitcher: Receive | Count | Transfer. Wraps existing `POST /receive`, stocktake lookup/count/complete, and `POST /transfers`. Mutate: owner|warehouse (`canReceive` / `canTransfer`). Nav: Operations → WMS.
+Frontend-only `/wms` warehouse console (no new API). Carbon ContentSwitcher: Receive | Count | Transfer. Wraps existing `POST /receive`, stocktake lookup/count/complete, and `POST /transfers`. Mutate: `stock.receive` / `stock.transfer`. Nav: Operations → WMS.
 
 ## V2-S15 reports (stock and sales)
 
@@ -247,9 +321,9 @@ Richer stock and sales reports under `/api/v1/reports` (cookie `vellano_session`
 
 **No sales-by-location:** `tax_invoices` have no `location_id` — location-scoped sales reporting would need a schema change (out of scope).
 
-| Action | owner | buyer | warehouse | till | books |
-|--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| All V2-S15 reports + CSV | yes | yes | yes | yes | yes |
+| Action | Permission |
+|--------|------------|
+| All V2-S15 reports + CSV | any authenticated |
 
 ## V2-S5 returns / RMA
 
@@ -265,10 +339,10 @@ One non-cancelled return per invoice. Cannot create if invoice already has a cre
 
 Complete restock while a stocktake is `in_progress` at that location → 409 `"Location is locked for stocktake"`.
 
-| Action | owner | warehouse | buyer | till | books |
-|--------|:-----:|:---------:|:-----:|:----:|:-----:|
-| List / get returns | yes | yes | yes | yes | yes |
-| Create / complete / cancel | yes | yes | no | yes | no |
+| Action | Permission |
+|--------|------------|
+| List / get returns | any authenticated |
+| Create / complete / cancel | `sales.returns` |
 
 ## V2-S6 laybys
 
@@ -286,10 +360,10 @@ Complete (from `ready` only): tax invoice, Dr AR / Cr sales / Cr VAT; apply depo
 
 Stocktake lock at location → 409 `"Location is locked for stocktake"` on hold create/cancel and on complete when not holding.
 
-| Action | owner | warehouse | buyer | till | books |
-|--------|:-----:|:---------:|:-----:|:----:|:-----:|
-| List / get laybys | yes | yes | yes | yes | yes |
-| Create, pay, complete, cancel | yes | yes | no | yes | no |
+| Action | Permission |
+|--------|------------|
+| List / get laybys | any authenticated |
+| Create, pay, complete, cancel | `sales.laybys` |
 
 ## V2-S7 home hub KPIs
 
@@ -301,9 +375,9 @@ Stocktake lock at location → 409 `"Location is locked for stocktake"` on hold 
 
 **`recent_movements`** (max 10): newest `unit_cost_audit` rows — `source`, title (`sku.our_ref` or `note`), detail (`source` + location name when present), `created_at`.
 
-| Action | owner | warehouse | buyer | till | books |
-|--------|:-----:|:---------:|:-----:|:----:|:-----:|
-| Home summary | yes | yes | yes | yes | yes |
+| Action | Permission |
+|--------|------------|
+| Home summary | any authenticated |
 
 ## S3 catalogue (suppliers, proformas, SKUs)
 
@@ -313,14 +387,14 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Proformas:** `GET /proformas`, `POST /proformas` (multipart: `supplier_id`, `invoice_number`, `invoice_date`, optional `currency`, file field `file`), `GET /proformas/{id}`, `GET /proformas/{id}/file` (PDF).
 - **SKUs:** `GET/POST /skus`, `GET /skus/{id}`, `PATCH /skus/{id}` (identity, category, prices, supplier fields), `DELETE /skus/{id}` (204; 409 if stock/orders/sales history), `POST /skus/{id}/photo` (field `photo`), `GET /skus/{id}/photo`.
 
-**S1 opening stock:** optional on `POST /skus`: `opening_location_id`, `opening_qty` (≥ 1), `opening_unit_cost_zar` (> 0), `opening_date` (defaults to today). If any opening field is set, location, qty, and unit cost are required. Owner/buyer. Writes location on-hand and cost audit source `opening`; no GL. Unit-cost blend matches receive. Omit all opening fields for a catalogue-only create (SKU is not in `GET /inventory`). Catalogue-only SKUs can be `DELETE`d; SKUs with `location_stock`, orders, or sales history return 409 `"Cannot delete a SKU that has stock, orders, or sales history."`
+**S1 opening stock:** optional on `POST /skus`: `opening_location_id`, `opening_qty` (≥ 1), `opening_unit_cost_zar` (> 0), `opening_date` (defaults to today). If any opening field is set, location, qty, and unit cost are required. Requires `catalogue.mutate`. Writes location on-hand and cost audit source `opening`; no GL. Unit-cost blend matches receive. Omit all opening fields for a catalogue-only create (SKU is not in `GET /inventory`). Catalogue-only SKUs can be `DELETE`d; SKUs with `location_stock`, orders, or sales history return 409 `"Cannot delete a SKU that has stock, orders, or sales history."`
 
 UI labels distinguish **Our barcode** from **Supplier ref** — never conflate them.
 
-| Action | owner | buyer | warehouse | till | books |
-|--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| List suppliers / proformas / catalogue | yes | yes | yes | yes | yes |
-| Create / update / delete SKU, file proforma, create supplier | yes | yes | no | no | no |
+| Action | Permission |
+|--------|------------|
+| List suppliers / proformas / catalogue | any authenticated |
+| Create / update / delete SKU, file proforma, create supplier | `catalogue.mutate` |
 
 No purchase orders, landed cost, quantities, or wholesale/retail pricing in S3.
 
@@ -332,11 +406,11 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Receive:** `POST /receive` — JSON `purchase_order_id`, `location_id`.
 - **Inventory:** `GET /inventory` — on-order, on-hand, sellable, unit costs per location.
 
-| Action | owner | buyer | warehouse | till | books |
-|--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| List/get PO, packing sheet, inventory | yes | yes | yes | yes | yes |
-| Create PO, on-water, land | yes | yes | no | no | no |
-| Receive | yes | no | yes | no | no |
+| Action | Permission |
+|--------|------------|
+| List/get PO, packing sheet, inventory | any authenticated (inventory costs need `stock.cost.view`) |
+| Create PO, on-water, land | `catalogue.mutate` |
+| Receive | `stock.receive` |
 
 PO numbers are sequential `PO-0001` (our ref, not supplier). Optional `proforma_id` must match PO supplier.
 
@@ -354,6 +428,40 @@ On receive, blend unit cost at a location by quantity-weighted average: when add
 
 The app does not send email.
 
+## F7 actual lead times
+
+Four nullable timestamptz stamps on `purchase_orders`: `ordered_at`, `on_water_at`, `landed_at`, `received_at`. First write wins (do not overwrite). Create sets `ordered_at` from `created_at` after flush. Migration `035_po_lead_timestamps` backfills `ordered_at` from `created_at` only — **never** invent water/land/received from `updated_at`. Historical received POs may only have `ordered_at`; prefer n=0 over fake days.
+
+Reports (any authenticated — do **not** require `stock.cost.view`):
+
+- `GET /api/v1/reports/supplier-lead-times` + `/csv`
+- `GET /api/v1/reports/sku-lead-times` + `/csv`
+
+Include only `status=received` with both `ordered_at` and `received_at`. Calendar days (`received_at.date() − ordered_at.date()`). **Median not mean** (`statistics.median`; `{10,20,100}` → 20). `median_last_3_days` is the median of the three newest by `received_at` (or all if n&lt;3). Multi-SKU POs share the same PO clock. `manual_lead_time_days` is read-only `Sku.lead_time_days` for comparison — **never PATCH** it from receive or reports. Do not change `#542` reorder math. All four stamps are on `PurchaseOrderResponse`.
+
+## F8 SKU ABC / Pareto criticality
+
+Revenue-based ABC on ex-VAT sales (`InvoiceLine.ex_vat`). **No Alembic.** Credit notes are **not** netted (#545 parity). Any authenticated — no `stock.cost.view`.
+
+- `GET /api/v1/reports/sku-criticality?from=&to=` + `/csv` — optional `from`/`to` (same aliases as sales-by-sku); default last 12 calendar months through today inclusive.
+- **A class** = cumulative value share ≤ 80% (value band, not top 20% of SKU count). **B** ≤ 95%, else **C**. `hits_50pct_band` marks the first SKU crossing 50% cumulative share. Header: `sku_count_for_50pct`, `sku_count_for_80pct`, `top_sku_share_pct`. Category rollup uses `Sku.category` (`null` → `Uncategorised`). Pure rank logic in `app/services/abc.py`.
+
+## F9 multi-location kit pick
+
+Location-scoped (not bin). No email. Reuse `stock.transfer` / `till.sell` / `sales.deliveries` — do **not** invent `picks.mutate`.
+
+**Settings** (`team_settings`, Alembic `036_picks` revises `035_po_lead_timestamps`): `always_prefer_warehouse` (bool, default true), `pick_priority` (JSONB list of location UUID strings, default `[]` = derive). PATCH uses existing `settings.mutate`.
+
+**Allocator** (`app/services/pick_allocator.py`, pure, no DB): walk `pick_priority` if set (skip missing/archived); else warehouse then showroom, `name` ASC within type. `always_prefer_warehouse` drains **all warehouse-type** locations first (not the name “Kramerville”). Never allocate more than on-hand or need. In-transit is already off `on_hand` (F2 dispatch) — no second ATP. Non-warehouse qty while warehouse has leftover the user skipped, or any non-warehouse qty while warehouse is short → `needs_confirm`. Shortfall is `qty_short`.
+
+**Documents:** `picks` numbered `PCK-0001`; status `draft | confirmed | picking | staged | cancelled`; source `invoice | layby | till`. Lines + allocations. `transfers.pick_id` SET NULL.
+
+**API** `/api/v1/picks`: GET list/get/pdf any authenticated. POST/PATCH/confirm/complete/cancel: any of `stock.transfer`, `till.sell`, `sales.deliveries`. Preview explodes F1 BOM, no persist, 400 if not a kit. Confirm requires full allocation; if `needs_confirm` and `confirm_split` is not true → 409 `"confirm_split required"`. Complete creates F2 transfers toward default staging (first warehouse in pick_priority / derived order — never a hardcoded UUID/name) and dispatches; dest on-hand rises only on receive. If every allocation is already at one showroom and `collect_from_showroom` (or all already at staging), skip transfers and set `staged`. One delivery (components, no stock move) when invoice/layby exists. Till-origin skips delivery until `invoice_id` is set. Receive of the last pick transfer sets `staged` and creates that delivery. Cancel draft/confirmed only.
+
+**Till:** kit not 100% at the posted showroom and no matching pick → 409 `"Kit requires pick"` (do not decrement only Bedfordview). Matching pick: no showroom component decrement; set `pick.invoice_id`; COGS from allocation locations or showroom cost; missing cost → 409, do not steal stock.
+
+v1 is location not bin.
+
 ## S5 prices
 
 Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesale_inc_vat`, `retail_ex_vat`, `retail_inc_vat`. Source of truth columns on `skus`: `wholesale_ex_vat`, `retail_ex_vat` only (ex-VAT stored; inc-VAT derived on read).
@@ -361,7 +469,7 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 - **VAT:** 15% hardcoded (V1). Home currency **ZAR**. No SARS API.
 - **Rounding:** store ex-VAT; display inc-VAT = `ex * 1.15` rounded half-up to the cent (`Decimal("0.01")`, `ROUND_HALF_UP`). Editing inc-VAT converts to ex-VAT with `inc / 1.15` rounded half-up to the cent.
 - **Worked examples:** 100.00 ex → 115.00 inc; 2300.00 inc → 2000.00 ex; 2500.00 inc → 2173.91 ex.
-- **Roles:** owner and buyer may PATCH prices; warehouse, till, and books may GET only (PATCH → 403).
+- **Roles:** PATCH prices requires `catalogue.mutate`; GET is any authenticated role.
 - **Quotes:** out of V1 — no quote entity, table, or routes.
 
 ## S6 ledger (books)
@@ -400,21 +508,21 @@ SKU `category` maps to those P&L accounts via `GET/PUT /api/v1/category-maps` (s
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 - **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on posted journal lines), `tax_treatment` (`none` | `vat15`), and `is_bank`. Extra bank codes 1110–1140 are seeded by `ensure_bank_accounts()`.
-- **Category maps:** `GET/PUT /category-maps` — SKU category → sales/COGS/stock-adj/count-var codes. Mutate: owner|books.
+- **Category maps:** `GET/PUT /category-maps` — SKU category → sales/COGS/stock-adj/count-var codes. Mutate: `books.mutate`.
 - **Contacts:** `GET/POST /contacts` — unified customers (`kind: customer`) and suppliers (`kind: supplier`). `POST` creates customers only; suppliers via `POST /suppliers`.
 - **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf` — 15% VAT on face; journal Dr AR, Cr Sales + VAT control.
 - **Repeating invoices:** `GET/POST /repeating-invoices`, `GET/PATCH /repeating-invoices/{id}`, `POST /repeating-invoices/{id}/run` — run-now only (no cron, no email). Posted invoices have no draft status.
 - **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}` — one CN per invoice; reverses AR/sales/VAT.
 - **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR).
 - **Payments:** `GET/POST /payments` — `direction: in` (invoice, ZAR) or `out` (bill, foreign FX). Response includes `fx_gain_loss_zar` (positive = gain, negative = loss).
-- **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: owner|books.
+- **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: `books.mutate`.
 - **Journal CSV (SimplePay):** `POST /journal-imports/preview` and `/commit` (multipart `file`); source `import:simplepay`; same-month 409. UI on `/journals`.
 - **Books history:** append-only `GET /books-events?document_type=&document_id=` (`invoice` | `bill` | `payment` | `journal`). Journal post + void = two rows on the original id. No PATCH/DELETE.
 
-| Action | owner | buyer | warehouse | till | books |
-|--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| List accounts, contacts, invoices, repeating invoices, bills, payments, journals | yes | yes | yes | yes | yes |
-| Mutate CoA, contacts, invoices, repeating invoices, CN, bills, payments, journals | yes | no | no | no | yes |
+| Action | Permission |
+|--------|------------|
+| List accounts, contacts, invoices, repeating invoices, bills, payments, journals | any authenticated |
+| Mutate CoA, contacts, invoices, repeating invoices, CN, bills, payments, journals | `books.mutate` |
 
 Example invoice create:
 
@@ -461,14 +569,14 @@ Date,Description,Reference,Amount
 - **Bank imports:** `GET/POST /bank-imports`, `GET /bank-imports/{id}`, `GET /bank-imports/unmatched-lines`, `GET /bank-imports/unmatched-counts`, `POST /bank-imports/{import_id}/lines/{line_id}/match` — body `{ "payment_id" }` XOR `{ "journal_id" }`. Bank CSV is per recon account (`account_id` on `POST /bank-imports`; omit defaults to 1100). Bank rules (`GET/POST /bank-rules?bank_account_id=`, PATCH/DELETE `/{id}`) are confirm-to-apply (`POST .../apply-rule` `{ rule_id }`); recode journal-matched lines with `POST .../recode` `{ account_id }`.
 - **Reports:** `GET /reports/aged-ar?as_of=`, `GET /reports/aged-ap?as_of=`, `GET /reports/profit-loss?from=&to=`, `GET /reports/balance-sheet?as_of=`, `GET /reports/trial-balance?as_of=`, `GET /reports/journals?from=&to=&source=` (source optional), `GET /reports/cash-summary?from=&to=` — plus `/csv` on trial-balance, journals, and cash-summary.
 - **VAT201 draft:** `GET /reports/vat201?from=&to=`, `GET /reports/vat201/csv`, `GET /reports/vat201/pdf` — shaped fields for copy/type-in to eFiling only.
-- **VAT201 periods:** `GET/POST /vat201/periods`, `GET /vat201/periods/{id}`, `POST .../lock`, `POST .../reopen` (owner + reason), `GET .../csv` and `/pdf`. Lock snapshots the VAT201 draft for that `from`/`to`. Range `GET /reports/vat201` stays for ad-hoc preview. Never SARS.
+- **VAT201 periods:** `GET/POST /vat201/periods`, `GET /vat201/periods/{id}`, `POST .../lock` (`books.mutate`), `POST .../reopen` (`users.manage` + reason), `GET .../csv` and `/pdf`. Lock snapshots the VAT201 draft for that `from`/`to`. Range `GET /reports/vat201` stays for ad-hoc preview. Never SARS.
 
 Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal matches (manual JE or bank-rule apply) do not mark a payment. Unmatched import lines remain visible. Amount+date suggestions are returned when a payment matches within ±3 days. Per-account unmatched counts: `GET /bank-imports/unmatched-counts`.
 
-| Action | owner | buyer | warehouse | till | books |
-|--------|:-----:|:-----:|:---------:|:----:|:-----:|
-| List imports, reports, VAT201 draft | yes | yes | yes | yes | yes |
-| Upload CSV, match lines | yes | no | no | no | yes |
+| Action | Permission |
+|--------|------------|
+| List imports, reports, VAT201 draft | any authenticated |
+| Upload CSV, match lines | `books.mutate` |
 
 ## Railway
 
@@ -523,6 +631,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/credit-notes` | `/credit-notes` |
 | `/till` | `/till` |
 | `/transfers` | `/transfers` |
+| `/picks` | `/picks` |
 | `/receive` | `/receive` |
 | `/wms` | `/receive`, `/stocktakes`, `/transfers` |
 | `/reports` | `/reports` |

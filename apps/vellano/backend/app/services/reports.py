@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.crud.account import AccountCRUD
+from app.crud.purchase_order import PurchaseOrderCRUD
 from app.models.account import AccountType
 from app.models.bill import Bill
 from app.models.credit_note import CreditNote
@@ -39,6 +40,12 @@ from app.schemas.reports_books import (
     TrialBalanceLine,
     TrialBalanceReport,
 )
+from app.schemas.reports_criticality import (
+    SkuCriticalityCategoryLine,
+    SkuCriticalityLine,
+    SkuCriticalityReport,
+)
+from app.schemas.reports_lead import SkuLeadTimesReport, SupplierLeadTimesReport
 from app.schemas.reports_stock import (
     AgedStockBucket,
     AgedStockLine,
@@ -49,6 +56,8 @@ from app.schemas.reports_stock import (
     StockValuationLine,
     StockValuationReport,
 )
+from app.services.abc import AbcSkuInput, build_abc_report, resolve_report_date_range
+from app.services.lead_times import build_sku_lead_times, build_supplier_lead_times
 
 AGED_STOCK_BUCKET_SPECS: tuple[tuple[str, str], ...] = (
     ("0-90", "0–90 days"),
@@ -102,6 +111,7 @@ class ReportsService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.account_crud = AccountCRUD(db)
+        self.po_crud = PurchaseOrderCRUD(db)
 
     async def aged_ar(self, as_of: datetime.date) -> AgedReport:
         result = await self.db.execute(
@@ -501,6 +511,84 @@ class ReportsService:
             total_inc_vat_zar=total_inc,
         )
 
+    async def sku_criticality(
+        self,
+        from_date: Optional[datetime.date],
+        to_date: Optional[datetime.date],
+    ) -> SkuCriticalityReport:
+        resolved_from, resolved_to = resolve_report_date_range(from_date, to_date)
+
+        result = await self.db.execute(
+            select(
+                InvoiceLine.sku_id,
+                Sku.our_ref,
+                Sku.name,
+                Sku.category,
+                func.coalesce(func.sum(InvoiceLine.qty), 0),
+                func.coalesce(func.sum(InvoiceLine.ex_vat), 0),
+            )
+            .join(TaxInvoice, InvoiceLine.invoice_id == TaxInvoice.id)
+            .join(Sku, InvoiceLine.sku_id == Sku.id)
+            .where(
+                and_(
+                    InvoiceLine.sku_id.isnot(None),
+                    TaxInvoice.issue_date >= resolved_from,
+                    TaxInvoice.issue_date <= resolved_to,
+                )
+            )
+            .group_by(InvoiceLine.sku_id, Sku.our_ref, Sku.name, Sku.category)
+            .order_by(Sku.our_ref)
+        )
+
+        inputs: list[AbcSkuInput] = []
+        for sku_id, our_ref, name, category, qty, ex_vat in result.all():
+            inputs.append(
+                AbcSkuInput(
+                    sku_id=sku_id,
+                    our_ref=our_ref,
+                    name=name,
+                    category=category,
+                    qty=int(qty),
+                    value_zar=Decimal(ex_vat),
+                )
+            )
+
+        ranked = build_abc_report(inputs)
+        return SkuCriticalityReport(
+            from_date=resolved_from,
+            to_date=resolved_to,
+            sku_count_for_50pct=ranked.sku_count_for_50pct,
+            sku_count_for_80pct=ranked.sku_count_for_80pct,
+            top_sku_share_pct=ranked.top_sku_share_pct,
+            lines=[
+                SkuCriticalityLine(
+                    sku_id=line.sku_id,
+                    our_ref=line.our_ref,
+                    name=line.name,
+                    category=line.category,
+                    qty=line.qty,
+                    value_zar=line.value_zar,
+                    share_pct=line.share_pct,
+                    cumulative_pct=line.cumulative_pct,
+                    abc_class=line.abc_class,
+                    hits_50pct_band=line.hits_50pct_band,
+                    is_a=line.is_a,
+                )
+                for line in ranked.lines
+            ],
+            categories=[
+                SkuCriticalityCategoryLine(
+                    category=line.category,
+                    qty=line.qty,
+                    value_zar=line.value_zar,
+                    share_pct=line.share_pct,
+                    cumulative_pct=line.cumulative_pct,
+                    abc_class=line.abc_class,
+                )
+                for line in ranked.categories
+            ],
+        )
+
     async def sales_vat(self, from_date: datetime.date, to_date: datetime.date) -> SalesVatReport:
         if from_date > to_date:
             raise ValueError("from_date must be on or before to_date")
@@ -654,6 +742,14 @@ class ReportsService:
             total_cash_out_zar=total_out,
             total_net_zar=total_in - total_out,
         )
+
+    async def supplier_lead_times(self) -> SupplierLeadTimesReport:
+        orders = await self.po_crud.list_received_dated()
+        return build_supplier_lead_times(orders)
+
+    async def sku_lead_times(self) -> SkuLeadTimesReport:
+        orders = await self.po_crud.list_received_dated()
+        return build_sku_lead_times(orders)
 
     async def _period_debit_credit(
         self,

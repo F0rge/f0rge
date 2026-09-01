@@ -19,6 +19,7 @@ INVENTORY_ALIASES: dict[str, tuple[str, ...]] = {
     "retail_inc_vat": ("retail price", "price", "pricezar", "retail", "retail price zar"),
     "barcode": ("barcode", "ean", "upc", "our barcode"),
     "cost_zar": ("cost", "cost price", "landed cost"),
+    "carton_count": ("carton count", "cartons", "carton_count"),
 }
 
 SOH_ALIASES: dict[str, tuple[str, ...]] = {
@@ -37,6 +38,7 @@ INVENTORY_FIELDS = (
     "retail_inc_vat",
     "barcode",
     "cost_zar",
+    "carton_count",
 )
 SOH_FIELDS = ("our_ref", "location", "qty", "unit_cost_zar")
 
@@ -56,6 +58,7 @@ class InventoryCsvRow:
     retail_inc_vat: Optional[Decimal] = None
     barcode: Optional[str] = None
     cost_zar: Optional[Decimal] = None
+    carton_count: Optional[int] = None
     errors: list[str] = field(default_factory=list)
 
 
@@ -220,6 +223,12 @@ def _parse_qty(value: str) -> int:
     return int(value)
 
 
+def _parse_carton_count(value: str) -> int:
+    if not re.fullmatch(r"[1-9]\d*", value):
+        raise ValidationError(f"carton_count must be an integer ≥ 1: {value}")
+    return int(value)
+
+
 def _missing_column_errors(
     applied_map: dict[str, str], required: tuple[str, ...]
 ) -> list[CsvRowError]:
@@ -270,6 +279,15 @@ def parse_inventory_csv(content: bytes, map_json: Optional[str] = None) -> Inven
             if raw_cost:
                 try:
                     row.cost_zar = _parse_money(raw_cost, "cost_zar")
+                except ValidationError as exc:
+                    row.errors.append(exc.detail)
+        if "carton_count" in applied_map:
+            raw_cartons = _cell(headers, cells, applied_map["carton_count"])
+            if not raw_cartons:
+                row.carton_count = 1
+            else:
+                try:
+                    row.carton_count = _parse_carton_count(raw_cartons)
                 except ValidationError as exc:
                     row.errors.append(exc.detail)
         for message in row.errors:

@@ -20,6 +20,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  can,
   canMutateBooks,
   createVat201Period,
   downloadVat201PeriodCsv,
@@ -162,8 +163,8 @@ function DraftFields({ draft }: { draft: Vat201Draft }) {
 
 export default function Vat201Page() {
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
-  const isOwner = user?.role === "owner";
+  const canMutate = canMutateBooks(user);
+  const canReopen = can(user, "users.manage");
   const [periods, setPeriods] = useState<Vat201Period[]>([]);
   const [selected, setSelected] = useState<Vat201PeriodDetail | null>(null);
   const [fromDate, setFromDate] = useState(() => defaultBimonthly().from);
@@ -468,7 +469,7 @@ export default function Vat201Page() {
                 {locking ? "Locking…" : "Lock"}
               </Button>
             ) : null}
-            {isOwner && selected.status === "locked" ? (
+            {canReopen && selected.status === "locked" ? (
               <Button
                 kind="danger--tertiary"
                 onClick={() => {

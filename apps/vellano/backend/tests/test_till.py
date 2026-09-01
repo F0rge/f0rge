@@ -15,7 +15,7 @@ from tests.test_purchase_orders import (
     _location_id_by_name,
     _relogin_owner,
 )
-from tests.test_transfers import _receive_qty_at_location
+from tests.test_transfers import _receive_qty_at_location, complete_location_transfer
 
 
 async def _set_retail_price(client: AsyncClient, sku_id: str, retail_ex: str) -> None:
@@ -58,16 +58,13 @@ async def _transfer_to_bedfordview(
     bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
     warehouse = await _login_warehouse(async_client)
     await _relogin_owner(owner_client)
-    transfer = await warehouse.post(
-        "/api/v1/transfers",
-        json={
-            "from_location_id": kramerville_id,
-            "to_location_id": bedford_id,
-            "sku_id": sku_id,
-            "qty": qty,
-        },
+    await complete_location_transfer(
+        warehouse,
+        kramerville_id,
+        bedford_id,
+        sku_id,
+        qty,
     )
-    assert transfer.status_code == 200
     return bedford_id
 
 
@@ -478,6 +475,206 @@ async def test_till_omit_customer_id_uses_walk_in(
     invoice = await owner_client.get(f"/api/v1/invoices/{sale.json()['invoice_id']}")
     assert invoice.status_code == 200
     assert invoice.json()["customer_name"] == WALK_IN_CUSTOMER_NAME
+
+
+async def test_till_carton_count_decrements_sellable_units(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=2,
+        location_name="Kramerville",
+        our_ref="TILL-CARTON",
+    )
+    sku_id = data["sku"]["id"]
+    patch = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={"retail_ex_vat": "4000.00", "carton_count": 3},
+    )
+    assert patch.status_code == 200
+    bedford_id = await _transfer_to_bedfordview(async_client, owner_client, sku_id, 2)
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1}],
+            "tender": "cash",
+        },
+    )
+    assert sale.status_code == 201
+    on_hand = await _inventory_on_hand(owner_client, sku_id, bedford_id)
+    assert on_hand == 1
+
+
+async def _ready_showroom_sale(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+    our_ref: str,
+    retail_ex: str = "1000.00",
+) -> tuple[str, str]:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=1,
+        location_name="Kramerville",
+        our_ref=our_ref,
+    )
+    sku_id = data["sku"]["id"]
+    await _set_retail_price(owner_client, sku_id, retail_ex)
+    bedford_id = await _transfer_to_bedfordview(async_client, owner_client, sku_id, 1)
+    return sku_id, bedford_id
+
+
+async def test_till_on_hold_customer_conflicts(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    sku_id, bedford_id = await _ready_showroom_sale(async_client, owner_client, "TILL-HOLD-F6")
+    customer = await owner_client.post(
+        "/api/v1/customers",
+        json={"name": "Till Hold Customer F6"},
+    )
+    assert customer.status_code == 201
+    customer_id = customer.json()["id"]
+    held = await owner_client.patch(
+        f"/api/v1/customers/{customer_id}",
+        json={"on_hold": True, "on_hold_reason": "collections"},
+    )
+    assert held.status_code == 200
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1}],
+            "tender": "cash",
+            "customer_id": customer_id,
+        },
+    )
+    assert sale.status_code == 409
+    assert sale.json()["detail"] == "Customer is on hold"
+
+
+async def test_till_over_credit_limit_conflicts(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    sku_id, bedford_id = await _ready_showroom_sale(async_client, owner_client, "TILL-LIMIT-F6")
+    customer = await owner_client.post(
+        "/api/v1/customers",
+        json={"name": "Till Limit Customer F6"},
+    )
+    assert customer.status_code == 201
+    customer_id = customer.json()["id"]
+    limited = await owner_client.patch(
+        f"/api/v1/customers/{customer_id}",
+        json={"credit_limit": "100.00"},
+    )
+    assert limited.status_code == 200
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1}],
+            "tender": "cash",
+            "customer_id": customer_id,
+        },
+    )
+    assert sale.status_code == 409
+    assert sale.json()["detail"] == "Customer exceeds credit limit"
+
+
+async def test_till_credit_override_owner_records_books_note(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    sku_id, bedford_id = await _ready_showroom_sale(async_client, owner_client, "TILL-OVR-F6")
+    customer = await owner_client.post(
+        "/api/v1/customers",
+        json={"name": "Till Override Customer F6"},
+    )
+    assert customer.status_code == 201
+    customer_id = customer.json()["id"]
+    held = await owner_client.patch(
+        f"/api/v1/customers/{customer_id}",
+        json={"on_hold": True, "credit_limit": "50.00"},
+    )
+    assert held.status_code == 200
+
+    await _relogin_owner(owner_client)
+    sale = await owner_client.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1}],
+            "tender": "cash",
+            "customer_id": customer_id,
+            "credit_override": True,
+            "credit_override_reason": "manager approved",
+        },
+    )
+    assert sale.status_code == 201
+    invoice_id = sale.json()["invoice_id"]
+
+    events = await owner_client.get(
+        "/api/v1/books-events",
+        params={"document_type": "invoice", "document_id": invoice_id},
+    )
+    assert events.status_code == 200
+    created = next(row for row in events.json() if row["action"] == "created")
+    assert created["note"] == "credit override: manager approved"
+
+
+async def test_till_role_cannot_credit_override(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    sku_id, bedford_id = await _ready_showroom_sale(async_client, owner_client, "TILL-OVR403-F6")
+    customer = await owner_client.post(
+        "/api/v1/customers",
+        json={"name": "Till Override Block F6"},
+    )
+    assert customer.status_code == 201
+    customer_id = customer.json()["id"]
+    held = await owner_client.patch(
+        f"/api/v1/customers/{customer_id}",
+        json={"on_hold": True},
+    )
+    assert held.status_code == 200
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1}],
+            "tender": "cash",
+            "customer_id": customer_id,
+            "credit_override": True,
+            "credit_override_reason": "please",
+        },
+    )
+    assert sale.status_code == 403
+
+    missing_reason = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1}],
+            "tender": "cash",
+            "customer_id": customer_id,
+            "credit_override": True,
+        },
+    )
+    assert missing_reason.status_code == 400
+    assert missing_reason.json()["detail"] == "credit_override_reason is required"
 
 
 async def test_no_psp_client_in_codebase() -> None:

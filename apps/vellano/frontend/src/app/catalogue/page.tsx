@@ -6,7 +6,9 @@ import {
   DataTable,
   InlineNotification,
   Modal,
+  NumberInput,
   Stack,
+  Tag,
   Table,
   TableBody,
   TableCell,
@@ -21,6 +23,7 @@ import { Barcode, DocumentExport, DocumentImport, Printer, TrashCan } from "@car
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
+import { SkuBomEditor } from "@/components/sku-bom-editor";
 import { SkuPriceEditor } from "@/components/sku-price-editor";
 import {
   ApiError,
@@ -29,20 +32,25 @@ import {
   deleteSku,
   formatPriceAmount,
   formatZarAmount,
+  getSkuLeadTimes,
   listInventory,
   listSkus,
   skuPhotoUrl,
   updateSku,
   type Sku,
+  type SkuLeadTimeRow,
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { isValidCartonCount, skuCartonCount } from "@/lib/carton-helpers";
 import { downloadCsv } from "@/lib/csv";
+import { formatObservedMedianLine, skuLeadTimeById } from "@/lib/lead-times";
 
 const TABLE_HEADERS = [
   { key: "select", header: "" },
   { key: "product", header: "SKU / Product Name" },
   { key: "category", header: "Category" },
+  { key: "cartons", header: "Cartons" },
   { key: "preferred_supplier", header: "Preferred supplier" },
   { key: "lead_time_days", header: "Lead time" },
   { key: "reorder_min", header: "Reorder min" },
@@ -60,6 +68,7 @@ type SkuIdentityForm = {
   design: string;
   fabric: string;
   category: string;
+  carton_count: number | "";
 };
 
 function emptyIdentityForm(): SkuIdentityForm {
@@ -70,6 +79,7 @@ function emptyIdentityForm(): SkuIdentityForm {
     design: "",
     fabric: "",
     category: "",
+    carton_count: 1,
   };
 }
 
@@ -81,16 +91,19 @@ function identityFormFromSku(sku: Sku): SkuIdentityForm {
     design: sku.design,
     fabric: sku.fabric,
     category: sku.category ?? "",
+    carton_count: skuCartonCount(sku),
   };
 }
 
 function isIdentityFormValid(form: SkuIdentityForm): boolean {
-  return Boolean(
-    form.our_ref.trim() &&
-      form.our_barcode.trim() &&
-      form.name.trim() &&
-      form.design.trim() &&
-      form.fabric.trim(),
+  return (
+    Boolean(
+      form.our_ref.trim() &&
+        form.our_barcode.trim() &&
+        form.name.trim() &&
+        form.design.trim() &&
+        form.fabric.trim(),
+    ) && isValidCartonCount(form.carton_count)
   );
 }
 
@@ -98,6 +111,7 @@ type SkuRow = {
   id: string;
   product: string;
   category: string;
+  cartons: string;
   preferred_supplier: string;
   lead_time_days: string;
   reorder_min: string;
@@ -178,13 +192,16 @@ function CataloguePageContent() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const canMutate = canMutateCatalogue(user?.role);
+  const canMutate = canMutateCatalogue(user);
+  const canViewCost = canViewCostAudit(user);
   const [skus, setSkus] = useState<Sku[]>([]);
+  const [skuLeadTimes, setSkuLeadTimes] = useState<SkuLeadTimeRow[]>([]);
   const [unitCostBySku, setUnitCostBySku] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [priceSku, setPriceSku] = useState<Sku | null>(null);
   const [editSku, setEditSku] = useState<Sku | null>(null);
+  const [bomSku, setBomSku] = useState<Sku | null>(null);
   const [editForm, setEditForm] = useState<SkuIdentityForm>(emptyIdentityForm);
   const [skuToDelete, setSkuToDelete] = useState<Sku | null>(null);
   const [saving, setSaving] = useState(false);
@@ -200,8 +217,13 @@ function CataloguePageContent() {
     setLoading(true);
     setError(null);
     try {
-      const [skuData, inventoryData] = await Promise.all([listSkus(), listInventory()]);
+      const [skuData, inventoryData, leadReport] = await Promise.all([
+        listSkus(),
+        listInventory(),
+        getSkuLeadTimes().catch(() => ({ rows: [] as SkuLeadTimeRow[] })),
+      ]);
       setSkus(skuData);
+      setSkuLeadTimes(leadReport.rows);
       const costs = new Map<string, string>();
       for (const entry of inventoryData) {
         if (entry.unit_cost_zar) {
@@ -269,10 +291,17 @@ function CataloguePageContent() {
   const allFilteredSelected =
     filteredSkus.length > 0 && filteredSkus.every((sku) => selectedIds.has(sku.id));
 
+  const tableHeaders = canViewCost
+    ? TABLE_HEADERS
+    : TABLE_HEADERS.filter((header) => header.key !== "cost_zar");
+
+  const leadBySku = skuLeadTimeById(skuLeadTimes);
+
   const rows: SkuRow[] = pagedSkus.map((entry) => ({
     id: entry.id,
     product: entry.id,
     category: entry.category?.trim() || "—",
+    cartons: String(skuCartonCount(entry)),
     preferred_supplier: entry.preferred_supplier_name?.trim() || "—",
     lead_time_days: formatLeadTime(entry.lead_time_days),
     reorder_min: entry.reorder_min !== null ? String(entry.reorder_min) : "—",
@@ -294,7 +323,7 @@ function CataloguePageContent() {
   }
 
   async function handleEditSkuSave() {
-    if (!editSku || !isIdentityFormValid(editForm)) {
+    if (!editSku || !isIdentityFormValid(editForm) || !isValidCartonCount(editForm.carton_count)) {
       return;
     }
     setIdentitySaving(true);
@@ -307,6 +336,7 @@ function CataloguePageContent() {
         design: editForm.design.trim(),
         fabric: editForm.fabric.trim(),
         category: editForm.category.trim() || null,
+        carton_count: editForm.carton_count,
       };
       await updateSku(editSku.id, payload);
       setEditSku(null);
@@ -343,6 +373,9 @@ function CataloguePageContent() {
       if (editSku?.id === skuToDelete.id) {
         setEditSku(null);
         setEditForm(emptyIdentityForm());
+      }
+      if (bomSku?.id === skuToDelete.id) {
+        setBomSku(null);
       }
       await loadSkus();
     } catch (err) {
@@ -414,10 +447,11 @@ function CataloguePageContent() {
                   "Our ref",
                   "Name",
                   "Category",
+                  "Cartons",
                   "Preferred supplier",
                   "Lead time",
                   "Reorder min",
-                  "Cost (ZAR)",
+                  ...(canViewCost ? ["Cost (ZAR)"] : []),
                   "Retail inc VAT",
                   "Trade inc VAT",
                   "Our barcode",
@@ -426,10 +460,11 @@ function CataloguePageContent() {
                   sku.our_ref,
                   sku.name,
                   sku.category?.trim() || "",
+                  String(skuCartonCount(sku)),
                   sku.preferred_supplier_name?.trim() || "",
                   formatLeadTime(sku.lead_time_days),
                   sku.reorder_min !== null ? String(sku.reorder_min) : "",
-                  unitCostBySku.get(sku.id) ?? "",
+                  ...(canViewCost ? [unitCostBySku.get(sku.id) ?? ""] : []),
                   sku.retail_inc_vat ?? "",
                   sku.wholesale_inc_vat ?? "",
                   sku.our_barcode,
@@ -468,11 +503,22 @@ function CataloguePageContent() {
         sku={priceSku}
         open={priceSku !== null}
         readOnly={!canMutate}
-        showCostAudit={canViewCostAudit(user?.role)}
+        showCostAudit={canViewCost}
         unitCostZar={priceSku ? (unitCostBySku.get(priceSku.id) ?? null) : null}
+        observedLeadTime={priceSku ? (leadBySku.get(priceSku.id) ?? null) : null}
         saving={saving}
         onSavingChange={setSaving}
         onClose={() => setPriceSku(null)}
+        onSaved={loadSkus}
+        onError={setError}
+      />
+
+      <SkuBomEditor
+        sku={bomSku}
+        skus={skus}
+        open={bomSku !== null}
+        canMutate={canMutate}
+        onClose={() => setBomSku(null)}
         onSaved={loadSkus}
         onError={setError}
       />
@@ -536,6 +582,23 @@ function CataloguePageContent() {
             onChange={(event) =>
               setEditForm((form) => ({ ...form, category: event.target.value }))
             }
+          />
+          <NumberInput
+            id="edit-sku-carton-count"
+            label="Cartons"
+            helperText="Sellable unit ships in this many cartons. Default 1. Not a kit BOM."
+            min={1}
+            step={1}
+            allowEmpty
+            value={editForm.carton_count}
+            invalid={editForm.carton_count !== "" && !isValidCartonCount(editForm.carton_count)}
+            invalidText="Cartons must be 1 or more"
+            onChange={(_event, { value }) => {
+              setEditForm((form) => ({
+                ...form,
+                carton_count: value === "" ? "" : Number(value),
+              }));
+            }}
           />
         </Stack>
       </Modal>
@@ -605,7 +668,7 @@ function CataloguePageContent() {
             </Button>
           </div>
 
-          <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
+          <DataTable rows={rows} headers={[...tableHeaders]}>
             {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
               <TableContainer title="Catalogue" description="All Vellano SKUs">
                 <Table {...getTableProps()}>
@@ -689,7 +752,22 @@ function CataloguePageContent() {
                                       <div>
                                         <div className="cds--type-semibold">{entry.our_ref}</div>
                                         <div className="cds--type-caption-01">{entry.name}</div>
+                                        {entry.is_kit ? (
+                                          <Tag type="teal" size="sm">
+                                            Kit
+                                          </Tag>
+                                        ) : null}
                                       </div>
+                                    </div>
+                                  </TableCell>
+                                );
+                              }
+                              if (cell.info.header === "lead_time_days" && entry) {
+                                return (
+                                  <TableCell key={cell.id}>
+                                    <div>{formatLeadTime(entry.lead_time_days)}</div>
+                                    <div className="cds--type-caption-01">
+                                      {formatObservedMedianLine(leadBySku.get(entry.id))}
                                     </div>
                                   </TableCell>
                                 );
@@ -733,6 +811,20 @@ function CataloguePageContent() {
                                         }}
                                       >
                                         Edit SKU
+                                      </Button>
+                                    ) : null}
+                                    {canMutate || entry.is_kit ? (
+                                      <Button
+                                        type="button"
+                                        kind="ghost"
+                                        size="sm"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          setBomSku(entry);
+                                        }}
+                                      >
+                                        Kit components
                                       </Button>
                                     ) : null}
                                     <Button

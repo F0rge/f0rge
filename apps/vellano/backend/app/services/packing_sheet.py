@@ -10,9 +10,13 @@ from reportlab.pdfgen import canvas
 
 def build_packing_sheet_pdf(
     po_number: str,
-    lines: list[tuple[str, str, str, str, int]],
+    lines: list[tuple[str, str, str, str, int, int]],
 ) -> bytes:
-    """Build packing sheet PDF. Each line: our_ref, our_barcode, name, fabric, qty."""
+    """Build packing sheet PDF.
+
+    Each line: our_ref, our_barcode, name, fabric, qty, carton_count.
+    qty is sellable units. carton_count is a document multiplier only.
+    """
     from io import BytesIO
 
     buffer = BytesIO()
@@ -25,7 +29,7 @@ def build_packing_sheet_pdf(
     y -= 15 * mm
 
     pdf.setFont("Helvetica", 10)
-    for our_ref, our_barcode, name, fabric, qty in lines:
+    for our_ref, our_barcode, name, fabric, qty, carton_count in lines:
         if y < 40 * mm:
             pdf.showPage()
             y = height - 30 * mm
@@ -40,7 +44,15 @@ def build_packing_sheet_pdf(
         pdf.drawString(30 * mm, y, f"Fabric: {fabric}")
         y -= 6 * mm
         pdf.drawString(30 * mm, y, f"Qty: {qty}")
-        y -= 10 * mm
+        y -= 6 * mm
+        if carton_count > 1:
+            pdf.drawString(
+                30 * mm,
+                y,
+                f"Cartons: {qty} \xd7 {carton_count} = {qty * carton_count}",
+            )
+            y -= 6 * mm
+        y -= 4 * mm
 
     pdf.save()
     return buffer.getvalue()

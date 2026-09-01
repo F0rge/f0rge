@@ -127,7 +127,7 @@ inventory_router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])
 
 @inventory_router.get("", response_model=list[InventorySkuResponse])
 async def list_inventory(
-    _: uuid.UUID = Depends(get_current_user_id),
+    user_id: uuid.UUID = Depends(get_current_user_id),
     service: InventoryService = Depends(get_inventory_service),
 ):
-    return await service.list()
+    return await service.list(user_id)

@@ -13,12 +13,16 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { BinSelect, LocationBinFields } from "@/components/bin-select";
+import { useLocationBins } from "@/hooks/use-location-bins";
 import {
   ApiError,
   canReceive,
   canTransfer,
   completeStocktake,
   createTransfer,
+  dispatchTransfer,
+  downloadTransferPdf,
   getStocktake,
   isActiveLocation,
   listInventory,
@@ -26,9 +30,11 @@ import {
   listPurchaseOrders,
   listSkus,
   listStocktakes,
+  listTransfers,
   lookupStocktakeBarcode,
   patchStocktakeLine,
   receivePurchaseOrder,
+  receiveTransfer,
   startStocktake,
   type InventorySku,
   type Location,
@@ -36,7 +42,10 @@ import {
   type Sku,
   type Stocktake,
   type StocktakeLine,
+  type Transfer,
 } from "@/lib/api";
+import { optionalMovementBinId } from "@/lib/bin-helpers";
+import { formatExpectedCartons } from "@/lib/carton-helpers";
 import { useAuth } from "@/lib/auth";
 
 type WmsTab = "receive" | "count" | "transfer";
@@ -71,8 +80,8 @@ function parsePositiveInt(value: string): number | null {
 
 export default function WmsPage() {
   const { user } = useAuth();
-  const canRecv = canReceive(user?.role);
-  const canXfer = canTransfer(user?.role);
+  const canRecv = canReceive(user);
+  const canXfer = canTransfer(user);
 
   const [tab, setTab] = useState<WmsTab>("receive");
   const [loading, setLoading] = useState(true);
@@ -159,7 +168,8 @@ export default function WmsPage() {
           <div>
             <h1 className="cds--type-productive-heading-04">Warehouse (mobile)</h1>
             <p className="cds--type-body-01">
-              Phone-friendly receive, stocktake count, and transfer flows.
+              Phone-friendly receive, stocktake count, and two-step transfers. Destination stock
+              updates only after receive.
             </p>
           </div>
 
@@ -243,8 +253,14 @@ function ReceiveTab({
 }: ReceiveTabProps) {
   const [poId, setPoId] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [binId, setBinId] = useState("");
   const [barcode, setBarcode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const { activeBins, defaultBinId } = useLocationBins(locationId);
+
+  useEffect(() => {
+    setBinId(defaultBinId);
+  }, [locationId, defaultBinId]);
 
   const selectedPo = landedOrders.find((entry) => entry.id === poId);
   const matchedSku = findSkuByBarcode(skus, barcode);
@@ -277,6 +293,7 @@ function ReceiveTab({
       await receivePurchaseOrder({
         purchase_order_id: poId,
         location_id: locationId,
+        bin_id: optionalMovementBinId(binId, defaultBinId),
       });
       const po = landedOrders.find((entry) => entry.id === poId);
       const location = locations.find((entry) => entry.id === locationId);
@@ -285,6 +302,7 @@ function ReceiveTab({
       );
       setPoId("");
       setLocationId("");
+      setBinId("");
       setBarcode("");
       await onReceived();
     } catch (err) {
@@ -318,6 +336,9 @@ function ReceiveTab({
           />
         ))}
       </Select>
+      {selectedPo ? (
+        <p className="cds--type-body-01">{formatExpectedCartons(selectedPo, skus)}</p>
+      ) : null}
       {landedOrders.length === 0 ? (
         <InlineNotification
           kind="info"
@@ -338,6 +359,14 @@ function ReceiveTab({
           <SelectItem key={entry.id} value={entry.id} text={entry.name} />
         ))}
       </Select>
+      <LocationBinFields
+        idPrefix="wms-receive"
+        locationId={locationId}
+        bins={activeBins}
+        value={binId}
+        onChange={setBinId}
+        includeScan
+      />
       <div className="vellano-wms-barcode">
         <TextInput
           id="wms-receive-barcode"
@@ -609,6 +638,15 @@ type TransferTabProps = {
   onTransferred: () => Promise<void>;
 };
 
+function fullQtyReceivePayload(transfer: Transfer) {
+  return {
+    lines: transfer.lines.map((line) => ({
+      line_id: line.id,
+      qty_received: line.qty_dispatched,
+    })),
+  };
+}
+
 function TransferTab({
   canMutate,
   locations,
@@ -622,8 +660,17 @@ function TransferTab({
   const [skuId, setSkuId] = useState("");
   const [fromLocationId, setFromLocationId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
+  const [fromBinId, setFromBinId] = useState("");
+  const [toBinId, setToBinId] = useState("");
   const [qty, setQty] = useState("1");
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<"draft" | "dispatch" | null>(null);
+  const [lastDraft, setLastDraft] = useState<Transfer | null>(null);
+  const [inboundDestId, setInboundDestId] = useState("");
+  const [inbound, setInbound] = useState<Transfer[]>([]);
+  const [inboundBusyId, setInboundBusyId] = useState<string | null>(null);
+  const { activeBins: fromBins, defaultBinId: fromDefaultBinId } =
+    useLocationBins(fromLocationId);
+  const { activeBins: toBins, defaultBinId: toDefaultBinId } = useLocationBins(toLocationId);
 
   const matchedSku = findSkuByBarcode(skus, barcode);
   const resolvedSkuId = skuId || matchedSku?.id || "";
@@ -642,12 +689,26 @@ function TransferTab({
     numericQty > 0 &&
     numericQty <= sourceOnHand;
 
+  const loadInbound = useCallback(async (destId: string) => {
+    if (!destId) {
+      setInbound([]);
+      return;
+    }
+    setInbound(await listTransfers({ status: "in_transit", to_location_id: destId }));
+  }, []);
+
+  useEffect(() => {
+    void loadInbound(inboundDestId).catch((err: unknown) => {
+      onError(err instanceof Error ? err.message : "Failed to load inbound transfers.");
+    });
+  }, [inboundDestId, loadInbound, onError]);
+
   if (!canMutate) {
     return (
       <InlineNotification
         kind="warning"
         title="Read only"
-        subtitle="Transfers require owner or warehouse role. Use the desktop Transfers page (/transfers) when you have access."
+        subtitle="WMS create and dispatch need owner or warehouse. Till users receive inbound transfers on the Transfers page."
         hideCloseButton
         lowContrast
       />
@@ -662,39 +723,126 @@ function TransferTab({
     }
   }
 
-  async function handleTransfer() {
+  function draftPayload() {
     if (!formValid || numericQty === null) {
+      return null;
+    }
+    return {
+      from_location_id: fromLocationId,
+      to_location_id: toLocationId,
+      lines: [
+        {
+          sku_id: resolvedSkuId,
+          qty: numericQty,
+          from_bin_id: optionalMovementBinId(fromBinId, fromDefaultBinId),
+          to_bin_id: optionalMovementBinId(toBinId, toDefaultBinId),
+        },
+      ],
+    };
+  }
+
+  function resetLine() {
+    setBarcode("");
+    setSkuId("");
+    setQty("1");
+  }
+
+  async function handleSaveDraft() {
+    const payload = draftPayload();
+    if (!payload) {
       return;
     }
-    setSubmitting(true);
+    setSubmitting("draft");
     onError("");
     try {
-      const result = await createTransfer({
-        from_location_id: fromLocationId,
-        to_location_id: toLocationId,
-        sku_id: resolvedSkuId,
-        qty: numericQty,
-      });
+      const created = await createTransfer(payload);
+      setLastDraft(created);
       onSuccess(
-        `Transferred ${result.qty} × ${result.our_ref} to ${result.to_location.location_name}.`,
+        `${created.transfer_number} saved as draft. Destination stock is unchanged until receive.`,
       );
-      setBarcode("");
-      setSkuId("");
-      setQty("1");
+      resetLine();
       await onTransferred();
     } catch (err) {
       if (err instanceof ApiError && (err.status === 409 || err.status === 400)) {
         onError(err.message);
       } else {
-        onError(err instanceof Error ? err.message : "Failed to transfer stock.");
+        onError(err instanceof Error ? err.message : "Failed to save transfer draft.");
       }
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
+    }
+  }
+
+  async function handleDispatch() {
+    setSubmitting("dispatch");
+    onError("");
+    try {
+      let draft = lastDraft;
+      if (!draft) {
+        const payload = draftPayload();
+        if (!payload) {
+          setSubmitting(null);
+          return;
+        }
+        draft = await createTransfer(payload);
+      }
+      const dispatched = await dispatchTransfer(draft.id);
+      setLastDraft(null);
+      onSuccess(
+        `${dispatched.transfer_number} dispatched. Source stock decreased. Destination stock updates only after receive.`,
+      );
+      resetLine();
+      await onTransferred();
+      await loadInbound(inboundDestId);
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 409 || err.status === 400)) {
+        onError(err.message);
+      } else {
+        onError(err instanceof Error ? err.message : "Failed to dispatch transfer.");
+      }
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  async function handleInboundReceive(entry: Transfer) {
+    setInboundBusyId(entry.id);
+    onError("");
+    try {
+      const received = await receiveTransfer(entry.id, fullQtyReceivePayload(entry));
+      onSuccess(`${received.transfer_number} received. Destination stock updated.`);
+      await loadInbound(inboundDestId);
+      await onTransferred();
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 409 || err.status === 400 || err.status === 403)) {
+        onError(err.message);
+      } else {
+        onError(err instanceof Error ? err.message : "Failed to receive transfer.");
+      }
+    } finally {
+      setInboundBusyId(null);
+    }
+  }
+
+  async function handleInboundPrint(entry: Transfer) {
+    setInboundBusyId(entry.id);
+    onError("");
+    try {
+      await downloadTransferPdf(entry.id, entry.transfer_number);
+      onSuccess(`Downloaded ${entry.transfer_number} transfer note.`);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to download transfer note.");
+    } finally {
+      setInboundBusyId(null);
     }
   }
 
   return (
     <Stack gap={5}>
+      <p className="cds--type-body-01">
+        Save draft does not move stock. Dispatch decreases source only — it does not receive at
+        destination.
+      </p>
       <div className="vellano-wms-barcode">
         <TextInput
           id="wms-transfer-barcode"
@@ -720,28 +868,63 @@ function TransferTab({
           </p>
         </div>
       ) : null}
+      {lastDraft ? (
+        <InlineNotification
+          kind="info"
+          title={lastDraft.transfer_number}
+          subtitle="Draft ready. Dispatch decreases source stock; destination still waits for receive."
+          hideCloseButton
+          lowContrast
+        />
+      ) : null}
       <Select
         id="wms-transfer-from"
         labelText="From location"
         value={fromLocationId}
-        onChange={(event) => setFromLocationId(event.target.value)}
+        onChange={(event) => {
+          setFromLocationId(event.target.value);
+          setFromBinId("");
+        }}
       >
         <SelectItem value="" text="Select source location" />
         {sourceOptions.map((entry) => (
           <SelectItem key={entry.id} value={entry.id} text={entry.name} />
         ))}
       </Select>
+      {fromLocationId ? (
+        <BinSelect
+          id="wms-transfer-from-bin"
+          labelText="From bin (optional)"
+          value={fromBinId}
+          bins={fromBins}
+          onChange={setFromBinId}
+          helperText="Leave as default to use the location default bin."
+        />
+      ) : null}
       <Select
         id="wms-transfer-to"
         labelText="To location"
         value={toLocationId}
-        onChange={(event) => setToLocationId(event.target.value)}
+        onChange={(event) => {
+          setToLocationId(event.target.value);
+          setToBinId("");
+        }}
       >
         <SelectItem value="" text="Select destination location" />
         {destinationOptions.map((entry) => (
           <SelectItem key={entry.id} value={entry.id} text={entry.name} />
         ))}
       </Select>
+      {toLocationId ? (
+        <BinSelect
+          id="wms-transfer-to-bin"
+          labelText="To bin (optional)"
+          value={toBinId}
+          bins={toBins}
+          onChange={setToBinId}
+          helperText="Leave as default to use the location default bin."
+        />
+      ) : null}
       {fromLocationId && resolvedSkuId ? (
         <p className="cds--type-body-01">
           On hand at source: <strong>{sourceOnHand}</strong>
@@ -757,9 +940,64 @@ function TransferTab({
         invalidText={`Only ${sourceOnHand} available at source`}
         disabled={!resolvedSkuId}
       />
-      <Button disabled={submitting || !formValid} onClick={() => void handleTransfer()}>
-        {submitting ? "Transferring…" : "Transfer"}
+      <Button
+        disabled={submitting !== null || !formValid}
+        onClick={() => void handleSaveDraft()}
+      >
+        {submitting === "draft" ? "Saving…" : "Save draft"}
       </Button>
+      <Button
+        kind="secondary"
+        disabled={submitting !== null || (!lastDraft && !formValid)}
+        onClick={() => void handleDispatch()}
+      >
+        {submitting === "dispatch" ? "Dispatching…" : "Dispatch"}
+      </Button>
+      <h2 className="cds--type-productive-heading-03">Inbound receive</h2>
+      <p className="cds--type-body-01">
+        Receive in-transit transfers into a destination. This is the step that increases dest
+        on-hand.
+      </p>
+      <Select
+        id="wms-inbound-dest"
+        labelText="Destination location"
+        value={inboundDestId}
+        onChange={(event) => setInboundDestId(event.target.value)}
+      >
+        <SelectItem value="" text="Select destination" />
+        {locations.map((entry) => (
+          <SelectItem key={entry.id} value={entry.id} text={entry.name} />
+        ))}
+      </Select>
+      {inboundDestId && inbound.length === 0 ? (
+        <p className="cds--type-body-01">No inbound transfers in transit to this location.</p>
+      ) : null}
+      {inbound.map((entry) => {
+        const busy = inboundBusyId === entry.id;
+        const summary = entry.lines
+          .map((line) => `${line.qty_dispatched} × ${line.sku_our_ref}`)
+          .join(", ");
+        return (
+          <div key={entry.id} className="vellano-wms-line-card">
+            <p className="cds--type-body-01">
+              <strong>{entry.transfer_number}</strong> — {entry.from_location_name} →{" "}
+              {entry.to_location_name}
+            </p>
+            <p className="cds--type-label-01 vellano-muted-text">{summary || "No lines"}</p>
+            <Button size="sm" disabled={busy} onClick={() => void handleInboundReceive(entry)}>
+              {busy ? "Receiving…" : "Receive"}
+            </Button>{" "}
+            <Button
+              kind="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => void handleInboundPrint(entry)}
+            >
+              Print PDF
+            </Button>
+          </div>
+        );
+      })}
       <Link href="/transfers">Full transfers page</Link>
     </Stack>
   );

@@ -46,7 +46,12 @@ class DeliveriesService:
     async def get(self, delivery_id: uuid.UUID) -> DeliveryResponse:
         return self._to_response(await self._get_or_404(delivery_id))
 
-    async def create(self, data: DeliveryCreate, user_id: uuid.UUID) -> DeliveryResponse:
+    async def create(
+        self,
+        data: DeliveryCreate,
+        user_id: uuid.UUID,
+        lines_override: Optional[list[DeliveryLine]] = None,
+    ) -> DeliveryResponse:
         location = await self.location_crud.get_by_id(data.location_id)
         if location is None:
             raise NotFoundError("Location not found")
@@ -55,10 +60,10 @@ class DeliveriesService:
 
         if data.source_type == DeliverySourceType.INVOICE:
             assert data.invoice_id is not None
-            delivery = await self._create_from_invoice(data, user_id)
+            delivery = await self._create_from_invoice(data, user_id, lines_override)
         else:
             assert data.layby_id is not None
-            delivery = await self._create_from_layby(data, user_id)
+            delivery = await self._create_from_layby(data, user_id, lines_override)
 
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(delivery)
@@ -95,7 +100,12 @@ class DeliveriesService:
             delivery.status = DeliveryStatus.CANCELLED
         return self._to_response(await self._get_or_404(delivery_id))
 
-    async def _create_from_invoice(self, data: DeliveryCreate, user_id: uuid.UUID) -> Delivery:
+    async def _create_from_invoice(
+        self,
+        data: DeliveryCreate,
+        user_id: uuid.UUID,
+        lines_override: Optional[list[DeliveryLine]] = None,
+    ) -> Delivery:
         invoice = await self.invoice_crud.get_by_id(data.invoice_id)
         if invoice is None:
             raise NotFoundError("Invoice not found")
@@ -108,7 +118,11 @@ class DeliveriesService:
 
         sku_ids = [line.sku_id for line in invoice.lines if line.sku_id is not None]
         skus_by_id = await self._load_skus(sku_ids)
-        lines = self._lines_from_invoice(invoice.lines, skus_by_id)
+        lines = (
+            lines_override
+            if lines_override is not None
+            else self._lines_from_invoice(invoice.lines, skus_by_id)
+        )
 
         delivery_number = await self.crud.get_next_delivery_number()
         return Delivery(
@@ -123,7 +137,12 @@ class DeliveriesService:
             lines=lines,
         )
 
-    async def _create_from_layby(self, data: DeliveryCreate, user_id: uuid.UUID) -> Delivery:
+    async def _create_from_layby(
+        self,
+        data: DeliveryCreate,
+        user_id: uuid.UUID,
+        lines_override: Optional[list[DeliveryLine]] = None,
+    ) -> Delivery:
         layby = await self.layby_crud.get_by_id(data.layby_id)
         if layby is None:
             raise NotFoundError("Layby not found")
@@ -134,7 +153,9 @@ class DeliveriesService:
         if existing is not None:
             raise ConflictError("Delivery already exists for this layby")
 
-        lines = self._lines_from_layby(layby.lines)
+        lines = (
+            lines_override if lines_override is not None else self._lines_from_layby(layby.lines)
+        )
         delivery_number = await self.crud.get_next_delivery_number()
         return Delivery(
             delivery_number=delivery_number,

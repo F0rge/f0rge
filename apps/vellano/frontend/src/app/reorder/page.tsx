@@ -56,7 +56,7 @@ type ReorderTableRow = {
 export default function ReorderPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const canRaise = canRaisePo(user?.role);
+  const canRaise = canRaisePo(user);
   const [rows, setRows] = useState<ReorderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.team import Team
-from app.models.user import User
+from app.models.user import User, UserRole
 from f0rge_db.crud import BaseCRUD
 
 
@@ -52,5 +52,14 @@ class UserCRUD(BaseCRUD):
     async def list_all(self) -> list[User]:
         result = await self.db.execute(
             select(User).options(selectinload(User.team)).order_by(User.email)
+        )
+        return list(result.scalars().all())
+
+    async def list_till_with_null_default(self) -> list[User]:
+        result = await self.db.execute(
+            select(User).where(
+                User.role == UserRole.TILL,
+                User.default_location_id.is_(None),
+            )
         )
         return list(result.scalars().all())

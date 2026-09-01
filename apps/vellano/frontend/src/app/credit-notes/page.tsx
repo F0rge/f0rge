@@ -58,7 +58,7 @@ type CreditNoteRow = {
 export default function CreditNotesPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);

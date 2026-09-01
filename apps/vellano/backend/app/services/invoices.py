@@ -15,6 +15,7 @@ from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import InvoiceCreate, InvoiceLineResponse, InvoiceResponse
 from app.services.books_events import BooksEventService
 from app.services.category_posting import CategoryPostingService
+from app.services.customer_credit import CustomerCreditService
 from app.services.chart_of_accounts import (
     CODE_AR,
     CODE_VAT,
@@ -36,6 +37,7 @@ class InvoiceService:
         self.posting = LedgerPostingService(db)
         self.category_posting = CategoryPostingService(db)
         self.events = BooksEventService(db)
+        self.credit = CustomerCreditService(db)
 
     async def list(self) -> list[InvoiceResponse]:
         invoices = await self.crud.list_all()
@@ -50,7 +52,7 @@ class InvoiceService:
     async def create(
         self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
     ) -> InvoiceResponse:
-        await self.contact_service.get_customer(data.customer_id)
+        customer = await self.contact_service.get_customer(data.customer_id)
 
         subtotal = Decimal(0)
         vat_total = Decimal(0)
@@ -78,6 +80,14 @@ class InvoiceService:
 
         if subtotal <= 0:
             raise ValidationError("Invoice total must be positive")
+
+        override_note = await self.credit.assert_allowed(
+            customer,
+            total_inc,
+            credit_override=data.credit_override,
+            credit_override_reason=data.credit_override_reason,
+            user_id=user_id,
+        )
 
         invoice_number = await self.crud.get_next_invoice_number()
         invoice = TaxInvoice(
@@ -118,6 +128,7 @@ class InvoiceService:
                 invoice.id,
                 BooksEventAction.CREATED,
                 actor_user_id=user_id,
+                note=override_note,
             )
             await self.crud.commit_refresh(invoice)
 
@@ -130,17 +141,24 @@ class InvoiceService:
         if invoice is None:
             raise NotFoundError("Invoice not found")
 
-        lines = [
-            (
-                line.description,
-                line.qty,
-                f"{line.unit_ex_vat:.2f}",
-                f"{line.ex_vat:.2f}",
-                f"{line.vat_amount:.2f}",
-                f"{line.inc_vat:.2f}",
+        lines = []
+        for line in invoice.lines:
+            description = line.description
+            if line.sku_id is not None:
+                sku = await self.sku_crud.get_by_id(line.sku_id)
+                if sku is not None and sku.carton_count > 1:
+                    cartons = line.qty * sku.carton_count
+                    description = f"{description} - Ships in {cartons} cartons"
+            lines.append(
+                (
+                    description,
+                    line.qty,
+                    f"{line.unit_ex_vat:.2f}",
+                    f"{line.ex_vat:.2f}",
+                    f"{line.vat_amount:.2f}",
+                    f"{line.inc_vat:.2f}",
+                )
             )
-            for line in invoice.lines
-        ]
         pdf_bytes = build_tax_invoice_pdf(
             invoice_number=invoice.invoice_number,
             issue_date=invoice.issue_date.isoformat(),

@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crud.user import UserCRUD
+from app.permissions import role_slug
+from app.services.permissions import PermissionService
 from f0rge_core.exceptions import UnauthorizedError, ValidationError
 
 JWT_ALGORITHM = "HS256"
@@ -110,6 +112,8 @@ class AuthService:
             "id": user.id,
             "email": user.email,
             "display_name": user.display_name,
-            "role": user.role.value,
+            "role": role_slug(user.role),
+            "permissions": await PermissionService(self.db).keys_for_user(user.id),
             "team": {"id": user.team.id, "name": user.team.name},
+            "default_location_id": user.default_location_id,
         }

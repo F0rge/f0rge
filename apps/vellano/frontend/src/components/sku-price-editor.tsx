@@ -29,10 +29,12 @@ import {
   parsePriceInput,
   updateSku,
   type Sku,
+  type SkuLeadTimeRow,
   type Supplier,
   type UnitCostAuditEntry,
   type UpdateSkuPricePayload,
 } from "@/lib/api";
+import { formatObservedMedianLine } from "@/lib/lead-times";
 
 type PriceBasis = "ex" | "inc";
 
@@ -55,6 +57,7 @@ type SkuPriceEditorProps = {
   readOnly: boolean;
   showCostAudit: boolean;
   unitCostZar: string | null;
+  observedLeadTime?: Pick<SkuLeadTimeRow, "median_days" | "n"> | null;
   saving: boolean;
   onSavingChange: (saving: boolean) => void;
   onClose: () => void;
@@ -181,6 +184,7 @@ export function SkuPriceEditor({
   readOnly,
   showCostAudit,
   unitCostZar,
+  observedLeadTime = null,
   saving,
   onSavingChange,
   onClose,
@@ -364,7 +368,7 @@ export function SkuPriceEditor({
             <strong>{sku.our_ref}</strong> — {sku.name}
           </p>
         </div>
-        {unitCostZar ? (
+        {showCostAudit && unitCostZar ? (
           <InlineNotification
             kind="info"
             title="Unit cost"
@@ -373,16 +377,18 @@ export function SkuPriceEditor({
             lowContrast
           />
         ) : null}
-        <TextInput
-          id="sku-last-landed-cost"
-          labelText="Last landed cost"
-          value={
-            sku.last_landed_cost_zar
-              ? `${displayPrice(sku.last_landed_cost_zar)} ZAR`
-              : "—"
-          }
-          readOnly
-        />
+        {showCostAudit ? (
+          <TextInput
+            id="sku-last-landed-cost"
+            labelText="Last landed cost"
+            value={
+              sku.last_landed_cost_zar
+                ? `${displayPrice(sku.last_landed_cost_zar)} ZAR`
+                : "—"
+            }
+            readOnly
+          />
+        ) : null}
         {readOnly ? (
           <>
             <TextInput
@@ -401,6 +407,12 @@ export function SkuPriceEditor({
               id="sku-lead-time-readonly"
               labelText="Lead time (days)"
               value={form.leadTimeDays ? `${form.leadTimeDays} days` : "—"}
+              readOnly
+            />
+            <TextInput
+              id="sku-observed-lead-time-readonly"
+              labelText="Observed median"
+              value={formatObservedMedianLine(observedLeadTime ?? undefined)}
               readOnly
             />
             <TextInput
@@ -445,6 +457,13 @@ export function SkuPriceEditor({
               onChange={(event) =>
                 setForm((current) => ({ ...current, leadTimeDays: event.target.value }))
               }
+            />
+            <TextInput
+              id="sku-observed-lead-time"
+              labelText="Observed median"
+              helperText="From completed POs — not written to lead time"
+              value={formatObservedMedianLine(observedLeadTime ?? undefined)}
+              readOnly
             />
             <TextInput
               id="sku-reorder-min"

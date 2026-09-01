@@ -18,6 +18,8 @@ class InvoiceCreate(BaseModel):
     customer_id: uuid.UUID
     issue_date: datetime.date
     lines: list[InvoiceLineCreate] = Field(min_length=1)
+    credit_override: bool = False
+    credit_override_reason: Optional[str] = None
 
 
 class InvoiceLineResponse(BaseModel):

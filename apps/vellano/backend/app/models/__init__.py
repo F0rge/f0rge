@@ -15,9 +15,11 @@ from app.models.delivery import (
 )
 from app.models.customer import Customer
 from app.models.inventory import LocationStock, SkuStock
+from app.models.location_bin import BinStock, LocationBin
 from app.models.journal import JournalDocumentType, JournalEntry, JournalLine, JournalStatus
 from app.models.layby import Layby, LaybyLine, LaybyPayment, LaybyStatus
 from app.models.location import Location, LocationType
+from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
 from app.models.payment import Payment, PaymentDirection
 from app.models.proforma import Proforma
 from app.models.purchase_order import (
@@ -29,6 +31,7 @@ from app.models.purchase_order import (
 )
 from app.models.repeating_invoice import RepeatingInvoice, RepeatingInvoiceLine
 from app.models.sku import Sku
+from app.models.sku_bom_line import SkuBomLine
 from app.models.stock_adjustment import (
     StockAdjustment,
     StockAdjustmentLine,
@@ -46,8 +49,10 @@ from app.models.stocktake import Stocktake, StocktakeLine, StocktakeStatus
 from app.models.supplier import Supplier
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.models.team_settings import TeamSettings
+from app.models.transfer import Transfer, TransferLine, TransferStatus
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
 from app.models.team import Team
+from app.models.role import Role, RolePermission
 from app.models.user import User, UserRole
 from app.models.vat201_period import (
     Vat201Period,
@@ -85,18 +90,28 @@ __all__ = [
     "LaybyLine",
     "LaybyPayment",
     "LaybyStatus",
+    "BinStock",
     "Location",
+    "LocationBin",
     "LocationStock",
     "LocationType",
     "Payment",
     "PaymentDirection",
+    "Pick",
+    "PickAllocation",
+    "PickLine",
+    "PickSourceType",
+    "PickStatus",
     "PoLine",
     "Proforma",
     "PurchaseOrder",
     "PurchaseOrderStatus",
     "RepeatingInvoice",
     "RepeatingInvoiceLine",
+    "Role",
+    "RolePermission",
     "Sku",
+    "SkuBomLine",
     "SkuStock",
     "StockAdjustment",
     "StockAdjustmentLine",
@@ -114,6 +129,9 @@ __all__ = [
     "TaxInvoice",
     "TaxTreatment",
     "TeamSettings",
+    "Transfer",
+    "TransferLine",
+    "TransferStatus",
     "UnitCostAudit",
     "UnitCostAuditSource",
     "Team",

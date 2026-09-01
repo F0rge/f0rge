@@ -28,6 +28,9 @@ export function ImportDocs() {
             <li>
               <strong>Cost Price</strong> — optional
             </li>
+            <li>
+              <strong>Cartons</strong> — optional, integer ≥ 1 (default 1)
+            </li>
           </ul>
         </Column>
         <Column lg={8} md={4} sm={4}>

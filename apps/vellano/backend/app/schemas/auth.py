@@ -23,4 +23,6 @@ class MeResponse(BaseModel):
     email: EmailStr
     display_name: Optional[str]
     role: str
+    permissions: list[str]
     team: TeamBrief
+    default_location_id: Optional[uuid.UUID] = None

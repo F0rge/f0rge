@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, status
 
@@ -8,6 +9,7 @@ from app.dependencies.auth import (
     get_current_user_id,
     get_customers_crm_service,
     require_customers_mutate,
+    require_customers_patch,
 )
 from app.schemas.customer_crm import (
     CustomerCrmCreate,
@@ -21,10 +23,13 @@ customers_router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
 
 @customers_router.get("", response_model=list[CustomerCrmResponse])
 async def list_customers(
+    overdue: Optional[bool] = None,
+    active_layby: Optional[bool] = None,
+    on_hold: Optional[bool] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: CustomersCrmService = Depends(get_customers_crm_service),
 ):
-    return await service.list()
+    return await service.list(overdue=overdue, active_layby=active_layby, on_hold=on_hold)
 
 
 @customers_router.post(
@@ -53,7 +58,7 @@ async def get_customer(
 async def update_customer(
     customer_id: uuid.UUID,
     body: CustomerCrmUpdate,
-    _: uuid.UUID = Depends(require_customers_mutate),
+    user_id: uuid.UUID = Depends(require_customers_patch),
     service: CustomersCrmService = Depends(get_customers_crm_service),
 ):
-    return await service.update(customer_id, body)
+    return await service.update(customer_id, body, user_id)

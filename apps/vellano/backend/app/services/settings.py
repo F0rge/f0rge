@@ -26,27 +26,28 @@ class SettingsService:
     async def get_for_user(self, user_id: uuid.UUID) -> SettingsResponse:
         user = await self._get_user(user_id)
         settings = await self.crud.get_or_create_for_team(user.team_id)
-        return self._to_response(settings.vat_rate, settings.home_currency)
+        return self._to_response(settings)
 
     async def update(self, user_id: uuid.UUID, data: SettingsUpdate) -> SettingsResponse:
         user = await self._get_user(user_id)
         settings = await self.crud.get_or_create_for_team(user.team_id)
 
-        if data.vat_rate is None and data.home_currency is None:
+        payload = data.model_dump(exclude_unset=True)
+        if not payload:
             raise ValidationError("No settings fields to update")
 
-        new_vat = data.vat_rate if data.vat_rate is not None else settings.vat_rate
-        new_currency = (
-            data.home_currency.upper() if data.home_currency is not None else settings.home_currency
-        )
-
-        if new_vat <= 0 or new_vat > 1:
-            raise ValidationError("vat_rate must be between 0 and 1")
-
-        settings.vat_rate = new_vat
-        settings.home_currency = new_currency
+        if data.vat_rate is not None:
+            if data.vat_rate <= 0 or data.vat_rate > 1:
+                raise ValidationError("vat_rate must be between 0 and 1")
+            settings.vat_rate = data.vat_rate
+        if data.home_currency is not None:
+            settings.home_currency = data.home_currency.upper()
+        if data.always_prefer_warehouse is not None:
+            settings.always_prefer_warehouse = data.always_prefer_warehouse
+        if data.pick_priority is not None:
+            settings.pick_priority = [str(item) for item in data.pick_priority]
         await self.db.flush()
-        return self._to_response(new_vat, new_currency, include_warning=True)
+        return self._to_response(settings, include_warning=True)
 
     async def _get_user(self, user_id: uuid.UUID):
         user = await self.user_crud.get_by_id(user_id)
@@ -56,11 +57,12 @@ class SettingsService:
 
     def _to_response(
         self,
-        vat_rate: Decimal,
-        home_currency: str,
+        settings,
         *,
         include_warning: bool = False,
     ) -> SettingsResponse:
+        vat_rate = settings.vat_rate
+        home_currency = settings.home_currency
         defaults_locked = vat_rate == DEFAULT_VAT_RATE and home_currency == DEFAULT_HOME_CURRENCY
         warning = None
         if not defaults_locked:
@@ -72,4 +74,12 @@ class SettingsService:
             home_currency=home_currency,
             defaults_locked=defaults_locked,
             warning=warning,
+            always_prefer_warehouse=bool(settings.always_prefer_warehouse),
+            pick_priority=parse_pick_priority(settings.pick_priority),
         )
+
+
+def parse_pick_priority(raw: object) -> list[uuid.UUID]:
+    if not raw:
+        return []
+    return [uuid.UUID(str(item)) for item in raw]

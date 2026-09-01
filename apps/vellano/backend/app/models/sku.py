@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import ForeignKey, Index, Integer, Numeric, String, text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, Numeric, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,6 +32,9 @@ class Sku(UUIDPkMixin, TimestampMixin, Base):
     photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     wholesale_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     retail_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    carton_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
 
     __table_args__ = (
         Index(
@@ -40,4 +43,5 @@ class Sku(UUIDPkMixin, TimestampMixin, Base):
             text("lower(fabric)"),
             unique=True,
         ),
+        CheckConstraint("carton_count >= 1", name="ck_skus_carton_count"),
     )

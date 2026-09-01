@@ -20,21 +20,26 @@ import { useCallback, useEffect, useState } from "react";
 import {
   canMutateCatalogue,
   createSupplier,
+  getSupplierLeadTimes,
   listSuppliers,
   type CreateSupplierPayload,
   type Supplier,
+  type SupplierLeadTimeRow,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatObservedMedianLine, supplierLeadTimeById } from "@/lib/lead-times";
 
 const TABLE_HEADERS = [
   { key: "name", header: "Name" },
   { key: "default_currency", header: "Default currency" },
+  { key: "observed_median", header: "Observed median" },
 ] as const;
 
 type SupplierRow = {
   id: string;
   name: string;
   default_currency: string;
+  observed_median: string;
 };
 
 const emptyCreateForm: CreateSupplierPayload = {
@@ -44,8 +49,9 @@ const emptyCreateForm: CreateSupplierPayload = {
 
 export default function SuppliersPage() {
   const { user } = useAuth();
-  const canMutate = canMutateCatalogue(user?.role);
+  const canMutate = canMutateCatalogue(user);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [leadTimes, setLeadTimes] = useState<SupplierLeadTimeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -56,8 +62,12 @@ export default function SuppliersPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listSuppliers();
+      const [data, leadReport] = await Promise.all([
+        listSuppliers(),
+        getSupplierLeadTimes().catch(() => ({ rows: [] as SupplierLeadTimeRow[] })),
+      ]);
       setSuppliers(data);
+      setLeadTimes(leadReport.rows);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load suppliers.");
     } finally {
@@ -71,10 +81,12 @@ export default function SuppliersPage() {
     }
   }, [user, loadSuppliers]);
 
+  const leadBySupplier = supplierLeadTimeById(leadTimes);
   const rows: SupplierRow[] = suppliers.map((entry) => ({
     id: entry.id,
     name: entry.name,
     default_currency: entry.default_currency,
+    observed_median: formatObservedMedianLine(leadBySupplier.get(entry.id)),
   }));
 
   async function handleCreate() {

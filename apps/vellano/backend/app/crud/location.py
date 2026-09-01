@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.location import Location
+from app.models.location import Location, LocationType
 from f0rge_db.crud import BaseCRUD
 
 
@@ -26,6 +26,18 @@ class LocationCRUD(BaseCRUD):
     async def count(self) -> int:
         result = await self.db.execute(select(func.count()).select_from(Location))
         return int(result.scalar_one())
+
+    async def get_active_by_name_and_type(
+        self,
+        name: str,
+        location_type: LocationType,
+    ) -> Optional[Location]:
+        stmt = select(Location).where(
+            func.lower(Location.name) == name.lower(),
+            Location.type == location_type,
+            Location.is_archived.is_(False),
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_active_by_name_insensitive(
         self,

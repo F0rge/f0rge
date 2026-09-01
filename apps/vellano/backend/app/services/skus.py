@@ -13,10 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
+from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.supplier import SupplierCRUD
 from app.crud.unit_cost_audit import UnitCostAuditCRUD
 from app.models.sku import Sku
 from app.models.unit_cost_audit import UnitCostAuditSource
+from app.permissions import STOCK_COST_VIEW
+from app.services.permissions import PermissionService
 from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
 from app.services.stock_movements import StockMovementService
 from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
@@ -38,19 +41,24 @@ class SkuService:
         self.location_crud = LocationCRUD(db)
         self.supplier_crud = SupplierCRUD(db)
         self.unit_cost_audit_crud = UnitCostAuditCRUD(db)
+        self.bom_crud = SkuBomLineCRUD(db)
         self.stock_movements = StockMovementService(db)
 
-    async def list(self, category: Optional[str] = None) -> list[SkuResponse]:
+    async def list(
+        self, category: Optional[str] = None, user_id: Optional[uuid.UUID] = None
+    ) -> list[SkuResponse]:
         skus = await self.crud.list_all(category=category)
-        return await self._to_responses(skus)
+        return await self._to_responses(skus, user_id)
 
-    async def get(self, sku_id: uuid.UUID) -> SkuResponse:
+    async def get(self, sku_id: uuid.UUID, user_id: Optional[uuid.UUID] = None) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
-        return (await self._to_responses([sku]))[0]
+        return (await self._to_responses([sku], user_id))[0]
 
-    async def update(self, sku_id: uuid.UUID, data: SkuUpdate) -> SkuResponse:
+    async def update(
+        self, sku_id: uuid.UUID, data: SkuUpdate, user_id: Optional[uuid.UUID] = None
+    ) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
@@ -111,6 +119,10 @@ class SkuService:
         if "supplier_ref" in fields_set:
             sku.supplier_ref = data.supplier_ref
 
+        if "carton_count" in fields_set:
+            assert data.carton_count is not None
+            sku.carton_count = data.carton_count
+
         if "wholesale_ex_vat" in fields_set and "wholesale_inc_vat" in fields_set:
             raise ValidationError("Cannot set both wholesale_ex_vat and wholesale_inc_vat")
         if "retail_ex_vat" in fields_set and "retail_inc_vat" in fields_set:
@@ -144,7 +156,7 @@ class SkuService:
             await self._raise_integrity_conflict(exc)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return (await self._to_responses([reloaded]))[0]
+        return (await self._to_responses([reloaded], user_id))[0]
 
     async def delete(self, sku_id: uuid.UUID) -> None:
         sku = await self.crud.get_by_id(sku_id)
@@ -175,6 +187,7 @@ class SkuService:
             fabric=data.fabric,
             supplier_ref=data.supplier_ref,
             category=data.category,
+            carton_count=data.carton_count,
         )
         try:
             async with unit_of_work(self.db):
@@ -196,9 +209,11 @@ class SkuService:
             await self._raise_integrity_conflict(exc)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return (await self._to_responses([reloaded]))[0]
+        return (await self._to_responses([reloaded], user_id))[0]
 
-    async def upload_photo(self, sku_id: uuid.UUID, file: UploadFile) -> SkuResponse:
+    async def upload_photo(
+        self, sku_id: uuid.UUID, file: UploadFile, user_id: Optional[uuid.UUID] = None
+    ) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
@@ -218,7 +233,7 @@ class SkuService:
         await self.crud.commit_refresh(sku)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return (await self._to_responses([reloaded]))[0]
+        return (await self._to_responses([reloaded], user_id))[0]
 
     async def serve_photo(self, sku_id: uuid.UUID) -> Response:
         sku = await self.crud.get_by_id(sku_id)
@@ -237,9 +252,17 @@ class SkuService:
             raise NotFoundError("SKU photo not found") from exc
         return Response(content=data, media_type="image/jpeg")
 
-    async def _to_responses(self, skus: list[Sku]) -> list[SkuResponse]:
+    async def _to_responses(
+        self, skus: list[Sku], user_id: Optional[uuid.UUID] = None
+    ) -> list[SkuResponse]:
         if not skus:
             return []
+
+        hide_cost = True
+        if user_id is not None:
+            hide_cost = not await PermissionService(self.db).has_permission(
+                user_id, STOCK_COST_VIEW
+            )
 
         sku_ids = [sku.id for sku in skus]
         supplier_ids = [
@@ -247,6 +270,7 @@ class SkuService:
         ]
         landed_costs = await self.unit_cost_audit_crud.latest_landed_costs_by_sku_ids(sku_ids)
         supplier_names = await self.supplier_crud.names_by_ids(supplier_ids)
+        kit_ids = await self.bom_crud.parent_ids_with_bom(sku_ids)
 
         return [
             self._to_response(
@@ -256,7 +280,8 @@ class SkuService:
                     if sku.preferred_supplier_id is not None
                     else None
                 ),
-                last_landed_cost_zar=landed_costs.get(sku.id),
+                last_landed_cost_zar=None if hide_cost else landed_costs.get(sku.id),
+                is_kit=sku.id in kit_ids,
             )
             for sku in skus
         ]
@@ -267,6 +292,7 @@ class SkuService:
         *,
         preferred_supplier_name: Optional[str] = None,
         last_landed_cost_zar: Optional[Decimal] = None,
+        is_kit: bool = False,
     ) -> SkuResponse:
         return SkuResponse(
             id=sku.id,
@@ -287,6 +313,8 @@ class SkuService:
             wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat),
             retail_ex_vat=sku.retail_ex_vat,
             retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat),
+            carton_count=sku.carton_count,
+            is_kit=is_kit,
             created_at=sku.created_at,
             updated_at=sku.updated_at,
         )

@@ -203,6 +203,43 @@ async def test_packing_sheet_pdf_content(owner_client: AsyncClient) -> None:
     assert "SUPPLIER-REF-ONLY" not in text
 
 
+async def test_packing_sheet_carton_count_when_gt_one(owner_client: AsyncClient) -> None:
+    supplier_id = await _create_supplier(owner_client, "Carton Pack Supplier")
+    sku = await _create_sku(
+        owner_client,
+        "PACK-CARTON-REF",
+        "PACK-CARTON-BAR",
+        "Carton Sofa",
+        "Carton Pack Design",
+        "Carton Pack Fabric",
+    )
+    patch = await owner_client.patch(
+        f"/api/v1/skus/{sku['id']}",
+        json={"carton_count": 3},
+    )
+    assert patch.status_code == 200
+
+    po_resp = await owner_client.post(
+        "/api/v1/purchase-orders",
+        json={
+            "supplier_id": supplier_id,
+            "lines": [
+                {"sku_id": sku["id"], "qty": 2, "factory_unit_amount": "80.00"},
+            ],
+        },
+    )
+    assert po_resp.status_code == 201
+    po_id = po_resp.json()["id"]
+
+    sheet_resp = await owner_client.get(f"/api/v1/purchase-orders/{po_id}/packing-sheet")
+    assert sheet_resp.status_code == 200
+    text = _pdf_text(sheet_resp.content)
+    assert "Qty: 2" in text
+    assert "Cartons: 2" in text
+    assert "3" in text
+    assert "6" in text
+
+
 async def test_on_water_updates_inventory_not_on_hand(owner_client: AsyncClient) -> None:
     supplier_id = await _create_supplier(owner_client, "Water Supplier")
     sku = await _create_sku(

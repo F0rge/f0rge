@@ -64,7 +64,7 @@ function historyDate(entry: AdjustmentSummary): string | undefined | null {
 
 export default function AdjustmentsPage() {
   const { user } = useAuth();
-  const canMutate = canReceive(user?.role);
+  const canMutate = canReceive(user);
   const [summaries, setSummaries] = useState<AdjustmentSummary[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);

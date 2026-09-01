@@ -14,7 +14,7 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useState } from "react";
 
-import { listInventory, type InventorySku } from "@/lib/api";
+import { canViewCostAudit, listInventory, type InventorySku } from "@/lib/api";
 import { CostAuditPanel } from "@/components/cost-audit-panel";
 import { useAuth } from "@/lib/auth";
 
@@ -41,6 +41,7 @@ type StockRow = {
 
 export default function StockPage() {
   const { user } = useAuth();
+  const canViewCost = canViewCostAudit(user);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +65,10 @@ export default function StockPage() {
     }
   }, [user, loadInventory]);
 
+  const tableHeaders = canViewCost
+    ? TABLE_HEADERS
+    : TABLE_HEADERS.filter((header) => header.key !== "unit_cost_zar");
+
   const rows: StockRow[] = inventory.map((entry) => ({
     id: entry.sku_id,
     our_ref: entry.our_ref,
@@ -71,7 +76,7 @@ export default function StockPage() {
     on_order: String(entry.on_order),
     on_hand: String(entry.on_hand),
     sellable: entry.sellable ? "Yes" : "No",
-    unit_cost_zar: entry.unit_cost_zar ?? "—",
+    unit_cost_zar: canViewCost ? (entry.unit_cost_zar ?? "—") : "—",
     locations: entry.sku_id,
   }));
 
@@ -105,7 +110,7 @@ export default function StockPage() {
           lowContrast
         />
       ) : (
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
+        <DataTable rows={rows} headers={[...tableHeaders]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Stock" description="All inventory SKUs">
               <Table {...getTableProps()}>
@@ -130,12 +135,26 @@ export default function StockPage() {
                             }
                             return (
                               <TableCell key={cell.id}>
-                                {entry.locations.map((loc) => (
-                                  <div key={loc.location_id}>
-                                    {loc.location_name}: {loc.on_hand}
-                                    {loc.unit_cost_zar ? ` @ ${loc.unit_cost_zar} ZAR` : ""}
-                                  </div>
-                                ))}
+                                {entry.locations.map((loc) => {
+                                  const bins = loc.bins ?? [];
+                                  return (
+                                    <div key={loc.location_id}>
+                                      <div>
+                                        {loc.location_name}: {loc.on_hand}
+                                        {canViewCost && loc.unit_cost_zar
+                                          ? ` @ ${loc.unit_cost_zar} ZAR`
+                                          : ""}
+                                      </div>
+                                      {bins.length > 0 ? (
+                                        <div className="cds--type-label-01 vellano-muted-text">
+                                          {bins
+                                            .map((bin) => `${bin.code}: ${bin.on_hand}`)
+                                            .join(" · ")}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
                               </TableCell>
                             );
                           }

@@ -115,7 +115,7 @@ function DeliveriesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const canMutate = canMutateDeliveries(user?.role);
+  const canMutate = canMutateDeliveries(user);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [laybys, setLaybys] = useState<Layby[]>([]);

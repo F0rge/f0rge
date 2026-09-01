@@ -102,3 +102,49 @@ async def test_books_can_create_invoice(
     )
     assert resp.status_code == 201
     assert resp.json()["invoice_number"] == "INV-0001"
+
+
+async def test_invoice_pdf_generated_carton_text(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    from tests.test_purchase_orders import _create_till, _location_id_by_name
+
+    bedford_id = await _location_id_by_name(owner_client, "Bedfordview")
+    sku_resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "INV-CARTON-SOFA",
+            "our_barcode": "INV-CARTON-SOFA-BAR",
+            "name": "Invoice carton sofa",
+            "design": "Invoice carton",
+            "fabric": "Velvet",
+            "carton_count": 3,
+            "opening_location_id": bedford_id,
+            "opening_qty": 2,
+            "opening_unit_cost_zar": "1000.00",
+        },
+    )
+    assert sku_resp.status_code == 201
+    sku_id = sku_resp.json()["id"]
+    price = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={"retail_ex_vat": "5000.00"},
+    )
+    assert price.status_code == 200
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 2}],
+            "tender": "cash",
+        },
+    )
+    assert sale.status_code == 201
+
+    pdf_resp = await owner_client.get(f"/api/v1/invoices/{sale.json()['invoice_id']}/pdf")
+    assert pdf_resp.status_code == 200
+    text = _pdf_text(pdf_resp.content)
+    assert "Ships in 6 cartons" in text

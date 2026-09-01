@@ -148,7 +148,7 @@ function LineActions({
 
 export default function BankReconciliationPage() {
   const { user } = useAuth();
-  const canMutate = canMutateBooks(user?.role);
+  const canMutate = canMutateBooks(user);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountId, setAccountId] = useState("");
   const [unmatchedCounts, setUnmatchedCounts] = useState<BankUnmatchedCount[]>([]);

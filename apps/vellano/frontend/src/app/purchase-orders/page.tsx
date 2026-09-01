@@ -76,7 +76,7 @@ function formatDate(iso: string): string {
 export default function PurchaseOrdersPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const canRaise = canRaisePo(user?.role);
+  const canRaise = canRaisePo(user);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

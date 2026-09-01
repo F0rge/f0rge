@@ -34,6 +34,7 @@ import {
   type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { isValidCartonCount } from "@/lib/carton-helpers";
 
 const emptyCreateForm: CreateSkuPayload = {
   our_ref: "",
@@ -58,7 +59,7 @@ function parseOptionalIncVat(value: string, label: string): string | null {
 export default function NewSkuPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const canMutate = canMutateCatalogue(user?.role);
+  const canMutate = canMutateCatalogue(user);
   const [createForm, setCreateForm] = useState<CreateSkuPayload>(emptyCreateForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [retailIncVat, setRetailIncVat] = useState("");
@@ -68,6 +69,7 @@ export default function NewSkuPage() {
   const [openingQty, setOpeningQty] = useState<number | "">(1);
   const [openingUnitCost, setOpeningUnitCost] = useState("");
   const [openingDate, setOpeningDate] = useState("");
+  const [cartonCount, setCartonCount] = useState<number | "">(1);
   const [locations, setLocations] = useState<Location[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +113,8 @@ export default function NewSkuPage() {
         parsedOpeningCost !== null &&
         parsedOpeningCost > 0,
     );
-  const formValid = skuFieldsValid && openingValid;
+  const cartonValid = isValidCartonCount(cartonCount);
+  const formValid = skuFieldsValid && openingValid && cartonValid;
 
   async function handleCreate() {
     if (!canMutate || !formValid) {
@@ -134,6 +137,9 @@ export default function NewSkuPage() {
       const category = createForm.category?.trim();
       if (category) {
         payload.category = category;
+      }
+      if (isValidCartonCount(cartonCount)) {
+        payload.carton_count = cartonCount;
       }
       if (recordStockNow) {
         const cost = parsePriceInput(openingUnitCost);
@@ -316,6 +322,22 @@ export default function NewSkuPage() {
                       setCreateForm((form) => ({ ...form, fabric: event.target.value }))
                     }
                     required
+                  />
+                </Column>
+                <Column lg={8} md={4} sm={4}>
+                  <NumberInput
+                    id="new-sku-carton-count"
+                    label="Cartons"
+                    helperText="Sellable unit ships in this many cartons. Default 1. Not a kit BOM."
+                    min={1}
+                    step={1}
+                    allowEmpty
+                    value={cartonCount}
+                    invalid={cartonCount !== "" && !cartonValid}
+                    invalidText="Cartons must be 1 or more"
+                    onChange={(_event, { value }) => {
+                      setCartonCount(value === "" ? "" : Number(value));
+                    }}
                   />
                 </Column>
                 <Column lg={16} md={8} sm={4}>

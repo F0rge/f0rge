@@ -40,8 +40,10 @@ import {
   Settings,
   ShoppingCart,
   Store,
+  Task,
   Undo,
   User,
+  UserAdmin,
   UserFollow,
   UserMultiple,
   Wallet,
@@ -53,6 +55,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { useAuth } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 import {
   ACCOUNT_NAV_ITEMS,
   BOOKS_NAV_ITEMS,
@@ -82,6 +85,7 @@ const ICONS = {
   "/receive": DeliveryParcel,
   "/wms": Barcode,
   "/transfers": Movement,
+  "/picks": Task,
   "/deliveries": DeliveryTruck,
   "/returns": Undo,
   "/laybys": PiggyBank,
@@ -99,6 +103,7 @@ const ICONS = {
   "/vat201": Document,
   "/till": Store,
   "/users": UserMultiple,
+  "/roles": UserAdmin,
   "/profile": User,
   "/settings": Settings,
 } as const;
@@ -145,7 +150,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   const accountItems = ACCOUNT_NAV_ITEMS.filter(
-    (item) => !("ownerOnly" in item && item.ownerOnly) || user.role === "owner",
+    (item) => !("permission" in item) || can(user, item.permission),
   );
 
   function renderNavLink(href: string, label: string) {

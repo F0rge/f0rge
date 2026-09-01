@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import csv
 import io
+from typing import Optional
 
 from app.schemas.reports_books import (
     CashSummaryReport,
     JournalReport,
     TrialBalanceReport,
 )
+from app.schemas.reports_criticality import SkuCriticalityReport
+from app.schemas.reports_lead import SkuLeadTimesReport, SupplierLeadTimesReport
 from app.schemas.reports_stock import (
     AgedStockReport,
     SalesBySkuReport,
@@ -87,6 +90,76 @@ def build_aged_stock_csv(report: AgedStockReport) -> bytes:
     return buffer.getvalue().encode("utf-8")
 
 
+def build_sku_criticality_csv(report: SkuCriticalityReport) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["from", report.from_date.isoformat(), "to", report.to_date.isoformat()])
+    writer.writerow(
+        [
+            "sku_count_for_50pct",
+            report.sku_count_for_50pct,
+            "sku_count_for_80pct",
+            report.sku_count_for_80pct,
+            "top_sku_share_pct",
+            f"{report.top_sku_share_pct:.2f}",
+        ]
+    )
+    writer.writerow(
+        [
+            "sku_id",
+            "our_ref",
+            "name",
+            "category",
+            "qty",
+            "value_zar",
+            "share_pct",
+            "cumulative_pct",
+            "abc_class",
+            "hits_50pct_band",
+            "is_a",
+        ]
+    )
+    for line in report.lines:
+        writer.writerow(
+            [
+                str(line.sku_id),
+                line.our_ref,
+                line.name,
+                line.category or "",
+                line.qty,
+                f"{line.value_zar:.2f}",
+                f"{line.share_pct:.2f}",
+                f"{line.cumulative_pct:.2f}",
+                line.abc_class,
+                line.hits_50pct_band,
+                line.is_a,
+            ]
+        )
+    writer.writerow([])
+    writer.writerow(
+        [
+            "category",
+            "qty",
+            "value_zar",
+            "share_pct",
+            "cumulative_pct",
+            "abc_class",
+        ]
+    )
+    for line in report.categories:
+        writer.writerow(
+            [
+                line.category,
+                line.qty,
+                f"{line.value_zar:.2f}",
+                f"{line.share_pct:.2f}",
+                f"{line.cumulative_pct:.2f}",
+                line.abc_class,
+            ]
+        )
+    return buffer.getvalue().encode("utf-8")
+
+
 def build_sales_by_sku_csv(report: SalesBySkuReport) -> bytes:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -107,6 +180,76 @@ def build_sales_by_sku_csv(report: SalesBySkuReport) -> bytes:
     writer.writerow(["total_qty", report.total_qty])
     writer.writerow(["total_ex_vat_zar", f"{report.total_ex_vat_zar:.2f}"])
     writer.writerow(["total_inc_vat_zar", f"{report.total_inc_vat_zar:.2f}"])
+    return buffer.getvalue().encode("utf-8")
+
+
+def _optional_days(value: Optional[float]) -> str:
+    if value is None:
+        return ""
+    if value == int(value):
+        return str(int(value))
+    return str(value)
+
+
+def build_supplier_lead_times_csv(report: SupplierLeadTimesReport) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "supplier_id",
+            "supplier_name",
+            "n",
+            "median_days",
+            "median_last_3_days",
+            "median_water_days",
+            "p90_days",
+        ]
+    )
+    for line in report.lines:
+        writer.writerow(
+            [
+                str(line.supplier_id),
+                line.supplier_name,
+                line.n,
+                _optional_days(line.median_days),
+                _optional_days(line.median_last_3_days),
+                _optional_days(line.median_water_days),
+                _optional_days(line.p90_days),
+            ]
+        )
+    return buffer.getvalue().encode("utf-8")
+
+
+def build_sku_lead_times_csv(report: SkuLeadTimesReport) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "sku_id",
+            "our_ref",
+            "name",
+            "manual_lead_time_days",
+            "n",
+            "median_days",
+            "median_last_3_days",
+            "median_water_days",
+            "p90_days",
+        ]
+    )
+    for line in report.lines:
+        writer.writerow(
+            [
+                str(line.sku_id),
+                line.our_ref,
+                line.name,
+                "" if line.manual_lead_time_days is None else line.manual_lead_time_days,
+                line.n,
+                _optional_days(line.median_days),
+                _optional_days(line.median_last_3_days),
+                _optional_days(line.median_water_days),
+                _optional_days(line.p90_days),
+            ]
+        )
     return buffer.getvalue().encode("utf-8")
 
 

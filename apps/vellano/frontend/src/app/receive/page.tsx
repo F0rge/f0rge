@@ -17,6 +17,8 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 
+import { LocationBinFields } from "@/components/bin-select";
+import { useLocationBins } from "@/hooks/use-location-bins";
 import {
   ApiError,
   PO_STATUS_LABELS,
@@ -25,23 +27,29 @@ import {
   listInventory,
   listLocations,
   listPurchaseOrders,
+  listSkus,
   receivePurchaseOrder,
   type InventorySku,
   type Location,
   type PurchaseOrder,
+  type Sku,
 } from "@/lib/api";
+import { optionalMovementBinId } from "@/lib/bin-helpers";
+import { formatExpectedCartons } from "@/lib/carton-helpers";
 import { useAuth } from "@/lib/auth";
 
 function ReceivePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const canRecv = canReceive(user?.role);
+  const canRecv = canReceive(user);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
+  const [skus, setSkus] = useState<Sku[]>([]);
   const [poId, setPoId] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [binId, setBinId] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,14 +59,16 @@ function ReceivePageContent() {
     setLoading(true);
     setError(null);
     try {
-      const [orderData, locationData, inventoryData] = await Promise.all([
+      const [orderData, locationData, inventoryData, skuData] = await Promise.all([
         listPurchaseOrders(),
         listLocations(),
         listInventory(),
+        listSkus(),
       ]);
       setOrders(orderData);
       setLocations(locationData.filter(isActiveLocation));
       setInventory(inventoryData);
+      setSkus(skuData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load receive data.");
     } finally {
@@ -79,6 +89,12 @@ function ReceivePageContent() {
     }
   }, [searchParams]);
 
+  const { activeBins, defaultBinId } = useLocationBins(locationId);
+
+  useEffect(() => {
+    setBinId(defaultBinId);
+  }, [locationId, defaultBinId]);
+
   const selectedPo = orders.find((entry) => entry.id === poId);
   const formValid = poId && locationId;
 
@@ -93,6 +109,7 @@ function ReceivePageContent() {
       await receivePurchaseOrder({
         purchase_order_id: poId,
         location_id: locationId,
+        bin_id: optionalMovementBinId(binId, defaultBinId),
       });
       const po = orders.find((entry) => entry.id === poId);
       const location = locations.find((entry) => entry.id === locationId);
@@ -101,6 +118,7 @@ function ReceivePageContent() {
       );
       setPoId("");
       setLocationId("");
+      setBinId("");
       await loadData();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -181,6 +199,9 @@ function ReceivePageContent() {
               lowContrast
             />
           ) : null}
+          {selectedPo && selectedPo.status === "landed" ? (
+            <p className="cds--type-body-01">{formatExpectedCartons(selectedPo, skus)}</p>
+          ) : null}
           <Select
             id="receive-location"
             labelText="Location"
@@ -192,6 +213,14 @@ function ReceivePageContent() {
               <SelectItem key={entry.id} value={entry.id} text={entry.name} />
             ))}
           </Select>
+          <LocationBinFields
+            idPrefix="receive"
+            locationId={locationId}
+            bins={activeBins}
+            value={binId}
+            onChange={setBinId}
+            includeScan
+          />
           {canRecv ? (
             <Button
               disabled={submitting || !formValid}

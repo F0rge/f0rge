@@ -51,7 +51,7 @@ function buildFormData(
 
 export default function ImportPage() {
   const { user } = useAuth();
-  const canMutate = canMutateCatalogue(user?.role);
+  const canMutate = canMutateCatalogue(user);
   const [inventoryFile, setInventoryFile] = useState<File | null>(null);
   const [sohFile, setSohFile] = useState<File | null>(null);
   const [inventoryMap, setInventoryMap] = useState<Record<string, string>>({});
