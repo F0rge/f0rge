@@ -264,6 +264,27 @@ Matching a bank line sets `payments.is_reconciled = true`. Unmatched import line
 - **Playground dataset:** set `SEED_PLAYGROUND=true` on `vellano-api` and redeploy to fill catalogue / PO / till / books for demos. Default off. See [Playground seed](#playground-seed-develop--local-demos).
 - **Object storage:** dedicated Railway Tigris bucket `vellano-dev` in this project only — never Marrow `photos` / `photos-dev`, never Marrow project buckets. On `vellano-api` develop: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{vellano-dev.*}}`; `AWS_ENDPOINT_URL_S3=https://fly.storage.tigris.dev`; `AWS_REGION=auto`. Keep `COOKIE_SECURE`, `JWT_SECRET`, `DATABASE_URL`. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Production is not wired.
 
+## V2 shell (issue #530)
+
+Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vellano Back Office Home v2](https://superdesign.dev/teams/cb0bbbcd-2f7f-4810-9426-2fbdd5577264/projects/21ee8b12-d1ca-40c6-9b91-312aeb11a9f7) — draft `2d67462c-32c2-4baf-90c8-bdef3893e5bd`. Saved copy: `apps/vellano/frontend/.superdesign/v2-home.html`.
+
+- **UI:** IBM Carbon only — never `@f0rge/ui`, Tailwind, shadcn, or Mantine in this app.
+- **Chrome:** Carbon UIShell; content `g10`; SideNav dark via `Theme g100`; main offset `.vellano-main` **16rem expanded / 3rem collapsed** (`data-nav-expanded`).
+- **Stub pages** (placeholder copy only — no API):
+
+| Label | Route | Slice |
+|-------|-------|-------|
+| Stocktakes | `/stocktakes` | V2-S2 |
+| Adjustments | `/adjustments` | V2-S3 |
+| Import | `/import` | V2-S4 |
+| Returns | `/returns` | V2-S5 |
+| Laybys | `/laybys` | V2-S6 |
+| Customers | `/customers` | V2-S10 |
+| Deliveries | `/deliveries` | V2-S11 |
+| Reorder | `/reorder` | V2-S12 |
+
+V1 routes (stock, till, books, reports, VAT201, etc.) remain live. S7 home hub KPIs/tables are not in S0.
+
 ## Frontend routes vs API paths
 
 Nav hrefs are not always the API prefix. When debugging network tabs:
@@ -280,6 +301,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/transfers` | `/transfers` |
 | `/receive` | `/receive` |
 | `/reports`, `/vat201` | `/reports` |
+| `/stocktakes`, `/adjustments`, `/import`, `/returns`, `/laybys`, `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
 
 ## Non-goals
 

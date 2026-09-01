@@ -19,19 +19,27 @@ import {
   Catalog,
   Delivery,
   DeliveryParcel,
+  DeliveryTruck,
   Document,
+  DocumentImport,
   Finance,
   Home,
   Industry,
+  InventoryManagement,
   Location,
   Logout,
   Movement,
+  PiggyBank,
   Product,
   Purchase,
   Receipt,
+  Report,
   Settings,
+  ShoppingCart,
   Store,
+  Undo,
   User,
+  UserFollow,
   UserMultiple,
   Wallet,
   ChartLine,
@@ -42,7 +50,17 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { useAuth } from "@/lib/auth";
-import { BOOKS_NAV_ITEMS, SIDE_NAV_ITEMS } from "@/lib/nav";
+import {
+  ACCOUNT_NAV_ITEMS,
+  BOOKS_NAV_ITEMS,
+  OPERATIONS_NAV_ITEMS,
+  PRIMARY_NAV_ITEMS,
+  SALES_NAV_ITEMS,
+  STOCK_NAV_ITEMS,
+  isBooksPath,
+  isNavLinkActive,
+  isStockPath,
+} from "@/lib/nav";
 import { HeaderSearch } from "@/components/header-search";
 
 const ICONS = {
@@ -52,10 +70,18 @@ const ICONS = {
   "/proformas": Document,
   "/catalogue": Catalog,
   "/stock": Product,
+  "/stocktakes": InventoryManagement,
+  "/adjustments": Report,
+  "/import": DocumentImport,
+  "/reorder": ShoppingCart,
   "/purchase-orders": Purchase,
   "/transit": Delivery,
   "/receive": DeliveryParcel,
   "/transfers": Movement,
+  "/deliveries": DeliveryTruck,
+  "/returns": Undo,
+  "/laybys": PiggyBank,
+  "/customers": UserFollow,
   "/ledger": Finance,
   "/contacts": UserMultiple,
   "/invoices": Receipt,
@@ -71,15 +97,10 @@ const ICONS = {
   "/settings": Settings,
 } as const;
 
-const BOOKS_HREFS = new Set<string>(BOOKS_NAV_ITEMS.map((item) => item.href));
+type NavHref = keyof typeof ICONS;
 
-function isBooksPath(pathname: string): boolean {
-  return (
-    BOOKS_HREFS.has(pathname) ||
-    pathname.startsWith("/invoices/") ||
-    pathname.startsWith("/credit-notes/") ||
-    pathname.startsWith("/bills/")
-  );
+function navIcon(href: string) {
+  return ICONS[href as NavHref];
 }
 
 type AppShellProps = {
@@ -117,27 +138,24 @@ export function AppShell({ children }: AppShellProps) {
     return null;
   }
 
-  const navItems = SIDE_NAV_ITEMS.filter(
+  const accountItems = ACCOUNT_NAV_ITEMS.filter(
     (item) => !("ownerOnly" in item && item.ownerOnly) || user.role === "owner",
   );
-  const tillIndex = navItems.findIndex((item) => item.href === "/till");
-  const navBeforeBooks = tillIndex === -1 ? navItems : navItems.slice(0, tillIndex);
-  const navAfterBooks = tillIndex === -1 ? [] : navItems.slice(tillIndex);
 
-  function renderNavLink(item: (typeof navItems)[number]) {
-    const Icon = ICONS[item.href];
+  function renderNavLink(href: string, label: string) {
+    const Icon = navIcon(href);
     return (
       <SideNavLink
-        key={item.href}
-        href={item.href}
+        key={href}
+        href={href}
         renderIcon={Icon}
-        isActive={pathname === item.href}
+        isActive={isNavLinkActive(pathname, href)}
         onClick={(event) => {
           event.preventDefault();
-          router.push(item.href);
+          router.push(href);
         }}
       >
-        {item.label}
+        {label}
       </SideNavLink>
     );
   }
@@ -181,43 +199,66 @@ export function AppShell({ children }: AppShellProps) {
             </HeaderGlobalAction>
           </HeaderGlobalBar>
         </Header>
-        <SideNav aria-label="Vellano sections" expanded={expanded} isPersistent>
-          <SideNavItems>
-            {navBeforeBooks.map(renderNavLink)}
-            <SideNavMenu
-              key="books-menu"
-              renderIcon={Finance}
-              title="Books"
-              defaultExpanded={isBooksPath(pathname)}
-              isActive={isBooksPath(pathname)}
-            >
-              {BOOKS_NAV_ITEMS.map((booksItem) => {
-                const BooksIcon = ICONS[booksItem.href];
-                const active =
-                  pathname === booksItem.href ||
-                  (booksItem.href === "/invoices" && pathname.startsWith("/invoices/")) ||
-                  (booksItem.href === "/credit-notes" &&
-                    pathname.startsWith("/credit-notes/")) ||
-                  (booksItem.href === "/bills" && pathname.startsWith("/bills/"));
-                return (
-                  <SideNavMenuItem
-                    key={booksItem.href}
-                    href={booksItem.href}
-                    renderIcon={BooksIcon}
-                    isActive={active}
-                    onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-                      event.preventDefault();
-                      router.push(booksItem.href);
-                    }}
-                  >
-                    {booksItem.label}
-                  </SideNavMenuItem>
-                );
-              })}
-            </SideNavMenu>
-            {navAfterBooks.map(renderNavLink)}
-          </SideNavItems>
-        </SideNav>
+        <Theme theme="g100">
+          <SideNav aria-label="Vellano sections" expanded={expanded} isPersistent>
+            <SideNavItems>
+              {PRIMARY_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
+              <SideNavMenu
+                key={isStockPath(pathname) ? "stock-open" : "stock-closed"}
+                renderIcon={Product}
+                title="Stock"
+                defaultExpanded={isStockPath(pathname)}
+                isActive={isStockPath(pathname)}
+              >
+                {STOCK_NAV_ITEMS.map((stockItem) => {
+                  const StockIcon = navIcon(stockItem.href);
+                  return (
+                    <SideNavMenuItem
+                      key={stockItem.href}
+                      href={stockItem.href}
+                      renderIcon={StockIcon}
+                      isActive={isNavLinkActive(pathname, stockItem.href)}
+                      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                        event.preventDefault();
+                        router.push(stockItem.href);
+                      }}
+                    >
+                      {stockItem.label}
+                    </SideNavMenuItem>
+                  );
+                })}
+              </SideNavMenu>
+              {OPERATIONS_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
+              {SALES_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
+              <SideNavMenu
+                key={isBooksPath(pathname) ? "books-open" : "books-closed"}
+                renderIcon={Finance}
+                title="Books"
+                defaultExpanded={isBooksPath(pathname)}
+                isActive={isBooksPath(pathname)}
+              >
+                {BOOKS_NAV_ITEMS.map((booksItem) => {
+                  const BooksIcon = navIcon(booksItem.href);
+                  return (
+                    <SideNavMenuItem
+                      key={booksItem.href}
+                      href={booksItem.href}
+                      renderIcon={BooksIcon}
+                      isActive={isNavLinkActive(pathname, booksItem.href)}
+                      onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                        event.preventDefault();
+                        router.push(booksItem.href);
+                      }}
+                    >
+                      {booksItem.label}
+                    </SideNavMenuItem>
+                  );
+                })}
+              </SideNavMenu>
+              {accountItems.map((item) => renderNavLink(item.href, item.label))}
+            </SideNavItems>
+          </SideNav>
+        </Theme>
         <main id="main-content" className="vellano-main">
           {children}
         </main>
