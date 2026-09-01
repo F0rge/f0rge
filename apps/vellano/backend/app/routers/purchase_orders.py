@@ -88,11 +88,12 @@ async def land_purchase_order(
     clearance_amount: Decimal = Form(...),
     clearance_currency: str = Form(...),
     clearance_file: UploadFile = File(...),
-    _: uuid.UUID = Depends(require_catalogue_mutate),
+    user_id: uuid.UUID = Depends(require_catalogue_mutate),
     service: PurchaseOrderService = Depends(get_purchase_order_service),
 ):
     return await service.land(
         po_id,
+        user_id,
         fx_to_zar,
         factory_invoice_number,
         factory_amount,
@@ -115,10 +116,10 @@ receive_router = APIRouter(prefix="/api/v1", tags=["receive"])
 @receive_router.post("/receive", response_model=PurchaseOrderResponse)
 async def receive_purchase_order(
     data: ReceiveRequest,
-    _: uuid.UUID = Depends(require_receive),
+    user_id: uuid.UUID = Depends(require_receive),
     service: PurchaseOrderService = Depends(get_purchase_order_service),
 ):
-    return await service.receive(data)
+    return await service.receive(data, user_id)
 
 
 inventory_router = APIRouter(prefix="/api/v1/inventory", tags=["inventory"])

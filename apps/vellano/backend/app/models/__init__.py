@@ -20,6 +20,8 @@ from app.models.purchase_order import (
 from app.models.sku import Sku
 from app.models.supplier import Supplier
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
+from app.models.team_settings import TeamSettings
+from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
 from app.models.team import Team
 from app.models.user import User, UserRole
 
@@ -51,6 +53,9 @@ __all__ = [
     "SkuStock",
     "Supplier",
     "TaxInvoice",
+    "TeamSettings",
+    "UnitCostAudit",
+    "UnitCostAuditSource",
     "Team",
     "User",
     "UserRole",

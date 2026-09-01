@@ -14,12 +14,16 @@ from app.services.bills import BillService
 from app.services.contacts import ContactService
 from app.services.credit_notes import CreditNoteService
 from app.services.accounts import AccountService
+from app.services.cost_audit import CostAuditService
+from app.services.home import HomeService
 from app.services.inventory import InventoryService
 from app.services.invoices import InvoiceService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
 from app.services.reports import ReportsService
+from app.services.search import SearchService
+from app.services.settings import SettingsService
 from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.skus import SkuService
@@ -67,6 +71,22 @@ def get_purchase_order_service(db: AsyncSession = Depends(get_db)) -> PurchaseOr
 
 def get_inventory_service(db: AsyncSession = Depends(get_db)) -> InventoryService:
     return InventoryService(db)
+
+
+def get_home_service(db: AsyncSession = Depends(get_db)) -> HomeService:
+    return HomeService(db)
+
+
+def get_search_service(db: AsyncSession = Depends(get_db)) -> SearchService:
+    return SearchService(db)
+
+
+def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
+    return SettingsService(db)
+
+
+def get_cost_audit_service(db: AsyncSession = Depends(get_db)) -> CostAuditService:
+    return CostAuditService(db)
 
 
 def get_account_service(db: AsyncSession = Depends(get_db)) -> AccountService:
@@ -196,5 +216,22 @@ async def require_books_mutate(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner or books access required",
+        )
+    return user_id
+
+
+async def require_cost_audit_view(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    user = await UserCRUD(db).get_by_id(user_id)
+    if user is None or user.role not in (
+        UserRole.OWNER,
+        UserRole.BOOKS,
+        UserRole.BUYER,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner, books, or buyer access required",
         )
     return user_id

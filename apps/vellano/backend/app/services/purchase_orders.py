@@ -29,6 +29,8 @@ from app.schemas.purchase_order import (
     PurchaseOrderResponse,
     ReceiveRequest,
 )
+from app.models.unit_cost_audit import UnitCostAuditSource
+from app.services.cost_audit import CostAuditService
 from app.services.object_storage import save_bytes
 from app.services.packing_sheet import (
     build_packing_sheet_pdf,
@@ -50,6 +52,7 @@ class PurchaseOrderService:
         self.sku_stock_crud = SkuStockCRUD(db)
         self.location_stock_crud = LocationStockCRUD(db)
         self.location_crud = LocationCRUD(db)
+        self.cost_audit = CostAuditService(db)
 
     async def list(self) -> list[PurchaseOrderResponse]:
         orders = await self.crud.list_all()
@@ -125,6 +128,7 @@ class PurchaseOrderService:
     async def land(
         self,
         po_id: uuid.UUID,
+        user_id: uuid.UUID,
         fx_to_zar: Decimal,
         factory_invoice_number: str,
         factory_amount: Decimal,
@@ -206,6 +210,16 @@ class PurchaseOrderService:
                 if unit_cost <= 0:
                     raise ValidationError("Computed unit cost must be positive")
                 line.unit_cost_zar = unit_cost
+                await self.cost_audit.record(
+                    sku_id=line.sku_id,
+                    new_cost_zar=unit_cost,
+                    changed_by_user_id=user_id,
+                    source=UnitCostAuditSource.LAND,
+                    old_cost_zar=None,
+                    po_id=po_id,
+                    po_line_id=line.id,
+                    note=f"Landed on {po.po_number}",
+                )
 
             for kind, invoice_number, amount, currency, pdf_bytes, kind_slug in bill_specs:
                 bill_id = uuid.uuid4()
@@ -247,7 +261,7 @@ class PurchaseOrderService:
 
         return Response(content=pdf_bytes, media_type="application/pdf")
 
-    async def receive(self, data: ReceiveRequest) -> PurchaseOrderResponse:
+    async def receive(self, data: ReceiveRequest, user_id: uuid.UUID) -> PurchaseOrderResponse:
         po = await self._get_po_or_404(data.purchase_order_id)
 
         if po.status == PurchaseOrderStatus.RECEIVED:
@@ -297,6 +311,17 @@ class PurchaseOrderService:
                     blended = (old_on_hand * old_cost + incoming_qty * incoming_cost) / new_on_hand
                 loc_stock.on_hand = new_on_hand
                 loc_stock.unit_cost_zar = blended
+                await self.cost_audit.record(
+                    sku_id=line.sku_id,
+                    location_id=data.location_id,
+                    old_cost_zar=old_cost,
+                    new_cost_zar=blended,
+                    changed_by_user_id=user_id,
+                    source=UnitCostAuditSource.RECEIVE,
+                    po_id=po.id,
+                    po_line_id=line.id,
+                    note=f"Received {po.po_number} into location",
+                )
 
         reloaded = await self._get_po_or_404(data.purchase_order_id)
         return self._to_response(reloaded)
