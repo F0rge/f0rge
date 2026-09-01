@@ -66,3 +66,5 @@ async def test_bill_attachment_upload_and_download(owner_client: AsyncClient) ->
     download_resp = await owner_client.get(f"/api/v1/bills/{bill_id}/attachment")
     assert download_resp.status_code == 200
     assert download_resp.headers["content-type"] == "application/pdf"
+    assert download_resp.content == MINIMAL_PDF
+    assert "attachment" in download_resp.headers.get("content-disposition", "")
