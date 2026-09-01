@@ -221,6 +221,20 @@ Stocktake lock at location → 409 `"Location is locked for stocktake"` on hold 
 | List / get laybys | yes | yes | yes | yes | yes |
 | Create, pay, complete, cancel | yes | yes | no | yes | no |
 
+## V2-S7 home hub KPIs
+
+`GET /home` (cookie `vellano_session`) extends the S10 summary with hub KPIs and attention lists. Existing fields (`on_order_*`, `on_hand_*`, `home_currency`) unchanged.
+
+**KPI fields:** `aged_stock_value_zar` (on-hand value where `location_stock.updated_at` ≤ now−180 days), `open_laybys_count` / `open_laybys_balance_zar` (status `open`|`ready`), `low_stock_count` (SKUs with total on-hand 1–2 inclusive), `open_returns_count` (returns status `draft`).
+
+**`needs_attention`** (max 8, skip empty groups): low-stock SKUs (3), in-progress stocktakes (2), draft returns, overdue laybys (`open` + `due_date` &lt; today), unmatched bank import lines.
+
+**`recent_movements`** (max 10): newest `unit_cost_audit` rows — `source`, title (`sku.our_ref` or `note`), detail (`source` + location name when present), `created_at`.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| Home summary | yes | yes | yes | yes | yes |
+
 ## S3 catalogue (suppliers, proformas, SKUs)
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -406,7 +420,7 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 | Deliveries | `/deliveries` | V2-S11 |
 | Reorder | `/reorder` | V2-S12 |
 
-V1 routes (stock, till, books, reports, VAT201, etc.) remain live. S7 home hub KPIs/tables are not in S0.
+V1 routes (stock, till, books, reports, VAT201, etc.) remain live. V2-S7 home hub KPIs and needs-attention / recent-movements tables ship on `/` via `GET /home`.
 
 ## Frontend routes vs API paths
 

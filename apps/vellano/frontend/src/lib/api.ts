@@ -1463,12 +1463,36 @@ export async function downloadVat201Pdf(fromDate: string, toDate: string): Promi
   URL.revokeObjectURL(url);
 }
 
+export type HomeAttentionKind = "low_stock" | "stocktake" | "returns" | "layby" | "bank";
+
+export type HomeAttentionItem = {
+  kind: HomeAttentionKind;
+  title: string;
+  detail: string;
+  status: string;
+  href: string;
+};
+
+export type HomeMovementItem = {
+  source: string;
+  title: string;
+  detail: string;
+  created_at: string;
+};
+
 export type HomeSummary = {
   on_order_qty: number;
   on_order_value_zar: string;
   on_hand_qty: number;
   on_hand_value_zar: string;
   home_currency: string;
+  aged_stock_value_zar: string;
+  open_laybys_count: number;
+  open_laybys_balance_zar: string;
+  low_stock_count: number;
+  open_returns_count: number;
+  needs_attention: HomeAttentionItem[];
+  recent_movements: HomeMovementItem[];
 };
 
 export type SkuSearchHit = {
