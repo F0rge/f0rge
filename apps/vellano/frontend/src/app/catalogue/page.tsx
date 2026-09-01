@@ -5,6 +5,7 @@ import {
   Checkbox,
   DataTable,
   InlineNotification,
+  Modal,
   Stack,
   Table,
   TableBody,
@@ -16,19 +17,24 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { Barcode, DocumentExport, DocumentImport, Printer } from "@carbon/icons-react";
+import { Barcode, DocumentExport, DocumentImport, Printer, TrashCan } from "@carbon/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { SkuPriceEditor } from "@/components/sku-price-editor";
 import {
+  ApiError,
   canMutateCatalogue,
   canViewCostAudit,
+  deleteSku,
   formatPriceAmount,
   formatZarAmount,
   listInventory,
   listSkus,
+  skuPhotoUrl,
+  updateSku,
   type Sku,
+  type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { downloadCsv } from "@/lib/csv";
@@ -46,6 +52,47 @@ const TABLE_HEADERS = [
   { key: "our_barcode", header: "Our barcode" },
   { key: "actions", header: "Actions" },
 ] as const;
+
+type SkuIdentityForm = {
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  design: string;
+  fabric: string;
+  category: string;
+};
+
+function emptyIdentityForm(): SkuIdentityForm {
+  return {
+    our_ref: "",
+    our_barcode: "",
+    name: "",
+    design: "",
+    fabric: "",
+    category: "",
+  };
+}
+
+function identityFormFromSku(sku: Sku): SkuIdentityForm {
+  return {
+    our_ref: sku.our_ref,
+    our_barcode: sku.our_barcode,
+    name: sku.name,
+    design: sku.design,
+    fabric: sku.fabric,
+    category: sku.category ?? "",
+  };
+}
+
+function isIdentityFormValid(form: SkuIdentityForm): boolean {
+  return Boolean(
+    form.our_ref.trim() &&
+      form.our_barcode.trim() &&
+      form.name.trim() &&
+      form.design.trim() &&
+      form.fabric.trim(),
+  );
+}
 
 type SkuRow = {
   id: string;
@@ -137,7 +184,12 @@ function CataloguePageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [priceSku, setPriceSku] = useState<Sku | null>(null);
+  const [editSku, setEditSku] = useState<Sku | null>(null);
+  const [editForm, setEditForm] = useState<SkuIdentityForm>(emptyIdentityForm);
+  const [skuToDelete, setSkuToDelete] = useState<Sku | null>(null);
   const [saving, setSaving] = useState(false);
+  const [identitySaving, setIdentitySaving] = useState(false);
+  const [deleteSaving, setDeleteSaving] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -234,6 +286,75 @@ function CataloguePageContent() {
 
   function openPriceEditor(entry: Sku) {
     setPriceSku(entry);
+  }
+
+  function openEditSku(entry: Sku) {
+    setEditSku(entry);
+    setEditForm(identityFormFromSku(entry));
+  }
+
+  async function handleEditSkuSave() {
+    if (!editSku || !isIdentityFormValid(editForm)) {
+      return;
+    }
+    setIdentitySaving(true);
+    setError(null);
+    try {
+      const payload: UpdateSkuPricePayload = {
+        our_ref: editForm.our_ref.trim(),
+        our_barcode: editForm.our_barcode.trim(),
+        name: editForm.name.trim(),
+        design: editForm.design.trim(),
+        fabric: editForm.fabric.trim(),
+        category: editForm.category.trim() || null,
+      };
+      await updateSku(editSku.id, payload);
+      setEditSku(null);
+      setEditForm(emptyIdentityForm());
+      await loadSkus();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setError(err.message);
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to update SKU.");
+      }
+    } finally {
+      setIdentitySaving(false);
+    }
+  }
+
+  async function handleDeleteSku() {
+    if (!skuToDelete) {
+      return;
+    }
+    setDeleteSaving(true);
+    setError(null);
+    try {
+      await deleteSku(skuToDelete.id);
+      setSkuToDelete(null);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(skuToDelete.id);
+        return next;
+      });
+      if (priceSku?.id === skuToDelete.id) {
+        setPriceSku(null);
+      }
+      if (editSku?.id === skuToDelete.id) {
+        setEditSku(null);
+        setEditForm(emptyIdentityForm());
+      }
+      await loadSkus();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setError(err.message);
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to delete SKU.");
+      }
+      setSkuToDelete(null);
+    } finally {
+      setDeleteSaving(false);
+    }
   }
 
   function toggleSelect(id: string) {
@@ -356,6 +477,85 @@ function CataloguePageContent() {
         onError={setError}
       />
 
+      <Modal
+        open={editSku !== null}
+        modalHeading="Edit SKU"
+        primaryButtonText={identitySaving ? "Saving…" : "Save"}
+        secondaryButtonText="Cancel"
+        onRequestClose={() => {
+          setEditSku(null);
+          setEditForm(emptyIdentityForm());
+        }}
+        onRequestSubmit={() => void handleEditSkuSave()}
+        primaryButtonDisabled={identitySaving || !isIdentityFormValid(editForm)}
+        size="md"
+      >
+        <Stack gap={5}>
+          <TextInput
+            id="edit-sku-our-ref"
+            labelText="Our ref *"
+            value={editForm.our_ref}
+            onChange={(event) =>
+              setEditForm((form) => ({ ...form, our_ref: event.target.value }))
+            }
+          />
+          <TextInput
+            id="edit-sku-our-barcode"
+            labelText="Our barcode *"
+            value={editForm.our_barcode}
+            onChange={(event) =>
+              setEditForm((form) => ({ ...form, our_barcode: event.target.value }))
+            }
+          />
+          <TextInput
+            id="edit-sku-name"
+            labelText="Name *"
+            value={editForm.name}
+            onChange={(event) => setEditForm((form) => ({ ...form, name: event.target.value }))}
+          />
+          <TextInput
+            id="edit-sku-design"
+            labelText="Design *"
+            value={editForm.design}
+            onChange={(event) =>
+              setEditForm((form) => ({ ...form, design: event.target.value }))
+            }
+          />
+          <TextInput
+            id="edit-sku-fabric"
+            labelText="Fabric *"
+            value={editForm.fabric}
+            onChange={(event) =>
+              setEditForm((form) => ({ ...form, fabric: event.target.value }))
+            }
+          />
+          <TextInput
+            id="edit-sku-category"
+            labelText="Category"
+            value={editForm.category}
+            onChange={(event) =>
+              setEditForm((form) => ({ ...form, category: event.target.value }))
+            }
+          />
+        </Stack>
+      </Modal>
+
+      <Modal
+        open={skuToDelete !== null}
+        modalHeading="Delete SKU"
+        primaryButtonText={deleteSaving ? "Deleting…" : "Delete"}
+        secondaryButtonText="Cancel"
+        danger
+        primaryButtonDisabled={deleteSaving}
+        onRequestClose={() => setSkuToDelete(null)}
+        onRequestSubmit={() => void handleDeleteSku()}
+      >
+        <p className="cds--type-body-01">
+          Delete <strong>{skuToDelete?.our_ref}</strong> ({skuToDelete?.name})? This cannot be
+          undone.
+        </p>
+      </Modal>
+
       {loading ? (
         <p className="cds--type-body-01">Loading catalogue…</p>
       ) : skus.length === 0 ? (
@@ -470,8 +670,27 @@ function CataloguePageContent() {
                               if (cell.info.header === "product" && entry) {
                                 return (
                                   <TableCell key={cell.id}>
-                                    <div className="cds--type-semibold">{entry.our_ref}</div>
-                                    <div className="cds--type-caption-01">{entry.name}</div>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "0.75rem",
+                                      }}
+                                    >
+                                      {entry.photo_storage_key ? (
+                                        <img
+                                          src={skuPhotoUrl(entry.id)}
+                                          alt={entry.name}
+                                          width={48}
+                                          height={48}
+                                          style={{ objectFit: "cover", flexShrink: 0 }}
+                                        />
+                                      ) : null}
+                                      <div>
+                                        <div className="cds--type-semibold">{entry.our_ref}</div>
+                                        <div className="cds--type-caption-01">{entry.name}</div>
+                                      </div>
+                                    </div>
                                   </TableCell>
                                 );
                               }
@@ -502,6 +721,20 @@ function CataloguePageContent() {
                                         printSkuLabels([entry]);
                                       }}
                                     />
+                                    {canMutate ? (
+                                      <Button
+                                        type="button"
+                                        kind="ghost"
+                                        size="sm"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          openEditSku(entry);
+                                        }}
+                                      >
+                                        Edit SKU
+                                      </Button>
+                                    ) : null}
                                     <Button
                                       type="button"
                                       kind="ghost"
@@ -514,6 +747,21 @@ function CataloguePageContent() {
                                     >
                                       {canMutate ? "Edit prices" : "View prices"}
                                     </Button>
+                                    {canMutate ? (
+                                      <Button
+                                        type="button"
+                                        kind="danger--ghost"
+                                        size="sm"
+                                        hasIconOnly
+                                        iconDescription="Delete SKU"
+                                        renderIcon={TrashCan}
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          setSkuToDelete(entry);
+                                        }}
+                                      />
+                                    ) : null}
                                   </TableCell>
                                 );
                               }

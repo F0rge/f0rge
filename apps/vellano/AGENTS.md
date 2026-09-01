@@ -77,9 +77,9 @@ Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` b
 
 ### Playground seed (develop / local demos)
 
-Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (marker: supplier `Playground Imports` or SKU `PG-TABLE`):
+Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (markers: supplier `Playground Imports` / SKU `PG-TABLE`, then demo pack `PG-SOFA`, then sofa catalogue `VEL-SOFA-LONDON`):
 
-suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → transfer 1 table to Bedfordview → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched).
+suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → transfer 1 table to Bedfordview → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched). A later pack adds high-end sofa SKUs with Unsplash photos (local files under `backend/data/playground_photos/`), extra customers, a trade invoice, a sofa layby, and a Minotti ZAR bill. Idempotent — existing DBs still get the sofa pack on the next boot.
 
 **Railway develop:** on service `vellano-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do not enable on a database you want to keep empty. After it runs, log in as `owner@example.com` / `change-me-owner` (or the role users above) and walk stock → proforma → PO → receive → transfer → till → books.
 
@@ -187,7 +187,7 @@ Extends `skus` (no second table). Columns: nullable `preferred_supplier_id` (FK 
 
 `last_landed_cost_zar` is **computed** on read from the latest `unit_cost_audit` row for that SKU where `source` is `land` or `receive` only (opening, correction, import, etc. do not count). `SkuResponse` also includes `preferred_supplier_name` (lookup).
 
-`PATCH /api/v1/skus/{id}` fields: `preferred_supplier_id`, `lead_time_days`, `supplier_ref` (plus existing price/category fields). Unknown `preferred_supplier_id` → 404 `"Supplier not found"`. Null clears via `model_fields_set`.
+`PATCH /api/v1/skus/{id}` fields: identity (`our_ref`, `our_barcode`, `name`, `design`, `fabric`), `category`, `preferred_supplier_id`, `lead_time_days`, `supplier_ref`, plus price fields. Duplicate `our_ref` / `our_barcode` / design+fabric → 409. Unknown `preferred_supplier_id` → 404 `"Supplier not found"`. Null clears nullable fields via `model_fields_set`. Identity uniqueness checks pass `exclude_id` so unchanged values are not treated as collisions.
 
 | Action | owner | buyer | warehouse | till | books |
 |--------|:-----:|:-----:|:---------:|:----:|:-----:|
@@ -311,16 +311,16 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 - **Suppliers:** `GET/POST /suppliers` — `{ name, default_currency? }` (currency defaults to USD).
 - **Proformas:** `GET /proformas`, `POST /proformas` (multipart: `supplier_id`, `invoice_number`, `invoice_date`, optional `currency`, file field `file`), `GET /proformas/{id}`, `GET /proformas/{id}/file` (PDF).
-- **SKUs:** `GET/POST /skus`, `POST /skus/{id}/photo` (field `photo`), `GET /skus/{id}`, `GET /skus/{id}/photo`.
+- **SKUs:** `GET/POST /skus`, `GET /skus/{id}`, `PATCH /skus/{id}` (identity, category, prices, supplier fields), `DELETE /skus/{id}` (204; 409 if stock/orders/sales history), `POST /skus/{id}/photo` (field `photo`), `GET /skus/{id}/photo`.
 
-**S1 opening stock:** optional on `POST /skus`: `opening_location_id`, `opening_qty` (≥ 1), `opening_unit_cost_zar` (> 0), `opening_date` (defaults to today). If any opening field is set, location, qty, and unit cost are required. Owner/buyer. Writes location on-hand and cost audit source `opening`; no GL. Unit-cost blend matches receive. Omit all opening fields for a catalogue-only create (SKU is not in `GET /inventory`).
+**S1 opening stock:** optional on `POST /skus`: `opening_location_id`, `opening_qty` (≥ 1), `opening_unit_cost_zar` (> 0), `opening_date` (defaults to today). If any opening field is set, location, qty, and unit cost are required. Owner/buyer. Writes location on-hand and cost audit source `opening`; no GL. Unit-cost blend matches receive. Omit all opening fields for a catalogue-only create (SKU is not in `GET /inventory`). Catalogue-only SKUs can be `DELETE`d; SKUs with `location_stock`, orders, or sales history return 409 `"Cannot delete a SKU that has stock, orders, or sales history."`
 
 UI labels distinguish **Our barcode** from **Supplier ref** — never conflate them.
 
 | Action | owner | buyer | warehouse | till | books |
 |--------|:-----:|:-----:|:---------:|:----:|:-----:|
 | List suppliers / proformas / catalogue | yes | yes | yes | yes | yes |
-| Create supplier / file proforma / add SKU | yes | yes | no | no | no |
+| Create / update / delete SKU, file proforma, create supplier | yes | yes | no | no | no |
 
 No purchase orders, landed cost, quantities, or wholesale/retail pricing in S3.
 
