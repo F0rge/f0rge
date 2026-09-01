@@ -315,3 +315,142 @@ export function uploadSkuPhoto(id: string, photo: File): Promise<Sku> {
   formData.append("photo", photo);
   return apiUpload<Sku>(`/skus/${id}/photo`, formData);
 }
+
+export type PurchaseOrderStatus = "open" | "on_water" | "landed" | "received";
+
+export type PoLine = {
+  id: string;
+  sku_id: string;
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  fabric: string;
+  qty: number;
+  factory_unit_amount: string;
+  unit_cost_zar: string | null;
+};
+
+export type LandingBill = {
+  kind: string;
+  invoice_number: string;
+  amount: string;
+  currency: string;
+};
+
+export type PurchaseOrder = {
+  id: string;
+  po_number: string;
+  status: PurchaseOrderStatus;
+  supplier_id: string;
+  supplier_name: string;
+  proforma_id: string | null;
+  fx_to_zar: string | null;
+  lines: PoLine[];
+  bills: LandingBill[];
+  received_location_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreatePoLinePayload = {
+  sku_id: string;
+  qty: number;
+  factory_unit_amount: string;
+};
+
+export type CreatePurchaseOrderPayload = {
+  supplier_id: string;
+  proforma_id?: string;
+  lines: CreatePoLinePayload[];
+};
+
+export type InventorySku = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  on_order: number;
+  on_hand: number;
+  sellable: boolean;
+  unit_cost_zar: string | null;
+  locations: {
+    location_id: string;
+    location_name: string;
+    on_hand: number;
+    unit_cost_zar: string | null;
+  }[];
+};
+
+export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
+  open: "Open",
+  on_water: "On water",
+  landed: "Landed",
+  received: "Received",
+};
+
+export function canRaisePo(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "buyer";
+}
+
+export function canReceive(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "warehouse";
+}
+
+export function listPurchaseOrders(): Promise<PurchaseOrder[]> {
+  return apiFetch<PurchaseOrder[]>("/purchase-orders");
+}
+
+export function createPurchaseOrder(payload: CreatePurchaseOrderPayload): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>("/purchase-orders", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getPurchaseOrder(id: string): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}`);
+}
+
+export async function downloadPackingSheet(id: string, poNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/purchase-orders/${id}/packing-sheet`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${poNumber}-packing-sheet.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export function markOnWater(id: string): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/on-water`, {
+    method: "POST",
+  });
+}
+
+export function landPurchaseOrder(id: string, formData: FormData): Promise<PurchaseOrder> {
+  return apiUpload<PurchaseOrder>(`/purchase-orders/${id}/land`, formData);
+}
+
+export function receivePurchaseOrder(payload: {
+  purchase_order_id: string;
+  location_id: string;
+}): Promise<void> {
+  return apiFetch<void>("/receive", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listInventory(): Promise<InventorySku[]> {
+  return apiFetch<InventorySku[]>("/inventory");
+}
