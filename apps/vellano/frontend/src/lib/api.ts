@@ -306,7 +306,7 @@ export type UpdateSkuPricePayload = {
   name?: string;
   design?: string;
   fabric?: string;
-  category?: string;
+  category?: string | null;
   wholesale_ex_vat?: string | number | null;
   wholesale_inc_vat?: string | number | null;
   retail_ex_vat?: string | number | null;
