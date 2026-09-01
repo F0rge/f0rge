@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +13,12 @@ from app.models.account import AccountType
 from app.models.bill import Bill
 from app.models.credit_note import CreditNote
 from app.models.customer import Customer
+from app.models.inventory import LocationStock
 from app.models.journal import JournalEntry, JournalLine
+from app.models.location import Location
+from app.models.sku import Sku
 from app.models.supplier import Supplier
-from app.models.tax_invoice import TaxInvoice
+from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.bank_import import (
     AgedBucket,
     AgedLine,
@@ -24,6 +28,22 @@ from app.schemas.bank_import import (
     ProfitLossLine,
     ProfitLossReport,
     Vat201Draft,
+)
+from app.schemas.reports_stock import (
+    AgedStockBucket,
+    AgedStockLine,
+    AgedStockReport,
+    SalesBySkuLine,
+    SalesBySkuReport,
+    SalesVatReport,
+    StockValuationLine,
+    StockValuationReport,
+)
+
+AGED_STOCK_BUCKET_SPECS: tuple[tuple[str, str], ...] = (
+    ("0-90", "0–90 days"),
+    ("91-180", "91–180 days"),
+    ("180+", "180+ days"),
 )
 
 
@@ -48,6 +68,24 @@ def _bucket_label(bucket: str) -> str:
         "90+": "90+ days",
     }
     return labels.get(bucket, bucket)
+
+
+def _line_stock_value(on_hand: int, unit_cost_zar: Optional[Decimal]) -> Decimal:
+    if unit_cost_zar is None or on_hand <= 0:
+        return Decimal(0)
+    return (Decimal(on_hand) * Decimal(unit_cost_zar)).quantize(Decimal("0.01"))
+
+
+def _aged_stock_bucket(
+    updated_at: datetime.datetime,
+    cutoff_90: datetime.datetime,
+    cutoff_180: datetime.datetime,
+) -> str:
+    if updated_at > cutoff_90:
+        return "0-90"
+    if updated_at > cutoff_180:
+        return "91-180"
+    return "180+"
 
 
 class ReportsService:
@@ -287,6 +325,200 @@ class ReportsService:
             net_vat_payable=output_tax - input_tax,
             invoice_count=int(invoice_count),
             credit_note_count=int(cn_count),
+        )
+
+    async def stock_valuation(self) -> StockValuationReport:
+        result = await self.db.execute(
+            select(
+                LocationStock,
+                Location.name,
+                Sku.our_ref,
+                Sku.name,
+            )
+            .join(Location, LocationStock.location_id == Location.id)
+            .join(Sku, LocationStock.sku_id == Sku.id)
+            .where(LocationStock.on_hand > 0)
+            .order_by(Location.name, Sku.our_ref)
+        )
+
+        lines: list[StockValuationLine] = []
+        total_on_hand = 0
+        total_value = Decimal(0)
+
+        for stock, location_name, our_ref, sku_name in result.all():
+            value = _line_stock_value(stock.on_hand, stock.unit_cost_zar)
+            total_on_hand += stock.on_hand
+            total_value += value
+            lines.append(
+                StockValuationLine(
+                    location_id=stock.location_id,
+                    location_name=location_name,
+                    sku_id=stock.sku_id,
+                    our_ref=our_ref,
+                    name=sku_name,
+                    on_hand=stock.on_hand,
+                    unit_cost_zar=stock.unit_cost_zar,
+                    value_zar=value,
+                )
+            )
+
+        return StockValuationReport(
+            lines=lines,
+            total_on_hand=total_on_hand,
+            total_value_zar=total_value.quantize(Decimal("0.01")),
+        )
+
+    async def aged_stock(self) -> AgedStockReport:
+        now = datetime.datetime.utcnow()
+        cutoff_90 = now - datetime.timedelta(days=90)
+        cutoff_180 = now - datetime.timedelta(days=180)
+
+        result = await self.db.execute(
+            select(
+                LocationStock,
+                Location.name,
+                Sku.our_ref,
+                Sku.name,
+            )
+            .join(Location, LocationStock.location_id == Location.id)
+            .join(Sku, LocationStock.sku_id == Sku.id)
+            .where(LocationStock.on_hand > 0)
+            .order_by(LocationStock.updated_at, Sku.our_ref)
+        )
+
+        bucket_lines: dict[str, list[AgedStockLine]] = {
+            key: [] for key, _ in AGED_STOCK_BUCKET_SPECS
+        }
+        bucket_qty: dict[str, int] = {key: 0 for key, _ in AGED_STOCK_BUCKET_SPECS}
+        bucket_value: dict[str, Decimal] = {key: Decimal(0) for key, _ in AGED_STOCK_BUCKET_SPECS}
+
+        for stock, location_name, our_ref, sku_name in result.all():
+            updated_at = stock.updated_at
+            bucket = _aged_stock_bucket(updated_at, cutoff_90, cutoff_180)
+            days = max(0, (now - updated_at).days)
+            value = _line_stock_value(stock.on_hand, stock.unit_cost_zar)
+            line = AgedStockLine(
+                sku_id=stock.sku_id,
+                our_ref=our_ref,
+                name=sku_name,
+                location_id=stock.location_id,
+                location_name=location_name,
+                on_hand=stock.on_hand,
+                value_zar=value,
+                days=days,
+                bucket=bucket,
+            )
+            bucket_lines[bucket].append(line)
+            bucket_qty[bucket] += stock.on_hand
+            bucket_value[bucket] += value
+
+        buckets = [
+            AgedStockBucket(
+                bucket=key,
+                label=label,
+                qty=bucket_qty[key],
+                value_zar=bucket_value[key].quantize(Decimal("0.01")),
+                lines=bucket_lines[key],
+            )
+            for key, label in AGED_STOCK_BUCKET_SPECS
+        ]
+        total_qty = sum(bucket_qty.values())
+        total_value = sum(bucket_value.values(), Decimal(0))
+
+        return AgedStockReport(
+            buckets=buckets,
+            total_qty=total_qty,
+            total_value_zar=total_value.quantize(Decimal("0.01")),
+        )
+
+    async def sales_by_sku(
+        self, from_date: datetime.date, to_date: datetime.date
+    ) -> SalesBySkuReport:
+        if from_date > to_date:
+            raise ValueError("from_date must be on or before to_date")
+
+        result = await self.db.execute(
+            select(
+                InvoiceLine.sku_id,
+                Sku.our_ref,
+                Sku.name,
+                func.coalesce(func.sum(InvoiceLine.qty), 0),
+                func.coalesce(func.sum(InvoiceLine.ex_vat), 0),
+                func.coalesce(func.sum(InvoiceLine.inc_vat), 0),
+            )
+            .join(TaxInvoice, InvoiceLine.invoice_id == TaxInvoice.id)
+            .join(Sku, InvoiceLine.sku_id == Sku.id)
+            .where(
+                and_(
+                    InvoiceLine.sku_id.isnot(None),
+                    TaxInvoice.issue_date >= from_date,
+                    TaxInvoice.issue_date <= to_date,
+                )
+            )
+            .group_by(InvoiceLine.sku_id, Sku.our_ref, Sku.name)
+            .order_by(Sku.our_ref)
+        )
+
+        lines: list[SalesBySkuLine] = []
+        total_qty = 0
+        total_ex = Decimal(0)
+        total_inc = Decimal(0)
+
+        for sku_id, our_ref, name, qty, ex_vat, inc_vat in result.all():
+            qty_int = int(qty)
+            ex = Decimal(ex_vat)
+            inc = Decimal(inc_vat)
+            total_qty += qty_int
+            total_ex += ex
+            total_inc += inc
+            lines.append(
+                SalesBySkuLine(
+                    sku_id=sku_id,
+                    our_ref=our_ref,
+                    name=name,
+                    qty=qty_int,
+                    ex_vat_zar=ex,
+                    inc_vat_zar=inc,
+                )
+            )
+
+        return SalesBySkuReport(
+            from_date=from_date,
+            to_date=to_date,
+            lines=lines,
+            total_qty=total_qty,
+            total_ex_vat_zar=total_ex,
+            total_inc_vat_zar=total_inc,
+        )
+
+    async def sales_vat(self, from_date: datetime.date, to_date: datetime.date) -> SalesVatReport:
+        if from_date > to_date:
+            raise ValueError("from_date must be on or before to_date")
+
+        result = await self.db.execute(
+            select(
+                func.count(),
+                func.coalesce(func.sum(TaxInvoice.subtotal_ex_vat), 0),
+                func.coalesce(func.sum(TaxInvoice.vat_amount), 0),
+                func.coalesce(func.sum(TaxInvoice.total_inc_vat), 0),
+                func.coalesce(func.sum(TaxInvoice.amount_paid), 0),
+            ).where(
+                and_(
+                    TaxInvoice.issue_date >= from_date,
+                    TaxInvoice.issue_date <= to_date,
+                )
+            )
+        )
+        invoice_count, subtotal, vat_amount, total_inc, amount_paid = result.one()
+
+        return SalesVatReport(
+            from_date=from_date,
+            to_date=to_date,
+            invoice_count=int(invoice_count),
+            subtotal_ex_vat=Decimal(subtotal),
+            vat_amount=Decimal(vat_amount),
+            total_inc_vat=Decimal(total_inc),
+            amount_paid=Decimal(amount_paid),
         )
 
     async def _period_net(

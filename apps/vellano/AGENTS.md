@@ -232,6 +232,25 @@ Endpoints (cookie `vellano_session`):
 
 Migration: `020_v2_s12_reorder_min`.
 
+## V2-S14 mobile WMS
+
+Frontend-only `/wms` warehouse console (no new API). Carbon ContentSwitcher: Receive | Count | Transfer. Wraps existing `POST /receive`, stocktake lookup/count/complete, and `POST /transfers`. Mutate: owner|warehouse (`canReceive` / `canTransfer`). Nav: Operations → WMS.
+
+## V2-S15 reports (stock and sales)
+
+Richer stock and sales reports under `/api/v1/reports` (cookie `vellano_session`). JSON + CSV export for each. All authenticated roles (same as existing S7 reports).
+
+- **Stock valuation:** `GET /reports/stock-valuation`, `GET /reports/stock-valuation/csv` — on-hand &gt; 0 by location × SKU (`on_hand × unit_cost_zar`).
+- **Aged stock:** `GET /reports/aged-stock`, `GET /reports/aged-stock/csv` — buckets `0-90`, `91-180`, `180+` days from `location_stock.updated_at` (180+ cutoff matches home `aged_stock_value_zar`).
+- **Sales by SKU:** `GET /reports/sales-by-sku?from=&to=`, `GET /reports/sales-by-sku/csv` — invoice lines with non-null `sku_id` in date range (till + books). Books lines without `sku_id` are omitted.
+- **Sales VAT summary:** `GET /reports/sales-vat?from=&to=`, `GET /reports/sales-vat/csv` — period totals from all `tax_invoices` (`invoice_count`, `subtotal_ex_vat`, `vat_amount`, `total_inc_vat`, `amount_paid`).
+
+**No sales-by-location:** `tax_invoices` have no `location_id` — location-scoped sales reporting would need a schema change (out of scope).
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| All V2-S15 reports + CSV | yes | yes | yes | yes | yes |
+
 ## V2-S5 returns / RMA
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -483,6 +502,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/till` | `/till` |
 | `/transfers` | `/transfers` |
 | `/receive` | `/receive` |
+| `/wms` | `/receive`, `/stocktakes`, `/transfers` |
 | `/reports`, `/vat201` | `/reports` |
 | `/stocktakes` | `/stocktakes` |
 | `/adjustments` | `/adjustments` |
