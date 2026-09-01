@@ -213,6 +213,25 @@ Numbering: `DLV-0001`. Status: `draft` | `packed` | `delivered` | `cancelled`. S
 
 Migration: `019_v2_s11_deliveries`.
 
+## V2-S12 reorder
+
+Nullable `skus.reorder_min` (Integer). PATCH via `SkuUpdate` — set with `ge=1`, clear with `null`. Included on `SkuResponse`.
+
+**Reorder math:** `on_hand` = SUM(`location_stock.on_hand`); `on_order` = (`sku_stock.on_order` or 0) + SUM(`po_lines.qty`) on purchase orders with status **`open`** (draft POs count; on-water qty lives in `sku_stock` only). Listed when `reorder_min IS NOT NULL` and `(on_hand + on_order) < reorder_min`. `suggested_qty = reorder_min - on_hand - on_order`.
+
+Endpoints (cookie `vellano_session`):
+
+- **Reorder:** `GET /reorder`, `POST /reorder/draft-po` body `{ sku_ids: [uuid, ...] }` (min 1).
+
+`POST /reorder/draft-po` groups by `preferred_supplier_id`, one `PurchaseOrderService.create` per supplier (`proforma_id=null`, status `open`). Line `qty` = `suggested_qty`; `factory_unit_amount` = `last_landed_cost_zar` or `1`. Each SKU must be on the reorder list and have a preferred supplier.
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| GET reorder list | yes | yes | yes | yes | yes |
+| POST draft PO | yes | yes | no | no | no |
+
+Migration: `020_v2_s12_reorder_min`.
+
 ## V2-S5 returns / RMA
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -445,11 +464,7 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 - **UI:** IBM Carbon only — never `@f0rge/ui`, Tailwind, shadcn, or Mantine in this app.
 - **Chrome:** Carbon UIShell; content `g10`; SideNav dark via `Theme g100`; main offset `.vellano-main` **16rem expanded / 3rem collapsed** (`data-nav-expanded`).
-- **Stub pages** (placeholder copy only — no API):
-
-| Label | Route | Slice |
-|-------|-------|-------|
-| Reorder | `/reorder` | V2-S12 |
+- **Stub pages:** none remaining (Deliveries and Reorder shipped in V2-S11 / V2-S12).
 
 V1 routes (stock, till, books, reports, VAT201, etc.) remain live. V2-S7 home hub KPIs and needs-attention / recent-movements tables ship on `/` via `GET /home`.
 
@@ -476,7 +491,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/laybys` | `/laybys` |
 | `/customers` | `/customers` |
 | `/deliveries` | `/deliveries` |
-| `/reorder` | *(none yet — V2 stub)* |
+| `/reorder` | `/reorder` |
 
 ## Non-goals
 

@@ -27,6 +27,7 @@ class Sku(UUIDPkMixin, TimestampMixin, Base):
         nullable=True,
     )
     lead_time_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reorder_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     wholesale_ex_vat: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)

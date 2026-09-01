@@ -46,6 +46,7 @@ type EditorFormState = {
   preferredSupplierId: string;
   supplierRef: string;
   leadTimeDays: string;
+  reorderMin: string;
 };
 
 type SkuPriceEditorProps = {
@@ -78,6 +79,7 @@ const emptyForm: EditorFormState = {
   preferredSupplierId: "",
   supplierRef: "",
   leadTimeDays: "",
+  reorderMin: "",
 };
 
 function formFromSku(sku: Sku): EditorFormState {
@@ -91,6 +93,7 @@ function formFromSku(sku: Sku): EditorFormState {
     preferredSupplierId: sku.preferred_supplier_id ?? "",
     supplierRef: sku.supplier_ref ?? "",
     leadTimeDays: sku.lead_time_days !== null ? String(sku.lead_time_days) : "",
+    reorderMin: sku.reorder_min !== null ? String(sku.reorder_min) : "",
   };
 }
 
@@ -101,6 +104,18 @@ function parseLeadTimeDays(value: string): number | null {
   }
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function parseReorderMin(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) {
     return null;
   }
   return parsed;
@@ -136,6 +151,11 @@ function buildPayload(sku: Sku, form: EditorFormState): UpdateSkuPricePayload {
     payload.lead_time_days = leadTimeDays;
   }
 
+  const reorderMin = parseReorderMin(form.reorderMin);
+  if (reorderMin !== sku.reorder_min) {
+    payload.reorder_min = reorderMin;
+  }
+
   return payload;
 }
 
@@ -149,7 +169,10 @@ function hasFormEdits(sku: Sku, form: EditorFormState): boolean {
   if (form.supplierRef.trim() !== (sku.supplier_ref ?? "")) {
     return true;
   }
-  return parseLeadTimeDays(form.leadTimeDays) !== sku.lead_time_days;
+  if (parseLeadTimeDays(form.leadTimeDays) !== sku.lead_time_days) {
+    return true;
+  }
+  return parseReorderMin(form.reorderMin) !== sku.reorder_min;
 }
 
 export function SkuPriceEditor({
@@ -380,6 +403,12 @@ export function SkuPriceEditor({
               value={form.leadTimeDays ? `${form.leadTimeDays} days` : "—"}
               readOnly
             />
+            <TextInput
+              id="sku-reorder-min-readonly"
+              labelText="Reorder min"
+              value={form.reorderMin || "—"}
+              readOnly
+            />
           </>
         ) : (
           <>
@@ -415,6 +444,15 @@ export function SkuPriceEditor({
               value={form.leadTimeDays}
               onChange={(event) =>
                 setForm((current) => ({ ...current, leadTimeDays: event.target.value }))
+              }
+            />
+            <TextInput
+              id="sku-reorder-min"
+              labelText="Reorder min"
+              helperText="Minimum stock level; leave blank to clear"
+              value={form.reorderMin}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, reorderMin: event.target.value }))
               }
             />
           </>

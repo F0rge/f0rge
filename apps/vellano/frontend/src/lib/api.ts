@@ -289,6 +289,7 @@ export type Sku = {
   preferred_supplier_id: string | null;
   preferred_supplier_name: string | null;
   lead_time_days: number | null;
+  reorder_min: number | null;
   last_landed_cost_zar: string | null;
   photo_storage_key: string | null;
   wholesale_ex_vat: string | null;
@@ -306,6 +307,7 @@ export type UpdateSkuPricePayload = {
   retail_inc_vat?: string | number | null;
   preferred_supplier_id?: string | null;
   lead_time_days?: number | null;
+  reorder_min?: number | null;
   supplier_ref?: string | null;
 };
 
@@ -2035,4 +2037,32 @@ export function isInvoiceFullyPaid(invoice: Invoice): boolean {
   const paid = Number(invoice.amount_paid);
   const total = Number(invoice.total_inc_vat);
   return Number.isFinite(paid) && Number.isFinite(total) && paid === total;
+}
+
+export type ReorderRow = {
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  reorder_min: number;
+  on_hand: number;
+  on_order: number;
+  suggested_qty: number;
+  preferred_supplier_id: string | null;
+  preferred_supplier_name: string | null;
+  last_landed_cost_zar: string | null;
+};
+
+export type CreateReorderDraftPoResponse = {
+  purchase_orders: PurchaseOrder[];
+};
+
+export function listReorder(): Promise<ReorderRow[]> {
+  return apiFetch<ReorderRow[]>("/reorder");
+}
+
+export function createReorderDraftPo(skuIds: string[]): Promise<CreateReorderDraftPoResponse> {
+  return apiFetch<CreateReorderDraftPoResponse>("/reorder/draft-po", {
+    method: "POST",
+    body: JSON.stringify({ sku_ids: skuIds }),
+  });
 }

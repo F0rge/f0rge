@@ -70,6 +70,9 @@ class SkuService:
         if "lead_time_days" in fields_set:
             sku.lead_time_days = data.lead_time_days
 
+        if "reorder_min" in fields_set:
+            sku.reorder_min = data.reorder_min
+
         if "supplier_ref" in fields_set:
             sku.supplier_ref = data.supplier_ref
 
@@ -227,6 +230,7 @@ class SkuService:
             preferred_supplier_id=sku.preferred_supplier_id,
             preferred_supplier_name=preferred_supplier_name,
             lead_time_days=sku.lead_time_days,
+            reorder_min=sku.reorder_min,
             last_landed_cost_zar=last_landed_cost_zar,
             category=sku.category,
             photo_storage_key=sku.photo_storage_key,

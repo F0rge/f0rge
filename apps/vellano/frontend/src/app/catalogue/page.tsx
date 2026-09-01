@@ -51,6 +51,7 @@ const TABLE_HEADERS = [
   { key: "category", header: "Category" },
   { key: "preferred_supplier", header: "Preferred supplier" },
   { key: "lead_time_days", header: "Lead time" },
+  { key: "reorder_min", header: "Reorder min" },
   { key: "cost_zar", header: "Cost (ZAR)" },
   { key: "retail_inc_vat", header: "Retail Price" },
   { key: "wholesale_inc_vat", header: "Trade Price" },
@@ -64,6 +65,7 @@ type SkuRow = {
   category: string;
   preferred_supplier: string;
   lead_time_days: string;
+  reorder_min: string;
   cost_zar: string;
   retail_inc_vat: string;
   wholesale_inc_vat: string;
@@ -264,6 +266,7 @@ function CataloguePageContent() {
     category: entry.category?.trim() || "—",
     preferred_supplier: entry.preferred_supplier_name?.trim() || "—",
     lead_time_days: formatLeadTime(entry.lead_time_days),
+    reorder_min: entry.reorder_min !== null ? String(entry.reorder_min) : "—",
     cost_zar: formatZarAmount(unitCostBySku.get(entry.id) ?? null),
     retail_inc_vat: formatIncVatPrice(entry.retail_inc_vat),
     wholesale_inc_vat: formatIncVatPrice(entry.wholesale_inc_vat),
