@@ -14,5 +14,18 @@ class Customer(UUIDPkMixin, TimestampMixin, Base):
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     vat_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     billing_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    customer_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="retail",
+        server_default="retail",
+    )
+    price_tier: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="standard",
+        server_default="standard",
+    )

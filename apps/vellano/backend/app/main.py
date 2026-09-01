@@ -20,6 +20,7 @@ from app.routers import (
     contacts,
     cost_audit,
     credit_notes,
+    customers,
     health,
     home,
     invoices,
@@ -102,6 +103,7 @@ app.include_router(laybys.laybys_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
 app.include_router(contacts.contacts_router)
+app.include_router(customers.customers_router)
 app.include_router(invoices.invoices_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)

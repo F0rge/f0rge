@@ -164,6 +164,23 @@ Preview is in-memory (200 even with row errors; 400 only if a file is unreadable
 - **VAT:** 15% on discounted ex-VAT subtotal (unchanged).
 - **Returns:** process return is UI-only in S9; backend returns API unchanged (V2-S5).
 
+## V2-S10 customers CRM
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Customers:** `GET/POST /customers`, `GET /customers/{id}`, `PATCH /customers/{id}`.
+
+Extends the existing `customers` table (no second customer entity). New columns: `customer_type` (`retail` | `trade`, default `retail`), `price_tier` (default `standard`), `phone` (nullable). `POST /contacts` still creates ledger customers with those defaults.
+
+`CustomerCrmResponse` includes open invoice and active layby aggregates (`open_invoices_count`, `open_invoices_zar`, `overdue_invoices_count`, `active_laybys_count`, `active_laybys_zar`). `ContactResponse` omits CRM fields.
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List / get customers | yes | yes | yes | yes | yes |
+| Create / update customers | yes | no | no | yes | yes |
+
+Migration: `017_v2_s10_customers_crm`.
+
 ## V2-S5 returns / RMA
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
@@ -386,7 +403,6 @@ Superdesign canvas (try-first; record credits failure in PR if CLI blocks): [Vel
 
 | Label | Route | Slice |
 |-------|-------|-------|
-| Customers | `/customers` | V2-S10 |
 | Deliveries | `/deliveries` | V2-S11 |
 | Reorder | `/reorder` | V2-S12 |
 
@@ -413,7 +429,8 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/import` | `/imports` |
 | `/returns` | `/returns` |
 | `/laybys` | `/laybys` |
-| `/customers`, `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
+| `/customers` | `/customers` |
+| `/deliveries`, `/reorder` | *(none yet — V2 stubs)* |
 
 ## Non-goals
 

@@ -1784,3 +1784,110 @@ export function completeLayby(id: string): Promise<Layby> {
 export function cancelLayby(id: string): Promise<Layby> {
   return apiFetch<Layby>(`/laybys/${id}/cancel`, { method: "POST" });
 }
+
+export type CustomerType = "retail" | "trade";
+
+export type CustomerCrm = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  vat_number: string | null;
+  billing_address: string | null;
+  customer_type: CustomerType;
+  price_tier: string;
+  open_invoices_count: number;
+  open_invoices_zar: string;
+  overdue_invoices_count: number;
+  active_laybys_count: number;
+  active_laybys_zar: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateCustomerPayload = {
+  name: string;
+  email?: string;
+  phone?: string;
+  vat_number?: string;
+  billing_address?: string;
+  customer_type?: CustomerType;
+  price_tier?: string;
+};
+
+export type UpdateCustomerPayload = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  vat_number?: string;
+  billing_address?: string;
+  customer_type?: CustomerType;
+  price_tier?: string;
+};
+
+export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
+  retail: "Retail",
+  trade: "Trade",
+};
+
+export function canMutateCustomers(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "books" || role === "till";
+}
+
+export function listCustomers(): Promise<CustomerCrm[]> {
+  return apiFetch<CustomerCrm[]>("/customers");
+}
+
+export function getCustomer(id: string): Promise<CustomerCrm> {
+  return apiFetch<CustomerCrm>(`/customers/${id}`);
+}
+
+function buildCustomerPayload(
+  payload: CreateCustomerPayload | UpdateCustomerPayload,
+): CreateCustomerPayload | UpdateCustomerPayload {
+  const body: CreateCustomerPayload | UpdateCustomerPayload = {};
+  if ("name" in payload && payload.name !== undefined) {
+    body.name = payload.name.trim();
+  }
+  const email = payload.email?.trim();
+  if (email) {
+    body.email = email;
+  }
+  const phone = payload.phone?.trim();
+  if (phone) {
+    body.phone = phone;
+  }
+  const vat = payload.vat_number?.trim();
+  if (vat) {
+    body.vat_number = vat;
+  }
+  const billing = payload.billing_address?.trim();
+  if (billing) {
+    body.billing_address = billing;
+  }
+  if (payload.customer_type) {
+    body.customer_type = payload.customer_type;
+  }
+  const tier = payload.price_tier?.trim();
+  if (tier) {
+    body.price_tier = tier;
+  }
+  return body;
+}
+
+export function createCustomer(payload: CreateCustomerPayload): Promise<CustomerCrm> {
+  return apiFetch<CustomerCrm>("/customers", {
+    method: "POST",
+    body: JSON.stringify(buildCustomerPayload(payload)),
+  });
+}
+
+export function updateCustomer(
+  id: string,
+  payload: UpdateCustomerPayload,
+): Promise<CustomerCrm> {
+  return apiFetch<CustomerCrm>(`/customers/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(buildCustomerPayload(payload)),
+  });
+}

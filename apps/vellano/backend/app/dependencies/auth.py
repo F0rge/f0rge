@@ -13,6 +13,7 @@ from app.services.auth import AuthService
 from app.services.bills import BillService
 from app.services.contacts import ContactService
 from app.services.credit_notes import CreditNoteService
+from app.services.customers_crm import CustomersCrmService
 from app.services.accounts import AccountService
 from app.services.cost_audit import CostAuditService
 from app.services.home import HomeService
@@ -100,6 +101,10 @@ def get_account_service(db: AsyncSession = Depends(get_db)) -> AccountService:
 
 def get_contact_service(db: AsyncSession = Depends(get_db)) -> ContactService:
     return ContactService(db)
+
+
+def get_customers_crm_service(db: AsyncSession = Depends(get_db)) -> CustomersCrmService:
+    return CustomersCrmService(db)
 
 
 def get_invoice_service(db: AsyncSession = Depends(get_db)) -> InvoiceService:
@@ -256,6 +261,19 @@ async def require_books_mutate(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner or books access required",
+        )
+    return user_id
+
+
+async def require_customers_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    user = await UserCRUD(db).get_by_id(user_id)
+    if user is None or user.role not in (UserRole.OWNER, UserRole.BOOKS, UserRole.TILL):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner, books, or till access required",
         )
     return user_id
 

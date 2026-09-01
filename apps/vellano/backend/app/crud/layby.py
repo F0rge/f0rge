@@ -29,6 +29,20 @@ class LaybyCRUD(BaseCRUD):
             )
         ).scalar_one_or_none()
 
+    async def list_for_customer(self, customer_id: uuid.UUID) -> list[Layby]:
+        result = await self.db.execute(
+            select(Layby)
+            .options(
+                selectinload(Layby.customer),
+                selectinload(Layby.location),
+                selectinload(Layby.lines).selectinload(LaybyLine.sku),
+                selectinload(Layby.payments),
+            )
+            .where(Layby.customer_id == customer_id)
+            .order_by(Layby.created_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def list_all(self) -> list[Layby]:
         result = await self.db.execute(
             select(Layby)
