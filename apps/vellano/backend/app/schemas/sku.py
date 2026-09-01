@@ -46,6 +46,11 @@ class SkuCreate(BaseModel):
 
 
 class SkuUpdate(BaseModel):
+    our_ref: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    our_barcode: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    name: Optional[str] = Field(default=None, min_length=1)
+    design: Optional[str] = Field(default=None, min_length=1)
+    fabric: Optional[str] = Field(default=None, min_length=1)
     category: Optional[str] = Field(default=None, max_length=64)
     preferred_supplier_id: Optional[uuid.UUID] = None
     lead_time_days: Optional[int] = Field(default=None, ge=0)

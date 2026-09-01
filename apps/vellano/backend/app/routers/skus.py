@@ -54,6 +54,15 @@ async def update_sku(
     return await service.update(sku_id, body)
 
 
+@skus_router.delete("/{sku_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_sku(
+    sku_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_catalogue_mutate),
+    service: SkuService = Depends(get_sku_service),
+):
+    return await service.delete(sku_id)
+
+
 @skus_router.post("/{sku_id}/photo", response_model=SkuResponse)
 async def upload_sku_photo(
     sku_id: uuid.UUID,

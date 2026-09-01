@@ -39,12 +39,22 @@ class SkuCRUD(BaseCRUD):
             stmt = stmt.where(Sku.id != exclude_id)
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
-    async def get_by_our_ref(self, our_ref: str) -> Optional[Sku]:
-        return (
-            await self.db.execute(select(Sku).where(Sku.our_ref == our_ref))
-        ).scalar_one_or_none()
+    async def get_by_our_ref(
+        self,
+        our_ref: str,
+        exclude_id: Optional[uuid.UUID] = None,
+    ) -> Optional[Sku]:
+        stmt = select(Sku).where(Sku.our_ref == our_ref)
+        if exclude_id is not None:
+            stmt = stmt.where(Sku.id != exclude_id)
+        return (await self.db.execute(stmt)).scalar_one_or_none()
 
-    async def get_by_our_barcode(self, our_barcode: str) -> Optional[Sku]:
-        return (
-            await self.db.execute(select(Sku).where(Sku.our_barcode == our_barcode))
-        ).scalar_one_or_none()
+    async def get_by_our_barcode(
+        self,
+        our_barcode: str,
+        exclude_id: Optional[uuid.UUID] = None,
+    ) -> Optional[Sku]:
+        stmt = select(Sku).where(Sku.our_barcode == our_barcode)
+        if exclude_id is not None:
+            stmt = stmt.where(Sku.id != exclude_id)
+        return (await self.db.execute(stmt)).scalar_one_or_none()

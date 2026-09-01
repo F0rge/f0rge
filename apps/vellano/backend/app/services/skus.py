@@ -57,6 +57,41 @@ class SkuService:
 
         fields_set = data.model_fields_set
 
+        if "our_ref" in fields_set:
+            assert data.our_ref is not None
+            if await self.crud.get_by_our_ref(data.our_ref, exclude_id=sku.id) is not None:
+                raise ConflictError("A SKU with this our_ref already exists")
+            sku.our_ref = data.our_ref
+
+        if "our_barcode" in fields_set:
+            assert data.our_barcode is not None
+            if await self.crud.get_by_our_barcode(data.our_barcode, exclude_id=sku.id) is not None:
+                raise ConflictError("A SKU with this our_barcode already exists")
+            sku.our_barcode = data.our_barcode
+
+        if "name" in fields_set:
+            assert data.name is not None
+            sku.name = data.name
+
+        if "design" in fields_set or "fabric" in fields_set:
+            new_design = data.design if "design" in fields_set else sku.design
+            new_fabric = data.fabric if "fabric" in fields_set else sku.fabric
+            if (
+                await self.crud.get_by_design_fabric_insensitive(
+                    new_design,
+                    new_fabric,
+                    exclude_id=sku.id,
+                )
+                is not None
+            ):
+                raise ConflictError("A SKU with this design and fabric already exists")
+            if "design" in fields_set:
+                assert data.design is not None
+                sku.design = data.design
+            if "fabric" in fields_set:
+                assert data.fabric is not None
+                sku.fabric = data.fabric
+
         if "category" in fields_set:
             sku.category = data.category
 
@@ -103,10 +138,24 @@ class SkuService:
                 validate_non_negative_price(data.retail_inc_vat, "retail_inc_vat")
                 sku.retail_ex_vat = inc_to_ex(data.retail_inc_vat)
 
-        await self.crud.commit_refresh(sku)
+        try:
+            await self.crud.commit_refresh(sku)
+        except IntegrityError as exc:
+            await self._raise_integrity_conflict(exc)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
         return (await self._to_responses([reloaded]))[0]
+
+    async def delete(self, sku_id: uuid.UUID) -> None:
+        sku = await self.crud.get_by_id(sku_id)
+        if sku is None:
+            raise NotFoundError("SKU not found")
+        try:
+            await self.crud.delete_and_commit(sku)
+        except IntegrityError as exc:
+            raise ConflictError(
+                "Cannot delete a SKU that has stock, orders, or sales history."
+            ) from exc
 
     async def create(self, data: SkuCreate, user_id: uuid.UUID) -> SkuResponse:
         await self._ensure_unique_fields(data.design, data.fabric, data.our_ref, data.our_barcode)

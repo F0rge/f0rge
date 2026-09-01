@@ -263,3 +263,200 @@ async def test_list_skus_filter_by_category(owner_client: AsyncClient) -> None:
     case_refs = {item["our_ref"] for item in case_insensitive.json()}
     assert "VEL-CAT-FIL-A" in case_refs
     assert "VEL-CAT-FIL-C" in case_refs
+
+
+async def _kramerville_id(client: AsyncClient) -> str:
+    resp = await client.get("/api/v1/locations")
+    assert resp.status_code == 200
+    for loc in resp.json():
+        if loc["name"] == "Kramerville":
+            return loc["id"]
+    raise AssertionError("Kramerville not found")
+
+
+async def test_patch_identity_fields_succeeds(owner_client: AsyncClient) -> None:
+    create_resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-ID-001",
+            "our_barcode": "BAR-ID-001",
+            "name": "Original name",
+            "design": "Original design",
+            "fabric": "Original fabric",
+        },
+    )
+    assert create_resp.status_code == 201
+    sku_id = create_resp.json()["id"]
+
+    patch_resp = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={
+            "name": "Updated name",
+            "our_ref": "VEL-ID-001-NEW",
+            "our_barcode": "BAR-ID-001-NEW",
+        },
+    )
+    assert patch_resp.status_code == 200
+    body = patch_resp.json()
+    assert body["name"] == "Updated name"
+    assert body["our_ref"] == "VEL-ID-001-NEW"
+    assert body["our_barcode"] == "BAR-ID-001-NEW"
+
+
+async def test_patch_duplicate_our_ref_returns_409(owner_client: AsyncClient) -> None:
+    first = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-DUP-REF-A",
+            "our_barcode": "BAR-DUP-REF-A",
+            "name": "First",
+            "design": "Dup design A",
+            "fabric": "Dup fabric A",
+        },
+    )
+    assert first.status_code == 201
+
+    second = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-DUP-REF-B",
+            "our_barcode": "BAR-DUP-REF-B",
+            "name": "Second",
+            "design": "Dup design B",
+            "fabric": "Dup fabric B",
+        },
+    )
+    assert second.status_code == 201
+    sku_id = second.json()["id"]
+
+    dup = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={"our_ref": "VEL-DUP-REF-A"},
+    )
+    assert dup.status_code == 409
+
+
+async def test_patch_duplicate_design_fabric_returns_409(owner_client: AsyncClient) -> None:
+    first = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-DUP-DF-A",
+            "our_barcode": "BAR-DUP-DF-A",
+            "name": "First",
+            "design": "Wave",
+            "fabric": "Velvet blue",
+        },
+    )
+    assert first.status_code == 201
+
+    second = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-DUP-DF-B",
+            "our_barcode": "BAR-DUP-DF-B",
+            "name": "Second",
+            "design": "Other design",
+            "fabric": "Other fabric",
+        },
+    )
+    assert second.status_code == 201
+    sku_id = second.json()["id"]
+
+    dup = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={"design": "wave", "fabric": "VELVET BLUE"},
+    )
+    assert dup.status_code == 409
+
+
+async def test_delete_unused_sku_returns_204_then_get_404(owner_client: AsyncClient) -> None:
+    create_resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-DEL-001",
+            "our_barcode": "BAR-DEL-001",
+            "name": "Deletable",
+            "design": "Delete design",
+            "fabric": "Delete fabric",
+        },
+    )
+    assert create_resp.status_code == 201
+    sku_id = create_resp.json()["id"]
+
+    delete_resp = await owner_client.delete(f"/api/v1/skus/{sku_id}")
+    assert delete_resp.status_code == 204
+
+    get_resp = await owner_client.get(f"/api/v1/skus/{sku_id}")
+    assert get_resp.status_code == 404
+
+
+async def test_delete_sku_with_opening_stock_returns_409(owner_client: AsyncClient) -> None:
+    location_id = await _kramerville_id(owner_client)
+    create_resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-DEL-STOCK",
+            "our_barcode": "BAR-DEL-STOCK",
+            "name": "Stocked item",
+            "design": "Stock design",
+            "fabric": "Stock fabric",
+            "opening_location_id": location_id,
+            "opening_qty": 3,
+            "opening_unit_cost_zar": "50.00",
+        },
+    )
+    assert create_resp.status_code == 201
+    sku_id = create_resp.json()["id"]
+
+    delete_resp = await owner_client.delete(f"/api/v1/skus/{sku_id}")
+    assert delete_resp.status_code == 409
+
+
+async def test_unauthenticated_delete_returns_401(async_client: AsyncClient) -> None:
+    sku_id = "00000000-0000-0000-0000-000000000001"
+    delete_resp = await async_client.delete(f"/api/v1/skus/{sku_id}")
+    assert delete_resp.status_code == 401
+
+
+async def test_till_cannot_patch_identity_or_delete(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    create_resp = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "VEL-TILL-PATCH",
+            "our_barcode": "BAR-TILL-PATCH",
+            "name": "Till patch target",
+            "design": "Till patch design",
+            "fabric": "Till patch fabric",
+        },
+    )
+    assert create_resp.status_code == 201
+    sku_id = create_resp.json()["id"]
+
+    create_user = await owner_client.post(
+        "/api/v1/users",
+        json={
+            "email": "till-patch-skus@example.com",
+            "password": "till-password",
+            "role": "till",
+        },
+    )
+    assert create_user.status_code == 201
+
+    async_client.cookies.clear()
+    login_resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": "till-patch-skus@example.com", "password": "till-password"},
+    )
+    assert login_resp.status_code == 200
+
+    patch_resp = await async_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={"name": "Till rename"},
+    )
+    assert patch_resp.status_code == 403
+
+    delete_resp = await async_client.delete(f"/api/v1/skus/{sku_id}")
+    assert delete_resp.status_code == 403
