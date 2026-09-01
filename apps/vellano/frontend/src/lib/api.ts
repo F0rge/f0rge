@@ -286,6 +286,10 @@ export type Sku = {
   fabric: string;
   category: string | null;
   supplier_ref: string | null;
+  preferred_supplier_id: string | null;
+  preferred_supplier_name: string | null;
+  lead_time_days: number | null;
+  last_landed_cost_zar: string | null;
   photo_storage_key: string | null;
   wholesale_ex_vat: string | null;
   wholesale_inc_vat: string | null;
@@ -300,6 +304,9 @@ export type UpdateSkuPricePayload = {
   wholesale_inc_vat?: string | number | null;
   retail_ex_vat?: string | number | null;
   retail_inc_vat?: string | number | null;
+  preferred_supplier_id?: string | null;
+  lead_time_days?: number | null;
+  supplier_ref?: string | null;
 };
 
 const VAT_MULTIPLIER = 1.15;

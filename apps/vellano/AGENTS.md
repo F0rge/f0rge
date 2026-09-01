@@ -181,6 +181,21 @@ Extends the existing `customers` table (no second customer entity). New columns:
 
 Migration: `017_v2_s10_customers_crm`.
 
+## V2-S13 SKU supplier prices
+
+Extends `skus` (no second table). Columns: nullable `preferred_supplier_id` (FK `suppliers.id`, `ON DELETE SET NULL`), nullable `lead_time_days`. `supplier_ref` already exists — PATCH via `SkuUpdate` (set or clear with `null`).
+
+`last_landed_cost_zar` is **computed** on read from the latest `unit_cost_audit` row for that SKU where `source` is `land` or `receive` only (opening, correction, import, etc. do not count). `SkuResponse` also includes `preferred_supplier_name` (lookup).
+
+`PATCH /api/v1/skus/{id}` fields: `preferred_supplier_id`, `lead_time_days`, `supplier_ref` (plus existing price/category fields). Unknown `preferred_supplier_id` → 404 `"Supplier not found"`. Null clears via `model_fields_set`.
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| List / get SKUs (incl. supplier fields) | yes | yes | yes | yes | yes |
+| PATCH supplier / lead time / supplier_ref | yes | yes | no | no | no |
+
+Migration: `018_v2_s13_sku_supplier`.
+
 ## V2-S5 returns / RMA
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):

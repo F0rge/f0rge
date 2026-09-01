@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import uuid
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import UploadFile
@@ -12,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
+from app.crud.supplier import SupplierCRUD
+from app.crud.unit_cost_audit import UnitCostAuditCRUD
 from app.models.sku import Sku
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
@@ -33,17 +36,19 @@ class SkuService:
         self.db = db
         self.crud = SkuCRUD(db)
         self.location_crud = LocationCRUD(db)
+        self.supplier_crud = SupplierCRUD(db)
+        self.unit_cost_audit_crud = UnitCostAuditCRUD(db)
         self.stock_movements = StockMovementService(db)
 
     async def list(self, category: Optional[str] = None) -> list[SkuResponse]:
         skus = await self.crud.list_all(category=category)
-        return [self._to_response(s) for s in skus]
+        return await self._to_responses(skus)
 
     async def get(self, sku_id: uuid.UUID) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
         if sku is None:
             raise NotFoundError("SKU not found")
-        return self._to_response(sku)
+        return (await self._to_responses([sku]))[0]
 
     async def update(self, sku_id: uuid.UUID, data: SkuUpdate) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
@@ -54,6 +59,19 @@ class SkuService:
 
         if "category" in fields_set:
             sku.category = data.category
+
+        if "preferred_supplier_id" in fields_set:
+            if data.preferred_supplier_id is not None:
+                supplier = await self.supplier_crud.get_by_id(data.preferred_supplier_id)
+                if supplier is None:
+                    raise NotFoundError("Supplier not found")
+            sku.preferred_supplier_id = data.preferred_supplier_id
+
+        if "lead_time_days" in fields_set:
+            sku.lead_time_days = data.lead_time_days
+
+        if "supplier_ref" in fields_set:
+            sku.supplier_ref = data.supplier_ref
 
         if "wholesale_ex_vat" in fields_set and "wholesale_inc_vat" in fields_set:
             raise ValidationError("Cannot set both wholesale_ex_vat and wholesale_inc_vat")
@@ -85,7 +103,7 @@ class SkuService:
         await self.crud.commit_refresh(sku)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return self._to_response(reloaded)
+        return (await self._to_responses([reloaded]))[0]
 
     async def create(self, data: SkuCreate, user_id: uuid.UUID) -> SkuResponse:
         await self._ensure_unique_fields(data.design, data.fabric, data.our_ref, data.our_barcode)
@@ -126,7 +144,7 @@ class SkuService:
             await self._raise_integrity_conflict(exc)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return self._to_response(reloaded)
+        return (await self._to_responses([reloaded]))[0]
 
     async def upload_photo(self, sku_id: uuid.UUID, file: UploadFile) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)
@@ -148,7 +166,7 @@ class SkuService:
         await self.crud.commit_refresh(sku)
         reloaded = await self.crud.get_by_id(sku.id)
         assert reloaded is not None
-        return self._to_response(reloaded)
+        return (await self._to_responses([reloaded]))[0]
 
     async def serve_photo(self, sku_id: uuid.UUID) -> Response:
         sku = await self.crud.get_by_id(sku_id)
@@ -167,7 +185,37 @@ class SkuService:
             raise NotFoundError("SKU photo not found") from exc
         return Response(content=data, media_type="image/jpeg")
 
-    def _to_response(self, sku: Sku) -> SkuResponse:
+    async def _to_responses(self, skus: list[Sku]) -> list[SkuResponse]:
+        if not skus:
+            return []
+
+        sku_ids = [sku.id for sku in skus]
+        supplier_ids = [
+            sku.preferred_supplier_id for sku in skus if sku.preferred_supplier_id is not None
+        ]
+        landed_costs = await self.unit_cost_audit_crud.latest_landed_costs_by_sku_ids(sku_ids)
+        supplier_names = await self.supplier_crud.names_by_ids(supplier_ids)
+
+        return [
+            self._to_response(
+                sku,
+                preferred_supplier_name=(
+                    supplier_names.get(sku.preferred_supplier_id)
+                    if sku.preferred_supplier_id is not None
+                    else None
+                ),
+                last_landed_cost_zar=landed_costs.get(sku.id),
+            )
+            for sku in skus
+        ]
+
+    def _to_response(
+        self,
+        sku: Sku,
+        *,
+        preferred_supplier_name: Optional[str] = None,
+        last_landed_cost_zar: Optional[Decimal] = None,
+    ) -> SkuResponse:
         return SkuResponse(
             id=sku.id,
             our_ref=sku.our_ref,
@@ -176,6 +224,10 @@ class SkuService:
             design=sku.design,
             fabric=sku.fabric,
             supplier_ref=sku.supplier_ref,
+            preferred_supplier_id=sku.preferred_supplier_id,
+            preferred_supplier_name=preferred_supplier_name,
+            lead_time_days=sku.lead_time_days,
+            last_landed_cost_zar=last_landed_cost_zar,
             category=sku.category,
             photo_storage_key=sku.photo_storage_key,
             wholesale_ex_vat=sku.wholesale_ex_vat,

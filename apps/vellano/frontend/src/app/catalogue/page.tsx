@@ -29,6 +29,7 @@ import { SkuPriceEditor } from "@/components/sku-price-editor";
 import {
   ApiError,
   canMutateCatalogue,
+  canViewCostAudit,
   createSku,
   formatPriceAmount,
   formatZarAmount,
@@ -48,6 +49,8 @@ const TABLE_HEADERS = [
   { key: "select", header: "" },
   { key: "product", header: "SKU / Product Name" },
   { key: "category", header: "Category" },
+  { key: "preferred_supplier", header: "Preferred supplier" },
+  { key: "lead_time_days", header: "Lead time" },
   { key: "cost_zar", header: "Cost (ZAR)" },
   { key: "retail_inc_vat", header: "Retail Price" },
   { key: "wholesale_inc_vat", header: "Trade Price" },
@@ -59,6 +62,8 @@ type SkuRow = {
   id: string;
   product: string;
   category: string;
+  preferred_supplier: string;
+  lead_time_days: string;
   cost_zar: string;
   retail_inc_vat: string;
   wholesale_inc_vat: string;
@@ -66,6 +71,13 @@ type SkuRow = {
   select: string;
   actions: string;
 };
+
+function formatLeadTime(days: number | null | undefined): string {
+  if (days === null || days === undefined) {
+    return "—";
+  }
+  return `${days} days`;
+}
 
 const emptyCreateForm: CreateSkuPayload = {
   our_ref: "",
@@ -250,6 +262,8 @@ function CataloguePageContent() {
     id: entry.id,
     product: entry.id,
     category: entry.category?.trim() || "—",
+    preferred_supplier: entry.preferred_supplier_name?.trim() || "—",
+    lead_time_days: formatLeadTime(entry.lead_time_days),
     cost_zar: formatZarAmount(unitCostBySku.get(entry.id) ?? null),
     retail_inc_vat: formatIncVatPrice(entry.retail_inc_vat),
     wholesale_inc_vat: formatIncVatPrice(entry.wholesale_inc_vat),
@@ -417,6 +431,7 @@ function CataloguePageContent() {
         sku={priceSku}
         open={priceSku !== null}
         readOnly={!canMutate}
+        showCostAudit={canViewCostAudit(user?.role)}
         unitCostZar={priceSku ? (unitCostBySku.get(priceSku.id) ?? null) : null}
         saving={saving}
         onSavingChange={setSaving}
