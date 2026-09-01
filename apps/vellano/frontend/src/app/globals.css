@@ -97,6 +97,37 @@ body {
   min-height: 10rem;
 }
 
+.vellano-home,
+.vellano-home-actions {
+  margin-inline: 0;
+  padding-inline: 0;
+}
+
+.vellano-home-kpis,
+.vellano-home-tables {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-inline: 0;
+  padding-inline: 0;
+}
+
+@media (min-width: 672px) {
+  .vellano-home-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1056px) {
+  .vellano-home-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .vellano-home-tables {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .vellano-home-metric {
   font-size: 1.75rem;
   font-weight: 600;
