@@ -1418,6 +1418,32 @@ export type BankImportLine = {
   matched_journal_number?: string | null;
   suggested_payment_id: string | null;
   suggested_payment_number: string | null;
+  suggested_rule_id?: string | null;
+  suggested_rule_pattern?: string | null;
+  suggested_account_code?: string | null;
+  suggested_account_name?: string | null;
+};
+
+export type BankRule = {
+  id: string;
+  bank_account_id: string;
+  pattern: string;
+  target_account_id: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateBankRulePayload = {
+  bank_account_id: string;
+  pattern: string;
+  target_account_id: string;
+};
+
+export type UpdateBankRulePayload = {
+  pattern?: string;
+  target_account_id?: string;
+  is_active?: boolean;
 };
 
 export type BankImport = {
@@ -1565,6 +1591,56 @@ export function matchBankLine(
   return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/match`, {
     method: "POST",
     body: JSON.stringify(target),
+  });
+}
+
+export function listBankRules(bankAccountId?: string): Promise<BankRule[]> {
+  const params = new URLSearchParams();
+  const id = bankAccountId?.trim();
+  if (id) {
+    params.set("bank_account_id", id);
+  }
+  const qs = params.toString();
+  return apiFetch<BankRule[]>(`/bank-rules${qs ? `?${qs}` : ""}`);
+}
+
+export function createBankRule(payload: CreateBankRulePayload): Promise<BankRule> {
+  return apiFetch<BankRule>("/bank-rules", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateBankRule(id: string, payload: UpdateBankRulePayload): Promise<BankRule> {
+  return apiFetch<BankRule>(`/bank-rules/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteBankRule(id: string): Promise<void> {
+  return apiFetch<void>(`/bank-rules/${id}`, { method: "DELETE" });
+}
+
+export function applyRule(
+  importId: string,
+  lineId: string,
+  ruleId: string,
+): Promise<BankImportLine> {
+  return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/apply-rule`, {
+    method: "POST",
+    body: JSON.stringify({ rule_id: ruleId }),
+  });
+}
+
+export function recodeLine(
+  importId: string,
+  lineId: string,
+  accountId: string,
+): Promise<BankImportLine> {
+  return apiFetch<BankImportLine>(`/bank-imports/${importId}/lines/${lineId}/recode`, {
+    method: "POST",
+    body: JSON.stringify({ account_id: accountId }),
   });
 }
 

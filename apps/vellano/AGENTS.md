@@ -450,7 +450,7 @@ Date,Description,Reference,Amount
 
 ### Endpoints (all under `/api/v1`, cookie `vellano_session`)
 
-- **Bank imports:** `GET/POST /bank-imports`, `GET /bank-imports/{id}`, `GET /bank-imports/unmatched-lines`, `GET /bank-imports/unmatched-counts`, `POST /bank-imports/{import_id}/lines/{line_id}/match` — body `{ "payment_id" }` XOR `{ "journal_id" }`. Bank CSV is per recon account (`account_id` on `POST /bank-imports`; omit defaults to 1100).
+- **Bank imports:** `GET/POST /bank-imports`, `GET /bank-imports/{id}`, `GET /bank-imports/unmatched-lines`, `GET /bank-imports/unmatched-counts`, `POST /bank-imports/{import_id}/lines/{line_id}/match` — body `{ "payment_id" }` XOR `{ "journal_id" }`. Bank CSV is per recon account (`account_id` on `POST /bank-imports`; omit defaults to 1100). Bank rules (`GET/POST /bank-rules?bank_account_id=`, PATCH/DELETE `/{id}`) are confirm-to-apply (`POST .../apply-rule` `{ rule_id }`); recode journal-matched lines with `POST .../recode` `{ account_id }`.
 - **Reports:** `GET /reports/aged-ar?as_of=`, `GET /reports/aged-ap?as_of=`, `GET /reports/profit-loss?from=&to=`, `GET /reports/balance-sheet?as_of=`, `GET /reports/trial-balance?as_of=`, `GET /reports/journals?from=&to=&source=` (source optional), `GET /reports/cash-summary?from=&to=` — plus `/csv` on trial-balance, journals, and cash-summary.
 - **VAT201 draft:** `GET /reports/vat201?from=&to=`, `GET /reports/vat201/csv`, `GET /reports/vat201/pdf` — shaped fields for copy/type-in to eFiling only.
 - **VAT201 periods:** `GET/POST /vat201/periods`, lock snapshot, owner-only reopen; CSV/PDF by period id. Never SARS.
@@ -505,7 +505,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/stock` | `/inventory` |
 | `/ledger` | `/accounts`, `/category-maps` |
 | `/journals` | `/journals` |
-| `/bank-reconciliation` | `/bank-imports` |
+| `/bank-reconciliation` | `/bank-imports`, `/bank-rules` |
 | `/proformas` | `/proformas` |
 | `/credit-notes` | `/credit-notes` |
 | `/till` | `/till` |

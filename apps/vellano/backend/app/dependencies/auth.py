@@ -23,6 +23,7 @@ from app.services.journals import JournalService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
+from app.services.bank_rules import BankRuleService
 from app.services.catalogue_imports import CatalogueImportService
 from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
@@ -142,6 +143,10 @@ def get_payment_service(db: AsyncSession = Depends(get_db)) -> PaymentService:
 
 def get_bank_import_service(db: AsyncSession = Depends(get_db)) -> BankImportService:
     return BankImportService(db)
+
+
+def get_bank_rule_service(db: AsyncSession = Depends(get_db)) -> BankRuleService:
+    return BankRuleService(db)
 
 
 def get_catalogue_import_service(

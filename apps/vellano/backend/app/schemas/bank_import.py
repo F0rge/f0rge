@@ -19,6 +19,10 @@ class BankImportLineResponse(BaseModel):
     matched_payment_number: Optional[str] = None
     suggested_payment_id: Optional[uuid.UUID] = None
     suggested_payment_number: Optional[str] = None
+    suggested_rule_id: Optional[uuid.UUID] = None
+    suggested_rule_pattern: Optional[str] = None
+    suggested_account_code: Optional[str] = None
+    suggested_account_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -67,6 +71,14 @@ class BankImportMatchRequest(BaseModel):
         if (self.payment_id is None) == (self.journal_id is None):
             raise ValueError("Provide exactly one of payment_id or journal_id")
         return self
+
+
+class BankApplyRuleRequest(BaseModel):
+    rule_id: uuid.UUID
+
+
+class BankRecodeRequest(BaseModel):
+    account_id: uuid.UUID
 
 
 class AgedBucket(BaseModel):

@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  applyRule,
   canMutateBooks,
   formatZarAmount,
   getBankImport,
@@ -32,6 +33,7 @@ import {
   listUnmatchedCounts,
   listUnmatchedLines,
   matchBankLine,
+  recodeLine,
   uploadBankImport,
   type Account,
   type BankImport,
@@ -42,6 +44,8 @@ import {
   type Payment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+
+import { BankRulesModal } from "./bank-rules-modal";
 
 const LINE_HEADERS = [
   { key: "transaction_date", header: "Date" },
@@ -57,6 +61,7 @@ const UNMATCHED_HEADERS = [
   { key: "description", header: "Description" },
   { key: "reference", header: "Reference" },
   { key: "amount_zar", header: "Amount" },
+  { key: "suggestion", header: "Suggestion" },
   { key: "actions", header: "" },
 ] as const;
 
@@ -77,17 +82,74 @@ function lineStatus(line: BankImportLine, journals: Journal[]): string {
   if (line.suggested_payment_number) {
     return `Suggested ${line.suggested_payment_number}`;
   }
+  if (line.suggested_rule_pattern) {
+    const dest = [line.suggested_account_code, line.suggested_account_name]
+      .filter(Boolean)
+      .join(" ");
+    return dest
+      ? `Suggested ${line.suggested_rule_pattern} → ${dest}`
+      : `Suggested ${line.suggested_rule_pattern}`;
+  }
   return "Unmatched";
+}
+
+function ruleSuggestion(line: BankImportLine): string {
+  if (!line.suggested_rule_id) {
+    return "—";
+  }
+  const dest = [line.suggested_account_code, line.suggested_account_name]
+    .filter(Boolean)
+    .join(" ");
+  const pattern = line.suggested_rule_pattern ?? "rule";
+  return dest ? `${pattern} → ${dest}` : pattern;
 }
 
 function accountLabel(account: Pick<Account, "code" | "name">): string {
   return `${account.code} ${account.name}`;
 }
 
+function LineActions({
+  line,
+  canMutate,
+  onMatch,
+  onApply,
+  onRecode,
+}: {
+  line: BankImportLine;
+  canMutate: boolean;
+  onMatch: () => void;
+  onApply: () => void;
+  onRecode: () => void;
+}) {
+  if (!canMutate) {
+    return null;
+  }
+  const unmatched = !isLineMatched(line);
+  return (
+    <Stack gap={2} orientation="horizontal">
+      {unmatched && line.suggested_rule_id ? (
+        <Button kind="tertiary" size="sm" onClick={onApply}>
+          Apply rule
+        </Button>
+      ) : null}
+      {unmatched ? (
+        <Button kind="ghost" size="sm" onClick={onMatch}>
+          Match
+        </Button>
+      ) : null}
+      {line.matched_journal_id && !line.matched_payment_id ? (
+        <Button kind="ghost" size="sm" onClick={onRecode}>
+          Recode
+        </Button>
+      ) : null}
+    </Stack>
+  );
+}
+
 export default function BankReconciliationPage() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user?.role);
-  const [bankAccounts, setBankAccounts] = useState<Account[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountId, setAccountId] = useState("");
   const [unmatchedCounts, setUnmatchedCounts] = useState<BankUnmatchedCount[]>([]);
   const [unmatchedLines, setUnmatchedLines] = useState<BankImportLine[]>([]);
@@ -105,8 +167,42 @@ export default function BankReconciliationPage() {
   const [matchPaymentId, setMatchPaymentId] = useState("");
   const [matchJournalId, setMatchJournalId] = useState("");
   const [matching, setMatching] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [applyImportId, setApplyImportId] = useState<string | null>(null);
+  const [applyLine, setApplyLine] = useState<BankImportLine | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [recodeImportId, setRecodeImportId] = useState<string | null>(null);
+  const [recodeLineRow, setRecodeLineRow] = useState<BankImportLine | null>(null);
+  const [recodeAccountId, setRecodeAccountId] = useState("");
+  const [recoding, setRecoding] = useState(false);
   const importIdByLineRef = useRef<Record<string, string>>({});
   const selectedImportIdRef = useRef<string | null>(null);
+
+  const bankAccounts = useMemo(
+    () =>
+      accounts
+        .filter((account) => account.is_bank)
+        .sort((left, right) => left.code.localeCompare(right.code)),
+    [accounts],
+  );
+
+  const recodeAccounts = useMemo(
+    () =>
+      accounts
+        .filter((account) => !account.is_archived && account.id !== accountId)
+        .sort((left, right) => left.code.localeCompare(right.code)),
+    [accounts, accountId],
+  );
+
+  const unmatchedById = useMemo(
+    () => new Map(unmatchedLines.map((line) => [line.id, line])),
+    [unmatchedLines],
+  );
+
+  const importLineById = useMemo(
+    () => new Map((selectedImport?.lines ?? []).map((line) => [line.id, line])),
+    [selectedImport],
+  );
 
   const rememberImportLines = useCallback((detail: BankImport) => {
     for (const line of detail.lines) {
@@ -128,7 +224,7 @@ export default function BankReconciliationPage() {
       const banks = accountList
         .filter((account) => account.is_bank)
         .sort((left, right) => left.code.localeCompare(right.code));
-      setBankAccounts(banks);
+      setAccounts(accountList);
       setImports(importList);
       setPayments(paymentList);
       setJournals(journalList);
@@ -214,6 +310,29 @@ export default function BankReconciliationPage() {
 
   const unreconciledPayments = payments.filter((payment) => !payment.is_reconciled);
 
+  const refreshAfterMutation = useCallback(
+    async (importId: string | null) => {
+      const [paymentList, unmatched, counts, importList, journalList] = await Promise.all([
+        listPayments(),
+        accountId ? listUnmatchedLines(accountId) : Promise.resolve([]),
+        listUnmatchedCounts(),
+        listBankImports(),
+        listJournals(),
+      ]);
+      setPayments(paymentList);
+      setUnmatchedLines(unmatched);
+      setUnmatchedCounts(counts);
+      setImports(importList);
+      setJournals(journalList);
+      if (importId) {
+        const detail = await getBankImport(importId);
+        rememberImportLines(detail);
+        setSelectedImport(detail);
+      }
+    },
+    [accountId, rememberImportLines],
+  );
+
   async function resolveImportId(lineId: string): Promise<string | null> {
     const cached = importIdByLineRef.current[lineId];
     if (cached) {
@@ -285,19 +404,7 @@ export default function BankReconciliationPage() {
       setMatchLineId(null);
       setMatchPaymentId("");
       setMatchJournalId("");
-      const [detail, paymentList, unmatched, counts, importList] = await Promise.all([
-        getBankImport(matchImportId),
-        listPayments(),
-        listUnmatchedLines(accountId),
-        listUnmatchedCounts(),
-        listBankImports(),
-      ]);
-      rememberImportLines(detail);
-      setSelectedImport(detail);
-      setPayments(paymentList);
-      setUnmatchedLines(unmatched);
-      setUnmatchedCounts(counts);
-      setImports(importList);
+      await refreshAfterMutation(matchImportId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Match failed.");
     } finally {
@@ -317,6 +424,73 @@ export default function BankReconciliationPage() {
     setMatchJournalId("");
   }
 
+  async function openApplyModal(line: BankImportLine) {
+    if (!line.suggested_rule_id) {
+      return;
+    }
+    const importId = await resolveImportId(line.id);
+    if (!importId) {
+      setError("Could not find the import for this line.");
+      return;
+    }
+    setApplyImportId(importId);
+    setApplyLine(line);
+  }
+
+  async function handleApplyRule() {
+    if (!applyImportId || !applyLine?.suggested_rule_id) {
+      return;
+    }
+    setApplying(true);
+    setError(null);
+    try {
+      await applyRule(applyImportId, applyLine.id, applyLine.suggested_rule_id);
+      setSuccess(
+        `Applied ${applyLine.suggested_rule_pattern ?? "rule"} and posted a journal.`,
+      );
+      const importId = applyImportId;
+      setApplyImportId(null);
+      setApplyLine(null);
+      await refreshAfterMutation(importId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Apply rule failed.");
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  async function openRecodeModal(line: BankImportLine) {
+    const importId = await resolveImportId(line.id);
+    if (!importId) {
+      setError("Could not find the import for this line.");
+      return;
+    }
+    setRecodeImportId(importId);
+    setRecodeLineRow(line);
+    setRecodeAccountId("");
+  }
+
+  async function handleRecode() {
+    if (!recodeImportId || !recodeLineRow || !recodeAccountId) {
+      return;
+    }
+    setRecoding(true);
+    setError(null);
+    try {
+      await recodeLine(recodeImportId, recodeLineRow.id, recodeAccountId);
+      setSuccess("Line recoded.");
+      const importId = recodeImportId;
+      setRecodeImportId(null);
+      setRecodeLineRow(null);
+      setRecodeAccountId("");
+      await refreshAfterMutation(importId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Recode failed.");
+    } finally {
+      setRecoding(false);
+    }
+  }
+
   const canMatch = Boolean(matchPaymentId) !== Boolean(matchJournalId);
 
   const unmatchedRows = unmatchedLines.map((line) => ({
@@ -325,8 +499,8 @@ export default function BankReconciliationPage() {
     description: line.description,
     reference: line.reference ?? "—",
     amount_zar: formatZarAmount(line.amount_zar),
-    actions: "match",
-    _suggested: line.suggested_payment_id,
+    suggestion: ruleSuggestion(line),
+    actions: "actions",
   }));
 
   const lineRows =
@@ -337,8 +511,7 @@ export default function BankReconciliationPage() {
       reference: line.reference ?? "—",
       amount_zar: formatZarAmount(line.amount_zar),
       status: lineStatus(line, journals),
-      actions: isLineMatched(line) ? "" : "match",
-      _suggested: line.suggested_payment_id,
+      actions: "actions",
     })) ?? [];
 
   return (
@@ -347,6 +520,7 @@ export default function BankReconciliationPage() {
         <h1 className="cds--type-productive-heading-04">Bank reconciliation</h1>
         <p className="cds--type-body-01">
           Import a bank CSV against a recon account and match lines to a payment or a posted journal.
+          Suggested bank rules apply with one confirm.
         </p>
       </div>
 
@@ -369,18 +543,28 @@ export default function BankReconciliationPage() {
         />
       ) : null}
 
-      <Select
-        id="bank-account-select"
-        labelText="Recon account"
-        helperText="Required for a new import. Unmatched queue and imports follow this account."
-        value={accountId}
-        onChange={(event) => setAccountId(event.target.value)}
-      >
-        {bankAccounts.length === 0 ? <SelectItem value="" text="No bank accounts" /> : null}
-        {bankAccounts.map((account) => (
-          <SelectItem key={account.id} value={account.id} text={accountLabel(account)} />
-        ))}
-      </Select>
+      <Stack gap={3}>
+        <Select
+          id="bank-account-select"
+          labelText="Recon account"
+          helperText="Required for a new import. Unmatched queue and imports follow this account."
+          value={accountId}
+          onChange={(event) => setAccountId(event.target.value)}
+        >
+          {bankAccounts.length === 0 ? <SelectItem value="" text="No bank accounts" /> : null}
+          {bankAccounts.map((account) => (
+            <SelectItem key={account.id} value={account.id} text={accountLabel(account)} />
+          ))}
+        </Select>
+        <Button
+          kind="ghost"
+          size="sm"
+          disabled={!accountId}
+          onClick={() => setRulesOpen(true)}
+        >
+          Rules
+        </Button>
+      </Stack>
 
       {unmatchedCounts.length > 0 ? (
         <div>
@@ -452,21 +636,21 @@ export default function BankReconciliationPage() {
                     </TableHead>
                     <TableBody>
                       {tableRows.map((row) => {
-                        const lineData = unmatchedRows.find((line) => line.id === row.id);
+                        const line = unmatchedById.get(row.id);
                         return (
                           <TableRow {...getRowProps({ row })} key={row.id}>
                             {row.cells.map((cell) => (
                               <TableCell key={cell.id}>
-                                {cell.info.header === "actions" && canMutate ? (
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      void openMatchModal(row.id, lineData?._suggested ?? null)
+                                {cell.info.header === "actions" && line ? (
+                                  <LineActions
+                                    line={line}
+                                    canMutate={canMutate}
+                                    onMatch={() =>
+                                      void openMatchModal(line.id, line.suggested_payment_id)
                                     }
-                                  >
-                                    Match
-                                  </Button>
+                                    onApply={() => void openApplyModal(line)}
+                                    onRecode={() => void openRecodeModal(line)}
+                                  />
                                 ) : (
                                   cell.value
                                 )}
@@ -534,8 +718,8 @@ export default function BankReconciliationPage() {
                         </TableHead>
                         <TableBody>
                           {tableRows.map((row) => {
-                            const lineData = lineRows.find((line) => line.id === row.id);
-                            const isMatched = lineData?.actions !== "match";
+                            const line = importLineById.get(row.id);
+                            const isMatched = line ? isLineMatched(line) : false;
                             return (
                               <TableRow {...getRowProps({ row })} key={row.id}>
                                 {row.cells.map((cell) => (
@@ -544,18 +728,16 @@ export default function BankReconciliationPage() {
                                       <Tag type="green">{cell.value}</Tag>
                                     ) : cell.info.header === "status" && !isMatched ? (
                                       <Tag type="gray">{cell.value}</Tag>
-                                    ) : cell.info.header === "actions" &&
-                                      canMutate &&
-                                      lineData?.actions === "match" ? (
-                                      <Button
-                                        kind="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                          void openMatchModal(row.id, lineData._suggested)
+                                    ) : cell.info.header === "actions" && line ? (
+                                      <LineActions
+                                        line={line}
+                                        canMutate={canMutate}
+                                        onMatch={() =>
+                                          void openMatchModal(line.id, line.suggested_payment_id)
                                         }
-                                      >
-                                        Match
-                                      </Button>
+                                        onApply={() => void openApplyModal(line)}
+                                        onRecode={() => void openRecodeModal(line)}
+                                      />
                                     ) : (
                                       cell.value
                                     )}
@@ -574,6 +756,63 @@ export default function BankReconciliationPage() {
           )}
         </Stack>
       )}
+
+      <BankRulesModal
+        open={rulesOpen}
+        canMutate={canMutate}
+        bankAccountId={accountId}
+        accounts={accounts}
+        onClose={() => setRulesOpen(false)}
+        onChanged={() => void refreshAfterMutation(selectedImport?.id ?? null)}
+      />
+
+      <Modal
+        open={applyLine !== null}
+        modalHeading="Apply bank rule"
+        primaryButtonText={applying ? "Applying…" : "Apply"}
+        secondaryButtonText="Cancel"
+        primaryButtonDisabled={applying || !applyLine?.suggested_rule_id}
+        onRequestClose={() => {
+          setApplyImportId(null);
+          setApplyLine(null);
+        }}
+        onRequestSubmit={() => void handleApplyRule()}
+      >
+        <p className="cds--type-body-01">
+          Apply {applyLine?.suggested_rule_pattern ?? "this rule"}
+          {applyLine?.suggested_account_code
+            ? ` → ${applyLine.suggested_account_code} ${applyLine.suggested_account_name ?? ""}`.trimEnd()
+            : ""}
+          ? This posts a journal and matches the line.
+        </p>
+      </Modal>
+
+      <Modal
+        open={recodeLineRow !== null}
+        modalHeading="Recode line"
+        primaryButtonText={recoding ? "Recoding…" : "Recode"}
+        secondaryButtonText="Cancel"
+        primaryButtonDisabled={!recodeAccountId || recoding}
+        onRequestClose={() => {
+          setRecodeImportId(null);
+          setRecodeLineRow(null);
+          setRecodeAccountId("");
+        }}
+        onRequestSubmit={() => void handleRecode()}
+      >
+        <Select
+          id="recode-account-select"
+          labelText="Target account"
+          helperText="Changes the non-bank side of the matched journal."
+          value={recodeAccountId}
+          onChange={(event) => setRecodeAccountId(event.target.value)}
+        >
+          <SelectItem value="" text="Select account" />
+          {recodeAccounts.map((account) => (
+            <SelectItem key={account.id} value={account.id} text={accountLabel(account)} />
+          ))}
+        </Select>
+      </Modal>
 
       <Modal
         open={matchLineId !== null}

@@ -65,6 +65,7 @@ class BankImportLineCRUD(BaseCRUD):
         stmt = (
             select(BankImportLine)
             .join(BankImport, BankImportLine.import_id == BankImport.id)
+            .options(selectinload(BankImportLine.bank_import))
             .where(
                 BankImportLine.matched_payment_id.is_(None),
                 BankImportLine.matched_journal_id.is_(None),

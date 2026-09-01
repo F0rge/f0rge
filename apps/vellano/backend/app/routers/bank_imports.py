@@ -11,10 +11,12 @@ from app.dependencies.auth import (
     require_books_mutate,
 )
 from app.schemas.bank_import import (
+    BankApplyRuleRequest,
     BankImportLineResponse,
     BankImportMatchRequest,
     BankImportResponse,
     BankImportSummary,
+    BankRecodeRequest,
     BankUnmatchedCount,
 )
 from app.services.bank_imports import BankImportService
@@ -82,3 +84,31 @@ async def match_bank_line(
     service: BankImportService = Depends(get_bank_import_service),
 ):
     return await service.match_line(import_id, line_id, body)
+
+
+@bank_imports_router.post(
+    "/{import_id}/lines/{line_id}/apply-rule",
+    response_model=BankImportLineResponse,
+)
+async def apply_bank_rule(
+    import_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: BankApplyRuleRequest,
+    _: uuid.UUID = Depends(require_books_mutate),
+    service: BankImportService = Depends(get_bank_import_service),
+):
+    return await service.apply_rule(import_id, line_id, body)
+
+
+@bank_imports_router.post(
+    "/{import_id}/lines/{line_id}/recode",
+    response_model=BankImportLineResponse,
+)
+async def recode_bank_line(
+    import_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: BankRecodeRequest,
+    _: uuid.UUID = Depends(require_books_mutate),
+    service: BankImportService = Depends(get_bank_import_service),
+):
+    return await service.recode(import_id, line_id, body)
