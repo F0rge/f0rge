@@ -11,6 +11,8 @@ libs/*
 libs/backend/*
 !libs/backend/core
 !libs/backend/db
+!libs/backend/storage
+!libs/backend/testing
 
 **/.venv
 apps/vellano/backend/tests

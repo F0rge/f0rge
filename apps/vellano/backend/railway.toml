@@ -10,6 +10,7 @@ watchPatterns = [
   "apps/vellano/**",
   "libs/backend/core/**",
   "libs/backend/db/**",
+  "libs/backend/storage/**",
 ]
 
 [deploy]
