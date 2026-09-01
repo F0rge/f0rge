@@ -5,6 +5,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.credit_note import CreditNoteCRUD
@@ -21,6 +22,7 @@ from app.services.chart_of_accounts import (
     CODE_VAT,
     LedgerPostingService,
 )
+from app.services.invoice_pdf import build_tax_invoice_pdf
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
 
@@ -67,6 +69,39 @@ class CreditNoteService:
         reloaded = await self.crud.get_by_id(credit_note.id)
         assert reloaded is not None
         return self._to_response(reloaded)
+
+    async def serve_pdf(self, credit_note_id: uuid.UUID) -> Response:
+        credit_note = await self.crud.get_by_id(credit_note_id)
+        if credit_note is None:
+            raise NotFoundError("Credit note not found")
+        invoice = credit_note.invoice
+        customer = invoice.customer
+        lines = [
+            (
+                line.description,
+                line.qty,
+                f"{line.unit_ex_vat:.2f}",
+                f"{line.ex_vat:.2f}",
+                f"{line.vat_amount:.2f}",
+                f"{line.inc_vat:.2f}",
+            )
+            for line in invoice.lines
+        ]
+        pdf_bytes = build_tax_invoice_pdf(
+            invoice_number=credit_note.credit_note_number,
+            issue_date=credit_note.issue_date.isoformat(),
+            customer_name=customer.name if customer else "",
+            customer_vat=customer.vat_number if customer else None,
+            customer_address=customer.billing_address if customer else None,
+            lines=lines,
+            subtotal_ex_vat=f"{credit_note.subtotal_ex_vat:.2f}",
+            vat_amount=f"{credit_note.vat_amount:.2f}",
+            total_inc_vat=f"{credit_note.total_inc_vat:.2f}",
+            title="Credit Note",
+            original_invoice_number=invoice.invoice_number,
+            credit_reason=credit_note.reason,
+        )
+        return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def create_for_return(
         self,

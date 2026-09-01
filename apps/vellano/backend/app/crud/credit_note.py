@@ -20,7 +20,10 @@ class CreditNoteCRUD(BaseCRUD):
         return (
             await self.db.execute(
                 select(CreditNote)
-                .options(selectinload(CreditNote.invoice).selectinload(TaxInvoice.customer))
+                .options(
+                    selectinload(CreditNote.invoice).selectinload(TaxInvoice.customer),
+                    selectinload(CreditNote.invoice).selectinload(TaxInvoice.lines),
+                )
                 .where(CreditNote.id == credit_note_id)
             )
         ).scalar_one_or_none()

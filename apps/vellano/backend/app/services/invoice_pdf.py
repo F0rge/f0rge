@@ -21,6 +21,9 @@ def build_tax_invoice_pdf(
     subtotal_ex_vat: str,
     vat_amount: str,
     total_inc_vat: str,
+    title: str = "Tax Invoice",
+    original_invoice_number: Optional[str] = None,
+    credit_reason: Optional[str] = None,
 ) -> bytes:
     """Each line: description, qty, unit_ex_vat, ex_vat, vat_amount, inc_vat."""
     from io import BytesIO
@@ -31,12 +34,18 @@ def build_tax_invoice_pdf(
     y = height - 25 * mm
 
     pdf.setFont("Helvetica-Bold", 16)
-    pdf.drawString(25 * mm, y, "Tax Invoice")
+    pdf.drawString(25 * mm, y, title)
     y -= 10 * mm
 
     pdf.setFont("Helvetica", 10)
     pdf.drawString(25 * mm, y, f"Invoice No: {invoice_number}")
     y -= 6 * mm
+    if original_invoice_number:
+        pdf.drawString(25 * mm, y, f"Original invoice: {original_invoice_number}")
+        y -= 6 * mm
+    if credit_reason:
+        pdf.drawString(25 * mm, y, f"Reason: {credit_reason}")
+        y -= 6 * mm
     pdf.drawString(25 * mm, y, f"Date: {issue_date}")
     y -= 12 * mm
 
