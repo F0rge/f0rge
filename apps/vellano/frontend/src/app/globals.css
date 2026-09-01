@@ -18,6 +18,47 @@ body {
   margin-left: 3rem;
 }
 
+.vellano-header-search {
+  position: relative;
+  width: min(20rem, 40vw);
+  margin-right: 0.5rem;
+}
+
+.vellano-header-search .cds--search-input {
+  background-color: var(--cds-layer-02, #393939);
+  color: var(--cds-text-on-color, #fff);
+}
+
+.vellano-header-search__panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  z-index: 9000;
+  width: min(28rem, 90vw);
+  max-height: 24rem;
+  overflow: auto;
+  padding: 0.75rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.vellano-header-search__empty {
+  padding: 0.75rem;
+}
+
+.vellano-home-tile {
+  min-height: 10rem;
+}
+
+.vellano-home-metric {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.vellano-cost-audit {
+  margin-top: 2rem;
+}
+
 .vellano-header-user {
   display: inline-flex;
   align-items: center;

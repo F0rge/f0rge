@@ -1,24 +1,49 @@
 "use client";
 
-import { InlineNotification, Stack } from "@carbon/react";
+import {
+  Column,
+  Grid,
+  InlineNotification,
+  Loading,
+  Stack,
+  Tile,
+} from "@carbon/react";
 import { useEffect, useState } from "react";
 
-type HealthState = "loading" | "ok" | "down";
+import { ApiError, getHomeSummary, type HomeSummary } from "@/lib/api";
+
+function formatZar(value: string, currency: string): string {
+  const amount = Number(value);
+  if (Number.isNaN(amount)) {
+    return value;
+  }
+  return `${amount.toLocaleString("en-ZA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${currency}`;
+}
 
 export default function HomePage() {
-  const [health, setHealth] = useState<HealthState>("loading");
+  const [summary, setSummary] = useState<HomeSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/v1/health")
-      .then((response) => {
+    getHomeSummary()
+      .then((data) => {
         if (!cancelled) {
-          setHealth(response.ok ? "ok" : "down");
+          setSummary(data);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!cancelled) {
-          setHealth("down");
+          setError(err instanceof ApiError ? err.message : "Failed to load home summary");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
         }
       });
     return () => {
@@ -28,25 +53,43 @@ export default function HomePage() {
 
   return (
     <Stack gap={6}>
-      <h1 className="cds--type-productive-heading-04">Home</h1>
-      <p className="cds--type-body-01">
-        Vellano back office. S4 purchase-order flow: raise PO, on water, land costs, receive into
-        locations. S6 books: chart of accounts, contacts, invoices, bills, and payments under Books
-        in the side nav. Till lands in a later slice.
-      </p>
-      {health === "loading" ? (
-        <InlineNotification kind="info" title="API" subtitle="Checking /api/v1/health…" hideCloseButton />
+      <div>
+        <h1 className="cds--type-productive-heading-04">Home</h1>
+        <p className="cds--type-body-01">
+          Stock cockpit — on-order (in transit) versus on-hand (received at locations).
+        </p>
+      </div>
+
+      {loading ? <Loading withOverlay={false} description="Loading summary…" /> : null}
+      {error ? (
+        <InlineNotification kind="error" title="Home summary" subtitle={error} hideCloseButton />
       ) : null}
-      {health === "ok" ? (
-        <InlineNotification kind="success" title="API" subtitle="Health check returned 200." hideCloseButton />
-      ) : null}
-      {health === "down" ? (
-        <InlineNotification
-          kind="warning"
-          title="API"
-          subtitle="Health check did not succeed. Start the API on :8003."
-          hideCloseButton
-        />
+
+      {summary ? (
+        <Grid condensed fullWidth>
+          <Column lg={8} md={4} sm={4}>
+            <Tile className="vellano-home-tile">
+              <h2 className="cds--type-productive-heading-03">On order</h2>
+              <p className="cds--type-body-01 vellano-home-metric">
+                {summary.on_order_qty.toLocaleString("en-ZA")} units
+              </p>
+              <p className="cds--type-helper-text-01">
+                {formatZar(summary.on_order_value_zar, summary.home_currency)} estimated
+              </p>
+            </Tile>
+          </Column>
+          <Column lg={8} md={4} sm={4}>
+            <Tile className="vellano-home-tile">
+              <h2 className="cds--type-productive-heading-03">On hand</h2>
+              <p className="cds--type-body-01 vellano-home-metric">
+                {summary.on_hand_qty.toLocaleString("en-ZA")} units
+              </p>
+              <p className="cds--type-helper-text-01">
+                {formatZar(summary.on_hand_value_zar, summary.home_currency)} at landed cost
+              </p>
+            </Tile>
+          </Column>
+        </Grid>
       ) : null}
     </Stack>
   );

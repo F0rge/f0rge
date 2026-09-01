@@ -42,6 +42,7 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { useAuth } from "@/lib/auth";
 import { BOOKS_NAV_ITEMS, SIDE_NAV_ITEMS } from "@/lib/nav";
+import { HeaderSearch } from "@/components/header-search";
 
 const ICONS = {
   "/": Home,
@@ -164,6 +165,7 @@ export function AppShell({ children }: AppShellProps) {
             Vellano
           </HeaderName>
           <HeaderGlobalBar>
+            <HeaderSearch />
             <span className="vellano-header-user" title={user.email}>
               {user.display_name || user.email}
             </span>

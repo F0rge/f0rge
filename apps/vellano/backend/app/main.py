@@ -16,14 +16,18 @@ from app.routers import (
     bank_imports,
     bills,
     contacts,
+    cost_audit,
     credit_notes,
     health,
+    home,
     invoices,
     locations,
     payments,
     proformas,
     purchase_orders,
     reports,
+    search,
+    settings as settings_router,
     skus,
     suppliers,
     till,
@@ -87,3 +91,7 @@ app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)
 app.include_router(bank_imports.bank_imports_router)
 app.include_router(reports.reports_router)
+app.include_router(search.search_router)
+app.include_router(home.home_router)
+app.include_router(settings_router.settings_router)
+app.include_router(cost_audit.cost_audit_router)
