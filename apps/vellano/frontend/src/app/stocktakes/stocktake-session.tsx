@@ -112,7 +112,7 @@ export function StocktakeSession({
       const draft = drafts[line.id];
       const counted = draft === "" ? line.counted_qty : draft;
       if (lineFilter === "uncounted") {
-        return counted === "" || counted === null;
+        return counted === null;
       }
       if (lineFilter === "variance") {
         return typeof counted === "number" && counted !== line.expected_qty;
