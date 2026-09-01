@@ -1,6 +1,6 @@
 "use client";
 
-import { InlineNotification, Modal, Stack, TextInput } from "@carbon/react";
+import { Button, InlineNotification, Stack, TextInput } from "@carbon/react";
 import { useEffect, useState } from "react";
 
 import {
@@ -174,21 +174,29 @@ export function SkuPriceEditor({
     }
   }
 
+  if (!open || !sku) {
+    return null;
+  }
+
   return (
-    <Modal
-      open={open}
-      modalHeading={readOnly ? "SKU prices" : "Edit prices"}
-      primaryButtonText={readOnly ? "Close" : saving ? "Saving…" : "Save"}
-      secondaryButtonText={readOnly ? undefined : "Cancel"}
-      primaryButtonDisabled={readOnly ? false : saving || !hasEdits}
-      onRequestClose={onClose}
-      onRequestSubmit={() => (readOnly ? onClose() : void handleSave())}
+    <section
+      className="cds--layer-01"
+      style={{
+        padding: "1.5rem",
+        border: "1px solid var(--cds-border-subtle-01, #e0e0e0)",
+        maxWidth: "36rem",
+      }}
+      aria-labelledby="sku-price-editor-heading"
     >
       <Stack gap={5}>
-        <p className="cds--type-body-01">
-          <strong>{sku?.our_ref ?? ""}</strong>
-          {sku ? ` — ${sku.name}` : ""}
-        </p>
+        <div>
+          <h2 id="sku-price-editor-heading" className="cds--type-productive-heading-03">
+            {readOnly ? "SKU prices" : "Edit prices"}
+          </h2>
+          <p className="cds--type-body-01">
+            <strong>{sku.our_ref}</strong> — {sku.name}
+          </p>
+        </div>
         {unitCostZar ? (
           <InlineNotification
             kind="info"
@@ -228,7 +236,27 @@ export function SkuPriceEditor({
           readOnly={readOnly}
           onChange={(event) => updateRetailInc(event.target.value)}
         />
+        <div style={{ display: "flex", gap: "0.75rem" }}>
+          {readOnly ? (
+            <Button type="button" kind="secondary" onClick={onClose}>
+              Close
+            </Button>
+          ) : (
+            <>
+              <Button
+                type="button"
+                disabled={saving || !hasEdits}
+                onClick={() => void handleSave()}
+              >
+                {saving ? "Saving…" : "Save"}
+              </Button>
+              <Button type="button" kind="secondary" disabled={saving} onClick={onClose}>
+                Cancel
+              </Button>
+            </>
+          )}
+        </div>
       </Stack>
-    </Modal>
+    </section>
   );
 }

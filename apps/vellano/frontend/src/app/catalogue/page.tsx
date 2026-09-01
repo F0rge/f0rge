@@ -199,6 +199,18 @@ export default function CataloguePage() {
         />
       ) : null}
 
+      <SkuPriceEditor
+        sku={priceSku}
+        open={priceSku !== null}
+        readOnly={!canMutate}
+        unitCostZar={priceSku ? (unitCostBySku.get(priceSku.id) ?? null) : null}
+        saving={saving}
+        onSavingChange={setSaving}
+        onClose={() => setPriceSku(null)}
+        onSaved={loadSkus}
+        onError={setError}
+      />
+
       {loading ? (
         <p className="cds--type-body-01">Loading catalogue…</p>
       ) : skus.length === 0 ? (
@@ -284,18 +296,6 @@ export default function CataloguePage() {
           )}
         </DataTable>
       )}
-
-      <SkuPriceEditor
-        sku={priceSku}
-        open={priceSku !== null}
-        readOnly={!canMutate}
-        unitCostZar={priceSku ? (unitCostBySku.get(priceSku.id) ?? null) : null}
-        saving={saving}
-        onSavingChange={setSaving}
-        onClose={() => setPriceSku(null)}
-        onSaved={loadSkus}
-        onError={setError}
-      />
 
       <Modal
         open={createOpen}
