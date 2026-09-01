@@ -29,6 +29,14 @@ async def _on_hand_or_zero(client: AsyncClient, sku_id: str, location_id: str) -
     return 0 if loc is None else loc["on_hand"]
 
 
+def _positive_allocs(line: dict) -> list[dict]:
+    return [item for item in line["allocations"] if item["qty"] > 0]
+
+
+def _alloc_at(line: dict, location_id: str) -> dict:
+    return next(item for item in line["allocations"] if item["location_id"] == location_id)
+
+
 def _pdf_text(pdf_bytes: bytes) -> str:
     reader = PdfReader(BytesIO(pdf_bytes))
     return "\n".join(page.extract_text() or "" for page in reader.pages)
@@ -186,7 +194,8 @@ async def test_always_prefer_warehouse_flip_changes_preview(
         json={"sku_id": parent["id"], "qty": 1},
     )
     assert prefer.status_code == 200, prefer.text
-    assert prefer.json()["lines"][0]["allocations"][0]["location_id"] == kramerville_id
+    prefer_positive = _positive_allocs(prefer.json()["lines"][0])
+    assert prefer_positive[0]["location_id"] == kramerville_id
 
     flipped = await owner_client.patch(
         "/api/v1/settings",
@@ -198,7 +207,8 @@ async def test_always_prefer_warehouse_flip_changes_preview(
         json={"sku_id": parent["id"], "qty": 1},
     )
     assert skipped.status_code == 200
-    assert skipped.json()["lines"][0]["allocations"][0]["location_id"] == bedford_id
+    skipped_positive = _positive_allocs(skipped.json()["lines"][0])
+    assert skipped_positive[0]["location_id"] == bedford_id
 
 
 async def test_leave_behind_and_confirm_split(
@@ -223,7 +233,7 @@ async def test_leave_behind_and_confirm_split(
     assert body["number"].startswith("PCK-")
     chair_line = next(line for line in body["lines"] if line["sku_id"] == kit["chairs"]["id"])
     assert chair_line["qty_needed"] == 4
-    assert chair_line["allocations"][0]["qty"] == 4
+    assert _alloc_at(chair_line, kramerville_id)["qty"] == 4
     assert await _on_hand_or_zero(owner_client, kit["chairs"]["id"], kramerville_id) == 6
 
     split_kit = await _kit(
@@ -418,8 +428,11 @@ async def test_third_location_is_just_another_row(owner_client: AsyncClient) -> 
     )
     assert preview.status_code == 200, preview.text
     allocs = preview.json()["lines"][0]["allocations"]
-    assert len(allocs) == 1
-    assert allocs[0]["location_id"] == sandton_id
+    assert {item["location_id"] for item in allocs} >= {sandton_id}
+    positive = _positive_allocs(preview.json()["lines"][0])
+    assert len(positive) == 1
+    assert positive[0]["location_id"] == sandton_id
+    assert positive[0]["qty"] == 4
 
 
 async def test_does_not_patch_invoice_description(
