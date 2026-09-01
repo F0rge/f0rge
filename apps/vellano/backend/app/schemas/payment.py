@@ -30,7 +30,7 @@ class PaymentResponse(BaseModel):
     amount_zar: Decimal
     fx_gain_loss_zar: Decimal
     paid_on: datetime.date
-    tender: Optional[Literal["cash", "card", "deposit"]] = None
+    tender: Optional[Literal["cash", "card", "deposit", "eft"]] = None
     is_reconciled: bool = False
     reconciled_at: Optional[datetime.datetime] = None
     created_at: datetime.datetime
