@@ -25,6 +25,7 @@ import {
   canMutateBooks,
   computeInvoicePreview,
   createInvoice,
+  downloadInvoicePdf,
   formatPriceAmount,
   formatZarAmount,
   listContacts,
@@ -197,6 +198,15 @@ function InvoicesPageContent() {
     }
   }
 
+  async function handleDownload(invoiceId: string, invoiceNumber: string) {
+    setError(null);
+    try {
+      await downloadInvoicePdf(invoiceId, invoiceNumber);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download tax invoice.");
+    }
+  }
+
   const visibleInvoices = useMemo(
     () =>
       invoices.filter((entry) =>
@@ -297,18 +307,33 @@ function InvoicesPageContent() {
                     >
                       {row.cells.map((cell) => {
                         if (cell.info.header === "actions") {
+                          const invoice = invoices.find((entry) => entry.id === row.id);
                           return (
                             <TableCell key={cell.id}>
-                              <Button
-                                kind="ghost"
-                                size="sm"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  router.push(`/invoices/${row.id}`);
-                                }}
-                              >
-                                Open
-                              </Button>
+                              <Stack gap={3} orientation="horizontal">
+                                <Button
+                                  kind="ghost"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    router.push(`/invoices/${row.id}`);
+                                  }}
+                                >
+                                  Open
+                                </Button>
+                                <Button
+                                  kind="ghost"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    if (invoice) {
+                                      void handleDownload(invoice.id, invoice.invoice_number);
+                                    }
+                                  }}
+                                >
+                                  Download
+                                </Button>
+                              </Stack>
                             </TableCell>
                           );
                         }
