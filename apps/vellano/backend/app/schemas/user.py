@@ -14,6 +14,7 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8)
     role: UserRole
     display_name: Optional[str] = None
+    default_location_id: Optional[uuid.UUID] = None
 
 
 class UserUpdate(BaseModel):
@@ -22,12 +23,14 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     is_disabled: Optional[bool] = None
     password: Optional[str] = Field(default=None, min_length=8)
+    default_location_id: Optional[uuid.UUID] = None
 
 
 class ProfileUpdate(BaseModel):
     email: Optional[EmailStr] = None
     display_name: Optional[str] = None
     password: Optional[str] = Field(default=None, min_length=8)
+    default_location_id: Optional[uuid.UUID] = None
 
 
 class UserResponse(BaseModel):
@@ -38,5 +41,6 @@ class UserResponse(BaseModel):
     is_disabled: bool
     team_id: uuid.UUID
     team: TeamBrief
+    default_location_id: Optional[uuid.UUID] = None
 
     model_config = ConfigDict(from_attributes=True)

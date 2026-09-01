@@ -112,4 +112,5 @@ class AuthService:
             "display_name": user.display_name,
             "role": user.role.value,
             "team": {"id": user.team.id, "name": user.team.name},
+            "default_location_id": user.default_location_id,
         }

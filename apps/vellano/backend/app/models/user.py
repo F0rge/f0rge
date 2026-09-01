@@ -44,6 +44,12 @@ class User(UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
     )
     is_disabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    default_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     team: Mapped["Team"] = relationship(back_populates="users")
 

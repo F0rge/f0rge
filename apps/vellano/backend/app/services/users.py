@@ -12,6 +12,10 @@ from app.models.team import Team
 from app.models.user import User, UserRole
 from app.schemas.user import ProfileUpdate, UserCreate, UserUpdate
 from app.services.auth import hash_password, validate_password
+from app.services.user_default_location import (
+    bedfordview_default_location_id,
+    resolve_writable_default_location_id,
+)
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -28,12 +32,24 @@ class UserService:
         if team is None:
             raise ValidationError("Team not configured")
 
+        fields_set = data.model_fields_set
+        if "default_location_id" in fields_set:
+            default_location_id = await resolve_writable_default_location_id(
+                self.db,
+                data.default_location_id,
+            )
+        elif data.role == UserRole.TILL:
+            default_location_id = await bedfordview_default_location_id(self.db)
+        else:
+            default_location_id = None
+
         user = User(
             team_id=team.id,
             email=data.email,
             password_hash=hash_password(data.password),
             display_name=data.display_name,
             role=data.role,
+            default_location_id=default_location_id,
         )
         await self.crud.add_and_flush(user)
         try:
@@ -63,6 +79,11 @@ class UserService:
         if data.password is not None:
             validate_password(data.password)
             user.password_hash = hash_password(data.password)
+        if "default_location_id" in data.model_fields_set:
+            user.default_location_id = await resolve_writable_default_location_id(
+                self.db,
+                data.default_location_id,
+            )
 
         try:
             await self.crud.commit_refresh(user)
@@ -90,6 +111,11 @@ class ProfileService:
         if data.password is not None:
             validate_password(data.password)
             user.password_hash = hash_password(data.password)
+        if "default_location_id" in data.model_fields_set:
+            user.default_location_id = await resolve_writable_default_location_id(
+                self.db,
+                data.default_location_id,
+            )
 
         try:
             await self.crud.commit_refresh(user)

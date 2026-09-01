@@ -38,6 +38,7 @@ async def test_me_authenticated_returns_200_with_team(async_client: AsyncClient)
     assert body["role"] == "owner"
     assert body["team"]["name"] == "Vellano"
     assert body["team"]["id"]
+    assert "default_location_id" in body
 
 
 async def test_logout_clears_session(async_client: AsyncClient) -> None:

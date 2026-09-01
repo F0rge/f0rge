@@ -23,9 +23,12 @@ import { useCallback, useEffect, useState } from "react";
 import {
   USER_ROLES,
   createUser,
+  isActiveLocation,
+  listLocations,
   listUsers,
   updateUser,
   type CreateUserPayload,
+  type Location,
   type User,
   type UserRole,
 } from "@/lib/api";
@@ -54,11 +57,13 @@ const emptyCreateForm: CreateUserPayload = {
   email: "",
   password: "",
   role: "buyer",
+  default_location_id: null,
 };
 
 export default function UsersPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -69,6 +74,7 @@ export default function UsersPage() {
     display_name: "",
     role: "buyer" as UserRole,
     password: "",
+    default_location_id: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -88,6 +94,9 @@ export default function UsersPage() {
   useEffect(() => {
     if (user?.role === "owner") {
       void loadUsers();
+      void listLocations()
+        .then((data) => setLocations(data.filter(isActiveLocation)))
+        .catch(() => setLocations([]));
     }
   }, [user, loadUsers]);
 
@@ -121,14 +130,44 @@ export default function UsersPage() {
       display_name: entry.display_name,
       role: entry.role,
       password: "",
+      default_location_id: entry.default_location_id ?? "",
     });
+  }
+
+  function defaultLocationSelect(
+    id: string,
+    labelText: string,
+    value: string,
+    onChange: (next: string) => void,
+  ) {
+    return (
+      <Select
+        id={id}
+        labelText={labelText}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <SelectItem value="" text="No default" />
+        {locations.map((loc) => (
+          <SelectItem
+            key={loc.id}
+            value={loc.id}
+            text={`${loc.name} (${loc.type})`}
+          />
+        ))}
+      </Select>
+    );
   }
 
   async function handleCreate() {
     setSaving(true);
     setError(null);
     try {
-      await createUser(createForm);
+      const payload: CreateUserPayload = {
+        ...createForm,
+        default_location_id: createForm.default_location_id || null,
+      };
+      await createUser(payload);
       setCreateOpen(false);
       setCreateForm(emptyCreateForm);
       await loadUsers();
@@ -153,6 +192,10 @@ export default function UsersPage() {
       };
       if (editForm.password) {
         payload.password = editForm.password;
+      }
+      const nextDefault = editForm.default_location_id || null;
+      if (nextDefault !== (editUser.default_location_id ?? null)) {
+        payload.default_location_id = nextDefault;
       }
       await updateUser(editUser.id, payload);
       setEditUser(null);
@@ -300,6 +343,12 @@ export default function UsersPage() {
               <SelectItem key={role.value} value={role.value} text={role.label} />
             ))}
           </Select>
+          {defaultLocationSelect(
+            "create-default-location",
+            "Default location",
+            createForm.default_location_id ?? "",
+            (next) => setCreateForm((f) => ({ ...f, default_location_id: next || null })),
+          )}
         </Stack>
       </Modal>
 
@@ -340,6 +389,12 @@ export default function UsersPage() {
               <SelectItem key={role.value} value={role.value} text={role.label} />
             ))}
           </Select>
+          {defaultLocationSelect(
+            "edit-default-location",
+            "Default location",
+            editForm.default_location_id,
+            (next) => setEditForm((f) => ({ ...f, default_location_id: next })),
+          )}
           <PasswordInput
             id="edit-password"
             labelText="New password"

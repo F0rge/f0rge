@@ -61,8 +61,8 @@ from app.services.users import BootstrapService
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with async_session_maker() as session:
         await BootstrapService(session).seed_if_empty()
-        await RoleUserSeedService(session).seed()
         await LocationSeedService(session).seed_if_empty()
+        await RoleUserSeedService(session).seed()
         coa = ChartOfAccountsSeedService(session)
         await coa.seed_if_empty()
         await coa.ensure_opening_equity()

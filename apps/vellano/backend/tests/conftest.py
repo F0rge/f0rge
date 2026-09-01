@@ -69,8 +69,8 @@ async def async_engine(
         await conn.run_sync(Base.metadata.create_all)
     async with async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)() as session:
         await BootstrapService(session).seed_if_empty()
-        await RoleUserSeedService(session).seed()
         await LocationSeedService(session).seed_if_empty()
+        await RoleUserSeedService(session).seed()
         coa = ChartOfAccountsSeedService(session)
         await coa.seed_if_empty()
         await coa.ensure_opening_equity()

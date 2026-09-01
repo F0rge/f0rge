@@ -11,6 +11,7 @@ export type AuthUser = {
   role: UserRole;
   team: Team;
   display_name: string | null;
+  default_location_id: string | null;
 };
 
 export type User = {
@@ -21,6 +22,7 @@ export type User = {
   is_disabled: boolean;
   team_id: string;
   team: Team;
+  default_location_id: string | null;
 };
 
 export type LoginResponse = {
@@ -32,6 +34,7 @@ export type CreateUserPayload = {
   password: string;
   role: UserRole;
   display_name?: string;
+  default_location_id?: string | null;
 };
 
 export type UpdateUserPayload = {
@@ -40,12 +43,14 @@ export type UpdateUserPayload = {
   role?: UserRole;
   display_name?: string;
   is_disabled?: boolean;
+  default_location_id?: string | null;
 };
 
 export type UpdateProfilePayload = {
   email?: string;
   display_name?: string;
   password?: string;
+  default_location_id?: string | null;
 };
 
 export class ApiError extends Error {

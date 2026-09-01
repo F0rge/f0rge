@@ -7,6 +7,11 @@ from httpx import AsyncClient
 
 from app.models.user import UserRole
 from tests.conftest import OWNER_EMAIL, OWNER_PASSWORD
+from tests.test_purchase_orders import _location_id_by_name
+
+
+async def _bedfordview_id(client: AsyncClient) -> str:
+    return await _location_id_by_name(client, "Bedfordview")
 
 
 @pytest.mark.parametrize("role", [r.value for r in UserRole if r != UserRole.OWNER])
@@ -166,3 +171,43 @@ async def test_exactly_one_team_after_seed(async_client: AsyncClient) -> None:
     )
     assert create_resp.status_code == 201
     assert create_resp.json()["team_id"] == team_id
+
+
+async def test_new_till_user_without_default_gets_bedfordview(owner_client: AsyncClient) -> None:
+    bedford_id = await _bedfordview_id(owner_client)
+    resp = await owner_client.post(
+        "/api/v1/users",
+        json={
+            "email": "new-till@example.com",
+            "password": "till-password",
+            "role": "till",
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["default_location_id"] == bedford_id
+
+
+async def test_profile_set_and_clear_default_location(owner_client: AsyncClient) -> None:
+    bedford_id = await _bedfordview_id(owner_client)
+    kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
+
+    set_resp = await owner_client.patch(
+        "/api/v1/profile",
+        json={"default_location_id": kramerville_id},
+    )
+    assert set_resp.status_code == 200
+    assert set_resp.json()["default_location_id"] == kramerville_id
+
+    clear_resp = await owner_client.patch(
+        "/api/v1/profile",
+        json={"default_location_id": None},
+    )
+    assert clear_resp.status_code == 200
+    assert clear_resp.json()["default_location_id"] is None
+
+    restore_resp = await owner_client.patch(
+        "/api/v1/profile",
+        json={"default_location_id": bedford_id},
+    )
+    assert restore_resp.status_code == 200
+    assert restore_resp.json()["default_location_id"] == bedford_id

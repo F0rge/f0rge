@@ -223,13 +223,22 @@ export default function TillPage() {
       setSkus(skuData);
       setInventory(inventoryData);
       setCustomers(customerData);
-      setLocationId((current) => current || showrooms[0]?.id || "");
+      setLocationId((current) => {
+        if (current) {
+          return current;
+        }
+        const defaultId = user?.default_location_id;
+        if (defaultId && showrooms.some((loc) => loc.id === defaultId)) {
+          return defaultId;
+        }
+        return showrooms[0]?.id ?? "";
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load till data.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (user) {

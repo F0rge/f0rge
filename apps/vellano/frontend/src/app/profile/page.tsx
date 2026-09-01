@@ -1,9 +1,17 @@
 "use client";
 
-import { Button, InlineNotification, PasswordInput, Stack, TextInput } from "@carbon/react";
+import {
+  Button,
+  InlineNotification,
+  PasswordInput,
+  Select,
+  SelectItem,
+  Stack,
+  TextInput,
+} from "@carbon/react";
 import { FormEvent, useEffect, useState } from "react";
 
-import { ApiError, updateProfile } from "@/lib/api";
+import { ApiError, isActiveLocation, listLocations, updateProfile, type Location } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 export default function ProfilePage() {
@@ -11,13 +19,22 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [defaultLocationId, setDefaultLocationId] = useState("");
+  const [locations, setLocations] = useState<Location[]>([]);
 
   useEffect(() => {
     if (user) {
       setDisplayName(user.display_name ?? "");
       setEmail(user.email);
+      setDefaultLocationId(user.default_location_id ?? "");
     }
   }, [user]);
+
+  useEffect(() => {
+    void listLocations()
+      .then((data) => setLocations(data.filter(isActiveLocation)))
+      .catch(() => setLocations([]));
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -42,6 +59,10 @@ export default function ProfilePage() {
       }
       if (password) {
         payload.password = password;
+      }
+      const nextDefault = defaultLocationId || null;
+      if (nextDefault !== (sessionUser.default_location_id ?? null)) {
+        payload.default_location_id = nextDefault;
       }
       await updateProfile(payload);
       await refreshUser();
@@ -113,6 +134,23 @@ export default function ProfilePage() {
             onChange={(event) => setPassword(event.target.value)}
             disabled={submitting}
           />
+          <Select
+            id="profile-default-location"
+            labelText="Default location"
+            helperText="Pre-selects on till when the location is a showroom"
+            value={defaultLocationId}
+            onChange={(event) => setDefaultLocationId(event.target.value)}
+            disabled={submitting}
+          >
+            <SelectItem value="" text="No default" />
+            {locations.map((loc) => (
+              <SelectItem
+                key={loc.id}
+                value={loc.id}
+                text={`${loc.name} (${loc.type})`}
+              />
+            ))}
+          </Select>
           <Button type="submit" disabled={submitting}>
             {submitting ? "Saving…" : "Save changes"}
           </Button>

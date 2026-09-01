@@ -24,3 +24,4 @@ class MeResponse(BaseModel):
     display_name: Optional[str]
     role: str
     team: TeamBrief
+    default_location_id: Optional[uuid.UUID] = None
