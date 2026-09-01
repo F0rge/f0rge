@@ -16,6 +16,7 @@ from app.services.playground_seed import (
     PACK_MARKER_REF,
     PLAYGROUND_SUPPLIER_NAME,
     PROFORMA_INVOICE_NUMBER,
+    SOFA_PACK_MARKER_REF,
     PlaygroundSeedService,
 )
 from app.services.proformas import ProformaService
@@ -82,6 +83,17 @@ async def test_playground_seed_creates_demo_path_and_is_idempotent(
     laybys = await LaybyCRUD(async_db).list_all()
     assert len(laybys) >= 4
 
+    london = await sku_crud.get_by_our_ref(SOFA_PACK_MARKER_REF)
+    assert london is not None
+    assert london.photo_storage_key
+    assert london.category == "Seating"
+
+    vel_sofas = [s for s in await sku_crud.list_all() if s.our_ref.startswith("VEL-SOFA-")]
+    assert len(vel_sofas) >= 10
+
+    first_london_id = london.id
+    first_vel_sofa_count = len(vel_sofas)
+
     first_supplier_id = playground_suppliers[0].id
     first_table_id = table_sku.id
     first_proforma_id = playground_proformas[0].id
@@ -103,3 +115,9 @@ async def test_playground_seed_creates_demo_path_and_is_idempotent(
     ]
     assert len(playground_proformas_after) == 1
     assert playground_proformas_after[0].id == first_proforma_id
+
+    london_after = await sku_crud.get_by_our_ref(SOFA_PACK_MARKER_REF)
+    assert london_after is not None
+    assert london_after.id == first_london_id
+    vel_sofas_after = [s for s in await sku_crud.list_all() if s.our_ref.startswith("VEL-SOFA-")]
+    assert len(vel_sofas_after) == first_vel_sofa_count

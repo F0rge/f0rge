@@ -22,6 +22,7 @@ COPY libs/backend/testing/src /app/libs/backend/testing/src
 RUN uv sync --frozen --no-dev
 
 COPY apps/vellano/backend/app ./app
+COPY apps/vellano/backend/data/playground_photos ./data/playground_photos
 COPY apps/vellano/backend/alembic.ini ./alembic.ini
 COPY apps/vellano/backend/migrations ./migrations
 
