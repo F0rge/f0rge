@@ -11,15 +11,22 @@ from app.config import settings
 from app.database import async_session_maker
 from app.middleware.auth import AuthContextMiddleware
 from app.routers import (
+    accounts,
     auth,
+    bills,
+    contacts,
+    credit_notes,
     health,
+    invoices,
     locations,
+    payments,
     proformas,
     purchase_orders,
     skus,
     suppliers,
     users,
 )
+from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
 from app.services.users import BootstrapService
 
@@ -29,6 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with async_session_maker() as session:
         await BootstrapService(session).seed_if_empty()
         await LocationSeedService(session).seed_if_empty()
+        await ChartOfAccountsSeedService(session).seed_if_empty()
     yield
 
 
@@ -63,3 +71,9 @@ app.include_router(skus.skus_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
+app.include_router(accounts.accounts_router)
+app.include_router(contacts.contacts_router)
+app.include_router(invoices.invoices_router)
+app.include_router(credit_notes.credit_notes_router)
+app.include_router(bills.bills_router)
+app.include_router(payments.payments_router)

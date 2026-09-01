@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import uuid
+from decimal import Decimal
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.crud.account import AccountCRUD
+from app.models.account import Account
+from app.schemas.account import AccountCreate, AccountResponse, AccountUpdate
+from f0rge_core.exceptions import ConflictError, NotFoundError
+from f0rge_db.crud import unit_of_work
+
+
+class AccountService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+        self.crud = AccountCRUD(db)
+
+    async def list(self) -> list[AccountResponse]:
+        accounts = await self.crud.list_all()
+        balances = await self.crud.get_balances()
+        return [
+            self._to_response(account, balances.get(account.id, Decimal(0))) for account in accounts
+        ]
+
+    async def create(self, data: AccountCreate) -> AccountResponse:
+        existing = await self.crud.get_by_code(data.code)
+        if existing is not None:
+            raise ConflictError("An account with this code already exists")
+
+        account = Account(
+            code=data.code,
+            name=data.name,
+            type=data.type,
+            is_system=False,
+        )
+        async with unit_of_work(self.db):
+            await self.crud.add_and_flush(account)
+            try:
+                await self.crud.commit_refresh(account)
+            except IntegrityError as exc:
+                raise ConflictError("An account with this code already exists") from exc
+
+        return self._to_response(account, Decimal(0))
+
+    async def update(self, account_id: uuid.UUID, data: AccountUpdate) -> AccountResponse:
+        account = await self.crud.get_by_id(account_id)
+        if account is None:
+            raise NotFoundError("Account not found")
+
+        if data.name is not None:
+            account.name = data.name
+        if data.is_archived is not None:
+            account.is_archived = data.is_archived
+
+        await self.crud.commit_refresh(account)
+        balances = await self.crud.get_balances()
+        return self._to_response(account, balances.get(account.id, Decimal(0)))
+
+    @staticmethod
+    def _to_response(account: Account, balance_zar: Decimal) -> AccountResponse:
+        return AccountResponse(
+            id=account.id,
+            code=account.code,
+            name=account.name,
+            type=account.type,
+            is_system=account.is_system,
+            is_archived=account.is_archived,
+            balance_zar=balance_zar,
+            created_at=account.created_at,
+            updated_at=account.updated_at,
+        )

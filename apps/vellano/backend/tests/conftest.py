@@ -30,6 +30,7 @@ from app.config import settings  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.auth import JWT_COOKIE_NAME  # noqa: E402
+from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService  # noqa: E402
 from app.services.users import BootstrapService  # noqa: E402
 
@@ -67,6 +68,7 @@ async def async_engine(
     async with async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)() as session:
         await BootstrapService(session).seed_if_empty()
         await LocationSeedService(session).seed_if_empty()
+        await ChartOfAccountsSeedService(session).seed_if_empty()
     try:
         yield engine
     finally:

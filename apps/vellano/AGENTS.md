@@ -134,6 +134,54 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 - **Roles:** owner and buyer may PATCH prices; warehouse, till, and books may GET only (PATCH → 403).
 - **Quotes:** out of V1 — no quote entity, table, or routes.
 
+## S6 ledger (books)
+
+Document-centric double-entry in ZAR. Every invoice, credit note, bill, and payment posts a balanced journal. Payments **record** cash/bank movement only — no PSP, EFT origination, or email.
+
+**Seller particulars (tax invoice face):** Vellano, Kramerville, Johannesburg, South Africa, VAT 4123456789 (demo).
+
+**Chart of accounts (seeded):**
+
+| code | name | type |
+|------|------|------|
+| 1100 | Bank | asset |
+| 1200 | Accounts receivable | asset |
+| 1300 | Inventory | asset |
+| 2100 | Accounts payable | liability |
+| 2200 | VAT control | liability |
+| 4000 | Sales | income |
+| 5000 | Cost of goods sold | expense |
+| 6100 | Foreign exchange gain/loss | expense |
+
+**Numbering:** `INV-0001`, `CN-0001`, `BILL-0001`, `PAY-0001` (sequential, same algorithm as `PO-0001`).
+
+Endpoints (all under `/api/v1`, cookie `vellano_session`):
+
+- **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on journal lines).
+- **Contacts:** `GET/POST /contacts` — unified customers (`kind: customer`) and suppliers (`kind: supplier`). `POST` creates customers only; suppliers via `POST /suppliers`.
+- **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf` — 15% VAT on face; journal Dr AR, Cr Sales + VAT control.
+- **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}` — one CN per invoice; reverses AR/sales/VAT.
+- **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR).
+- **Payments:** `GET/POST /payments` — `direction: in` (invoice, ZAR) or `out` (bill, foreign FX). Response includes `fx_gain_loss_zar` (positive = gain, negative = loss).
+
+| Action | owner | buyer | warehouse | till | books |
+|--------|:-----:|:-----:|:---------:|:----:|:-----:|
+| List accounts, contacts, invoices, bills, payments | yes | yes | yes | yes | yes |
+| Mutate CoA, contacts, invoices, CN, bills, payments | yes | no | no | no | yes |
+
+Example invoice create:
+
+```json
+POST /api/v1/invoices
+{
+  "customer_id": "<uuid>",
+  "issue_date": "2026-09-01",
+  "lines": [{ "description": "Dining table", "qty": 1, "unit_ex_vat": "1000.00" }]
+}
+```
+
+PDF: `GET /api/v1/invoices/{id}/pdf`
+
 ## Railway
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project.
@@ -148,7 +196,7 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 
 ## Non-goals
 
-The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: ledger, till, and other S6–S11 product features.
+The app does not send email, pay, file VAT, or open a bank account. Auth (S1) is shipped — do not re-implement it. Out of scope: till and other S7–S11 product features.
 
 ## Python
 
