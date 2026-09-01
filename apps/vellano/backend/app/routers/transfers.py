@@ -14,7 +14,7 @@ transfers_router = APIRouter(prefix="/api/v1/transfers", tags=["transfers"])
 @transfers_router.post("", response_model=TransferResponse, status_code=status.HTTP_200_OK)
 async def create_transfer(
     data: TransferCreate,
-    _: uuid.UUID = Depends(require_transfer),
+    user_id: uuid.UUID = Depends(require_transfer),
     service: TransferService = Depends(get_transfer_service),
 ):
-    return await service.transfer(data)
+    return await service.transfer(data, user_id)

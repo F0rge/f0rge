@@ -96,6 +96,23 @@ Endpoints: `GET/POST /api/v1/locations`, `PATCH /api/v1/locations/{id}`. Archive
 
 Startup seeds two locations when the table is empty: Kramerville (warehouse), Bedfordview (showroom). Same rows are inserted by migration `003_locations`.
 
+## F0 warehouse bins
+
+Bins are children of a location (row × bay × level). Quantity lives on `bin_stock`; `location_stock.on_hand` is always the rollup. **Unit cost stays on `location_stock.unit_cost_zar`** (weighted average) — no per-bin cost.
+
+Every location has a default **FLOOR** bin (`code=FLOOR`, `row_code=F`, `bay=1`, `level=1`). Seed and `LocationService.create` add it; migration `029_warehouse_bins` backfills existing locations and copies `location_stock.on_hand` onto that bin.
+
+- **API:** `GET/POST /locations/{id}/bins`, `POST /locations/{id}/bins/grid` (idempotent; skip existing row/bay/level), `PATCH /locations/{id}/bins/{bin_id}` (`is_archived` / `is_default`). Scan payload is bin `code`. List includes archived. Mutate: owner|warehouse. Read: any authenticated role.
+- **Grid codes:** `{row}-{bay:02d}-{level}` e.g. `A-01-1`.
+- **Print / scan:** bin labels via `printHtml` (blob URL + `window.open(url, "_blank")` — never `noopener`) + JsBarcode CODE128 of `code`. Receive/WMS type-or-scan matches `code` (case-insensitive).
+- **Stock:** omitted `bin_id` / `from_bin_id` / `to_bin_id` uses the active default. Archived bins cannot receive. Cannot archive the default without assigning another first. Same-location bin-to-bin is out of v1.
+- **Stocktake** stays location-scoped; variance applies to the default bin (no `stocktake_lines.bin_id`).
+
+| Action | owner | warehouse | buyer | till | books |
+|--------|:-----:|:---------:|:-----:|:----:|:-----:|
+| List bins | yes | yes | yes | yes | yes |
+| Create / grid / archive / set default | yes | yes | no | no | no |
+
 ## V2-S2 stocktakes
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):

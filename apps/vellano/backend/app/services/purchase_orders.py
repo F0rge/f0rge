@@ -11,10 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
 from app.crud.proforma import ProformaCRUD
-from app.crud.purchase_order import LocationStockCRUD, PurchaseOrderCRUD, SkuStockCRUD
+from app.crud.purchase_order import PurchaseOrderCRUD, SkuStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
-from app.models.inventory import LocationStock, SkuStock
+from app.models.inventory import SkuStock
 from app.models.purchase_order import (
     LandingBill,
     LandingBillKind,
@@ -32,6 +32,7 @@ from app.schemas.purchase_order import (
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.services.cost_audit import CostAuditService
 from app.services.object_storage import save_bytes
+from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
 from app.services.packing_sheet import (
     build_packing_sheet_pdf,
@@ -51,9 +52,9 @@ class PurchaseOrderService:
         self.proforma_crud = ProformaCRUD(db)
         self.sku_crud = SkuCRUD(db)
         self.sku_stock_crud = SkuStockCRUD(db)
-        self.location_stock_crud = LocationStockCRUD(db)
         self.location_crud = LocationCRUD(db)
         self.cost_audit = CostAuditService(db)
+        self.stock_movements = StockMovementService(db)
 
     async def list(self) -> list[PurchaseOrderResponse]:
         orders = await self.crud.list_all()
@@ -289,40 +290,19 @@ class PurchaseOrderService:
                 if stock.on_order < line.qty:
                     raise ConflictError("On-order quantity insufficient")
                 stock.on_order -= line.qty
+                assert line.unit_cost_zar is not None
 
-                loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                    line.sku_id,
-                    data.location_id,
-                )
-                if loc_stock is None:
-                    loc_stock = LocationStock(
-                        sku_id=line.sku_id,
-                        location_id=data.location_id,
-                        on_hand=0,
-                    )
-                    await self.location_stock_crud.add_and_flush(loc_stock)
-
-                old_on_hand = loc_stock.on_hand
-                old_cost = loc_stock.unit_cost_zar
-                incoming_qty = line.qty
-                incoming_cost = line.unit_cost_zar
-                new_on_hand = old_on_hand + incoming_qty
-                if old_on_hand == 0 or old_cost is None:
-                    blended = incoming_cost
-                else:
-                    blended = (old_on_hand * old_cost + incoming_qty * incoming_cost) / new_on_hand
-                loc_stock.on_hand = new_on_hand
-                loc_stock.unit_cost_zar = blended
-                await self.cost_audit.record(
+                await self.stock_movements.apply_incoming_qty(
                     sku_id=line.sku_id,
                     location_id=data.location_id,
-                    old_cost_zar=old_cost,
-                    new_cost_zar=blended,
-                    changed_by_user_id=user_id,
+                    qty=line.qty,
+                    unit_cost_zar=line.unit_cost_zar,
+                    user_id=user_id,
                     source=UnitCostAuditSource.RECEIVE,
+                    note=f"Received {po.po_number} into location",
+                    bin_id=data.bin_id,
                     po_id=po.id,
                     po_line_id=line.id,
-                    note=f"Received {po.po_number} into location",
                 )
 
         reloaded = await self._get_po_or_404(data.purchase_order_id)

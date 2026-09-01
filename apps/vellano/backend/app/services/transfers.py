@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
-from app.models.inventory import LocationStock
+from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.transfer import TransferCreate, TransferLocationStock, TransferResponse
+from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -18,8 +21,9 @@ class TransferService:
         self.location_crud = LocationCRUD(db)
         self.sku_crud = SkuCRUD(db)
         self.location_stock_crud = LocationStockCRUD(db)
+        self.stock_movements = StockMovementService(db)
 
-    async def transfer(self, data: TransferCreate) -> TransferResponse:
+    async def transfer(self, data: TransferCreate, user_id: uuid.UUID) -> TransferResponse:
         stocktakes = StocktakeService(self.db)
         await stocktakes.assert_location_unlocked(data.from_location_id)
         await stocktakes.assert_location_unlocked(data.to_location_id)
@@ -54,32 +58,33 @@ class TransferService:
             raise ConflictError("Source location has no unit cost for this SKU")
 
         async with unit_of_work(self.db):
-            source_stock.on_hand -= data.qty
-
-            dest_stock = await self.location_stock_crud.get_by_sku_and_location(
-                data.sku_id,
-                data.to_location_id,
+            await self.stock_movements.apply_outgoing_qty(
+                sku_id=data.sku_id,
+                location_id=data.from_location_id,
+                qty=data.qty,
+                user_id=user_id,
+                source=UnitCostAuditSource.RECEIVE,
+                note="Transfer out",
+                bin_id=data.from_bin_id,
+                record_audit=False,
             )
-            if dest_stock is None:
-                dest_stock = LocationStock(
-                    sku_id=data.sku_id,
-                    location_id=data.to_location_id,
-                    on_hand=0,
-                    unit_cost_zar=unit_cost,
-                )
-                await self.location_stock_crud.add_and_flush(dest_stock)
+            dest_stock = await self.stock_movements.apply_incoming_qty(
+                sku_id=data.sku_id,
+                location_id=data.to_location_id,
+                qty=data.qty,
+                unit_cost_zar=unit_cost,
+                user_id=user_id,
+                source=UnitCostAuditSource.RECEIVE,
+                note="Transfer in",
+                bin_id=data.to_bin_id,
+                record_audit=False,
+            )
 
-            old_on_hand = dest_stock.on_hand
-            old_cost = dest_stock.unit_cost_zar
-            incoming_qty = data.qty
-            new_on_hand = old_on_hand + incoming_qty
-            if old_on_hand == 0 or old_cost is None:
-                dest_stock.unit_cost_zar = unit_cost
-            else:
-                dest_stock.unit_cost_zar = (
-                    old_on_hand * old_cost + incoming_qty * unit_cost
-                ) / new_on_hand
-            dest_stock.on_hand = new_on_hand
+        source_stock = await self.location_stock_crud.get_by_sku_and_location(
+            data.sku_id,
+            data.from_location_id,
+        )
+        assert source_stock is not None
 
         return TransferResponse(
             sku_id=sku.id,

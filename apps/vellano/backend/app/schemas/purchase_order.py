@@ -57,3 +57,4 @@ class PurchaseOrderResponse(BaseModel):
 class ReceiveRequest(BaseModel):
     purchase_order_id: uuid.UUID
     location_id: uuid.UUID
+    bin_id: Optional[uuid.UUID] = None

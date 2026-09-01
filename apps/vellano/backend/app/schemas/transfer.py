@@ -12,6 +12,8 @@ class TransferCreate(BaseModel):
     to_location_id: uuid.UUID
     sku_id: uuid.UUID
     qty: int = Field(gt=0)
+    from_bin_id: Optional[uuid.UUID] = None
+    to_bin_id: Optional[uuid.UUID] = None
 
 
 class TransferLocationStock(BaseModel):

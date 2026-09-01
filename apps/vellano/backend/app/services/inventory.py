@@ -4,10 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.crud.location_bin import BinStockCRUD
 from app.crud.purchase_order import LocationStockCRUD, SkuStockCRUD
 from app.models.inventory import LocationStock
 from app.models.sku import Sku
 from app.schemas.inventory import InventorySkuResponse, LocationStockResponse
+from app.schemas.location_bin import BinOnHandResponse
 from app.services.packing_sheet import sku_level_unit_cost
 
 
@@ -16,6 +18,7 @@ class InventoryService:
         self.db = db
         self.sku_stock_crud = SkuStockCRUD(db)
         self.location_stock_crud = LocationStockCRUD(db)
+        self.bin_stock_crud = BinStockCRUD(db)
 
     async def list(self) -> list[InventorySkuResponse]:
         sku_ids_with_movement: set = set()
@@ -43,12 +46,22 @@ class InventoryService:
 
             loc_stocks = await self._get_location_stocks_for_sku(sku.id)
             on_hand = sum(ls.on_hand for ls in loc_stocks)
+            bin_rows = await self.bin_stock_crud.list_nonzero_for_skus([sku.id])
             locations = [
                 LocationStockResponse(
                     location_id=ls.location_id,
                     location_name=ls.location.name,
                     on_hand=ls.on_hand,
                     unit_cost_zar=ls.unit_cost_zar,
+                    bins=[
+                        BinOnHandResponse(
+                            bin_id=row.bin_id,
+                            code=row.bin.code,
+                            on_hand=row.on_hand,
+                        )
+                        for row in bin_rows
+                        if row.bin.location_id == ls.location_id
+                    ],
                 )
                 for ls in loc_stocks
             ]

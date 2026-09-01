@@ -23,6 +23,7 @@ from app.services.invoices import InvoiceService
 from app.services.repeating_invoices import RepeatingInvoiceService
 from app.services.journal_imports import JournalImportService
 from app.services.journals import JournalService
+from app.services.location_bins import LocationBinService
 from app.services.locations import LocationService
 from app.services.payments import PaymentService
 from app.services.bank_imports import BankImportService
@@ -66,6 +67,10 @@ def get_bootstrap_service(db: AsyncSession = Depends(get_db)) -> BootstrapServic
 
 def get_location_service(db: AsyncSession = Depends(get_db)) -> LocationService:
     return LocationService(db)
+
+
+def get_location_bin_service(db: AsyncSession = Depends(get_db)) -> LocationBinService:
+    return LocationBinService(db)
 
 
 def get_supplier_service(db: AsyncSession = Depends(get_db)) -> SupplierService:

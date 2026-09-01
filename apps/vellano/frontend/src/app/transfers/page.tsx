@@ -17,6 +17,8 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { BinSelect } from "@/components/bin-select";
+import { useLocationBins } from "@/hooks/use-location-bins";
 import {
   ApiError,
   canTransfer,
@@ -29,6 +31,7 @@ import {
   type Location,
   type Sku,
 } from "@/lib/api";
+import { optionalMovementBinId } from "@/lib/bin-helpers";
 import { useAuth } from "@/lib/auth";
 
 export default function TransfersPage() {
@@ -39,6 +42,8 @@ export default function TransfersPage() {
   const [inventory, setInventory] = useState<InventorySku[]>([]);
   const [fromLocationId, setFromLocationId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
+  const [fromBinId, setFromBinId] = useState("");
+  const [toBinId, setToBinId] = useState("");
   const [skuId, setSkuId] = useState("");
   const [qty, setQty] = useState<number | "">(1);
   const [loading, setLoading] = useState(true);
@@ -70,6 +75,10 @@ export default function TransfersPage() {
       void loadData();
     }
   }, [user, loadData]);
+
+  const { activeBins: fromBins, defaultBinId: fromDefaultBinId } =
+    useLocationBins(fromLocationId);
+  const { activeBins: toBins, defaultBinId: toDefaultBinId } = useLocationBins(toLocationId);
 
   const inventoryBySku = useMemo(
     () => new Map(inventory.map((entry) => [entry.sku_id, entry])),
@@ -114,6 +123,8 @@ export default function TransfersPage() {
         to_location_id: toLocationId,
         sku_id: skuId,
         qty: numericQty,
+        from_bin_id: optionalMovementBinId(fromBinId, fromDefaultBinId),
+        to_bin_id: optionalMovementBinId(toBinId, toDefaultBinId),
       });
       const fromName = result.from_location.location_name;
       const toName = result.to_location.location_name;
@@ -184,6 +195,7 @@ export default function TransfersPage() {
             value={fromLocationId}
             onChange={(event) => {
               setFromLocationId(event.target.value);
+              setFromBinId("");
               setSkuId("");
             }}
           >
@@ -192,17 +204,40 @@ export default function TransfersPage() {
               <SelectItem key={entry.id} value={entry.id} text={entry.name} />
             ))}
           </Select>
+          {fromLocationId ? (
+            <BinSelect
+              id="transfer-from-bin"
+              labelText="From bin (optional)"
+              value={fromBinId}
+              bins={fromBins}
+              onChange={setFromBinId}
+              helperText="Leave as default to use the location default bin."
+            />
+          ) : null}
           <Select
             id="transfer-to"
             labelText="To location"
             value={toLocationId}
-            onChange={(event) => setToLocationId(event.target.value)}
+            onChange={(event) => {
+              setToLocationId(event.target.value);
+              setToBinId("");
+            }}
           >
             <SelectItem value="" text="Select destination location" />
             {destinationOptions.map((entry) => (
               <SelectItem key={entry.id} value={entry.id} text={entry.name} />
             ))}
           </Select>
+          {toLocationId ? (
+            <BinSelect
+              id="transfer-to-bin"
+              labelText="To bin (optional)"
+              value={toBinId}
+              bins={toBins}
+              onChange={setToBinId}
+              helperText="Leave as default to use the location default bin."
+            />
+          ) : null}
           <Select
             id="transfer-sku"
             labelText="SKU"

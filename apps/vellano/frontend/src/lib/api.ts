@@ -194,6 +194,80 @@ export function isActiveLocation(loc: Location): boolean {
   return !loc.is_archived;
 }
 
+export type LocationBin = {
+  id: string;
+  location_id: string;
+  code: string;
+  row_code: string;
+  bay: number;
+  level: number;
+  is_default: boolean;
+  is_archived: boolean;
+  archived_at: string | null;
+};
+
+export type CreateLocationBinPayload = {
+  row_code: string;
+  bay: number;
+  level: number;
+};
+
+export type LocationBinGridPayload = {
+  rows: string[];
+  bays: number;
+  levels: number;
+};
+
+export type UpdateLocationBinPayload = {
+  is_archived?: boolean;
+  is_default?: boolean;
+};
+
+export type InventoryBinOnHand = {
+  bin_id: string;
+  code: string;
+  on_hand: number;
+};
+
+export function listLocationBins(locationId: string): Promise<LocationBin[]> {
+  return apiFetch<LocationBin[]>(`/locations/${locationId}/bins`);
+}
+
+export function createLocationBin(
+  locationId: string,
+  payload: CreateLocationBinPayload,
+): Promise<LocationBin> {
+  return apiFetch<LocationBin>(`/locations/${locationId}/bins`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function generateLocationBinGrid(
+  locationId: string,
+  payload: LocationBinGridPayload,
+): Promise<LocationBin[]> {
+  return apiFetch<LocationBin[]>(`/locations/${locationId}/bins/grid`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateLocationBin(
+  locationId: string,
+  binId: string,
+  payload: UpdateLocationBinPayload,
+): Promise<LocationBin> {
+  return apiFetch<LocationBin>(`/locations/${locationId}/bins/${binId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function canManageLocations(role: UserRole | undefined): boolean {
+  return role === "owner" || role === "warehouse";
+}
+
 export function canMutateCatalogue(role: UserRole | undefined): boolean {
   return role === "owner" || role === "buyer";
 }
@@ -527,6 +601,7 @@ export type InventorySku = {
     location_name: string;
     on_hand: number;
     unit_cost_zar: string | null;
+    bins: InventoryBinOnHand[];
   }[];
 };
 
@@ -642,10 +717,23 @@ export function landPurchaseOrder(id: string, formData: FormData): Promise<Purch
 export function receivePurchaseOrder(payload: {
   purchase_order_id: string;
   location_id: string;
+  bin_id?: string;
 }): Promise<void> {
+  const body: {
+    purchase_order_id: string;
+    location_id: string;
+    bin_id?: string;
+  } = {
+    purchase_order_id: payload.purchase_order_id,
+    location_id: payload.location_id,
+  };
+  const binId = payload.bin_id?.trim();
+  if (binId) {
+    body.bin_id = binId;
+  }
   return apiFetch<void>("/receive", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 }
 
@@ -658,6 +746,8 @@ export type TransferPayload = {
   to_location_id: string;
   sku_id: string;
   qty: number;
+  from_bin_id?: string;
+  to_bin_id?: string;
 };
 
 export type TransferResult = {
@@ -680,9 +770,23 @@ export type TransferResult = {
 };
 
 export function createTransfer(payload: TransferPayload): Promise<TransferResult> {
+  const body: TransferPayload = {
+    from_location_id: payload.from_location_id,
+    to_location_id: payload.to_location_id,
+    sku_id: payload.sku_id,
+    qty: payload.qty,
+  };
+  const fromBin = payload.from_bin_id?.trim();
+  if (fromBin) {
+    body.from_bin_id = fromBin;
+  }
+  const toBin = payload.to_bin_id?.trim();
+  if (toBin) {
+    body.to_bin_id = toBin;
+  }
   return apiFetch<TransferResult>("/transfers", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 }
 

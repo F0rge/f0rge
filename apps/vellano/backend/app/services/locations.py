@@ -8,7 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.location import LocationCRUD
+from app.crud.location_bin import LocationBinCRUD
 from app.models.location import Location, LocationType
+from app.models.location_bin import new_floor_bin
 from app.schemas.location import LocationCreate, LocationUpdate
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
@@ -18,6 +20,7 @@ class LocationService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.crud = LocationCRUD(db)
+        self.bin_crud = LocationBinCRUD(db)
 
     async def list(self) -> list[Location]:
         return await self.crud.list_all()
@@ -28,9 +31,10 @@ class LocationService:
             name=data.name,
             type=data.type,
         )
-        await self.crud.add_and_flush(location)
         try:
-            await self.crud.commit_refresh(location)
+            async with unit_of_work(self.db):
+                await self.crud.add_and_flush(location)
+                await self.bin_crud.add_and_flush(new_floor_bin(location.id))
         except IntegrityError as exc:
             raise ConflictError("A location with this name already exists") from exc
         reloaded = await self.crud.get_by_id(location.id)
@@ -82,6 +86,7 @@ class LocationSeedService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.crud = LocationCRUD(db)
+        self.bin_crud = LocationBinCRUD(db)
 
     async def seed_if_empty(self) -> None:
         if await self.crud.count() > 0:
@@ -91,3 +96,4 @@ class LocationSeedService:
             for name, location_type in self.SEED_ROWS:
                 location = Location(name=name, type=location_type)
                 await self.crud.add_and_flush(location)
+                await self.bin_crud.add_and_flush(new_floor_bin(location.id))

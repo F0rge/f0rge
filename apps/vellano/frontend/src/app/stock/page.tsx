@@ -130,12 +130,24 @@ export default function StockPage() {
                             }
                             return (
                               <TableCell key={cell.id}>
-                                {entry.locations.map((loc) => (
-                                  <div key={loc.location_id}>
-                                    {loc.location_name}: {loc.on_hand}
-                                    {loc.unit_cost_zar ? ` @ ${loc.unit_cost_zar} ZAR` : ""}
-                                  </div>
-                                ))}
+                                {entry.locations.map((loc) => {
+                                  const bins = loc.bins ?? [];
+                                  return (
+                                    <div key={loc.location_id}>
+                                      <div>
+                                        {loc.location_name}: {loc.on_hand}
+                                        {loc.unit_cost_zar ? ` @ ${loc.unit_cost_zar} ZAR` : ""}
+                                      </div>
+                                      {bins.length > 0 ? (
+                                        <div className="cds--type-label-01 vellano-muted-text">
+                                          {bins
+                                            .map((bin) => `${bin.code}: ${bin.on_hand}`)
+                                            .join(" · ")}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
                               </TableCell>
                             );
                           }

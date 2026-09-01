@@ -13,6 +13,8 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { BinSelect, LocationBinFields } from "@/components/bin-select";
+import { useLocationBins } from "@/hooks/use-location-bins";
 import {
   ApiError,
   canReceive,
@@ -37,6 +39,7 @@ import {
   type Stocktake,
   type StocktakeLine,
 } from "@/lib/api";
+import { optionalMovementBinId } from "@/lib/bin-helpers";
 import { useAuth } from "@/lib/auth";
 
 type WmsTab = "receive" | "count" | "transfer";
@@ -243,8 +246,14 @@ function ReceiveTab({
 }: ReceiveTabProps) {
   const [poId, setPoId] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [binId, setBinId] = useState("");
   const [barcode, setBarcode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const { activeBins, defaultBinId } = useLocationBins(locationId);
+
+  useEffect(() => {
+    setBinId(defaultBinId);
+  }, [locationId, defaultBinId]);
 
   const selectedPo = landedOrders.find((entry) => entry.id === poId);
   const matchedSku = findSkuByBarcode(skus, barcode);
@@ -277,6 +286,7 @@ function ReceiveTab({
       await receivePurchaseOrder({
         purchase_order_id: poId,
         location_id: locationId,
+        bin_id: optionalMovementBinId(binId, defaultBinId),
       });
       const po = landedOrders.find((entry) => entry.id === poId);
       const location = locations.find((entry) => entry.id === locationId);
@@ -285,6 +295,7 @@ function ReceiveTab({
       );
       setPoId("");
       setLocationId("");
+      setBinId("");
       setBarcode("");
       await onReceived();
     } catch (err) {
@@ -338,6 +349,14 @@ function ReceiveTab({
           <SelectItem key={entry.id} value={entry.id} text={entry.name} />
         ))}
       </Select>
+      <LocationBinFields
+        idPrefix="wms-receive"
+        locationId={locationId}
+        bins={activeBins}
+        value={binId}
+        onChange={setBinId}
+        includeScan
+      />
       <div className="vellano-wms-barcode">
         <TextInput
           id="wms-receive-barcode"
@@ -622,8 +641,13 @@ function TransferTab({
   const [skuId, setSkuId] = useState("");
   const [fromLocationId, setFromLocationId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
+  const [fromBinId, setFromBinId] = useState("");
+  const [toBinId, setToBinId] = useState("");
   const [qty, setQty] = useState("1");
   const [submitting, setSubmitting] = useState(false);
+  const { activeBins: fromBins, defaultBinId: fromDefaultBinId } =
+    useLocationBins(fromLocationId);
+  const { activeBins: toBins, defaultBinId: toDefaultBinId } = useLocationBins(toLocationId);
 
   const matchedSku = findSkuByBarcode(skus, barcode);
   const resolvedSkuId = skuId || matchedSku?.id || "";
@@ -674,6 +698,8 @@ function TransferTab({
         to_location_id: toLocationId,
         sku_id: resolvedSkuId,
         qty: numericQty,
+        from_bin_id: optionalMovementBinId(fromBinId, fromDefaultBinId),
+        to_bin_id: optionalMovementBinId(toBinId, toDefaultBinId),
       });
       onSuccess(
         `Transferred ${result.qty} × ${result.our_ref} to ${result.to_location.location_name}.`,
@@ -724,24 +750,50 @@ function TransferTab({
         id="wms-transfer-from"
         labelText="From location"
         value={fromLocationId}
-        onChange={(event) => setFromLocationId(event.target.value)}
+        onChange={(event) => {
+          setFromLocationId(event.target.value);
+          setFromBinId("");
+        }}
       >
         <SelectItem value="" text="Select source location" />
         {sourceOptions.map((entry) => (
           <SelectItem key={entry.id} value={entry.id} text={entry.name} />
         ))}
       </Select>
+      {fromLocationId ? (
+        <BinSelect
+          id="wms-transfer-from-bin"
+          labelText="From bin (optional)"
+          value={fromBinId}
+          bins={fromBins}
+          onChange={setFromBinId}
+          helperText="Leave as default to use the location default bin."
+        />
+      ) : null}
       <Select
         id="wms-transfer-to"
         labelText="To location"
         value={toLocationId}
-        onChange={(event) => setToLocationId(event.target.value)}
+        onChange={(event) => {
+          setToLocationId(event.target.value);
+          setToBinId("");
+        }}
       >
         <SelectItem value="" text="Select destination location" />
         {destinationOptions.map((entry) => (
           <SelectItem key={entry.id} value={entry.id} text={entry.name} />
         ))}
       </Select>
+      {toLocationId ? (
+        <BinSelect
+          id="wms-transfer-to-bin"
+          labelText="To bin (optional)"
+          value={toBinId}
+          bins={toBins}
+          onChange={setToBinId}
+          helperText="Leave as default to use the location default bin."
+        />
+      ) : null}
       {fromLocationId && resolvedSkuId ? (
         <p className="cds--type-body-01">
           On hand at source: <strong>{sourceOnHand}</strong>

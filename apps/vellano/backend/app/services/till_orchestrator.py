@@ -22,6 +22,7 @@ from app.schemas.invoice import InvoiceLineResponse
 from app.schemas.till import TillSaleCreate, TillSaleLocationStock, TillSaleResponse
 from app.services.books_events import BooksEventService
 from app.services.category_posting import CategoryPostingService
+from app.services.stock_movements import StockMovementService
 from app.services.chart_of_accounts import (
     CODE_AR,
     CODE_BANK,
@@ -47,6 +48,7 @@ class TillOrchestrator:
         self.posting = LedgerPostingService(db)
         self.category_posting = CategoryPostingService(db)
         self.events = BooksEventService(db)
+        self.stock_movements = StockMovementService(db)
 
     async def create_sale(
         self, data: TillSaleCreate, user_id: Optional[uuid.UUID] = None
@@ -206,8 +208,12 @@ class TillOrchestrator:
                     entry_date=sale_date,
                 )
 
-            for sku, qty, location_stock, _discount in line_inputs:
-                location_stock.on_hand -= qty
+            for sku, qty, _location_stock, _discount in line_inputs:
+                await self.stock_movements.apply_bin_qty_delta(
+                    sku_id=sku.id,
+                    location_id=data.location_id,
+                    qty_delta=-qty,
+                )
 
             invoice.amount_paid = total_inc
             await self.events.record(
