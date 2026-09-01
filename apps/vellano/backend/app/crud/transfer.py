@@ -46,6 +46,12 @@ class TransferCRUD(BaseCRUD):
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_by_pick_id(self, pick_id: uuid.UUID) -> list[Transfer]:
+        result = await self.db.execute(
+            select(Transfer).options(*self._options()).where(Transfer.pick_id == pick_id)
+        )
+        return list(result.scalars().all())
+
     async def get_next_transfer_number(self) -> str:
         result = await self.db.execute(
             select(Transfer.transfer_number).order_by(Transfer.transfer_number.desc()).limit(1)

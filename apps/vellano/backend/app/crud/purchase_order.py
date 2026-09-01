@@ -128,3 +128,13 @@ class LocationStockCRUD(BaseCRUD):
             .where(LocationStock.on_hand > 0)
         )
         return list(result.scalars().all())
+
+    async def list_for_sku_ids(self, sku_ids: list[uuid.UUID]) -> list[LocationStock]:
+        if not sku_ids:
+            return []
+        result = await self.db.execute(
+            select(LocationStock)
+            .options(selectinload(LocationStock.location))
+            .where(LocationStock.sku_id.in_(sku_ids))
+        )
+        return list(result.scalars().all())

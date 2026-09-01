@@ -93,3 +93,7 @@ export function canManageCustomerCredit(user: PermissionHolder): boolean {
 export function canMutateDeliveries(user: PermissionHolder): boolean {
   return can(user, "sales.deliveries");
 }
+
+export function canMutatePicks(user: PermissionHolder): boolean {
+  return can(user, "stock.transfer") || can(user, "till.sell") || can(user, "sales.deliveries");
+}

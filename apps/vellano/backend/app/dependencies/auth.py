@@ -59,6 +59,7 @@ from app.services.stock_returns import StockReturnsService
 from app.services.stocktakes import StocktakeService
 from app.services.suppliers import SupplierService
 from app.services.transfers import TransferService
+from app.services.picks import PickService
 from app.services.till_orchestrator import TillOrchestrator
 from app.services.roles import RoleService
 from app.services.users import BootstrapService, ProfileService, UserService
@@ -235,6 +236,10 @@ def get_till_orchestrator(db: AsyncSession = Depends(get_db)) -> TillOrchestrato
     return TillOrchestrator(db)
 
 
+def get_pick_service(db: AsyncSession = Depends(get_db)) -> PickService:
+    return PickService(db)
+
+
 def get_role_service(db: AsyncSession = Depends(get_db)) -> RoleService:
     return RoleService(db)
 
@@ -355,3 +360,10 @@ async def require_cost_audit_view(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (STOCK_COST_VIEW,))
+
+
+async def require_picks_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES))

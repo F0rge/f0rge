@@ -21,6 +21,7 @@ class TransferCreate(BaseModel):
     from_location_id: uuid.UUID
     to_location_id: uuid.UUID
     notes: Optional[str] = None
+    pick_id: Optional[uuid.UUID] = None
     lines: list[TransferLineCreate] = Field(min_length=1)
 
 
@@ -62,6 +63,7 @@ class TransferResponse(BaseModel):
     received_at: Optional[datetime.datetime]
     received_by_user_id: Optional[uuid.UUID]
     received_display_name: Optional[str]
+    pick_id: Optional[uuid.UUID] = None
     lines: list[TransferLineResponse] = Field(default_factory=list)
     created_at: datetime.datetime
     updated_at: datetime.datetime

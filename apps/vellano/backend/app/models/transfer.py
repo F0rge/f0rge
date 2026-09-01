@@ -76,6 +76,12 @@ class Transfer(UUIDPkMixin, TimestampMixin, Base):
     )
     received_display_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pick_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("picks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     from_location: Mapped["Location"] = relationship(foreign_keys=[from_location_id])
     to_location: Mapped["Location"] = relationship(foreign_keys=[to_location_id])

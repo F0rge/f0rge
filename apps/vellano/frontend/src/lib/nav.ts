@@ -36,6 +36,7 @@ export const OPERATIONS_NAV_ITEMS = [
   { href: "/receive", label: "Receive" },
   { href: "/wms", label: "WMS" },
   { href: "/transfers", label: "Transfers" },
+  { href: "/picks", label: "Picks" },
   { href: "/deliveries", label: "Deliveries" },
   { href: "/till", label: "Till" },
   { href: "/laybys", label: "Laybys" },
@@ -97,6 +98,9 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
     return true;
   }
   if (href === "/customers" && pathname.startsWith("/customers/")) {
+    return true;
+  }
+  if (href === "/picks" && pathname.startsWith("/picks/")) {
     return true;
   }
   return false;

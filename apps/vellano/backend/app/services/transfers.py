@@ -95,6 +95,14 @@ class TransferService:
                 )
             )
 
+        pick_id = data.pick_id
+        if pick_id is not None:
+            from app.crud.pick import PickCRUD
+
+            pick = await PickCRUD(self.db).get_by_id(pick_id)
+            if pick is None:
+                raise NotFoundError("Pick not found")
+
         transfer = Transfer(
             transfer_number=await self.crud.get_next_transfer_number(),
             status=TransferStatus.DRAFT,
@@ -102,6 +110,7 @@ class TransferService:
             to_location_id=to_location.id,
             created_by_user_id=user_id,
             notes=data.notes,
+            pick_id=pick_id,
             lines=lines,
         )
         async with unit_of_work(self.db):
@@ -192,6 +201,11 @@ class TransferService:
             transfer.received_at = now
             transfer.received_by_user_id = user_id
             transfer.received_display_name = _display_name(user)
+
+        if transfer.pick_id is not None:
+            from app.services.picks import PickService
+
+            await PickService(self.db).stage_after_transfer_received(transfer.pick_id, user_id)
 
         return self._to_response(await self._get_or_404(transfer_id))
 
@@ -286,6 +300,7 @@ class TransferService:
             received_at=row.received_at,
             received_by_user_id=row.received_by_user_id,
             received_display_name=row.received_display_name,
+            pick_id=row.pick_id,
             lines=[
                 TransferLineResponse(
                     id=line.id,

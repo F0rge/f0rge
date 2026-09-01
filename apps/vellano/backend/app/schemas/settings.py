@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from typing import Optional
 
@@ -12,8 +13,12 @@ class SettingsResponse(BaseModel):
     home_currency: str
     defaults_locked: bool
     warning: Optional[str] = None
+    always_prefer_warehouse: bool
+    pick_priority: list[uuid.UUID]
 
 
 class SettingsUpdate(BaseModel):
     vat_rate: Optional[Decimal] = Field(default=None, ge=0, le=1)
     home_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
+    always_prefer_warehouse: Optional[bool] = None
+    pick_priority: Optional[list[uuid.UUID]] = None

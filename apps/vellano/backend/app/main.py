@@ -36,6 +36,7 @@ from app.routers import (
     journals,
     locations,
     payments,
+    picks,
     proformas,
     purchase_orders,
     reorder,
@@ -127,6 +128,7 @@ app.include_router(purchase_orders.receive_router)
 app.include_router(purchase_orders.inventory_router)
 app.include_router(reorder.reorder_router)
 app.include_router(transfers.transfers_router)
+app.include_router(picks.picks_router)
 app.include_router(stocktakes.stocktakes_router)
 app.include_router(adjustments.adjustments_router)
 app.include_router(returns.returns_router)

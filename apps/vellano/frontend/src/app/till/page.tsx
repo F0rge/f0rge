@@ -45,6 +45,7 @@ import {
   computeInvoicePreview,
   createTillSale,
   downloadInvoicePdf,
+  listPicks,
   exVatToIncVat,
   formatPriceAmount,
   formatZarAmount,
@@ -61,11 +62,13 @@ import {
   type InventorySku,
   type Location,
   type Sku,
+  type PickDocument,
   type TillSaleResult,
   type TillTender,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { isCreditBlockMessage } from "@/lib/customer-crm";
+import { isKitRequiresPickMessage, picksCreateHref } from "@/lib/picks";
 import {
   isDesktopPointer,
   isProtectedScanField,
@@ -259,6 +262,9 @@ export default function TillPage() {
   const [creditOverride, setCreditOverride] = useState(false);
   const [creditOverrideReason, setCreditOverrideReason] = useState("");
   const [creditBlock, setCreditBlock] = useState<string | null>(null);
+  const [pickId, setPickId] = useState("");
+  const [confirmedPicks, setConfirmedPicks] = useState<PickDocument[]>([]);
+  const [kitRequiresPick, setKitRequiresPick] = useState(false);
   const scanBufferRef = useRef("");
 
   const loadData = useCallback(async () => {
@@ -315,6 +321,9 @@ export default function TillPage() {
     if (!locationId || !sku.retail_ex_vat) {
       return false;
     }
+    if (sku.is_kit) {
+      return true;
+    }
     const row = inventoryBySku.get(sku.id);
     if (!row) {
       return false;
@@ -342,6 +351,40 @@ export default function TillPage() {
     return totals;
   }, [cart]);
 
+  const cartKits = useMemo(() => cart.filter((line) => line.sku.is_kit), [cart]);
+  const firstCartKit = cartKits[0];
+  const cartKitKey = cartKits
+    .map((line) => line.sku.id)
+    .sort()
+    .join(",");
+
+  useEffect(() => {
+    setPickId("");
+    setKitRequiresPick(false);
+    if (!cartKitKey) {
+      setConfirmedPicks([]);
+      return;
+    }
+    const kitIds = new Set(cartKitKey.split(","));
+    let cancelled = false;
+    listPicks()
+      .then((picks) => {
+        if (!cancelled) {
+          setConfirmedPicks(
+            picks.filter((entry) => entry.status === "confirmed" && kitIds.has(entry.sku_id)),
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConfirmedPicks([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cartKitKey]);
+
   const summary = cartSummary(cart);
   const totalIncLabel = formatPriceAmount(summary.totalIncVat);
 
@@ -358,7 +401,8 @@ export default function TillPage() {
     locationId &&
     skuId &&
     numericQty > 0 &&
-    numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0) &&
+    (selectedSku?.is_kit ||
+      numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0)) &&
     unitExVat(selectedSku ?? ({} as Sku)) > 0;
 
   const floorOnHandFor = useCallback(
@@ -447,6 +491,9 @@ export default function TillPage() {
     locationId &&
     cart.length > 0 &&
     cart.every((line) => {
+      if (line.sku.is_kit) {
+        return line.qty > 0;
+      }
       const onHand =
         inventoryBySku
           .get(line.sku.id)
@@ -456,6 +503,13 @@ export default function TillPage() {
 
   function handleAddToCart() {
     if (!addValid || !selectedSku) {
+      return;
+    }
+    if (selectedSku.is_kit) {
+      setError(null);
+      setCart((current) => mergeCartBySku(current, selectedSku, numericQty));
+      setSkuId("");
+      setQty(1);
       return;
     }
     if (applyScan(selectedSku.our_barcode, false, numericQty)) {
@@ -495,6 +549,7 @@ export default function TillPage() {
     setSubmitting(true);
     setError(null);
     setCreditBlock(null);
+    setKitRequiresPick(false);
     setLastSale(null);
     try {
       const result = await createTillSale({
@@ -511,6 +566,7 @@ export default function TillPage() {
         }),
         tender,
         ...(customerId ? { customer_id: customerId } : {}),
+        ...(pickId ? { pick_id: pickId } : {}),
         ...(canOverrideCredit && creditOverride
           ? {
               credit_override: true,
@@ -523,6 +579,7 @@ export default function TillPage() {
       setCart([]);
       setSkuId("");
       setCustomerId("");
+      setPickId("");
       setQty(1);
       await loadData();
     } catch (err) {
@@ -535,6 +592,9 @@ export default function TillPage() {
       setError(message);
       if (err instanceof ApiError && err.status === 409 && isCreditBlockMessage(err.message)) {
         setCreditBlock(err.message);
+      }
+      if (err instanceof ApiError && err.status === 409 && isKitRequiresPickMessage(err.message)) {
+        setKitRequiresPick(true);
       }
     } finally {
       setSubmitting(false);
@@ -589,6 +649,24 @@ export default function TillPage() {
           onCloseButtonClick={() => setError(null)}
           lowContrast
         />
+      ) : null}
+
+      {kitRequiresPick && firstCartKit ? (
+        <Stack gap={3}>
+          <InlineNotification
+            kind="warning"
+            title="Kit requires pick"
+            subtitle="Create and confirm a pick before selling this kit. A split kit cannot be sold from the till."
+            hideCloseButton
+            lowContrast
+          />
+          <Button
+            kind="ghost"
+            onClick={() => router.push(picksCreateHref(firstCartKit.sku.id, firstCartKit.qty))}
+          >
+            Open picks
+          </Button>
+        </Stack>
       ) : null}
 
       {loading ? (
@@ -838,6 +916,24 @@ export default function TillPage() {
                     hideCloseButton
                     lowContrast
                   />
+                ) : null}
+
+                {confirmedPicks.length > 0 ? (
+                  <Select
+                    id="till-pick"
+                    labelText="Confirmed pick"
+                    value={pickId}
+                    onChange={(event) => setPickId(event.target.value)}
+                  >
+                    <SelectItem value="" text="Select pick" />
+                    {confirmedPicks.map((entry) => (
+                      <SelectItem
+                        key={entry.id}
+                        value={entry.id}
+                        text={`${entry.pick_number || entry.id} · ${entry.sku_our_ref || entry.sku_id} × ${entry.qty}`}
+                      />
+                    ))}
+                  </Select>
                 ) : null}
 
                 {canOverrideCredit && (selectedCustomer?.on_hold || creditBlock) ? (

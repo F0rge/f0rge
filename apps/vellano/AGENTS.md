@@ -158,7 +158,7 @@ Migration: `031_two_step_transfers`.
 ## Shop-floor qty patterns (A / B / C)
 
 - **A carton_count**: same SKU ships in N cartons; qty is sellable units. Stock, till, PO qty, and books qty stay sellable. Packing sheet and invoice PDF may print a generated carton total when `carton_count > 1`.
-- **B kit BOM**: virtual parent (`sku_bom_lines`); stock/pick are components; till explodes the BOM and consumes components at the posted showroom. Invoice is one line at the parent price. A SKU is a kit if it has ≥1 BOM line. Parent has no `on_hand` write on till.
+- **B kit BOM**: virtual parent (`sku_bom_lines`); stock/pick are components. Till explodes the BOM: if **100% of every component** is at the posted showroom, consume there (F1). Otherwise `ConflictError("Kit requires pick")` unless a confirmed/picking/staged pick for the same kit×qty is posted (`pick_id` on the sale). Invoice is one line at the parent price. A SKU is a kit if it has ≥1 BOM line. Parent has no `on_hand` write on till.
 - **C inner pack**: supplier carton of N eaches — **not in this ticket** (PO line later).
 
 ## V2-S2 stocktakes
@@ -446,6 +446,22 @@ Revenue-based ABC on ex-VAT sales (`InvoiceLine.ex_vat`). **No Alembic.** Credit
 - `GET /api/v1/reports/sku-criticality?from=&to=` + `/csv` — optional `from`/`to` (same aliases as sales-by-sku); default last 12 calendar months through today inclusive.
 - **A class** = cumulative value share ≤ 80% (value band, not top 20% of SKU count). **B** ≤ 95%, else **C**. `hits_50pct_band` marks the first SKU crossing 50% cumulative share. Header: `sku_count_for_50pct`, `sku_count_for_80pct`, `top_sku_share_pct`. Category rollup uses `Sku.category` (`null` → `Uncategorised`). Pure rank logic in `app/services/abc.py`.
 
+## F9 multi-location kit pick
+
+Location-scoped (not bin). No email. Reuse `stock.transfer` / `till.sell` / `sales.deliveries` — do **not** invent `picks.mutate`.
+
+**Settings** (`team_settings`, Alembic `036_picks` revises `035_po_lead_timestamps`): `always_prefer_warehouse` (bool, default true), `pick_priority` (JSONB list of location UUID strings, default `[]` = derive). PATCH uses existing `settings.mutate`.
+
+**Allocator** (`app/services/pick_allocator.py`, pure, no DB): walk `pick_priority` if set (skip missing/archived); else warehouse then showroom, `name` ASC within type. `always_prefer_warehouse` drains **all warehouse-type** locations first (not the name “Kramerville”). Never allocate more than on-hand or need. In-transit is already off `on_hand` (F2 dispatch) — no second ATP. Non-warehouse qty while warehouse has leftover the user skipped, or any non-warehouse qty while warehouse is short → `needs_confirm`. Shortfall is `qty_short`.
+
+**Documents:** `picks` numbered `PCK-0001`; status `draft | confirmed | picking | staged | cancelled`; source `invoice | layby | till`. Lines + allocations. `transfers.pick_id` SET NULL.
+
+**API** `/api/v1/picks`: GET list/get/pdf any authenticated. POST/PATCH/confirm/complete/cancel: any of `stock.transfer`, `till.sell`, `sales.deliveries`. Preview explodes F1 BOM, no persist, 400 if not a kit. Confirm requires full allocation; if `needs_confirm` and `confirm_split` is not true → 409 `"confirm_split required"`. Complete creates F2 transfers toward default staging (first warehouse in pick_priority / derived order — never a hardcoded UUID/name) and dispatches; dest on-hand rises only on receive. If every allocation is already at one showroom and `collect_from_showroom` (or all already at staging), skip transfers and set `staged`. One delivery (components, no stock move) when invoice/layby exists. Till-origin skips delivery until `invoice_id` is set. Receive of the last pick transfer sets `staged` and creates that delivery. Cancel draft/confirmed only.
+
+**Till:** kit not 100% at the posted showroom and no matching pick → 409 `"Kit requires pick"` (do not decrement only Bedfordview). Matching pick: no showroom component decrement; set `pick.invoice_id`; COGS from allocation locations or showroom cost; missing cost → 409, do not steal stock.
+
+v1 is location not bin.
+
 ## S5 prices
 
 Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesale_inc_vat`, `retail_ex_vat`, `retail_inc_vat`. Source of truth columns on `skus`: `wholesale_ex_vat`, `retail_ex_vat` only (ex-VAT stored; inc-VAT derived on read).
@@ -615,6 +631,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/credit-notes` | `/credit-notes` |
 | `/till` | `/till` |
 | `/transfers` | `/transfers` |
+| `/picks` | `/picks` |
 | `/receive` | `/receive` |
 | `/wms` | `/receive`, `/stocktakes`, `/transfers` |
 | `/reports` | `/reports` |

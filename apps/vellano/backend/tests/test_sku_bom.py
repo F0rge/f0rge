@@ -276,7 +276,7 @@ async def test_kit_till_short_component_returns_409(
         },
     )
     assert sale.status_code == 409
-    assert "KIT-SHORT-CUSHION" in sale.json()["detail"]
+    assert sale.json()["detail"] == "Kit requires pick"
 
     invoices = await owner_client.get("/api/v1/invoices")
     assert invoices.status_code == 200

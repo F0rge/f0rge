@@ -10,10 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
 from app.crud.payment import PaymentCRUD
+from app.crud.pick import PickCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
+from app.models.pick import Pick, PickStatus
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.location import LocationType
@@ -56,6 +58,7 @@ class TillOrchestrator:
         self.credit = CustomerCreditService(db)
         self.stock_movements = StockMovementService(db)
         self.bom_crud = SkuBomLineCRUD(db)
+        self.pick_crud = PickCRUD(db)
 
     async def create_sale(
         self, data: TillSaleCreate, user_id: Optional[uuid.UUID] = None
@@ -96,6 +99,7 @@ class TillOrchestrator:
         cogs_parts: list[tuple[str, Decimal, Decimal]] = []
         stock_decrements: list[tuple[uuid.UUID, int]] = []
         reserved: dict[uuid.UUID, int] = {}
+        picks_to_link: list[Pick] = []
         total_cogs = Decimal(0)
 
         for line in data.lines:
@@ -107,34 +111,17 @@ class TillOrchestrator:
 
             bom_lines = await self.bom_crud.list_by_parent(sku.id)
             if bom_lines:
-                line_cogs = Decimal(0)
-                for bom in bom_lines:
-                    need = bom.qty * line.qty
-                    component = await self.sku_crud.get_by_id(bom.component_sku_id)
-                    if component is None:
-                        raise NotFoundError("SKU not found")
-                    loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                        bom.component_sku_id,
-                        data.location_id,
-                    )
-                    available = (loc_stock.on_hand if loc_stock is not None else 0) - reserved.get(
-                        bom.component_sku_id, 0
-                    )
-                    if loc_stock is None or available < need:
-                        raise ConflictError(
-                            f"Insufficient on-hand quantity for {component.our_ref} "
-                            "at this location"
-                        )
-                    if loc_stock.unit_cost_zar is None:
-                        raise ConflictError(
-                            f"No unit cost for {component.our_ref} at this location"
-                        )
-                    line_cogs += (loc_stock.unit_cost_zar * need).quantize(
-                        CENT,
-                        rounding=ROUND_HALF_UP,
-                    )
-                    reserved[bom.component_sku_id] = reserved.get(bom.component_sku_id, 0) + need
-                    stock_decrements.append((bom.component_sku_id, need))
+                line_cogs, pick = await self._kit_line_cogs(
+                    sku=sku,
+                    line_qty=line.qty,
+                    bom_lines=bom_lines,
+                    location_id=data.location_id,
+                    pick_id=data.pick_id,
+                    reserved=reserved,
+                    stock_decrements=stock_decrements,
+                )
+                if pick is not None:
+                    picks_to_link.append(pick)
             else:
                 location_stock = await self.location_stock_crud.get_by_sku_and_location(
                     line.sku_id,
@@ -278,6 +265,9 @@ class TillOrchestrator:
                     qty_delta=-qty,
                 )
 
+            for pick in picks_to_link:
+                pick.invoice_id = invoice.id
+
             invoice.amount_paid = total_inc
             await self.events.record(
                 BooksDocumentType.INVOICE,
@@ -293,6 +283,13 @@ class TillOrchestrator:
                 actor_user_id=user_id,
             )
             await self.invoice_crud.commit_refresh(invoice)
+
+        if user_id is not None:
+            from app.services.picks import PickService
+
+            pick_service = PickService(self.db)
+            for pick in picks_to_link:
+                await pick_service.ensure_delivery(pick.id, user_id)
 
         reloaded = await self.invoice_crud.get_by_id(invoice.id)
         assert reloaded is not None
@@ -333,6 +330,87 @@ class TillOrchestrator:
                 on_hand=on_hand,
             ),
         )
+
+    async def _kit_line_cogs(
+        self,
+        sku,
+        line_qty: int,
+        bom_lines,
+        location_id: uuid.UUID,
+        pick_id: Optional[uuid.UUID],
+        reserved: dict[uuid.UUID, int],
+        stock_decrements: list[tuple[uuid.UUID, int]],
+    ) -> tuple[Decimal, Optional[Pick]]:
+        showroom_ok = True
+        for bom in bom_lines:
+            need = bom.qty * line_qty
+            loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                bom.component_sku_id,
+                location_id,
+            )
+            available = (loc_stock.on_hand if loc_stock is not None else 0) - reserved.get(
+                bom.component_sku_id, 0
+            )
+            if loc_stock is None or available < need:
+                showroom_ok = False
+                break
+
+        if showroom_ok:
+            line_cogs = Decimal(0)
+            for bom in bom_lines:
+                need = bom.qty * line_qty
+                component = await self.sku_crud.get_by_id(bom.component_sku_id)
+                if component is None:
+                    raise NotFoundError("SKU not found")
+                loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                    bom.component_sku_id,
+                    location_id,
+                )
+                assert loc_stock is not None
+                if loc_stock.unit_cost_zar is None:
+                    raise ConflictError(f"No unit cost for {component.our_ref} at this location")
+                line_cogs += (loc_stock.unit_cost_zar * need).quantize(
+                    CENT,
+                    rounding=ROUND_HALF_UP,
+                )
+                reserved[bom.component_sku_id] = reserved.get(bom.component_sku_id, 0) + need
+                stock_decrements.append((bom.component_sku_id, need))
+            return line_cogs, None
+
+        pick = None
+        if pick_id is not None:
+            pick = await self.pick_crud.get_by_id(pick_id)
+        if (
+            pick is None
+            or pick.status not in (PickStatus.CONFIRMED, PickStatus.PICKING, PickStatus.STAGED)
+            or pick.kit_sku_id != sku.id
+            or pick.kit_qty != line_qty
+        ):
+            raise ConflictError("Kit requires pick")
+        if pick.invoice_id is not None:
+            raise ConflictError("Pick is already linked to an invoice")
+
+        line_cogs = Decimal(0)
+        for pick_line in pick.lines:
+            component = await self.sku_crud.get_by_id(pick_line.sku_id)
+            if component is None:
+                raise NotFoundError("SKU not found")
+            for alloc in pick_line.allocations:
+                loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                    pick_line.sku_id,
+                    alloc.location_id,
+                )
+                cost = loc_stock.unit_cost_zar if loc_stock is not None else None
+                if cost is None:
+                    showroom = await self.location_stock_crud.get_by_sku_and_location(
+                        pick_line.sku_id,
+                        location_id,
+                    )
+                    cost = showroom.unit_cost_zar if showroom is not None else None
+                if cost is None:
+                    raise ConflictError(f"No unit cost for {component.our_ref}")
+                line_cogs += (cost * alloc.qty).quantize(CENT, rounding=ROUND_HALF_UP)
+        return line_cogs, pick
 
     async def _get_walk_in_customer(self):
         from app.models.customer import Customer

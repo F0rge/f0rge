@@ -1,3 +1,14 @@
+import {
+  normalizePick,
+  normalizePickList,
+  normalizePickSettings,
+  normalizePreview,
+  type CreatePickPayload,
+  type PickDocument,
+  type PickPreview,
+  type UpdatePickPayload,
+} from "./picks";
+
 export type PresetRole = "owner" | "buyer" | "warehouse" | "till" | "books";
 /** Role slug — five presets plus custom slugs from GET /roles. */
 export type UserRole = string;
@@ -203,6 +214,7 @@ export {
   canMutateCustomers,
   canMutateDeliveries,
   canMutateLaybys,
+  canMutatePicks,
   canMutateReturns,
   canMutateSettings,
   canRaisePo,
@@ -213,6 +225,17 @@ export {
   canViewCostAudit,
   hasPermission,
 } from "./permissions";
+
+export type {
+  CreatePickPayload,
+  PickAllocation,
+  PickDocument,
+  PickLine,
+  PickPreview,
+  PickPreviewLine,
+  PickStatus,
+  UpdatePickPayload,
+} from "./picks";
 
 export type LocationType = "warehouse" | "showroom";
 
@@ -726,6 +749,7 @@ export type TillSalePayload = {
   lines: TillSaleLinePayload[];
   tender: TillTender;
   customer_id?: string;
+  pick_id?: string;
   credit_override?: boolean;
   credit_override_reason?: string;
 };
@@ -964,6 +988,90 @@ export async function downloadTransferPdf(id: string, transferNumber: string): P
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+}
+
+export function listPicks(): Promise<PickDocument[]> {
+  return apiFetch<unknown>("/picks").then(normalizePickList);
+}
+
+export function getPick(id: string): Promise<PickDocument> {
+  return apiFetch<unknown>(`/picks/${id}`).then(normalizePick);
+}
+
+export function previewPick(payload: { sku_id: string; qty: number }): Promise<PickPreview> {
+  return apiFetch<unknown>("/picks/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }).then(normalizePreview);
+}
+
+export function createPick(payload: CreatePickPayload): Promise<PickDocument> {
+  return apiFetch<unknown>("/picks", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }).then(normalizePick);
+}
+
+export function updatePick(id: string, payload: UpdatePickPayload): Promise<PickDocument> {
+  return apiFetch<unknown>(`/picks/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  }).then(normalizePick);
+}
+
+export function confirmPick(id: string, confirmSplit?: boolean): Promise<PickDocument> {
+  const body: { confirm_split?: boolean } = {};
+  if (confirmSplit) {
+    body.confirm_split = true;
+  }
+  return apiFetch<unknown>(`/picks/${id}/confirm`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }).then(normalizePick);
+}
+
+export function completePick(
+  id: string,
+  payload: { staging_location_id?: string; collect_from_showroom?: boolean } = {},
+): Promise<PickDocument> {
+  const body: { staging_location_id?: string; collect_from_showroom?: boolean } = {};
+  if (payload.staging_location_id) {
+    body.staging_location_id = payload.staging_location_id;
+  }
+  if (payload.collect_from_showroom) {
+    body.collect_from_showroom = true;
+  }
+  return apiFetch<unknown>(`/picks/${id}/complete`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }).then(normalizePick);
+}
+
+export function cancelPick(id: string): Promise<PickDocument> {
+  return apiFetch<unknown>(`/picks/${id}/cancel`, { method: "POST" }).then(normalizePick);
+}
+
+export async function downloadPickPdf(id: string, _pickNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/picks/${id}/pdf`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank");
+  if (!opened) {
+    URL.revokeObjectURL(url);
+    window.alert("Allow pop-ups to print.");
+    return;
+  }
+  opened.addEventListener("load", () => {
+    URL.revokeObjectURL(url);
+  });
 }
 
 export type StocktakeStatus = "in_progress" | "completed" | "cancelled";
@@ -2773,6 +2881,8 @@ export type AppSettings = {
   home_currency: string;
   defaults_locked: boolean;
   warning: string | null;
+  always_prefer_warehouse: boolean;
+  pick_priority: string[];
 };
 
 export type UnitCostAuditEntry = {
@@ -2791,6 +2901,15 @@ export type UnitCostAuditEntry = {
   created_at: string;
 };
 
+function withPickSettings(raw: AppSettings): AppSettings {
+  const pick = normalizePickSettings(raw);
+  return {
+    ...raw,
+    always_prefer_warehouse: pick.always_prefer_warehouse,
+    pick_priority: pick.pick_priority,
+  };
+}
+
 export function getHomeSummary(): Promise<HomeSummary> {
   return apiFetch<HomeSummary>("/home");
 }
@@ -2800,17 +2919,19 @@ export function searchAll(q: string): Promise<SearchResponse> {
 }
 
 export function getSettings(): Promise<AppSettings> {
-  return apiFetch<AppSettings>("/settings");
+  return apiFetch<AppSettings>("/settings").then(withPickSettings);
 }
 
 export function updateSettings(payload: {
   vat_rate?: string;
   home_currency?: string;
+  always_prefer_warehouse?: boolean;
+  pick_priority?: string[];
 }): Promise<AppSettings> {
   return apiFetch<AppSettings>("/settings", {
     method: "PATCH",
     body: JSON.stringify(payload),
-  });
+  }).then(withPickSettings);
 }
 
 export function listCostAudit(
