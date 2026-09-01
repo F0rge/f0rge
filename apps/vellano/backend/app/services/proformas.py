@@ -6,7 +6,7 @@ import uuid
 from typing import Optional
 
 from fastapi import UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,12 +14,8 @@ from app.crud.proforma import ProformaCRUD
 from app.crud.supplier import SupplierCRUD
 from app.models.proforma import Proforma
 from app.schemas.proforma import ProformaResponse
-from app.services.object_storage import (
-    is_remote_storage_ref,
-    presigned_get_url,
-    read_bytes,
-    save_bytes,
-)
+from app.services.object_storage import save_bytes
+from app.services.stored_pdf import serve_stored_pdf
 from app.services.suppliers import SupplierService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 
@@ -87,18 +83,11 @@ class ProformaService:
         proforma = await self.crud.get_by_id(proforma_id)
         if proforma is None:
             raise NotFoundError("Proforma not found")
-
-        storage_key = proforma.pdf_storage_key
-        if is_remote_storage_ref(storage_key):
-            url = presigned_get_url(storage_key)
-            if url:
-                return RedirectResponse(url)
-
-        try:
-            data = await asyncio.to_thread(read_bytes, storage_key)
-        except FileNotFoundError as exc:
-            raise NotFoundError("Proforma file not found") from exc
-        return Response(content=data, media_type="application/pdf")
+        return await serve_stored_pdf(
+            proforma.pdf_storage_key,
+            f"{proforma.invoice_number}.pdf",
+            "Proforma file not found",
+        )
 
     @staticmethod
     def _to_response(proforma: Proforma) -> ProformaResponse:
