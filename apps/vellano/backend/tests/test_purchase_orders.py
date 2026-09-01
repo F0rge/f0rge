@@ -67,6 +67,14 @@ async def _create_buyer(client: AsyncClient, owner_client: AsyncClient) -> Async
 
 
 async def _create_warehouse(client: AsyncClient, owner_client: AsyncClient) -> AsyncClient:
+    client.cookies.clear()
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "warehouse-po@example.com", "password": "warehouse-password"},
+    )
+    if login_resp.status_code == 200:
+        return client
+
     await _relogin_owner(owner_client)
     create_user = await owner_client.post(
         "/api/v1/users",
@@ -88,6 +96,14 @@ async def _create_warehouse(client: AsyncClient, owner_client: AsyncClient) -> A
 
 
 async def _create_till(client: AsyncClient, owner_client: AsyncClient) -> AsyncClient:
+    client.cookies.clear()
+    login_resp = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "till-po@example.com", "password": "till-password"},
+    )
+    if login_resp.status_code == 200:
+        return client
+
     await _relogin_owner(owner_client)
     create_user = await owner_client.post(
         "/api/v1/users",
