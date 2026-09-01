@@ -22,6 +22,7 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { BooksHistory } from "@/components/books-history";
 import {
   canMutateBooks,
   commitJournalImport,
@@ -816,6 +817,7 @@ export default function JournalsPage() {
                 {formatZarAmount(viewJournal.credit_total_zar)}
               </strong>
             </p>
+            <BooksHistory documentType="journal" documentId={viewJournal.id} />
           </Stack>
         ) : null}
       </Modal>

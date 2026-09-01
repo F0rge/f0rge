@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.bill import BillCRUD
 from app.crud.supplier import SupplierCRUD
 from app.models.bill import Bill, BillLine
+from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
+from app.services.books_events import BooksEventService
 from app.schemas.bill import BillCreate, BillLineResponse, BillResponse
 from app.services.chart_of_accounts import CODE_AP, CODE_INVENTORY, LedgerPostingService
 from app.services.object_storage import (
@@ -34,6 +36,7 @@ class BillService:
         self.crud = BillCRUD(db)
         self.supplier_crud = SupplierCRUD(db)
         self.posting = LedgerPostingService(db)
+        self.events = BooksEventService(db)
 
     async def list(self) -> list[BillResponse]:
         bills = await self.crud.list_all()
@@ -45,7 +48,7 @@ class BillService:
             raise NotFoundError("Bill not found")
         return self._to_response(bill)
 
-    async def create(self, data: BillCreate) -> BillResponse:
+    async def create(self, data: BillCreate, user_id: Optional[uuid.UUID] = None) -> BillResponse:
         supplier = await self.supplier_crud.get_by_id(data.supplier_id)
         if supplier is None:
             raise NotFoundError("Supplier not found")
@@ -99,6 +102,12 @@ class BillService:
                     (CODE_AP, Decimal(0), amount_zar),
                 ],
                 entry_date=bill.issue_date,
+            )
+            await self.events.record(
+                BooksDocumentType.BILL,
+                bill.id,
+                BooksEventAction.CREATED,
+                actor_user_id=user_id,
             )
             await self.crud.commit_refresh(bill)
 

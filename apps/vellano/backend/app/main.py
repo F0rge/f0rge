@@ -17,6 +17,7 @@ from app.routers import (
     bank_imports,
     bank_rules,
     bills,
+    books_events,
     catalogue_imports,
     category_maps,
     contacts,
@@ -124,6 +125,7 @@ app.include_router(journal_imports.journal_imports_router)
 app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)
+app.include_router(books_events.books_events_router)
 app.include_router(bank_imports.bank_imports_router)
 app.include_router(bank_rules.bank_rules_router)
 app.include_router(reports.reports_router)

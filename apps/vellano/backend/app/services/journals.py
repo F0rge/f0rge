@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.account import AccountCRUD
 from app.crud.journal import JournalCRUD
+from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import (
     JournalDocumentType,
     JournalEntry,
     JournalLine,
     JournalStatus,
 )
+from app.services.books_events import BooksEventService
 from app.schemas.journal import (
     JournalCreate,
     JournalLineCreate,
@@ -29,6 +32,7 @@ class JournalService:
         self.db = db
         self.crud = JournalCRUD(db)
         self.account_crud = AccountCRUD(db)
+        self.events = BooksEventService(db)
 
     async def list(self) -> list[JournalResponse]:
         return [self._to_response(entry) for entry in await self.crud.list_all()]
@@ -36,7 +40,9 @@ class JournalService:
     async def get(self, journal_id: uuid.UUID) -> JournalResponse:
         return self._to_response(await self._get_or_404(journal_id))
 
-    async def create(self, data: JournalCreate) -> JournalResponse:
+    async def create(
+        self, data: JournalCreate, user_id: Optional[uuid.UUID] = None
+    ) -> JournalResponse:
         if data.status == JournalStatus.VOIDED:
             raise ValidationError("Cannot create a voided journal")
         amounts = self._validated_line_amounts(data.lines)
@@ -66,18 +72,39 @@ class JournalService:
                         credit_zar=credit,
                     )
                 )
+            action = (
+                BooksEventAction.POSTED
+                if data.status == JournalStatus.POSTED
+                else BooksEventAction.CREATED
+            )
+            await self.events.record(
+                BooksDocumentType.JOURNAL,
+                entry.id,
+                action,
+                actor_user_id=user_id,
+            )
 
         return self._to_response(await self._get_or_404(entry.id))
 
-    async def post(self, journal_id: uuid.UUID) -> JournalResponse:
+    async def post(
+        self, journal_id: uuid.UUID, user_id: Optional[uuid.UUID] = None
+    ) -> JournalResponse:
         entry = await self._get_or_404(journal_id)
         if entry.status != JournalStatus.DRAFT:
             raise ValidationError("Journal is not a draft")
         async with unit_of_work(self.db):
             entry.status = JournalStatus.POSTED
+            await self.events.record(
+                BooksDocumentType.JOURNAL,
+                entry.id,
+                BooksEventAction.POSTED,
+                actor_user_id=user_id,
+            )
         return self._to_response(await self._get_or_404(entry.id))
 
-    async def void(self, journal_id: uuid.UUID) -> JournalResponse:
+    async def void(
+        self, journal_id: uuid.UUID, user_id: Optional[uuid.UUID] = None
+    ) -> JournalResponse:
         entry = await self._get_or_404(journal_id)
         if entry.document_type != JournalDocumentType.MANUAL:
             raise ValidationError("Only manual journals can be voided")
@@ -109,6 +136,12 @@ class JournalService:
                 )
             entry.status = JournalStatus.VOIDED
             entry.voided_by_id = reversing.id
+            await self.events.record(
+                BooksDocumentType.JOURNAL,
+                entry.id,
+                BooksEventAction.VOIDED,
+                actor_user_id=user_id,
+            )
 
         return self._to_response(await self._get_or_404(entry.id))
 

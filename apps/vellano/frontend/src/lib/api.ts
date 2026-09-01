@@ -1323,6 +1323,32 @@ export function listPayments(): Promise<Payment[]> {
   return apiFetch<Payment[]>("/payments");
 }
 
+export type BooksDocumentType = "invoice" | "bill" | "payment" | "journal";
+
+export type BooksEventAction = "created" | "posted" | "voided";
+
+export type BooksEvent = {
+  id: string;
+  document_type: BooksDocumentType;
+  document_id: string;
+  action: BooksEventAction;
+  actor_user_id: string | null;
+  actor_email: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+export function listBooksEvents(
+  documentType: BooksDocumentType,
+  documentId: string,
+): Promise<BooksEvent[]> {
+  const params = new URLSearchParams({
+    document_type: documentType,
+    document_id: documentId,
+  });
+  return apiFetch<BooksEvent[]>(`/books-events?${params.toString()}`);
+}
+
 export function createPayment(payload: CreatePaymentPayload): Promise<Payment> {
   return apiFetch<Payment>("/payments", {
     method: "POST",

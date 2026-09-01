@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 import datetime
 import uuid
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,7 +86,9 @@ class RepeatingInvoiceService:
         await self.crud.commit_refresh(schedule)
         return self._to_response(await self._get_or_404(schedule.id))
 
-    async def run(self, schedule_id: uuid.UUID) -> RepeatingInvoiceRunResponse:
+    async def run(
+        self, schedule_id: uuid.UUID, user_id: Optional[uuid.UUID] = None
+    ) -> RepeatingInvoiceRunResponse:
         schedule = await self._get_or_404(schedule_id)
         if not schedule.is_active:
             raise ValidationError("Repeating invoice is not active")
@@ -104,7 +107,8 @@ class RepeatingInvoiceService:
                     )
                     for line in schedule.lines
                 ],
-            )
+            ),
+            user_id,
         )
         schedule.next_date = advance_month(schedule.next_date, schedule.day_of_month)
         await self.crud.commit_refresh(schedule)

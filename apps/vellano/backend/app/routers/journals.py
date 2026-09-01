@@ -26,10 +26,10 @@ async def list_journals(
 @journals_router.post("", response_model=JournalResponse, status_code=status.HTTP_201_CREATED)
 async def create_journal(
     body: JournalCreate,
-    _: uuid.UUID = Depends(require_books_mutate),
+    user_id: uuid.UUID = Depends(require_books_mutate),
     service: JournalService = Depends(get_journal_service),
 ):
-    return await service.create(body)
+    return await service.create(body, user_id)
 
 
 @journals_router.get("/{journal_id}", response_model=JournalResponse)
@@ -44,16 +44,16 @@ async def get_journal(
 @journals_router.post("/{journal_id}/post", response_model=JournalResponse)
 async def post_journal(
     journal_id: uuid.UUID,
-    _: uuid.UUID = Depends(require_books_mutate),
+    user_id: uuid.UUID = Depends(require_books_mutate),
     service: JournalService = Depends(get_journal_service),
 ):
-    return await service.post(journal_id)
+    return await service.post(journal_id, user_id)
 
 
 @journals_router.post("/{journal_id}/void", response_model=JournalResponse)
 async def void_journal(
     journal_id: uuid.UUID,
-    _: uuid.UUID = Depends(require_books_mutate),
+    user_id: uuid.UUID = Depends(require_books_mutate),
     service: JournalService = Depends(get_journal_service),
 ):
-    return await service.void(journal_id)
+    return await service.void(journal_id, user_id)

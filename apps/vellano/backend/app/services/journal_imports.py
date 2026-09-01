@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import uuid
+from typing import Optional
+
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,7 +51,9 @@ class JournalImportService:
             narration=parsed.narration,
         )
 
-    async def commit(self, file: UploadFile) -> JournalResponse:
+    async def commit(
+        self, file: UploadFile, user_id: Optional[uuid.UUID] = None
+    ) -> JournalResponse:
         parsed, errors, accounts = await self._parse_and_validate(await file.read())
         if errors:
             raise ValidationError(errors[0].message)
@@ -74,7 +79,8 @@ class JournalImportService:
                 source=SIMPLEPAY_SOURCE,
                 status=JournalStatus.POSTED,
                 lines=lines,
-            )
+            ),
+            user_id,
         )
 
     async def _parse_and_validate(

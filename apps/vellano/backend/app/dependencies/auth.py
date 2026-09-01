@@ -11,6 +11,7 @@ from app.middleware.auth import get_current_user_id
 from app.models.user import UserRole
 from app.services.auth import AuthService
 from app.services.bills import BillService
+from app.services.books_events import BooksEventService
 from app.services.contacts import ContactService
 from app.services.credit_notes import CreditNoteService
 from app.services.customers_crm import CustomersCrmService
@@ -149,6 +150,10 @@ def get_credit_note_service(db: AsyncSession = Depends(get_db)) -> CreditNoteSer
 
 def get_bill_service(db: AsyncSession = Depends(get_db)) -> BillService:
     return BillService(db)
+
+
+def get_books_event_service(db: AsyncSession = Depends(get_db)) -> BooksEventService:
+    return BooksEventService(db)
 
 
 def get_payment_service(db: AsyncSession = Depends(get_db)) -> PaymentService:

@@ -18,6 +18,7 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { BooksHistory } from "@/components/books-history";
 import {
   canMutateBooks,
   createCreditNote,
@@ -314,6 +315,8 @@ export default function InvoiceDetailPage() {
           <p className="cds--type-body-01">Balance due: {formatZarAmount(invoice.balance)}</p>
         </div>
       </section>
+
+      <BooksHistory documentType="invoice" documentId={invoice.id} />
 
       <Modal
         open={paymentOpen}

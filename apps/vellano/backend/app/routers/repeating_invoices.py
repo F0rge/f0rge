@@ -70,7 +70,7 @@ async def update_repeating_invoice(
 )
 async def run_repeating_invoice(
     schedule_id: uuid.UUID,
-    _: uuid.UUID = Depends(require_books_mutate),
+    user_id: uuid.UUID = Depends(require_books_mutate),
     service: RepeatingInvoiceService = Depends(get_repeating_invoice_service),
 ):
-    return await service.run(schedule_id)
+    return await service.run(schedule_id, user_id)

@@ -26,7 +26,7 @@ async def list_payments(
 @payments_router.post("", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
 async def create_payment(
     body: PaymentCreate,
-    _: uuid.UUID = Depends(require_books_mutate),
+    user_id: uuid.UUID = Depends(require_books_mutate),
     service: PaymentService = Depends(get_payment_service),
 ):
-    return await service.create(body)
+    return await service.create(body, user_id)

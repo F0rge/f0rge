@@ -31,7 +31,7 @@ async def preview_journal_import(
 )
 async def commit_journal_import(
     file: UploadFile = File(...),
-    _: uuid.UUID = Depends(require_books_mutate),
+    user_id: uuid.UUID = Depends(require_books_mutate),
     service: JournalImportService = Depends(get_journal_import_service),
 ):
-    return await service.commit(file)
+    return await service.commit(file, user_id)
