@@ -7,6 +7,7 @@ from typing import Optional
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud.account import AccountCRUD
 from app.models.account import AccountType
@@ -28,6 +29,15 @@ from app.schemas.bank_import import (
     ProfitLossLine,
     ProfitLossReport,
     Vat201Draft,
+)
+from app.schemas.reports_books import (
+    CashSummaryAccount,
+    CashSummaryReport,
+    JournalReport,
+    JournalReportEntry,
+    JournalReportLine,
+    TrialBalanceLine,
+    TrialBalanceReport,
 )
 from app.schemas.reports_stock import (
     AgedStockBucket,
@@ -521,14 +531,136 @@ class ReportsService:
             amount_paid=Decimal(amount_paid),
         )
 
-    async def _period_net(
+    async def trial_balance(self, as_of: datetime.date) -> TrialBalanceReport:
+        accounts = [a for a in await self.account_crud.list_all() if not a.is_archived]
+        lines: list[TrialBalanceLine] = []
+        total_debit = Decimal(0)
+        total_credit = Decimal(0)
+        for account in accounts:
+            net = await self._balance_as_of(account.id, as_of)
+            if net == 0:
+                continue
+            if net > 0:
+                debit = net
+                credit = Decimal(0)
+            else:
+                debit = Decimal(0)
+                credit = -net
+            lines.append(
+                TrialBalanceLine(
+                    code=account.code,
+                    name=account.name,
+                    debit_zar=debit,
+                    credit_zar=credit,
+                )
+            )
+            total_debit += debit
+            total_credit += credit
+        return TrialBalanceReport(
+            as_of=as_of,
+            lines=lines,
+            total_debit_zar=total_debit,
+            total_credit_zar=total_credit,
+        )
+
+    async def journal_report(
+        self,
+        from_date: datetime.date,
+        to_date: datetime.date,
+        source: Optional[str] = None,
+    ) -> JournalReport:
+        if from_date > to_date:
+            raise ValueError("from_date must be on or before to_date")
+
+        filters = [
+            JournalEntry.status != JournalStatus.DRAFT,
+            JournalEntry.entry_date >= from_date,
+            JournalEntry.entry_date <= to_date,
+        ]
+        if source is not None:
+            filters.append(JournalEntry.source == source)
+
+        result = await self.db.execute(
+            select(JournalEntry)
+            .options(selectinload(JournalEntry.lines).selectinload(JournalLine.account))
+            .where(and_(*filters))
+            .order_by(
+                JournalEntry.entry_date,
+                JournalEntry.journal_number,
+                JournalEntry.created_at,
+                JournalEntry.id,
+            )
+        )
+        entries: list[JournalReportEntry] = []
+        for entry in result.scalars().unique().all():
+            entries.append(
+                JournalReportEntry(
+                    entry_date=entry.entry_date,
+                    journal_number=entry.journal_number,
+                    document_type=entry.document_type,
+                    source=entry.source,
+                    memo=entry.memo,
+                    status=entry.status,
+                    lines=[
+                        JournalReportLine(
+                            account_code=line.account.code,
+                            account_name=line.account.name,
+                            debit_zar=line.debit_zar,
+                            credit_zar=line.credit_zar,
+                        )
+                        for line in entry.lines
+                    ],
+                )
+            )
+        return JournalReport(
+            from_date=from_date,
+            to_date=to_date,
+            source=source,
+            entries=entries,
+        )
+
+    async def cash_summary(
+        self,
+        from_date: datetime.date,
+        to_date: datetime.date,
+    ) -> CashSummaryReport:
+        if from_date > to_date:
+            raise ValueError("from_date must be on or before to_date")
+
+        bank_accounts = [
+            a for a in await self.account_crud.list_all() if a.is_bank and not a.is_archived
+        ]
+        accounts: list[CashSummaryAccount] = []
+        total_in = Decimal(0)
+        total_out = Decimal(0)
+        for account in bank_accounts:
+            cash_in, cash_out = await self._period_debit_credit(account.id, from_date, to_date)
+            accounts.append(
+                CashSummaryAccount(
+                    code=account.code,
+                    name=account.name,
+                    cash_in_zar=cash_in,
+                    cash_out_zar=cash_out,
+                    net_zar=cash_in - cash_out,
+                )
+            )
+            total_in += cash_in
+            total_out += cash_out
+        return CashSummaryReport(
+            from_date=from_date,
+            to_date=to_date,
+            accounts=accounts,
+            total_cash_in_zar=total_in,
+            total_cash_out_zar=total_out,
+            total_net_zar=total_in - total_out,
+        )
+
+    async def _period_debit_credit(
         self,
         account_id: uuid.UUID,
         from_date: datetime.date,
         to_date: datetime.date,
-        *,
-        credit_minus_debit: bool,
-    ) -> Decimal:
+    ) -> tuple[Decimal, Decimal]:
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(JournalLine.debit_zar), 0),
@@ -546,8 +678,17 @@ class ReportsService:
             )
         )
         debits, credits = result.one()
-        debits = Decimal(debits)
-        credits = Decimal(credits)
+        return Decimal(debits), Decimal(credits)
+
+    async def _period_net(
+        self,
+        account_id: uuid.UUID,
+        from_date: datetime.date,
+        to_date: datetime.date,
+        *,
+        credit_minus_debit: bool,
+    ) -> Decimal:
+        debits, credits = await self._period_debit_credit(account_id, from_date, to_date)
         if credit_minus_debit:
             return credits - debits
         return debits - credits

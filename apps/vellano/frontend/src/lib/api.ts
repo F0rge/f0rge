@@ -1729,6 +1729,61 @@ export type SalesVatReport = {
   amount_paid: string;
 };
 
+export type TrialBalanceLine = {
+  code: string;
+  name: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type TrialBalanceReport = {
+  as_of: string;
+  lines: TrialBalanceLine[];
+  total_debit_zar: string;
+  total_credit_zar: string;
+};
+
+export type JournalReportLine = {
+  account_code: string;
+  account_name: string;
+  debit_zar: string;
+  credit_zar: string;
+};
+
+export type JournalReportEntry = {
+  entry_date: string;
+  journal_number: string | null;
+  document_type: JournalDocumentType;
+  source: string | null;
+  memo: string | null;
+  status: JournalStatus;
+  lines: JournalReportLine[];
+};
+
+export type JournalReport = {
+  from_date: string;
+  to_date: string;
+  source: string | null;
+  entries: JournalReportEntry[];
+};
+
+export type CashSummaryAccount = {
+  code: string;
+  name: string;
+  cash_in_zar: string;
+  cash_out_zar: string;
+  net_zar: string;
+};
+
+export type CashSummaryReport = {
+  from_date: string;
+  to_date: string;
+  accounts: CashSummaryAccount[];
+  total_cash_in_zar: string;
+  total_cash_out_zar: string;
+  total_net_zar: string;
+};
+
 export function getStockValuation(): Promise<StockValuationReport> {
   return apiFetch<StockValuationReport>("/reports/stock-valuation");
 }
@@ -1829,6 +1884,108 @@ export async function downloadSalesVatCsv(fromDate: string, toDate: string): Pro
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `sales-vat-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+function journalsReportQuery(fromDate: string, toDate: string, source?: string): string {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const params = new URLSearchParams({ from, to });
+  const trimmed = source?.trim();
+  if (trimmed) {
+    params.set("source", trimmed);
+  }
+  return params.toString();
+}
+
+export function getTrialBalance(asOf: string): Promise<TrialBalanceReport> {
+  const date = requireIsoDate(asOf, reportTodayIso());
+  return apiFetch<TrialBalanceReport>(
+    `/reports/trial-balance?as_of=${encodeURIComponent(date)}`,
+  );
+}
+
+export function getJournalsReport(
+  fromDate: string,
+  toDate: string,
+  source?: string,
+): Promise<JournalReport> {
+  return apiFetch<JournalReport>(`/reports/journals?${journalsReportQuery(fromDate, toDate, source)}`);
+}
+
+export function getCashSummary(fromDate: string, toDate: string): Promise<CashSummaryReport> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  return apiFetch<CashSummaryReport>(
+    `/reports/cash-summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+}
+
+export async function downloadTrialBalanceCsv(asOf: string): Promise<void> {
+  const date = requireIsoDate(asOf, reportTodayIso());
+  const response = await fetch(
+    `/api/v1/reports/trial-balance/csv?as_of=${encodeURIComponent(date)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `trial-balance-${date}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadJournalsCsv(
+  fromDate: string,
+  toDate: string,
+  source?: string,
+): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const response = await fetch(`/api/v1/reports/journals/csv?${journalsReportQuery(fromDate, toDate, source)}`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `journals-${from}-to-${to}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadCashSummaryCsv(fromDate: string, toDate: string): Promise<void> {
+  const from = requireIsoDate(fromDate, reportMonthStartIso());
+  const to = requireIsoDate(toDate, reportTodayIso());
+  const response = await fetch(
+    `/api/v1/reports/cash-summary/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `cash-summary-${from}-to-${to}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);

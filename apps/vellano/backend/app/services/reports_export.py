@@ -3,6 +3,11 @@ from __future__ import annotations
 import csv
 import io
 
+from app.schemas.reports_books import (
+    CashSummaryReport,
+    JournalReport,
+    TrialBalanceReport,
+)
 from app.schemas.reports_stock import (
     AgedStockReport,
     SalesBySkuReport,
@@ -115,4 +120,83 @@ def build_sales_vat_csv(report: SalesVatReport) -> bytes:
     writer.writerow(["vat_amount", f"{report.vat_amount:.2f}"])
     writer.writerow(["total_inc_vat", f"{report.total_inc_vat:.2f}"])
     writer.writerow(["amount_paid", f"{report.amount_paid:.2f}"])
+    return buffer.getvalue().encode("utf-8")
+
+
+def build_trial_balance_csv(report: TrialBalanceReport) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["as_of", report.as_of.isoformat()])
+    writer.writerow(["code", "name", "debit_zar", "credit_zar"])
+    for line in report.lines:
+        writer.writerow(
+            [
+                line.code,
+                line.name,
+                f"{line.debit_zar:.2f}",
+                f"{line.credit_zar:.2f}",
+            ]
+        )
+    writer.writerow([])
+    writer.writerow(["total_debit_zar", f"{report.total_debit_zar:.2f}"])
+    writer.writerow(["total_credit_zar", f"{report.total_credit_zar:.2f}"])
+    return buffer.getvalue().encode("utf-8")
+
+
+def build_journals_csv(report: JournalReport) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["from", report.from_date.isoformat(), "to", report.to_date.isoformat()])
+    writer.writerow(
+        [
+            "entry_date",
+            "journal_number",
+            "document_type",
+            "source",
+            "memo",
+            "status",
+            "account_code",
+            "account_name",
+            "debit_zar",
+            "credit_zar",
+        ]
+    )
+    for entry in report.entries:
+        for line in entry.lines:
+            writer.writerow(
+                [
+                    entry.entry_date.isoformat(),
+                    entry.journal_number or "",
+                    entry.document_type.value,
+                    entry.source or "",
+                    entry.memo or "",
+                    entry.status.value,
+                    line.account_code,
+                    line.account_name,
+                    f"{line.debit_zar:.2f}",
+                    f"{line.credit_zar:.2f}",
+                ]
+            )
+    return buffer.getvalue().encode("utf-8")
+
+
+def build_cash_summary_csv(report: CashSummaryReport) -> bytes:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["from", report.from_date.isoformat(), "to", report.to_date.isoformat()])
+    writer.writerow(["code", "name", "cash_in_zar", "cash_out_zar", "net_zar"])
+    for account in report.accounts:
+        writer.writerow(
+            [
+                account.code,
+                account.name,
+                f"{account.cash_in_zar:.2f}",
+                f"{account.cash_out_zar:.2f}",
+                f"{account.net_zar:.2f}",
+            ]
+        )
+    writer.writerow([])
+    writer.writerow(["total_cash_in_zar", f"{report.total_cash_in_zar:.2f}"])
+    writer.writerow(["total_cash_out_zar", f"{report.total_cash_out_zar:.2f}"])
+    writer.writerow(["total_net_zar", f"{report.total_net_zar:.2f}"])
     return buffer.getvalue().encode("utf-8")
