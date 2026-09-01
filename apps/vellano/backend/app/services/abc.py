@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import calendar
 import datetime
 import uuid
 from decimal import Decimal
 from typing import NamedTuple, Optional
 
-from dateutil.relativedelta import relativedelta
 
 A_THRESHOLD = Decimal("0.80")
 B_THRESHOLD = Decimal("0.95")
@@ -58,7 +58,12 @@ def default_report_date_range(
     today: Optional[datetime.date] = None,
 ) -> tuple[datetime.date, datetime.date]:
     end = today or datetime.date.today()
-    start = end - relativedelta(months=12)
+    year = end.year
+    month = end.month - 12
+    while month <= 0:
+        month += 12
+        year -= 1
+    start = datetime.date(year, month, min(end.day, calendar.monthrange(year, month)[1]))
     return start, end
 
 

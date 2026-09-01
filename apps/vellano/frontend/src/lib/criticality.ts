@@ -1,10 +1,11 @@
 import type { SkuCriticalityReport } from "./api";
 
-export function formatSharePct(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
+export function formatSharePct(value: number | string | null | undefined): string {
+  const numeric = typeof value === "string" ? Number(value) : value;
+  if (numeric === null || numeric === undefined || !Number.isFinite(numeric)) {
     return "—";
   }
-  const formatted = Number.isInteger(value) ? String(value) : value.toFixed(1);
+  const formatted = Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1);
   return `${formatted}%`;
 }
 

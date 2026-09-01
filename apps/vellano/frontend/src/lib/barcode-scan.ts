@@ -114,14 +114,16 @@ export function resolveTillScan(options: {
     return { ok: false, error: "no_retail" };
   }
 
-  const onHand = options.floorOnHand(sku.id);
-  if (onHand <= 0) {
-    return { ok: false, error: "not_on_floor" };
-  }
+  if (!sku.is_kit) {
+    const onHand = options.floorOnHand(sku.id);
+    if (onHand <= 0) {
+      return { ok: false, error: "not_on_floor" };
+    }
 
-  const remaining = onHand - options.cartQty(sku.id);
-  if (options.addQty > remaining) {
-    return { ok: false, error: "over_floor" };
+    const remaining = onHand - options.cartQty(sku.id);
+    if (options.addQty > remaining) {
+      return { ok: false, error: "over_floor" };
+    }
   }
 
   return { ok: true, sku, qty: options.addQty };

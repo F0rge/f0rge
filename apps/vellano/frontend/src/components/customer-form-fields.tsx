@@ -133,6 +133,7 @@ export function CustomerFormFields({
             label="Credit limit (ZAR)"
             min={0}
             step={1}
+            allowEmpty
             value={Number.isFinite(creditLimitValue) ? creditLimitValue : ""}
             onChange={(_, { value }) =>
               onChange({ credit_limit: value === "" ? "" : String(value) })
