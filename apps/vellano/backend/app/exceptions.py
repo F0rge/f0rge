@@ -12,3 +12,10 @@ class NiaLlmUnconfiguredError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("nia_llm_unconfigured")
+
+
+class NiaCapExceededError(DomainError):
+    """Monthly token cap reached or blocked (cap 0). Mapped to HTTP 429."""
+
+    def __init__(self) -> None:
+        super().__init__("nia_cap_exceeded")

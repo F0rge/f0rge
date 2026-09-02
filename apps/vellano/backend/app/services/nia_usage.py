@@ -44,3 +44,6 @@ class NiaUsageService:
 
     async def sum_total_tokens_for_user(self, user_id: uuid.UUID) -> int:
         return await self.crud.sum_total_tokens_for_user(user_id)
+
+    async def sum_total_tokens_for_user_current_utc_month(self, user_id: uuid.UUID) -> int:
+        return await self.crud.sum_total_tokens_for_user_current_utc_month(user_id)

@@ -546,6 +546,22 @@ body {
   gap: 0.5rem;
 }
 
+.vellano-nia-usage-meter {
+  width: 100%;
+  max-width: 28rem;
+  height: 0.5rem;
+  background: var(--cds-border-subtle-01);
+  border-radius: 0.25rem;
+  overflow: hidden;
+}
+
+.vellano-nia-usage-meter__bar {
+  height: 100%;
+  background: var(--cds-interactive);
+  border-radius: 0.25rem;
+  transition: width 0.2s ease;
+}
+
 /* Carbon DataTable cells are nowrap; tags and long emails need to wrap. */
 .cds--data-table tbody td.vellano-cell-wrap {
   white-space: normal;

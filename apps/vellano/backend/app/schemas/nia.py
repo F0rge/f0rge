@@ -43,3 +43,24 @@ class NiaThreadResponse(NiaThreadSummaryResponse):
 class NiaResumeRequest(BaseModel):
     decision: Literal["accept", "decline", "cancel"]
     tool_call_id: Optional[str] = None
+
+
+class NiaUsageMeResponse(BaseModel):
+    used: int
+    cap: int
+    remaining: int
+    period_start: datetime.datetime
+
+
+class NiaUsageUserResponse(BaseModel):
+    user_id: uuid.UUID
+    email: str
+    display_name: Optional[str] = None
+    used: int
+    cap: int
+    override: Optional[int] = None
+    remaining: int
+
+
+class NiaUsageCapUpdate(BaseModel):
+    nia_monthly_token_cap: Optional[int] = None

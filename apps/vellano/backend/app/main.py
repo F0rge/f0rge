@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
 from f0rge_core.handlers import register_exception_handlers
 
-from app.exceptions import ForbiddenError, NiaLlmUnconfiguredError
+from app.exceptions import ForbiddenError, NiaCapExceededError, NiaLlmUnconfiguredError
 
 from app.config import settings
 from app.database import async_session_maker
@@ -46,6 +46,7 @@ from app.routers import (
     nia,
     nia_run,
     nia_threads,
+    nia_usage as nia_usage_router,
     reports,
     roles,
     search,
@@ -113,10 +114,22 @@ async def _nia_llm_unconfigured_handler(_: Request, exc: Exception) -> JSONRespo
     )
 
 
+async def _nia_cap_exceeded_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, NiaCapExceededError)
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={"detail": {"code": exc.detail}},
+    )
+
+
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
 app.add_exception_handler(
     NiaLlmUnconfiguredError,
     cast(ExceptionHandler, _nia_llm_unconfigured_handler),
+)
+app.add_exception_handler(
+    NiaCapExceededError,
+    cast(ExceptionHandler, _nia_cap_exceeded_handler),
 )
 
 app.add_middleware(
@@ -173,3 +186,4 @@ app.include_router(cost_audit.cost_audit_router)
 app.include_router(nia.nia_router)
 app.include_router(nia_threads.nia_threads_router)
 app.include_router(nia_run.nia_run_router)
+app.include_router(nia_usage_router.nia_usage_router)

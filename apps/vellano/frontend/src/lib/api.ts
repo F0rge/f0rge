@@ -217,6 +217,8 @@ export {
   canMutatePicks,
   canMutateReturns,
   canMutateSettings,
+  canAdminNia,
+  canUseNia,
   canRaisePo,
   canReceive,
   canReceiveTransfer,
@@ -2883,6 +2885,24 @@ export type AppSettings = {
   warning: string | null;
   always_prefer_warehouse: boolean;
   pick_priority: string[];
+  nia_monthly_token_cap: number;
+};
+
+export type NiaUsageMe = {
+  used: number;
+  cap: number;
+  remaining: number;
+  period_start: string;
+};
+
+export type NiaUsageUser = {
+  user_id: string;
+  email: string;
+  display_name: string | null;
+  used: number;
+  cap: number;
+  override: number | null;
+  remaining: number;
 };
 
 export type UnitCostAuditEntry = {
@@ -2927,11 +2947,30 @@ export function updateSettings(payload: {
   home_currency?: string;
   always_prefer_warehouse?: boolean;
   pick_priority?: string[];
+  nia_monthly_token_cap?: number;
 }): Promise<AppSettings> {
   return apiFetch<AppSettings>("/settings", {
     method: "PATCH",
     body: JSON.stringify(payload),
   }).then(withPickSettings);
+}
+
+export function getNiaUsageMe(): Promise<NiaUsageMe> {
+  return apiFetch<NiaUsageMe>("/nia/usage/me");
+}
+
+export function listNiaUsage(): Promise<NiaUsageUser[]> {
+  return apiFetch<NiaUsageUser[]>("/nia/usage");
+}
+
+export function patchNiaUsageCap(
+  userId: string,
+  cap: number | null,
+): Promise<NiaUsageUser> {
+  return apiFetch<NiaUsageUser>(`/nia/usage/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ nia_monthly_token_cap: cap }),
+  });
 }
 
 export function listCostAudit(
