@@ -5,7 +5,7 @@ import enum
 import uuid
 from typing import Any, Optional
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -148,6 +148,78 @@ class NiaUsageEvent(UUIDPkMixin, Base):
         default=datetime.datetime.utcnow,
     )
     openrouter_generation_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class NiaScheduledTask(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "nia_scheduled_tasks"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("teams.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    timezone: Mapped[str] = mapped_column(Text, nullable=False, default="Africa/Johannesburg")
+    cadence: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notify_only_if_changed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_run_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    last_status: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_output_hash: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    user: Mapped["User"] = relationship()
+    team: Mapped["Team"] = relationship()
+    runs: Mapped[list["NiaScheduledRun"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="NiaScheduledRun.started_at",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "last_status IS NULL OR last_status IN ('ok', 'skipped', 'error', 'needs_ok')",
+            name="ck_nia_scheduled_tasks_last_status",
+        ),
+    )
+
+
+class NiaScheduledRun(UUIDPkMixin, Base):
+    __tablename__ = "nia_scheduled_runs"
+
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("nia_scheduled_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    started_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    finished_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    thread_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("nia_threads.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    task: Mapped[NiaScheduledTask] = relationship(back_populates="runs")
+    thread: Mapped[Optional["NiaThread"]] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('ok', 'skipped', 'error', 'needs_ok')",
+            name="ck_nia_scheduled_runs_status",
+        ),
+    )
 
 
 from app.models.team import Team  # noqa: E402

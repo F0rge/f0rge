@@ -8,6 +8,11 @@ import {
   Select,
   SelectItem,
   Stack,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
   TextInput,
   Tile,
   Toggle,
@@ -28,6 +33,7 @@ import {
   type Location,
 } from "@/lib/api";
 import { NiaCapsSettings } from "@/components/nia/nia-caps-settings";
+import { NiaScheduleSettings } from "@/components/nia/nia-schedule-settings";
 import { useAuth } from "@/lib/auth";
 
 export default function SettingsPage() {
@@ -272,13 +278,39 @@ export default function SettingsPage() {
       ) : null}
 
       {settings && (canUseNiaAssistant || canAdminNiaCaps) ? (
-        <NiaCapsSettings
-          canUse={canUseNiaAssistant}
-          canAdmin={canAdminNiaCaps}
-          teamDefaultCap={niaMonthlyTokenCap}
-          teamDefaultDisabled={!canMutate || saving}
-          onTeamDefaultCapChange={setNiaMonthlyTokenCap}
-        />
+        <Tile>
+          <Stack gap={5}>
+            <div>
+              <h2 className="cds--type-productive-heading-03">Nia</h2>
+              <p className="cds--type-body-01 vellano-muted-text">
+                Token caps and scheduled jobs. Nia never emails, takes till payment, or eFiles.
+              </p>
+            </div>
+            <Tabs>
+              <TabList aria-label="Nia settings">
+                <Tab>Usage</Tab>
+                {canUseNiaAssistant ? <Tab>Scheduled</Tab> : null}
+              </TabList>
+              <TabPanels>
+                <TabPanel>
+                  <NiaCapsSettings
+                    canUse={canUseNiaAssistant}
+                    canAdmin={canAdminNiaCaps}
+                    teamDefaultCap={niaMonthlyTokenCap}
+                    teamDefaultDisabled={!canMutate || saving}
+                    onTeamDefaultCapChange={setNiaMonthlyTokenCap}
+                    hideChrome
+                  />
+                </TabPanel>
+                {canUseNiaAssistant ? (
+                  <TabPanel>
+                    <NiaScheduleSettings />
+                  </TabPanel>
+                ) : null}
+              </TabPanels>
+            </Tabs>
+          </Stack>
+        </Tile>
       ) : null}
     </Stack>
   );

@@ -77,6 +77,7 @@ type NiaCapsSettingsProps = {
   teamDefaultCap: number;
   teamDefaultDisabled?: boolean;
   onTeamDefaultCapChange: (value: number) => void;
+  hideChrome?: boolean;
 };
 
 export function NiaCapsSettings({
@@ -85,6 +86,7 @@ export function NiaCapsSettings({
   teamDefaultCap,
   teamDefaultDisabled = false,
   onTeamDefaultCapChange,
+  hideChrome = false,
 }: NiaCapsSettingsProps) {
   const [usageMe, setUsageMe] = useState<NiaUsageMe | null>(null);
   const [usageRows, setUsageRows] = useState<NiaUsageUser[]>([]);
@@ -187,15 +189,20 @@ export function NiaCapsSettings({
     actions: row.user_id,
   }));
 
-  return (
-    <Tile>
+  const body = (
       <Stack gap={5}>
-        <div>
-          <h2 className="cds--type-productive-heading-03">Nia</h2>
+        {hideChrome ? (
           <p className="cds--type-body-01 vellano-muted-text">
             Monthly token usage for the in-app assistant. Caps reset each UTC calendar month.
           </p>
-        </div>
+        ) : (
+          <div>
+            <h2 className="cds--type-productive-heading-03">Nia</h2>
+            <p className="cds--type-body-01 vellano-muted-text">
+              Monthly token usage for the in-app assistant. Caps reset each UTC calendar month.
+            </p>
+          </div>
+        )}
 
         {error ? (
           <InlineNotification kind="error" title="Nia" subtitle={error} hideCloseButton />
@@ -376,6 +383,10 @@ export function NiaCapsSettings({
           </Stack>
         ) : null}
       </Stack>
-    </Tile>
   );
+
+  if (hideChrome) {
+    return body;
+  }
+  return <Tile>{body}</Tile>;
 }

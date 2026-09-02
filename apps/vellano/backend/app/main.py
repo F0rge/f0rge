@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from typing import AsyncIterator, cast
+import asyncio
+import logging
+from contextlib import asynccontextmanager, suppress
+from typing import AsyncIterator, Optional, cast
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,6 +47,7 @@ from app.routers import (
     laybys,
     nia,
     nia_run,
+    nia_schedule,
     nia_threads,
     nia_usage as nia_usage_router,
     reports,
@@ -65,7 +68,25 @@ from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
 from app.services.roles import RoleSeedService
 from app.services.till_seed import TillSeedService
+from app.services.nia_schedule import NiaScheduleService
 from app.services.users import BootstrapService
+
+logger = logging.getLogger(__name__)
+
+TICK_INTERVAL_SECONDS = 60
+
+
+async def _nia_schedule_loop(stop: asyncio.Event) -> None:
+    while not stop.is_set():
+        try:
+            async with async_session_maker() as session:
+                await NiaScheduleService(session).tick_due_tasks()
+        except Exception:
+            logger.exception("nia schedule tick failed")
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=TICK_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            continue
 
 
 @asynccontextmanager
@@ -83,7 +104,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.ensure_bank_accounts()
         await TillSeedService(session).seed_if_empty()
         await PlaygroundSeedService(session).seed_if_enabled()
-    yield
+    stop = asyncio.Event()
+    ticker: Optional[asyncio.Task] = None
+    if settings.nia_schedule_ticker:
+        ticker = asyncio.create_task(_nia_schedule_loop(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        if ticker is not None:
+            ticker.cancel()
+            with suppress(asyncio.CancelledError):
+                await ticker
 
 
 app = FastAPI(
@@ -187,3 +219,4 @@ app.include_router(nia.nia_router)
 app.include_router(nia_threads.nia_threads_router)
 app.include_router(nia_run.nia_run_router)
 app.include_router(nia_usage_router.nia_usage_router)
+app.include_router(nia_schedule.nia_schedule_router)

@@ -69,6 +69,7 @@ from app.services.vat201_periods import Vat201PeriodService
 from app.services.nia_audit import NiaAuditService
 from app.services.nia_caps import NiaCapsService
 from app.services.nia_run import NiaRunService
+from app.services.nia_schedule import NiaScheduleService
 from app.services.nia_threads import NiaThreadsService
 from app.services.nia_usage import NiaUsageService
 
@@ -408,3 +409,7 @@ def get_nia_audit_service(db: AsyncSession = Depends(get_db)) -> NiaAuditService
 
 def get_nia_caps_service(db: AsyncSession = Depends(get_db)) -> NiaCapsService:
     return NiaCapsService(db)
+
+
+def get_nia_schedule_service(db: AsyncSession = Depends(get_db)) -> NiaScheduleService:
+    return NiaScheduleService(db)
