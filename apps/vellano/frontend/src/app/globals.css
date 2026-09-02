@@ -562,6 +562,223 @@ body {
   transition: width 0.2s ease;
 }
 
+.vellano-shell[data-nia-dock-open="true"] .vellano-main {
+  margin-right: var(--vellano-nia-dock-width, 24rem);
+  transition: margin-right 0.15s ease;
+}
+
+.vellano-nia-dock {
+  position: fixed;
+  top: 3rem;
+  right: 0;
+  bottom: 0;
+  z-index: 7000;
+  display: flex;
+  overflow: hidden;
+  background: var(--cds-layer-01, #fff);
+  border-left: 2px solid transparent;
+  border-image: linear-gradient(180deg, #4589ff, #a56eff) 1;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+  opacity: 0;
+  transition: width 0.15s ease, opacity 0.15s ease;
+}
+
+.vellano-nia-dock--open {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.vellano-nia-dock__resize {
+  flex: 0 0 0.375rem;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+}
+
+.vellano-nia-dock__resize:hover {
+  background: linear-gradient(180deg, rgba(69, 137, 255, 0.25), rgba(165, 110, 255, 0.25));
+}
+
+.vellano-nia-dock__inner {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.vellano-nia-dock__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 0.75rem 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+}
+
+.vellano-nia-dock__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vellano-nia-dock__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.vellano-nia-dock__meter {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+}
+
+.vellano-nia-dock__meter .vellano-nia-usage-meter {
+  max-width: none;
+  margin-top: 0.25rem;
+}
+
+.vellano-nia-dock__threads {
+  flex: 0 0 auto;
+  max-height: 8rem;
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+}
+
+.vellano-nia-dock__threads-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.vellano-nia-dock__thread-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vellano-nia-dock__thread {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0;
+}
+
+.vellano-nia-dock__thread--active {
+  background: var(--cds-layer-hover-01, #f4f4f4);
+}
+
+.vellano-nia-dock__thread-select {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0.375rem 0.5rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.vellano-nia-dock__thread-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.vellano-nia-dock__messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+.vellano-nia-dock__empty {
+  color: var(--cds-text-secondary, #525252);
+}
+
+.vellano-nia-dock__message {
+  margin-bottom: 0.75rem;
+}
+
+.vellano-nia-dock__message--user .vellano-nia-dock__bubble {
+  margin-left: auto;
+  background: var(--cds-layer-accent-01, #e0e0e0);
+}
+
+.vellano-nia-dock__message--assistant .vellano-nia-dock__bubble {
+  background: var(--cds-layer-02, #f4f4f4);
+}
+
+.vellano-nia-dock__bubble {
+  display: block;
+  max-width: 92%;
+  margin: 0.25rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.25rem;
+  white-space: pre-wrap;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.vellano-nia-card {
+  margin-top: 0.25rem;
+  padding: 0.75rem;
+}
+
+.vellano-nia-card--approval {
+  border-left: 3px solid #f1c21b;
+}
+
+.vellano-nia-card--choice {
+  border-left: 3px solid #a56eff;
+}
+
+.vellano-nia-card--nav {
+  border-left: 3px solid #0f62fe;
+}
+
+.vellano-nia-card--list {
+  border-left: 3px solid #0f62fe;
+}
+
+.vellano-nia-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.vellano-nia-dock__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0 0.75rem 0.5rem;
+}
+
+.vellano-nia-dock__composer {
+  padding: 0.5rem 0.75rem 0.75rem;
+  border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+}
+
+.vellano-nia-dock__composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.vellano-nia-mark {
+  flex-shrink: 0;
+}
+
 /* Carbon DataTable cells are nowrap; tags and long emails need to wrap. */
 .cds--data-table tbody td.vellano-cell-wrap {
   white-space: normal;

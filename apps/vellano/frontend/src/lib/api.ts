@@ -8,6 +8,7 @@ import {
   type PickPreview,
   type UpdatePickPayload,
 } from "./picks";
+import { consumeNiaSse } from "./nia-sse";
 
 export type PresetRole = "owner" | "buyer" | "warehouse" | "till" | "books";
 /** Role slug — five presets plus custom slugs from GET /roles. */
@@ -98,12 +99,29 @@ export class ApiError extends Error {
 
 async function parseErrorMessage(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { detail?: string | { msg?: string }[] };
+    const body = (await response.json()) as {
+      detail?: string | { msg?: string }[] | { code?: string; message?: string };
+    };
     if (typeof body.detail === "string") {
       return body.detail;
     }
     if (Array.isArray(body.detail) && body.detail[0]?.msg) {
       return body.detail[0].msg;
+    }
+    if (body.detail && typeof body.detail === "object" && "code" in body.detail) {
+      const code = body.detail.code;
+      if (code === "nia_llm_unconfigured") {
+        return "Nia is not configured";
+      }
+      if (code === "nia_cap_exceeded") {
+        return "Monthly Nia allowance used";
+      }
+      if (typeof body.detail.message === "string" && body.detail.message.trim()) {
+        return body.detail.message;
+      }
+      if (typeof code === "string") {
+        return code;
+      }
     }
   } catch {
     // ignore parse errors
@@ -2971,6 +2989,133 @@ export function patchNiaUsageCap(
     method: "PATCH",
     body: JSON.stringify({ nia_monthly_token_cap: cap }),
   });
+}
+
+export type NiaMessage = {
+  id: string;
+  role: "user" | "assistant" | string;
+  content: string;
+  structured_payload: NiaStructuredPayload | null;
+  created_at: string;
+};
+
+export type NiaThreadSummary = {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+};
+
+export type NiaThread = NiaThreadSummary & {
+  messages: NiaMessage[];
+};
+
+export type NiaNeedsOkPayload = {
+  kind: "needs_ok";
+  title: string;
+  body: string;
+  tool_call_id: string;
+  tool_name?: string;
+  actions?: string[];
+};
+
+export type NiaYourCallPayload = {
+  kind: "your_call";
+  title?: string;
+  body?: string;
+  options?: string[];
+  tool_call_id?: string;
+};
+
+export type NiaOpenedPagePayload = {
+  kind: "opened_page";
+  path: string;
+};
+
+export type NiaOverdueInvoicesPayload = {
+  kind: "overdue_invoices";
+  invoices: {
+    id: string;
+    invoice_number: string;
+    remaining_zar: string;
+  }[];
+};
+
+export type NiaStructuredPayload =
+  | NiaNeedsOkPayload
+  | NiaYourCallPayload
+  | NiaOpenedPagePayload
+  | NiaOverdueInvoicesPayload
+  | { kind: string; [key: string]: unknown };
+
+export type NiaResumeDecision = "accept" | "decline" | "cancel";
+
+export function listNiaThreads(): Promise<NiaThreadSummary[]> {
+  return apiFetch<NiaThreadSummary[]>("/nia/threads");
+}
+
+export function createNiaThread(title?: string): Promise<NiaThread> {
+  const body = title?.trim() ? { title: title.trim() } : {};
+  return apiFetch<NiaThread>("/nia/threads", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getNiaThread(id: string): Promise<NiaThread> {
+  return apiFetch<NiaThread>(`/nia/threads/${id}`);
+}
+
+export function archiveNiaThread(id: string): Promise<NiaThreadSummary> {
+  return apiFetch<NiaThreadSummary>(`/nia/threads/${id}/archive`, { method: "POST" });
+}
+
+/** Feature-detect: returns null when usage endpoint is unavailable (404). */
+export async function getNiaUsageMeOptional(): Promise<NiaUsageMe | null> {
+  const response = await fetch("/api/v1/nia/usage/me", { credentials: "include" });
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  return response.json() as Promise<NiaUsageMe>;
+}
+
+export async function runNiaThread(
+  threadId: string,
+  message: string,
+  pagePath: string,
+  onToken?: (delta: string) => void,
+): Promise<void> {
+  const response = await fetch(`/api/v1/nia/threads/${threadId}/run`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, page: { path: pagePath } }),
+  });
+  await consumeNiaSse(response, onToken);
+}
+
+export async function resumeNiaThread(
+  threadId: string,
+  decision: NiaResumeDecision,
+  toolCallId?: string,
+  onToken?: (delta: string) => void,
+): Promise<void> {
+  const body: { decision: NiaResumeDecision; tool_call_id?: string } = { decision };
+  if (toolCallId) {
+    body.tool_call_id = toolCallId;
+  }
+  const response = await fetch(`/api/v1/nia/threads/${threadId}/resume`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  await consumeNiaSse(response, onToken);
 }
 
 export function listCostAudit(

@@ -68,6 +68,12 @@ import {
   isStockPath,
 } from "@/lib/nav";
 import { HeaderSearch } from "@/components/header-search";
+import {
+  NiaDockPanel,
+  NiaDockProvider,
+  NiaHeaderAction,
+} from "@/components/nia/nia-dock";
+import { canUseNia } from "@/lib/permissions";
 
 const ICONS = {
   "/": Home,
@@ -177,39 +183,41 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="vellano-shell" data-nav-expanded={expanded ? "true" : "false"}>
-      <Theme theme="g100">
-        <Header aria-label="Vellano">
-          <SkipToContent />
-          <HeaderMenuButton
-            aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
-            isActive={expanded}
-            onClick={() => setExpanded((current) => !current)}
-          />
-          <HeaderName
-            href="/"
-            prefix="F0rge"
-            onClick={(event) => {
-              event.preventDefault();
-              router.push("/");
-            }}
-          >
-            Vellano
-          </HeaderName>
-          <HeaderGlobalBar>
-            <HeaderSearch />
-            <span className="vellano-header-user" title={user.email}>
-              {user.display_name || user.email}
-            </span>
-            <HeaderGlobalAction
-              aria-label="Log out"
-              tooltipAlignment="end"
-              onClick={() => void handleLogout()}
+    <NiaDockProvider>
+      <div className="vellano-shell" data-nav-expanded={expanded ? "true" : "false"}>
+        <Theme theme="g100">
+          <Header aria-label="Vellano">
+            <SkipToContent />
+            <HeaderMenuButton
+              aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
+              isActive={expanded}
+              onClick={() => setExpanded((current) => !current)}
+            />
+            <HeaderName
+              href="/"
+              prefix="F0rge"
+              onClick={(event) => {
+                event.preventDefault();
+                router.push("/");
+              }}
             >
-              <Logout size={20} />
-            </HeaderGlobalAction>
-          </HeaderGlobalBar>
-        </Header>
+              Vellano
+            </HeaderName>
+            <HeaderGlobalBar>
+              <HeaderSearch />
+              {canUseNia(user) ? <NiaHeaderAction /> : null}
+              <span className="vellano-header-user" title={user.email}>
+                {user.display_name || user.email}
+              </span>
+              <HeaderGlobalAction
+                aria-label="Log out"
+                tooltipAlignment="end"
+                onClick={() => void handleLogout()}
+              >
+                <Logout size={20} />
+              </HeaderGlobalAction>
+            </HeaderGlobalBar>
+          </Header>
         <SideNav
           aria-label="Vellano sections"
           expanded={expanded}
@@ -271,7 +279,9 @@ export function AppShell({ children }: AppShellProps) {
         <main id="main-content" className="vellano-main">
           {children}
         </main>
+        {canUseNia(user) ? <NiaDockPanel enabled /> : null}
       </Theme>
     </div>
+    </NiaDockProvider>
   );
 }
