@@ -14,6 +14,7 @@ from app.schemas.nia import (
     NiaThreadCreate,
     NiaThreadResponse,
     NiaThreadSummaryResponse,
+    NiaThreadUpdate,
 )
 from app.services.nia_audit import NiaAuditService
 from app.services.nia_threads import NiaThreadsService
@@ -49,6 +50,16 @@ async def get_nia_thread(
     service: NiaThreadsService = Depends(get_nia_threads_service),
 ) -> NiaThreadResponse:
     return await service.get_thread(user_id, thread_id)
+
+
+@nia_threads_router.patch("/{thread_id}", response_model=NiaThreadSummaryResponse)
+async def rename_nia_thread(
+    thread_id: uuid.UUID,
+    body: NiaThreadUpdate,
+    user_id: uuid.UUID = Depends(require_nia_use),
+    service: NiaThreadsService = Depends(get_nia_threads_service),
+) -> NiaThreadSummaryResponse:
+    return await service.rename_thread(user_id, thread_id, body)
 
 
 @nia_threads_router.get("/{thread_id}/audit", response_model=list[NiaAuditEventResponse])

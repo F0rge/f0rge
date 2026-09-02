@@ -2,7 +2,7 @@
 
 import { Button, StructuredListBody, StructuredListRow, StructuredListWrapper, Tile } from "@carbon/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   resumeNiaThread,
@@ -20,6 +20,7 @@ import {
   type TransferStatus,
 } from "@/lib/api";
 import { writeCanvasSpec } from "@/lib/nia-canvas-store";
+import { labelForNavPath } from "@/lib/nav";
 
 import { NiaCitationChips } from "./nia-citation-chips";
 
@@ -43,51 +44,46 @@ function isTransferDraft(payload: NiaStructuredPayload): payload is NiaTransferD
   return payload.kind === "transfer_draft";
 }
 
-function OpenedPageCard({ path, messageId }: { path: string; messageId: string }) {
+function OpenedPageCard({ path }: { path: string }) {
   const router = useRouter();
-  const navigatedRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (navigatedRef.current.has(messageId)) {
-      return;
-    }
-    navigatedRef.current.add(messageId);
-    router.push(path);
-  }, [messageId, path, router]);
+  const label = labelForNavPath(path);
 
   return (
     <Tile className="vellano-nia-card vellano-nia-card--nav">
       <p className="cds--type-label-01">Opened page</p>
-      <p className="cds--type-body-01">{path}</p>
+      <p className="cds--type-body-01">{label}</p>
+      <div className="vellano-nia-card__actions">
+        <Button size="sm" kind="primary" onClick={() => router.push(path)}>
+          Open {label}
+        </Button>
+      </div>
     </Tile>
   );
 }
 
 function CanvasSpecCard({
   title,
-  messageId,
   spec,
 }: {
   title: string;
-  messageId: string;
   spec: Parameters<typeof writeCanvasSpec>[0];
 }) {
   const router = useRouter();
-  const navigatedRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (navigatedRef.current.has(messageId)) {
-      return;
-    }
-    navigatedRef.current.add(messageId);
+  function handleView() {
     writeCanvasSpec(spec);
     router.push("/canvas");
-  }, [messageId, router, spec]);
+  }
 
   return (
     <Tile className="vellano-nia-card vellano-nia-card--nav">
       <p className="cds--type-label-01">Canvas</p>
       <p className="cds--type-body-01">{title}</p>
+      <div className="vellano-nia-card__actions">
+        <Button size="sm" kind="primary" onClick={handleView}>
+          View Canvas
+        </Button>
+      </div>
     </Tile>
   );
 }
@@ -166,11 +162,7 @@ function TransferDraftCard({
           <Button size="sm" kind="danger--tertiary" disabled={undoing} onClick={() => void handleUndo()}>
             Undo
           </Button>
-          <Button
-            size="sm"
-            kind="ghost"
-            onClick={() => router.push(`/transfers`)}
-          >
+          <Button size="sm" kind="ghost" onClick={() => router.push("/transfers")}>
             Open Transfers
           </Button>
         </div>
@@ -206,13 +198,11 @@ export function NiaStructuredCard({
   }
 
   if (structured.kind === "opened_page" && typeof structured.path === "string") {
-    return <OpenedPageCard path={structured.path} messageId={message.id} />;
+    return <OpenedPageCard path={structured.path} />;
   }
 
   if (isCanvasSpecPayload(structured)) {
-    return (
-      <CanvasSpecCard title={structured.title} messageId={message.id} spec={structured} />
-    );
+    return <CanvasSpecCard title={structured.title} spec={structured} />;
   }
 
   if (isTransferDraft(structured)) {

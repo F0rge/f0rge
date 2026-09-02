@@ -3099,6 +3099,17 @@ export function archiveNiaThread(id: string): Promise<NiaThreadSummary> {
   return apiFetch<NiaThreadSummary>(`/nia/threads/${id}/archive`, { method: "POST" });
 }
 
+export function patchNiaThread(id: string, title: string): Promise<NiaThreadSummary> {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    return Promise.reject(new ApiError(422, "Title cannot be empty"));
+  }
+  return apiFetch<NiaThreadSummary>(`/nia/threads/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title: trimmed }),
+  });
+}
+
 /** Feature-detect: returns null when usage endpoint is unavailable (404). */
 export async function getNiaUsageMeOptional(): Promise<NiaUsageMe | null> {
   const response = await fetch("/api/v1/nia/usage/me", { credentials: "include" });

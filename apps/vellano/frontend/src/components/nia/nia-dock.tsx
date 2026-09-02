@@ -6,18 +6,22 @@ import {
   IconButton,
   InlineNotification,
   Loading,
+  Modal,
   TextArea,
+  TextInput,
 } from "@carbon/react";
 import {
+  Add,
   Archive,
   Close,
+  Edit,
   FitToScreen,
   Microphone,
-  Renew,
+  RecentlyViewed,
   Send,
   SidePanelClose,
 } from "@carbon/icons-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -36,19 +40,26 @@ import {
   createNiaThread,
   getNiaThread,
   getNiaUsageMeOptional,
+  isCanvasSpecPayload,
   listNiaThreads,
+  patchNiaThread,
   runNiaThread,
   type NiaMessage,
   type NiaThread,
   type NiaThreadSummary,
   type NiaUsageMe,
 } from "@/lib/api";
+import { writeCanvasSpec } from "@/lib/nia-canvas-store";
+import {
+  formatRelativeThreadTime,
+  messageHasStructuredCard,
+  syncCanvasSpecFromThread,
+} from "@/lib/nia-thread-utils";
 
 const WIDTH_STORAGE_KEY = "vellano-nia-dock-width";
 const MIN_WIDTH_PX = 320;
 const DEFAULT_WIDTH_PX = 384;
 const MAX_WIDTH_RATIO = 0.8;
-const EXPANDED_WIDTH_RATIO = 0.92;
 
 const SUGGESTIONS = [
   "List overdue invoices",
@@ -72,10 +83,6 @@ export function useNiaDock(): NiaDockContextValue {
   return ctx;
 }
 
-function formatTokenCount(value: number): string {
-  return value.toLocaleString("en-ZA");
-}
-
 function readStoredWidth(): number {
   if (typeof window === "undefined") {
     return DEFAULT_WIDTH_PX;
@@ -86,6 +93,173 @@ function readStoredWidth(): number {
     return DEFAULT_WIDTH_PX;
   }
   return Math.max(MIN_WIDTH_PX, parsed);
+}
+
+function applyPostRunNavigation(thread: NiaThread, router: ReturnType<typeof useRouter>): void {
+  const lastMessage = thread.messages[thread.messages.length - 1];
+  if (!lastMessage || lastMessage.role !== "assistant") {
+    return;
+  }
+  const payload = lastMessage.structured_payload;
+  if (!payload || typeof payload !== "object" || !("kind" in payload)) {
+    return;
+  }
+  if (payload.kind === "opened_page" && typeof payload.path === "string") {
+    router.push(payload.path);
+    return;
+  }
+  if (isCanvasSpecPayload(payload)) {
+    writeCanvasSpec(payload);
+    router.push("/canvas");
+  }
+}
+
+type NiaConversationProps = {
+  messages: NiaMessage[];
+  activeThreadId: string | undefined;
+  streaming: boolean;
+  streamingText: string;
+  loadingThread: boolean;
+  showSuggestions: boolean;
+  composer: string;
+  composerDisabled: boolean;
+  speechSupported: boolean;
+  onComposerChange: (value: string) => void;
+  onSend: (messageText?: string) => void;
+  onToggleDictate: () => void;
+  onResumeComplete: () => void;
+  onResumeError: (message: string) => void;
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
+};
+
+function NiaConversation({
+  messages,
+  activeThreadId,
+  streaming,
+  streamingText,
+  loadingThread,
+  showSuggestions,
+  composer,
+  composerDisabled,
+  speechSupported,
+  onComposerChange,
+  onSend,
+  onToggleDictate,
+  onResumeComplete,
+  onResumeError,
+  messagesEndRef,
+}: NiaConversationProps) {
+  const hasUserMessage = messages.some((message) => message.role === "user");
+
+  return (
+    <>
+      <div className="vellano-nia-dock__messages">
+        {loadingThread ? (
+          <Loading withOverlay={false} description="Loading conversation…" />
+        ) : messages.length === 0 && !streamingText ? (
+          <p className="vellano-nia-dock__empty cds--type-body-01">
+            Ask Nia about invoices, stock, or navigation.
+          </p>
+        ) : (
+          <>
+            {messages.map((message) => {
+              const hasCard =
+                message.role === "assistant" && messageHasStructuredCard(message);
+              return (
+                <div
+                  key={message.id}
+                  className={`vellano-nia-dock__message vellano-nia-dock__message--${message.role}`}
+                >
+                  {hasCard ? (
+                    <NiaStructuredCard
+                      message={message}
+                      threadId={activeThreadId ?? ""}
+                      streaming={streaming}
+                      onResumeComplete={onResumeComplete}
+                      onResumeError={onResumeError}
+                    />
+                  ) : null}
+                  {message.content && !hasCard ? (
+                    <p className="vellano-nia-dock__bubble">{message.content}</p>
+                  ) : null}
+                </div>
+              );
+            })}
+            {streamingText ? (
+              <div className="vellano-nia-dock__message vellano-nia-dock__message--assistant">
+                <p className="vellano-nia-dock__bubble">{streamingText}</p>
+              </div>
+            ) : null}
+          </>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {showSuggestions && !hasUserMessage ? (
+        <div className="vellano-nia-dock__suggestions">
+          {SUGGESTIONS.map((label) => (
+            <Button
+              key={label}
+              kind="ghost"
+              size="sm"
+              disabled={streaming}
+              onClick={() => {
+                onComposerChange(label);
+                void onSend(label);
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="vellano-nia-dock__composer">
+        <TextArea
+          id="nia-composer"
+          labelText="Message Nia"
+          hideLabel
+          placeholder="Message Nia…"
+          rows={1}
+          value={composer}
+          disabled={composerDisabled}
+          onChange={(event) => onComposerChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void onSend();
+            }
+          }}
+        />
+        <div className="vellano-nia-dock__composer-actions">
+          <IconButton
+            kind="ghost"
+            size="md"
+            label="Dictate"
+            aria-label="Dictate"
+            disabled={!speechSupported || streaming}
+            title={
+              speechSupported
+                ? "Dictate"
+                : "Speech recognition is not supported in this browser"
+            }
+            onClick={onToggleDictate}
+          >
+            <Microphone />
+          </IconButton>
+          <Button
+            kind="primary"
+            size="md"
+            renderIcon={Send}
+            disabled={streaming || !composer.trim() || composerDisabled}
+            onClick={() => void onSend()}
+          >
+            Send
+          </Button>
+        </div>
+      </div>
+    </>
+  );
 }
 
 type NiaDockProviderProps = {
@@ -104,7 +278,7 @@ export function NiaDockProvider({ children, enabled = true }: NiaDockProviderPro
       return;
     }
     function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
+      if ((event.metaKey || event.ctrlKey) && event.key === ".") {
         event.preventDefault();
         toggle();
       }
@@ -124,7 +298,7 @@ export function NiaHeaderAction() {
   const { toggle } = useNiaDock();
   return (
     <HeaderGlobalAction
-      aria-label="Nia"
+      aria-label="Nia (⌘/Ctrl+.)"
       tooltipAlignment="end"
       onClick={toggle}
     >
@@ -139,11 +313,16 @@ type NiaDockPanelProps = {
 
 export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { open, toggle } = useNiaDock();
 
   const [width, setWidth] = useState(DEFAULT_WIDTH_PX);
-  const [expanded, setExpanded] = useState(false);
-  const [preExpandWidth, setPreExpandWidth] = useState(DEFAULT_WIDTH_PX);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameThreadId, setRenameThreadId] = useState<string | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [renaming, setRenaming] = useState(false);
   const [threads, setThreads] = useState<NiaThreadSummary[]>([]);
   const [activeThread, setActiveThread] = useState<NiaThread | null>(null);
   const [composer, setComposer] = useState("");
@@ -154,7 +333,6 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [usageMe, setUsageMe] = useState<NiaUsageMe | null | undefined>(undefined);
   const [dictating, setDictating] = useState(false);
-  const [viewportWidth, setViewportWidth] = useState(DEFAULT_WIDTH_PX);
 
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -164,9 +342,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     typeof window !== "undefined" &&
     Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
 
-  const effectiveWidth = expanded
-    ? Math.floor(viewportWidth * EXPANDED_WIDTH_RATIO)
-    : width;
+  const composerBlocked = usageMe?.cap === 0;
 
   const loadThreads = useCallback(async () => {
     setLoadingThreads(true);
@@ -185,6 +361,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     setError(null);
     try {
       const thread = await getNiaThread(threadId);
+      syncCanvasSpecFromThread(thread);
       setActiveThread(thread);
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Failed to load thread");
@@ -195,12 +372,6 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
 
   useEffect(() => {
     setWidth(readStoredWidth());
-    function syncViewport() {
-      setViewportWidth(window.innerWidth);
-    }
-    syncViewport();
-    window.addEventListener("resize", syncViewport);
-    return () => window.removeEventListener("resize", syncViewport);
   }, []);
 
   useEffect(() => {
@@ -220,7 +391,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     }
     if (enabled && open) {
       shell.setAttribute("data-nia-dock-open", "true");
-      shell.style.setProperty("--vellano-nia-dock-width", `${effectiveWidth}px`);
+      shell.style.setProperty("--vellano-nia-dock-width", `${width}px`);
     } else {
       shell.removeAttribute("data-nia-dock-open");
       shell.style.removeProperty("--vellano-nia-dock-width");
@@ -229,17 +400,15 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
       shell.removeAttribute("data-nia-dock-open");
       shell.style.removeProperty("--vellano-nia-dock-width");
     };
-  }, [enabled, open, effectiveWidth]);
+  }, [enabled, open, width]);
 
   useEffect(() => {
-    if (!expanded) {
-      sessionStorage.setItem(WIDTH_STORAGE_KEY, String(width));
-    }
-  }, [width, expanded]);
+    sessionStorage.setItem(WIDTH_STORAGE_KEY, String(width));
+  }, [width]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeThread?.messages, streamingText]);
+  }, [activeThread?.messages, streamingText, modalOpen]);
 
   if (!enabled) {
     return null;
@@ -277,7 +446,10 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
       await runNiaThread(thread.id, text, pathname, (delta) => {
         setStreamingText((current) => current + delta);
       });
-      await loadThread(thread.id);
+      const fresh = await getNiaThread(thread.id);
+      syncCanvasSpecFromThread(fresh);
+      setActiveThread(fresh);
+      applyPostRunNavigation(fresh, router);
       await loadThreads();
       getNiaUsageMeOptional().then(setUsageMe).catch(() => undefined);
       setComposer("");
@@ -303,8 +475,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     }
   }
 
-  async function handleArchive(threadId: string, event: React.MouseEvent) {
-    event.stopPropagation();
+  async function handleArchive(threadId: string) {
     try {
       await archiveNiaThread(threadId);
       setThreads((current) => current.filter((row) => row.id !== threadId));
@@ -316,10 +487,40 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     }
   }
 
-  function handleResizePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (expanded) {
+  function openRename(thread: NiaThreadSummary) {
+    setRenameThreadId(thread.id);
+    setRenameTitle(thread.title);
+    setRenameOpen(true);
+  }
+
+  async function handleRenameSubmit() {
+    if (!renameThreadId) {
       return;
     }
+    const trimmed = renameTitle.trim();
+    if (!trimmed) {
+      setError("Title cannot be empty");
+      return;
+    }
+    setRenaming(true);
+    try {
+      const updated = await patchNiaThread(renameThreadId, trimmed);
+      setThreads((current) =>
+        current.map((row) => (row.id === updated.id ? { ...row, title: updated.title } : row)),
+      );
+      if (activeThread?.id === updated.id) {
+        setActiveThread({ ...activeThread, title: updated.title });
+      }
+      setRenameOpen(false);
+      setRenameThreadId(null);
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : "Failed to rename thread");
+    } finally {
+      setRenaming(false);
+    }
+  }
+
+  function handleResizePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault();
     resizeRef.current = { startX: event.clientX, startWidth: width };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -343,16 +544,6 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
       resizeRef.current = null;
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-  }
-
-  function toggleExpanded() {
-    if (expanded) {
-      setExpanded(false);
-      setWidth(preExpandWidth);
-      return;
-    }
-    setPreExpandWidth(width);
-    setExpanded(true);
   }
 
   function toggleDictate() {
@@ -388,224 +579,201 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     setDictating(true);
   }
 
-  const usagePercent =
-    usageMe && usageMe.cap > 0 ? Math.min(100, (usageMe.used / usageMe.cap) * 100) : 0;
-
   const messages: NiaMessage[] = activeThread?.messages ?? [];
 
+  const conversationProps: NiaConversationProps = {
+    messages,
+    activeThreadId: activeThread?.id,
+    streaming,
+    streamingText,
+    loadingThread,
+    showSuggestions: true,
+    composer,
+    composerDisabled: streaming || composerBlocked,
+    speechSupported,
+    onComposerChange: setComposer,
+    onSend: handleSend,
+    onToggleDictate: toggleDictate,
+    onResumeComplete: () => {
+      if (activeThread) {
+        void loadThread(activeThread.id);
+      }
+    },
+    onResumeError: setError,
+    messagesEndRef,
+  };
+
   return (
-    <aside
-      className={`vellano-nia-dock${open ? " vellano-nia-dock--open" : ""}${expanded ? " vellano-nia-dock--expanded" : ""}`}
-      style={{ width: open ? effectiveWidth : 0 }}
-      aria-hidden={!open}
-    >
-      <div
-        className="vellano-nia-dock__resize"
-        onPointerDown={handleResizePointerDown}
-        onPointerMove={handleResizePointerMove}
-        onPointerUp={handleResizePointerUp}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize Nia panel"
-      />
-      <div className="vellano-nia-dock__inner">
-        <header className="vellano-nia-dock__header">
-          <div className="vellano-nia-dock__title">
-            <NiaMark size={22} />
-            <span className="cds--type-productive-heading-02">Nia</span>
-          </div>
-          <div className="vellano-nia-dock__header-actions">
-            <IconButton
-              kind="ghost"
-              size="sm"
-              label={expanded ? "Dock" : "Expand"}
-              onClick={toggleExpanded}
-            >
-              {expanded ? <SidePanelClose /> : <FitToScreen />}
-            </IconButton>
-            <IconButton kind="ghost" size="sm" label="Close Nia" onClick={toggle}>
-              <Close />
-            </IconButton>
-          </div>
-        </header>
-
-        {usageMe !== undefined && usageMe !== null ? (
-          <div className="vellano-nia-dock__meter">
-            <p className="cds--type-helper-text-01">
-              {formatTokenCount(usageMe.used)} / {formatTokenCount(usageMe.cap)} tokens
-              {usageMe.cap === 0 ? " — blocked" : ""}
-            </p>
-            {usageMe.cap > 0 ? (
-              <div
-                className="vellano-nia-usage-meter"
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={usageMe.cap}
-                aria-valuenow={usageMe.used}
-                aria-label="Nia token usage this month"
+    <>
+      <aside
+        className={`vellano-nia-dock${open ? " vellano-nia-dock--open" : ""}`}
+        style={{ width: open ? width : 0 }}
+        aria-hidden={!open}
+      >
+        <div
+          className="vellano-nia-dock__resize"
+          onPointerDown={handleResizePointerDown}
+          onPointerMove={handleResizePointerMove}
+          onPointerUp={handleResizePointerUp}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize Nia panel"
+        />
+        <div className="vellano-nia-dock__inner">
+          <header className="vellano-nia-dock__header">
+            <div className="vellano-nia-dock__title">
+              <NiaMark size={22} />
+              <span className="cds--type-productive-heading-02">Nia</span>
+            </div>
+            <div className="vellano-nia-dock__header-actions">
+              <IconButton
+                kind="ghost"
+                size="sm"
+                label="New conversation"
+                onClick={() => void handleNewThread()}
               >
-                <div
-                  className="vellano-nia-usage-meter__bar"
-                  style={{ width: `${usagePercent}%` }}
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+                <Add />
+              </IconButton>
+              <IconButton
+                kind="ghost"
+                size="sm"
+                label="History"
+                onClick={() => {
+                  void loadThreads();
+                  setHistoryOpen(true);
+                }}
+              >
+                <RecentlyViewed />
+              </IconButton>
+              <IconButton
+                kind="ghost"
+                size="sm"
+                label="Expand"
+                onClick={() => setModalOpen(true)}
+              >
+                <FitToScreen />
+              </IconButton>
+              <IconButton kind="ghost" size="sm" label="Close Nia" onClick={toggle}>
+                <Close />
+              </IconButton>
+            </div>
+          </header>
 
-        <div className="vellano-nia-dock__threads">
-          <div className="vellano-nia-dock__threads-toolbar">
-            <p className="cds--type-label-01">Threads</p>
-            <Button kind="ghost" size="sm" renderIcon={Renew} onClick={() => void handleNewThread()}>
-              New
-            </Button>
-          </div>
-          {loadingThreads ? (
-            <Loading withOverlay={false} description="Loading threads…" small />
-          ) : threads.length === 0 ? (
-            <p className="cds--type-helper-text-01">No threads yet.</p>
-          ) : (
-            <ul className="vellano-nia-dock__thread-list">
-              {threads.map((thread) => (
-                <li
-                  key={thread.id}
-                  className={`vellano-nia-dock__thread${activeThread?.id === thread.id ? " vellano-nia-dock__thread--active" : ""}`}
+          {error && !modalOpen ? (
+            <InlineNotification
+              kind="error"
+              title="Nia"
+              subtitle={error}
+              lowContrast
+              onClose={() => setError(null)}
+            />
+          ) : null}
+
+          {!modalOpen ? <NiaConversation {...conversationProps} /> : (
+            <p className="vellano-nia-dock__expanded-hint cds--type-helper-text-01">
+              Conversation expanded — use Dock to return.
+            </p>
+          )}
+        </div>
+      </aside>
+
+      <Modal
+        open={modalOpen}
+        modalHeading="Nia"
+        passiveModal
+        size="lg"
+        className="vellano-nia-modal"
+        onRequestClose={() => setModalOpen(false)}
+      >
+        <div className="vellano-nia-modal__body">
+          {error ? (
+            <InlineNotification
+              kind="error"
+              title="Nia"
+              subtitle={error}
+              lowContrast
+              onClose={() => setError(null)}
+            />
+          ) : null}
+          <NiaConversation {...conversationProps} />
+        </div>
+        <div className="vellano-nia-modal__footer">
+          <Button kind="secondary" size="sm" renderIcon={SidePanelClose} onClick={() => setModalOpen(false)}>
+            Dock
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={historyOpen}
+        modalHeading="Conversation history"
+        passiveModal
+        size="sm"
+        onRequestClose={() => setHistoryOpen(false)}
+      >
+        {loadingThreads ? (
+          <Loading withOverlay={false} description="Loading threads…" small />
+        ) : threads.length === 0 ? (
+          <p className="cds--type-body-01">No threads yet.</p>
+        ) : (
+          <ul className="vellano-nia-history-list">
+            {threads.map((thread) => (
+              <li key={thread.id} className="vellano-nia-history-list__item">
+                <button
+                  type="button"
+                  className="vellano-nia-history-list__select"
+                  onClick={() => {
+                    void loadThread(thread.id);
+                    setHistoryOpen(false);
+                  }}
                 >
-                  <button
-                    type="button"
-                    className="vellano-nia-dock__thread-select"
-                    onClick={() => void loadThread(thread.id)}
+                  <span className="vellano-nia-history-list__title">{thread.title}</span>
+                  <span className="vellano-nia-history-list__time">
+                    {formatRelativeThreadTime(thread.updated_at)}
+                  </span>
+                </button>
+                <div className="vellano-nia-history-list__actions">
+                  <IconButton
+                    kind="ghost"
+                    size="sm"
+                    label={`Rename ${thread.title}`}
+                    onClick={() => openRename(thread)}
                   >
-                    <span className="vellano-nia-dock__thread-title">{thread.title}</span>
-                  </button>
+                    <Edit />
+                  </IconButton>
                   <IconButton
                     kind="ghost"
                     size="sm"
                     label={`Archive ${thread.title}`}
-                    onClick={(event: React.MouseEvent) => void handleArchive(thread.id, event)}
+                    onClick={() => void handleArchive(thread.id)}
                   >
                     <Archive />
                   </IconButton>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="vellano-nia-dock__messages">
-          {loadingThread ? (
-            <Loading withOverlay={false} description="Loading conversation…" />
-          ) : messages.length === 0 && !streamingText ? (
-            <p className="vellano-nia-dock__empty cds--type-body-01">
-              Ask Nia about invoices, stock, or navigation.
-            </p>
-          ) : (
-            <>
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`vellano-nia-dock__message vellano-nia-dock__message--${message.role}`}
-                >
-                  {message.role === "assistant" && message.structured_payload ? (
-                    <NiaStructuredCard
-                      message={message}
-                      threadId={activeThread?.id ?? ""}
-                      streaming={streaming}
-                      onResumeComplete={() => {
-                        if (activeThread) {
-                          void loadThread(activeThread.id);
-                        }
-                      }}
-                      onResumeError={setError}
-                    />
-                  ) : null}
-                  {message.content ? (
-                    <p className="vellano-nia-dock__bubble">{message.content}</p>
-                  ) : null}
                 </div>
-              ))}
-              {streamingText ? (
-                <div className="vellano-nia-dock__message vellano-nia-dock__message--assistant">
-                  <p className="vellano-nia-dock__bubble">{streamingText}</p>
-                </div>
-              ) : null}
-            </>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
 
-        {error ? (
-          <InlineNotification
-            kind="error"
-            title="Nia"
-            subtitle={error}
-            lowContrast
-            onClose={() => setError(null)}
-          />
-        ) : null}
-
-        <div className="vellano-nia-dock__suggestions">
-          {SUGGESTIONS.map((label) => (
-            <Button
-              key={label}
-              kind="ghost"
-              size="sm"
-              disabled={streaming}
-              onClick={() => {
-                setComposer(label);
-                void handleSend(label);
-              }}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-
-        <div className="vellano-nia-dock__composer">
-          <TextArea
-            id="nia-composer"
-            labelText="Message Nia"
-            hideLabel
-            placeholder="Message Nia…"
-            rows={3}
-            value={composer}
-            disabled={streaming || usageMe?.cap === 0}
-            onChange={(event) => setComposer(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void handleSend();
-              }
-            }}
-          />
-          <div className="vellano-nia-dock__composer-actions">
-            <IconButton
-              kind="ghost"
-              size="md"
-              label="Dictate"
-              aria-label="Dictate"
-              disabled={!speechSupported || streaming}
-              title={
-                speechSupported
-                  ? "Dictate"
-                  : "Speech recognition is not supported in this browser"
-              }
-              onClick={toggleDictate}
-            >
-              <Microphone />
-            </IconButton>
-            <Button
-              kind="primary"
-              size="md"
-              renderIcon={Send}
-              disabled={streaming || !composer.trim() || usageMe?.cap === 0}
-              onClick={() => void handleSend()}
-            >
-              Send
-            </Button>
-          </div>
-        </div>
-      </div>
-    </aside>
+      <Modal
+        open={renameOpen}
+        modalHeading="Rename conversation"
+        primaryButtonText={renaming ? "Saving…" : "Save"}
+        secondaryButtonText="Cancel"
+        primaryButtonDisabled={renaming || !renameTitle.trim()}
+        onRequestClose={() => setRenameOpen(false)}
+        onRequestSubmit={() => void handleRenameSubmit()}
+      >
+        <TextInput
+          id="nia-rename-title"
+          labelText="Title"
+          value={renameTitle}
+          onChange={(event) => setRenameTitle(event.target.value)}
+          invalid={!renameTitle.trim()}
+          invalidText="Title cannot be empty"
+        />
+      </Modal>
+    </>
   );
 }

@@ -4,7 +4,7 @@ import datetime
 import uuid
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class NiaHealthResponse(BaseModel):
@@ -14,6 +14,18 @@ class NiaHealthResponse(BaseModel):
 
 class NiaThreadCreate(BaseModel):
     title: Optional[str] = Field(default=None, max_length=512)
+
+
+class NiaThreadUpdate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=512)
+
+    @field_validator("title", mode="after")
+    @classmethod
+    def strip_non_empty(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Title cannot be empty")
+        return stripped
 
 
 class NiaMessageResponse(BaseModel):
