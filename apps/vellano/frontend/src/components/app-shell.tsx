@@ -56,6 +56,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { useAuth } from "@/lib/auth";
+import { bindCanvasUser } from "@/lib/nia-canvas-store";
 import { can } from "@/lib/permissions";
 import {
   ACCOUNT_NAV_ITEMS,
@@ -139,6 +140,12 @@ export function AppShell({ children }: AppShellProps) {
       router.replace("/login");
     }
   }, [loading, user, isLogin, router]);
+
+  useEffect(() => {
+    if (user) {
+      bindCanvasUser(user.id);
+    }
+  }, [user]);
 
   if (isLogin) {
     return <>{children}</>;

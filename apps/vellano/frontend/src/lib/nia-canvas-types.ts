@@ -33,6 +33,12 @@ export type CanvasSpec = {
   components: CanvasComponent[];
 };
 
+export type CanvasClearedPayload = {
+  kind: "canvas_cleared";
+  path?: "/canvas";
+  cleared_at?: string;
+};
+
 const CHART_TYPES = new Set(["bar", "line", "table", "metric"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -156,4 +162,17 @@ export function isCanvasSpecPayload(
   payload: { kind: string; [key: string]: unknown },
 ): payload is CanvasSpec {
   return parseCanvasSpec(payload) !== null;
+}
+
+export function isCanvasClearedPayload(
+  payload: { kind: string; [key: string]: unknown },
+): payload is CanvasClearedPayload {
+  if (payload.kind !== "canvas_cleared") {
+    return false;
+  }
+  return payload.path === "/canvas" || payload.path === undefined;
+}
+
+export function isEmptyCanvasSpec(spec: CanvasSpec | null): boolean {
+  return spec === null || spec.components.length === 0;
 }

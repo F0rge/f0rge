@@ -1,42 +1,50 @@
 "use client";
 
-import { InlineNotification, Stack } from "@carbon/react";
+import { Button, InlineNotification, Stack } from "@carbon/react";
 import { useEffect } from "react";
 
 import { CanvasSurface } from "@/components/nia/canvas-surface";
 import { useAuth } from "@/lib/auth";
+import { getNiaThread, listNiaThreads } from "@/lib/api";
 import {
-  getNiaThread,
-  isCanvasSpecPayload,
-  listNiaThreads,
-} from "@/lib/api";
-import { readCanvasSpec, useCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
+  bindCanvasUser,
+  clearCanvasSpec,
+  isCanvasCleared,
+  readCanvasSpec,
+  useCanvasSpec,
+} from "@/lib/nia-canvas-store";
+import { isEmptyCanvasSpec } from "@/lib/nia-canvas-types";
+import { hydrateCanvasFromThreadMessages } from "@/lib/nia-thread-utils";
 import { canUseNia } from "@/lib/permissions";
 
 const HYDRATE_THREAD_CAP = 10;
+const EMPTY_COPY =
+  "Ask Nia to chart overdue invoices, sales by SKU, or dining vs sofas.";
 
-async function hydrateCanvasSpecFromThreads(): Promise<boolean> {
+async function hydrateCanvasSpecFromThreads(): Promise<void> {
+  if (readCanvasSpec() || isCanvasCleared()) {
+    return;
+  }
   const threads = await listNiaThreads();
   const candidates = threads.slice(0, HYDRATE_THREAD_CAP);
-  for (const summary of candidates) {
-    const thread = await getNiaThread(summary.id);
-    for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
-      const payload = thread.messages[index]?.structured_payload;
-      if (payload && isCanvasSpecPayload(payload)) {
-        writeCanvasSpec(payload);
-        return true;
-      }
-    }
+  const detailed = await Promise.all(candidates.map((summary) => getNiaThread(summary.id)));
+  if (isCanvasCleared()) {
+    return;
   }
-  return false;
+  hydrateCanvasFromThreadMessages(detailed);
 }
 
 export default function CanvasPage() {
   const { user } = useAuth();
   const spec = useCanvasSpec();
+  const empty = isEmptyCanvasSpec(spec);
 
   useEffect(() => {
-    if (readCanvasSpec() || !user || !canUseNia(user)) {
+    if (!user || !canUseNia(user)) {
+      return;
+    }
+    bindCanvasUser(user.id);
+    if (readCanvasSpec() || isCanvasCleared()) {
       return;
     }
     void hydrateCanvasSpecFromThreads().catch(() => undefined);
@@ -57,17 +65,18 @@ export default function CanvasPage() {
 
   return (
     <Stack gap={6} className="vellano-page">
-      <div>
-        <h1 className="cds--type-productive-heading-04">Canvas</h1>
-        {spec ? (
-          <p className="vellano-muted-text cds--type-body-01">{spec.title}</p>
-        ) : (
+      <div className="vellano-page-header">
+        <div>
+          <h1 className="cds--type-productive-heading-04">Canvas</h1>
           <p className="vellano-muted-text cds--type-body-01">
-            Ask Nia to chart something — try dining vs sofas this month.
+            {empty ? EMPTY_COPY : spec?.title}
           </p>
-        )}
+        </div>
+        <Button kind="ghost" size="sm" onClick={() => clearCanvasSpec()}>
+          Clear canvas
+        </Button>
       </div>
-      {spec ? <CanvasSurface spec={spec} /> : null}
+      {empty || !spec ? null : <CanvasSurface spec={spec} />}
     </Stack>
   );
 }

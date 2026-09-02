@@ -12,7 +12,20 @@ from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
 from app.models.tax_invoice import TaxInvoice
 from app.nia.agent import NiaDeps, nia_agent
-from app.nia.canvas import build_dining_vs_sofas_canvas_spec
+from app.nia.canvas import (
+    add_canvas_component as merge_add_canvas_component,
+    build_aged_ar_canvas_spec,
+    build_dining_vs_sofas_canvas_spec,
+    build_overdue_invoices_canvas_spec,
+    build_sales_by_sku_canvas_spec,
+    build_stock_on_hand_canvas_spec,
+    canvas_cleared_payload,
+    empty_canvas_spec,
+    merge_canvas_mode,
+    remove_canvas_component as drop_canvas_component,
+    set_canvas_spec,
+    set_canvas_title as apply_canvas_title,
+)
 from app.permissions import NIA_USE, STOCK_TRANSFER
 from app.schemas.transfer import TransferCreate, TransferLineCreate
 from app.services.inventory import InventoryService
@@ -76,6 +89,28 @@ def _require_nia_use(deps: NiaDeps) -> Optional[str]:
 
 def _set_structured_payload(ctx: RunContext[NiaDeps], payload: dict[str, Any]) -> None:
     ctx.deps.last_structured_payload = payload
+
+
+def _current_canvas(deps: NiaDeps) -> dict[str, Any]:
+    spec = deps.canvas_spec
+    if isinstance(spec, dict) and spec.get("kind") == "canvas_spec":
+        return spec
+    return empty_canvas_spec()
+
+
+def _publish_canvas_spec(ctx: RunContext[NiaDeps], spec: dict[str, Any]) -> dict[str, Any]:
+    ctx.deps.canvas_spec = spec
+    _set_structured_payload(ctx, spec)
+    return spec
+
+
+def _apply_chart_spec(
+    ctx: RunContext[NiaDeps],
+    incoming: dict[str, Any],
+    mode: Optional[str],
+) -> dict[str, Any]:
+    merged = merge_canvas_mode(_current_canvas(ctx.deps), incoming, mode or "replace")
+    return _publish_canvas_spec(ctx, merged)
 
 
 async def _resolve_sku_id(db, sku_ref: str) -> Optional[uuid.UUID]:
@@ -188,15 +223,158 @@ async def get_stock_on_hand(
 
 
 @nia_agent.tool
-async def chart_dining_vs_sofas(ctx: RunContext[NiaDeps]) -> Union[dict[str, Any], str]:
+async def clear_canvas(ctx: RunContext[NiaDeps]) -> Union[dict[str, Any], str]:
+    """Empty the Canvas whiteboard. Call this when the user asks to clear the canvas."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    ctx.deps.canvas_spec = empty_canvas_spec()
+    payload = canvas_cleared_payload()
+    _set_structured_payload(ctx, payload)
+    return payload
+
+
+@nia_agent.tool
+async def set_canvas(
+    ctx: RunContext[NiaDeps],
+    title: str,
+    components: list[dict[str, Any]],
+) -> Union[dict[str, Any], str]:
+    """Replace the whole Canvas spec (title + components). Use for 'instead show X'."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    spec = set_canvas_spec(title, components)
+    if spec is None:
+        return "Canvas replace failed: components must be allowlisted bar, line, table, or metric cards."
+    return _publish_canvas_spec(ctx, spec)
+
+
+@nia_agent.tool
+async def add_canvas_component(
+    ctx: RunContext[NiaDeps],
+    component: dict[str, Any],
+) -> Union[dict[str, Any], str]:
+    """Append one Canvas card and keep the existing cards."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    spec = merge_add_canvas_component(_current_canvas(ctx.deps), component)
+    if spec is None:
+        return (
+            "Canvas add failed: component must be an allowlisted bar, line, table, or metric card."
+        )
+    return _publish_canvas_spec(ctx, spec)
+
+
+@nia_agent.tool
+async def remove_canvas_component(
+    ctx: RunContext[NiaDeps],
+    component_id: str,
+) -> Union[dict[str, Any], str]:
+    """Remove a Canvas card by id."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    current = _current_canvas(ctx.deps)
+    target = component_id.strip()
+    if not any(entry.get("id") == target for entry in current.get("components", [])):
+        return f"Canvas remove failed: no component with id {target}."
+    return _publish_canvas_spec(ctx, drop_canvas_component(current, target))
+
+
+@nia_agent.tool
+async def set_canvas_title(ctx: RunContext[NiaDeps], title: str) -> Union[dict[str, Any], str]:
+    """Set the Canvas title without changing cards."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    return _publish_canvas_spec(ctx, apply_canvas_title(_current_canvas(ctx.deps), title))
+
+
+@nia_agent.tool
+async def chart_dining_vs_sofas(
+    ctx: RunContext[NiaDeps],
+    mode: str = "replace",
+) -> Union[dict[str, Any], str]:
     """Chart dining vs sofa sales for the current calendar month on Canvas."""
     denied = _require_nia_use(ctx.deps)
     if denied:
         return denied
 
     spec = await build_dining_vs_sofas_canvas_spec(ctx.deps.db)
-    _set_structured_payload(ctx, spec)
-    return spec
+    return _apply_chart_spec(ctx, spec, mode)
+
+
+@nia_agent.tool
+async def chart_overdue_invoices(
+    ctx: RunContext[NiaDeps],
+    mode: str = "replace",
+) -> Union[dict[str, Any], str]:
+    """Draw overdue invoices (30-day terms) as a Canvas table. Replaces the canvas by default."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    spec = await build_overdue_invoices_canvas_spec(ctx.deps.db)
+    return _apply_chart_spec(ctx, spec, mode)
+
+
+@nia_agent.tool
+async def chart_sales_by_sku(
+    ctx: RunContext[NiaDeps],
+    top_n: int = 8,
+    mode: str = "replace",
+) -> Union[dict[str, Any], str]:
+    """Chart top SKU sales this month on Canvas from the sales-by-SKU report."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    spec = await build_sales_by_sku_canvas_spec(ctx.deps.db, top_n)
+    return _apply_chart_spec(ctx, spec, mode)
+
+
+@nia_agent.tool
+async def chart_stock_on_hand(
+    ctx: RunContext[NiaDeps],
+    sku: str,
+    location: str,
+    mode: str = "add",
+) -> Union[dict[str, Any], str]:
+    """Add a stock-on-hand table for a SKU at a location. Default is append."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    spec, error = await build_stock_on_hand_canvas_spec(
+        ctx.deps.db,
+        sku,
+        location,
+        ctx.deps.user_id,
+    )
+    if error or spec is None:
+        return error or "Stock on hand chart failed."
+    return _apply_chart_spec(ctx, spec, mode)
+
+
+@nia_agent.tool
+async def chart_aged_ar(
+    ctx: RunContext[NiaDeps],
+    mode: str = "replace",
+) -> Union[dict[str, Any], str]:
+    """Chart aged receivables buckets on Canvas from the existing aged-AR report."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    spec = await build_aged_ar_canvas_spec(ctx.deps.db)
+    return _apply_chart_spec(ctx, spec, mode)
 
 
 @nia_agent.tool
