@@ -43,6 +43,7 @@ from app.routers import (
     repeating_invoices,
     returns,
     laybys,
+    nia,
     reports,
     roles,
     search,
@@ -155,3 +156,4 @@ app.include_router(search.search_router)
 app.include_router(home.home_router)
 app.include_router(settings_router.settings_router)
 app.include_router(cost_audit.cost_audit_router)
+app.include_router(nia.nia_router)

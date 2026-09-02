@@ -10,6 +10,8 @@ from app.middleware.auth import get_current_user_id
 from app.permissions import (
     BOOKS_MUTATE,
     CATALOGUE_MUTATE,
+    NIA_ADMIN,
+    NIA_USE,
     PO_RAISE,
     SALES_CUSTOMERS,
     SALES_DELIVERIES,
@@ -367,3 +369,17 @@ async def require_picks_mutate(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES))
+
+
+async def require_nia_use(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (NIA_USE,))
+
+
+async def require_nia_admin(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (NIA_ADMIN,))

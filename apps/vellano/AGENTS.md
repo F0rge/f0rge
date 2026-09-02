@@ -79,19 +79,30 @@ Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` b
 
 Authorisation is a **permission catalog**, not role-tuple checks. `users.role` is a string slug matching `roles.slug`. Five built-in roles are **presets**. Owner is immutable (`is_system`, `is_owner_preset`); `has_permission` short-circuits for owner. Custom roles are named bundles (`POST /api/v1/roles`). Cookie remains `vellano_session`.
 
-**Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.deliveries`, `sales.customers`, `books.mutate`, `books.journals`.
+**Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.deliveries`, `sales.customers`, `books.mutate`, `books.journals`, `nia.use`, `nia.admin`.
 
 | Preset | Keys |
 |--------|------|
 | **owner** | all catalog keys; cannot strip; cannot demote last owner |
-| **buyer** | `catalogue.mutate`, `po.raise`, `stock.cost.view` |
-| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.deliveries` (no `stock.cost.view`, no till) |
-| **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.deliveries`, `sales.customers` (no `stock.cost.view`) |
-| **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view` (no `till.sell`) |
+| **buyer** | `catalogue.mutate`, `po.raise`, `stock.cost.view`, `nia.use` |
+| **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.deliveries`, `nia.use` (no `stock.cost.view`, no till) |
+| **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.deliveries`, `sales.customers`, `nia.use` (no `stock.cost.view`) |
+| **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view`, `nia.use` (no `till.sell`) |
 
 `GET /auth/me` returns `role` plus `permissions: list[str]`. Missing `stock.cost.view` nulls inventory `unit_cost_zar` and SKU `last_landed_cost_zar`; cost-audit is 403. Any till line `discount_percent > 0` requires `till.discount`.
 
 Reads (list/get/PDF/reports) stay **any authenticated** unless noted. Mutate keys below replace the old owner\|warehouse\|… matrices.
+
+### Nia (in-app assistant)
+
+Product name is **Nia** — never “Copilot” in UI copy.
+
+- **Stack:** PydanticAI + AG-UI on existing `vellano-api` (same cookie `vellano_session`). No CopilotKit, no extra Railway service, no Marrow `OPENROUTER_API_KEY`.
+- **Permissions:** `nia.use` to talk to Nia; `nia.admin` to view/edit per-user token caps (owner preset includes both via all catalog keys).
+- **Env on `vellano-api` (develop):** `OPENROUTER_API_KEY` (required for LLM), optional `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1` in app code). Health: `GET /api/v1/nia/health` → `{ok, llm}` (`llm` false if key missing). Do **not** add these to `vellano-frontend`.
+- **Railway click-path:** Railway → project **Vellano** → service **vellano-api** → environment **develop** → Variables → `OPENROUTER_API_KEY`. Never copy Marrow `zoological-fulfillment` keys into git or this project.
+- **Hard no:** Nia must not send email, take payment, or file with SARS/RCS.
+- **Local:** ports remain `:8003` / `:3003`. Superdesign try-first for Nia UI (see [UI — IBM Carbon](#ui--ibm-carbon-explicit-exception-to-ui-kitmdc)).
 
 ### Playground seed (develop / local demos)
 
