@@ -186,7 +186,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <NiaDockProvider>
+    <NiaDockProvider enabled={canUseNia(user)}>
       <div className="vellano-shell" data-nav-expanded={expanded ? "true" : "false"}>
         <Theme theme="g100">
           <Header aria-label="Vellano">

@@ -90,15 +90,19 @@ function readStoredWidth(): number {
 
 type NiaDockProviderProps = {
   children: ReactNode;
+  enabled?: boolean;
 };
 
-export function NiaDockProvider({ children }: NiaDockProviderProps) {
+export function NiaDockProvider({ children, enabled = true }: NiaDockProviderProps) {
   const [open, setOpen] = useState(false);
 
   const toggle = useCallback(() => setOpen((current) => !current), []);
   const openDock = useCallback(() => setOpen(true), []);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
         event.preventDefault();
@@ -107,7 +111,7 @@ export function NiaDockProvider({ children }: NiaDockProviderProps) {
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [toggle]);
+  }, [enabled, toggle]);
 
   return (
     <NiaDockContext.Provider value={{ open, toggle, openDock }}>
@@ -150,6 +154,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [usageMe, setUsageMe] = useState<NiaUsageMe | null | undefined>(undefined);
   const [dictating, setDictating] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(DEFAULT_WIDTH_PX);
 
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -160,7 +165,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
 
   const effectiveWidth = expanded
-    ? Math.floor(window.innerWidth * EXPANDED_WIDTH_RATIO)
+    ? Math.floor(viewportWidth * EXPANDED_WIDTH_RATIO)
     : width;
 
   const loadThreads = useCallback(async () => {
@@ -190,6 +195,12 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
 
   useEffect(() => {
     setWidth(readStoredWidth());
+    function syncViewport() {
+      setViewportWidth(window.innerWidth);
+    }
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
   }, []);
 
   useEffect(() => {

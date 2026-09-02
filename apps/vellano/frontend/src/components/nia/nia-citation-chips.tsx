@@ -33,8 +33,7 @@ export function NiaCitationChips({ citations }: NiaCitationChipsProps) {
       {safe.map((citation, index) => {
         const key = `${citation.label}-${citation.href ?? index}`;
         const href = citation.href?.trim();
-        if (href) {
-          const internal = href.startsWith("/");
+        if (href && href.startsWith("/") && !href.startsWith("//")) {
           return (
             <Button
               key={key}
@@ -42,11 +41,7 @@ export function NiaCitationChips({ citations }: NiaCitationChipsProps) {
               size="sm"
               className="vellano-nia-citations__link"
               onClick={() => {
-                if (internal) {
-                  router.push(href);
-                } else {
-                  window.open(href, "_blank", "noopener,noreferrer");
-                }
+                router.push(href);
               }}
             >
               {citation.label}
