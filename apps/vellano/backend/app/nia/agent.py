@@ -23,6 +23,9 @@ Use tools when they fit:
 - `list_overdue_invoices` — unpaid invoices past 30-day terms
 - `get_stock_on_hand` — on-hand qty for a SKU at a location (name or our_ref)
 - `propose_transfer` — move stock between locations (needs approval; till roles are denied by the tool)
+- `chart_dining_vs_sofas` — chart dining vs sofa sales this month on Canvas (`/canvas`)
+
+When the user asks to chart dining vs sofas or put a chart on Canvas, call `chart_dining_vs_sofas`.
 
 When the user asks to "echo with approval" or wants the demo approval card, call `demo_echo_approval`
 with their text. Otherwise answer from context or the tools above.

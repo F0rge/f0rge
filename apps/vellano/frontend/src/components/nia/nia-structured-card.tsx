@@ -7,12 +7,14 @@ import { useEffect, useRef } from "react";
 import {
   resumeNiaThread,
   ApiError,
+  isCanvasSpecPayload,
   type NiaMessage,
   type NiaNeedsOkPayload,
   type NiaOverdueInvoicesPayload,
   type NiaResumeDecision,
   type NiaStructuredPayload,
 } from "@/lib/api";
+import { writeCanvasSpec } from "@/lib/nia-canvas-store";
 
 type NiaStructuredCardProps = {
   message: NiaMessage;
@@ -50,6 +52,35 @@ function OpenedPageCard({ path, messageId }: { path: string; messageId: string }
   );
 }
 
+function CanvasSpecCard({
+  title,
+  messageId,
+  spec,
+}: {
+  title: string;
+  messageId: string;
+  spec: Parameters<typeof writeCanvasSpec>[0];
+}) {
+  const router = useRouter();
+  const navigatedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (navigatedRef.current.has(messageId)) {
+      return;
+    }
+    navigatedRef.current.add(messageId);
+    writeCanvasSpec(spec);
+    router.push("/canvas");
+  }, [messageId, router, spec]);
+
+  return (
+    <Tile className="vellano-nia-card vellano-nia-card--nav">
+      <p className="cds--type-label-01">Canvas</p>
+      <p className="cds--type-body-01">{title}</p>
+    </Tile>
+  );
+}
+
 export function NiaStructuredCard({
   message,
   threadId,
@@ -78,6 +109,12 @@ export function NiaStructuredCard({
 
   if (structured.kind === "opened_page" && typeof structured.path === "string") {
     return <OpenedPageCard path={structured.path} messageId={message.id} />;
+  }
+
+  if (isCanvasSpecPayload(structured)) {
+    return (
+      <CanvasSpecCard title={structured.title} messageId={message.id} spec={structured} />
+    );
   }
 
   if (isOverdueInvoices(structured)) {

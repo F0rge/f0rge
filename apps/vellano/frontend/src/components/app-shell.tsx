@@ -47,6 +47,7 @@ import {
   UserFollow,
   UserMultiple,
   Wallet,
+  ChartColumn,
   ChartLine,
   DocumentSubtract,
   DocumentTasks,
@@ -59,6 +60,7 @@ import { can } from "@/lib/permissions";
 import {
   ACCOUNT_NAV_ITEMS,
   BOOKS_NAV_ITEMS,
+  NIA_NAV_ITEMS,
   OPERATIONS_NAV_ITEMS,
   PRIMARY_NAV_ITEMS,
   SALES_NAV_ITEMS,
@@ -106,6 +108,7 @@ const ICONS = {
   "/payments": Wallet,
   "/bank-reconciliation": DocumentTasks,
   "/reports": ChartLine,
+  "/canvas": ChartColumn,
   "/vat201": Document,
   "/till": Store,
   "/users": UserMultiple,
@@ -271,6 +274,9 @@ export function AppShell({ children }: AppShellProps) {
                 </SideNavMenuItem>
               ))}
             </SideNavMenu>
+            {canUseNia(user)
+              ? NIA_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))
+              : null}
             {accountItems.map((item) => renderNavLink(item.href, item.label))}
           </SideNavItems>
         </SideNav>

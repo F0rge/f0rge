@@ -3033,6 +3033,17 @@ export type NiaOpenedPagePayload = {
   path: string;
 };
 
+export type {
+  CanvasBarLineComponent,
+  CanvasComponent,
+  CanvasMetricComponent,
+  CanvasSpec,
+  CanvasTableComponent,
+} from "./nia-canvas-types";
+export { isCanvasSpecPayload, parseCanvasSpec } from "./nia-canvas-types";
+
+export type NiaCanvasSpecPayload = import("./nia-canvas-types").CanvasSpec;
+
 export type NiaOverdueInvoicesPayload = {
   kind: "overdue_invoices";
   invoices: {
@@ -3046,6 +3057,7 @@ export type NiaStructuredPayload =
   | NiaNeedsOkPayload
   | NiaYourCallPayload
   | NiaOpenedPagePayload
+  | NiaCanvasSpecPayload
   | NiaOverdueInvoicesPayload
   | { kind: string; [key: string]: unknown };
 

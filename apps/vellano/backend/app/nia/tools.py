@@ -12,6 +12,7 @@ from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
 from app.models.tax_invoice import TaxInvoice
 from app.nia.agent import NiaDeps, nia_agent
+from app.nia.canvas import build_dining_vs_sofas_canvas_spec
 from app.permissions import NIA_USE, STOCK_TRANSFER
 from app.schemas.transfer import TransferCreate, TransferLineCreate
 from app.services.inventory import InventoryService
@@ -180,6 +181,18 @@ async def get_stock_on_hand(
     if "error" in payload:
         return str(payload["error"])
     return payload
+
+
+@nia_agent.tool
+async def chart_dining_vs_sofas(ctx: RunContext[NiaDeps]) -> Union[dict[str, Any], str]:
+    """Chart dining vs sofa sales for the current calendar month on Canvas."""
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return denied
+
+    spec = await build_dining_vs_sofas_canvas_spec(ctx.deps.db)
+    _set_structured_payload(ctx, spec)
+    return spec
 
 
 @nia_agent.tool

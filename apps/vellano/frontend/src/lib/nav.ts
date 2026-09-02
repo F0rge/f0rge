@@ -47,6 +47,8 @@ export const SALES_NAV_ITEMS = [
   { href: "/customers", label: "Customers" },
 ] as const;
 
+export const NIA_NAV_ITEMS = [{ href: "/canvas", label: "Canvas" }] as const;
+
 export const ACCOUNT_NAV_ITEMS = [
   { href: "/users", label: "Users", permission: "users.manage" as const },
   { href: "/roles", label: "Roles", permission: "users.manage" as const },
