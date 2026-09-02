@@ -52,9 +52,12 @@ def patch_storage_dir(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def patch_async_session_maker(
-    async_engine: AsyncEngine,
+    request: pytest.FixtureRequest,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    if request.node.get_closest_marker("no_db"):
+        return
+    async_engine = request.getfixturevalue("async_engine")
     maker = async_sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.database.async_session_maker", maker)
     monkeypatch.setattr("app.main.async_session_maker", maker)

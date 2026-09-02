@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from ag_ui.core import ReasoningMessageContentEvent, TextMessageContentEvent, ToolCallStartEvent
 from ag_ui.encoder import EventEncoder
 from starlette.responses import StreamingResponse
 
 from app.services.nia_sse import NIA_SSE_HEADERS, apply_nia_sse_headers
+
+pytestmark = pytest.mark.no_db
 
 
 def _payload(encoded: str) -> dict:
@@ -37,8 +40,7 @@ def test_agui_encode_event_tool_start_shape() -> None:
     payload = _payload(encoded)
     assert payload["type"] == "TOOL_CALL_START"
     assert (
-        payload.get("toolCallName") == "create_sku"
-        or payload.get("tool_call_name") == "create_sku"
+        payload.get("toolCallName") == "create_sku" or payload.get("tool_call_name") == "create_sku"
     )
 
 

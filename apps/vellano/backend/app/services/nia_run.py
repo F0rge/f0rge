@@ -380,7 +380,9 @@ class NiaRunService:
         if deferred_tool_results is not None:
             stream_kwargs["deferred_tool_results"] = deferred_tool_results
         # run_stream → request_stream(stream=True). Do not use agent.run() here.
-        return apply_nia_sse_headers(adapter.streaming_response(adapter.run_stream(**stream_kwargs)))
+        return apply_nia_sse_headers(
+            adapter.streaming_response(adapter.run_stream(**stream_kwargs))
+        )
 
     async def dispatch_run(
         self,

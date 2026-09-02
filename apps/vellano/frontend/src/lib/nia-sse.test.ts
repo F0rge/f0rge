@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseNiaSseLine, peekNiaSseType } from "./nia-sse";
+import { consumeNiaSse, parseNiaSseLine, peekNiaSseType } from "./nia-sse";
 import { showNiaWorkingRow } from "./nia-thinking";
 
 /**
@@ -81,6 +81,40 @@ describe("parseNiaSseLine", () => {
     const line = 'data: {"type":"RUN_STARTED","threadId":"t","runId":"r"}';
     expect(peekNiaSseType(line)).toBe("RUN_STARTED");
     expect(parseNiaSseLine(line)).toBeNull();
+  });
+});
+
+describe("consumeNiaSse", () => {
+  it("dispatches answer tokens as each encoded chunk arrives", async () => {
+    const tokens: string[] = [];
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode('data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"msg_1","delta":"Hel"}\n\n'),
+        );
+        controller.enqueue(
+          encoder.encode('data: {"type":"TextMessageContent","delta":"lo"}\n\n'),
+        );
+        controller.enqueue(
+          encoder.encode('data: {"type":"TOOL_CALL_START","toolCallName":"create_sku"}\n\n'),
+        );
+        controller.close();
+      },
+    });
+    const tools: string[] = [];
+    await consumeNiaSse(
+      new Response(stream, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+      {
+        onToken: (delta) => tokens.push(delta),
+        onTool: (name) => tools.push(name),
+      },
+    );
+    expect(tokens).toEqual(["Hel", "lo"]);
+    expect(tools).toEqual(["create_sku"]);
   });
 });
 

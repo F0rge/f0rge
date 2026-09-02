@@ -30,11 +30,9 @@ export function NiaThinking({
 
   useEffect(() => {
     if (!streaming) {
-      setElapsedSeconds(0);
-      return;
+      return undefined;
     }
     const startedAt = Date.now();
-    setElapsedSeconds(0);
     const timer = window.setInterval(() => {
       setElapsedSeconds(niaWorkingElapsedSeconds(startedAt, Date.now()));
     }, 1000);
