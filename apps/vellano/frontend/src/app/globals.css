@@ -15,6 +15,8 @@ body {
   margin-left: 16rem;
   padding: 2rem;
   min-height: calc(100vh - 3rem);
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .vellano-main .cds--css-grid {
@@ -169,6 +171,7 @@ body {
 .vellano-shell .cds--header {
   background-color: #161616;
   border-bottom: 1px solid #393939;
+  z-index: 8001;
 }
 
 .vellano-shell .cds--side-nav {
@@ -525,6 +528,10 @@ body {
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
   }
 
+  .vellano-shell[data-nia-dock-open="true"] .vellano-wms-switcher {
+    right: var(--vellano-nia-dock-width, 24rem);
+  }
+
   .vellano-wms-switcher .cds--content-switcher {
     width: 100%;
   }
@@ -565,6 +572,20 @@ body {
 .vellano-shell[data-nia-dock-open="true"] .vellano-main {
   margin-right: var(--vellano-nia-dock-width, 24rem);
   transition: margin-right 0.15s ease;
+}
+
+.vellano-shell[data-nia-dock-open="true"] .vellano-catalogue-toolbar,
+.vellano-shell[data-nia-dock-open="true"] .vellano-catalogue-actions,
+.vellano-shell[data-nia-dock-open="true"] .vellano-home-actions,
+.vellano-shell[data-nia-dock-open="true"] .cds--table-toolbar,
+.vellano-shell[data-nia-dock-open="true"] .cds--data-table-container,
+.vellano-shell[data-nia-dock-open="true"] .vellano-till-layout__summary {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.cds--modal {
+  z-index: 9000;
 }
 
 .vellano-nia-dock {
@@ -735,6 +756,7 @@ body {
   border-left: 2px solid transparent;
   border-image: linear-gradient(180deg, #4589ff, #a56eff) 1;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  white-space: normal;
 }
 
 .vellano-nia-dock__bubble {
@@ -746,6 +768,91 @@ body {
   white-space: pre-wrap;
   font-size: 0.875rem;
   line-height: 1.4;
+}
+
+.vellano-nia-dock__bubble p {
+  margin: 0 0 0.5rem;
+}
+
+.vellano-nia-dock__bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.vellano-nia-dock__bubble ul,
+.vellano-nia-dock__bubble ol {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.vellano-nia-dock__bubble li {
+  margin: 0.125rem 0;
+}
+
+.vellano-nia-dock__bubble code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.8125rem;
+  background: var(--cds-layer-02, #e0e0e0);
+  padding: 0.05rem 0.25rem;
+}
+
+.vellano-nia-dock__bubble pre {
+  overflow-x: auto;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: var(--cds-layer-02, #e0e0e0);
+}
+
+.vellano-nia-dock__bubble pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.vellano-nia-dock__bubble h1,
+.vellano-nia-dock__bubble h2,
+.vellano-nia-dock__bubble h3,
+.vellano-nia-dock__bubble h4 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.vellano-nia-dock__bubble a {
+  color: var(--cds-link-primary, #0f62fe);
+}
+
+.vellano-nia-dock__thinking {
+  max-width: 92%;
+  margin-bottom: 0.25rem;
+}
+
+.vellano-nia-dock__thinking .cds--accordion {
+  background: transparent;
+}
+
+.vellano-nia-dock__thinking-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary, #525252);
+}
+
+.vellano-nia-dock__working {
+  display: flex;
+  align-items: center;
+  min-height: 2rem;
+  margin-bottom: 0.25rem;
+}
+
+.vellano-nia-card--fields {
+  border-left: 3px solid #0f62fe;
+}
+
+.vellano-nia-card__fields {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 .vellano-nia-card {

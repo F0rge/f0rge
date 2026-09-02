@@ -16,6 +16,14 @@ from app.exceptions import NiaLlmUnconfiguredError
 import app.nia  # noqa: F401 — register Nia tools on the agent
 from app.models.nia import NiaMessageRole
 from app.nia.agent import NiaDeps, build_nia_model, nia_agent
+from app.nia.catalog import CATALOG_BY_ID
+from app.nia.dispatch import _serialize
+from app.nia.fields import (
+    FIELDS_ASSISTANT_TEXT,
+    FIELDS_SOURCE,
+    NEEDS_FIELDS_KIND,
+    build_needs_fields_payload,
+)
 from app.nia.hitl import (
     CANCELLED_ASSISTANT_TEXT,
     NEEDS_OK_ASSISTANT_TEXT,
@@ -23,14 +31,16 @@ from app.nia.hitl import (
     load_agent_messages,
     pending_from_deferred,
 )
+from app.nia.actions import action_allowed, hitl_body, missing_permission_message
 from app.nia.tools import PROPOSE_TRANSFER_TOOL
 from app.schemas.nia import NiaResumeRequest
+from pydantic import ValidationError as PydanticValidationError
 from app.services.nia_audit import NiaAuditService, extract_tool_args
 from app.services.nia_caps import check_nia_budget
 from app.services.nia_threads import NiaThreadsService
 from app.services.nia_usage import NiaUsageService
 from app.services.permissions import PermissionService
-from f0rge_core.exceptions import ConflictError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 
 
 def _parse_optional_uuid(value: Any) -> Optional[uuid.UUID]:
@@ -133,6 +143,46 @@ def _assistant_text_from_output(output: Any) -> str:
     return str(output)
 
 
+def _payload_and_pending(
+    output: Any,
+    deps: NiaDeps,
+) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
+    if isinstance(output, DeferredToolRequests):
+        pending_tools = pending_from_deferred(output)
+        return pending_tools, pending_tools
+    payload = deps.last_structured_payload
+    if payload is not None and payload.get("kind") == NEEDS_FIELDS_KIND:
+        return payload, payload
+    return payload, None
+
+
+def _cleaned_fields(values: Optional[dict[str, Any]]) -> dict[str, Any]:
+    cleaned: dict[str, Any] = {}
+    for key, value in (values or {}).items():
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        cleaned[key] = value
+    return cleaned
+
+
+def _action_result_text(action_title: str, result: Any) -> str:
+    serialized = _serialize(result)
+    if isinstance(serialized, dict):
+        label = (
+            serialized.get("our_ref")
+            or serialized.get("invoice_number")
+            or serialized.get("transfer_number")
+            or serialized.get("journal_number")
+            or serialized.get("id")
+        )
+        if label:
+            return f"{action_title} saved: {label}."
+        return f"{action_title} saved."
+    return str(serialized)
+
+
 class NiaRunService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -166,17 +216,8 @@ class NiaRunService:
     ) -> None:
         output = result.output
         assistant_text = _assistant_text_from_output(output)
-        structured_payload: Optional[dict[str, Any]] = None
-        pending_tools: Optional[dict[str, Any]] = None
+        structured_payload, pending_tools = _payload_and_pending(output, deps)
         agent_messages = dump_agent_messages(result.all_messages())
-
-        if isinstance(output, DeferredToolRequests):
-            pending_tools = pending_from_deferred(output)
-            structured_payload = pending_tools
-        else:
-            pending_tools = None
-            if deps.last_structured_payload is not None:
-                structured_payload = deps.last_structured_payload
 
         if user_text:
             await self.threads.append_message(
@@ -225,17 +266,8 @@ class NiaRunService:
     ) -> None:
         output = result.output
         assistant_text = _assistant_text_from_output(output)
-        structured_payload: Optional[dict[str, Any]] = None
-        pending_tools: Optional[dict[str, Any]] = None
+        structured_payload, pending_tools = _payload_and_pending(output, deps)
         agent_messages = dump_agent_messages(result.all_messages())
-
-        if isinstance(output, DeferredToolRequests):
-            pending_tools = pending_from_deferred(output)
-            structured_payload = pending_tools
-        else:
-            pending_tools = None
-            if deps.last_structured_payload is not None:
-                structured_payload = deps.last_structured_payload
 
         if assistant_text:
             await self.threads.append_message(
@@ -376,6 +408,206 @@ class NiaRunService:
             user_text=user_text,
         )
 
+    async def _resume_submit_fields(
+        self,
+        *,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        body: NiaResumeRequest,
+        pending: dict[str, Any],
+        agent_messages: Optional[list[Any]],
+    ) -> JSONResponse:
+        if pending.get("kind") != NEEDS_FIELDS_KIND:
+            raise ConflictError("No pending fields")
+        action = CATALOG_BY_ID.get(str(pending.get("action_id") or ""))
+        if action is None:
+            raise ValidationError("Unknown action")
+
+        permission_keys = await self.permissions.keys_for_user(user_id)
+        if not action_allowed(action, permission_keys):
+            await self.threads.clear_pending_tools(user_id, thread_id)
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                missing_permission_message(action, permission_keys),
+            )
+            return JSONResponse(content={"ok": True})
+
+        merged = _cleaned_fields(
+            pending.get("values") if isinstance(pending.get("values"), dict) else {}
+        )
+        merged.update(_cleaned_fields(body.fields))
+
+        try:
+            data = action.args_model.model_validate(merged)
+        except PydanticValidationError as exc:
+            payload = build_needs_fields_payload(action, merged, exc)
+            await self.threads.save_agent_state(
+                user_id,
+                thread_id,
+                agent_messages=agent_messages,
+                pending_tools=payload,
+            )
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                FIELDS_ASSISTANT_TEXT,
+                structured_payload=payload,
+            )
+            return JSONResponse(content={"ok": True, "kind": NEEDS_FIELDS_KIND})
+
+        if action.write:
+            payload = {
+                "kind": "needs_ok",
+                "title": action.title,
+                "body": hitl_body(action, data),
+                "actions": ["accept", "decline", "cancel"],
+                "tool_name": "run_nia_action",
+                "tool_call_id": pending.get("tool_call_id") or str(uuid.uuid4()),
+                "action_id": action.id,
+                "args": data.model_dump(mode="json"),
+                "source": FIELDS_SOURCE,
+            }
+            await self.threads.save_agent_state(
+                user_id,
+                thread_id,
+                agent_messages=agent_messages,
+                pending_tools=payload,
+            )
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                NEEDS_OK_ASSISTANT_TEXT,
+                structured_payload=payload,
+            )
+            return JSONResponse(content={"ok": True, "kind": "needs_ok"})
+
+        deps = NiaDeps(
+            user_id=user_id,
+            permissions=permission_keys,
+            page_path="",
+            db=self.db,
+        )
+        try:
+            result = await action.handler(deps, data)
+        except (ValidationError, NotFoundError, ConflictError) as exc:
+            detail = getattr(exc, "detail", None)
+            text = str(detail) if detail else str(exc)
+            await self.threads.clear_pending_tools(user_id, thread_id)
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                text,
+            )
+            return JSONResponse(content={"ok": True})
+
+        await self.threads.clear_pending_tools(user_id, thread_id)
+        await self.threads.append_message(
+            user_id,
+            thread_id,
+            NiaMessageRole.ASSISTANT.value,
+            _action_result_text(action.title, result),
+        )
+        return JSONResponse(content={"ok": True})
+
+    async def _resume_fields_approval(
+        self,
+        *,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        body: NiaResumeRequest,
+        pending: dict[str, Any],
+    ) -> JSONResponse:
+        if body.decision == "cancel":
+            await self.audit.record(
+                user_id=user_id,
+                thread_id=thread_id,
+                tool_name=str(pending.get("tool_name") or "run_nia_action"),
+                args=pending.get("args") if isinstance(pending.get("args"), dict) else None,
+                decision="cancel",
+            )
+            await self.threads.clear_pending_tools(user_id, thread_id)
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                CANCELLED_ASSISTANT_TEXT,
+            )
+            return JSONResponse(content={"ok": True})
+
+        if body.decision == "decline":
+            await self.audit.record(
+                user_id=user_id,
+                thread_id=thread_id,
+                tool_name=str(pending.get("tool_name") or "run_nia_action"),
+                args=pending.get("args") if isinstance(pending.get("args"), dict) else None,
+                decision="decline",
+            )
+            await self.threads.clear_pending_tools(user_id, thread_id)
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                "Declined.",
+            )
+            return JSONResponse(content={"ok": True})
+
+        action = CATALOG_BY_ID.get(str(pending.get("action_id") or ""))
+        if action is None:
+            raise ValidationError("Unknown action")
+        permission_keys = await self.permissions.keys_for_user(user_id)
+        if not action_allowed(action, permission_keys):
+            await self.threads.clear_pending_tools(user_id, thread_id)
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                missing_permission_message(action, permission_keys),
+            )
+            return JSONResponse(content={"ok": True})
+
+        args = pending.get("args") if isinstance(pending.get("args"), dict) else {}
+        data = action.args_model.model_validate(args)
+        deps = NiaDeps(
+            user_id=user_id,
+            permissions=permission_keys,
+            page_path="",
+            db=self.db,
+        )
+        try:
+            result = await action.handler(deps, data)
+        except (ValidationError, NotFoundError, ConflictError) as exc:
+            detail = getattr(exc, "detail", None)
+            text = str(detail) if detail else str(exc)
+            await self.threads.clear_pending_tools(user_id, thread_id)
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                text,
+            )
+            return JSONResponse(content={"ok": True})
+
+        await self.audit.record(
+            user_id=user_id,
+            thread_id=thread_id,
+            tool_name=str(pending.get("tool_name") or "run_nia_action"),
+            args=args,
+            decision="accept",
+        )
+        await self.threads.clear_pending_tools(user_id, thread_id)
+        await self.threads.append_message(
+            user_id,
+            thread_id,
+            NiaMessageRole.ASSISTANT.value,
+            _action_result_text(action.title, result),
+        )
+        return JSONResponse(content={"ok": True})
+
     async def dispatch_resume(
         self,
         *,
@@ -387,6 +619,23 @@ class NiaRunService:
         pending = thread.pending_tools
         if not pending:
             raise ConflictError("No pending approval")
+
+        if body.decision == "submit_fields":
+            return await self._resume_submit_fields(
+                user_id=user_id,
+                thread_id=thread_id,
+                body=body,
+                pending=pending,
+                agent_messages=thread.agent_messages,
+            )
+
+        if pending.get("source") == FIELDS_SOURCE and pending.get("kind") == "needs_ok":
+            return await self._resume_fields_approval(
+                user_id=user_id,
+                thread_id=thread_id,
+                body=body,
+                pending=pending,
+            )
 
         tool_call_id = body.tool_call_id or pending.get("tool_call_id")
         if not tool_call_id:

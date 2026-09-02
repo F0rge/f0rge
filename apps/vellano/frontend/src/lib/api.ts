@@ -8,7 +8,7 @@ import {
   type PickPreview,
   type UpdatePickPayload,
 } from "./picks";
-import { consumeNiaSse } from "./nia-sse";
+import { consumeNiaSse, type NiaSseHandlers } from "./nia-sse";
 
 export type PresetRole = "owner" | "buyer" | "warehouse" | "till" | "books";
 /** Role slug — five presets plus custom slugs from GET /roles. */
@@ -3020,6 +3020,33 @@ export type NiaNeedsOkPayload = {
   actions?: string[];
 };
 
+export type NiaFieldType = "text" | "number" | "date" | "boolean" | "select" | "json";
+
+export type NiaFieldOption = {
+  id: string;
+  text: string;
+};
+
+export type NiaFieldSpec = {
+  id: string;
+  label: string;
+  type: NiaFieldType | string;
+  required: boolean;
+  value?: string;
+  error?: string;
+  options?: NiaFieldOption[];
+};
+
+export type NiaNeedsFieldsPayload = {
+  kind: "needs_fields";
+  action_id: string;
+  title: string;
+  body?: string;
+  fields: NiaFieldSpec[];
+  values?: Record<string, unknown>;
+  source?: string;
+};
+
 export type NiaYourCallPayload = {
   kind: "your_call";
   title?: string;
@@ -3070,6 +3097,7 @@ export type NiaTransferDraftPayload = {
 
 export type NiaStructuredPayload =
   | NiaNeedsOkPayload
+  | NiaNeedsFieldsPayload
   | NiaYourCallPayload
   | NiaOpenedPagePayload
   | NiaCanvasSpecPayload
@@ -3077,7 +3105,7 @@ export type NiaStructuredPayload =
   | NiaTransferDraftPayload
   | { kind: string; [key: string]: unknown };
 
-export type NiaResumeDecision = "accept" | "decline" | "cancel";
+export type NiaResumeDecision = "accept" | "decline" | "cancel" | "submit_fields";
 
 export function listNiaThreads(): Promise<NiaThreadSummary[]> {
   return apiFetch<NiaThreadSummary[]>("/nia/threads");
@@ -3127,7 +3155,7 @@ export async function runNiaThread(
   threadId: string,
   message: string,
   pagePath: string,
-  onToken?: (delta: string) => void,
+  handlers?: ((delta: string) => void) | NiaSseHandlers,
 ): Promise<void> {
   const response = await fetch(`/api/v1/nia/threads/${threadId}/run`, {
     method: "POST",
@@ -3135,18 +3163,26 @@ export async function runNiaThread(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, page: { path: pagePath } }),
   });
-  await consumeNiaSse(response, onToken);
+  await consumeNiaSse(response, handlers);
 }
 
 export async function resumeNiaThread(
   threadId: string,
   decision: NiaResumeDecision,
   toolCallId?: string,
-  onToken?: (delta: string) => void,
+  handlers?: ((delta: string) => void) | NiaSseHandlers,
+  fields?: Record<string, unknown>,
 ): Promise<void> {
-  const body: { decision: NiaResumeDecision; tool_call_id?: string } = { decision };
+  const body: {
+    decision: NiaResumeDecision;
+    tool_call_id?: string;
+    fields?: Record<string, unknown>;
+  } = { decision };
   if (toolCallId) {
     body.tool_call_id = toolCallId;
+  }
+  if (fields) {
+    body.fields = fields;
   }
   const response = await fetch(`/api/v1/nia/threads/${threadId}/resume`, {
     method: "POST",
@@ -3154,7 +3190,7 @@ export async function resumeNiaThread(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  await consumeNiaSse(response, onToken);
+  await consumeNiaSse(response, handlers);
 }
 
 export function listCostAudit(

@@ -3,6 +3,7 @@ import { writeCanvasSpec } from "@/lib/nia-canvas-store";
 
 const STRUCTURED_CARD_KINDS = new Set([
   "needs_ok",
+  "needs_fields",
   "opened_page",
   "canvas_spec",
   "transfer_draft",
