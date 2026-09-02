@@ -40,6 +40,14 @@ class NiaThread(UUIDPkMixin, TimestampMixin, Base):
         DateTime,
         nullable=True,
     )
+    pending_tools: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+    agent_messages: Mapped[Optional[list[Any]]] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
 
     user: Mapped["User"] = relationship()
     team: Mapped["Team"] = relationship()

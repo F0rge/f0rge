@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -38,3 +38,8 @@ class NiaThreadSummaryResponse(BaseModel):
 
 class NiaThreadResponse(NiaThreadSummaryResponse):
     messages: list[NiaMessageResponse]
+
+
+class NiaResumeRequest(BaseModel):
+    decision: Literal["accept", "decline", "cancel"]
+    tool_call_id: Optional[str] = None

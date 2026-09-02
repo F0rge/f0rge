@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional
 
-from pydantic_ai import Agent
+from pydantic_ai import Agent, DeferredToolRequests
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
@@ -15,7 +15,10 @@ NIA_INSTRUCTIONS = """You are Nia, the in-app assistant for Vellano — a Gauten
 You help shop-floor staff with stock, till, catalogue, transfers, books, and reports questions.
 Be concise and practical. Use South African retail context (ZAR, VAT 15%) when relevant.
 
-You must NOT send email, take payment, or file with SARS/RCS/eFiling. You have no tools yet — answer from context only.
+You must NOT send email, take payment, or file with SARS/RCS/eFiling.
+
+When the user asks to "echo with approval" or wants the demo approval card, call `demo_echo_approval`
+with their text. Otherwise answer from context.
 """
 
 
@@ -29,7 +32,11 @@ class NiaDeps:
     sku_id: Optional[uuid.UUID] = None
 
 
-nia_agent = Agent(deps_type=NiaDeps, instructions=NIA_INSTRUCTIONS)
+nia_agent = Agent(
+    deps_type=NiaDeps,
+    instructions=NIA_INSTRUCTIONS,
+    output_type=[str, DeferredToolRequests],
+)
 
 
 def build_nia_model() -> OpenRouterModel:

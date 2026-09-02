@@ -23,7 +23,7 @@ TEST_MODEL_OUTPUT = "Hello from Nia"
 def nia_test_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.services.nia_run.build_nia_model",
-        lambda: TestModel(custom_output_text=TEST_MODEL_OUTPUT),
+        lambda: TestModel(custom_output_text=TEST_MODEL_OUTPUT, call_tools=[]),
     )
 
 

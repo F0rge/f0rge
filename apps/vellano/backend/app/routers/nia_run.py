@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, Request
 
 from app.dependencies.auth import get_nia_run_service, require_nia_use
+from app.schemas.nia import NiaResumeRequest
 from app.services.nia_run import NiaRunService
 
 nia_run_router = APIRouter(prefix="/api/v1/nia/threads", tags=["nia"])
@@ -21,4 +22,18 @@ async def run_nia_thread(
         user_id=user_id,
         thread_id=thread_id,
         request=request,
+    )
+
+
+@nia_run_router.post("/{thread_id}/resume")
+async def resume_nia_thread(
+    thread_id: uuid.UUID,
+    body: NiaResumeRequest,
+    user_id: uuid.UUID = Depends(require_nia_use),
+    service: NiaRunService = Depends(get_nia_run_service),
+):
+    return await service.dispatch_resume(
+        user_id=user_id,
+        thread_id=thread_id,
+        body=body,
     )

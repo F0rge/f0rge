@@ -48,6 +48,13 @@ class NiaThreadsService:
             await self.crud.add_and_flush(thread)
         return self._to_response(await self._get_owned_or_404(thread.id, user_id))
 
+    async def get_owned_thread(
+        self,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+    ) -> NiaThread:
+        return await self._get_owned_or_404(thread_id, user_id)
+
     async def get_thread(
         self,
         user_id: uuid.UUID,
@@ -61,15 +68,42 @@ class NiaThreadsService:
         thread_id: uuid.UUID,
         role: str,
         content: str,
+        *,
+        structured_payload: Optional[dict] = None,
     ) -> None:
         thread = await self._get_owned_or_404(thread_id, user_id)
         message = NiaMessage(
             thread_id=thread.id,
             role=role,
             content=content,
+            structured_payload=structured_payload,
         )
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(message)
+            thread.updated_at = datetime.datetime.utcnow()
+
+    async def save_agent_state(
+        self,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        *,
+        agent_messages: Optional[list],
+        pending_tools: Optional[dict],
+    ) -> None:
+        thread = await self._get_owned_or_404(thread_id, user_id)
+        async with unit_of_work(self.db):
+            thread.agent_messages = agent_messages
+            thread.pending_tools = pending_tools
+            thread.updated_at = datetime.datetime.utcnow()
+
+    async def clear_pending_tools(
+        self,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+    ) -> None:
+        thread = await self._get_owned_or_404(thread_id, user_id)
+        async with unit_of_work(self.db):
+            thread.pending_tools = None
             thread.updated_at = datetime.datetime.utcnow()
 
     async def archive_thread(
