@@ -62,8 +62,8 @@ const DEFAULT_WIDTH_PX = 384;
 const MAX_WIDTH_RATIO = 0.8;
 
 const SUGGESTIONS = [
+  "Create a SKU",
   "List overdue invoices",
-  "Show open invoices",
   "What stock is on hand?",
 ] as const;
 
@@ -158,7 +158,7 @@ function NiaConversation({
           <Loading withOverlay={false} description="Loading conversation…" />
         ) : messages.length === 0 && !streamingText ? (
           <p className="vellano-nia-dock__empty cds--type-body-01">
-            Ask Nia about invoices, stock, or navigation.
+            Ask Nia to create a SKU, check stock, or open a page.
           </p>
         ) : (
           <>
