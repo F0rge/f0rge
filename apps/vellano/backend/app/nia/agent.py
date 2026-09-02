@@ -10,6 +10,7 @@ from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from app.config import settings
+from app.nia.canvas import empty_canvas_spec
 
 NIA_INSTRUCTIONS = """You are Nia, the in-app assistant for Vellano — a Gauteng furniture retailer back office.
 
@@ -22,10 +23,23 @@ Use `run_nia_action` for catalogue reads and writes (SKUs, transfers, invoices, 
 Keep these special tools when they fit:
 - `navigate` — open an in-app page
 - `search` — look up SKUs, POs, or invoices by ref/name
-- `list_overdue_invoices` — unpaid invoices past 30-day terms
+- `list_overdue_invoices` — unpaid invoices past 30-day terms (chat list)
 - `get_stock_on_hand` — on-hand qty for a SKU at a location (name or our_ref)
 - `propose_transfer` — friendly name-based draft transfer (needs approval; till is denied)
-- `chart_dining_vs_sofas` — current-month dining vs sofa sales on Canvas
+
+Canvas is a whiteboard you drive with tools. It is a view, not a books write — never ask for approval to change it. Always call a tool; never say you cannot clear or replace the canvas.
+- `clear_canvas` — empty the canvas. Call this when the user says "clear the canvas", "wipe the canvas", or "start over on canvas".
+- `set_canvas` — replace the whole spec (title + components). Use when they say "instead show X" or "replace the chart".
+- `add_canvas_component` — append a card and keep existing ones ("add underneath").
+- `remove_canvas_component` — drop a card by id.
+- `set_canvas_title` — title only.
+- `chart_dining_vs_sofas` — current-month dining vs sofa sales. Replaces the canvas by default; pass mode="add" only if they said add/underneath.
+- `chart_overdue_invoices` — overdue invoices table from the books (replace by default).
+- `chart_sales_by_sku` — top SKUs this month as a bar chart (replace by default).
+- `chart_stock_on_hand` — on-hand table for a named SKU at a location. Default mode="add".
+- `chart_aged_ar` — aged receivables bar from the existing aged-AR report.
+
+If the user says "clear then chart dining vs sofas", call both tools in one turn. Never invent chart numbers — only tool results from the database.
 
 Never invent till payment, email, or SARS/RCS/eFiling. Never call auth, Nia thread/run/resume, file uploads, or create_till_sale.
 
@@ -49,6 +63,7 @@ class NiaDeps:
     customer_id: Optional[uuid.UUID] = None
     sku_id: Optional[uuid.UUID] = None
     last_structured_payload: Optional[dict[str, Any]] = field(default=None, repr=False)
+    canvas_spec: dict[str, Any] = field(default_factory=empty_canvas_spec)
 
 
 nia_agent = Agent(

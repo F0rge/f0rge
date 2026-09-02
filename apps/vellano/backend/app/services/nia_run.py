@@ -16,6 +16,7 @@ from app.exceptions import NiaLlmUnconfiguredError
 import app.nia  # noqa: F401 — register Nia tools on the agent
 from app.models.nia import NiaMessageRole
 from app.nia.agent import NiaDeps, build_nia_model, nia_agent
+from app.nia.canvas import spec_from_thread_payloads
 from app.nia.catalog import CATALOG_BY_ID
 from app.nia.dispatch import _serialize
 from app.nia.fields import (
@@ -192,10 +193,19 @@ class NiaRunService:
         self.permissions = PermissionService(db)
         self.audit = NiaAuditService(db)
 
-    async def _build_deps(self, user_id: uuid.UUID, run_input: RunAgentInput) -> NiaDeps:
+    async def _build_deps(
+        self,
+        user_id: uuid.UUID,
+        run_input: RunAgentInput,
+        thread_id: uuid.UUID,
+    ) -> NiaDeps:
         permission_keys = await self.permissions.keys_for_user(user_id)
         page_path = _page_path_from_forwarded(run_input.forwarded_props)
         entity_ids = _entity_ids_from_forwarded(run_input.forwarded_props)
+        thread = await self.threads.get_owned_thread(user_id, thread_id)
+        canvas_spec = spec_from_thread_payloads(
+            [message.structured_payload for message in thread.messages]
+        )
         return NiaDeps(
             user_id=user_id,
             permissions=permission_keys,
@@ -204,6 +214,7 @@ class NiaRunService:
             invoice_id=entity_ids["invoice_id"],
             customer_id=entity_ids["customer_id"],
             sku_id=entity_ids["sku_id"],
+            canvas_spec=canvas_spec,
         )
 
     async def _persist_run_result(
@@ -401,7 +412,7 @@ class NiaRunService:
 
         await check_nia_budget(self.db, user_id)
 
-        deps = await self._build_deps(user_id, run_input)
+        deps = await self._build_deps(user_id, run_input, thread_id)
         user_text = _last_user_message_text(run_input)
 
         return self._streaming_response(

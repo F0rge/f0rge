@@ -42,6 +42,7 @@ import {
   createNiaThread,
   getNiaThread,
   getNiaUsageMeOptional,
+  isCanvasClearedPayload,
   isCanvasSpecPayload,
   listNiaThreads,
   patchNiaThread,
@@ -51,7 +52,7 @@ import {
   type NiaThreadSummary,
   type NiaUsageMe,
 } from "@/lib/api";
-import { writeCanvasSpec } from "@/lib/nia-canvas-store";
+import { clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
 import { appendToolLine } from "@/lib/nia-thinking";
 import {
   formatRelativeThreadTime,
@@ -113,6 +114,11 @@ function applyPostRunNavigation(thread: NiaThread, router: ReturnType<typeof use
   }
   if (isCanvasSpecPayload(payload)) {
     writeCanvasSpec(payload);
+    router.push("/canvas");
+    return;
+  }
+  if (isCanvasClearedPayload(payload)) {
+    clearCanvasSpec();
     router.push("/canvas");
   }
 }
@@ -386,7 +392,6 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     setError(null);
     try {
       const thread = await getNiaThread(threadId);
-      syncCanvasSpecFromThread(thread);
       setActiveThread(thread);
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Failed to load thread");

@@ -19,6 +19,7 @@ import {
   ApiError,
   cancelTransfer,
   getTransfer,
+  isCanvasClearedPayload,
   isCanvasSpecPayload,
   TRANSFER_STATUS_LABELS,
   type NiaFieldSpec,
@@ -31,7 +32,7 @@ import {
   type NiaTransferDraftPayload,
   type TransferStatus,
 } from "@/lib/api";
-import { writeCanvasSpec } from "@/lib/nia-canvas-store";
+import { clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
 import { labelForNavPath } from "@/lib/nav";
 
 import { NiaCitationChips } from "./nia-citation-chips";
@@ -273,6 +274,27 @@ function CanvasSpecCard({
   );
 }
 
+function CanvasClearedCard() {
+  const router = useRouter();
+
+  function handleView() {
+    clearCanvasSpec();
+    router.push("/canvas");
+  }
+
+  return (
+    <Tile className="vellano-nia-card vellano-nia-card--nav">
+      <p className="cds--type-label-01">Canvas</p>
+      <p className="cds--type-body-01">Canvas cleared</p>
+      <div className="vellano-nia-card__actions">
+        <Button size="sm" kind="ghost" onClick={handleView}>
+          View Canvas
+        </Button>
+      </div>
+    </Tile>
+  );
+}
+
 function TransferDraftCard({
   payload,
   onError,
@@ -388,6 +410,10 @@ export function NiaStructuredCard({
 
   if (isCanvasSpecPayload(structured)) {
     return <CanvasSpecCard title={structured.title} spec={structured} />;
+  }
+
+  if (isCanvasClearedPayload(structured)) {
+    return <CanvasClearedCard />;
   }
 
   if (isTransferDraft(structured)) {

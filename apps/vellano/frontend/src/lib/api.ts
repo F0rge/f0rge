@@ -3130,9 +3130,16 @@ export type {
   CanvasSpec,
   CanvasTableComponent,
 } from "./nia-canvas-types";
-export { isCanvasSpecPayload, parseCanvasSpec } from "./nia-canvas-types";
+export {
+  isCanvasClearedPayload,
+  isCanvasSpecPayload,
+  isEmptyCanvasSpec,
+  parseCanvasSpec,
+} from "./nia-canvas-types";
+export type { CanvasClearedPayload } from "./nia-canvas-types";
 
 export type NiaCanvasSpecPayload = import("./nia-canvas-types").CanvasSpec;
+export type NiaCanvasClearedPayload = import("./nia-canvas-types").CanvasClearedPayload;
 
 export type NiaCitation = {
   label: string;
@@ -3164,6 +3171,7 @@ export type NiaStructuredPayload =
   | NiaYourCallPayload
   | NiaOpenedPagePayload
   | NiaCanvasSpecPayload
+  | NiaCanvasClearedPayload
   | NiaOverdueInvoicesPayload
   | NiaTransferDraftPayload
   | { kind: string; [key: string]: unknown };
