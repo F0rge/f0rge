@@ -52,6 +52,7 @@ import {
   type NiaUsageMe,
 } from "@/lib/api";
 import { writeCanvasSpec } from "@/lib/nia-canvas-store";
+import { appendToolLine } from "@/lib/nia-thinking";
 import {
   formatRelativeThreadTime,
   messageHasStructuredCard,
@@ -476,11 +477,9 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
         onThinking: (delta) => {
           setThinkingText((current) => current + delta);
         },
-        onTool: (name) => {
+        onTool: (name, phase) => {
           setToolNames((current) => (current[current.length - 1] === name ? current : [...current, name]));
-          setThinkingText((current) =>
-            current ? `${current}\nCalling ${name}…` : `Calling ${name}…`,
-          );
+          setThinkingText((current) => appendToolLine(current, name, phase));
         },
       });
       const fresh = await getNiaThread(thread.id);

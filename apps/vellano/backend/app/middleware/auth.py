@@ -4,9 +4,8 @@ import uuid
 from typing import Optional
 
 from fastapi import Cookie, Header, HTTPException, status
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from f0rge_db.auth_context import user_id_ctx
 from app.services.auth import JWT_COOKIE_NAME, decode_access_token
@@ -33,12 +32,17 @@ def _resolve_user_id(
     return None
 
 
-class AuthContextMiddleware(BaseHTTPMiddleware):
-    async def dispatch(
-        self,
-        request: Request,
-        call_next: RequestResponseEndpoint,
-    ) -> Response:
+class AuthContextMiddleware:
+    """Pure ASGI so Nia SSE is not buffered by ``BaseHTTPMiddleware``."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
         token_ctx = user_id_ctx.set(None)
         try:
             user_id_ctx.set(
@@ -47,7 +51,7 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                     request.headers.get("Authorization"),
                 )
             )
-            return await call_next(request)
+            await self.app(scope, receive, send)
         finally:
             user_id_ctx.reset(token_ctx)
 
