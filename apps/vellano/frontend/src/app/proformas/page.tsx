@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   canMutateCatalogue,
   createProforma,
+  downloadProformaPdf,
   listProformas,
   listSuppliers,
   type Proforma,
@@ -152,6 +153,15 @@ export default function ProformasPage() {
     }
   }
 
+  async function handleDownload(proformaId: string, invoiceNumber: string) {
+    setError(null);
+    try {
+      await downloadProformaPdf(proformaId, invoiceNumber);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download proforma PDF.");
+    }
+  }
+
   const formValid =
     form.supplier_id && form.invoice_number.trim() && form.invoice_date && pdfFile;
 
@@ -206,16 +216,19 @@ export default function ProformasPage() {
                     <TableRow {...getRowProps({ row })} key={row.id}>
                       {row.cells.map((cell) => {
                         if (cell.info.header === "pdf") {
+                          const entry = proformas.find((item) => item.id === row.id);
                           return (
                             <TableCell key={cell.id}>
                               <Button
                                 kind="ghost"
                                 size="sm"
-                                href={`/api/v1/proformas/${row.id}/file`}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                onClick={() => {
+                                  if (entry) {
+                                    void handleDownload(entry.id, entry.invoice_number);
+                                  }
+                                }}
                               >
-                                Open PDF
+                                Download PDF
                               </Button>
                             </TableCell>
                           );

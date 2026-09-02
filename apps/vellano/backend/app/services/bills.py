@@ -6,7 +6,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from fastapi import UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.bill import BillCRUD
@@ -17,13 +17,9 @@ from app.models.journal import JournalDocumentType
 from app.services.books_events import BooksEventService
 from app.schemas.bill import BillCreate, BillLineResponse, BillResponse
 from app.services.chart_of_accounts import CODE_AP, CODE_INVENTORY, LedgerPostingService
-from app.services.object_storage import (
-    is_remote_storage_ref,
-    presigned_get_url,
-    read_bytes,
-    save_bytes,
-)
+from app.services.object_storage import save_bytes
 from app.services.packing_sheet import convert_bill_to_zar
+from app.services.stored_pdf import serve_stored_pdf
 from app.services.suppliers import SupplierService
 from app.services.vat import CENT
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -140,20 +136,11 @@ class BillService:
         bill = await self.crud.get_by_id(bill_id)
         if bill is None:
             raise NotFoundError("Bill not found")
-        if not bill.pdf_storage_key:
-            raise NotFoundError("Bill attachment not found")
-
-        storage_key = bill.pdf_storage_key
-        if is_remote_storage_ref(storage_key):
-            url = presigned_get_url(storage_key)
-            if url:
-                return RedirectResponse(url)
-
-        try:
-            data = await asyncio.to_thread(read_bytes, storage_key)
-        except FileNotFoundError as exc:
-            raise NotFoundError("Bill attachment not found") from exc
-        return Response(content=data, media_type="application/pdf")
+        return await serve_stored_pdf(
+            bill.pdf_storage_key,
+            f"{bill.bill_number}.pdf",
+            "Bill attachment not found",
+        )
 
     @staticmethod
     def _resolve_fx(currency: str, fx_to_zar: Optional[Decimal]) -> Decimal:

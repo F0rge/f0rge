@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from io import BytesIO
+
 from httpx import AsyncClient
+from pypdf import PdfReader
 
 
 async def _create_invoice(owner_client: AsyncClient) -> dict:
@@ -21,6 +24,11 @@ async def _create_invoice(owner_client: AsyncClient) -> dict:
     )
     assert resp.status_code == 201
     return resp.json()
+
+
+def _pdf_text(pdf_bytes: bytes) -> str:
+    reader = PdfReader(BytesIO(pdf_bytes))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
 async def test_credit_note_reverses_invoice(owner_client: AsyncClient) -> None:
@@ -83,3 +91,27 @@ async def test_till_cannot_create_credit_note(
         json={"invoice_id": invoice["id"]},
     )
     assert resp.status_code == 403
+
+
+async def test_credit_note_pdf(owner_client: AsyncClient) -> None:
+    invoice = await _create_invoice(owner_client)
+    created = await owner_client.post(
+        "/api/v1/credit-notes",
+        json={"invoice_id": invoice["id"], "reason": "Returned"},
+    )
+    assert created.status_code == 201
+    body = created.json()
+
+    pdf_resp = await owner_client.get(f"/api/v1/credit-notes/{body['id']}/pdf")
+    assert pdf_resp.status_code == 200
+    assert pdf_resp.headers["content-type"] == "application/pdf"
+    text = _pdf_text(pdf_resp.content)
+    assert "Credit Note" in text
+    assert "CN-0001" in text
+    assert invoice["invoice_number"] in text
+    assert "Returned" in text
+
+
+async def test_unauthenticated_credit_note_pdf_returns_401(async_client: AsyncClient) -> None:
+    resp = await async_client.get("/api/v1/credit-notes/00000000-0000-0000-0000-000000000001/pdf")
+    assert resp.status_code == 401

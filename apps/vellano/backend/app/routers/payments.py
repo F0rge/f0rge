@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import Response
 
 from app.dependencies.auth import (
     get_current_user_id,
@@ -30,3 +31,12 @@ async def create_payment(
     service: PaymentService = Depends(get_payment_service),
 ):
     return await service.create(body, user_id)
+
+
+@payments_router.get("/{payment_id}/pdf", response_model=None)
+async def get_payment_pdf(
+    payment_id: uuid.UUID,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: PaymentService = Depends(get_payment_service),
+) -> Response:
+    return await service.serve_pdf(payment_id)

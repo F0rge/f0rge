@@ -39,6 +39,7 @@ async def test_create_proforma_stores_pdf_and_metadata(owner_client: AsyncClient
     assert file_resp.status_code == 200
     assert file_resp.headers["content-type"].startswith("application/pdf")
     assert file_resp.content == MINIMAL_PDF
+    assert "attachment" in file_resp.headers.get("content-disposition", "")
 
 
 async def test_proforma_file_unauthenticated_returns_401(

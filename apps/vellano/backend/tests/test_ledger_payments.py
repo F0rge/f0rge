@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from io import BytesIO
+
 from httpx import AsyncClient
+from pypdf import PdfReader
 
 
 async def _account_balances(owner_client: AsyncClient) -> dict[str, str]:
@@ -27,6 +30,11 @@ async def _create_customer_invoice(owner_client: AsyncClient) -> dict:
     )
     assert resp.status_code == 201
     return resp.json()
+
+
+def _pdf_text(pdf_bytes: bytes) -> str:
+    reader = PdfReader(BytesIO(pdf_bytes))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
 async def _create_usd_bill(owner_client: AsyncClient) -> dict:
@@ -69,6 +77,38 @@ async def test_payment_in_clears_ar(owner_client: AsyncClient) -> None:
     balances = await _account_balances(owner_client)
     assert balances["1200"] == "0.00"
     assert balances["1100"] == "1150.00"
+
+
+async def test_payment_in_pdf(owner_client: AsyncClient) -> None:
+    invoice = await _create_customer_invoice(owner_client)
+    resp = await owner_client.post(
+        "/api/v1/payments",
+        json={
+            "direction": "in",
+            "invoice_id": invoice["id"],
+            "amount": "1150.00",
+            "currency": "ZAR",
+            "paid_on": "2026-09-02",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["payment_number"] == "PAY-0001"
+
+    pdf_resp = await owner_client.get(f"/api/v1/payments/{body['id']}/pdf")
+    assert pdf_resp.status_code == 200
+    assert pdf_resp.headers["content-type"] == "application/pdf"
+    text = _pdf_text(pdf_resp.content)
+    assert "Payment Receipt" in text
+    assert "PAY-0001" in text
+    assert "1150.00" in text
+    assert invoice["invoice_number"] in text
+    assert "Received" in text
+
+
+async def test_unauthenticated_payment_pdf_returns_401(async_client: AsyncClient) -> None:
+    resp = await async_client.get("/api/v1/payments/00000000-0000-0000-0000-000000000001/pdf")
+    assert resp.status_code == 401
 
 
 async def test_books_can_create_payment(

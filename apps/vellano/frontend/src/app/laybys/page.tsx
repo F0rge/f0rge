@@ -50,6 +50,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { matchesCustomerQuery } from "@/lib/customer-crm";
+import { printHtml } from "@/lib/print-html";
 
 const TABLE_HEADERS = [
   { key: "layby_number", header: "Reference" },
@@ -182,17 +183,13 @@ function matchesStatusFilter(layby: Layby, filter: StatusFilter): boolean {
 }
 
 function printLaybyReceipt(layby: Layby): void {
-  const printWindow = window.open("", "_blank", "noopener,noreferrer");
-  if (!printWindow) {
-    return;
-  }
   const itemsHtml =
     layby.lines.length === 0
       ? "<p>—</p>"
       : `<ul>${layby.lines
           .map((line) => `<li>${escapeHtml(line.name)} × ${line.qty}</li>`)
           .join("")}</ul>`;
-  printWindow.document.write(`<!DOCTYPE html>
+  printHtml(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -215,9 +212,6 @@ function printLaybyReceipt(layby: Layby): void {
   <div class="row"><span class="label">Due date:</span> ${escapeHtml(formatDate(layby.due_date))}</div>
 </body>
 </html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
 }
 
 function sumLinesExVat(lines: LineForm[], skusById: Map<string, Sku>): number {

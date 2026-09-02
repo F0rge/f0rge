@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Button,
   DataTable,
   InlineNotification,
   Modal,
@@ -17,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BooksHistory } from "@/components/books-history";
 import {
+  downloadPaymentPdf,
   formatFxGainLoss,
   formatZarAmount,
   listPayments,
@@ -32,6 +34,7 @@ const TABLE_HEADERS = [
   { key: "amount_zar", header: "ZAR" },
   { key: "fx_gain_loss_zar", header: "FX gain/loss" },
   { key: "paid_on", header: "Paid on" },
+  { key: "actions", header: "" },
 ] as const;
 
 type PaymentRow = {
@@ -43,6 +46,7 @@ type PaymentRow = {
   amount_zar: string;
   fx_gain_loss_zar: string;
   paid_on: string;
+  actions: string;
 };
 
 export default function PaymentsPage() {
@@ -76,6 +80,15 @@ export default function PaymentsPage() {
     [payments],
   );
 
+  async function handleDownload(paymentId: string, paymentNumber: string) {
+    setError(null);
+    try {
+      await downloadPaymentPdf(paymentId, paymentNumber);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download payment receipt.");
+    }
+  }
+
   const rows: PaymentRow[] = payments.map((entry) => ({
     id: entry.id,
     payment_number: entry.payment_number,
@@ -85,6 +98,7 @@ export default function PaymentsPage() {
     amount_zar: formatZarAmount(entry.amount_zar),
     fx_gain_loss_zar: formatFxGainLoss(entry.fx_gain_loss_zar),
     paid_on: entry.paid_on,
+    actions: entry.id,
   }));
 
   return (
@@ -144,9 +158,25 @@ export default function PaymentsPage() {
                         }}
                         style={{ cursor: payment ? "pointer" : undefined }}
                       >
-                        {row.cells.map((cell) => (
-                          <TableCell key={cell.id}>{cell.value}</TableCell>
-                        ))}
+                        {row.cells.map((cell) => {
+                          if (cell.info.header === "actions" && payment) {
+                            return (
+                              <TableCell key={cell.id}>
+                                <Button
+                                  kind="ghost"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleDownload(payment.id, payment.payment_number);
+                                  }}
+                                >
+                                  Download receipt
+                                </Button>
+                              </TableCell>
+                            );
+                          }
+                          return <TableCell key={cell.id}>{cell.value}</TableCell>;
+                        })}
                       </TableRow>
                     );
                   })}

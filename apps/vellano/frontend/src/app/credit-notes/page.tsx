@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   canMutateBooks,
   createCreditNote,
+  downloadCreditNotePdf,
   formatZarAmount,
   listCreditNotes,
   listInvoices,
@@ -144,6 +145,15 @@ export default function CreditNotesPage() {
     }
   }
 
+  async function handleDownload(creditNoteId: string, creditNoteNumber: string) {
+    setError(null);
+    try {
+      await downloadCreditNotePdf(creditNoteId, creditNoteNumber);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download credit note PDF.");
+    }
+  }
+
   const invoiceIdByCreditNoteId = useMemo(
     () => Object.fromEntries(creditNotes.map((entry) => [entry.id, entry.invoice_id])),
     [creditNotes],
@@ -220,6 +230,7 @@ export default function CreditNotesPage() {
                 <TableBody>
                   {tableRows.map((row) => {
                     const invoiceIdForRow = invoiceIdByCreditNoteId[row.id];
+                    const creditNote = creditNotes.find((entry) => entry.id === row.id);
                     return (
                       <TableRow
                         {...getRowProps({ row })}
@@ -235,18 +246,35 @@ export default function CreditNotesPage() {
                           if (cell.info.header === "actions") {
                             return (
                               <TableCell key={cell.id}>
-                                <Button
-                                  kind="ghost"
-                                  size="sm"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    if (invoiceIdForRow) {
-                                      router.push(`/invoices/${invoiceIdForRow}`);
-                                    }
-                                  }}
-                                >
-                                  View invoice
-                                </Button>
+                                <Stack gap={3} orientation="horizontal">
+                                  <Button
+                                    kind="ghost"
+                                    size="sm"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      if (invoiceIdForRow) {
+                                        router.push(`/invoices/${invoiceIdForRow}`);
+                                      }
+                                    }}
+                                  >
+                                    View invoice
+                                  </Button>
+                                  <Button
+                                    kind="ghost"
+                                    size="sm"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      if (creditNote) {
+                                        void handleDownload(
+                                          creditNote.id,
+                                          creditNote.credit_note_number,
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    Download PDF
+                                  </Button>
+                                </Stack>
                               </TableCell>
                             );
                           }

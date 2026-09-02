@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import Response
 
 from app.dependencies.auth import (
     get_credit_note_service,
@@ -41,3 +42,12 @@ async def get_credit_note(
     service: CreditNoteService = Depends(get_credit_note_service),
 ):
     return await service.get(credit_note_id)
+
+
+@credit_notes_router.get("/{credit_note_id}/pdf", response_model=None)
+async def get_credit_note_pdf(
+    credit_note_id: uuid.UUID,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: CreditNoteService = Depends(get_credit_note_service),
+) -> Response:
+    return await service.serve_pdf(credit_note_id)
