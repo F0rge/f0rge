@@ -44,6 +44,7 @@ from app.routers import (
     returns,
     laybys,
     nia,
+    nia_threads,
     reports,
     roles,
     search,
@@ -157,3 +158,4 @@ app.include_router(home.home_router)
 app.include_router(settings_router.settings_router)
 app.include_router(cost_audit.cost_audit_router)
 app.include_router(nia.nia_router)
+app.include_router(nia_threads.nia_threads_router)

@@ -103,6 +103,7 @@ Product name is **Nia** — never “Copilot” in UI copy.
 - **Railway click-path:** Railway → project **Vellano** → service **vellano-api** → environment **develop** → Variables → `OPENROUTER_API_KEY`. Never copy Marrow `zoological-fulfillment` keys into git or this project.
 - **Hard no:** Nia must not send email, take payment, or file with SARS/RCS.
 - **Local:** ports remain `:8003` / `:3003`. Superdesign try-first for Nia UI (see [UI — IBM Carbon](#ui--ibm-carbon-explicit-exception-to-ui-kitmdc)).
+- **Threads (N1):** `GET/POST /api/v1/nia/threads`, `GET /api/v1/nia/threads/{id}`, `POST /api/v1/nia/threads/{id}/archive` — require `nia.use`. List returns current user's non-archived threads only; cross-user GET is 404. Team-wide usage caps (`nia.admin`) are N5.
 
 ### Playground seed (develop / local demos)
 
