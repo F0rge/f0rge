@@ -202,17 +202,17 @@ export default function RolesPage() {
                           }
                           if (cell.info.header === "permissions" && entry) {
                             return (
-                              <TableCell key={cell.id}>
+                              <TableCell key={cell.id} className="vellano-cell-wrap">
                                 {entry.permissions.length === 0 ? (
                                   "—"
                                 ) : (
-                                  <Stack gap={2} orientation="horizontal">
+                                  <div className="vellano-tag-wrap">
                                     {entry.permissions.map((key) => (
                                       <Tag key={key} type="gray" size="sm">
                                         {key}
                                       </Tag>
                                     ))}
-                                  </Stack>
+                                  </div>
                                 )}
                               </TableCell>
                             );

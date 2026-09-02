@@ -5,10 +5,7 @@ import { formatIsoDate, laybyActiveBadgeLabel, overdueBadgeLabel } from "@/lib/c
 
 export function CustomerCrmBadges({ customer }: { customer: CustomerCrm }) {
   return (
-    <div
-      className="vellano-customer-badges"
-      style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.25rem" }}
-    >
+    <div className="vellano-customer-badges">
       {customer.on_hold ? (
         <Tag type="red" size="sm">
           On hold

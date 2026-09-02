@@ -27,7 +27,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="cds--label">{label}</div>
-      <p className="cds--type-body-01">{value || "—"}</p>
+      <p className="cds--type-body-01 vellano-break-text">{value || "—"}</p>
     </div>
   );
 }
@@ -140,13 +140,7 @@ export default function CustomerDetailPage() {
           <Tile>
             <Stack gap={5}>
               <h2 className="cds--type-productive-heading-03">Account</h2>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
-                  gap: "1rem",
-                }}
-              >
+              <div className="vellano-detail-grid">
                 <DetailRow label="Open invoices" value={formatZarAmount(customer.open_invoices_zar)} />
                 <DetailRow
                   label="Overdue"

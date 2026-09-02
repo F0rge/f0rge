@@ -545,3 +545,53 @@ body {
   justify-content: space-between;
   gap: 0.5rem;
 }
+
+/* Carbon DataTable cells are nowrap; tags and long emails need to wrap. */
+.cds--data-table tbody td.vellano-cell-wrap {
+  white-space: normal;
+  vertical-align: top;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.vellano-tag-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 52rem;
+}
+
+.vellano-tag-wrap .cds--tag {
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.vellano-break-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.vellano-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+}
+
+.vellano-detail-grid > * {
+  min-width: 0;
+}
+
+.cds--data-table tbody td.vellano-customer-cell {
+  white-space: normal;
+  vertical-align: top;
+  padding-top: 0.75rem;
+  padding-bottom: 1.25rem;
+}
+
+.vellano-customer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.375rem;
+}

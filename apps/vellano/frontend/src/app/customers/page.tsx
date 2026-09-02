@@ -440,7 +440,7 @@ export default function CustomersPage() {
                           const laybys = formatActiveLaybys(entry);
                           return (
                             <TableRow {...getRowProps({ row })} key={row.id}>
-                              <TableCell>
+                              <TableCell className="vellano-customer-cell">
                                 <Button
                                   type="button"
                                   kind="ghost"
@@ -460,8 +460,10 @@ export default function CustomersPage() {
                                   Tier: {entry.price_tier}
                                 </div>
                               </TableCell>
-                              <TableCell>
-                                <div className="cds--type-body-compact-01">{formatContact(entry)}</div>
+                              <TableCell className="vellano-cell-wrap">
+                                <div className="cds--type-body-compact-01 vellano-break-text">
+                                  {formatContact(entry)}
+                                </div>
                               </TableCell>
                               <TableCell style={{ textAlign: "right" }}>
                                 <div
