@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import Boolean, ForeignKey, Numeric, String, UniqueConstraint, text
+from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,6 +12,7 @@ from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 DEFAULT_VAT_RATE = Decimal("0.15")
 DEFAULT_HOME_CURRENCY = "ZAR"
+DEFAULT_NIA_MONTHLY_TOKEN_CAP = 500000
 
 
 class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
@@ -43,6 +44,12 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
         default=list,
         server_default=text("'[]'::jsonb"),
+    )
+    nia_monthly_token_cap: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=DEFAULT_NIA_MONTHLY_TOKEN_CAP,
+        server_default=text("500000"),
     )
 
     team: Mapped["Team"] = relationship()

@@ -18,7 +18,7 @@ from app.models.inventory import LocationStock, SkuStock
 from app.models.location_bin import BinStock, LocationBin
 from app.models.journal import JournalDocumentType, JournalEntry, JournalLine, JournalStatus
 from app.models.layby import Layby, LaybyLine, LaybyPayment, LaybyStatus
-from app.models.location import Location, LocationType
+from app.models.nia import NiaAuditEvent, NiaMessage, NiaThread, NiaUsageEvent
 from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
 from app.models.payment import Payment, PaymentDirection
 from app.models.proforma import Proforma
@@ -95,6 +95,10 @@ __all__ = [
     "LocationBin",
     "LocationStock",
     "LocationType",
+    "NiaAuditEvent",
+    "NiaMessage",
+    "NiaThread",
+    "NiaUsageEvent",
     "Payment",
     "PaymentDirection",
     "Pick",

@@ -17,7 +17,9 @@ import { useEffect, useState } from "react";
 
 import {
   ApiError,
+  canAdminNia,
   canMutateSettings,
+  canUseNia,
   getSettings,
   isActiveLocation,
   listLocations,
@@ -25,16 +27,20 @@ import {
   type AppSettings,
   type Location,
 } from "@/lib/api";
+import { NiaCapsSettings } from "@/components/nia/nia-caps-settings";
 import { useAuth } from "@/lib/auth";
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const canMutate = canMutateSettings(user);
+  const canUseNiaAssistant = canUseNia(user);
+  const canAdminNiaCaps = canAdminNia(user);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [vatPercent, setVatPercent] = useState("15");
   const [currency, setCurrency] = useState("ZAR");
   const [preferWarehouse, setPreferWarehouse] = useState(true);
   const [pickPriority, setPickPriority] = useState<string[]>([]);
+  const [niaMonthlyTokenCap, setNiaMonthlyTokenCap] = useState(500000);
   const [locations, setLocations] = useState<Location[]>([]);
   const [addLocationId, setAddLocationId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -52,6 +58,7 @@ export default function SettingsPage() {
           setCurrency(data.home_currency);
           setPreferWarehouse(data.always_prefer_warehouse);
           setPickPriority(data.pick_priority);
+          setNiaMonthlyTokenCap(data.nia_monthly_token_cap);
           setLocations(locationData.filter(isActiveLocation));
         }
       })
@@ -81,12 +88,14 @@ export default function SettingsPage() {
         home_currency: currency.toUpperCase(),
         always_prefer_warehouse: preferWarehouse,
         pick_priority: pickPriority,
+        ...(canAdminNiaCaps ? { nia_monthly_token_cap: niaMonthlyTokenCap } : {}),
       });
       setSettings(updated);
       setVatPercent(updated.vat_percent);
       setCurrency(updated.home_currency);
       setPreferWarehouse(updated.always_prefer_warehouse);
       setPickPriority(updated.pick_priority);
+      setNiaMonthlyTokenCap(updated.nia_monthly_token_cap);
       setNotice(updated.warning ?? "Settings saved.");
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Failed to save settings");
@@ -260,6 +269,16 @@ export default function SettingsPage() {
             )}
           </Stack>
         </Tile>
+      ) : null}
+
+      {settings && (canUseNiaAssistant || canAdminNiaCaps) ? (
+        <NiaCapsSettings
+          canUse={canUseNiaAssistant}
+          canAdmin={canAdminNiaCaps}
+          teamDefaultCap={niaMonthlyTokenCap}
+          teamDefaultDisabled={!canMutate || saving}
+          onTeamDefaultCapChange={setNiaMonthlyTokenCap}
+        />
       ) : null}
     </Stack>
   );

@@ -6,7 +6,12 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.team_settings import DEFAULT_HOME_CURRENCY, DEFAULT_VAT_RATE, TeamSettings
+from app.models.team_settings import (
+    DEFAULT_HOME_CURRENCY,
+    DEFAULT_NIA_MONTHLY_TOKEN_CAP,
+    DEFAULT_VAT_RATE,
+    TeamSettings,
+)
 from f0rge_db.crud import BaseCRUD
 
 
@@ -28,6 +33,7 @@ class TeamSettingsCRUD(BaseCRUD):
             home_currency=DEFAULT_HOME_CURRENCY,
             always_prefer_warehouse=True,
             pick_priority=[],
+            nia_monthly_token_cap=DEFAULT_NIA_MONTHLY_TOKEN_CAP,
         )
         await self.add_and_flush(settings)
         return settings

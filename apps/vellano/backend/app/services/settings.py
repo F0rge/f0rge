@@ -46,6 +46,8 @@ class SettingsService:
             settings.always_prefer_warehouse = data.always_prefer_warehouse
         if data.pick_priority is not None:
             settings.pick_priority = [str(item) for item in data.pick_priority]
+        if data.nia_monthly_token_cap is not None:
+            settings.nia_monthly_token_cap = data.nia_monthly_token_cap
         await self.db.flush()
         return self._to_response(settings, include_warning=True)
 
@@ -76,6 +78,7 @@ class SettingsService:
             warning=warning,
             always_prefer_warehouse=bool(settings.always_prefer_warehouse),
             pick_priority=parse_pick_priority(settings.pick_priority),
+            nia_monthly_token_cap=int(settings.nia_monthly_token_cap),
         )
 
 

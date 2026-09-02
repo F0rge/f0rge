@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.crud.location_bin import BinStockCRUD
 from app.crud.purchase_order import LocationStockCRUD, SkuStockCRUD
+from app.crud.sku import SkuCRUD
 from app.models.inventory import LocationStock
 from app.models.sku import Sku
 from app.permissions import STOCK_COST_VIEW
@@ -94,6 +95,47 @@ class InventoryService:
             )
 
         return responses
+
+    async def get_at_location(
+        self,
+        sku_ref: str,
+        location_name: str,
+        user_id: uuid.UUID,
+    ) -> dict[str, object]:
+        sku = await self._resolve_sku(sku_ref)
+        if sku is None:
+            return {"error": f"SKU not found: {sku_ref}"}
+
+        from app.crud.location import LocationCRUD
+
+        location = await LocationCRUD(self.db).get_active_by_name_insensitive(location_name)
+        if location is None:
+            return {"error": f"Location not found: {location_name}"}
+
+        row = await self.location_stock_crud.get_by_sku_and_location(sku.id, location.id)
+        on_hand = row.on_hand if row is not None else 0
+        hide_cost = not await PermissionService(self.db).has_permission(user_id, STOCK_COST_VIEW)
+
+        payload: dict[str, object] = {
+            "sku_id": str(sku.id),
+            "our_ref": sku.our_ref,
+            "location": location.name,
+            "on_hand": on_hand,
+        }
+        if not hide_cost and row is not None:
+            payload["unit_cost_zar"] = (
+                str(row.unit_cost_zar) if row.unit_cost_zar is not None else None
+            )
+        return payload
+
+    async def _resolve_sku(self, sku_ref: str) -> Optional[Sku]:
+        ref = sku_ref.strip()
+        sku_crud = SkuCRUD(self.db)
+        try:
+            sku_id = uuid.UUID(ref)
+        except ValueError:
+            return await sku_crud.get_by_our_ref(ref)
+        return await sku_crud.get_by_id(sku_id)
 
     async def _get_location_stocks_for_sku(self, sku_id) -> list[LocationStock]:
         result = await self.db.execute(

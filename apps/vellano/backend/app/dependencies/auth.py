@@ -10,6 +10,8 @@ from app.middleware.auth import get_current_user_id
 from app.permissions import (
     BOOKS_MUTATE,
     CATALOGUE_MUTATE,
+    NIA_ADMIN,
+    NIA_USE,
     PO_RAISE,
     SALES_CUSTOMERS,
     SALES_DELIVERIES,
@@ -64,6 +66,11 @@ from app.services.till_orchestrator import TillOrchestrator
 from app.services.roles import RoleService
 from app.services.users import BootstrapService, ProfileService, UserService
 from app.services.vat201_periods import Vat201PeriodService
+from app.services.nia_audit import NiaAuditService
+from app.services.nia_caps import NiaCapsService
+from app.services.nia_run import NiaRunService
+from app.services.nia_threads import NiaThreadsService
+from app.services.nia_usage import NiaUsageService
 
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
@@ -367,3 +374,37 @@ async def require_picks_mutate(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES))
+
+
+async def require_nia_use(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (NIA_USE,))
+
+
+async def require_nia_admin(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (NIA_ADMIN,))
+
+
+def get_nia_threads_service(db: AsyncSession = Depends(get_db)) -> NiaThreadsService:
+    return NiaThreadsService(db)
+
+
+def get_nia_usage_service(db: AsyncSession = Depends(get_db)) -> NiaUsageService:
+    return NiaUsageService(db)
+
+
+def get_nia_run_service(db: AsyncSession = Depends(get_db)) -> NiaRunService:
+    return NiaRunService(db)
+
+
+def get_nia_audit_service(db: AsyncSession = Depends(get_db)) -> NiaAuditService:
+    return NiaAuditService(db)
+
+
+def get_nia_caps_service(db: AsyncSession = Depends(get_db)) -> NiaCapsService:
+    return NiaCapsService(db)

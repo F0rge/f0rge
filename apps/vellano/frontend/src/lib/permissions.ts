@@ -15,6 +15,8 @@ export const PERMISSION_CATALOG = [
   "sales.customers",
   "books.mutate",
   "books.journals",
+  "nia.use",
+  "nia.admin",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_CATALOG)[number];
@@ -96,4 +98,12 @@ export function canMutateDeliveries(user: PermissionHolder): boolean {
 
 export function canMutatePicks(user: PermissionHolder): boolean {
   return can(user, "stock.transfer") || can(user, "till.sell") || can(user, "sales.deliveries");
+}
+
+export function canUseNia(user: PermissionHolder): boolean {
+  return can(user, "nia.use");
+}
+
+export function canAdminNia(user: PermissionHolder): boolean {
+  return can(user, "nia.admin");
 }

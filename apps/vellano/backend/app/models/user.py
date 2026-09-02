@@ -5,7 +5,7 @@ import uuid
 
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -41,6 +41,7 @@ class User(UUIDPkMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+    nia_monthly_token_cap: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     team: Mapped["Team"] = relationship(back_populates="users")
 
