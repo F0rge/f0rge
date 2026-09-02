@@ -153,7 +153,7 @@ export default function LocationsPage() {
 
   return (
     <Stack gap={6}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="vellano-page-header">
         <div>
           <h1 className="cds--type-productive-heading-04">Locations</h1>
           <p className="cds--type-body-01">

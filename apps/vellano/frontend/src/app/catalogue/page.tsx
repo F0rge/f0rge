@@ -438,7 +438,7 @@ function CataloguePageContent() {
 
   return (
     <Stack gap={6}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="vellano-page-header">
         <div>
           <h1 className="cds--type-productive-heading-04">Catalogue</h1>
           <p className="cds--type-body-01">

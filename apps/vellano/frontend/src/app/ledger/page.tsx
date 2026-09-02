@@ -262,7 +262,7 @@ export default function ChartOfAccountsPage() {
 
   return (
     <Stack gap={6}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="vellano-page-header">
         <div>
           <h1 className="cds--type-productive-heading-04">Chart of accounts</h1>
           <p className="cds--type-body-01">
@@ -338,7 +338,7 @@ export default function ChartOfAccountsPage() {
 
       {!loading ? (
         <Stack gap={4}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div className="vellano-page-header">
             <div>
               <h2 className="cds--type-productive-heading-03">Category posting</h2>
               <p className="cds--type-body-01">

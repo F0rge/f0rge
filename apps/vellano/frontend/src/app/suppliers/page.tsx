@@ -113,7 +113,7 @@ export default function SuppliersPage() {
 
   return (
     <Stack gap={6}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="vellano-page-header">
         <div>
           <h1 className="cds--type-productive-heading-04">Suppliers</h1>
           <p className="cds--type-body-01">Furniture suppliers and their default currencies.</p>

@@ -149,7 +149,7 @@ export function LocationBinsPanel({ location, canMutate }: LocationBinsPanelProp
 
   return (
     <Stack gap={4}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+      <div className="vellano-page-header">
         <p className="cds--type-body-01">
           Bins at <strong>{location.name}</strong>
         </p>
