@@ -1,1 +1,1 @@
-"""Nia agent package (N0 stub — no agent loop yet)."""
+"""Nia agent package (PydanticAI + AG-UI)."""

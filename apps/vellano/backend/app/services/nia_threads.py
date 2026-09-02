@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.nia import NiaThreadCRUD
 from app.crud.user import UserCRUD
-from app.models.nia import NiaThread
+from app.models.nia import NiaMessage, NiaThread
 from app.schemas.nia import (
     NiaMessageResponse,
     NiaThreadCreate,
@@ -54,6 +54,23 @@ class NiaThreadsService:
         thread_id: uuid.UUID,
     ) -> NiaThreadResponse:
         return self._to_response(await self._get_owned_or_404(thread_id, user_id))
+
+    async def append_message(
+        self,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        role: str,
+        content: str,
+    ) -> None:
+        thread = await self._get_owned_or_404(thread_id, user_id)
+        message = NiaMessage(
+            thread_id=thread.id,
+            role=role,
+            content=content,
+        )
+        async with unit_of_work(self.db):
+            await self.crud.add_and_flush(message)
+            thread.updated_at = datetime.datetime.utcnow()
 
     async def archive_thread(
         self,

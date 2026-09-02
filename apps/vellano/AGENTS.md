@@ -104,6 +104,7 @@ Product name is **Nia** — never “Copilot” in UI copy.
 - **Hard no:** Nia must not send email, take payment, or file with SARS/RCS.
 - **Local:** ports remain `:8003` / `:3003`. Superdesign try-first for Nia UI (see [UI — IBM Carbon](#ui--ibm-carbon-explicit-exception-to-ui-kitmdc)).
 - **Threads (N1):** `GET/POST /api/v1/nia/threads`, `GET /api/v1/nia/threads/{id}`, `POST /api/v1/nia/threads/{id}/archive` — require `nia.use`. List returns current user's non-archived threads only; cross-user GET is 404. Team-wide usage caps (`nia.admin`) are N5.
+- **Run (N2):** `POST /api/v1/nia/threads/{id}/run` — require `nia.use`. Transport is **AG-UI SSE** via `pydantic_ai.ui.ag_ui.AGUIAdapter` (`streaming_response` + `run_stream`). Accepts either canonical AG-UI `RunAgentInput` JSON (`threadId`, `runId`, `messages`, `tools`, `context`, `forwardedProps`) or convenience JSON `{ "message": "…", "page": { "path": "/invoices" } }` (thread id from path; server generates `runId`). On completion: append user + assistant rows to the thread and insert a `nia_usage_events` row (`input_tokens`/`output_tokens` → prompt/completion). Missing `OPENROUTER_API_KEY` → **503** `{"detail":{"code":"nia_llm_unconfigured"}}` (never echo the key). `check_nia_budget` in `app/services/nia_caps.py` is a no-op until N5. CI/tests: `models.ALLOW_MODEL_REQUESTS = False` + `TestModel` override + dummy key.
 
 ### Playground seed (develop / local demos)
 

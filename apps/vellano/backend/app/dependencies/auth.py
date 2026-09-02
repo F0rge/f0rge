@@ -66,6 +66,7 @@ from app.services.till_orchestrator import TillOrchestrator
 from app.services.roles import RoleService
 from app.services.users import BootstrapService, ProfileService, UserService
 from app.services.vat201_periods import Vat201PeriodService
+from app.services.nia_run import NiaRunService
 from app.services.nia_threads import NiaThreadsService
 from app.services.nia_usage import NiaUsageService
 
@@ -393,3 +394,7 @@ def get_nia_threads_service(db: AsyncSession = Depends(get_db)) -> NiaThreadsSer
 
 def get_nia_usage_service(db: AsyncSession = Depends(get_db)) -> NiaUsageService:
     return NiaUsageService(db)
+
+
+def get_nia_run_service(db: AsyncSession = Depends(get_db)) -> NiaRunService:
+    return NiaRunService(db)
