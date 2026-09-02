@@ -748,6 +748,22 @@ body {
   border-left: 3px solid #0f62fe;
 }
 
+.vellano-nia-card--undo {
+  border-left: 3px solid #da1e28;
+}
+
+.vellano-nia-citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.vellano-nia-citations__link {
+  min-block-size: auto;
+  padding-inline: 0.375rem;
+}
+
 .vellano-nia-card__actions {
   display: flex;
   flex-wrap: wrap;

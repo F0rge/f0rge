@@ -45,6 +45,20 @@ class NiaResumeRequest(BaseModel):
     tool_call_id: Optional[str] = None
 
 
+class NiaAuditEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    user_id: uuid.UUID
+    thread_id: Optional[uuid.UUID] = None
+    tool_name: str
+    args: Optional[dict[str, Any]] = None
+    decision: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[uuid.UUID] = None
+    created_at: datetime.datetime
+
+
 class NiaUsageMeResponse(BaseModel):
     used: int
     cap: int

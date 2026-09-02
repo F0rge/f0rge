@@ -23,7 +23,9 @@ from app.nia.hitl import (
     load_agent_messages,
     pending_from_deferred,
 )
+from app.nia.tools import PROPOSE_TRANSFER_TOOL
 from app.schemas.nia import NiaResumeRequest
+from app.services.nia_audit import NiaAuditService, extract_tool_args
 from app.services.nia_caps import check_nia_budget
 from app.services.nia_threads import NiaThreadsService
 from app.services.nia_usage import NiaUsageService
@@ -137,6 +139,7 @@ class NiaRunService:
         self.threads = NiaThreadsService(db)
         self.usage = NiaUsageService(db)
         self.permissions = PermissionService(db)
+        self.audit = NiaAuditService(db)
 
     async def _build_deps(self, user_id: uuid.UUID, run_input: RunAgentInput) -> NiaDeps:
         permission_keys = await self.permissions.keys_for_user(user_id)
@@ -218,6 +221,7 @@ class NiaRunService:
         user_id: uuid.UUID,
         thread_id: uuid.UUID,
         result: Any,
+        deps: NiaDeps,
     ) -> None:
         output = result.output
         assistant_text = _assistant_text_from_output(output)
@@ -230,6 +234,8 @@ class NiaRunService:
             structured_payload = pending_tools
         else:
             pending_tools = None
+            if deps.last_structured_payload is not None:
+                structured_payload = deps.last_structured_payload
 
         if assistant_text:
             await self.threads.append_message(
@@ -246,6 +252,43 @@ class NiaRunService:
             pending_tools=pending_tools,
         )
 
+    async def _record_resume_audit(
+        self,
+        *,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        decision: str,
+        pending: dict[str, Any],
+        agent_messages: Optional[list[Any]],
+        deps: NiaDeps,
+    ) -> None:
+        tool_name = str(pending.get("tool_name") or "unknown")
+        tool_call_id = pending.get("tool_call_id")
+        args = extract_tool_args(agent_messages, tool_call_id)
+
+        if decision == "accept":
+            payload = deps.last_structured_payload or {}
+            if tool_name == PROPOSE_TRANSFER_TOOL and payload.get("kind") == "transfer_draft":
+                transfer_id = _parse_optional_uuid(payload.get("transfer_id"))
+                await self.audit.record(
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    tool_name=tool_name,
+                    args=args,
+                    decision="accept",
+                    entity_type="transfer",
+                    entity_id=transfer_id,
+                )
+            return
+
+        await self.audit.record(
+            user_id=user_id,
+            thread_id=thread_id,
+            tool_name=tool_name,
+            args=args,
+            decision=decision,
+        )
+
     def _streaming_response(
         self,
         *,
@@ -256,6 +299,9 @@ class NiaRunService:
         user_text: str,
         message_history: Optional[list] = None,
         deferred_tool_results: Optional[DeferredToolResults] = None,
+        resume_decision: Optional[str] = None,
+        pending_snapshot: Optional[dict[str, Any]] = None,
+        agent_messages_snapshot: Optional[list[Any]] = None,
     ) -> Response:
         async def on_complete(result: Any) -> AsyncIterator[Any]:
             if message_history is None:
@@ -271,7 +317,17 @@ class NiaRunService:
                     user_id=user_id,
                     thread_id=thread_id,
                     result=result,
+                    deps=deps,
                 )
+                if resume_decision and pending_snapshot:
+                    await self._record_resume_audit(
+                        user_id=user_id,
+                        thread_id=thread_id,
+                        decision=resume_decision,
+                        pending=pending_snapshot,
+                        agent_messages=agent_messages_snapshot,
+                        deps=deps,
+                    )
             await self._record_usage(
                 user_id=user_id,
                 thread_id=thread_id,
@@ -337,6 +393,13 @@ class NiaRunService:
             raise ValidationError("tool_call_id is required")
 
         if body.decision == "cancel":
+            await self.audit.record(
+                user_id=user_id,
+                thread_id=thread_id,
+                tool_name=str(pending.get("tool_name") or "unknown"),
+                args=extract_tool_args(thread.agent_messages, tool_call_id),
+                decision="cancel",
+            )
             await self.threads.clear_pending_tools(user_id, thread_id)
             await self.threads.append_message(
                 user_id,
@@ -376,4 +439,7 @@ class NiaRunService:
             user_text="",
             message_history=message_history,
             deferred_tool_results=deferred_results,
+            resume_decision=body.decision,
+            pending_snapshot=dict(pending),
+            agent_messages_snapshot=thread.agent_messages,
         )

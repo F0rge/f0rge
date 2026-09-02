@@ -3044,6 +3044,11 @@ export { isCanvasSpecPayload, parseCanvasSpec } from "./nia-canvas-types";
 
 export type NiaCanvasSpecPayload = import("./nia-canvas-types").CanvasSpec;
 
+export type NiaCitation = {
+  label: string;
+  href?: string;
+};
+
 export type NiaOverdueInvoicesPayload = {
   kind: "overdue_invoices";
   invoices: {
@@ -3051,6 +3056,16 @@ export type NiaOverdueInvoicesPayload = {
     invoice_number: string;
     remaining_zar: string;
   }[];
+  citations?: NiaCitation[];
+};
+
+export type NiaTransferDraftPayload = {
+  kind: "transfer_draft";
+  transfer_id: string;
+  transfer_number: string;
+  status: TransferStatus;
+  undoable: boolean;
+  citations?: NiaCitation[];
 };
 
 export type NiaStructuredPayload =
@@ -3059,6 +3074,7 @@ export type NiaStructuredPayload =
   | NiaOpenedPagePayload
   | NiaCanvasSpecPayload
   | NiaOverdueInvoicesPayload
+  | NiaTransferDraftPayload
   | { kind: string; [key: string]: unknown };
 
 export type NiaResumeDecision = "accept" | "decline" | "cancel";

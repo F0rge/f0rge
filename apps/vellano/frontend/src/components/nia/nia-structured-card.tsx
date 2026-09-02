@@ -2,19 +2,26 @@
 
 import { Button, StructuredListBody, StructuredListRow, StructuredListWrapper, Tile } from "@carbon/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   resumeNiaThread,
   ApiError,
+  cancelTransfer,
+  getTransfer,
   isCanvasSpecPayload,
+  TRANSFER_STATUS_LABELS,
   type NiaMessage,
   type NiaNeedsOkPayload,
   type NiaOverdueInvoicesPayload,
   type NiaResumeDecision,
   type NiaStructuredPayload,
+  type NiaTransferDraftPayload,
+  type TransferStatus,
 } from "@/lib/api";
 import { writeCanvasSpec } from "@/lib/nia-canvas-store";
+
+import { NiaCitationChips } from "./nia-citation-chips";
 
 type NiaStructuredCardProps = {
   message: NiaMessage;
@@ -30,6 +37,10 @@ function isNeedsOk(payload: NiaStructuredPayload): payload is NiaNeedsOkPayload 
 
 function isOverdueInvoices(payload: NiaStructuredPayload): payload is NiaOverdueInvoicesPayload {
   return payload.kind === "overdue_invoices";
+}
+
+function isTransferDraft(payload: NiaStructuredPayload): payload is NiaTransferDraftPayload {
+  return payload.kind === "transfer_draft";
 }
 
 function OpenedPageCard({ path, messageId }: { path: string; messageId: string }) {
@@ -81,6 +92,93 @@ function CanvasSpecCard({
   );
 }
 
+function TransferDraftCard({
+  payload,
+  onError,
+}: {
+  payload: NiaTransferDraftPayload;
+  onError: (message: string) => void;
+}) {
+  const router = useRouter();
+  const [liveStatus, setLiveStatus] = useState<TransferStatus>(payload.status);
+  const [undoHidden, setUndoHidden] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getTransfer(payload.transfer_id)
+      .then((transfer) => {
+        if (!cancelled) {
+          setLiveStatus(transfer.status);
+        }
+      })
+      .catch(() => {
+        // Keep payload status when refresh fails.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [payload.transfer_id]);
+
+  const showUndo = payload.undoable && liveStatus === "draft" && !undoHidden && !undoing;
+
+  async function handleUndo() {
+    setUndoing(true);
+    try {
+      const cancelled = await cancelTransfer(payload.transfer_id);
+      setLiveStatus(cancelled.status);
+      setUndoHidden(true);
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 409) {
+        setUndoHidden(true);
+        setBlockedMessage("Already dispatched — reverse in Transfers");
+        try {
+          const transfer = await getTransfer(payload.transfer_id);
+          setLiveStatus(transfer.status);
+        } catch {
+          setLiveStatus("in_transit");
+        }
+      } else {
+        onError(err instanceof ApiError ? err.message : "Failed to cancel transfer");
+      }
+    } finally {
+      setUndoing(false);
+    }
+  }
+
+  const statusLabel = TRANSFER_STATUS_LABELS[liveStatus] ?? liveStatus;
+  const dispatchedNote =
+    liveStatus === "in_transit"
+      ? "Dispatched — stock left the source. Receive or reverse in Transfers."
+      : null;
+
+  return (
+    <Tile className="vellano-nia-card vellano-nia-card--undo">
+      <p className="cds--type-label-01">Transfer draft</p>
+      <p className="cds--type-body-01">{payload.transfer_number}</p>
+      <p className="vellano-muted-text">Status: {statusLabel}</p>
+      {dispatchedNote ? <p className="cds--type-body-01">{dispatchedNote}</p> : null}
+      {blockedMessage ? <p className="cds--type-body-01">{blockedMessage}</p> : null}
+      <NiaCitationChips citations={payload.citations} />
+      {showUndo ? (
+        <div className="vellano-nia-card__actions">
+          <Button size="sm" kind="danger--tertiary" disabled={undoing} onClick={() => void handleUndo()}>
+            Undo
+          </Button>
+          <Button
+            size="sm"
+            kind="ghost"
+            onClick={() => router.push(`/transfers`)}
+          >
+            Open Transfers
+          </Button>
+        </div>
+      ) : null}
+    </Tile>
+  );
+}
+
 export function NiaStructuredCard({
   message,
   threadId,
@@ -117,6 +215,10 @@ export function NiaStructuredCard({
     );
   }
 
+  if (isTransferDraft(structured)) {
+    return <TransferDraftCard payload={structured} onError={onResumeError} />;
+  }
+
   if (isOverdueInvoices(structured)) {
     return (
       <Tile className="vellano-nia-card vellano-nia-card--list">
@@ -137,6 +239,7 @@ export function NiaStructuredCard({
             </StructuredListBody>
           </StructuredListWrapper>
         )}
+        <NiaCitationChips citations={structured.citations} />
       </Tile>
     );
   }

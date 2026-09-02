@@ -4,12 +4,18 @@ import uuid
 
 from fastapi import APIRouter, Depends, status
 
-from app.dependencies.auth import get_nia_threads_service, require_nia_use
+from app.dependencies.auth import (
+    get_nia_audit_service,
+    get_nia_threads_service,
+    require_nia_use,
+)
 from app.schemas.nia import (
+    NiaAuditEventResponse,
     NiaThreadCreate,
     NiaThreadResponse,
     NiaThreadSummaryResponse,
 )
+from app.services.nia_audit import NiaAuditService
 from app.services.nia_threads import NiaThreadsService
 
 nia_threads_router = APIRouter(prefix="/api/v1/nia/threads", tags=["nia"])
@@ -43,6 +49,15 @@ async def get_nia_thread(
     service: NiaThreadsService = Depends(get_nia_threads_service),
 ) -> NiaThreadResponse:
     return await service.get_thread(user_id, thread_id)
+
+
+@nia_threads_router.get("/{thread_id}/audit", response_model=list[NiaAuditEventResponse])
+async def list_nia_thread_audit(
+    thread_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_nia_use),
+    service: NiaAuditService = Depends(get_nia_audit_service),
+) -> list[NiaAuditEventResponse]:
+    return await service.list_for_thread(thread_id, user_id)
 
 
 @nia_threads_router.post("/{thread_id}/archive", response_model=NiaThreadSummaryResponse)

@@ -157,8 +157,12 @@ async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str
         }
         for inv in rows
     ]
+    citations = [{"label": inv.invoice_number, "href": f"/invoices/{inv.id}"} for inv in rows]
     if invoices:
-        _set_structured_payload(ctx, {"kind": "overdue_invoices", "invoices": invoices})
+        _set_structured_payload(
+            ctx,
+            {"kind": "overdue_invoices", "invoices": invoices, "citations": citations},
+        )
     return invoices
 
 
@@ -246,9 +250,13 @@ async def propose_transfer(
         ),
         ctx.deps.user_id,
     )
-    return {
+    payload = {
         "kind": "transfer_draft",
         "transfer_id": str(transfer.id),
         "transfer_number": transfer.transfer_number,
         "status": transfer.status.value,
+        "undoable": True,
+        "citations": [{"label": transfer.transfer_number, "href": "/transfers"}],
     }
+    _set_structured_payload(ctx, payload)
+    return payload

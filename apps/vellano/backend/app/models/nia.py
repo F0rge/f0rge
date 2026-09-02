@@ -90,6 +90,39 @@ class NiaMessage(UUIDPkMixin, Base):
     )
 
 
+class NiaAuditEvent(UUIDPkMixin, Base):
+    __tablename__ = "nia_audit_events"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    thread_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("nia_threads.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    tool_name: Mapped[str] = mapped_column(Text, nullable=False)
+    args: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    decision: Mapped[str] = mapped_column(Text, nullable=False)
+    entity_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    entity_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.datetime.utcnow,
+    )
+
+    user: Mapped["User"] = relationship()
+    thread: Mapped[Optional["NiaThread"]] = relationship()
+
+
 class NiaUsageEvent(UUIDPkMixin, Base):
     __tablename__ = "nia_usage_events"
 
