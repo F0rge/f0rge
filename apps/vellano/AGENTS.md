@@ -142,7 +142,7 @@ Every location has a default **FLOOR** bin (`code=FLOOR`, `row_code=F`, `bay=1`,
 
 - **API:** `GET/POST /locations/{id}/bins`, `POST /locations/{id}/bins/grid` (idempotent; skip existing row/bay/level), `PATCH /locations/{id}/bins/{bin_id}` (`is_archived` / `is_default`). Scan payload is bin `code`. List includes archived. Mutate: `stock.receive`. Read: any authenticated role.
 - **Grid codes:** `{row}-{bay:02d}-{level}` e.g. `A-01-1`.
-- **Print / scan:** bin labels via `printHtml` (blob URL + `window.open(url, "_blank")` — never `noopener`) + JsBarcode CODE128 of `code`. Receive/WMS type-or-scan matches `code` (case-insensitive).
+- **Print / scan:** `printHtml` (blob URL + `window.open(url, "_blank")` — never `noopener`). Bin labels and catalogue SKU labels render JsBarcode CODE128 (`code` / `our_barcode`). Layby receipts use the same helper (no barcode). Receive/WMS type-or-scan matches bin `code` (case-insensitive).
 - **Stock:** omitted `bin_id` / `from_bin_id` / `to_bin_id` uses the active default. Archived bins cannot receive. Cannot archive the default without assigning another first. Same-location bin-to-bin is out of v1.
 - **Transfers:** optional `from_bin_id` / `to_bin_id` on each line; dest on-hand rises only on dest receive (F2).
 - **Stocktake** stays location-scoped; variance applies to the default bin (no `stocktake_lines.bin_id`).
@@ -404,7 +404,7 @@ Stocktake lock at location → 409 `"Location is locked for stocktake"` on hold 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 - **Suppliers:** `GET/POST /suppliers` — `{ name, default_currency? }` (currency defaults to USD).
-- **Proformas:** `GET /proformas`, `POST /proformas` (multipart: `supplier_id`, `invoice_number`, `invoice_date`, optional `currency`, file field `file`), `GET /proformas/{id}`, `GET /proformas/{id}/file` (PDF).
+- **Proformas:** `GET /proformas`, `POST /proformas` (multipart: `supplier_id`, `invoice_number`, `invoice_date`, optional `currency`, file field `file`), `GET /proformas/{id}`, `GET /proformas/{id}/file` (PDF streamed via `serve_stored_pdf`; no S3 302).
 - **SKUs:** `GET/POST /skus`, `GET /skus/{id}`, `PATCH /skus/{id}` (identity, category, prices, supplier fields), `DELETE /skus/{id}` (204; 409 if stock/orders/sales history), `POST /skus/{id}/photo` (field `photo`), `GET /skus/{id}/photo`.
 
 **S1 opening stock:** optional on `POST /skus`: `opening_location_id`, `opening_qty` (≥ 1), `opening_unit_cost_zar` (> 0), `opening_date` (defaults to today). If any opening field is set, location, qty, and unit cost are required. Requires `catalogue.mutate`. Writes location on-hand and cost audit source `opening`; no GL. Unit-cost blend matches receive. Omit all opening fields for a catalogue-only create (SKU is not in `GET /inventory`). Catalogue-only SKUs can be `DELETE`d; SKUs with `location_stock`, orders, or sales history return 409 `"Cannot delete a SKU that has stock, orders, or sales history."`
@@ -532,9 +532,9 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Contacts:** `GET/POST /contacts` — unified customers (`kind: customer`) and suppliers (`kind: supplier`). `POST` creates customers only; suppliers via `POST /suppliers`.
 - **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf` — 15% VAT on face; journal Dr AR, Cr Sales + VAT control.
 - **Repeating invoices:** `GET/POST /repeating-invoices`, `GET/PATCH /repeating-invoices/{id}`, `POST /repeating-invoices/{id}/run` — run-now only (no cron, no email). Posted invoices have no draft status.
-- **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}` — one CN per invoice; reverses AR/sales/VAT.
-- **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR).
-- **Payments:** `GET/POST /payments` — `direction: in` (invoice, ZAR) or `out` (bill, foreign FX). Response includes `fx_gain_loss_zar` (positive = gain, negative = loss).
+- **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}`, `GET /credit-notes/{id}/pdf` — one CN per invoice; reverses AR/sales/VAT. PDF reuses the tax-invoice canvas with title Credit Note.
+- **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR). Attachment GET streams bytes via `serve_stored_pdf` (same-origin; no S3 302).
+- **Payments:** `GET/POST /payments`, `GET /payments/{id}/pdf` — `direction: in` (invoice, ZAR) or `out` (bill, foreign FX). Response includes `fx_gain_loss_zar` (positive = gain, negative = loss).
 - **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: `books.mutate`.
 - **Journal CSV (SimplePay):** `POST /journal-imports/preview` and `/commit` (multipart `file`); source `import:simplepay`; same-month 409. UI on `/journals`.
 - **Books history:** append-only `GET /books-events?document_type=&document_id=` (`invoice` | `bill` | `payment` | `journal`). Journal post + void = two rows on the original id. No PATCH/DELETE.
