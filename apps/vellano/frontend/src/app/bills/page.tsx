@@ -215,7 +215,7 @@ export default function BillsPage() {
 
   return (
     <Stack gap={6}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="vellano-page-header">
         <div>
           <h1 className="cds--type-productive-heading-04">Bills</h1>
           <p className="cds--type-body-01">Supplier bills in foreign currency with ZAR conversion.</p>

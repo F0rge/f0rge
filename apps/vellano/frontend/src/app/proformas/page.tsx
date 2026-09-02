@@ -157,7 +157,7 @@ export default function ProformasPage() {
 
   return (
     <Stack gap={6}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div className="vellano-page-header">
         <div>
           <h1 className="cds--type-productive-heading-04">Proformas</h1>
           <p className="cds--type-body-01">Proforma invoices filed against suppliers.</p>

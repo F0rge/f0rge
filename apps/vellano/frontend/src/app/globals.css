@@ -16,7 +16,13 @@ body {
   padding: 2rem;
   min-height: calc(100vh - 3rem);
   min-width: 0;
-  overflow-x: auto;
+  /* Title rows stay in the dock-inset viewport; wide tables scroll on panels. */
+  overflow-x: hidden;
+}
+
+.vellano-main > * {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .vellano-main .cds--css-grid {
@@ -219,10 +225,12 @@ body {
 .vellano-page-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .vellano-sku-form {
@@ -448,6 +456,16 @@ body {
 .vellano-catalogue-panel {
   border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   background: var(--cds-layer-01, #fff);
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* Wide tables that are not wrapped in .vellano-catalogue-panel. */
+.vellano-main .cds--data-table-container {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .vellano-catalogue-toolbar {
