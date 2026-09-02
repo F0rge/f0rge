@@ -74,6 +74,31 @@ export function isStockPath(pathname: string): boolean {
   return STOCK_HREFS.has(pathname);
 }
 
+const ALL_NAV_PATH_LABELS: ReadonlyMap<string, string> = new Map(
+  [
+    ...PRIMARY_NAV_ITEMS,
+    ...STOCK_NAV_ITEMS,
+    ...OPERATIONS_NAV_ITEMS,
+    ...SALES_NAV_ITEMS,
+    ...BOOKS_NAV_ITEMS,
+    ...NIA_NAV_ITEMS,
+  ].map((item) => [item.href, item.label]),
+);
+
+/** Human label for Nia navigation cards — maps `/invoices` → "Invoices", not raw path. */
+export function labelForNavPath(path: string): string {
+  const exact = ALL_NAV_PATH_LABELS.get(path);
+  if (exact) {
+    return exact;
+  }
+  for (const [href, label] of ALL_NAV_PATH_LABELS) {
+    if (href !== "/" && path.startsWith(`${href}/`)) {
+      return label;
+    }
+  }
+  return path;
+}
+
 export function isNavLinkActive(pathname: string, href: string): boolean {
   if (pathname === href) {
     return true;

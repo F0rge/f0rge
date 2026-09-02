@@ -14,11 +14,20 @@ from app.schemas.nia import (
     NiaThreadCreate,
     NiaThreadResponse,
     NiaThreadSummaryResponse,
+    NiaThreadUpdate,
 )
-from f0rge_core.exceptions import NotFoundError
+from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
 DEFAULT_THREAD_TITLE = "New thread"
+AUTO_TITLE_MAX_LEN = 80
+
+
+def _auto_title_from_message(content: str) -> str:
+    first_line = content.strip().split("\n", 1)[0]
+    if len(first_line) > AUTO_TITLE_MAX_LEN:
+        return first_line[:AUTO_TITLE_MAX_LEN] + "…"
+    return first_line
 
 
 class NiaThreadsService:
@@ -63,6 +72,21 @@ class NiaThreadsService:
     ) -> NiaThreadResponse:
         return self._to_response(await self._get_owned_or_404(thread_id, user_id))
 
+    async def rename_thread(
+        self,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        data: NiaThreadUpdate,
+    ) -> NiaThreadSummaryResponse:
+        title = data.title.strip()
+        if not title:
+            raise ValidationError("Title cannot be empty")
+        thread = await self._get_owned_or_404(thread_id, user_id)
+        async with unit_of_work(self.db):
+            thread.title = title
+            thread.updated_at = datetime.datetime.utcnow()
+        return self._to_summary(thread)
+
     async def append_message(
         self,
         user_id: uuid.UUID,
@@ -73,6 +97,7 @@ class NiaThreadsService:
         structured_payload: Optional[dict] = None,
     ) -> None:
         thread = await self._get_owned_or_404(thread_id, user_id)
+        is_first_user = role == "user" and not any(msg.role == "user" for msg in thread.messages)
         message = NiaMessage(
             thread_id=thread.id,
             role=role,
@@ -82,6 +107,10 @@ class NiaThreadsService:
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(message)
             thread.updated_at = datetime.datetime.utcnow()
+            if is_first_user and thread.title == DEFAULT_THREAD_TITLE:
+                auto_title = _auto_title_from_message(content)
+                if auto_title:
+                    thread.title = auto_title
 
     async def save_agent_state(
         self,

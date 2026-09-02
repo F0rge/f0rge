@@ -634,48 +634,34 @@ body {
   border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
 }
 
-.vellano-nia-dock__meter .vellano-nia-usage-meter {
-  max-width: none;
-  margin-top: 0.25rem;
-}
-
-.vellano-nia-dock__threads {
-  flex: 0 0 auto;
-  max-height: 8rem;
-  overflow: auto;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
-}
-
-.vellano-nia-dock__threads-toolbar {
+.vellano-nia-dock__expanded-hint {
+  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.25rem;
+  justify-content: center;
+  padding: 1rem;
+  color: var(--cds-text-secondary, #525252);
+  text-align: center;
 }
 
-.vellano-nia-dock__thread-list {
+.vellano-nia-history-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.vellano-nia-dock__thread {
+.vellano-nia-history-list__item {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  border-radius: 0;
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
 }
 
-.vellano-nia-dock__thread--active {
-  background: var(--cds-layer-hover-01, #f4f4f4);
-}
-
-.vellano-nia-dock__thread-select {
+.vellano-nia-history-list__select {
   flex: 1;
   min-width: 0;
   margin: 0;
-  padding: 0.375rem 0.5rem;
+  padding: 0.625rem 0;
   border: 0;
   background: transparent;
   text-align: left;
@@ -684,12 +670,43 @@ body {
   color: inherit;
 }
 
-.vellano-nia-dock__thread-title {
+.vellano-nia-history-list__title {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.875rem;
+}
+
+.vellano-nia-history-list__time {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary, #525252);
+}
+
+.vellano-nia-history-list__actions {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.vellano-nia-modal__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 24rem;
+  max-height: 70vh;
+}
+
+.vellano-nia-modal__body .vellano-nia-dock__messages {
+  flex: 1;
+  min-height: 12rem;
+}
+
+.vellano-nia-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
 }
 
 .vellano-nia-dock__messages {
@@ -709,11 +726,15 @@ body {
 
 .vellano-nia-dock__message--user .vellano-nia-dock__bubble {
   margin-left: auto;
-  background: var(--cds-layer-accent-01, #e0e0e0);
+  background: var(--cds-button-primary, #0f62fe);
+  color: var(--cds-text-on-color, #fff);
 }
 
 .vellano-nia-dock__message--assistant .vellano-nia-dock__bubble {
-  background: var(--cds-layer-02, #f4f4f4);
+  background: var(--cds-layer-01, #fff);
+  border-left: 2px solid transparent;
+  border-image: linear-gradient(180deg, #4589ff, #a56eff) 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .vellano-nia-dock__bubble {
