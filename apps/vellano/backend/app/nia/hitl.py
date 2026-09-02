@@ -37,7 +37,15 @@ def build_needs_ok_payload(approval: ToolCallPart) -> dict[str, Any]:
 def pending_from_deferred(output: DeferredToolRequests) -> Optional[dict[str, Any]]:
     if not output.approvals:
         return None
-    return build_needs_ok_payload(output.approvals[0])
+    approval = output.approvals[0]
+    meta = output.metadata.get(approval.tool_call_id or "")
+    if isinstance(meta, dict) and meta.get("kind"):
+        payload = dict(meta)
+        payload.setdefault("tool_name", approval.tool_name)
+        payload.setdefault("tool_call_id", approval.tool_call_id)
+        payload.setdefault("actions", ["accept", "decline", "cancel"])
+        return payload
+    return build_needs_ok_payload(approval)
 
 
 def resolve_approval_part(

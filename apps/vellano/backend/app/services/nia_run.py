@@ -13,6 +13,7 @@ from starlette.responses import JSONResponse, Response
 
 from app.config import settings
 from app.exceptions import NiaLlmUnconfiguredError
+import app.nia  # noqa: F401 — register Nia tools on the agent
 from app.models.nia import NiaMessageRole
 from app.nia.agent import NiaDeps, build_nia_model, nia_agent
 from app.nia.hitl import (
@@ -145,6 +146,7 @@ class NiaRunService:
             user_id=user_id,
             permissions=permission_keys,
             page_path=page_path,
+            db=self.db,
             invoice_id=entity_ids["invoice_id"],
             customer_id=entity_ids["customer_id"],
             sku_id=entity_ids["sku_id"],
@@ -157,6 +159,7 @@ class NiaRunService:
         thread_id: uuid.UUID,
         user_text: str,
         result: Any,
+        deps: NiaDeps,
     ) -> None:
         output = result.output
         assistant_text = _assistant_text_from_output(output)
@@ -169,6 +172,8 @@ class NiaRunService:
             structured_payload = pending_tools
         else:
             pending_tools = None
+            if deps.last_structured_payload is not None:
+                structured_payload = deps.last_structured_payload
 
         if user_text:
             await self.threads.append_message(
@@ -259,6 +264,7 @@ class NiaRunService:
                     thread_id=thread_id,
                     user_text=user_text,
                     result=result,
+                    deps=deps,
                 )
             else:
                 await self._persist_resume_result(
