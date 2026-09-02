@@ -44,6 +44,11 @@ postgres_container = postgres_container_fixture("postgres:16")
 
 
 @pytest.fixture(autouse=True)
+def disable_nia_schedule_ticker(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "nia_schedule_ticker", False)
+
+
+@pytest.fixture(autouse=True)
 def patch_storage_dir(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     storage_path = tmp_path / "storage"
     storage_path.mkdir()

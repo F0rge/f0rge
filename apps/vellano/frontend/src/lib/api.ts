@@ -3054,6 +3054,69 @@ export function patchNiaUsageCap(
   });
 }
 
+export type NiaScheduleCadence =
+  | "weekdays_08"
+  | "daily_08"
+  | "weekly_mon_08"
+  | "hourly"
+  | "custom";
+
+export type NiaScheduledTask = {
+  id: string;
+  name: string;
+  prompt: string;
+  timezone: string;
+  cadence: NiaScheduleCadence | string;
+  cron: string | null;
+  enabled: boolean;
+  notify_only_if_changed: boolean;
+  last_run_at: string | null;
+  last_status: "ok" | "skipped" | "error" | "needs_ok" | string | null;
+  last_error: string | null;
+  next_run_at: string | null;
+  last_thread_id: string | null;
+  created_at: string;
+};
+
+export type NiaScheduledTaskWrite = {
+  name: string;
+  prompt: string;
+  timezone?: string;
+  cadence: NiaScheduleCadence;
+  cron?: string;
+  enabled?: boolean;
+  notify_only_if_changed?: boolean;
+};
+
+export function listNiaSchedule(): Promise<NiaScheduledTask[]> {
+  return apiFetch<NiaScheduledTask[]>("/nia/schedule");
+}
+
+export function createNiaSchedule(payload: NiaScheduledTaskWrite): Promise<NiaScheduledTask> {
+  return apiFetch<NiaScheduledTask>("/nia/schedule", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateNiaSchedule(
+  id: string,
+  payload: Partial<NiaScheduledTaskWrite>,
+): Promise<NiaScheduledTask> {
+  return apiFetch<NiaScheduledTask>(`/nia/schedule/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteNiaSchedule(id: string): Promise<void> {
+  return apiFetch<void>(`/nia/schedule/${id}`, { method: "DELETE" });
+}
+
+export function runNiaScheduleNow(id: string): Promise<NiaScheduledTask> {
+  return apiFetch<NiaScheduledTask>(`/nia/schedule/${id}/run`, { method: "POST" });
+}
+
 export type NiaMessage = {
   id: string;
   role: "user" | "assistant" | string;

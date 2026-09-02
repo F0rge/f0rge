@@ -408,6 +408,54 @@ class NiaRunService:
             user_text=user_text,
         )
 
+    async def run_prompt(
+        self,
+        *,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        prompt: str,
+    ) -> tuple[str, Optional[str]]:
+        """In-process Nia run used by the scheduler. Does not auto-approve writes."""
+        await self.threads.get_thread(user_id, thread_id)
+        if not settings.openrouter_api_key.strip():
+            raise NiaLlmUnconfiguredError()
+        await check_nia_budget(self.db, user_id)
+
+        run_input = build_run_input(
+            json.dumps({"message": prompt}).encode("utf-8"),
+            thread_id,
+        )
+        deps = await self._build_deps(user_id, run_input)
+        result = await nia_agent.run(
+            prompt,
+            deps=deps,
+            model=build_nia_model(),
+        )
+        await self._persist_run_result(
+            user_id=user_id,
+            thread_id=thread_id,
+            user_text=prompt,
+            result=result,
+            deps=deps,
+        )
+        usage = getattr(result, "usage", None)
+        if callable(usage):
+            usage = usage()
+        await self._record_usage(
+            user_id=user_id,
+            thread_id=thread_id,
+            usage=usage,
+        )
+        output = result.output
+        assistant_text = _assistant_text_from_output(output)
+        structured_payload, _pending = _payload_and_pending(output, deps)
+        pending_kind: Optional[str] = None
+        if structured_payload is not None:
+            kind = structured_payload.get("kind")
+            if kind in ("needs_ok", "needs_fields"):
+                pending_kind = "needs_ok"
+        return assistant_text, pending_kind
+
     async def _resume_submit_fields(
         self,
         *,
