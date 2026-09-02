@@ -59,6 +59,12 @@ nia_agent = Agent(
 
 
 def build_nia_model() -> OpenRouterModel:
+    """OpenRouter chat model for Nia.
+
+    AG-UI uses ``AGUIAdapter.run_stream`` → ``OpenRouterModel.request_stream``,
+    which calls Chat Completions with ``stream=True``. Do not switch the run
+    path to ``agent.run()`` / ``request()`` or tokens buffer until complete.
+    """
     return OpenRouterModel(
         settings.openrouter_model,
         provider=OpenRouterProvider(api_key=settings.openrouter_api_key),

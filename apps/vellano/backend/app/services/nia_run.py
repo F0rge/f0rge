@@ -37,6 +37,7 @@ from app.schemas.nia import NiaResumeRequest
 from pydantic import ValidationError as PydanticValidationError
 from app.services.nia_audit import NiaAuditService, extract_tool_args
 from app.services.nia_caps import check_nia_budget
+from app.services.nia_sse import apply_nia_sse_headers
 from app.services.nia_threads import NiaThreadsService
 from app.services.nia_usage import NiaUsageService
 from app.services.permissions import PermissionService
@@ -378,7 +379,10 @@ class NiaRunService:
             stream_kwargs["message_history"] = message_history
         if deferred_tool_results is not None:
             stream_kwargs["deferred_tool_results"] = deferred_tool_results
-        return adapter.streaming_response(adapter.run_stream(**stream_kwargs))
+        # run_stream → request_stream(stream=True). Do not use agent.run() here.
+        return apply_nia_sse_headers(
+            adapter.streaming_response(adapter.run_stream(**stream_kwargs))
+        )
 
     async def dispatch_run(
         self,

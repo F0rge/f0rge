@@ -57,6 +57,7 @@ const TEXT_TYPES = new Set([
   "TEXT_MESSAGE_CONTENT",
   "TEXT_MESSAGE_CHUNK",
   "TEXT_DELTA",
+  "TEXT_MESSAGE_DELTA",
 ]);
 
 const THINKING_TYPES = new Set([
@@ -70,11 +71,50 @@ const THINKING_TYPES = new Set([
 const TOOL_START_TYPES = new Set(["TOOL_CALL_START", "TOOL_CALL_BEGIN"]);
 const TOOL_END_TYPES = new Set(["TOOL_CALL_END", "TOOL_CALL_RESULT"]);
 
-function normalizeType(value: unknown): string {
-  return String(value ?? "")
-    .trim()
-    .toUpperCase()
-    .replace(/-/g, "_");
+const LIFECYCLE_TYPES = new Set([
+  "TEXT_MESSAGE_START",
+  "TEXT_MESSAGE_END",
+  "THINKING_START",
+  "THINKING_END",
+  "THINKING_TEXT_MESSAGE_START",
+  "THINKING_TEXT_MESSAGE_END",
+  "REASONING_START",
+  "REASONING_END",
+  "REASONING_MESSAGE_START",
+  "REASONING_MESSAGE_END",
+  "TOOL_CALL_ARGS",
+  "RUN_STARTED",
+  "RUN_FINISHED",
+  "RUN_ERROR",
+  "STEP_STARTED",
+  "STEP_FINISHED",
+]);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/** `TextMessageContent` / `text-delta` / `TEXT_MESSAGE_CONTENT` → `TEXT_MESSAGE_CONTENT`. */
+export function normalizeNiaSseType(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+  return raw
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[-\s]+/g, "_")
+    .replace(/__+/g, "_")
+    .toUpperCase();
+}
+
+function readType(event: Record<string, unknown>): string {
+  const nestedEvent = asRecord(event.event);
+  const nestedData = asRecord(event.data);
+  return normalizeNiaSseType(
+    event.type ?? nestedEvent?.type ?? nestedData?.type ?? event.event,
+  );
 }
 
 function readString(...values: unknown[]): string | null {
@@ -86,13 +126,28 @@ function readString(...values: unknown[]): string | null {
   return null;
 }
 
+function readDelta(event: Record<string, unknown>): string | null {
+  const nestedEvent = asRecord(event.event);
+  const nestedData = asRecord(event.data);
+  return readString(
+    event.delta,
+    event.content,
+    event.text,
+    nestedEvent?.delta,
+    nestedEvent?.content,
+    nestedEvent?.text,
+    nestedData?.delta,
+    nestedData?.content,
+    nestedData?.text,
+  );
+}
+
 function toolNameFromEvent(event: Record<string, unknown>): string {
   const nested =
-    event.toolCall && typeof event.toolCall === "object"
-      ? (event.toolCall as Record<string, unknown>)
-      : event.tool_call && typeof event.tool_call === "object"
-        ? (event.tool_call as Record<string, unknown>)
-        : null;
+    asRecord(event.toolCall) ??
+    asRecord(event.tool_call) ??
+    asRecord(event.event) ??
+    asRecord(event.data);
   return (
     readString(
       event.toolCallName,
@@ -102,12 +157,12 @@ function toolNameFromEvent(event: Record<string, unknown>): string {
       event.name,
       nested?.name,
       nested?.toolCallName,
+      nested?.tool_call_name,
     ) ?? "tool"
   );
 }
 
-/** Parse one AG-UI SSE `data:` line. Ignores tool-arg deltas so they never enter the answer bubble. */
-export function parseNiaSseLine(line: string): NiaSseEvent | null {
+function ssePayload(line: string): string | null {
   const trimmed = line.trim();
   if (!trimmed.startsWith("data:")) {
     return null;
@@ -116,10 +171,52 @@ export function parseNiaSseLine(line: string): NiaSseEvent | null {
   if (!payload || payload === "[DONE]") {
     return null;
   }
+  return payload;
+}
+
+export function peekNiaSseType(line: string): string | null {
+  const payload = ssePayload(line);
+  if (!payload) {
+    return null;
+  }
   try {
-    const event = JSON.parse(payload) as Record<string, unknown>;
-    const type = normalizeType(event.type ?? event.event);
-    const text = readString(event.delta, event.content, event.text);
+    const event = asRecord(JSON.parse(payload));
+    if (!event) {
+      return null;
+    }
+    const type = readType(event);
+    return type || null;
+  } catch {
+    return null;
+  }
+}
+
+function logUnknownNiaSseType(type: string): void {
+  if (process.env.NODE_ENV === "production") {
+    return;
+  }
+  if (TEXT_TYPES.has(type) || THINKING_TYPES.has(type)) {
+    return;
+  }
+  if (TOOL_START_TYPES.has(type) || TOOL_END_TYPES.has(type) || LIFECYCLE_TYPES.has(type)) {
+    return;
+  }
+  console.info("[nia-sse] unknown event type", type);
+}
+
+/** Parse one AG-UI SSE `data:` line. Ignores tool-arg deltas so they never enter the answer bubble. */
+export function parseNiaSseLine(line: string): NiaSseEvent | null {
+  const payload = ssePayload(line);
+  if (!payload) {
+    return null;
+  }
+  try {
+    const event = asRecord(JSON.parse(payload));
+    if (!event) {
+      return null;
+    }
+    const type = readType(event);
+    const text = readDelta(event);
 
     if (TOOL_START_TYPES.has(type)) {
       return { kind: "tool_start", name: toolNameFromEvent(event) };
@@ -132,6 +229,9 @@ export function parseNiaSseLine(line: string): NiaSseEvent | null {
     }
     if (TEXT_TYPES.has(type) && text) {
       return { kind: "text", delta: text };
+    }
+    if (type) {
+      logUnknownNiaSseType(type);
     }
   } catch {
     // ignore malformed SSE chunks

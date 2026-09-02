@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   turbopack: { root: repoRoot },
   transpilePackages: ["@carbon/react", "@carbon/icons-react"],
   async rewrites() {
+    // App Router routes under src/app/api/v1/nia/threads/[threadId]/{run,resume}
+    // win over this rewrite (afterFiles) so SSE is piped, not buffered.
     return [
       {
         source: "/api/:path*",

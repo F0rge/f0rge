@@ -60,6 +60,10 @@ async def test_till_run_persists_messages_and_usage(
         json={"message": "hello", "page": {"path": "/invoices"}},
     )
     assert run.status_code == 200
+    content_type = run.headers.get("content-type", "")
+    assert "text/event-stream" in content_type
+    assert "no-cache" in run.headers.get("cache-control", "")
+    assert run.headers.get("x-accel-buffering") == "no"
     await _consume_stream(run)
 
     thread = await till.get(f"/api/v1/nia/threads/{thread_id}")

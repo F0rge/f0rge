@@ -1,9 +1,14 @@
 "use client";
 
 import { Accordion, AccordionItem, InlineLoading } from "@carbon/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { niaThinkingSummary, showNiaWorkingRow } from "@/lib/nia-thinking";
+import {
+  niaThinkingBody,
+  niaThinkingTitle,
+  niaWorkingElapsedSeconds,
+  showNiaWorkingRow,
+} from "@/lib/nia-thinking";
 
 type NiaThinkingProps = {
   streaming: boolean;
@@ -19,35 +24,53 @@ export function NiaThinking({
   toolNames,
 }: NiaThinkingProps) {
   const [expanded, setExpanded] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const working = showNiaWorkingRow(streaming, streamingText);
   const hasActivity = Boolean(thinkingText.trim() || toolNames.length);
+
+  useEffect(() => {
+    if (!streaming) {
+      return undefined;
+    }
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(niaWorkingElapsedSeconds(startedAt, Date.now()));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [streaming]);
+
   if (!streaming && !hasActivity) {
     return null;
   }
 
-  const summary = niaThinkingSummary({
+  const title = niaThinkingTitle({
+    streaming,
+    answerStarted: Boolean(streamingText.trim()),
+    elapsedSeconds,
     toolNames,
     hasReasoning: Boolean(thinkingText.trim()),
-    answerStarted: Boolean(streamingText.trim()),
+  });
+  const body = niaThinkingBody({
+    thinkingText,
+    toolNames,
+    waiting: working,
   });
 
   return (
     <div className="vellano-nia-dock__thinking">
       {working ? (
         <div className="vellano-nia-dock__working">
-          <InlineLoading description="Nia is working…" />
+          <InlineLoading description={title} />
         </div>
       ) : null}
       {hasActivity || working ? (
         <Accordion align="start" size="sm">
           <AccordionItem
-            title={summary}
+            title={title}
             open={expanded}
             onHeadingClick={() => setExpanded((current) => !current)}
           >
-            <pre className="vellano-nia-dock__thinking-body">
-              {thinkingText.trim() || (working ? "Waiting for the first token…" : "No extra detail.")}
-            </pre>
+            {body ? <pre className="vellano-nia-dock__thinking-body">{body}</pre> : null}
           </AccordionItem>
         </Accordion>
       ) : null}

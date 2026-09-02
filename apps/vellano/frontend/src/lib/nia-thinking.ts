@@ -2,6 +2,14 @@ export function showNiaWorkingRow(streaming: boolean, streamingText: string): bo
   return streaming && !streamingText.trim();
 }
 
+export function niaWorkingElapsedSeconds(startedAtMs: number, nowMs: number): number {
+  return Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
+}
+
+export function formatNiaWorkingTitle(elapsedSeconds: number): string {
+  return `Working ${Math.max(0, Math.floor(elapsedSeconds))}s`;
+}
+
 export function formatNiaToolLabel(name: string): string {
   const trimmed = name.trim();
   if (!trimmed || trimmed === "tool") {
@@ -32,6 +40,42 @@ export function niaThinkingSummary(options: {
     return "Thought for a few seconds";
   }
   return "Thought for a few seconds";
+}
+
+export function niaThinkingTitle(options: {
+  streaming: boolean;
+  answerStarted: boolean;
+  elapsedSeconds: number;
+  toolNames: string[];
+  hasReasoning: boolean;
+}): string {
+  if (options.streaming && !options.answerStarted) {
+    return formatNiaWorkingTitle(options.elapsedSeconds);
+  }
+  return niaThinkingSummary({
+    toolNames: options.toolNames,
+    hasReasoning: options.hasReasoning,
+    answerStarted: options.answerStarted,
+  });
+}
+
+export function niaThinkingBody(options: {
+  thinkingText: string;
+  toolNames: string[];
+  waiting: boolean;
+}): string {
+  const trimmed = options.thinkingText.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+  const lastTool = options.toolNames[options.toolNames.length - 1];
+  if (lastTool) {
+    return `Calling ${formatNiaToolLabel(lastTool)}…`;
+  }
+  if (options.waiting) {
+    return "";
+  }
+  return "No extra detail.";
 }
 
 export function appendThinkingLine(current: string, delta: string): string {
