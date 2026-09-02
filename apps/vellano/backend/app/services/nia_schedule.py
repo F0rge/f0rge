@@ -21,6 +21,7 @@ from app.schemas.nia import (
     NiaThreadCreate,
 )
 from app.services.nia_cadence import (
+    CADENCE_PRESETS,
     DEFAULT_TIMEZONE,
     cadence_is_preset,
     is_due,
@@ -46,7 +47,10 @@ def stored_cadence(cadence: str, cron: Optional[str]) -> str:
         if not cron or not cron.strip():
             raise ValidationError("cron is required when cadence is custom")
         return resolve_cron(cron.strip())
-    return resolve_cron(cadence)
+    if cadence not in CADENCE_PRESETS:
+        raise ValidationError("Unknown cadence")
+    resolve_cron(cadence)
+    return cadence
 
 
 def response_cadence(stored: str) -> str:

@@ -142,6 +142,7 @@ async def test_crud_own_tasks_only(
     assert till_list.status_code == 200
     assert till_list.json() == []
 
+    owner = await _login(owner_client, "owner@example.com", settings.seed_owner_password)
     patched = await owner.patch(
         f"/api/v1/nia/schedule/{task_id}",
         json={"enabled": False},
@@ -191,7 +192,7 @@ async def test_max_ten_enabled_and_fast_cron(
             "enabled": False,
         },
     )
-    assert fast.status_code == 422
+    assert fast.status_code == 400
 
 
 async def test_run_now_creates_thread(
