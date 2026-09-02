@@ -53,8 +53,9 @@ class NiaThreadResponse(NiaThreadSummaryResponse):
 
 
 class NiaResumeRequest(BaseModel):
-    decision: Literal["accept", "decline", "cancel"]
+    decision: Literal["accept", "decline", "cancel", "submit_fields"]
     tool_call_id: Optional[str] = None
+    fields: Optional[dict[str, Any]] = None
 
 
 class NiaAuditEventResponse(BaseModel):

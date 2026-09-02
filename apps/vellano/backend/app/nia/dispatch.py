@@ -14,6 +14,11 @@ from app.nia.actions import (
 )
 from app.nia.agent import NiaDeps, nia_agent
 from app.nia.catalog import CATALOG, CATALOG_BY_ID
+from app.nia.fields import (
+    FIELDS_ASSISTANT_TEXT,
+    build_needs_fields_payload,
+    should_emit_fields_form,
+)
 from app.schemas.location import LocationResponse
 from app.schemas.user import UserResponse
 
@@ -81,6 +86,13 @@ async def run_nia_action(
     try:
         data = action.args_model.model_validate(args or {})
     except PydanticValidationError as exc:
+        if should_emit_fields_form(action):
+            ctx.deps.last_structured_payload = build_needs_fields_payload(
+                action,
+                args or {},
+                exc,
+            )
+            return FIELDS_ASSISTANT_TEXT
         return _format_pydantic_errors(exc)
 
     if action.write and not ctx.tool_call_approved:

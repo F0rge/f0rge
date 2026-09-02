@@ -413,6 +413,12 @@ async def test_create_sku_validation_no_hitl(
         for m in messages
         if m["role"] == "assistant"
     )
+    assistant = next(m for m in messages if m["role"] == "assistant")
+    payload = assistant.get("structured_payload") or {}
+    assert payload.get("kind") == "needs_fields"
+    assert payload.get("action_id") == "create_sku"
+    field_ids = {field["id"] for field in payload.get("fields", [])}
+    assert {"our_ref", "our_barcode", "name", "design", "fabric"} <= field_ids
     blob = _thread_text_blob(thread.json()).lower()
     assert "missing" in blob or "invalid" in blob or "required" in blob or "field" in blob
 
@@ -469,3 +475,57 @@ async def test_create_invoice_hitl_before_mutate(
     invoices_after = await owner.get("/api/v1/invoices")
     assert invoices_after.status_code == 200
     assert any(row["customer_id"] == customer_id for row in invoices_after.json())
+
+
+async def test_create_sku_needs_fields_then_hitl(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.nia_run.build_nia_model",
+        lambda: _tool_call_model(
+            "run_nia_action",
+            {"action_id": "create_sku", "args": {}},
+        ),
+    )
+    owner = await _login(owner_client, "owner@example.com", settings.seed_owner_password)
+    thread_id = await _create_thread(owner)
+    run = await owner.post(
+        f"/api/v1/nia/threads/{thread_id}/run",
+        json={"message": "create sku"},
+    )
+    assert run.status_code == 200
+    await _consume_stream(run)
+
+    thread = await owner.get(f"/api/v1/nia/threads/{thread_id}")
+    assistant = next(m for m in thread.json()["messages"] if m["role"] == "assistant")
+    assert assistant["structured_payload"]["kind"] == "needs_fields"
+
+    sku_args = _sku_create_args("FIELDS")
+    fields_resume = await owner.post(
+        f"/api/v1/nia/threads/{thread_id}/resume",
+        json={"decision": "submit_fields", "fields": sku_args},
+    )
+    assert fields_resume.status_code == 200
+
+    after_fields = await owner.get(f"/api/v1/nia/threads/{thread_id}")
+    approval = next(
+        m
+        for m in after_fields.json()["messages"]
+        if m["role"] == "assistant"
+        and (m.get("structured_payload") or {}).get("kind") == "needs_ok"
+    )
+    listed = await owner.get("/api/v1/skus")
+    assert listed.status_code == 200
+    assert not any(row["our_ref"] == sku_args["our_ref"] for row in listed.json())
+
+    accept = await owner.post(
+        f"/api/v1/nia/threads/{thread_id}/resume",
+        json={"decision": "accept", "tool_call_id": approval["structured_payload"]["tool_call_id"]},
+    )
+    assert accept.status_code == 200
+
+    after = await owner.get("/api/v1/skus")
+    assert after.status_code == 200
+    assert any(row["our_ref"] == sku_args["our_ref"] for row in after.json())

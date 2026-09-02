@@ -33,7 +33,9 @@ import {
 } from "react";
 
 import { NiaMark } from "@/components/nia/nia-mark";
+import { NiaMarkdown } from "@/components/nia/nia-markdown";
 import { NiaStructuredCard } from "@/components/nia/nia-structured-card";
+import { NiaThinking } from "@/components/nia/nia-thinking";
 import {
   ApiError,
   archiveNiaThread,
@@ -119,6 +121,8 @@ type NiaConversationProps = {
   activeThreadId: string | undefined;
   streaming: boolean;
   streamingText: string;
+  thinkingText: string;
+  toolNames: string[];
   loadingThread: boolean;
   showSuggestions: boolean;
   composer: string;
@@ -137,6 +141,8 @@ function NiaConversation({
   activeThreadId,
   streaming,
   streamingText,
+  thinkingText,
+  toolNames,
   loadingThread,
   showSuggestions,
   composer,
@@ -156,7 +162,7 @@ function NiaConversation({
       <div className="vellano-nia-dock__messages">
         {loadingThread ? (
           <Loading withOverlay={false} description="Loading conversation…" />
-        ) : messages.length === 0 && !streamingText ? (
+        ) : messages.length === 0 && !streaming ? (
           <p className="vellano-nia-dock__empty cds--type-body-01">
             Ask Nia to create a SKU, check stock, or open a page.
           </p>
@@ -180,14 +186,30 @@ function NiaConversation({
                     />
                   ) : null}
                   {message.content && !hasCard ? (
-                    <p className="vellano-nia-dock__bubble">{message.content}</p>
+                    message.role === "assistant" ? (
+                      <div className="vellano-nia-dock__bubble">
+                        <NiaMarkdown text={message.content} />
+                      </div>
+                    ) : (
+                      <p className="vellano-nia-dock__bubble">{message.content}</p>
+                    )
                   ) : null}
                 </div>
               );
             })}
-            {streamingText ? (
+            {streaming ? (
               <div className="vellano-nia-dock__message vellano-nia-dock__message--assistant">
-                <p className="vellano-nia-dock__bubble">{streamingText}</p>
+                <NiaThinking
+                  streaming={streaming}
+                  streamingText={streamingText}
+                  thinkingText={thinkingText}
+                  toolNames={toolNames}
+                />
+                {streamingText ? (
+                  <div className="vellano-nia-dock__bubble">
+                    <NiaMarkdown text={streamingText} />
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </>
@@ -328,6 +350,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const [composer, setComposer] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [thinkingText, setThinkingText] = useState("");
+  const [toolNames, setToolNames] = useState<string[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -437,14 +461,27 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     setError(null);
     setStreaming(true);
     setStreamingText("");
+    setThinkingText("");
+    setToolNames([]);
     const thread = await ensureThread();
     if (!thread) {
       setStreaming(false);
       return;
     }
     try {
-      await runNiaThread(thread.id, text, pathname, (delta) => {
-        setStreamingText((current) => current + delta);
+      await runNiaThread(thread.id, text, pathname, {
+        onToken: (delta) => {
+          setStreamingText((current) => current + delta);
+        },
+        onThinking: (delta) => {
+          setThinkingText((current) => current + delta);
+        },
+        onTool: (name) => {
+          setToolNames((current) => (current[current.length - 1] === name ? current : [...current, name]));
+          setThinkingText((current) =>
+            current ? `${current}\nCalling ${name}…` : `Calling ${name}…`,
+          );
+        },
       });
       const fresh = await getNiaThread(thread.id);
       syncCanvasSpecFromThread(fresh);
@@ -454,6 +491,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
       getNiaUsageMeOptional().then(setUsageMe).catch(() => undefined);
       setComposer("");
       setStreamingText("");
+      setThinkingText("");
+      setToolNames([]);
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Failed to send message");
     } finally {
@@ -466,6 +505,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     setActiveThread(null);
     setComposer("");
     setStreamingText("");
+    setThinkingText("");
+    setToolNames([]);
     try {
       const created = await createNiaThread();
       setActiveThread(created);
@@ -586,6 +627,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     activeThreadId: activeThread?.id,
     streaming,
     streamingText,
+    thinkingText,
+    toolNames,
     loadingThread,
     showSuggestions: true,
     composer,

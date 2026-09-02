@@ -1,6 +1,16 @@
 "use client";
 
-import { Button, StructuredListBody, StructuredListRow, StructuredListWrapper, Tile } from "@carbon/react";
+import {
+  Button,
+  Dropdown,
+  NumberInput,
+  StructuredListBody,
+  StructuredListRow,
+  StructuredListWrapper,
+  TextArea,
+  TextInput,
+  Tile,
+} from "@carbon/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -11,7 +21,9 @@ import {
   getTransfer,
   isCanvasSpecPayload,
   TRANSFER_STATUS_LABELS,
+  type NiaFieldSpec,
   type NiaMessage,
+  type NiaNeedsFieldsPayload,
   type NiaNeedsOkPayload,
   type NiaOverdueInvoicesPayload,
   type NiaResumeDecision,
@@ -34,6 +46,179 @@ type NiaStructuredCardProps = {
 
 function isNeedsOk(payload: NiaStructuredPayload): payload is NiaNeedsOkPayload {
   return payload.kind === "needs_ok";
+}
+
+function isNeedsFields(payload: NiaStructuredPayload): payload is NiaNeedsFieldsPayload {
+  return payload.kind === "needs_fields";
+}
+
+function initialFieldValues(payload: NiaNeedsFieldsPayload): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const field of payload.fields) {
+    if (typeof field.value === "string") {
+      values[field.id] = field.value;
+      continue;
+    }
+    const supplied = payload.values?.[field.id];
+    if (supplied !== undefined && supplied !== null) {
+      values[field.id] = String(supplied);
+    }
+  }
+  return values;
+}
+
+export function coerceNeedsFieldsValues(
+  fields: NiaFieldSpec[],
+  raw: Record<string, string>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of fields) {
+    const value = (raw[field.id] ?? "").trim();
+    if (!value) {
+      continue;
+    }
+    if (field.type === "number") {
+      const parsed = Number(value);
+      out[field.id] = Number.isFinite(parsed) ? parsed : value;
+      continue;
+    }
+    if (field.type === "boolean") {
+      out[field.id] = value === "true";
+      continue;
+    }
+    if (field.type === "json") {
+      try {
+        out[field.id] = JSON.parse(value);
+      } catch {
+        out[field.id] = value;
+      }
+      continue;
+    }
+    out[field.id] = value;
+  }
+  return out;
+}
+
+function NeedsFieldsCard({
+  payload,
+  threadId,
+  streaming,
+  onResumeComplete,
+  onResumeError,
+}: {
+  payload: NiaNeedsFieldsPayload;
+  threadId: string;
+  streaming: boolean;
+  onResumeComplete: () => void;
+  onResumeError: (message: string) => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>(() => initialFieldValues(payload));
+  const [submitting, setSubmitting] = useState(false);
+
+  function setField(id: string, value: string) {
+    setValues((current) => ({ ...current, [id]: value }));
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    try {
+      await resumeNiaThread(
+        threadId,
+        "submit_fields",
+        undefined,
+        undefined,
+        coerceNeedsFieldsValues(payload.fields, values),
+      );
+      onResumeComplete();
+    } catch (err: unknown) {
+      onResumeError(err instanceof ApiError ? err.message : "Failed to submit fields");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Tile className="vellano-nia-card vellano-nia-card--fields">
+      <p className="cds--type-label-01">{payload.title}</p>
+      {payload.body ? <p className="cds--type-body-01">{payload.body}</p> : null}
+      <div className="vellano-nia-card__fields">
+        {payload.fields.map((field) => {
+          const invalid = Boolean(field.error);
+          if (field.type === "number") {
+            return (
+              <NumberInput
+                key={field.id}
+                id={`nia-field-${field.id}`}
+                label={field.label}
+                value={values[field.id] ?? ""}
+                required={field.required}
+                invalid={invalid}
+                invalidText={field.error}
+                hideSteppers
+                onChange={(_event, state) => {
+                  const next = state?.value;
+                  setField(field.id, next === undefined || next === "" ? "" : String(next));
+                }}
+              />
+            );
+          }
+          if (field.type === "select" || field.type === "boolean") {
+            const items = field.options ?? [];
+            const selected = items.find((item) => item.id === values[field.id]) ?? null;
+            return (
+              <Dropdown
+                key={field.id}
+                id={`nia-field-${field.id}`}
+                titleText={field.label}
+                label="Choose"
+                items={items}
+                itemToString={(item) => (item ? item.text : "")}
+                selectedItem={selected}
+                invalid={invalid}
+                invalidText={field.error}
+                onChange={({ selectedItem }) => {
+                  setField(field.id, selectedItem?.id ?? "");
+                }}
+              />
+            );
+          }
+          if (field.type === "json") {
+            return (
+              <TextArea
+                key={field.id}
+                id={`nia-field-${field.id}`}
+                labelText={field.label}
+                value={values[field.id] ?? ""}
+                required={field.required}
+                invalid={invalid}
+                invalidText={field.error}
+                rows={4}
+                onChange={(event) => setField(field.id, event.target.value)}
+              />
+            );
+          }
+          return (
+            <TextInput
+              key={field.id}
+              id={`nia-field-${field.id}`}
+              labelText={field.label}
+              type={field.type === "date" ? "date" : "text"}
+              value={values[field.id] ?? ""}
+              required={field.required}
+              invalid={invalid}
+              invalidText={field.error}
+              onChange={(event) => setField(field.id, event.target.value)}
+            />
+          );
+        })}
+      </div>
+      <div className="vellano-nia-card__actions">
+        <Button size="sm" kind="primary" disabled={streaming || submitting} onClick={() => void handleSubmit()}>
+          Continue
+        </Button>
+      </div>
+    </Tile>
+  );
 }
 
 function isOverdueInvoices(payload: NiaStructuredPayload): payload is NiaOverdueInvoicesPayload {
@@ -243,6 +428,18 @@ export function NiaStructuredCard({
         <p className="cds--type-label-01">{title}</p>
         {body ? <p className="cds--type-body-01">{body}</p> : null}
       </Tile>
+    );
+  }
+
+  if (isNeedsFields(structured)) {
+    return (
+      <NeedsFieldsCard
+        payload={structured}
+        threadId={threadId}
+        streaming={streaming}
+        onResumeComplete={onResumeComplete}
+        onResumeError={onResumeError}
+      />
     );
   }
 
