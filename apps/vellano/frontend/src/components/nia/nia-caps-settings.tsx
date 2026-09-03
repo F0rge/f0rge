@@ -16,16 +16,25 @@ import {
   TableRow,
   Tile,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
   getNiaUsageMe,
   listNiaUsage,
   patchNiaUsageCap,
+  updateSettings,
   type NiaUsageMe,
   type NiaUsageUser,
 } from "@/lib/api";
+import {
+  formatNiaTokenCount,
+  formatNiaUsageLine,
+  niaUsagePercent,
+  overrideDraftFromOverride,
+  parseOverrideDraft,
+  type NiaOverrideDraft,
+} from "@/lib/nia-caps-math";
 
 const ADMIN_HEADERS = [
   { key: "user", header: "User" },
@@ -36,10 +45,6 @@ const ADMIN_HEADERS = [
   { key: "actions", header: "Actions" },
 ] as const;
 
-function formatTokenCount(value: number): string {
-  return value.toLocaleString("en-ZA");
-}
-
 function formatPeriodStart(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
@@ -48,35 +53,14 @@ function formatPeriodStart(iso: string): string {
   return date.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
-type OverrideDraft = {
-  value: string;
-  inherit: boolean;
-};
-
-function overrideDraftFromRow(row: NiaUsageUser): OverrideDraft {
-  if (row.override === null) {
-    return { value: "", inherit: true };
-  }
-  return { value: String(row.override), inherit: false };
-}
-
-function parseOverrideDraft(draft: OverrideDraft): number | null {
-  if (draft.inherit || draft.value.trim() === "") {
-    return null;
-  }
-  const parsed = Number(draft.value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return null;
-  }
-  return Math.trunc(parsed);
-}
-
 type NiaCapsSettingsProps = {
   canUse: boolean;
   canAdmin: boolean;
   teamDefaultCap: number;
   teamDefaultDisabled?: boolean;
   onTeamDefaultCapChange: (value: number) => void;
+  /** Bump after parent "Save settings" so the usage table reloads with the new team default. */
+  refreshKey?: number;
   hideChrome?: boolean;
 };
 
@@ -86,16 +70,29 @@ export function NiaCapsSettings({
   teamDefaultCap,
   teamDefaultDisabled = false,
   onTeamDefaultCapChange,
+  refreshKey = 0,
   hideChrome = false,
 }: NiaCapsSettingsProps) {
   const [usageMe, setUsageMe] = useState<NiaUsageMe | null>(null);
   const [usageRows, setUsageRows] = useState<NiaUsageUser[]>([]);
-  const [overrideDrafts, setOverrideDrafts] = useState<Record<string, OverrideDraft>>({});
+  const [overrideDrafts, setOverrideDrafts] = useState<Record<string, NiaOverrideDraft>>({});
+  const [teamDraft, setTeamDraft] = useState(teamDefaultCap);
+  const [persistedTeamCap, setPersistedTeamCap] = useState(teamDefaultCap);
+  const draftDrivenParentSync = useRef(false);
   const [loadingMe, setLoadingMe] = useState(canUse);
   const [loadingAdmin, setLoadingAdmin] = useState(canAdmin);
   const [error, setError] = useState<string | null>(null);
   const [rowNotice, setRowNotice] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [savingTeamDefault, setSavingTeamDefault] = useState(false);
+
+  const loadMyUsage = useCallback(async () => {
+    if (!canUse) {
+      return;
+    }
+    const data = await getNiaUsageMe();
+    setUsageMe(data);
+  }, [canUse]);
 
   const loadAdminUsage = useCallback(async () => {
     if (!canAdmin) {
@@ -106,7 +103,7 @@ export function NiaCapsSettings({
       const rows = await listNiaUsage();
       setUsageRows(rows);
       setOverrideDrafts(
-        Object.fromEntries(rows.map((row) => [row.user_id, overrideDraftFromRow(row)])),
+        Object.fromEntries(rows.map((row) => [row.user_id, overrideDraftFromOverride(row.override)])),
       );
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Failed to load Nia usage");
@@ -114,6 +111,16 @@ export function NiaCapsSettings({
       setLoadingAdmin(false);
     }
   }, [canAdmin]);
+
+  useEffect(() => {
+    setTeamDraft(teamDefaultCap);
+    // Typing syncs the parent so "Save settings" keeps the draft; do not treat that as persisted.
+    if (draftDrivenParentSync.current) {
+      draftDrivenParentSync.current = false;
+      return;
+    }
+    setPersistedTeamCap(teamDefaultCap);
+  }, [teamDefaultCap]);
 
   useEffect(() => {
     if (!canUse) {
@@ -144,7 +151,39 @@ export function NiaCapsSettings({
 
   useEffect(() => {
     void loadAdminUsage();
-  }, [loadAdminUsage]);
+  }, [loadAdminUsage, refreshKey]);
+
+  useEffect(() => {
+    if (refreshKey === 0 || !canUse) {
+      return;
+    }
+    void loadMyUsage().catch((err: unknown) => {
+      setError(err instanceof ApiError ? err.message : "Failed to load your Nia usage");
+    });
+  }, [refreshKey, canUse, loadMyUsage]);
+
+  async function handleSaveTeamDefault() {
+    setSavingTeamDefault(true);
+    setError(null);
+    setRowNotice(null);
+    try {
+      const updated = await updateSettings({ nia_monthly_token_cap: teamDraft });
+      onTeamDefaultCapChange(updated.nia_monthly_token_cap);
+      setTeamDraft(updated.nia_monthly_token_cap);
+      setPersistedTeamCap(updated.nia_monthly_token_cap);
+      await loadAdminUsage();
+      if (canUse) {
+        await loadMyUsage();
+      }
+      setRowNotice(
+        `Saved team default cap (${formatNiaTokenCount(updated.nia_monthly_token_cap)}). Users with Inherit now use this cap.`,
+      );
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : "Failed to save team default cap");
+    } finally {
+      setSavingTeamDefault(false);
+    }
+  }
 
   async function handleSaveOverride(userId: string) {
     const draft = overrideDrafts[userId];
@@ -162,8 +201,12 @@ export function NiaCapsSettings({
       );
       setOverrideDrafts((current) => ({
         ...current,
-        [userId]: overrideDraftFromRow(updated),
+        [userId]: overrideDraftFromOverride(updated.override),
       }));
+      // Summary card ("Your usage") must track the same effective cap as the table.
+      if (canUse) {
+        await loadMyUsage();
+      }
       setRowNotice(`Saved cap for ${updated.email}.`);
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Failed to save user cap");
@@ -176,15 +219,15 @@ export function NiaCapsSettings({
     return null;
   }
 
-  const usagePercent =
-    usageMe && usageMe.cap > 0 ? Math.min(100, (usageMe.used / usageMe.cap) * 100) : 0;
+  const usagePercent = usageMe ? niaUsagePercent(usageMe.used, usageMe.cap) : 0;
+  const teamDefaultDirty = teamDraft !== persistedTeamCap;
 
   const adminRows = usageRows.map((row) => ({
     id: row.user_id,
     user: row.display_name ? `${row.display_name} (${row.email})` : row.email,
-    used: formatTokenCount(row.used),
-    cap: formatTokenCount(row.cap),
-    remaining: formatTokenCount(row.remaining),
+    used: formatNiaTokenCount(row.used),
+    cap: formatNiaTokenCount(row.cap),
+    remaining: formatNiaTokenCount(row.remaining),
     override: row.user_id,
     actions: row.user_id,
   }));
@@ -219,8 +262,8 @@ export function NiaCapsSettings({
             ) : usageMe ? (
               <Stack gap={3}>
                 <p className="cds--type-body-01">
-                  {formatTokenCount(usageMe.used)} used of {formatTokenCount(usageMe.cap)} cap (
-                  {formatTokenCount(usageMe.remaining)} remaining) — {formatPeriodStart(usageMe.period_start)}
+                  {formatNiaUsageLine(usageMe.used, usageMe.cap, usageMe.remaining)} —{" "}
+                  {formatPeriodStart(usageMe.period_start)}
                 </p>
                 <div
                   className="vellano-nia-usage-meter"
@@ -249,27 +292,42 @@ export function NiaCapsSettings({
 
         {canAdmin ? (
           <Stack gap={5}>
-            <NumberInput
-              id="nia-team-default-cap"
-              label="Team default monthly token cap"
-              helperText="Applies when a user has no override. Set to 0 to block Nia for users without an override."
-              value={String(teamDefaultCap)}
-              min={0}
-              step={1000}
-              disabled={teamDefaultDisabled}
-              onChange={(_, { value }) => {
-                if (typeof value === "number") {
-                  onTeamDefaultCapChange(value);
-                  return;
-                }
-                if (typeof value === "string" && value.trim() !== "") {
-                  const parsed = Number(value);
-                  if (Number.isFinite(parsed) && parsed >= 0) {
-                    onTeamDefaultCapChange(Math.trunc(parsed));
+            <Stack gap={3}>
+              <NumberInput
+                id="nia-team-default-cap"
+                label="Team default monthly token cap"
+                helperText="Applies when a user has no override. Set to 0 to block Nia for users without an override. Use Save team default below — editing the field alone does not persist."
+                value={String(teamDraft)}
+                min={0}
+                step={1000}
+                disabled={teamDefaultDisabled || savingTeamDefault}
+                onChange={(_, { value }) => {
+                  if (typeof value === "number") {
+                    draftDrivenParentSync.current = true;
+                    setTeamDraft(value);
+                    onTeamDefaultCapChange(value);
+                    return;
                   }
-                }
-              }}
-            />
+                  if (typeof value === "string" && value.trim() !== "") {
+                    const parsed = Number(value);
+                    if (Number.isFinite(parsed) && parsed >= 0) {
+                      const next = Math.trunc(parsed);
+                      draftDrivenParentSync.current = true;
+                      setTeamDraft(next);
+                      onTeamDefaultCapChange(next);
+                    }
+                  }
+                }}
+              />
+              <Button
+                kind="secondary"
+                size="md"
+                disabled={teamDefaultDisabled || savingTeamDefault || !teamDefaultDirty}
+                onClick={() => void handleSaveTeamDefault()}
+              >
+                {savingTeamDefault ? "Saving…" : "Save team default"}
+              </Button>
+            </Stack>
 
             <Stack gap={3}>
               <p className="cds--label">Per-user caps</p>
@@ -311,7 +369,7 @@ export function NiaCapsSettings({
                             const draft =
                               overrideDrafts[userId] ??
                               (sourceRow
-                                ? overrideDraftFromRow(sourceRow)
+                                ? overrideDraftFromOverride(sourceRow.override)
                                 : { value: "", inherit: true });
                             const { key: rowKey, ...rowProps } = getRowProps({ row });
                             return (
@@ -325,6 +383,7 @@ export function NiaCapsSettings({
                                           hideLabel
                                           label="Override cap"
                                           placeholder="Inherit"
+                                          allowEmpty
                                           value={draft.inherit ? "" : draft.value}
                                           min={0}
                                           step={1000}

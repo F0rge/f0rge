@@ -47,6 +47,7 @@ export default function SettingsPage() {
   const [preferWarehouse, setPreferWarehouse] = useState(true);
   const [pickPriority, setPickPriority] = useState<string[]>([]);
   const [niaMonthlyTokenCap, setNiaMonthlyTokenCap] = useState(500000);
+  const [niaCapsRefreshKey, setNiaCapsRefreshKey] = useState(0);
   const [locations, setLocations] = useState<Location[]>([]);
   const [addLocationId, setAddLocationId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -102,6 +103,7 @@ export default function SettingsPage() {
       setPreferWarehouse(updated.always_prefer_warehouse);
       setPickPriority(updated.pick_priority);
       setNiaMonthlyTokenCap(updated.nia_monthly_token_cap);
+      setNiaCapsRefreshKey((key) => key + 1);
       setNotice(updated.warning ?? "Settings saved.");
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Failed to save settings");
@@ -299,6 +301,7 @@ export default function SettingsPage() {
                     teamDefaultCap={niaMonthlyTokenCap}
                     teamDefaultDisabled={!canMutate || saving}
                     onTeamDefaultCapChange={setNiaMonthlyTokenCap}
+                    refreshKey={niaCapsRefreshKey}
                     hideChrome
                   />
                 </TabPanel>

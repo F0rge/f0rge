@@ -10,6 +10,7 @@ from app.crud.user import UserCRUD
 from app.models.team_settings import DEFAULT_HOME_CURRENCY, DEFAULT_VAT_RATE
 from app.schemas.settings import SettingsResponse, SettingsUpdate
 from f0rge_core.exceptions import NotFoundError, ValidationError
+from f0rge_db.crud import unit_of_work
 
 
 class SettingsService:
@@ -36,19 +37,19 @@ class SettingsService:
         if not payload:
             raise ValidationError("No settings fields to update")
 
-        if data.vat_rate is not None:
-            if data.vat_rate <= 0 or data.vat_rate > 1:
-                raise ValidationError("vat_rate must be between 0 and 1")
-            settings.vat_rate = data.vat_rate
-        if data.home_currency is not None:
-            settings.home_currency = data.home_currency.upper()
-        if data.always_prefer_warehouse is not None:
-            settings.always_prefer_warehouse = data.always_prefer_warehouse
-        if data.pick_priority is not None:
-            settings.pick_priority = [str(item) for item in data.pick_priority]
-        if data.nia_monthly_token_cap is not None:
-            settings.nia_monthly_token_cap = data.nia_monthly_token_cap
-        await self.db.flush()
+        async with unit_of_work(self.db):
+            if data.vat_rate is not None:
+                if data.vat_rate <= 0 or data.vat_rate > 1:
+                    raise ValidationError("vat_rate must be between 0 and 1")
+                settings.vat_rate = data.vat_rate
+            if data.home_currency is not None:
+                settings.home_currency = data.home_currency.upper()
+            if data.always_prefer_warehouse is not None:
+                settings.always_prefer_warehouse = data.always_prefer_warehouse
+            if data.pick_priority is not None:
+                settings.pick_priority = [str(item) for item in data.pick_priority]
+            if data.nia_monthly_token_cap is not None:
+                settings.nia_monthly_token_cap = data.nia_monthly_token_cap
         return self._to_response(settings, include_warning=True)
 
     async def _get_user(self, user_id: uuid.UUID):
