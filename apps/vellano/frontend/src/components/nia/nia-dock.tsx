@@ -29,6 +29,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
@@ -54,9 +55,12 @@ import {
 } from "@/lib/api";
 import { clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
 import {
-  readDockOpen,
+  getDockOpenServerSnapshot,
+  getDockOpenSnapshot,
   readDockThreadId,
-  writeDockOpen,
+  setDockOpen,
+  subscribeDockOpen,
+  toggleDockOpen,
   writeDockThreadId,
 } from "@/lib/nia-dock-session";
 import { appendToolLine } from "@/lib/nia-thinking";
@@ -303,23 +307,18 @@ type NiaDockProviderProps = {
 };
 
 export function NiaDockProvider({ children, enabled = true }: NiaDockProviderProps) {
-  const [open, setOpen] = useState(false);
-  const persistOpen = useRef(false);
+  const open = useSyncExternalStore(
+    subscribeDockOpen,
+    getDockOpenSnapshot,
+    getDockOpenServerSnapshot,
+  );
 
-  const toggle = useCallback(() => setOpen((current) => !current), []);
-  const openDock = useCallback(() => setOpen(true), []);
-
-  useEffect(() => {
-    setOpen(readDockOpen());
+  const toggle = useCallback(() => {
+    toggleDockOpen();
   }, []);
-
-  useEffect(() => {
-    if (!persistOpen.current) {
-      persistOpen.current = true;
-      return;
-    }
-    writeDockOpen(open);
-  }, [open]);
+  const openDock = useCallback(() => {
+    setDockOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!enabled) {

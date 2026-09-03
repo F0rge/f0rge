@@ -4,8 +4,10 @@ import {
   OPEN_STORAGE_KEY,
   THREAD_STORAGE_KEY,
   clearDockSession,
+  getDockOpenSnapshot,
   readDockOpen,
   readDockThreadId,
+  setDockOpen,
   writeDockOpen,
   writeDockThreadId,
 } from "./nia-dock-session";
@@ -73,5 +75,15 @@ describe("nia dock session", () => {
     expect(window.sessionStorage.getItem(THREAD_STORAGE_KEY)).toBeNull();
     expect(readDockOpen()).toBe(false);
     expect(readDockThreadId()).toBeNull();
+  });
+});
+
+describe("nia dock open store", () => {
+  it("setDockOpen updates snapshot and sessionStorage", () => {
+    setDockOpen(true);
+    expect(getDockOpenSnapshot()).toBe(true);
+    expect(readDockOpen()).toBe(true);
+    setDockOpen(false);
+    expect(getDockOpenSnapshot()).toBe(false);
   });
 });

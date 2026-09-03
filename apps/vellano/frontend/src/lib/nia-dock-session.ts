@@ -53,4 +53,50 @@ export function clearDockSession(): void {
   }
   store.removeItem(OPEN_STORAGE_KEY);
   store.removeItem(THREAD_STORAGE_KEY);
+  dockOpenValue = false;
+  dockOpenHydrated = true;
+  emitDockOpen();
+}
+
+
+type DockOpenListener = () => void;
+
+const dockOpenListeners = new Set<DockOpenListener>();
+let dockOpenValue = false;
+let dockOpenHydrated = false;
+
+function emitDockOpen(): void {
+  for (const listener of dockOpenListeners) {
+    listener();
+  }
+}
+
+export function subscribeDockOpen(listener: DockOpenListener): () => void {
+  dockOpenListeners.add(listener);
+  return () => {
+    dockOpenListeners.delete(listener);
+  };
+}
+
+export function getDockOpenSnapshot(): boolean {
+  if (!dockOpenHydrated) {
+    dockOpenValue = readDockOpen();
+    dockOpenHydrated = true;
+  }
+  return dockOpenValue;
+}
+
+export function getDockOpenServerSnapshot(): boolean {
+  return false;
+}
+
+export function setDockOpen(open: boolean): void {
+  dockOpenValue = open;
+  dockOpenHydrated = true;
+  writeDockOpen(open);
+  emitDockOpen();
+}
+
+export function toggleDockOpen(): void {
+  setDockOpen(!getDockOpenSnapshot());
 }
