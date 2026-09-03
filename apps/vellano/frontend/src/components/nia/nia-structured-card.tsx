@@ -11,6 +11,7 @@ import {
   TextInput,
   Tile,
 } from "@carbon/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -34,6 +35,7 @@ import {
 } from "@/lib/api";
 import { clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
 import { labelForNavPath } from "@/lib/nav";
+import { niaInvoiceHref } from "@/lib/nia-navigation";
 
 import { NiaCitationChips } from "./nia-citation-chips";
 
@@ -507,7 +509,12 @@ export function NiaStructuredCard({
               {structured.invoices.map((invoice) => (
                 <StructuredListRow key={invoice.id}>
                   <div>
-                    <p className="cds--type-body-01">{invoice.invoice_number}</p>
+                    <Link
+                      className="cds--link cds--type-body-01"
+                      href={niaInvoiceHref(invoice.id)}
+                    >
+                      {invoice.invoice_number}
+                    </Link>
                     <p className="vellano-muted-text">R {invoice.remaining_zar} remaining</p>
                   </div>
                 </StructuredListRow>

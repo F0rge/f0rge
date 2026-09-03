@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, Tag } from "@carbon/react";
-import { useRouter } from "next/navigation";
+import { Tag } from "@carbon/react";
+import Link from "next/link";
 
 import type { NiaCitation } from "@/lib/api";
 
@@ -22,7 +22,6 @@ type NiaCitationChipsProps = {
 };
 
 export function NiaCitationChips({ citations }: NiaCitationChipsProps) {
-  const router = useRouter();
   const safe = (citations ?? []).filter(isSafeCitation);
   if (safe.length === 0) {
     return null;
@@ -35,17 +34,9 @@ export function NiaCitationChips({ citations }: NiaCitationChipsProps) {
         const href = citation.href?.trim();
         if (href && href.startsWith("/") && !href.startsWith("//")) {
           return (
-            <Button
-              key={key}
-              kind="ghost"
-              size="sm"
-              className="vellano-nia-citations__link"
-              onClick={() => {
-                router.push(href);
-              }}
-            >
+            <Link key={key} className="vellano-nia-citations__link" href={href}>
               {citation.label}
-            </Button>
+            </Link>
           );
         }
         return (
