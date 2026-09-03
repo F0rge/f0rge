@@ -16,7 +16,7 @@ from app.exceptions import NiaLlmUnconfiguredError
 import app.nia  # noqa: F401 — register Nia tools on the agent
 from app.models.nia import NiaMessageRole
 from app.nia.agent import NiaDeps, build_nia_model, nia_agent
-from app.nia.canvas import spec_from_thread_payloads
+from app.nia.canvas import canvas_payload_to_persist, spec_from_thread_payloads
 from app.nia.catalog import CATALOG_BY_ID
 from app.nia.dispatch import _serialize
 from app.nia.fields import (
@@ -267,6 +267,12 @@ class NiaRunService:
                 NiaMessageRole.USER.value,
                 user_text,
             )
+        await self._append_preserved_canvas(
+            user_id=user_id,
+            thread_id=thread_id,
+            primary=structured_payload,
+            deps=deps,
+        )
         if assistant_text or structured_payload:
             await self.threads.append_message(
                 user_id,
@@ -310,6 +316,12 @@ class NiaRunService:
         structured_payload, pending_tools = _payload_and_pending(output, deps)
         agent_messages = dump_agent_messages(result.all_messages())
 
+        await self._append_preserved_canvas(
+            user_id=user_id,
+            thread_id=thread_id,
+            primary=structured_payload,
+            deps=deps,
+        )
         if assistant_text or structured_payload:
             await self.threads.append_message(
                 user_id,
@@ -323,6 +335,26 @@ class NiaRunService:
             thread_id,
             agent_messages=agent_messages,
             pending_tools=pending_tools,
+        )
+
+    async def _append_preserved_canvas(
+        self,
+        *,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        primary: Optional[dict[str, Any]],
+        deps: NiaDeps,
+    ) -> None:
+        """Keep a chart from a turn whose payload slot went to fields/approval."""
+        preserved = canvas_payload_to_persist(primary, deps.last_canvas_payload)
+        if preserved is None:
+            return
+        await self.threads.append_message(
+            user_id,
+            thread_id,
+            NiaMessageRole.ASSISTANT.value,
+            "",
+            structured_payload=preserved,
         )
 
     async def _record_resume_audit(

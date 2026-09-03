@@ -55,6 +55,11 @@ import {
 } from "@/lib/api";
 import { clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
 import {
+  optimisticUserMessage,
+  planComposerSend,
+  withOptimisticUserMessage,
+} from "@/lib/nia-composer";
+import {
   getDockOpenServerSnapshot,
   getDockOpenSnapshot,
   readDockThreadId,
@@ -243,10 +248,7 @@ function NiaConversation({
               kind="ghost"
               size="sm"
               disabled={streaming}
-              onClick={() => {
-                onComposerChange(label);
-                void onSend(label);
-              }}
+              onClick={() => void onSend(label)}
             >
               {label}
             </Button>
@@ -255,6 +257,7 @@ function NiaConversation({
       ) : null}
 
       <div className="vellano-nia-dock__composer">
+        {/* Never disabled while streaming — a disabled field loses focus and eats keystrokes (#618). */}
         <TextArea
           id="nia-composer"
           labelText="Message Nia"
@@ -374,6 +377,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const [threads, setThreads] = useState<NiaThreadSummary[]>([]);
   const [activeThread, setActiveThread] = useState<NiaThread | null>(null);
   const [composer, setComposer] = useState("");
+  const [pendingUserMessage, setPendingUserMessage] = useState<NiaMessage | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [thinkingText, setThinkingText] = useState("");
@@ -388,6 +392,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const persistThread = useRef(false);
+  const hydratedThread = useRef(false);
 
   const speechSupported =
     typeof window !== "undefined" &&
@@ -425,13 +430,17 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   }, []);
 
   useEffect(() => {
-    if (!enabled || !open) {
+    if (!enabled || !open || hydratedThread.current) {
       return;
     }
     const storedId = readDockThreadId();
-    if (storedId) {
-      void loadThread(storedId);
+    if (!storedId) {
+      return;
     }
+    // Hydrate once per mount: a late GET must not overwrite the thread a
+    // finished run just wrote (that hid pending HITL cards until reopen).
+    hydratedThread.current = true;
+    void loadThread(storedId);
   }, [enabled, open, loadThread]);
 
   useEffect(() => {
@@ -497,23 +506,39 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     }
   }
 
+  function resetStreamState() {
+    setStreaming(false);
+    setPendingUserMessage(null);
+    setStreamingText("");
+    setThinkingText("");
+    setToolNames([]);
+  }
+
   async function handleSend(messageText?: string) {
-    const text = (messageText ?? composer).trim();
-    if (!text || streaming) {
+    const plan = planComposerSend({
+      composer,
+      override: messageText,
+      streaming,
+      blocked: composerBlocked,
+    });
+    if (!plan.send) {
       return;
     }
     setError(null);
+    setComposer(plan.nextComposer);
+    setPendingUserMessage(optimisticUserMessage(plan.text, new Date().toISOString()));
     setStreaming(true);
     setStreamingText("");
     setThinkingText("");
     setToolNames([]);
     const thread = await ensureThread();
     if (!thread) {
-      setStreaming(false);
+      resetStreamState();
       return;
     }
+    let streamed = false;
     try {
-      await runNiaThread(thread.id, text, pathname, {
+      await runNiaThread(thread.id, plan.text, pathname, {
         onToken: (delta) => {
           setStreamingText((current) => current + delta);
         },
@@ -525,27 +550,32 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
           setThinkingText((current) => appendToolLine(current, name, phase));
         },
       });
+      streamed = true;
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : "Failed to send message");
+    }
+    // Refresh even when the stream failed: a pending Accept card is persisted
+    // when the run ends, and it has to show in the open thread (#608).
+    try {
       const fresh = await getNiaThread(thread.id);
       syncCanvasSpecFromThread(fresh);
       setActiveThread(fresh);
-      applyPostRunNavigation(fresh, router);
+      if (streamed) {
+        applyPostRunNavigation(fresh, router);
+      }
       await loadThreads();
       getNiaUsageMeOptional().then(setUsageMe).catch(() => undefined);
-      setComposer("");
-      setStreamingText("");
-      setThinkingText("");
-      setToolNames([]);
-    } catch (err: unknown) {
-      setError(err instanceof ApiError ? err.message : "Failed to send message");
-    } finally {
-      setStreaming(false);
+    } catch {
+      // Keep the run error already shown in the banner.
     }
+    resetStreamState();
   }
 
   async function handleNewThread() {
     setError(null);
     setActiveThread(null);
     setComposer("");
+    setPendingUserMessage(null);
     setStreamingText("");
     setThinkingText("");
     setToolNames([]);
@@ -662,7 +692,10 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     setDictating(true);
   }
 
-  const messages: NiaMessage[] = activeThread?.messages ?? [];
+  const messages: NiaMessage[] = withOptimisticUserMessage(
+    activeThread?.messages ?? [],
+    pendingUserMessage,
+  );
 
   const conversationProps: NiaConversationProps = {
     messages,
@@ -674,7 +707,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     loadingThread,
     showSuggestions: true,
     composer,
-    composerDisabled: streaming || composerBlocked,
+    composerDisabled: composerBlocked,
     speechSupported,
     onComposerChange: setComposer,
     onSend: handleSend,

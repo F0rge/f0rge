@@ -50,6 +50,8 @@ export async function proxyNiaSse(
   }
 
   const { readable, writable } = new TransformStream();
-  void upstream.body.pipeTo(writable);
+  // Chunk-for-chunk pipe (no buffering); a client abort must not surface as an
+  // unhandled rejection in the Node route.
+  void upstream.body.pipeTo(writable).catch(() => undefined);
   return new Response(readable, { status: upstream.status, headers: outHeaders });
 }
