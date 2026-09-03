@@ -1113,3 +1113,11 @@ body {
   font-weight: 600;
   line-height: 1.1;
 }
+
+.vellano-nia-card--nav .vellano-nia-spreadsheet {
+  margin-top: 0.75rem;
+}
+
+.vellano-nia-card--nav .vellano-nia-spreadsheet + .vellano-nia-spreadsheet {
+  margin-top: 0.5rem;
+}
