@@ -100,6 +100,7 @@ def _current_canvas(deps: NiaDeps) -> dict[str, Any]:
 
 def _publish_canvas_spec(ctx: RunContext[NiaDeps], spec: dict[str, Any]) -> dict[str, Any]:
     ctx.deps.canvas_spec = spec
+    ctx.deps.canvas_updated = True
     _set_structured_payload(ctx, spec)
     return spec
 
@@ -230,6 +231,7 @@ async def clear_canvas(ctx: RunContext[NiaDeps]) -> Union[dict[str, Any], str]:
         return denied
 
     ctx.deps.canvas_spec = empty_canvas_spec()
+    ctx.deps.canvas_updated = True
     payload = canvas_cleared_payload()
     _set_structured_payload(ctx, payload)
     return payload

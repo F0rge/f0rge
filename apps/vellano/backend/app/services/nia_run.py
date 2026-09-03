@@ -16,9 +16,10 @@ from app.exceptions import NiaLlmUnconfiguredError
 import app.nia  # noqa: F401 — register Nia tools on the agent
 from app.models.nia import NiaMessageRole
 from app.nia.agent import NiaDeps, build_nia_model, nia_agent
-from app.nia.canvas import spec_from_thread_payloads
+from app.nia.canvas import ranking_text_from_canvas_spec, spec_from_thread_payloads
 from app.nia.catalog import CATALOG_BY_ID
 from app.nia.dispatch import _serialize
+from app.nia.oneshot import ensure_oneshot_chart, should_persist_canvas_ahead
 from app.nia.fields import (
     FIELDS_ASSISTANT_TEXT,
     FIELDS_SOURCE,
@@ -217,6 +218,32 @@ class NiaRunService:
             canvas_spec=canvas_spec,
         )
 
+    async def _append_assistant_cards(
+        self,
+        *,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        assistant_text: str,
+        structured_payload: Optional[dict[str, Any]],
+        deps: NiaDeps,
+    ) -> None:
+        if should_persist_canvas_ahead(deps, structured_payload):
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                ranking_text_from_canvas_spec(deps.canvas_spec),
+                structured_payload=deps.canvas_spec,
+            )
+        if assistant_text:
+            await self.threads.append_message(
+                user_id,
+                thread_id,
+                NiaMessageRole.ASSISTANT.value,
+                assistant_text,
+                structured_payload=structured_payload,
+            )
+
     async def _persist_run_result(
         self,
         *,
@@ -226,6 +253,7 @@ class NiaRunService:
         result: Any,
         deps: NiaDeps,
     ) -> None:
+        await ensure_oneshot_chart(deps, user_text)
         output = result.output
         assistant_text = _assistant_text_from_output(output)
         structured_payload, pending_tools = _payload_and_pending(output, deps)
@@ -238,14 +266,13 @@ class NiaRunService:
                 NiaMessageRole.USER.value,
                 user_text,
             )
-        if assistant_text:
-            await self.threads.append_message(
-                user_id,
-                thread_id,
-                NiaMessageRole.ASSISTANT.value,
-                assistant_text,
-                structured_payload=structured_payload,
-            )
+        await self._append_assistant_cards(
+            user_id=user_id,
+            thread_id=thread_id,
+            assistant_text=assistant_text,
+            structured_payload=structured_payload,
+            deps=deps,
+        )
         await self.threads.save_agent_state(
             user_id,
             thread_id,
@@ -281,14 +308,13 @@ class NiaRunService:
         structured_payload, pending_tools = _payload_and_pending(output, deps)
         agent_messages = dump_agent_messages(result.all_messages())
 
-        if assistant_text:
-            await self.threads.append_message(
-                user_id,
-                thread_id,
-                NiaMessageRole.ASSISTANT.value,
-                assistant_text,
-                structured_payload=structured_payload,
-            )
+        await self._append_assistant_cards(
+            user_id=user_id,
+            thread_id=thread_id,
+            assistant_text=assistant_text,
+            structured_payload=structured_payload,
+            deps=deps,
+        )
         await self.threads.save_agent_state(
             user_id,
             thread_id,

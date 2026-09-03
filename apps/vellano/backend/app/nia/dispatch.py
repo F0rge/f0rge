@@ -87,6 +87,7 @@ async def run_nia_action(
         data = action.args_model.model_validate(args or {})
     except PydanticValidationError as exc:
         if should_emit_fields_form(action):
+            # Keep deps.canvas_spec — a chart published this turn must survive the fields card.
             ctx.deps.last_structured_payload = build_needs_fields_payload(
                 action,
                 args or {},

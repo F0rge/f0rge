@@ -66,6 +66,7 @@ class NiaDeps:
     sku_id: Optional[uuid.UUID] = None
     last_structured_payload: Optional[dict[str, Any]] = field(default=None, repr=False)
     canvas_spec: dict[str, Any] = field(default_factory=empty_canvas_spec)
+    canvas_updated: bool = False
 
 
 nia_agent = Agent(

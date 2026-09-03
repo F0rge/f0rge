@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
 from sqlalchemy import and_, select
@@ -242,6 +242,40 @@ def normalize_canvas_mode(mode: Optional[str]) -> str:
     if value in {"add", "append", "underneath"}:
         return "add"
     return "replace"
+
+
+def _zar_rank(value: Any) -> str:
+    try:
+        quantized = Decimal(str(value)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError, TypeError):
+        return "0.00"
+    return format(quantized, "f")
+
+
+def ranking_text_from_canvas_spec(spec: dict[str, Any]) -> str:
+    """Short numeric ranking for chat when a HITL card follows a chart this turn."""
+    components = spec.get("components") if isinstance(spec, dict) else None
+    if isinstance(components, list):
+        for component in components:
+            if not isinstance(component, dict) or component.get("type") != "bar":
+                continue
+            categories = component.get("categories") or []
+            series = component.get("series") or []
+            values = series[0].get("values") if series and isinstance(series[0], dict) else []
+            if not isinstance(categories, list) or not isinstance(values, list):
+                continue
+            if len(categories) >= 2 and len(values) >= 2:
+                left = str(categories[0])
+                right = str(categories[1]).lower()
+                return (
+                    f"{left} R{_zar_rank(values[0])} vs {right} R{_zar_rank(values[1])} this month."
+                )
+            if len(categories) >= 1 and len(values) >= 1:
+                return f"{categories[0]} R{_zar_rank(values[0])} this month."
+    title = spec.get("title") if isinstance(spec, dict) else None
+    if isinstance(title, str) and title.strip():
+        return title
+    return "Canvas updated."
 
 
 def _month_bounds(today: datetime.date) -> tuple[datetime.date, datetime.date]:
