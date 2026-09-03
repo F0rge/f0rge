@@ -9,6 +9,7 @@ from app.crud.location import LocationCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
+from app.crud.customer import CustomerCRUD
 from app.crud.layby import LaybyCRUD
 from app.services.playground_seed import (
     CHAIR_SKU_REF,
@@ -18,6 +19,12 @@ from app.services.playground_seed import (
     PROFORMA_INVOICE_NUMBER,
     SOFA_PACK_MARKER_REF,
     PlaygroundSeedService,
+)
+from app.services.playground_bi_catalog import (
+    BI_CUSTOMERS,
+    BI_MARKER_REF,
+    BI_SKUS,
+    BI_SUPPLIERS,
 )
 from app.services.proformas import ProformaService
 
@@ -91,8 +98,23 @@ async def test_playground_seed_creates_demo_path_and_is_idempotent(
     vel_sofas = [s for s in await sku_crud.list_all() if s.our_ref.startswith("VEL-SOFA-")]
     assert len(vel_sofas) >= 10
 
+    bi_marker = await sku_crud.get_by_our_ref(BI_MARKER_REF)
+    assert bi_marker is not None
+    assert bi_marker.photo_storage_key
+    bi_skus = [s for s in await sku_crud.list_all() if s.our_ref.startswith("VEL-BI-")]
+    assert len(bi_skus) == len(BI_SKUS)
+    assert len(bi_skus) >= 80
+    suppliers_all = await supplier_crud.list_all()
+    assert len(suppliers_all) >= len(BI_SUPPLIERS)
+    customers_all = await CustomerCRUD(async_db).list_all()
+    assert len(customers_all) >= len(BI_CUSTOMERS)
+    laybys_all = await LaybyCRUD(async_db).list_all()
+    assert len(laybys_all) >= 10
+
     first_london_id = london.id
     first_vel_sofa_count = len(vel_sofas)
+    first_bi_id = bi_marker.id
+    first_bi_count = len(bi_skus)
 
     first_supplier_id = playground_suppliers[0].id
     first_table_id = table_sku.id
@@ -121,3 +143,9 @@ async def test_playground_seed_creates_demo_path_and_is_idempotent(
     assert london_after.id == first_london_id
     vel_sofas_after = [s for s in await sku_crud.list_all() if s.our_ref.startswith("VEL-SOFA-")]
     assert len(vel_sofas_after) == first_vel_sofa_count
+
+    bi_after = await sku_crud.get_by_our_ref(BI_MARKER_REF)
+    assert bi_after is not None
+    assert bi_after.id == first_bi_id
+    bi_skus_after = [s for s in await sku_crud.list_all() if s.our_ref.startswith("VEL-BI-")]
+    assert len(bi_skus_after) == first_bi_count

@@ -115,11 +115,17 @@ Product name is **Nia** — never “Copilot” in UI copy.
 
 ### Playground seed (develop / local demos)
 
-Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (markers: supplier `Playground Imports` / SKU `PG-TABLE`, then demo pack `PG-SOFA`, then sofa catalogue `VEL-SOFA-LONDON`):
+Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (markers: supplier `Playground Imports` / SKU `PG-TABLE`, then demo pack `PG-SOFA`, then sofa catalogue `VEL-SOFA-LONDON`, then BI pack `VEL-BI-V1`):
 
-suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → two-step transfer 1 table to Bedfordview (draft → dispatch → receive) → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched). A later pack adds high-end sofa SKUs with Unsplash photos (local files under `backend/data/playground_photos/`), extra customers, a trade invoice, a sofa layby, and a Minotti ZAR bill. Idempotent — existing DBs still get the sofa pack on the next boot.
+suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land → receive 2 at Kramerville → two-step transfer 1 table to Bedfordview (draft → dispatch → receive) → customer invoice (paid) + till cash sale of that table → USD FX bill + 3-line bank CSV (two matched, one unmatched). A later pack adds high-end sofa SKUs with Unsplash photos (local files under `backend/data/playground_photos/`), extra customers, a trade invoice, a sofa layby, and a Minotti ZAR bill.
 
-**Railway develop:** on service `vellano-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do not enable on a database you want to keep empty. After it runs, log in as `owner@example.com` / `change-me-owner` (or the role users above) and walk stock → proforma → PO → receive → transfer → till → books.
+**BI pack (`VEL-BI-V1`):** ~110 extra SKUs (sofas, dining, beds, outdoor, coffee/side tables, lighting, accessories, storage) with Unsplash/Pexels photos, 12 Gauteng-facing suppliers, 32 JHB/PTA retail+trade customers. **Every on-hand or sold unit is purchased first:** catalogue-only SKU create (no opening stock) → PO → on-water → land → receive at Kramerville → F2 transfer to Bedfordview before till/layby. Fast movers, dead stock (aged `location_stock.updated_at`), and overstocked high-value lines (~R100k+ at cost) are included so Nia charts have signal. Idempotent — existing DBs still get later packs on the next boot if their marker SKU is absent.
+
+**Lead times:** Italy/EU factories 6–14 weeks (`lead_time_days` 49–90) vs local SA 2–5 weeks (14–28). `preferred_supplier_id` + `supplier_ref` set on every BI SKU; fast/normal get `reorder_min`. PO `ordered_at` is `received_at − lead_days` so a 12-week sofa is never received-and-sold the same week. Till/layby dates are after the Bedfordview receive.
+
+**Backdate limits:** till/PO/transfer services stamp "now"; the pack then writes `tax_invoices.issue_date`, `payments.paid_on`, PO lead timestamps, transfer timestamps, and dead-stock `location_stock.updated_at`. Journals and stock-movement audit rows stay at seed-run time. Books `InvoiceCreate` does not move stock — BI books invoices are AR-only (no `sku_id`) so sales-by-SKU does not claim units still on hand. SKU sales signal comes from till + completed laybys.
+
+**Railway develop:** on service `vellano-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do **not** enable on production. After it runs, log in as `owner@example.com` / `change-me-owner` (or the role users above) and walk stock → proforma → PO → receive → transfer → till → books.
 
 Local: `SEED_PLAYGROUND=true` in `apps/vellano/backend/.env`, then restart uvicorn.
 
