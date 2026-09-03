@@ -9,7 +9,6 @@ import { getNiaThread, listNiaThreads } from "@/lib/api";
 import {
   bindCanvasUser,
   clearCanvasSpec,
-  isCanvasCleared,
   readCanvasSpec,
   useCanvasSpec,
 } from "@/lib/nia-canvas-store";
@@ -21,16 +20,15 @@ const HYDRATE_THREAD_CAP = 10;
 const EMPTY_COPY =
   "Ask Nia to chart overdue invoices, sales by SKU, or dining vs sofas.";
 
+// A local clear no longer skips this fetch: hydrate compares timestamps, so a
+// chart persisted after that clear (e.g. a chart + SKU form in one turn) shows.
 async function hydrateCanvasSpecFromThreads(): Promise<void> {
-  if (readCanvasSpec() || isCanvasCleared()) {
+  if (readCanvasSpec()) {
     return;
   }
   const threads = await listNiaThreads();
   const candidates = threads.slice(0, HYDRATE_THREAD_CAP);
   const detailed = await Promise.all(candidates.map((summary) => getNiaThread(summary.id)));
-  if (isCanvasCleared()) {
-    return;
-  }
   hydrateCanvasFromThreadMessages(detailed);
 }
 
@@ -44,7 +42,7 @@ export default function CanvasPage() {
       return;
     }
     bindCanvasUser(user.id);
-    if (readCanvasSpec() || isCanvasCleared()) {
+    if (readCanvasSpec()) {
       return;
     }
     void hydrateCanvasSpecFromThreads().catch(() => undefined);

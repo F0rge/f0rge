@@ -110,12 +110,14 @@ export function writeCanvasSpec(spec: CanvasSpec): void {
   emit();
 }
 
-export function clearCanvasSpec(): void {
+/** `clearedAt` accepts the server instant of a `canvas_cleared` message so a
+ * later chart from the same thread can still win (see nia-thread-utils). */
+export function clearCanvasSpec(clearedAt?: string): void {
   const current = readRawState();
   writeRawState({
     userId: current.userId,
     spec: null,
-    clearedAt: new Date().toISOString(),
+    clearedAt: clearedAt ?? new Date().toISOString(),
   });
   emit();
 }
@@ -123,6 +125,10 @@ export function clearCanvasSpec(): void {
 export function isCanvasCleared(): boolean {
   const current = readRawState();
   return current.clearedAt !== null && current.spec === null;
+}
+
+export function canvasClearedAt(): string | null {
+  return readRawState().clearedAt;
 }
 
 export function subscribe(listener: Listener): () => void {

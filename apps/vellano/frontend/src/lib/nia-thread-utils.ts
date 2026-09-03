@@ -4,7 +4,7 @@ import {
   type NiaMessage,
   type NiaThread,
 } from "@/lib/api";
-import { clearCanvasSpec, isCanvasCleared, writeCanvasSpec } from "@/lib/nia-canvas-store";
+import { canvasClearedAt, clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
 import { parseCanvasSpec, type CanvasSpec } from "@/lib/nia-canvas-types";
 
 const STRUCTURED_CARD_KINDS = new Set([
@@ -57,12 +57,47 @@ export function latestCanvasEventFromMessages(
   return null;
 }
 
+const HAS_TIMEZONE = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+
+/** Thread timestamps are naive UTC from the API — read them as UTC, not local. */
+export function canvasEventInstant(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Date.parse(HAS_TIMEZONE.test(value) ? value : `${value}Z`);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function absoluteIso(value: string): string | undefined {
+  const instant = canvasEventInstant(value);
+  return instant === null ? undefined : new Date(instant).toISOString();
+}
+
 export function applyLatestCanvasEvent(event: LatestCanvasEvent): void {
   if (event.type === "cleared") {
-    clearCanvasSpec();
+    clearCanvasSpec(absoluteIso(event.createdAt));
     return;
   }
   writeCanvasSpec(event.spec);
+}
+
+/** A local clear only blocks hydrate for canvas events it is newer than.
+ *
+ * A chart tool followed by a write tool in one run persists the chart as its
+ * own thread message, so `/canvas` has to hydrate it even when this browser
+ * cleared the canvas earlier — otherwise the sentinel hides every later chart.
+ */
+function eventOutranksLocalClear(createdAt: string): boolean {
+  const clearedAt = canvasClearedAt();
+  if (clearedAt === null) {
+    return true;
+  }
+  const event = canvasEventInstant(createdAt);
+  const cleared = canvasEventInstant(clearedAt);
+  if (event === null || cleared === null) {
+    return false;
+  }
+  return event > cleared;
 }
 
 export function syncCanvasSpecFromThread(thread: NiaThread): void {
@@ -76,20 +111,20 @@ export function syncCanvasSpecFromThread(thread: NiaThread): void {
 export function hydrateCanvasFromThreadMessages(
   threads: { messages: NiaMessage[] }[],
 ): boolean {
-  if (isCanvasCleared()) {
-    return false;
-  }
   let newest: LatestCanvasEvent | null = null;
+  let newestInstant = Number.NEGATIVE_INFINITY;
   for (const thread of threads) {
     const event = latestCanvasEventFromMessages(thread.messages);
     if (!event) {
       continue;
     }
-    if (!newest || event.createdAt > newest.createdAt) {
+    const instant = canvasEventInstant(event.createdAt) ?? Number.NEGATIVE_INFINITY;
+    if (!newest || instant > newestInstant) {
       newest = event;
+      newestInstant = instant;
     }
   }
-  if (!newest) {
+  if (!newest || !eventOutranksLocalClear(newest.createdAt)) {
     return false;
   }
   applyLatestCanvasEvent(newest);
