@@ -4,17 +4,37 @@ import { Accordion, AccordionItem, InlineLoading } from "@carbon/react";
 import { useEffect, useState } from "react";
 
 import {
+  formatNiaWorkingTitle,
+  niaReasoningToggleLabel,
   niaThinkingBody,
   niaThinkingTitle,
   niaWorkingElapsedSeconds,
+  showNiaReasoningToggle,
   showNiaWorkingRow,
 } from "@/lib/nia-thinking";
+
+export function NiaMilestoneList({ labels }: { labels: string[] }) {
+  const lines = labels.map((label) => label.trim()).filter(Boolean);
+  if (lines.length === 0) {
+    return null;
+  }
+  return (
+    <ul className="vellano-nia-dock__milestones">
+      {lines.map((label, index) => (
+        <li key={`${index}-${label}`} className="vellano-nia-dock__milestone">
+          {label}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 type NiaThinkingProps = {
   streaming: boolean;
   streamingText: string;
   thinkingText: string;
   toolNames: string[];
+  milestones?: string[];
 };
 
 export function NiaThinking({
@@ -22,6 +42,7 @@ export function NiaThinking({
   streamingText,
   thinkingText,
   toolNames,
+  milestones = [],
 }: NiaThinkingProps) {
   const [expanded, setExpanded] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -43,9 +64,10 @@ export function NiaThinking({
     return null;
   }
 
+  const answerStarted = Boolean(streamingText.trim());
   const title = niaThinkingTitle({
     streaming,
-    answerStarted: Boolean(streamingText.trim()),
+    answerStarted,
     elapsedSeconds,
     toolNames,
     hasReasoning: Boolean(thinkingText.trim()),
@@ -55,18 +77,27 @@ export function NiaThinking({
     toolNames,
     waiting: working,
   });
+  const showReasoning = showNiaReasoningToggle({ working, hasActivity });
+  const reasoningTitle = showReasoning
+    ? niaReasoningToggleLabel({
+        expanded,
+        streaming,
+        answerStarted,
+      })
+    : title;
 
   return (
     <div className="vellano-nia-dock__thinking">
       {working ? (
         <div className="vellano-nia-dock__working">
-          <InlineLoading description={title} />
+          <InlineLoading description={formatNiaWorkingTitle(elapsedSeconds)} />
         </div>
       ) : null}
-      {hasActivity || working ? (
+      <NiaMilestoneList labels={milestones} />
+      {showReasoning ? (
         <Accordion align="start" size="sm">
           <AccordionItem
-            title={title}
+            title={reasoningTitle}
             open={expanded}
             onHeadingClick={() => setExpanded((current) => !current)}
           >

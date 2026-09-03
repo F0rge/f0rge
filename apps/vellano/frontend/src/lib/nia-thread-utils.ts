@@ -10,7 +10,6 @@ import { parseCanvasSpec, type CanvasSpec } from "@/lib/nia-canvas-types";
 const STRUCTURED_CARD_KINDS = new Set([
   "needs_ok",
   "needs_fields",
-  "opened_page",
   "canvas_spec",
   "canvas_cleared",
   "transfer_draft",
@@ -21,6 +20,11 @@ const STRUCTURED_CARD_KINDS = new Set([
 export function messageHasStructuredCard(message: NiaMessage): boolean {
   const payload = message.structured_payload;
   if (!payload || typeof payload !== "object" || !("kind" in payload)) {
+    return false;
+  }
+  // opened_page means applyPostRunNavigation already pushed this route.
+  // The card would only offer a redundant second navigation action.
+  if (payload.kind === "opened_page") {
     return false;
   }
   return STRUCTURED_CARD_KINDS.has(String(payload.kind));

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from pydantic_ai import Agent, DeferredToolRequests
+from pydantic_ai_harness import CodeMode
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -16,6 +17,8 @@ NIA_INSTRUCTIONS = """You are Nia, the in-app assistant for Vellano — a Gauten
 
 Be concise and practical. Use South African retail context (ZAR, VAT 15%) when relevant.
 
+Never use emojis. Do not put them in headers, bullets, labels, or anywhere else in the reply. Write plain words instead of symbols.
+
 Answer the current user's actual question. Conversation history is context, not a new request: do not answer or agree with an earlier question unless the current message clearly refers back to it. Never invent a decision or recommendation question. For a factual lookup, report the facts neutrally without volunteering a verdict or advice. Do not begin with "Yes", "No", or other agreement unless the current message explicitly asks for confirmation, a yes/no answer, or a recommendation.
 
 Do not reflexively end answers with "Want me to…?" or a menu of things you could do. Offer a next step only when it is directly useful to the request; otherwise stop after answering.
@@ -26,6 +29,7 @@ Use `run_nia_action` for catalogue reads and writes (SKUs, transfers, invoices, 
 
 Keep these special tools when they fit:
 - `navigate` — open an in-app page
+- `report_milestone` — emit a short progress label mid-run (call between steps; plain words, no emojis)
 - `search` — look up SKUs, POs, or invoices by ref/name
 - `list_overdue_invoices` — unpaid invoices past 30-day terms (chat list)
 - `get_stock_on_hand` — on-hand qty for a SKU at a location (name or our_ref)
@@ -48,6 +52,10 @@ Canvas is a whiteboard you drive with tools. It is a view, not a books write —
 If the user says "clear then chart dining vs sofas", call both tools in one turn. Never invent chart numbers — only tool results from the database.
 
 Never invent till payment, email, or SARS/RCS/eFiling. Never call auth, Nia thread/run/resume, file uploads, or create_till_sale.
+
+For multi-step calculations or fan-out over lists, use `run_code` (code mode) so you can loop and compute in one turn. `search` is available inside `run_code`. Do not call writes, approvals, navigate, or `report_milestone` from code mode.
+
+When a task takes more than one lookup or calculation, call `report_milestone` between steps so the user sees progress before the final answer.
 
 When a write needs arguments the user has not given, call `run_nia_action` with the action id and whatever args you have (an empty object is fine). Do not interview in markdown or list required fields — the app shows a form. Validation errors become that form, not a lecture. After the form is complete the user still approves the write before anything is saved.
 
@@ -73,10 +81,31 @@ class NiaDeps:
     canvas_spec: dict[str, Any] = field(default_factory=empty_canvas_spec)
 
 
+# Read tools that existing TestModel force-calls stay native so RBAC/catalog
+# tests keep working. Writes, navigate, HITL, canvas, and report_milestone
+# stay native so approval cards and AG-UI custom events are not bypassed.
+NIA_CODE_MODE_TOOLS: tuple[str, ...] = ("search",)
+
+
+def nia_code_mode() -> CodeMode:
+    return CodeMode(tools=list(NIA_CODE_MODE_TOOLS))
+
+
+def nia_code_mode_capability() -> Optional[CodeMode]:
+    root = nia_agent.root_capability
+    nested = getattr(root, "capabilities", None)
+    candidates = nested if nested is not None else (root,)
+    for cap in candidates:
+        if isinstance(cap, CodeMode):
+            return cap
+    return None
+
+
 nia_agent = Agent(
     deps_type=NiaDeps,
     instructions=NIA_INSTRUCTIONS,
     output_type=[str, DeferredToolRequests],
+    capabilities=[nia_code_mode()],
 )
 
 

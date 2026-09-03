@@ -18,6 +18,7 @@ dependencies = [
     "f0rge-storage",
     "reportlab>=5.0.1",
     "pydantic-ai[openrouter,ag-ui]",
+    "pydantic-ai-harness[codemode]>=0.28.1",
 ]
 
 [dependency-groups]

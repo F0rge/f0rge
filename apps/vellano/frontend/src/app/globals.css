@@ -863,6 +863,19 @@ body {
   margin-bottom: 0.25rem;
 }
 
+.vellano-nia-dock__milestones {
+  list-style: none;
+  margin: 0 0 0.35rem;
+  padding: 0;
+}
+
+.vellano-nia-dock__milestone {
+  margin: 0.1rem 0;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--cds-text-secondary, #525252);
+}
+
 .vellano-nia-card--fields {
   border-left: 3px solid #0f62fe;
 }
