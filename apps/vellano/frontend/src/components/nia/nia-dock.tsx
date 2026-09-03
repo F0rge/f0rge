@@ -57,6 +57,7 @@ import { appendToolLine } from "@/lib/nia-thinking";
 import {
   formatRelativeThreadTime,
   messageHasStructuredCard,
+  messageShowsDockProse,
   syncCanvasSpecFromThread,
 } from "@/lib/nia-thread-utils";
 
@@ -183,6 +184,15 @@ function NiaConversation({
                   key={message.id}
                   className={`vellano-nia-dock__message vellano-nia-dock__message--${message.role}`}
                 >
+                  {messageShowsDockProse(message) ? (
+                    message.role === "assistant" ? (
+                      <div className="vellano-nia-dock__bubble">
+                        <NiaMarkdown text={message.content} />
+                      </div>
+                    ) : (
+                      <p className="vellano-nia-dock__bubble">{message.content}</p>
+                    )
+                  ) : null}
                   {hasCard ? (
                     <NiaStructuredCard
                       message={message}
@@ -191,15 +201,6 @@ function NiaConversation({
                       onResumeComplete={onResumeComplete}
                       onResumeError={onResumeError}
                     />
-                  ) : null}
-                  {message.content && !hasCard ? (
-                    message.role === "assistant" ? (
-                      <div className="vellano-nia-dock__bubble">
-                        <NiaMarkdown text={message.content} />
-                      </div>
-                    ) : (
-                      <p className="vellano-nia-dock__bubble">{message.content}</p>
-                    )
                   ) : null}
                 </div>
               );
