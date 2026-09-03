@@ -47,6 +47,25 @@ def is_canvas_cleared(payload: Any) -> bool:
     return isinstance(payload, dict) and payload.get("kind") == CANVAS_CLEARED_KIND
 
 
+def canvas_payload_to_persist(
+    primary: Any,
+    canvas: Any,
+) -> Optional[dict[str, Any]]:
+    """Canvas event to persist alongside a non-canvas payload from the same turn.
+
+    One turn has a single structured-payload slot. When a chart runs and a
+    write tool then asks for fields or approval, the later payload takes that
+    slot and the chart would never reach the thread — so `/canvas` stayed
+    empty. Returns the canvas event to store as its own message, or ``None``
+    when the primary payload already is that canvas event.
+    """
+    if not (is_canvas_spec(canvas) or is_canvas_cleared(canvas)):
+        return None
+    if is_canvas_spec(primary) or is_canvas_cleared(primary):
+        return None
+    return canvas
+
+
 def spec_from_thread_payloads(payloads: list[Any]) -> dict[str, Any]:
     """Newest canvas event wins. A later clear wipes older specs."""
     for payload in reversed(payloads):
