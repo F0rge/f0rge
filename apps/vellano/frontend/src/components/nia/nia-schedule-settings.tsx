@@ -187,10 +187,12 @@ export function NiaScheduleSettings() {
     const previousEnabled = task.enabled;
     setBusyId(task.id);
     setError(null);
+    setNotice(null);
     setTasks((current) => withScheduleEnabled(current, task.id, enabled));
     try {
       const updated = await updateNiaSchedule(task.id, { enabled });
       setTasks((current) => replaceScheduleTask(current, updated));
+      setNotice(enabled ? "Task enabled." : "Task paused.");
     } catch (err: unknown) {
       setTasks((current) => withScheduleEnabled(current, task.id, previousEnabled));
       setError(err instanceof ApiError ? err.message : "Failed to update task");
