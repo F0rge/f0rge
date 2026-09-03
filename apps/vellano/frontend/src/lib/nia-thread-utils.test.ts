@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { NiaMessage } from "./api";
-import { messageShowsDockProse } from "./nia-thread-utils";
+import { messageHasStructuredCard, messageShowsDockProse } from "./nia-thread-utils";
 
 const CHASE =
   "Yes — chase INV-0004 for Naledi Mokoena, R2070, 40 days overdue on 30-day terms.";
@@ -61,6 +61,36 @@ describe("messageShowsDockProse", () => {
         message({
           role: "user",
           content: "should I chase overdue invoices?",
+        }),
+      ),
+    ).toBe(true);
+  });
+});
+
+
+describe("messageHasStructuredCard", () => {
+  it("suppresses opened_page after the same turn navigates", () => {
+    expect(
+      messageHasStructuredCard(
+        message({
+          role: "assistant",
+          content: "Opened invoices.",
+          structured_payload: { kind: "opened_page", path: "/invoices" },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps non-navigation structured cards", () => {
+    expect(
+      messageHasStructuredCard(
+        message({
+          role: "assistant",
+          content: "INV-0004 is overdue.",
+          structured_payload: {
+            kind: "overdue_invoices",
+            invoices: [{ id: "inv-0004", invoice_number: "INV-0004", remaining_zar: "2070.00" }],
+          },
         }),
       ),
     ).toBe(true);

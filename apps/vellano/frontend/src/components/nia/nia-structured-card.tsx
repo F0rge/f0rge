@@ -34,7 +34,6 @@ import {
   type TransferStatus,
 } from "@/lib/api";
 import { clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
-import { labelForNavPath } from "@/lib/nav";
 import { niaInvoiceHref } from "@/lib/nia-navigation";
 
 import { NiaCitationChips } from "./nia-citation-chips";
@@ -307,23 +306,6 @@ function isTransferDraft(payload: NiaStructuredPayload): payload is NiaTransferD
   return payload.kind === "transfer_draft";
 }
 
-function OpenedPageCard({ path }: { path: string }) {
-  const router = useRouter();
-  const label = labelForNavPath(path);
-
-  return (
-    <Tile className="vellano-nia-card vellano-nia-card--nav">
-      <p className="cds--type-label-01">Opened page</p>
-      <p className="cds--type-body-01">{label}</p>
-      <div className="vellano-nia-card__actions">
-        <Button size="sm" kind="primary" onClick={() => router.push(path)}>
-          Open {label}
-        </Button>
-      </div>
-    </Tile>
-  );
-}
-
 function CanvasSpecCard({
   title,
   spec,
@@ -481,8 +463,10 @@ export function NiaStructuredCard({
     }
   }
 
-  if (structured.kind === "opened_page" && typeof structured.path === "string") {
-    return <OpenedPageCard path={structured.path} />;
+  // Successful `opened_page` payloads navigate in applyPostRunNavigation;
+  // never render a second View/Open-page action for the same turn.
+  if (structured.kind === "opened_page") {
+    return null;
   }
 
   if (isCanvasSpecPayload(structured)) {
