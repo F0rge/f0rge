@@ -29,6 +29,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
@@ -53,6 +54,15 @@ import {
   type NiaUsageMe,
 } from "@/lib/api";
 import { clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
+import {
+  getDockOpenServerSnapshot,
+  getDockOpenSnapshot,
+  readDockThreadId,
+  setDockOpen,
+  subscribeDockOpen,
+  toggleDockOpen,
+  writeDockThreadId,
+} from "@/lib/nia-dock-session";
 import { appendToolLine } from "@/lib/nia-thinking";
 import {
   formatRelativeThreadTime,
@@ -298,10 +308,18 @@ type NiaDockProviderProps = {
 };
 
 export function NiaDockProvider({ children, enabled = true }: NiaDockProviderProps) {
-  const [open, setOpen] = useState(false);
+  const open = useSyncExternalStore(
+    subscribeDockOpen,
+    getDockOpenSnapshot,
+    getDockOpenServerSnapshot,
+  );
 
-  const toggle = useCallback(() => setOpen((current) => !current), []);
-  const openDock = useCallback(() => setOpen(true), []);
+  const toggle = useCallback(() => {
+    toggleDockOpen();
+  }, []);
+  const openDock = useCallback(() => {
+    setDockOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!enabled) {
@@ -369,6 +387,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const persistThread = useRef(false);
 
   const speechSupported =
     typeof window !== "undefined" &&
@@ -404,6 +423,24 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   useEffect(() => {
     setWidth(readStoredWidth());
   }, []);
+
+  useEffect(() => {
+    if (!enabled || !open) {
+      return;
+    }
+    const storedId = readDockThreadId();
+    if (storedId) {
+      void loadThread(storedId);
+    }
+  }, [enabled, open, loadThread]);
+
+  useEffect(() => {
+    if (!persistThread.current) {
+      persistThread.current = true;
+      return;
+    }
+    writeDockThreadId(activeThread?.id ?? null);
+  }, [activeThread?.id]);
 
   useEffect(() => {
     if (!enabled || !open) {

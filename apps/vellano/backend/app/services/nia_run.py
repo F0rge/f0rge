@@ -440,7 +440,7 @@ class NiaRunService:
             json.dumps({"message": prompt}).encode("utf-8"),
             thread_id,
         )
-        deps = await self._build_deps(user_id, run_input)
+        deps = await self._build_deps(user_id, run_input, thread_id)
         result = await nia_agent.run(
             prompt,
             deps=deps,
@@ -740,7 +740,7 @@ class NiaRunService:
             context=[],
             forwarded_props={},
         )
-        deps = await self._build_deps(user_id, run_input)
+        deps = await self._build_deps(user_id, run_input, thread_id)
         message_history = load_agent_messages(thread.agent_messages)
 
         return self._streaming_response(
