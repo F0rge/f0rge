@@ -23,6 +23,7 @@ from app.schemas.nia import (
 from app.services.nia_cadence import (
     CADENCE_PRESETS,
     DEFAULT_TIMEZONE,
+    as_utc_aware,
     cadence_is_preset,
     is_due,
     next_fire,
@@ -323,7 +324,7 @@ class NiaScheduleService:
             last_run_at=task.last_run_at,
             last_status=task.last_status,
             last_error=task.last_error,
-            next_run_at=nxt,
+            next_run_at=as_utc_aware(nxt),
             last_thread_id=latest.thread_id if latest else None,
             created_at=task.created_at,
         )

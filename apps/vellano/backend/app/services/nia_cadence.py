@@ -29,6 +29,15 @@ def utcnow() -> datetime.datetime:
     return datetime.datetime.utcnow()
 
 
+def as_utc_aware(when: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    """Attach UTC tzinfo for API JSON. Internals and DB columns stay naive UTC."""
+    if when is None:
+        return None
+    if when.tzinfo is None:
+        return when.replace(tzinfo=datetime.timezone.utc)
+    return when.astimezone(datetime.timezone.utc)
+
+
 def validate_timezone(name: str) -> str:
     stripped = name.strip()
     if not stripped:
