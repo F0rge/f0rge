@@ -91,6 +91,9 @@ class PlaygroundSeedService:
             await self._seed()
         await self._seed_demo_pack()
         await self._seed_sofa_catalog_pack()
+        from app.services.playground_bi_pack import seed_bi_pack
+
+        await seed_bi_pack(self)
 
     async def _already_seeded(self) -> bool:
         if await self.supplier_crud.get_by_name_insensitive(PLAYGROUND_SUPPLIER_NAME) is not None:
@@ -922,6 +925,7 @@ class PlaygroundSeedService:
         qty: int,
         unit_cost: Decimal,
         photo_filename: Optional[str] = None,
+        opening_date: Optional[datetime.date] = None,
     ):
         sku = await sku_service.create(
             SkuCreate(
@@ -934,6 +938,7 @@ class PlaygroundSeedService:
                 opening_location_id=location_id,
                 opening_qty=qty,
                 opening_unit_cost_zar=unit_cost,
+                opening_date=opening_date,
             ),
             owner_id,
         )
