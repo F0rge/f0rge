@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal
 from typing import Any, Optional, Union
 
-from pydantic_ai import ApprovalRequired, RunContext
+from pydantic_ai import ApprovalRequired, RunContext, ToolReturn
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
@@ -13,6 +13,7 @@ from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
 from app.models.tax_invoice import TaxInvoice
 from app.nia.agent import NiaDeps, nia_agent
+from app.nia.milestones import milestone_tool_return
 from app.nia.canvas import (
     add_canvas_component as merge_add_canvas_component,
     build_aged_ar_canvas_spec,
@@ -170,6 +171,19 @@ async def navigate(ctx: RunContext[NiaDeps], path: str) -> Union[dict[str, str],
     payload = {"kind": "opened_page", "path": normalized}
     _set_structured_payload(ctx, payload)
     return payload
+
+
+@nia_agent.tool
+async def report_milestone(ctx: RunContext[NiaDeps], label: str) -> ToolReturn:
+    """Report a short progress label to the user while you work.
+
+    Call this between steps so the dock shows progress before the final answer.
+    Keep the label plain words, no emojis.
+    """
+    denied = _require_nia_use(ctx.deps)
+    if denied:
+        return ToolReturn(return_value=denied)
+    return milestone_tool_return(label)
 
 
 @nia_agent.tool

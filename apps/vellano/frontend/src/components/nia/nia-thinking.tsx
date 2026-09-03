@@ -10,11 +10,28 @@ import {
   showNiaWorkingRow,
 } from "@/lib/nia-thinking";
 
+export function NiaMilestoneList({ labels }: { labels: string[] }) {
+  const lines = labels.map((label) => label.trim()).filter(Boolean);
+  if (lines.length === 0) {
+    return null;
+  }
+  return (
+    <ul className="vellano-nia-dock__milestones">
+      {lines.map((label, index) => (
+        <li key={`${index}-${label}`} className="vellano-nia-dock__milestone">
+          {label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 type NiaThinkingProps = {
   streaming: boolean;
   streamingText: string;
   thinkingText: string;
   toolNames: string[];
+  milestones?: string[];
 };
 
 export function NiaThinking({
@@ -22,6 +39,7 @@ export function NiaThinking({
   streamingText,
   thinkingText,
   toolNames,
+  milestones = [],
 }: NiaThinkingProps) {
   const [expanded, setExpanded] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -63,6 +81,7 @@ export function NiaThinking({
           <InlineLoading description={title} />
         </div>
       ) : null}
+      <NiaMilestoneList labels={milestones} />
       {hasActivity || working ? (
         <Accordion align="start" size="sm">
           <AccordionItem

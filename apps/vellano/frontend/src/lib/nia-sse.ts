@@ -39,18 +39,20 @@ export async function parseNiaErrorResponse(response: Response): Promise<string>
   }
 }
 
-export type NiaSseKind = "text" | "thinking" | "tool_start" | "tool_end";
+export type NiaSseKind = "text" | "thinking" | "tool_start" | "tool_end" | "milestone";
 
 export type NiaSseEvent =
   | { kind: "text"; delta: string }
   | { kind: "thinking"; delta: string }
   | { kind: "tool_start"; name: string }
-  | { kind: "tool_end"; name: string };
+  | { kind: "tool_end"; name: string }
+  | { kind: "milestone"; label: string };
 
 export type NiaSseHandlers = {
   onToken?: (delta: string) => void;
   onThinking?: (delta: string) => void;
   onTool?: (name: string, phase: "start" | "end") => void;
+  onMilestone?: (label: string) => void;
 };
 
 const TEXT_TYPES = new Set([
@@ -70,6 +72,7 @@ const THINKING_TYPES = new Set([
 
 const TOOL_START_TYPES = new Set(["TOOL_CALL_START", "TOOL_CALL_BEGIN"]);
 const TOOL_END_TYPES = new Set(["TOOL_CALL_END", "TOOL_CALL_RESULT"]);
+const CUSTOM_TYPES = new Set(["CUSTOM"]);
 
 const LIFECYCLE_TYPES = new Set([
   "TEXT_MESSAGE_START",
@@ -94,6 +97,31 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function isMilestoneName(value: unknown): boolean {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return raw === "milestone" || raw === "nia.milestone" || raw === "nia_milestone";
+}
+
+/** Label from an AG-UI CustomEvent `value` (`{label}` / `{step}` or a string). */
+export function milestoneLabelFromValue(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+  for (const key of ["label", "step", "text", "message"] as const) {
+    const candidate = record[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return null;
 }
 
 /** `TextMessageContent` / `text-delta` / `TEXT_MESSAGE_CONTENT` → `TEXT_MESSAGE_CONTENT`. */
@@ -201,6 +229,9 @@ function logUnknownNiaSseType(type: string): void {
   if (TOOL_START_TYPES.has(type) || TOOL_END_TYPES.has(type) || LIFECYCLE_TYPES.has(type)) {
     return;
   }
+  if (CUSTOM_TYPES.has(type)) {
+    return;
+  }
   console.info("[nia-sse] unknown event type", type);
 }
 
@@ -223,6 +254,20 @@ export function parseNiaSseLine(line: string): NiaSseEvent | null {
     }
     if (TOOL_END_TYPES.has(type)) {
       return { kind: "tool_end", name: toolNameFromEvent(event) };
+    }
+    if (CUSTOM_TYPES.has(type)) {
+      const nestedEvent = asRecord(event.event);
+      const nestedData = asRecord(event.data);
+      const name = readString(event.name, nestedEvent?.name, nestedData?.name);
+      if (isMilestoneName(name)) {
+        const label = milestoneLabelFromValue(
+          event.value ?? nestedEvent?.value ?? nestedData?.value,
+        );
+        if (label) {
+          return { kind: "milestone", label };
+        }
+      }
+      return null;
     }
     if (THINKING_TYPES.has(type) && text) {
       return { kind: "thinking", delta: text };
@@ -255,6 +300,10 @@ function dispatchSseEvent(event: NiaSseEvent, handlers: NiaSseHandlers): void {
   }
   if (event.kind === "thinking") {
     handlers.onThinking?.(event.delta);
+    return;
+  }
+  if (event.kind === "milestone") {
+    handlers.onMilestone?.(event.label);
     return;
   }
   handlers.onTool?.(event.name, event.kind === "tool_start" ? "start" : "end");

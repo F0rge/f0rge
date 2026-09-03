@@ -146,6 +146,7 @@ type NiaConversationProps = {
   streamingText: string;
   thinkingText: string;
   toolNames: string[];
+  milestones: string[];
   loadingThread: boolean;
   showSuggestions: boolean;
   composer: string;
@@ -166,6 +167,7 @@ function NiaConversation({
   streamingText,
   thinkingText,
   toolNames,
+  milestones,
   loadingThread,
   showSuggestions,
   composer,
@@ -227,6 +229,7 @@ function NiaConversation({
                   streamingText={streamingText}
                   thinkingText={thinkingText}
                   toolNames={toolNames}
+                  milestones={milestones}
                 />
                 {streamingText ? (
                   <div className="vellano-nia-dock__bubble">
@@ -382,6 +385,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const [streamingText, setStreamingText] = useState("");
   const [thinkingText, setThinkingText] = useState("");
   const [toolNames, setToolNames] = useState<string[]>([]);
+  const [milestones, setMilestones] = useState<string[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -512,6 +516,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     setStreamingText("");
     setThinkingText("");
     setToolNames([]);
+    setMilestones([]);
   }
 
   async function handleSend(messageText?: string) {
@@ -531,6 +536,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     setStreamingText("");
     setThinkingText("");
     setToolNames([]);
+    setMilestones([]);
     const thread = await ensureThread();
     if (!thread) {
       resetStreamState();
@@ -546,8 +552,14 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
           setThinkingText((current) => current + delta);
         },
         onTool: (name, phase) => {
+          if (name === "report_milestone") {
+            return;
+          }
           setToolNames((current) => (current[current.length - 1] === name ? current : [...current, name]));
           setThinkingText((current) => appendToolLine(current, name, phase));
+        },
+        onMilestone: (label) => {
+          setMilestones((current) => [...current, label]);
         },
       });
       streamed = true;
@@ -704,6 +716,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     streamingText,
     thinkingText,
     toolNames,
+    milestones,
     loadingThread,
     showSuggestions: true,
     composer,
