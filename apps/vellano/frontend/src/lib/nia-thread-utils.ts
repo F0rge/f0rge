@@ -26,6 +26,11 @@ export function messageHasStructuredCard(message: NiaMessage): boolean {
   return STRUCTURED_CARD_KINDS.has(String(payload.kind));
 }
 
+/** Dock prose is independent of structured cards (opened_page is optional extra). */
+export function messageShowsDockProse(message: Pick<NiaMessage, "content">): boolean {
+  return message.content.trim().length > 0;
+}
+
 export type LatestCanvasEvent =
   | { type: "spec"; spec: CanvasSpec; createdAt: string }
   | { type: "cleared"; createdAt: string };

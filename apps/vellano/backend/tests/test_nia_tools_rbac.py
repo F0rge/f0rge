@@ -11,6 +11,7 @@ from pydantic_ai.models.test import TestModel
 
 from app.config import settings
 import app.nia  # noqa: F401 — register tools
+from app.nia.tools import _is_allowed_nav_path
 
 models.ALLOW_MODEL_REQUESTS = False
 
@@ -118,8 +119,22 @@ async def test_list_overdue_invoices_returns_fixture_id(
 
     thread = await books.get(f"/api/v1/nia/threads/{thread_id}")
     assert thread.status_code == 200
-    blob = _thread_text_blob(thread.json())
+    body = thread.json()
+    blob = _thread_text_blob(body)
     assert invoice_id in blob
+    assert "Nia Overdue Customer" in blob
+    remaining = invoice_resp.json()["balance"]
+    assert str(remaining) in blob
+    assistant = next(m for m in reversed(body["messages"]) if m["role"] == "assistant")
+    payload = assistant["structured_payload"]
+    assert payload["kind"] == "overdue_invoices"
+    match = next(row for row in payload["invoices"] if row["id"] == invoice_id)
+    assert match["customer_name"] == "Nia Overdue Customer"
+    assert match["remaining_zar"] == str(remaining)
+    assert match["issue_date"] == "2026-07-01"
+    assert match["terms_days"] == 30
+    assert isinstance(match["days_overdue"], int)
+    assert match["days_overdue"] >= 0
 
 
 async def test_till_propose_transfer_denied_without_hitl(
@@ -311,3 +326,11 @@ async def test_till_navigate_allowed_and_unknown_denied(
     bad_thread = await till.get(f"/api/v1/nia/threads/{thread_bad}")
     bad_blob = _thread_text_blob(bad_thread.json()).lower()
     assert "denied" in bad_blob or "unknown route" in bad_blob
+
+
+@pytest.mark.no_db
+def test_navigate_allows_invoice_list_and_uuid_detail() -> None:
+    assert _is_allowed_nav_path("/invoices")
+    assert _is_allowed_nav_path("/invoices/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    assert not _is_allowed_nav_path("/invoices/not-a-uuid")
+    assert not _is_allowed_nav_path("/not-a-route")

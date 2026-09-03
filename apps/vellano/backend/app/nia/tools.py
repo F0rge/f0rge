@@ -7,6 +7,7 @@ from typing import Any, Optional, Union
 
 from pydantic_ai import ApprovalRequired, RunContext
 from sqlalchemy import and_, select
+from sqlalchemy.orm import selectinload
 
 from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
@@ -75,6 +76,24 @@ ALLOWED_NAV_PATHS: frozenset[str] = frozenset(
 )
 
 PROPOSE_TRANSFER_TOOL = "propose_transfer"
+_INVOICE_DETAIL_PREFIX = "/invoices/"
+_OVERDUE_TERMS_DAYS = 30
+
+
+def _is_allowed_nav_path(normalized: str) -> bool:
+    """Exact allowlisted routes, plus invoice detail `/invoices/{uuid}`."""
+    if normalized in ALLOWED_NAV_PATHS:
+        return True
+    if not normalized.startswith(_INVOICE_DETAIL_PREFIX):
+        return False
+    suffix = normalized[len(_INVOICE_DETAIL_PREFIX) :]
+    if not suffix or "/" in suffix:
+        return False
+    try:
+        uuid.UUID(suffix)
+    except ValueError:
+        return False
+    return True
 
 
 def _has_permission(deps: NiaDeps, key: str) -> bool:
@@ -132,7 +151,10 @@ async def _resolve_location_id(db, location_name: str) -> Optional[uuid.UUID]:
 
 @nia_agent.tool
 async def navigate(ctx: RunContext[NiaDeps], path: str) -> Union[dict[str, str], str]:
-    """Open an in-app page by path. Use only known Vellano routes."""
+    """Open an in-app page by path. Use only known Vellano routes.
+
+    Opening a page does not replace answering a recommendation question.
+    """
     denied = _require_nia_use(ctx.deps)
     if denied:
         return denied
@@ -141,7 +163,7 @@ async def navigate(ctx: RunContext[NiaDeps], path: str) -> Union[dict[str, str],
     if not normalized.startswith("/"):
         normalized = f"/{normalized}"
 
-    if normalized not in ALLOWED_NAV_PATHS:
+    if not _is_allowed_nav_path(normalized):
         return f"Navigation denied: unknown route {normalized}"
 
     payload = {"kind": "opened_page", "path": normalized}
@@ -151,7 +173,10 @@ async def navigate(ctx: RunContext[NiaDeps], path: str) -> Union[dict[str, str],
 
 @nia_agent.tool
 async def search(ctx: RunContext[NiaDeps], q: str) -> Union[dict[str, Any], str]:
-    """Search SKUs, purchase orders, and invoices by reference or name."""
+    """Search SKUs, purchase orders, and invoices by reference or name.
+
+    Summarise the answer in the assistant message first, then optionally open a page.
+    """
     denied = _require_nia_use(ctx.deps)
     if denied:
         return denied
@@ -165,16 +190,20 @@ async def search(ctx: RunContext[NiaDeps], q: str) -> Union[dict[str, Any], str]
 
 @nia_agent.tool
 async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str, Any]], str]:
-    """List unpaid invoices past 30-day terms (issue_date + 30)."""
+    """List unpaid invoices past 30-day terms (issue_date + 30).
+
+    Summarise the chase recommendation in the assistant message first, then optionally open a page.
+    """
     denied = _require_nia_use(ctx.deps)
     if denied:
         return denied
 
     today = datetime.date.today()
-    overdue_cutoff = today - datetime.timedelta(days=30)
+    overdue_cutoff = today - datetime.timedelta(days=_OVERDUE_TERMS_DAYS)
     balance = TaxInvoice.total_inc_vat - TaxInvoice.amount_paid
     stmt = (
         select(TaxInvoice)
+        .options(selectinload(TaxInvoice.customer))
         .where(
             and_(
                 balance > 0,
@@ -184,14 +213,22 @@ async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str
         .order_by(TaxInvoice.issue_date, TaxInvoice.invoice_number)
     )
     rows = (await ctx.deps.db.execute(stmt)).scalars().all()
-    invoices = [
-        {
-            "id": str(inv.id),
-            "invoice_number": inv.invoice_number,
-            "remaining_zar": str((inv.total_inc_vat - inv.amount_paid).quantize(Decimal("0.01"))),
-        }
-        for inv in rows
-    ]
+    invoices = []
+    for inv in rows:
+        due_date = inv.issue_date + datetime.timedelta(days=_OVERDUE_TERMS_DAYS)
+        invoices.append(
+            {
+                "id": str(inv.id),
+                "invoice_number": inv.invoice_number,
+                "customer_name": inv.customer.name,
+                "issue_date": inv.issue_date.isoformat(),
+                "days_overdue": (today - due_date).days,
+                "terms_days": _OVERDUE_TERMS_DAYS,
+                "remaining_zar": str(
+                    (inv.total_inc_vat - inv.amount_paid).quantize(Decimal("0.01"))
+                ),
+            }
+        )
     citations = [{"label": inv.invoice_number, "href": f"/invoices/{inv.id}"} for inv in rows]
     if invoices:
         _set_structured_payload(
