@@ -7,6 +7,7 @@ from app.nia.fields import canonical_field_values
 
 pytestmark = pytest.mark.no_db
 
+
 def test_barcode_alias_maps_to_our_barcode() -> None:
     values = canonical_field_values({"name": "Nia Test", "barcode": "9900002026090301"})
     assert values["our_barcode"] == "9900002026090301"
