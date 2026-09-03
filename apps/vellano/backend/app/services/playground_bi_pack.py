@@ -8,13 +8,15 @@ from io import BytesIO
 from typing import TYPE_CHECKING, Optional
 
 from fastapi import UploadFile
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 
-from app.crud.purchase_order import PurchaseOrderCRUD
+from app.crud.bill import BillCRUD
+from app.crud.purchase_order import LocationStockCRUD, PurchaseOrderCRUD
 from app.crud.transfer import TransferCRUD
 from app.models.inventory import LocationStock
+from app.models.layby import Layby
 from app.models.payment import Payment
-from app.models.tax_invoice import TaxInvoice
+from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.bill import BillCreate, BillLineCreate
 from app.schemas.customer_crm import CustomerCrmCreate
 from app.schemas.invoice import InvoiceCreate, InvoiceLineCreate
@@ -87,9 +89,6 @@ class PlaygroundBiPack:
         self.showroom_since_ago: dict[str, int] = {}
 
     async def seed_if_needed(self) -> None:
-        if await self.seed.sku_crud.get_by_our_ref(BI_MARKER_REF) is not None:
-            return
-
         from app.config import settings
 
         owner = await self.seed.user_crud.get_by_email(settings.seed_owner_email)
@@ -102,10 +101,17 @@ class PlaygroundBiPack:
 
         suppliers = await self._ensure_suppliers()
         customers = await self._ensure_customers()
-        skus = await self._create_skus(owner.id, suppliers)
-        await self._seed_purchase_orders(owner.id, kramerville.id, suppliers, skus)
-        await self._seed_transfers(owner.id, kramerville.id, bedfordview.id, skus)
-        await self._seed_till_sales(bedfordview.id, customers, skus, today)
+        marker = await self.seed.sku_crud.get_by_our_ref(BI_MARKER_REF)
+        if marker is None:
+            skus = await self._create_skus(owner.id, suppliers)
+            await self._seed_purchase_orders(owner.id, kramerville.id, suppliers, skus)
+            await self._seed_transfers(owner.id, kramerville.id, bedfordview.id, skus)
+            await self._seed_till_sales(bedfordview.id, customers, skus, today)
+        else:
+            skus = await self._existing_skus()
+            if len(skus) < len(BI_SKUS):
+                return
+            await self._hydrate_showroom_from_stock(bedfordview.id, skus)
         await self._seed_invoices(customers, today)
         await self._seed_laybys(owner.id, bedfordview.id, customers, skus, today)
         await self._seed_bills(suppliers, today)
@@ -148,6 +154,58 @@ class PlaygroundBiPack:
             else:
                 out[spec["name"]] = existing.id
         return out
+
+    async def _existing_skus(self) -> dict[str, uuid.UUID]:
+        out: dict[str, uuid.UUID] = {}
+        for spec in BI_SKUS:
+            row = await self.seed.sku_crud.get_by_our_ref(spec["our_ref"])
+            if row is not None:
+                out[spec["our_ref"]] = row.id
+        return out
+
+    async def _hydrate_showroom_from_stock(
+        self,
+        showroom_id: uuid.UUID,
+        skus: dict[str, uuid.UUID],
+    ) -> None:
+        stock_crud = LocationStockCRUD(self.db)
+        for ref, sku_id in skus.items():
+            row = await stock_crud.get_by_sku_and_location(sku_id, showroom_id)
+            self.showroom[ref] = int(row.on_hand) if row is not None else 0
+
+    async def _count_bi_invoices(self) -> int:
+        result = await self.db.execute(
+            select(func.count(func.distinct(InvoiceLine.invoice_id))).where(
+                InvoiceLine.description.startswith(BI_PACK_NOTES_PREFIX)
+            )
+        )
+        return int(result.scalar_one() or 0)
+
+    async def _count_bi_laybys(self) -> int:
+        result = await self.db.execute(
+            select(func.count())
+            .select_from(Layby)
+            .where(Layby.notes.startswith(BI_PACK_NOTES_PREFIX))
+        )
+        return int(result.scalar_one() or 0)
+
+    async def _stamp_partial_balance(self, invoice_id: uuid.UUID) -> None:
+        await self.seed._ensure_transaction()
+        async with unit_of_work(self.db):
+            invoice = await self.db.get(TaxInvoice, invoice_id)
+            if invoice is None or invoice.amount_paid != 0:
+                return
+            part = (invoice.total_inc_vat * Decimal("0.40")).quantize(CENT)
+            if 0 < part < invoice.total_inc_vat:
+                invoice.amount_paid = part
+
+    async def _backfill_partial_balances(self) -> None:
+        dining = f"{BI_PACK_NOTES_PREFIX} trade dining specification"
+        result = await self.db.execute(
+            select(InvoiceLine.invoice_id).where(InvoiceLine.description == dining)
+        )
+        for invoice_id in {row[0] for row in result.all()}:
+            await self._stamp_partial_balance(invoice_id)
 
     async def _create_skus(
         self,
@@ -568,7 +626,10 @@ class PlaygroundBiPack:
         trade_names = [spec["name"] for spec in BI_CUSTOMERS if spec["customer_type"] == "trade"]
         retail_names = [spec["name"] for spec in BI_CUSTOMERS if spec["customer_type"] == "retail"]
         plans = ["paid"] * 8 + ["partial"] * 8 + ["overdue"] * 8
+        existing = await self._count_bi_invoices()
         for i, status in enumerate(plans):
+            if i < existing:
+                continue
             if status == "overdue":
                 days = 45 + (i * 6)
                 name = trade_names[i % len(trade_names)]
@@ -615,18 +676,10 @@ class PlaygroundBiPack:
                     )
                 )
             elif status == "partial":
-                await self.seed._ensure_transaction()
-                part = (invoice.total_inc_vat * Decimal("0.40")).quantize(CENT)
-                if part > 0:
-                    await payment_service.create(
-                        PaymentCreate(
-                            direction="in",
-                            invoice_id=invoice.id,
-                            amount=part,
-                            currency="ZAR",
-                            paid_on=issue + datetime.timedelta(days=8),
-                        )
-                    )
+                # PaymentService requires the remaining balance in full.
+                # Stamp amount_paid so Nia still sees partial AR.
+                await self._stamp_partial_balance(invoice.id)
+        await self._backfill_partial_balances()
 
     async def _seed_laybys(
         self,
@@ -636,6 +689,8 @@ class PlaygroundBiPack:
         skus: dict[str, uuid.UUID],
         today: datetime.date,
     ) -> None:
+        if await self._count_bi_laybys() > 0:
+            return
         laybys = LaybysService(self.db)
         retail_names = [spec["name"] for spec in BI_CUSTOMERS if spec["customer_type"] == "retail"]
         candidates = [
@@ -719,7 +774,10 @@ class PlaygroundBiPack:
             ("patio", "BI-BILL-PL-01", Decimal("22300.00"), 55, False),
             ("weylandts", "BI-BILL-WY-01", Decimal("9800.00"), 25, True),
         ]
+        existing_refs = {bill.supplier_ref for bill in await BillCRUD(self.db).list_all()}
         for key, ref, amount, days_ago, paid in rows:
+            if ref in existing_refs:
+                continue
             issue = today - datetime.timedelta(days=days_ago)
             await self.seed._ensure_transaction()
             bill = await bill_service.create(
