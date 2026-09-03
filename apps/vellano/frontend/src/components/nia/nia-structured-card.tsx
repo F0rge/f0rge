@@ -53,17 +53,23 @@ function isNeedsFields(payload: NiaStructuredPayload): payload is NiaNeedsFields
   return payload.kind === "needs_fields";
 }
 
-function initialFieldValues(payload: NiaNeedsFieldsPayload): Record<string, string> {
+export function initialFieldValues(payload: NiaNeedsFieldsPayload): Record<string, string> {
   const values: Record<string, string> = {};
   for (const field of payload.fields) {
-    if (typeof field.value === "string") {
-      values[field.id] = field.value;
-      continue;
+    const fieldValue: unknown = field.value;
+    if (fieldValue !== undefined && fieldValue !== null) {
+      const coerced = String(fieldValue);
+      if (coerced.trim() !== "") {
+        values[field.id] = coerced;
+        continue;
+      }
     }
     const supplied = payload.values?.[field.id];
     if (supplied !== undefined && supplied !== null) {
       values[field.id] = String(supplied);
+      continue;
     }
+    values[field.id] = "";
   }
   return values;
 }
