@@ -20,6 +20,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 import app.nia  # noqa: F401 — register Nia tools on the agent
 from app.nia.agent import NiaDeps, nia_agent
 from app.nia.canvas import CANVAS_PATH, CANVAS_SPEC_KIND, spec_from_thread_payloads
+from app.nia.hitl import richer_needs_ok
 from app.permissions import CATALOGUE_MUTATE, NIA_USE
 from app.services.nia_run import NiaRunService
 
@@ -76,6 +77,28 @@ class _FakeThreads:
         structured_payload: Optional[dict[str, Any]] = None,
     ) -> None:
         self.appended.append(_Appended(role, content, structured_payload))
+
+    async def append_or_replace_needs_ok(
+        self,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        content: str,
+        structured_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self.appended:
+            latest = self.appended[-1]
+            existing = latest.structured_payload
+            if (
+                latest.role == "assistant"
+                and isinstance(existing, dict)
+                and existing.get("kind") == "needs_ok"
+            ):
+                kept = richer_needs_ok(existing, structured_payload)
+                if kept is structured_payload:
+                    self.appended[-1] = _Appended(latest.role, content, structured_payload)
+                return kept
+        self.appended.append(_Appended("assistant", content, structured_payload))
+        return structured_payload
 
     async def save_agent_state(
         self,

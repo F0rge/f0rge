@@ -68,6 +68,17 @@ def _nonnull_change_count(payload: dict[str, Any]) -> int:
     return count
 
 
+def is_needs_ok_payload(payload: Any) -> bool:
+    return isinstance(payload, dict) and payload.get("kind") == "needs_ok"
+
+
+def richer_needs_ok(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    """Keep the approval with more actual changes; new payload wins a tie."""
+    if _nonnull_change_count(existing) > _nonnull_change_count(incoming):
+        return existing
+    return incoming
+
+
 def _payload_from_approval(
     output: DeferredToolRequests,
     approval: ToolCallPart,
@@ -86,7 +97,10 @@ def pending_from_deferred(output: DeferredToolRequests) -> Optional[dict[str, An
     if not output.approvals:
         return None
     payloads = [_payload_from_approval(output, approval) for approval in output.approvals]
-    return max(payloads, key=_nonnull_change_count)
+    pending = payloads[0]
+    for payload in payloads[1:]:
+        pending = richer_needs_ok(pending, payload)
+    return pending
 
 
 def resolve_approval_part(

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.nia import NiaThreadCRUD
 from app.crud.user import UserCRUD
 from app.models.nia import NiaMessage, NiaThread
+from app.nia.hitl import is_needs_ok_payload, richer_needs_ok
 from app.schemas.nia import (
     NiaMessageResponse,
     NiaThreadCreate,
@@ -111,6 +112,37 @@ class NiaThreadsService:
                 auto_title = _auto_title_from_message(content)
                 if auto_title:
                     thread.title = auto_title
+
+    async def append_or_replace_needs_ok(
+        self,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        content: str,
+        structured_payload: dict,
+    ) -> dict:
+        """Coalesce consecutive approval cards and return the payload retained."""
+        thread = await self._get_owned_or_404(thread_id, user_id)
+        latest = thread.messages[-1] if thread.messages else None
+        existing = latest.structured_payload if latest is not None else None
+        if latest is not None and latest.role == "assistant" and is_needs_ok_payload(existing):
+            kept = richer_needs_ok(existing, structured_payload)
+            if kept is structured_payload:
+                async with unit_of_work(self.db):
+                    latest.content = content
+                    latest.structured_payload = structured_payload
+                    thread.updated_at = datetime.datetime.utcnow()
+            return kept
+
+        message = NiaMessage(
+            thread_id=thread.id,
+            role="assistant",
+            content=content,
+            structured_payload=structured_payload,
+        )
+        async with unit_of_work(self.db):
+            await self.crud.add_and_flush(message)
+            thread.updated_at = datetime.datetime.utcnow()
+        return structured_payload
 
     async def save_agent_state(
         self,

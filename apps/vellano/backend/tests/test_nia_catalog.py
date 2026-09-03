@@ -14,7 +14,7 @@ from pydantic_ai.models.test import TestModel
 
 from app.config import settings
 from app.nia.catalog import CATALOG
-from app.nia.hitl import pending_from_deferred
+from app.nia.hitl import pending_from_deferred, richer_needs_ok
 import app.nia  # noqa: F401 — register tools
 
 models.ALLOW_MODEL_REQUESTS = False
@@ -445,6 +445,22 @@ def test_pending_from_deferred_keeps_one_richest_run_nia_action_approval() -> No
     assert pending["tool_name"] == "run_nia_action"
     assert pending["action_id"] == "update_sku"
     assert pending["args"] == {"sku_id": "sku-1", "retail_inc_vat": "1500.00"}
+
+
+@pytest.mark.no_db
+def test_richer_needs_ok_keeps_existing_richer_payload() -> None:
+    rich = {"kind": "needs_ok", "args": {"sku_id": "sku-1", "retail_inc_vat": "1500.00"}}
+    sparse = {"kind": "needs_ok", "args": {"sku_id": "sku-1"}}
+
+    assert richer_needs_ok(rich, sparse) is rich
+
+
+@pytest.mark.no_db
+def test_richer_needs_ok_replaces_existing_sparse_payload() -> None:
+    sparse = {"kind": "needs_ok", "args": {"sku_id": "sku-1"}}
+    rich = {"kind": "needs_ok", "args": {"sku_id": "sku-1", "retail_inc_vat": "1500.00"}}
+
+    assert richer_needs_ok(sparse, rich) is rich
 
 
 async def test_create_sku_till_permission_string_no_hitl(

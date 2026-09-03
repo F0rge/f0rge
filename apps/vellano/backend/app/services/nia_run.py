@@ -29,6 +29,7 @@ from app.nia.hitl import (
     CANCELLED_ASSISTANT_TEXT,
     NEEDS_OK_ASSISTANT_TEXT,
     dump_agent_messages,
+    is_needs_ok_payload,
     load_agent_messages,
     pending_from_deferred,
 )
@@ -274,13 +275,14 @@ class NiaRunService:
             deps=deps,
         )
         if assistant_text or structured_payload:
-            await self.threads.append_message(
-                user_id,
-                thread_id,
-                NiaMessageRole.ASSISTANT.value,
-                assistant_text or "",
+            structured_payload = await self._append_assistant_result(
+                user_id=user_id,
+                thread_id=thread_id,
+                content=assistant_text or "",
                 structured_payload=structured_payload,
             )
+            if is_needs_ok_payload(structured_payload):
+                pending_tools = structured_payload
         await self.threads.save_agent_state(
             user_id,
             thread_id,
@@ -323,19 +325,44 @@ class NiaRunService:
             deps=deps,
         )
         if assistant_text or structured_payload:
-            await self.threads.append_message(
-                user_id,
-                thread_id,
-                NiaMessageRole.ASSISTANT.value,
-                assistant_text or "",
+            structured_payload = await self._append_assistant_result(
+                user_id=user_id,
+                thread_id=thread_id,
+                content=assistant_text or "",
                 structured_payload=structured_payload,
             )
+            if is_needs_ok_payload(structured_payload):
+                pending_tools = structured_payload
         await self.threads.save_agent_state(
             user_id,
             thread_id,
             agent_messages=agent_messages,
             pending_tools=pending_tools,
         )
+
+    async def _append_assistant_result(
+        self,
+        *,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        content: str,
+        structured_payload: Optional[dict[str, Any]],
+    ) -> Optional[dict[str, Any]]:
+        if is_needs_ok_payload(structured_payload):
+            return await self.threads.append_or_replace_needs_ok(
+                user_id,
+                thread_id,
+                content,
+                structured_payload,
+            )
+        await self.threads.append_message(
+            user_id,
+            thread_id,
+            NiaMessageRole.ASSISTANT.value,
+            content,
+            structured_payload=structured_payload,
+        )
+        return structured_payload
 
     async def _append_preserved_canvas(
         self,
