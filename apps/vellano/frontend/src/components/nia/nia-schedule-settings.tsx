@@ -36,7 +36,13 @@ import {
   type NiaScheduleCadence,
   type NiaScheduledTask,
 } from "@/lib/api";
-import { formatNextRun } from "@/lib/nia-schedule";
+import {
+  formatNextRun,
+  replaceScheduleTask,
+  scheduleToggleLabel,
+  shouldHandleScheduleRowToggleKey,
+  withScheduleEnabled,
+} from "@/lib/nia-schedule";
 
 const HEADERS = [
   { key: "name", header: "Name" },
@@ -178,12 +184,15 @@ export function NiaScheduleSettings() {
   }
 
   async function handleToggle(task: NiaScheduledTask, enabled: boolean) {
+    const previousEnabled = task.enabled;
     setBusyId(task.id);
     setError(null);
+    setTasks((current) => withScheduleEnabled(current, task.id, enabled));
     try {
       const updated = await updateNiaSchedule(task.id, { enabled });
-      setTasks((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+      setTasks((current) => replaceScheduleTask(current, updated));
     } catch (err: unknown) {
+      setTasks((current) => withScheduleEnabled(current, task.id, previousEnabled));
       setError(err instanceof ApiError ? err.message : "Failed to update task");
     } finally {
       setBusyId(null);
@@ -284,21 +293,38 @@ export function NiaScheduleSettings() {
                   {tableRows.map((row) => {
                     const task = tasks.find((entry) => entry.id === row.id);
                     const { key: rowKey, ...rowProps } = getRowProps({ row });
+                    const rowBusy = Boolean(task && busyId === task.id);
                     return (
-                      <TableRow key={rowKey} {...rowProps}>
+                      <TableRow
+                        key={rowKey}
+                        {...rowProps}
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (!task) {
+                            return;
+                          }
+                          if (
+                            !shouldHandleScheduleRowToggleKey(event.target, event.key, rowBusy)
+                          ) {
+                            return;
+                          }
+                          event.preventDefault();
+                          void handleToggle(task, !task.enabled);
+                        }}
+                      >
                         {row.cells.map((cell) => {
                           if (cell.info.header === "enabled" && task) {
                             return (
-                              <TableCell key={cell.id}>
+                              <TableCell key={cell.id} aria-busy={rowBusy}>
                                 <Toggle
                                   id={`nia-task-enabled-${task.id}`}
                                   size="sm"
                                   hideLabel
-                                  labelA="Off"
+                                  labelA="Paused"
                                   labelB="On"
-                                  labelText="Enabled"
+                                  labelText={scheduleToggleLabel(task.name, task.enabled)}
                                   toggled={task.enabled}
-                                  disabled={busyId === task.id}
+                                  disabled={rowBusy}
                                   onToggle={(checked) => void handleToggle(task, checked)}
                                 />
                               </TableCell>
@@ -412,7 +438,7 @@ export function NiaScheduleSettings() {
           <Toggle
             id="nia-task-enabled"
             labelText="Enabled"
-            labelA="Off"
+            labelA="Paused"
             labelB="On"
             toggled={draft.enabled}
             onToggle={(checked) => setDraft((current) => ({ ...current, enabled: checked }))}
