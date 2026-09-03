@@ -12,7 +12,7 @@ from app.models.team_settings import (
     DEFAULT_VAT_RATE,
     TeamSettings,
 )
-from f0rge_db.crud import BaseCRUD
+from f0rge_db.crud import BaseCRUD, unit_of_work
 
 
 class TeamSettingsCRUD(BaseCRUD):
@@ -35,5 +35,6 @@ class TeamSettingsCRUD(BaseCRUD):
             pick_priority=[],
             nia_monthly_token_cap=DEFAULT_NIA_MONTHLY_TOKEN_CAP,
         )
-        await self.add_and_flush(settings)
+        async with unit_of_work(self.db):
+            await self.add_and_flush(settings)
         return settings

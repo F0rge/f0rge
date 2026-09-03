@@ -13,6 +13,7 @@ from app.models.team_settings import TeamSettings
 from app.models.user import User
 from app.services.nia_usage import NiaUsageService
 from f0rge_core.exceptions import NotFoundError
+from f0rge_db.crud import unit_of_work
 
 
 def effective_nia_cap(user: User, team_settings: TeamSettings) -> int:
@@ -92,8 +93,8 @@ class NiaCapsService:
         if target is None or target.team_id != admin.team_id:
             raise NotFoundError("User not found")
 
-        target.nia_monthly_token_cap = cap
-        await self.db.flush()
+        async with unit_of_work(self.db):
+            target.nia_monthly_token_cap = cap
 
         team_settings = await self.team_settings_crud.get_or_create_for_team(admin.team_id)
         used = await self.usage_service.sum_total_tokens_for_user_current_utc_month(target.id)
