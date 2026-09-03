@@ -57,6 +57,7 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import { useAuth } from "@/lib/auth";
 import { bindCanvasUser } from "@/lib/nia-canvas-store";
+import { clearDockSession } from "@/lib/nia-dock-session";
 import { can } from "@/lib/permissions";
 import {
   ACCOUNT_NAV_ITEMS,
@@ -188,6 +189,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   async function handleLogout() {
+    clearDockSession();
     await logout();
     router.push("/login");
   }
