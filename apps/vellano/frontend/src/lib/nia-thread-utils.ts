@@ -30,6 +30,45 @@ export function messageHasStructuredCard(message: NiaMessage): boolean {
   return STRUCTURED_CARD_KINDS.has(String(payload.kind));
 }
 
+export function latestNeedsOkToolCallId(messages: NiaMessage[]): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const payload = message?.structured_payload;
+    if (!payload || typeof payload !== "object" || !("kind" in payload)) {
+      if (message?.role === "assistant" && message.content.trim().length > 0) {
+        return null;
+      }
+      continue;
+    }
+    if (payload.kind !== "needs_ok") {
+      if (message.role === "assistant") {
+        return null;
+      }
+      continue;
+    }
+    const toolCallId = "tool_call_id" in payload ? payload.tool_call_id : null;
+    return typeof toolCallId === "string" && toolCallId.trim().length > 0
+      ? toolCallId
+      : null;
+  }
+  return null;
+}
+
+export function messageNeedsOkIsActionable(
+  message: NiaMessage,
+  currentToolCallId: string | null,
+): boolean {
+  const payload = message.structured_payload;
+  if (!payload || typeof payload !== "object" || !("kind" in payload)) {
+    return false;
+  }
+  if (payload.kind !== "needs_ok" || currentToolCallId === null) {
+    return false;
+  }
+  const toolCallId = "tool_call_id" in payload ? payload.tool_call_id : null;
+  return toolCallId === currentToolCallId;
+}
+
 /** Dock prose is independent of structured cards (opened_page is optional extra). */
 export function messageShowsDockProse(message: Pick<NiaMessage, "content">): boolean {
   return message.content.trim().length > 0;

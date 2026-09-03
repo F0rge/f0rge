@@ -7,11 +7,14 @@ from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
+from pydantic_ai import DeferredToolRequests
+from pydantic_ai.messages import ToolCallPart
 from pydantic_ai import models
 from pydantic_ai.models.test import TestModel
 
 from app.config import settings
 from app.nia.catalog import CATALOG
+from app.nia.hitl import pending_from_deferred, richer_needs_ok
 import app.nia  # noqa: F401 — register tools
 
 models.ALLOW_MODEL_REQUESTS = False
@@ -347,6 +350,117 @@ async def test_create_sku_owner_hitl_then_exists(
     after = await owner.get("/api/v1/skus")
     assert after.status_code == 200
     assert any(row["our_ref"] == sku_args["our_ref"] for row in after.json())
+
+
+async def test_update_sku_hitl_accept_applies_without_second_model_call(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created = await owner_client.post("/api/v1/skus", json=_sku_create_args("UPDATE"))
+    assert created.status_code == 201
+    sku_id = created.json()["id"]
+    build_calls: list[str] = []
+
+    def build_nia_model() -> ArgsTestModel:
+        build_calls.append("called")
+        return _tool_call_model(
+            "run_nia_action",
+            {
+                "action_id": "update_sku",
+                "args": {
+                    "sku_id": sku_id,
+                    "retail_inc_vat": "1500.00",
+                    "our_barcode": None,
+                },
+            },
+        )
+
+    monkeypatch.setattr("app.services.nia_run.build_nia_model", build_nia_model)
+    owner = await _login(async_client, "owner@example.com", settings.seed_owner_password)
+    thread_id = await _create_thread(owner)
+
+    run = await owner.post(
+        f"/api/v1/nia/threads/{thread_id}/run",
+        json={"message": "update it"},
+    )
+    assert run.status_code == 200
+    await _consume_stream(run)
+    assert len(build_calls) == 1
+
+    thread_before = await owner.get(f"/api/v1/nia/threads/{thread_id}")
+    assistant = next(m for m in thread_before.json()["messages"] if m["role"] == "assistant")
+    payload = assistant["structured_payload"]
+    assert payload["kind"] == "needs_ok"
+    assert payload["action_id"] == "update_sku"
+    assert payload["args"] == {"sku_id": sku_id, "retail_inc_vat": "1500.00"}
+    assert "retail_inc_vat=1500.00" in payload["body"]
+    assert "our_barcode=None" not in payload["body"]
+
+    before = await owner.get(f"/api/v1/skus/{sku_id}")
+    assert before.status_code == 200
+    assert before.json()["retail_inc_vat"] != "1500.00"
+
+    resume = await owner.post(
+        f"/api/v1/nia/threads/{thread_id}/resume",
+        json={"decision": "accept", "tool_call_id": payload["tool_call_id"]},
+    )
+    assert resume.status_code == 200
+    assert resume.json() == {"ok": True}
+    assert len(build_calls) == 1
+
+    after = await owner.get(f"/api/v1/skus/{sku_id}")
+    assert after.status_code == 200
+    assert after.json()["retail_inc_vat"] == "1500.00"
+
+
+@pytest.mark.no_db
+def test_pending_from_deferred_keeps_one_richest_run_nia_action_approval() -> None:
+    sparse = ToolCallPart("run_nia_action", {"action_id": "update_sku"}, tool_call_id="sparse")
+    rich = ToolCallPart("run_nia_action", {"action_id": "update_sku"}, tool_call_id="rich")
+    output = DeferredToolRequests(
+        approvals=[sparse, rich],
+        metadata={
+            "sparse": {
+                "kind": "needs_ok",
+                "title": "Update SKU",
+                "body": "Update SKU: sku_id=sku-1",
+                "action_id": "update_sku",
+                "args": {"sku_id": "sku-1"},
+            },
+            "rich": {
+                "kind": "needs_ok",
+                "title": "Update SKU",
+                "body": "Update SKU: sku_id=sku-1, retail_inc_vat=1500.00",
+                "action_id": "update_sku",
+                "args": {"sku_id": "sku-1", "retail_inc_vat": "1500.00"},
+            },
+        },
+    )
+
+    pending = pending_from_deferred(output)
+
+    assert pending is not None
+    assert pending["tool_call_id"] == "rich"
+    assert pending["tool_name"] == "run_nia_action"
+    assert pending["action_id"] == "update_sku"
+    assert pending["args"] == {"sku_id": "sku-1", "retail_inc_vat": "1500.00"}
+
+
+@pytest.mark.no_db
+def test_richer_needs_ok_keeps_existing_richer_payload() -> None:
+    rich = {"kind": "needs_ok", "args": {"sku_id": "sku-1", "retail_inc_vat": "1500.00"}}
+    sparse = {"kind": "needs_ok", "args": {"sku_id": "sku-1"}}
+
+    assert richer_needs_ok(rich, sparse) is rich
+
+
+@pytest.mark.no_db
+def test_richer_needs_ok_replaces_existing_sparse_payload() -> None:
+    sparse = {"kind": "needs_ok", "args": {"sku_id": "sku-1"}}
+    rich = {"kind": "needs_ok", "args": {"sku_id": "sku-1", "retail_inc_vat": "1500.00"}}
+
+    assert richer_needs_ok(sparse, rich) is rich
 
 
 async def test_create_sku_till_permission_string_no_hitl(

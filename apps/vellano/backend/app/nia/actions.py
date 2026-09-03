@@ -343,9 +343,16 @@ def redact_mapping(value: Any) -> Any:
 
 
 def hitl_body(action: NiaAction, data: BaseModel) -> str:
-    dumped = redact_mapping(data.model_dump(mode="json"))
+    dumped = redact_mapping(data.model_dump(mode="json", exclude_unset=True, exclude_none=True))
     if not dumped:
         summary = action.title
+    elif action.id == "update_sku" and dumped.get("sku_id"):
+        sku_id = dumped["sku_id"]
+        parts = [f"{key}={item}" for key, item in dumped.items() if key != "sku_id"]
+        if parts:
+            summary = f"{action.title} {sku_id}: {', '.join(parts)}"
+        else:
+            summary = f"{action.title} {sku_id}"
     else:
         parts = [f"{key}={item}" for key, item in dumped.items()]
         summary = f"{action.title}: {', '.join(parts)}"

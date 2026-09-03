@@ -44,6 +44,7 @@ type NiaStructuredCardProps = {
   onResumeComplete: () => void;
   onResumeError: (message: string) => void;
   streaming: boolean;
+  actionable: boolean;
 };
 
 function isNeedsOk(payload: NiaStructuredPayload): payload is NiaNeedsOkPayload {
@@ -443,6 +444,7 @@ export function NiaStructuredCard({
   onResumeComplete,
   onResumeError,
   streaming,
+  actionable,
 }: NiaStructuredCardProps) {
   const payload = message.structured_payload;
   if (!payload || typeof payload !== "object" || !("kind" in payload)) {
@@ -540,32 +542,34 @@ export function NiaStructuredCard({
       <Tile className="vellano-nia-card vellano-nia-card--approval">
         <p className="cds--type-label-01">{structured.title}</p>
         <p className="cds--type-body-01">{structured.body}</p>
-        <div className="vellano-nia-card__actions">
-          <Button
-            size="sm"
-            kind="primary"
-            disabled={streaming}
-            onClick={() => void handleDecision("accept")}
-          >
-            Accept
-          </Button>
-          <Button
-            size="sm"
-            kind="secondary"
-            disabled={streaming}
-            onClick={() => void handleDecision("decline")}
-          >
-            Decline
-          </Button>
-          <Button
-            size="sm"
-            kind="ghost"
-            disabled={streaming}
-            onClick={() => void handleDecision("cancel")}
-          >
-            Cancel
-          </Button>
-        </div>
+        {actionable ? (
+          <div className="vellano-nia-card__actions">
+            <Button
+              size="sm"
+              kind="primary"
+              disabled={streaming}
+              onClick={() => void handleDecision("accept")}
+            >
+              Accept
+            </Button>
+            <Button
+              size="sm"
+              kind="secondary"
+              disabled={streaming}
+              onClick={() => void handleDecision("decline")}
+            >
+              Decline
+            </Button>
+            <Button
+              size="sm"
+              kind="ghost"
+              disabled={streaming}
+              onClick={() => void handleDecision("cancel")}
+            >
+              Cancel
+            </Button>
+          </div>
+        ) : null}
       </Tile>
     );
   }

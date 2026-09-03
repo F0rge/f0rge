@@ -18,7 +18,7 @@ from app.models.nia import NiaMessageRole
 from app.nia.agent import NiaDeps, build_nia_model, nia_agent
 from app.nia.canvas import canvas_payload_to_persist, spec_from_thread_payloads
 from app.nia.catalog import CATALOG_BY_ID
-from app.nia.dispatch import _serialize
+from app.nia.dispatch import _serialize, dump_action_args
 from app.nia.fields import (
     FIELDS_ASSISTANT_TEXT,
     FIELDS_SOURCE,
@@ -29,6 +29,7 @@ from app.nia.hitl import (
     CANCELLED_ASSISTANT_TEXT,
     NEEDS_OK_ASSISTANT_TEXT,
     dump_agent_messages,
+    is_needs_ok_payload,
     load_agent_messages,
     pending_from_deferred,
 )
@@ -274,13 +275,14 @@ class NiaRunService:
             deps=deps,
         )
         if assistant_text or structured_payload:
-            await self.threads.append_message(
-                user_id,
-                thread_id,
-                NiaMessageRole.ASSISTANT.value,
-                assistant_text or "",
+            structured_payload = await self._append_assistant_result(
+                user_id=user_id,
+                thread_id=thread_id,
+                content=assistant_text or "",
                 structured_payload=structured_payload,
             )
+            if is_needs_ok_payload(structured_payload):
+                pending_tools = structured_payload
         await self.threads.save_agent_state(
             user_id,
             thread_id,
@@ -323,19 +325,44 @@ class NiaRunService:
             deps=deps,
         )
         if assistant_text or structured_payload:
-            await self.threads.append_message(
-                user_id,
-                thread_id,
-                NiaMessageRole.ASSISTANT.value,
-                assistant_text or "",
+            structured_payload = await self._append_assistant_result(
+                user_id=user_id,
+                thread_id=thread_id,
+                content=assistant_text or "",
                 structured_payload=structured_payload,
             )
+            if is_needs_ok_payload(structured_payload):
+                pending_tools = structured_payload
         await self.threads.save_agent_state(
             user_id,
             thread_id,
             agent_messages=agent_messages,
             pending_tools=pending_tools,
         )
+
+    async def _append_assistant_result(
+        self,
+        *,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        content: str,
+        structured_payload: Optional[dict[str, Any]],
+    ) -> Optional[dict[str, Any]]:
+        if is_needs_ok_payload(structured_payload):
+            return await self.threads.append_or_replace_needs_ok(
+                user_id,
+                thread_id,
+                content,
+                structured_payload,
+            )
+        await self.threads.append_message(
+            user_id,
+            thread_id,
+            NiaMessageRole.ASSISTANT.value,
+            content,
+            structured_payload=structured_payload,
+        )
+        return structured_payload
 
     async def _append_preserved_canvas(
         self,
@@ -587,6 +614,7 @@ class NiaRunService:
             return JSONResponse(content={"ok": True, "kind": NEEDS_FIELDS_KIND})
 
         if action.write:
+            persisted_args = dump_action_args(data)
             payload = {
                 "kind": "needs_ok",
                 "title": action.title,
@@ -595,7 +623,7 @@ class NiaRunService:
                 "tool_name": "run_nia_action",
                 "tool_call_id": pending.get("tool_call_id") or str(uuid.uuid4()),
                 "action_id": action.id,
-                "args": data.model_dump(mode="json"),
+                "args": persisted_args,
                 "source": FIELDS_SOURCE,
             }
             await self.threads.save_agent_state(
@@ -815,7 +843,11 @@ class NiaRunService:
                 agent_messages=thread.agent_messages,
             )
 
-        if pending.get("source") == FIELDS_SOURCE and pending.get("kind") == "needs_ok":
+        if (
+            pending.get("kind") == "needs_ok"
+            and pending.get("action_id")
+            and isinstance(pending.get("args"), dict)
+        ):
             return await self._resume_fields_approval(
                 user_id=user_id,
                 thread_id=thread_id,

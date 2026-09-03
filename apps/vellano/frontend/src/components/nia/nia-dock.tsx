@@ -71,7 +71,9 @@ import {
 import { appendToolLine } from "@/lib/nia-thinking";
 import {
   formatRelativeThreadTime,
+  latestNeedsOkToolCallId,
   messageHasStructuredCard,
+  messageNeedsOkIsActionable,
   messageShowsDockProse,
   syncCanvasSpecFromThread,
 } from "@/lib/nia-thread-utils";
@@ -181,6 +183,7 @@ function NiaConversation({
   messagesEndRef,
 }: NiaConversationProps) {
   const hasUserMessage = messages.some((message) => message.role === "user");
+  const latestApprovalToolCallId = latestNeedsOkToolCallId(messages);
 
   return (
     <>
@@ -217,6 +220,7 @@ function NiaConversation({
                       streaming={streaming}
                       onResumeComplete={onResumeComplete}
                       onResumeError={onResumeError}
+                      actionable={messageNeedsOkIsActionable(message, latestApprovalToolCallId)}
                     />
                   ) : null}
                 </div>

@@ -3144,6 +3144,8 @@ export type NiaNeedsOkPayload = {
   tool_call_id: string;
   tool_name?: string;
   actions?: string[];
+  action_id?: string;
+  args?: Record<string, unknown>;
 };
 
 export type NiaFieldType = "text" | "number" | "date" | "boolean" | "select" | "json";
