@@ -74,6 +74,7 @@ def _sku_args(suffix: str) -> dict:
     }
 
 
+@pytest.mark.no_db
 def test_preset_cron_and_min_interval() -> None:
     assert resolve_cron("weekdays_08") == "0 8 * * 1-5"
     validate_min_interval("hourly", "Africa/Johannesburg")
@@ -81,6 +82,15 @@ def test_preset_cron_and_min_interval() -> None:
         validate_min_interval("*/5 * * * *", "Africa/Johannesburg")
 
 
+@pytest.mark.no_db
+def test_weekdays_08_next_run_is_08_sast_not_15() -> None:
+    """Wed 23:00 SAST → Thu 08:00 SAST (06:00 UTC), never 15:00."""
+    now = datetime.datetime(2026, 9, 2, 21, 0, 0)  # Wed 23:00 SAST
+    nxt = next_fire("weekdays_08", "Africa/Johannesburg", now)
+    assert nxt == datetime.datetime(2026, 9, 3, 6, 0, 0)
+
+
+@pytest.mark.no_db
 def test_next_and_previous_fire_sast() -> None:
     now = datetime.datetime(2026, 9, 2, 6, 5, 0)  # 08:05 SAST
     nxt = next_fire("daily_08", "Africa/Johannesburg", now)

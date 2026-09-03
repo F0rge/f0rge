@@ -4,7 +4,7 @@ import datetime
 import uuid
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 
 class NiaHealthResponse(BaseModel):
@@ -158,6 +158,14 @@ class NiaScheduledTaskResponse(BaseModel):
     next_run_at: Optional[datetime.datetime] = None
     last_thread_id: Optional[uuid.UUID] = None
     created_at: datetime.datetime
+
+    @field_serializer("next_run_at")
+    def serialize_utc(self, value: Optional[datetime.datetime]) -> Optional[str]:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.timezone.utc)
+        return value.isoformat().replace("+00:00", "Z")
 
 
 class NiaScheduledRunResponse(BaseModel):

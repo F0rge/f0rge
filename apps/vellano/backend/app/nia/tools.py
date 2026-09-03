@@ -454,6 +454,13 @@ async def propose_transfer(
                     f"Create draft transfer of {qty} × {sku.strip()} "
                     f"from {from_location.strip()} to {to_location.strip()}?"
                 ),
+                "from_location_id": str(from_id),
+                "to_location_id": str(to_id),
+                "sku_id": str(sku_id),
+                "qty": qty,
+                "sku": sku.strip(),
+                "from_location": from_location.strip(),
+                "to_location": to_location.strip(),
             }
         )
 
