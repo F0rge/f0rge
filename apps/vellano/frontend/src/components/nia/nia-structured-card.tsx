@@ -106,6 +106,41 @@ export function coerceNeedsFieldsValues(
   return out;
 }
 
+export function fieldHasValue(value: string | undefined): boolean {
+  return (value ?? "").trim() !== "";
+}
+
+export function isMissingRequiredError(error: string | undefined): boolean {
+  if (!error) return false;
+  const normalized = error.trim().toLowerCase();
+  return (
+    normalized === "field required" ||
+    normalized === "required" ||
+    normalized.includes("field required") ||
+    normalized.includes("field should not be empty")
+  );
+}
+
+export function isNeedsFieldInvalid(
+  field: Pick<NiaFieldSpec, "required" | "error">,
+  currentValue: string | undefined,
+): boolean {
+  if (fieldHasValue(currentValue)) {
+    if (!field.error) return false;
+    if (isMissingRequiredError(field.error)) return false;
+    return true; // keep real format/type errors
+  }
+  if (field.required) return true;
+  return Boolean(field.error);
+}
+
+export function needsFieldsFormComplete(
+  fields: Array<Pick<NiaFieldSpec, "id" | "required">>,
+  values: Record<string, string>,
+): boolean {
+  return fields.every((field) => !field.required || fieldHasValue(values[field.id]));
+}
+
 function NeedsFieldsCard({
   payload,
   threadId,
@@ -150,7 +185,12 @@ function NeedsFieldsCard({
       {payload.body ? <p className="cds--type-body-01">{payload.body}</p> : null}
       <div className="vellano-nia-card__fields">
         {payload.fields.map((field) => {
-          const invalid = Boolean(field.error);
+          const invalid = isNeedsFieldInvalid(field, values[field.id]);
+          const invalidText = !invalid
+            ? undefined
+            : field.error && !isMissingRequiredError(field.error)
+              ? field.error
+              : "Field required";
           if (field.type === "number") {
             return (
               <NumberInput
@@ -160,7 +200,7 @@ function NeedsFieldsCard({
                 value={values[field.id] ?? ""}
                 required={field.required}
                 invalid={invalid}
-                invalidText={field.error}
+                invalidText={invalidText}
                 hideSteppers
                 onChange={(_event, state) => {
                   const next = state?.value;
@@ -182,7 +222,7 @@ function NeedsFieldsCard({
                 itemToString={(item) => (item ? item.text : "")}
                 selectedItem={selected}
                 invalid={invalid}
-                invalidText={field.error}
+                invalidText={invalidText}
                 onChange={({ selectedItem }) => {
                   setField(field.id, selectedItem?.id ?? "");
                 }}
@@ -198,7 +238,7 @@ function NeedsFieldsCard({
                 value={values[field.id] ?? ""}
                 required={field.required}
                 invalid={invalid}
-                invalidText={field.error}
+                invalidText={invalidText}
                 rows={4}
                 onChange={(event) => setField(field.id, event.target.value)}
               />
@@ -213,14 +253,19 @@ function NeedsFieldsCard({
               value={values[field.id] ?? ""}
               required={field.required}
               invalid={invalid}
-              invalidText={field.error}
+              invalidText={invalidText}
               onChange={(event) => setField(field.id, event.target.value)}
             />
           );
         })}
       </div>
       <div className="vellano-nia-card__actions">
-        <Button size="sm" kind="primary" disabled={streaming || submitting} onClick={() => void handleSubmit()}>
+        <Button
+          size="sm"
+          kind="primary"
+          disabled={streaming || submitting || !needsFieldsFormComplete(payload.fields, values)}
+          onClick={() => void handleSubmit()}
+        >
           Continue
         </Button>
       </div>
