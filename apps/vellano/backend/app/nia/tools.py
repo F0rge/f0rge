@@ -193,7 +193,8 @@ async def search(ctx: RunContext[NiaDeps], q: str) -> Union[dict[str, Any], str]
 async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str, Any]], str]:
     """List unpaid invoices past 30-day terms (issue_date + 30).
 
-    Summarise the chase recommendation in the assistant message first, then optionally open a page.
+    Summarise the requested invoice facts neutrally. Recommend chasing only when
+    the current user message explicitly asks for that recommendation.
     """
     denied = _require_nia_use(ctx.deps)
     if denied:

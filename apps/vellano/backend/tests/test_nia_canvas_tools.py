@@ -9,6 +9,7 @@ from pydantic_ai.models.test import TestModel
 
 from app.config import settings
 from app.nia.agent import NIA_INSTRUCTIONS
+from app.nia.tools import list_overdue_invoices
 from app.nia.canvas import (
     add_canvas_component,
     empty_canvas_spec,
@@ -90,12 +91,21 @@ def test_instructions_tell_nia_to_clear_canvas() -> None:
 
 
 @pytest.mark.no_db
-def test_instructions_tell_nia_to_write_chase_recommendation() -> None:
+def test_instructions_limit_chase_recommendations_to_explicit_requests() -> None:
+    assert "Answer the current user's actual question" in NIA_INSTRUCTIONS
+    assert "Conversation history is context, not a new request" in NIA_INSTRUCTIONS
+    assert "Never invent a decision or recommendation question" in NIA_INSTRUCTIONS
+    assert 'Do not begin with "Yes", "No", or other agreement' in NIA_INSTRUCTIONS
+    assert 'Do not reflexively end answers with "Want me to…?"' in NIA_INSTRUCTIONS
+    assert "Only when the current user message explicitly asks" in NIA_INSTRUCTIONS
     assert "write the recommendation in the assistant message in plain language" in NIA_INSTRUCTIONS
     assert "invoice number, customer name, amount" in NIA_INSTRUCTIONS
     assert 'yes/no (or "ask a human because…")' in NIA_INSTRUCTIONS
+    assert "is a factual lookup, not a request for a chase recommendation" in NIA_INSTRUCTIONS
     assert "NEVER a substitute for the answer" in NIA_INSTRUCTIONS
     assert "Do not invent email, payment, or SARS actions" in NIA_INSTRUCTIONS
+    assert "requested invoice facts neutrally" in (list_overdue_invoices.__doc__ or "")
+    assert "explicitly asks for that recommendation" in (list_overdue_invoices.__doc__ or "")
 
 
 @pytest.mark.no_db
