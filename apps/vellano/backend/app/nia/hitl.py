@@ -4,15 +4,36 @@ import json
 from typing import Any, Optional
 
 from pydantic_ai import DeferredToolRequests
-from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, ToolCallPart
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelMessagesTypeAdapter,
+    ModelRequest,
+    ToolCallPart,
+    UserPromptPart,
+)
 
 NEEDS_OK_ASSISTANT_TEXT = "Nia needs your approval"
 CANCELLED_ASSISTANT_TEXT = "Cancelled."
 DEMO_ECHO_TOOL_NAME = "demo_echo_approval"
+MAX_HISTORY_USER_TURNS = 20
+
+
+def limit_agent_messages(messages: list[ModelMessage]) -> list[ModelMessage]:
+    """Keep complete message groups for the most recent user turns."""
+    user_turn_starts = [
+        index
+        for index, message in enumerate(messages)
+        if isinstance(message, ModelRequest)
+        and any(isinstance(part, UserPromptPart) for part in message.parts)
+    ]
+    if len(user_turn_starts) <= MAX_HISTORY_USER_TURNS:
+        return messages
+    return messages[user_turn_starts[-MAX_HISTORY_USER_TURNS] :]
 
 
 def dump_agent_messages(messages: list[ModelMessage]) -> list[Any]:
-    return json.loads(ModelMessagesTypeAdapter.dump_json(messages))
+    bounded = limit_agent_messages(messages)
+    return json.loads(ModelMessagesTypeAdapter.dump_json(bounded))
 
 
 def load_agent_messages(data: Optional[list[Any]]) -> list[ModelMessage]:

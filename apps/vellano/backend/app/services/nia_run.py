@@ -407,9 +407,10 @@ class NiaRunService:
         resume_decision: Optional[str] = None,
         pending_snapshot: Optional[dict[str, Any]] = None,
         agent_messages_snapshot: Optional[list[Any]] = None,
+        is_resume: bool = False,
     ) -> Response:
         async def on_complete(result: Any) -> AsyncIterator[Any]:
-            if message_history is None:
+            if not is_resume:
                 await self._persist_run_result(
                     user_id=user_id,
                     thread_id=thread_id,
@@ -463,7 +464,7 @@ class NiaRunService:
         thread_id: uuid.UUID,
         request: Request,
     ) -> Response:
-        await self.threads.get_thread(user_id, thread_id)
+        thread = await self.threads.get_owned_thread(user_id, thread_id)
 
         body = await request.body()
         run_input = build_run_input(body, thread_id)
@@ -475,6 +476,7 @@ class NiaRunService:
 
         deps = await self._build_deps(user_id, run_input, thread_id)
         user_text = _last_user_message_text(run_input)
+        message_history = load_agent_messages(thread.agent_messages)
 
         return self._streaming_response(
             run_input=run_input,
@@ -482,6 +484,7 @@ class NiaRunService:
             user_id=user_id,
             thread_id=thread_id,
             user_text=user_text,
+            message_history=message_history,
         )
 
     async def run_prompt(
@@ -492,7 +495,7 @@ class NiaRunService:
         prompt: str,
     ) -> tuple[str, Optional[str]]:
         """In-process Nia run used by the scheduler. Does not auto-approve writes."""
-        await self.threads.get_thread(user_id, thread_id)
+        thread = await self.threads.get_owned_thread(user_id, thread_id)
         if not settings.openrouter_api_key.strip():
             raise NiaLlmUnconfiguredError()
         await check_nia_budget(self.db, user_id)
@@ -506,6 +509,7 @@ class NiaRunService:
             prompt,
             deps=deps,
             model=build_nia_model(),
+            message_history=load_agent_messages(thread.agent_messages),
         )
         await self._persist_run_result(
             user_id=user_id,
@@ -884,4 +888,5 @@ class NiaRunService:
             resume_decision=body.decision,
             pending_snapshot=dict(pending),
             agent_messages_snapshot=thread.agent_messages,
+            is_resume=True,
         )
