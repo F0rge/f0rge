@@ -26,6 +26,10 @@ from app.schemas.user import UserResponse
 # In-process services only — never HTTP-to-self against /api/v1 from this package.
 
 
+def dump_action_args(data: BaseModel) -> dict[str, Any]:
+    return data.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+
+
 def _serialize(value: Any) -> Any:
     if value is None:
         return {"ok": True}
@@ -96,11 +100,15 @@ async def run_nia_action(
         return _format_pydantic_errors(exc)
 
     if action.write and not ctx.tool_call_approved:
+        persisted_args = dump_action_args(data)
         raise ApprovalRequired(
             metadata={
                 "kind": "needs_ok",
                 "title": action.title,
                 "body": hitl_body(action, data),
+                "action_id": action.id,
+                "args": persisted_args,
+                "tool_name": "run_nia_action",
             }
         )
 

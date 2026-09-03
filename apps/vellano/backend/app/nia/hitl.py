@@ -16,6 +16,7 @@ NEEDS_OK_ASSISTANT_TEXT = "Nia needs your approval"
 CANCELLED_ASSISTANT_TEXT = "Cancelled."
 DEMO_ECHO_TOOL_NAME = "demo_echo_approval"
 MAX_HISTORY_USER_TURNS = 20
+IDENTIFIER_ARG_KEYS = frozenset({"id", "sku_id", "tool_call_id"})
 
 
 def limit_agent_messages(messages: list[ModelMessage]) -> list[ModelMessage]:
@@ -55,10 +56,22 @@ def build_needs_ok_payload(approval: ToolCallPart) -> dict[str, Any]:
     }
 
 
-def pending_from_deferred(output: DeferredToolRequests) -> Optional[dict[str, Any]]:
-    if not output.approvals:
-        return None
-    approval = output.approvals[0]
+def _nonnull_change_count(payload: dict[str, Any]) -> int:
+    args = payload.get("args")
+    if not isinstance(args, dict):
+        return 0
+    count = 0
+    for key, value in args.items():
+        if key in IDENTIFIER_ARG_KEYS or value is None:
+            continue
+        count += 1
+    return count
+
+
+def _payload_from_approval(
+    output: DeferredToolRequests,
+    approval: ToolCallPart,
+) -> dict[str, Any]:
     meta = output.metadata.get(approval.tool_call_id or "")
     if isinstance(meta, dict) and meta.get("kind"):
         payload = dict(meta)
@@ -67,6 +80,13 @@ def pending_from_deferred(output: DeferredToolRequests) -> Optional[dict[str, An
         payload.setdefault("actions", ["accept", "decline", "cancel"])
         return payload
     return build_needs_ok_payload(approval)
+
+
+def pending_from_deferred(output: DeferredToolRequests) -> Optional[dict[str, Any]]:
+    if not output.approvals:
+        return None
+    payloads = [_payload_from_approval(output, approval) for approval in output.approvals]
+    return max(payloads, key=_nonnull_change_count)
 
 
 def resolve_approval_part(
