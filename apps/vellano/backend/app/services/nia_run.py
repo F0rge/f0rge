@@ -35,6 +35,8 @@ from app.nia.hitl import (
 from app.nia.actions import action_allowed, hitl_body, missing_permission_message
 from app.nia.tools import PROPOSE_TRANSFER_TOOL
 from app.schemas.nia import NiaResumeRequest
+from app.schemas.transfer import TransferCreate, TransferLineCreate
+from app.services.transfers import TransferService
 from pydantic import ValidationError as PydanticValidationError
 from app.services.nia_audit import NiaAuditService, extract_tool_args
 from app.services.nia_caps import check_nia_budget
@@ -139,9 +141,36 @@ def build_run_input(body: bytes, thread_id: uuid.UUID) -> RunAgentInput:
     return AGUIAdapter.build_run_input(json.dumps(payload).encode("utf-8"))
 
 
-def _assistant_text_from_output(output: Any) -> str:
+def _text_from_messages(messages: Any) -> str:
+    texts: list[str] = []
+    for msg in messages or []:
+        parts = getattr(msg, "parts", None)
+        if not parts:
+            continue
+        for part in parts:
+            kind = getattr(part, "part_kind", None) or getattr(part, "kind", None)
+            name = type(part).__name__
+            if kind not in ("text", "text-delta") and name not in ("TextPart",):
+                continue
+            content = getattr(part, "content", None)
+            if isinstance(content, str) and content.strip():
+                texts.append(content.strip())
+    return texts[-1] if texts else ""
+
+
+def _assistant_text_from_output(output: Any, messages: Any = None) -> str:
     if isinstance(output, DeferredToolRequests):
         return NEEDS_OK_ASSISTANT_TEXT
+    model_text = _text_from_messages(messages)
+    if isinstance(output, dict):
+        kind = output.get("kind")
+        if kind == "opened_page":
+            return model_text or f"Opened {output.get('path') or 'page'}."
+        if model_text:
+            return model_text
+        return ""
+    if model_text:
+        return model_text
     return str(output)
 
 
@@ -227,7 +256,7 @@ class NiaRunService:
         deps: NiaDeps,
     ) -> None:
         output = result.output
-        assistant_text = _assistant_text_from_output(output)
+        assistant_text = _assistant_text_from_output(output, result.all_messages())
         structured_payload, pending_tools = _payload_and_pending(output, deps)
         agent_messages = dump_agent_messages(result.all_messages())
 
@@ -238,12 +267,12 @@ class NiaRunService:
                 NiaMessageRole.USER.value,
                 user_text,
             )
-        if assistant_text:
+        if assistant_text or structured_payload:
             await self.threads.append_message(
                 user_id,
                 thread_id,
                 NiaMessageRole.ASSISTANT.value,
-                assistant_text,
+                assistant_text or "",
                 structured_payload=structured_payload,
             )
         await self.threads.save_agent_state(
@@ -277,16 +306,16 @@ class NiaRunService:
         deps: NiaDeps,
     ) -> None:
         output = result.output
-        assistant_text = _assistant_text_from_output(output)
+        assistant_text = _assistant_text_from_output(output, result.all_messages())
         structured_payload, pending_tools = _payload_and_pending(output, deps)
         agent_messages = dump_agent_messages(result.all_messages())
 
-        if assistant_text:
+        if assistant_text or structured_payload:
             await self.threads.append_message(
                 user_id,
                 thread_id,
                 NiaMessageRole.ASSISTANT.value,
-                assistant_text,
+                assistant_text or "",
                 structured_payload=structured_payload,
             )
         await self.threads.save_agent_state(
@@ -671,6 +700,64 @@ class NiaRunService:
         )
         return JSONResponse(content={"ok": True})
 
+    async def _resume_propose_transfer_accept(
+        self,
+        *,
+        user_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        pending: dict[str, Any],
+    ) -> JSONResponse:
+        """Create the draft transfer from stored HITL args (no second LLM round)."""
+        from_id = _parse_optional_uuid(pending.get("from_location_id"))
+        to_id = _parse_optional_uuid(pending.get("to_location_id"))
+        sku_id = _parse_optional_uuid(pending.get("sku_id"))
+        try:
+            qty = int(pending.get("qty") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        if from_id is None or to_id is None or sku_id is None or qty <= 0:
+            raise ValidationError("Transfer approval is missing location or SKU details")
+
+        transfer = await TransferService(self.db).create(
+            TransferCreate(
+                from_location_id=from_id,
+                to_location_id=to_id,
+                lines=[TransferLineCreate(sku_id=sku_id, qty=qty)],
+            ),
+            user_id,
+        )
+        payload = {
+            "kind": "transfer_draft",
+            "transfer_id": str(transfer.id),
+            "transfer_number": transfer.transfer_number,
+            "status": transfer.status.value,
+            "undoable": True,
+            "citations": [{"label": transfer.transfer_number, "href": "/transfers"}],
+        }
+        await self.audit.record(
+            user_id=user_id,
+            thread_id=thread_id,
+            tool_name=PROPOSE_TRANSFER_TOOL,
+            args={
+                "from_location_id": str(from_id),
+                "to_location_id": str(to_id),
+                "sku_id": str(sku_id),
+                "qty": qty,
+            },
+            decision="accept",
+            entity_type="transfer",
+            entity_id=transfer.id,
+        )
+        await self.threads.clear_pending_tools(user_id, thread_id)
+        await self.threads.append_message(
+            user_id,
+            thread_id,
+            NiaMessageRole.ASSISTANT.value,
+            f"Transfer draft saved: {transfer.transfer_number}.",
+            structured_payload=payload,
+        )
+        return JSONResponse(content={"ok": True, "kind": "transfer_draft"})
+
     async def dispatch_resume(
         self,
         *,
@@ -697,6 +784,17 @@ class NiaRunService:
                 user_id=user_id,
                 thread_id=thread_id,
                 body=body,
+                pending=pending,
+            )
+
+        if (
+            body.decision == "accept"
+            and str(pending.get("tool_name") or "") == PROPOSE_TRANSFER_TOOL
+            and pending.get("from_location_id")
+        ):
+            return await self._resume_propose_transfer_accept(
+                user_id=user_id,
+                thread_id=thread_id,
                 pending=pending,
             )
 

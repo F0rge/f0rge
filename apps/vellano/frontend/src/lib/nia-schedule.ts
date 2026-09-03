@@ -1,10 +1,18 @@
 const DEFAULT_TZ = "Africa/Johannesburg";
 
+export function parseScheduleInstant(iso: string): Date {
+  const trimmed = iso.trim();
+  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(trimmed)) {
+    return new Date(trimmed);
+  }
+  return new Date(`${trimmed.replace(" ", "T")}Z`);
+}
+
 export function formatNextRun(iso: string | null, timezone: string): string {
   if (!iso) {
     return "—";
   }
-  const date = new Date(iso);
+  const date = parseScheduleInstant(iso);
   if (Number.isNaN(date.getTime())) {
     return iso;
   }

@@ -125,8 +125,14 @@ def _matches(local: datetime.datetime, cron_expr: str) -> bool:
     )
 
 
+def _as_utc_naive(when: datetime.datetime) -> datetime.datetime:
+    if when.tzinfo is None:
+        return when
+    return when.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+
 def _to_local(when: datetime.datetime, timezone_name: str) -> datetime.datetime:
-    aware = when.replace(tzinfo=datetime.timezone.utc)
+    aware = _as_utc_naive(when).replace(tzinfo=datetime.timezone.utc)
     return aware.astimezone(ZoneInfo(timezone_name))
 
 
@@ -144,7 +150,7 @@ def next_fire(
     after: datetime.datetime,
 ) -> Optional[datetime.datetime]:
     cron_expr = resolve_cron(cadence)
-    cursor = _floor_minute(after) + datetime.timedelta(minutes=1)
+    cursor = _floor_minute(_as_utc_naive(after)) + datetime.timedelta(minutes=1)
     limit = cursor + MAX_LOOKAHEAD
     while cursor <= limit:
         local = _to_local(cursor, timezone_name)
@@ -160,7 +166,7 @@ def previous_fire(
     at: datetime.datetime,
 ) -> Optional[datetime.datetime]:
     cron_expr = resolve_cron(cadence)
-    cursor = _floor_minute(at)
+    cursor = _floor_minute(_as_utc_naive(at))
     limit = cursor - MAX_LOOKAHEAD
     while cursor >= limit:
         local = _to_local(cursor, timezone_name)

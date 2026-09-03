@@ -53,6 +53,30 @@ function isNeedsFields(payload: NiaStructuredPayload): payload is NiaNeedsFields
   return payload.kind === "needs_fields";
 }
 
+const FIELD_VALUE_ALIASES: Record<string, string[]> = {
+  our_barcode: ["barcode", "our_barcode"],
+  our_ref: ["sku", "sku_code", "ref", "our_ref"],
+};
+
+function lookupSuppliedValue(
+  values: Record<string, unknown> | undefined,
+  fieldId: string,
+): unknown {
+  if (!values) {
+    return undefined;
+  }
+  if (values[fieldId] !== undefined && values[fieldId] !== null && String(values[fieldId]).trim() !== "") {
+    return values[fieldId];
+  }
+  for (const alias of FIELD_VALUE_ALIASES[fieldId] ?? []) {
+    const candidate = values[alias];
+    if (candidate !== undefined && candidate !== null && String(candidate).trim() !== "") {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
 export function initialFieldValues(payload: NiaNeedsFieldsPayload): Record<string, string> {
   const values: Record<string, string> = {};
   for (const field of payload.fields) {
@@ -64,7 +88,7 @@ export function initialFieldValues(payload: NiaNeedsFieldsPayload): Record<strin
         continue;
       }
     }
-    const supplied = payload.values?.[field.id];
+    const supplied = lookupSuppliedValue(payload.values, field.id);
     if (supplied !== undefined && supplied !== null) {
       values[field.id] = String(supplied);
       continue;

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import hashlib
 import logging
 import uuid
@@ -309,6 +310,8 @@ class NiaScheduleService:
         nxt = None
         if task.enabled:
             nxt = next_fire(task.cadence, task.timezone, now)
+            if nxt is not None and nxt.tzinfo is None:
+                nxt = nxt.replace(tzinfo=datetime.timezone.utc)
         stored = task.cadence
         preset = cadence_is_preset(stored)
         return NiaScheduledTaskResponse(

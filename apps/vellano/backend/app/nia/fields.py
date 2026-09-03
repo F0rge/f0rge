@@ -14,6 +14,25 @@ NEEDS_FIELDS_KIND = "needs_fields"
 FIELDS_ASSISTANT_TEXT = "Fill in the required fields to continue."
 FIELDS_SOURCE = "fields"
 
+# Model args Nia often names loosely (barcode vs our_barcode).
+FIELD_ALIASES: dict[str, str] = {
+    "barcode": "our_barcode",
+    "sku": "our_ref",
+    "sku_code": "our_ref",
+    "ref": "our_ref",
+}
+
+
+def canonical_field_values(supplied: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Copy supplied keys and map common aliases onto the Pydantic field ids."""
+    values: dict[str, Any] = dict(supplied or {})
+    for key, value in list(values.items()):
+        canonical = FIELD_ALIASES.get(key)
+        if canonical and canonical not in values:
+            values[canonical] = value
+    return values
+
+
 _FIELD_LABELS: dict[str, str] = {
     "our_ref": "Our ref",
     "our_barcode": "Our barcode",
@@ -148,7 +167,7 @@ def fields_from_model(
     exc: Optional[PydanticValidationError] = None,
 ) -> list[dict[str, Any]]:
     """Describe form fields from a Pydantic args model."""
-    values = supplied or {}
+    values = canonical_field_values(supplied)
     errors = _errors_by_field(exc)
     required_rows: list[dict[str, Any]] = []
     optional_rows: list[dict[str, Any]] = []
@@ -191,7 +210,7 @@ def build_needs_fields_payload(
     supplied: Optional[dict[str, Any]] = None,
     exc: Optional[PydanticValidationError] = None,
 ) -> dict[str, Any]:
-    values = dict(supplied or {})
+    values = canonical_field_values(supplied)
     return {
         "kind": NEEDS_FIELDS_KIND,
         "action_id": action.id,

@@ -20,6 +20,12 @@ describe("formatNextRun", () => {
     expect(label).toContain("2026");
     expect(label.includes("08:00") || label.includes("8:00")).toBe(true);
   });
+
+  it("treats naive ISO as UTC so weekdays 08:00 is not 15:00 SAST", () => {
+    const label = formatNextRun("2026-09-03T06:00:00", "Africa/Johannesburg");
+    expect(label.includes("08:00") || label.includes("8:00")).toBe(true);
+    expect(label.includes("15:00")).toBe(false);
+  });
 });
 
 describe("scheduleToggleStateLabel", () => {
