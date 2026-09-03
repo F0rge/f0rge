@@ -12,7 +12,7 @@ import {
   Tile,
 } from "@carbon/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -33,6 +33,7 @@ import {
   type NiaTransferDraftPayload,
   type TransferStatus,
 } from "@/lib/api";
+import { showViewCanvasButton } from "@/lib/nia-canvas-nav";
 import { clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
 import { niaInvoiceHref } from "@/lib/nia-navigation";
 import { canvasTableComponents } from "@/lib/nia-spreadsheet";
@@ -317,8 +318,10 @@ function CanvasSpecCard({
   spec: Parameters<typeof writeCanvasSpec>[0];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const tables = canvasTableComponents(spec);
   const tableOnly = tables.length > 0 && spec.components.every((component) => component.type === "table");
+  const showView = showViewCanvasButton(pathname);
 
   function handleView() {
     writeCanvasSpec(spec);
@@ -339,17 +342,20 @@ function CanvasSpecCard({
           compact
         />
       ))}
-      <div className="vellano-nia-card__actions">
-        <Button size="sm" kind={tableOnly ? "ghost" : "primary"} onClick={handleView}>
-          View Canvas
-        </Button>
-      </div>
+      {showView ? (
+        <div className="vellano-nia-card__actions">
+          <Button size="sm" kind={tableOnly ? "ghost" : "primary"} onClick={handleView}>
+            View Canvas
+          </Button>
+        </div>
+      ) : null}
     </Tile>
   );
 }
 
 function CanvasClearedCard() {
   const router = useRouter();
+  const pathname = usePathname();
 
   function handleView() {
     clearCanvasSpec();
@@ -360,11 +366,13 @@ function CanvasClearedCard() {
     <Tile className="vellano-nia-card vellano-nia-card--nav">
       <p className="cds--type-label-01">Canvas</p>
       <p className="cds--type-body-01">Canvas cleared</p>
-      <div className="vellano-nia-card__actions">
-        <Button size="sm" kind="ghost" onClick={handleView}>
-          View Canvas
-        </Button>
-      </div>
+      {showViewCanvasButton(pathname) ? (
+        <div className="vellano-nia-card__actions">
+          <Button size="sm" kind="ghost" onClick={handleView}>
+            View Canvas
+          </Button>
+        </div>
+      ) : null}
     </Tile>
   );
 }
