@@ -90,6 +90,15 @@ def test_instructions_tell_nia_to_clear_canvas() -> None:
 
 
 @pytest.mark.no_db
+def test_instructions_tell_nia_to_write_chase_recommendation() -> None:
+    assert "write the recommendation in the assistant message in plain language" in NIA_INSTRUCTIONS
+    assert "invoice number, customer name, amount" in NIA_INSTRUCTIONS
+    assert 'yes/no (or "ask a human because…")' in NIA_INSTRUCTIONS
+    assert "NEVER a substitute for the answer" in NIA_INSTRUCTIONS
+    assert "Do not invent email, payment, or SARS actions" in NIA_INSTRUCTIONS
+
+
+@pytest.mark.no_db
 def test_spec_helpers_clear_replace_add_remove() -> None:
     dining = {
         "kind": "canvas_spec",
