@@ -302,7 +302,7 @@ async def chart_dining_vs_sofas(
     ctx: RunContext[NiaDeps],
     mode: str = "replace",
 ) -> Union[dict[str, Any], str]:
-    """Chart dining vs sofa sales for the current calendar month on Canvas."""
+    """Chart dining vs sofa sales for the current calendar month on Canvas. Still call this when the same message also asks to draft or create a SKU."""
     denied = _require_nia_use(ctx.deps)
     if denied:
         return denied
@@ -331,7 +331,7 @@ async def chart_sales_by_sku(
     top_n: int = 8,
     mode: str = "replace",
 ) -> Union[dict[str, Any], str]:
-    """Chart top SKU sales this month on Canvas from the sales-by-SKU report."""
+    """Chart top SKU sales this month on Canvas from the sales-by-SKU report. Still call this when the same message also asks to draft or create a SKU."""
     denied = _require_nia_use(ctx.deps)
     if denied:
         return denied

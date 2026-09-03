@@ -75,7 +75,7 @@ async def run_nia_action(
     action_id: str,
     args: dict[str, Any],
 ) -> Any:
-    """Run a catalogue action by id. Writes need approval. Pass args as a JSON object."""
+    """Run a catalogue action by id. Writes need approval. Pass args as a JSON object. When the user also asked for a chart or ranking, call the chart tool in the same turn before this write."""
     action = CATALOG_BY_ID.get(action_id)
     if action is None:
         return f"Unknown action: {action_id}"

@@ -17,6 +17,8 @@ from app.nia.canvas import (
     set_canvas_spec,
     spec_from_thread_payloads,
 )
+from app.nia.dispatch import run_nia_action
+from app.nia.tools import chart_dining_vs_sofas, chart_sales_by_sku
 import app.nia  # noqa: F401 — register tools
 
 models.ALLOW_MODEL_REQUESTS = False
@@ -87,6 +89,23 @@ def test_instructions_tell_nia_to_clear_canvas() -> None:
     assert "add_canvas_component" in NIA_INSTRUCTIONS
     assert "chart_overdue_invoices" in NIA_INSTRUCTIONS
     assert "my only canvas action" not in NIA_INSTRUCTIONS.lower()
+
+
+@pytest.mark.no_db
+def test_instructions_tell_nia_chart_and_sku_in_one_turn() -> None:
+    text = NIA_INSTRUCTIONS.lower()
+    assert "do both in this turn" in text
+    assert "sku" in text
+    assert "write" in text
+    assert "call the chart tool first" in text
+    assert "do not require a second message" in text
+    assert 'because the prompt contains "and"' in text
+    dining_doc = chart_dining_vs_sofas.__doc__ or ""
+    sku_doc = chart_sales_by_sku.__doc__ or ""
+    write_doc = run_nia_action.__doc__ or ""
+    assert "draft or create a SKU" in dining_doc
+    assert "draft or create a SKU" in sku_doc
+    assert "call the chart tool in the same turn before this write" in write_doc
 
 
 @pytest.mark.no_db
