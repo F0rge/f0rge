@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatNiaWorkingTitle,
+  niaReasoningToggleLabel,
   niaThinkingBody,
   niaThinkingSummary,
   niaThinkingTitle,
   niaWorkingElapsedSeconds,
+  showNiaReasoningToggle,
   showNiaWorkingRow,
 } from "./nia-thinking";
 
@@ -47,7 +49,7 @@ describe("working-row timer helper", () => {
     expect(formatNiaWorkingTitle(12)).toBe("Working 12s");
   });
 
-  it("uses Working Ns as the title while waiting", () => {
+  it("does not put Working Ns on the reasoning accordion title", () => {
     expect(
       niaThinkingTitle({
         streaming: true,
@@ -56,10 +58,10 @@ describe("working-row timer helper", () => {
         toolNames: [],
         hasReasoning: false,
       }),
-    ).toBe("Working 12s");
+    ).toBe("Thinking");
   });
 
-  it("keeps Working Ns even when a tool is in flight", () => {
+  it("summarises the in-flight tool instead of Working Ns", () => {
     expect(
       niaThinkingTitle({
         streaming: true,
@@ -68,7 +70,30 @@ describe("working-row timer helper", () => {
         toolNames: ["create_sku"],
         hasReasoning: false,
       }),
-    ).toBe("Working 4s");
+    ).toBe("Calling create_sku…");
+  });
+
+  it("hides the reasoning accordion while the Working spinner is visible", () => {
+    expect(showNiaReasoningToggle({ working: true, hasActivity: true })).toBe(false);
+    expect(showNiaReasoningToggle({ working: false, hasActivity: true })).toBe(true);
+    expect(showNiaReasoningToggle({ working: false, hasActivity: false })).toBe(false);
+  });
+
+  it("labels the accordion Show reasoning instead of Working Ns", () => {
+    expect(
+      niaReasoningToggleLabel({
+        expanded: false,
+        streaming: true,
+        answerStarted: false,
+      }),
+    ).toBe("Show reasoning");
+    expect(
+      niaReasoningToggleLabel({
+        expanded: true,
+        streaming: false,
+        answerStarted: true,
+      }),
+    ).toBe("Hide reasoning");
   });
 
   it("leaves the body empty while waiting with no tools", () => {

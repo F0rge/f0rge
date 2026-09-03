@@ -42,6 +42,14 @@ export function niaThinkingSummary(options: {
   return "Thought for a few seconds";
 }
 
+export function niaReasoningToggleLabel(options: {
+  expanded: boolean;
+  streaming: boolean;
+  answerStarted: boolean;
+}): string {
+  return options.expanded ? "Hide reasoning" : "Show reasoning";
+}
+
 export function niaThinkingTitle(options: {
   streaming: boolean;
   answerStarted: boolean;
@@ -49,14 +57,19 @@ export function niaThinkingTitle(options: {
   toolNames: string[];
   hasReasoning: boolean;
 }): string {
-  if (options.streaming && !options.answerStarted) {
-    return formatNiaWorkingTitle(options.elapsedSeconds);
-  }
+  // Working Ns belongs only on the primary spinner; the accordion uses a quieter label.
   return niaThinkingSummary({
     toolNames: options.toolNames,
     hasReasoning: options.hasReasoning,
     answerStarted: options.answerStarted,
   });
+}
+
+export function showNiaReasoningToggle(options: {
+  working: boolean;
+  hasActivity: boolean;
+}): boolean {
+  return options.hasActivity && !options.working;
 }
 
 export function niaThinkingBody(options: {
