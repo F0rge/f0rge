@@ -1,17 +1,8 @@
 "use client";
 
-import {
-  DataTable,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tile,
-} from "@carbon/react";
+import { Tile } from "@carbon/react";
 
+import { NiaSpreadsheet } from "@/components/nia/nia-spreadsheet";
 import type {
   CanvasBarLineComponent,
   CanvasComponent,
@@ -157,43 +148,14 @@ function LineChart({ component }: { component: CanvasBarLineComponent }) {
 }
 
 function TableChart({ component }: { component: Extract<CanvasComponent, { type: "table" }> }) {
-  const headers = component.headers.map((header) => ({ key: header, header }));
-  const rows = component.rows.map((row, rowIndex) => ({
-    id: `${component.id}-row-${rowIndex}`,
-    ...Object.fromEntries(
-      component.headers.map((header, columnIndex) => [header, row[columnIndex] ?? ""]),
-    ),
-  }));
-
   return (
     <div className="vellano-canvas-chart">
-      <p className="cds--type-heading-compact-01">{component.title}</p>
-      <DataTable rows={rows} headers={headers} size="sm">
-        {({ rows: tableRows, headers: tableHeaders, getTableProps, getHeaderProps, getRowProps }) => (
-          <TableContainer>
-            <Table {...getTableProps()} size="sm">
-              <TableHead>
-                <TableRow>
-                  {tableHeaders.map((header) => (
-                    <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                      {header.header}
-                    </TableHeader>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {tableRows.map((row) => (
-                  <TableRow {...getRowProps({ row })} key={row.id}>
-                    {row.cells.map((cell) => (
-                      <TableCell key={cell.id}>{cell.value}</TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </DataTable>
+      <NiaSpreadsheet
+        title={component.title}
+        headers={component.headers}
+        rows={component.rows}
+        readOnly
+      />
     </div>
   );
 }
