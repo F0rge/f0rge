@@ -27,6 +27,7 @@ from app.routers import (
     export,
     food_analysis,
     health_metrics,
+    hypotheses,
     insights,
     lab_markers,
     labs,
@@ -218,6 +219,7 @@ app.include_router(airflow_internal.router)
 app.include_router(insights.router)
 app.include_router(signals.router)
 app.include_router(treatments.router)
+app.include_router(hypotheses.router)
 app.include_router(export.router)
 app.include_router(labs.router)
 app.include_router(settings_router.router)
