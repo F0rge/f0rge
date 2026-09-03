@@ -22,6 +22,7 @@ from app.services.nia_cadence import (
     resolve_cron,
     validate_min_interval,
 )
+from app.services.nia_run import NiaRunService
 from app.services.nia_schedule import ADVISORY_LOCK_KEY, NiaScheduleService
 from app.services.nia_usage import NiaUsageService
 from f0rge_core.exceptions import ValidationError
@@ -155,6 +156,84 @@ async def test_crud_own_tasks_only(
     assert deleted.status_code == 204
     missing = await owner.get(f"/api/v1/nia/schedule/{task_id}")
     assert missing.status_code == 404
+
+
+async def test_patch_enable_paused_task_does_not_run(
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execute_calls: list[object] = []
+    prompt_calls: list[object] = []
+
+    async def spy_execute(*args: object, **kwargs: object) -> None:
+        execute_calls.append((args, kwargs))
+
+    async def spy_run_prompt(*args: object, **kwargs: object) -> tuple[str, None]:
+        prompt_calls.append((args, kwargs))
+        return "should not run", None
+
+    monkeypatch.setattr(NiaScheduleService, "_execute_task", spy_execute)
+    monkeypatch.setattr(NiaRunService, "run_prompt", spy_run_prompt)
+
+    owner = await _login(owner_client, "owner@example.com", settings.seed_owner_password)
+    created = await owner.post(
+        "/api/v1/nia/schedule",
+        json={
+            "name": "QA overdue list",
+            "prompt": "List overdue invoices and summarise them.",
+            "cadence": "weekdays_08",
+            "timezone": "Africa/Johannesburg",
+            "enabled": False,
+        },
+    )
+    assert created.status_code == 201
+    body = created.json()
+    assert body["enabled"] is False
+    assert body["next_run_at"] is None
+    assert body["last_status"] is None
+    task_id = body["id"]
+
+    patched = await owner.patch(
+        f"/api/v1/nia/schedule/{task_id}",
+        json={"enabled": True},
+    )
+    assert patched.status_code == 200
+    enabled_body = patched.json()
+    assert enabled_body["enabled"] is True
+    assert enabled_body["next_run_at"]
+    assert enabled_body["last_status"] is None
+    error = enabled_body.get("last_error")
+    assert error is None or ("_build_deps" not in error and "thread_id" not in error)
+
+    listed = await owner.get("/api/v1/nia/schedule")
+    assert listed.status_code == 200
+    listed_row = next(row for row in listed.json() if row["id"] == task_id)
+    assert listed_row["enabled"] is True
+    assert listed_row["next_run_at"]
+
+    assert execute_calls == []
+    assert prompt_calls == []
+    runs = (
+        (
+            await async_db.execute(
+                sa.select(NiaScheduledRun).where(NiaScheduledRun.task_id == uuid.UUID(task_id))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert runs == []
+    threads = (
+        (
+            await async_db.execute(
+                sa.select(NiaThread).where(NiaThread.title.like("QA overdue list%"))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert threads == []
 
 
 async def test_max_ten_enabled_and_fast_cron(

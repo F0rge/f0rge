@@ -180,9 +180,11 @@ export function NiaScheduleSettings() {
   async function handleToggle(task: NiaScheduledTask, enabled: boolean) {
     setBusyId(task.id);
     setError(null);
+    setNotice(null);
     try {
       const updated = await updateNiaSchedule(task.id, { enabled });
       setTasks((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+      setNotice(enabled ? "Task enabled." : "Task paused.");
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Failed to update task");
     } finally {
