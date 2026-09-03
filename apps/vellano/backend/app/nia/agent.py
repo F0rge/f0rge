@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from pydantic_ai import Agent, DeferredToolRequests
+from pydantic_ai_harness import CodeMode
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -52,6 +53,8 @@ If the user says "clear then chart dining vs sofas", call both tools in one turn
 
 Never invent till payment, email, or SARS/RCS/eFiling. Never call auth, Nia thread/run/resume, file uploads, or create_till_sale.
 
+For multi-step calculations or fan-out over lists, use `run_code` (code mode) so you can loop and compute in one turn. `search` is available inside `run_code`. Do not call writes, approvals, navigate, or `report_milestone` from code mode.
+
 When a task takes more than one lookup or calculation, call `report_milestone` between steps so the user sees progress before the final answer.
 
 When a write needs arguments the user has not given, call `run_nia_action` with the action id and whatever args you have (an empty object is fine). Do not interview in markdown or list required fields — the app shows a form. Validation errors become that form, not a lecture. After the form is complete the user still approves the write before anything is saved.
@@ -78,10 +81,31 @@ class NiaDeps:
     canvas_spec: dict[str, Any] = field(default_factory=empty_canvas_spec)
 
 
+# Read tools that existing TestModel force-calls stay native so RBAC/catalog
+# tests keep working. Writes, navigate, HITL, canvas, and report_milestone
+# stay native so approval cards and AG-UI custom events are not bypassed.
+NIA_CODE_MODE_TOOLS: tuple[str, ...] = ("search",)
+
+
+def nia_code_mode() -> CodeMode:
+    return CodeMode(tools=list(NIA_CODE_MODE_TOOLS))
+
+
+def nia_code_mode_capability() -> Optional[CodeMode]:
+    root = nia_agent.root_capability
+    nested = getattr(root, "capabilities", None)
+    candidates = nested if nested is not None else (root,)
+    for cap in candidates:
+        if isinstance(cap, CodeMode):
+            return cap
+    return None
+
+
 nia_agent = Agent(
     deps_type=NiaDeps,
     instructions=NIA_INSTRUCTIONS,
     output_type=[str, DeferredToolRequests],
+    capabilities=[nia_code_mode()],
 )
 
 
