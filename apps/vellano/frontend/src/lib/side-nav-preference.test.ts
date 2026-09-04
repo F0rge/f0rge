@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   SIDE_NAV_EXPANDED_KEY,
+  getSideNavExpandedSnapshot,
   readSideNavExpanded,
+  setSideNavExpanded,
+  toggleSideNavExpanded,
   writeSideNavExpanded,
 } from "./side-nav-preference";
 
@@ -28,14 +31,18 @@ beforeEach(() => {
     configurable: true,
     value: { sessionStorage: session },
   });
+  session.removeItem(SIDE_NAV_EXPANDED_KEY);
+  setSideNavExpanded(true);
 });
 
 describe("side nav preference", () => {
   it("defaults to expanded when the key is missing", () => {
+    window.sessionStorage.removeItem(SIDE_NAV_EXPANDED_KEY);
     expect(readSideNavExpanded()).toBe(true);
   });
 
   it("honours an explicit default when unset", () => {
+    window.sessionStorage.removeItem(SIDE_NAV_EXPANDED_KEY);
     expect(readSideNavExpanded(false)).toBe(false);
   });
 
@@ -51,5 +58,21 @@ describe("side nav preference", () => {
     expect(readSideNavExpanded()).toBe(true);
     window.sessionStorage.setItem(SIDE_NAV_EXPANDED_KEY, "true");
     expect(readSideNavExpanded()).toBe(true);
+  });
+
+  it("setSideNavExpanded updates snapshot and storage", () => {
+    setSideNavExpanded(false);
+    expect(getSideNavExpandedSnapshot()).toBe(false);
+    expect(window.sessionStorage.getItem(SIDE_NAV_EXPANDED_KEY)).toBe("0");
+    setSideNavExpanded(true);
+    expect(getSideNavExpandedSnapshot()).toBe(true);
+  });
+
+  it("toggleSideNavExpanded flips the snapshot", () => {
+    setSideNavExpanded(true);
+    toggleSideNavExpanded();
+    expect(getSideNavExpandedSnapshot()).toBe(false);
+    toggleSideNavExpanded();
+    expect(getSideNavExpandedSnapshot()).toBe(true);
   });
 });

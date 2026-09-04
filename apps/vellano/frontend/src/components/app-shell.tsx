@@ -53,7 +53,7 @@ import {
   DocumentTasks,
 } from "@carbon/icons-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 
 import { useAuth } from "@/lib/auth";
 import { bindCanvasUser } from "@/lib/nia-canvas-store";
@@ -79,8 +79,11 @@ import {
 } from "@/components/nia/nia-dock";
 import { canUseNia } from "@/lib/permissions";
 import {
-  readSideNavExpanded,
-  writeSideNavExpanded,
+  getSideNavExpandedServerSnapshot,
+  getSideNavExpandedSnapshot,
+  setSideNavExpanded,
+  subscribeSideNavExpanded,
+  toggleSideNavExpanded,
 } from "@/lib/side-nav-preference";
 
 const ICONS = {
@@ -137,13 +140,12 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAuth();
-  // SSR-safe default; hydrate from sessionStorage after mount.
-  const [expanded, setExpanded] = useState(true);
+  const expanded = useSyncExternalStore(
+    subscribeSideNavExpanded,
+    getSideNavExpandedSnapshot,
+    getSideNavExpandedServerSnapshot,
+  );
   const isLogin = pathname === "/login";
-
-  useEffect(() => {
-    setExpanded(readSideNavExpanded(true));
-  }, []);
 
   useEffect(() => {
     if (!loading && !user && !isLogin) {
@@ -156,14 +158,6 @@ export function AppShell({ children }: AppShellProps) {
       bindCanvasUser(user.id);
     }
   }, [user]);
-
-  function toggleSideNav() {
-    setExpanded((current) => {
-      const next = !current;
-      writeSideNavExpanded(next);
-      return next;
-    });
-  }
 
   if (isLogin) {
     return <>{children}</>;
@@ -222,7 +216,7 @@ export function AppShell({ children }: AppShellProps) {
               aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
               isActive={expanded}
               isCollapsible
-              onClick={toggleSideNav}
+              onClick={toggleSideNavExpanded}
             />
             <HeaderName
               href="/"
@@ -254,10 +248,7 @@ export function AppShell({ children }: AppShellProps) {
           expanded={expanded}
           isRail
           isPersistent
-          onOverlayClick={() => {
-            setExpanded(false);
-            writeSideNavExpanded(false);
-          }}
+          onOverlayClick={() => setSideNavExpanded(false)}
         >
           <SideNavItems>
             {PRIMARY_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
