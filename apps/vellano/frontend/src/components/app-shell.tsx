@@ -53,7 +53,7 @@ import {
   DocumentTasks,
 } from "@carbon/icons-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 
 import { useAuth } from "@/lib/auth";
 import { bindCanvasUser } from "@/lib/nia-canvas-store";
@@ -78,6 +78,13 @@ import {
   NiaHeaderAction,
 } from "@/components/nia/nia-dock";
 import { canUseNia } from "@/lib/permissions";
+import {
+  getSideNavExpandedServerSnapshot,
+  getSideNavExpandedSnapshot,
+  setSideNavExpanded,
+  subscribeSideNavExpanded,
+  toggleSideNavExpanded,
+} from "@/lib/side-nav-preference";
 
 const ICONS = {
   "/": Home,
@@ -133,7 +140,11 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAuth();
-  const [expanded, setExpanded] = useState(true);
+  const expanded = useSyncExternalStore(
+    subscribeSideNavExpanded,
+    getSideNavExpandedSnapshot,
+    getSideNavExpandedServerSnapshot,
+  );
   const isLogin = pathname === "/login";
 
   useEffect(() => {
@@ -200,10 +211,12 @@ export function AppShell({ children }: AppShellProps) {
         <Theme theme="g100">
           <Header aria-label="Vellano">
             <SkipToContent />
+            {/* isCollapsible keeps the hamburger visible at lg+ (Carbon otherwise hides it). */}
             <HeaderMenuButton
               aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
               isActive={expanded}
-              onClick={() => setExpanded((current) => !current)}
+              isCollapsible
+              onClick={toggleSideNavExpanded}
             />
             <HeaderName
               href="/"
@@ -235,7 +248,7 @@ export function AppShell({ children }: AppShellProps) {
           expanded={expanded}
           isRail
           isPersistent
-          onOverlayClick={() => setExpanded(false)}
+          onOverlayClick={() => setSideNavExpanded(false)}
         >
           <SideNavItems>
             {PRIMARY_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
