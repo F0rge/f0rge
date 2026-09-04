@@ -36,10 +36,7 @@ import {
 import { showViewCanvasButton } from "@/lib/nia-canvas-nav";
 import { clearCanvasSpec, writeCanvasSpec } from "@/lib/nia-canvas-store";
 import { niaInvoiceHref } from "@/lib/nia-navigation";
-import { canvasTableComponents } from "@/lib/nia-spreadsheet";
-
 import { NiaCitationChips } from "./nia-citation-chips";
-import { NiaSpreadsheet } from "./nia-spreadsheet";
 
 type NiaStructuredCardProps = {
   message: NiaMessage;
@@ -319,8 +316,6 @@ function CanvasSpecCard({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const tables = canvasTableComponents(spec);
-  const tableOnly = tables.length > 0 && spec.components.every((component) => component.type === "table");
   const showView = showViewCanvasButton(pathname);
 
   function handleView() {
@@ -332,19 +327,9 @@ function CanvasSpecCard({
     <Tile className="vellano-nia-card vellano-nia-card--nav">
       <p className="cds--type-label-01">Canvas</p>
       <p className="cds--type-body-01">{title}</p>
-      {tables.map((table) => (
-        <NiaSpreadsheet
-          key={table.id}
-          title={table.title}
-          headers={table.headers}
-          rows={table.rows}
-          readOnly
-          compact
-        />
-      ))}
       {showView ? (
         <div className="vellano-nia-card__actions">
-          <Button size="sm" kind={tableOnly ? "ghost" : "primary"} onClick={handleView}>
+          <Button size="sm" kind="primary" onClick={handleView}>
             View Canvas
           </Button>
         </div>
