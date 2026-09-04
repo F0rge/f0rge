@@ -78,6 +78,10 @@ import {
   NiaHeaderAction,
 } from "@/components/nia/nia-dock";
 import { canUseNia } from "@/lib/permissions";
+import {
+  readSideNavExpanded,
+  writeSideNavExpanded,
+} from "@/lib/side-nav-preference";
 
 const ICONS = {
   "/": Home,
@@ -133,8 +137,13 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAuth();
+  // SSR-safe default; hydrate from sessionStorage after mount.
   const [expanded, setExpanded] = useState(true);
   const isLogin = pathname === "/login";
+
+  useEffect(() => {
+    setExpanded(readSideNavExpanded(true));
+  }, []);
 
   useEffect(() => {
     if (!loading && !user && !isLogin) {
@@ -147,6 +156,14 @@ export function AppShell({ children }: AppShellProps) {
       bindCanvasUser(user.id);
     }
   }, [user]);
+
+  function toggleSideNav() {
+    setExpanded((current) => {
+      const next = !current;
+      writeSideNavExpanded(next);
+      return next;
+    });
+  }
 
   if (isLogin) {
     return <>{children}</>;
@@ -200,10 +217,12 @@ export function AppShell({ children }: AppShellProps) {
         <Theme theme="g100">
           <Header aria-label="Vellano">
             <SkipToContent />
+            {/* isCollapsible keeps the hamburger visible at lg+ (Carbon otherwise hides it). */}
             <HeaderMenuButton
               aria-label={expanded ? "Collapse navigation" : "Expand navigation"}
               isActive={expanded}
-              onClick={() => setExpanded((current) => !current)}
+              isCollapsible
+              onClick={toggleSideNav}
             />
             <HeaderName
               href="/"
@@ -235,7 +254,10 @@ export function AppShell({ children }: AppShellProps) {
           expanded={expanded}
           isRail
           isPersistent
-          onOverlayClick={() => setExpanded(false)}
+          onOverlayClick={() => {
+            setExpanded(false);
+            writeSideNavExpanded(false);
+          }}
         >
           <SideNavItems>
             {PRIMARY_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}

@@ -36,10 +36,18 @@ body {
   margin-left: 3rem;
 }
 
+/* Search sm is 2rem; header ribbon is 3rem — flex-center in the global bar. */
 .vellano-header-search {
   position: relative;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
   width: min(20rem, 40vw);
-  margin-right: 0.5rem;
+  margin-inline-end: var(--cds-spacing-03, 0.5rem);
+}
+
+.vellano-shell .cds--header__global {
+  align-items: center;
 }
 
 .vellano-header-search .cds--search-input,
@@ -165,7 +173,8 @@ body {
 .vellano-header-user {
   display: inline-flex;
   align-items: center;
-  padding: 0 1rem;
+  align-self: stretch;
+  padding: 0 var(--cds-spacing-05, 1rem);
   color: #f4f4f4;
   font-size: 0.875rem;
   max-width: 14rem;
