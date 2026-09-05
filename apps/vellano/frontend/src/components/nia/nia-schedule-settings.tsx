@@ -340,11 +340,14 @@ export function NiaScheduleSettings() {
                                   enableV12Overflowmenu
                                   enableV12DynamicFloatingStyles
                                 >
+                                  {/* Classic OverflowMenu typings omit v12 autoAlign/menuAlignment. */}
                                   <OverflowMenu
                                     size="sm"
-                                    autoAlign
-                                    menuAlignment="bottom-end"
-                                    label={`Actions for ${task.name}`}
+                                    {...({
+                                      autoAlign: true,
+                                      menuAlignment: "bottom-end",
+                                      label: `Actions for ${task.name}`,
+                                    } as Record<string, unknown>)}
                                   >
                                     <MenuItem
                                       label="Edit"
