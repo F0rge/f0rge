@@ -68,6 +68,12 @@ import {
   toggleDockOpen,
   writeDockThreadId,
 } from "@/lib/nia-dock-session";
+import {
+  NIA_NEAR_BOTTOM_PX,
+  isNearBottom,
+  readScrollMetrics,
+  scrollElementToBottom,
+} from "@/lib/nia-stick-to-bottom";
 import { appendToolLine } from "@/lib/nia-thinking";
 import {
   formatRelativeThreadTime,
@@ -159,7 +165,6 @@ type NiaConversationProps = {
   onToggleDictate: () => void;
   onResumeComplete: () => void;
   onResumeError: (message: string) => void;
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
 };
 
 function NiaConversation({
@@ -180,14 +185,59 @@ function NiaConversation({
   onToggleDictate,
   onResumeComplete,
   onResumeError,
-  messagesEndRef,
 }: NiaConversationProps) {
   const hasUserMessage = messages.some((message) => message.role === "user");
   const latestApprovalToolCallId = latestNeedsOkToolCallId(messages);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+
+  const pinToBottom = useCallback((force = false) => {
+    const el = messagesRef.current;
+    if (!el) {
+      return;
+    }
+    if (force || stickToBottomRef.current) {
+      stickToBottomRef.current = true;
+      scrollElementToBottom(el);
+    }
+  }, []);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesRef.current;
+    if (!el) {
+      return;
+    }
+    stickToBottomRef.current = isNearBottom(readScrollMetrics(el), NIA_NEAR_BOTTOM_PX);
+  }, []);
+
+  // New thread / open history: always land on latest.
+  useEffect(() => {
+    stickToBottomRef.current = true;
+    pinToBottom(true);
+  }, [activeThreadId, pinToBottom]);
+
+  // Follow streaming + new messages only while the user is near the bottom.
+  useEffect(() => {
+    pinToBottom();
+  }, [messages, streamingText, streaming, pinToBottom]);
+
+  // Send must not force stick: if the user scrolled up to read history, keep
+  // their place. Messages/streaming effect already pins when stickToBottomRef
+  // is true (near bottom).
+  const handleSend = useCallback(
+    (messageText?: string) => {
+      void onSend(messageText);
+    },
+    [onSend],
+  );
 
   return (
     <>
-      <div className="vellano-nia-dock__messages">
+      <div
+        className="vellano-nia-dock__messages"
+        ref={messagesRef}
+        onScroll={handleMessagesScroll}
+      >
         {loadingThread ? (
           <Loading withOverlay={false} description="Loading conversation…" />
         ) : messages.length === 0 && !streaming ? (
@@ -244,7 +294,6 @@ function NiaConversation({
             ) : null}
           </>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {showSuggestions && !hasUserMessage ? (
@@ -255,7 +304,7 @@ function NiaConversation({
               kind="ghost"
               size="sm"
               disabled={streaming}
-              onClick={() => void onSend(label)}
+              onClick={() => void handleSend(label)}
             >
               {label}
             </Button>
@@ -277,7 +326,7 @@ function NiaConversation({
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              void onSend();
+              void handleSend();
             }
           }}
         />
@@ -287,6 +336,8 @@ function NiaConversation({
             size="md"
             label="Dictate"
             aria-label="Dictate"
+            align="left"
+            autoAlign
             disabled={!speechSupported || streaming}
             title={
               speechSupported
@@ -302,7 +353,7 @@ function NiaConversation({
             size="md"
             renderIcon={Send}
             disabled={streaming || !composer.trim() || composerDisabled}
-            onClick={() => void onSend()}
+            onClick={() => void handleSend()}
           >
             Send
           </Button>
@@ -397,7 +448,6 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const [dictating, setDictating] = useState(false);
 
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const persistThread = useRef(false);
   const hydratedThread = useRef(false);
@@ -490,10 +540,6 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   useEffect(() => {
     sessionStorage.setItem(WIDTH_STORAGE_KEY, String(width));
   }, [width]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeThread?.messages, streamingText, modalOpen]);
 
   if (!enabled) {
     return null;
@@ -735,7 +781,6 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
       }
     },
     onResumeError: setError,
-    messagesEndRef,
   };
 
   return (
@@ -765,6 +810,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                 kind="ghost"
                 size="sm"
                 label="New conversation"
+                align="bottom-end"
+                autoAlign
                 onClick={() => void handleNewThread()}
               >
                 <Add />
@@ -773,6 +820,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                 kind="ghost"
                 size="sm"
                 label="History"
+                align="bottom-end"
+                autoAlign
                 onClick={() => {
                   void loadThreads();
                   setHistoryOpen(true);
@@ -784,11 +833,20 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                 kind="ghost"
                 size="sm"
                 label="Expand"
+                align="bottom-end"
+                autoAlign
                 onClick={() => setModalOpen(true)}
               >
                 <FitToScreen />
               </IconButton>
-              <IconButton kind="ghost" size="sm" label="Close Nia" onClick={toggle}>
+              <IconButton
+                kind="ghost"
+                size="sm"
+                label="Close Nia"
+                align="bottom-end"
+                autoAlign
+                onClick={toggle}
+              >
                 <Close />
               </IconButton>
             </div>
@@ -872,6 +930,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                     kind="ghost"
                     size="sm"
                     label={`Rename ${thread.title}`}
+                    align="left"
+                    autoAlign
                     onClick={() => openRename(thread)}
                   >
                     <Edit />
@@ -880,6 +940,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                     kind="ghost"
                     size="sm"
                     label={`Archive ${thread.title}`}
+                    align="left"
+                    autoAlign
                     onClick={() => void handleArchive(thread.id)}
                   >
                     <Archive />
