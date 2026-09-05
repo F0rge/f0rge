@@ -1181,3 +1181,17 @@ body {
   overflow: visible;
 }
 
+
+.vellano-catalogue-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  flex-wrap: nowrap;
+}
+
+.vellano-catalogue-overflow-menu.cds--overflow-menu-options,
+.cds--overflow-menu-options.vellano-catalogue-overflow-menu,
+.cds--menu.vellano-catalogue-overflow-menu {
+  z-index: 9100;
+}

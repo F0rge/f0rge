@@ -4,9 +4,12 @@ import {
   Button,
   Checkbox,
   DataTable,
+  FeatureFlags,
   InlineNotification,
+  MenuItem,
   Modal,
   NumberInput,
+  OverflowMenu,
   Stack,
   Tag,
   Table,
@@ -19,7 +22,7 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { Barcode, DocumentExport, DocumentImport, Printer, TrashCan } from "@carbon/icons-react";
+import { Barcode, DocumentExport, DocumentImport, Printer } from "@carbon/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -799,75 +802,61 @@ function CataloguePageContent() {
                               }
                               if (cell.info.header === "actions" && entry) {
                                 return (
-                                  <TableCell key={cell.id} style={{ textAlign: "center" }}>
-                                    <Button
-                                      type="button"
-                                      kind="ghost"
-                                      size="sm"
-                                      hasIconOnly
-                                      iconDescription="Print label"
-                                      renderIcon={Barcode}
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        printSkuLabels([entry]);
-                                      }}
-                                    />
-                                    {canMutate ? (
+                                  <TableCell key={cell.id} className="vellano-catalogue-actions-cell">
+                                    <div className="vellano-catalogue-row-actions">
                                       <Button
                                         type="button"
                                         kind="ghost"
-                                        size="sm"
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          openEditSku(entry);
-                                        }}
-                                      >
-                                        Edit SKU
-                                      </Button>
-                                    ) : null}
-                                    {canMutate || entry.is_kit ? (
-                                      <Button
-                                        type="button"
-                                        kind="ghost"
-                                        size="sm"
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          setBomSku(entry);
-                                        }}
-                                      >
-                                        Kit components
-                                      </Button>
-                                    ) : null}
-                                    <Button
-                                      type="button"
-                                      kind="ghost"
-                                      size="sm"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        openPriceEditor(entry);
-                                      }}
-                                    >
-                                      {canMutate ? "Edit prices" : "View prices"}
-                                    </Button>
-                                    {canMutate ? (
-                                      <Button
-                                        type="button"
-                                        kind="danger--ghost"
                                         size="sm"
                                         hasIconOnly
-                                        iconDescription="Delete SKU"
-                                        renderIcon={TrashCan}
+                                        iconDescription="Print label"
+                                        renderIcon={Barcode}
                                         onClick={(event) => {
                                           event.preventDefault();
                                           event.stopPropagation();
-                                          setSkuToDelete(entry);
+                                          printSkuLabels([entry]);
                                         }}
                                       />
-                                    ) : null}
+                                      <FeatureFlags
+                                        enableV12Overflowmenu
+                                        enableV12DynamicFloatingStyles
+                                      >
+                                        <OverflowMenu
+                                          size="sm"
+                                          flipped
+                                          menuOptionsClass="vellano-catalogue-overflow-menu"
+                                          {...({
+                                            autoAlign: true,
+                                            menuAlignment: "bottom-end",
+                                            label: `Actions for ${entry.our_ref}`,
+                                          } as Record<string, unknown>)}
+                                        >
+                                          {canMutate ? (
+                                            <MenuItem
+                                              label="Edit SKU"
+                                              onClick={() => openEditSku(entry)}
+                                            />
+                                          ) : null}
+                                          {canMutate || entry.is_kit ? (
+                                            <MenuItem
+                                              label="Kit components"
+                                              onClick={() => setBomSku(entry)}
+                                            />
+                                          ) : null}
+                                          <MenuItem
+                                            label={canMutate ? "Edit prices" : "View prices"}
+                                            onClick={() => openPriceEditor(entry)}
+                                          />
+                                          {canMutate ? (
+                                            <MenuItem
+                                              kind="danger"
+                                              label="Delete SKU"
+                                              onClick={() => setSkuToDelete(entry)}
+                                            />
+                                          ) : null}
+                                        </OverflowMenu>
+                                      </FeatureFlags>
+                                    </div>
                                   </TableCell>
                                 );
                               }
