@@ -140,15 +140,20 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function formatIncVatPrice(value: string | null | undefined): string {
+function formatCatalogueMoney(value: string | null | undefined): string {
   if (!value) {
     return "—";
   }
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    return value;
+    return "—";
   }
-  return formatZarAmount(formatPriceAmount(parsed));
+  // NBSP keeps the rand symbol glued to the amount under right-aligned cells.
+  return `R ${formatPriceAmount(parsed)}`;
+}
+
+function formatIncVatPrice(value: string | null | undefined): string {
+  return formatCatalogueMoney(value);
 }
 
 function barcodeSvg(value: string): string {
