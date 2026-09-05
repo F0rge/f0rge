@@ -221,13 +221,14 @@ function NiaConversation({
     pinToBottom();
   }, [messages, streamingText, streaming, pinToBottom]);
 
+  // Send must not force stick: if the user scrolled up to read history, keep
+  // their place. Messages/streaming effect already pins when stickToBottomRef
+  // is true (near bottom).
   const handleSend = useCallback(
     (messageText?: string) => {
-      stickToBottomRef.current = true;
-      pinToBottom(true);
       void onSend(messageText);
     },
-    [onSend, pinToBottom],
+    [onSend],
   );
 
   return (

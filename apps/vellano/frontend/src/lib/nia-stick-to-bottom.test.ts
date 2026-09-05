@@ -50,3 +50,23 @@ describe("scrollElementToBottom", () => {
     expect(el.scrollTop).toBe(900);
   });
 });
+
+/**
+ * NiaConversation contract (nia-dock.tsx):
+ * - onScroll sets stickToBottomRef via isNearBottom
+ * - activeThreadId change force-pins to latest
+ * - messages/streaming effect calls pinToBottom() only when stickToBottomRef is true
+ * - handleSend must NOT set stickToBottomRef or force-pin (scrolled-up users stay put)
+ */
+describe("stick-to-bottom send contract", () => {
+  it("documents that send must not flip stick when scrolled up", () => {
+    // Pure helpers cannot assert React refs; guard the threshold used by onScroll
+    // so a scrolled-up viewport stays non-sticky after send.
+    const scrolledUp = {
+      scrollTop: 0,
+      scrollHeight: 2000,
+      clientHeight: 400,
+    };
+    expect(isNearBottom(scrolledUp)).toBe(false);
+  });
+});
