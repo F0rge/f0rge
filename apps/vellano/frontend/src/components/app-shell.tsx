@@ -162,11 +162,14 @@ export function AppShell({ children }: AppShellProps) {
 
   // Pathname tab changes must reset document/main scroll so the fixed header
   // does not clip page titles / primary actions from a prior scrolled page.
+  // rAF: run after Next scroll restoration / layout paint.
   useEffect(() => {
     if (isLogin) {
       return;
     }
     resetMainScroll();
+    const id = requestAnimationFrame(() => resetMainScroll());
+    return () => cancelAnimationFrame(id);
   }, [pathname, isLogin]);
 
   if (isLogin) {

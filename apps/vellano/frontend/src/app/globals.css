@@ -14,10 +14,13 @@ body {
   margin-top: 3rem;
   margin-left: 16rem;
   padding: 2rem;
-  min-height: calc(100vh - 3rem);
+  /* Fixed header is 3rem — main is the app scrollport so tab nav can reset it. */
+  height: calc(100vh - 3rem);
+  min-height: 0;
   min-width: 0;
   /* Title rows stay in the dock-inset viewport; wide tables scroll on panels. */
   overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .vellano-main > * {

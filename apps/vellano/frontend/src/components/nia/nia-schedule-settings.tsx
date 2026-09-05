@@ -4,11 +4,12 @@ import {
   Button,
   Checkbox,
   DataTable,
+  FeatureFlags,
   InlineNotification,
   Loading,
+  MenuItem,
   Modal,
   OverflowMenu,
-  OverflowMenuItem,
   Select,
   SelectItem,
   Stack,
@@ -335,30 +336,36 @@ export function NiaScheduleSettings() {
                           if (cell.info.header === "actions" && task) {
                             return (
                               <TableCell key={cell.id}>
-                                <OverflowMenu
-                                  size="sm"
-                                  flipped
-                                  direction="bottom"
-                                  menuOptionsClass="vellano-nia-overflow-menu"
-                                  aria-label={`Actions for ${task.name}`}
-                                  iconDescription={`Actions for ${task.name}`}
+                                <FeatureFlags
+                                  enableV12Overflowmenu
+                                  enableV12DynamicFloatingStyles
                                 >
-                                  <OverflowMenuItem
-                                    itemText="Edit"
-                                    onClick={() => openEdit(task)}
-                                  />
-                                  <OverflowMenuItem
-                                    itemText={busyId === task.id ? "Running…" : "Run now"}
-                                    disabled={busyId === task.id}
-                                    onClick={() => void handleRunNow(task)}
-                                  />
-                                  <OverflowMenuItem
-                                    itemText="Delete"
-                                    isDelete
-                                    disabled={busyId === task.id}
-                                    onClick={() => void handleDelete(task)}
-                                  />
-                                </OverflowMenu>
+                                  {/* Classic OverflowMenu typings omit v12 autoAlign/menuAlignment. */}
+                                  <OverflowMenu
+                                    size="sm"
+                                    {...({
+                                      autoAlign: true,
+                                      menuAlignment: "bottom-end",
+                                      label: `Actions for ${task.name}`,
+                                    } as Record<string, unknown>)}
+                                  >
+                                    <MenuItem
+                                      label="Edit"
+                                      onClick={() => openEdit(task)}
+                                    />
+                                    <MenuItem
+                                      label={busyId === task.id ? "Running…" : "Run now"}
+                                      disabled={busyId === task.id}
+                                      onClick={() => void handleRunNow(task)}
+                                    />
+                                    <MenuItem
+                                      kind="danger"
+                                      label="Delete"
+                                      disabled={busyId === task.id}
+                                      onClick={() => void handleDelete(task)}
+                                    />
+                                  </OverflowMenu>
+                                </FeatureFlags>
                               </TableCell>
                             );
                           }
