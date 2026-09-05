@@ -15,7 +15,7 @@ from app.config import settings
 from app.exceptions import NiaLlmUnconfiguredError
 import app.nia  # noqa: F401 — register Nia tools on the agent
 from app.models.nia import NiaMessageRole
-from app.nia.agent import NiaDeps, build_nia_model, nia_agent
+from app.nia.agent import NiaDeps, build_nia_model, build_nia_model_settings, nia_agent
 from app.nia.canvas import canvas_payload_to_persist, spec_from_thread_payloads
 from app.nia.catalog import CATALOG_BY_ID
 from app.nia.dispatch import _serialize, dump_action_args
@@ -475,6 +475,9 @@ class NiaRunService:
             "model": build_nia_model(),
             "on_complete": on_complete,
         }
+        model_settings = build_nia_model_settings()
+        if model_settings is not None:
+            stream_kwargs["model_settings"] = model_settings
         if message_history is not None:
             stream_kwargs["message_history"] = message_history
         if deferred_tool_results is not None:
@@ -536,6 +539,7 @@ class NiaRunService:
             prompt,
             deps=deps,
             model=build_nia_model(),
+            model_settings=build_nia_model_settings(),
             message_history=load_agent_messages(thread.agent_messages),
         )
         await self._persist_run_result(
