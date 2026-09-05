@@ -1195,3 +1195,16 @@ body {
 .cds--menu.vellano-catalogue-overflow-menu {
   z-index: 9100;
 }
+
+/* Productive form modals: end-aligned Cancel/Save instead of full-bleed 50/50. */
+.vellano-modal--actions-end .cds--modal-footer {
+  justify-content: flex-end;
+  gap: 0;
+}
+
+.vellano-modal--actions-end .cds--modal-footer .cds--btn {
+  flex: 0 0 auto;
+  inline-size: auto;
+  max-inline-size: none;
+  min-inline-size: 5.5rem;
+}
