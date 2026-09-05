@@ -322,10 +322,9 @@ export function NiaScheduleSettings() {
                                 <Toggle
                                   id={`nia-task-enabled-${task.id}`}
                                   size="sm"
-                                  hideLabel
-                                  labelA="Paused"
+                                  labelA="Off"
                                   labelB="On"
-                                  labelText={scheduleToggleLabel(task.name, task.enabled)}
+                                  aria-label={scheduleToggleLabel(task.name, task.enabled)}
                                   toggled={task.enabled}
                                   disabled={rowBusy}
                                   onToggle={(checked) => void handleToggle(task, checked)}
