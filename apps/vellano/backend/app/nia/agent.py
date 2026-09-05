@@ -7,8 +7,9 @@ from typing import Any, Optional
 from pydantic_ai import Agent, DeferredToolRequests
 from pydantic_ai_harness import CodeMode
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.models.openrouter import OpenRouterModel, OpenRouterModelSettings
 from pydantic_ai.providers.openrouter import OpenRouterProvider
+from pydantic_ai.settings import ModelSettings
 
 from app.config import settings
 from app.nia.canvas import empty_canvas_spec
@@ -109,14 +110,41 @@ nia_agent = Agent(
 )
 
 
+_ALLOWED_REASONING_EFFORTS = frozenset({"low", "high", "max", "medium", "minimal", "xhigh", "none"})
+
+
+def build_nia_model_settings() -> ModelSettings | None:
+    """OpenRouter reasoning controls for Nia (effort + exclude).
+
+    Maps ``OPENROUTER_REASONING_EFFORT`` / ``OPENROUTER_REASONING_EXCLUDE`` onto
+    pydantic-ai ``openrouter_reasoning`` → request ``extra_body.reasoning``.
+    GLM-5.3 family always reasons; ``exclude`` keeps thinking out of the
+    assistant content (not a UI-only hide).
+    """
+    effort = (settings.openrouter_reasoning_effort or "").strip().lower()
+    exclude = bool(settings.openrouter_reasoning_exclude)
+    if not effort and not exclude:
+        return None
+    if effort and effort not in _ALLOWED_REASONING_EFFORTS:
+        effort = "low"
+    reasoning: dict[str, Any] = {"enabled": True, "exclude": exclude}
+    if effort:
+        # TypedDict omits ``max``; OpenRouter/GLM accept it — plain dict is fine.
+        reasoning["effort"] = effort
+    settings_out: OpenRouterModelSettings = {"openrouter_reasoning": reasoning}  # type: ignore[typeddict-item]
+    return settings_out
+
+
 def build_nia_model() -> OpenRouterModel:
     """OpenRouter chat model for Nia.
 
     AG-UI uses ``AGUIAdapter.run_stream`` → ``OpenRouterModel.request_stream``,
     which calls Chat Completions with ``stream=True``. Do not switch the run
     path to ``agent.run()`` / ``request()`` or tokens buffer until complete.
+    Default settings include OpenRouter ``reasoning`` (effort + exclude).
     """
     return OpenRouterModel(
         settings.openrouter_model,
         provider=OpenRouterProvider(api_key=settings.openrouter_api_key),
+        settings=build_nia_model_settings(),
     )
