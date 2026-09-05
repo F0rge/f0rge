@@ -615,6 +615,14 @@ body {
   z-index: 9000;
 }
 
+/* Carbon floating menus default to z('floating')=6000, under header (8001) and Nia dock (7000). */
+.cds--overflow-menu-options,
+.cds--popover,
+.cds--tooltip,
+.cds--menu {
+  z-index: 9100;
+}
+
 .vellano-nia-dock {
   position: fixed;
   top: 3rem;
@@ -622,6 +630,7 @@ body {
   bottom: 0;
   z-index: 7000;
   display: flex;
+  /* Clip only while collapsed (width:0). Open dock must not clip header tooltips. */
   overflow: hidden;
   background: var(--cds-layer-01, #fff);
   border-left: 2px solid transparent;
@@ -635,6 +644,8 @@ body {
 .vellano-nia-dock--open {
   pointer-events: auto;
   opacity: 1;
+  /* IconButton/Popover tooltips render in-tree; overflow:hidden would clip them. */
+  overflow: visible;
 }
 
 .vellano-nia-dock__resize {
@@ -651,9 +662,12 @@ body {
 .vellano-nia-dock__inner {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* Keep scroll on messages/composer; do not clip header floating UI. */
+  overflow: visible;
 }
 
 .vellano-nia-dock__header {
@@ -1130,3 +1144,10 @@ body {
 .vellano-nia-card--nav .vellano-nia-spreadsheet + .vellano-nia-spreadsheet {
   margin-top: 0.5rem;
 }
+
+/* Schedule OverflowMenu (portaled) — keep above header/dock even if Carbon floating layer regresses. */
+.vellano-nia-overflow-menu.cds--overflow-menu-options,
+.cds--overflow-menu-options.vellano-nia-overflow-menu {
+  z-index: 9100;
+}
+

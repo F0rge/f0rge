@@ -58,6 +58,7 @@ import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from
 import { useAuth } from "@/lib/auth";
 import { bindCanvasUser } from "@/lib/nia-canvas-store";
 import { clearDockSession } from "@/lib/nia-dock-session";
+import { resetMainScroll } from "@/lib/reset-main-scroll";
 import { can } from "@/lib/permissions";
 import {
   ACCOUNT_NAV_ITEMS,
@@ -158,6 +159,15 @@ export function AppShell({ children }: AppShellProps) {
       bindCanvasUser(user.id);
     }
   }, [user]);
+
+  // Pathname tab changes must reset document/main scroll so the fixed header
+  // does not clip page titles / primary actions from a prior scrolled page.
+  useEffect(() => {
+    if (isLogin) {
+      return;
+    }
+    resetMainScroll();
+  }, [pathname, isLogin]);
 
   if (isLogin) {
     return <>{children}</>;
