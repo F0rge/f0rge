@@ -362,6 +362,7 @@ export default function UsersPage() {
 
       <Modal
         open={editUser !== null}
+        className="vellano-modal--actions-end"
         modalHeading="Edit user"
         primaryButtonText={saving ? "Saving…" : "Save"}
         secondaryButtonText="Cancel"

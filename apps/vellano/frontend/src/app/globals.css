@@ -166,7 +166,14 @@ body {
 .vellano-home-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: stretch;
   gap: 0.5rem;
+}
+
+.vellano-home-actions .cds--btn {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 .vellano-cost-audit {
@@ -612,6 +619,19 @@ body {
 .vellano-shell[data-nia-dock-open="true"] .vellano-till-layout__summary {
   max-width: 100%;
   min-width: 0;
+}
+
+/* Home primary actions: coherent reflow when Nia dock narrows the main column. */
+.vellano-shell[data-nia-dock-open="true"] .vellano-home-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.vellano-shell[data-nia-dock-open="true"] .vellano-home-actions .cds--btn {
+  inline-size: 100%;
+  max-inline-size: none;
+  justify-content: center;
 }
 
 .cds--modal {
@@ -1150,7 +1170,41 @@ body {
 
 /* Schedule OverflowMenu (portaled) — keep above header/dock even if Carbon floating layer regresses. */
 .vellano-nia-overflow-menu.cds--overflow-menu-options,
-.cds--overflow-menu-options.vellano-nia-overflow-menu {
+.cds--overflow-menu-options.vellano-nia-overflow-menu,
+.cds--menu.vellano-nia-overflow-menu {
   z-index: 9100;
 }
 
+/* Let schedule row menus escape DataTable clipping when flipped into viewport. */
+.vellano-nia-schedule-table .cds--data-table-content,
+.vellano-nia-schedule-table .cds--data-table-container {
+  overflow: visible;
+}
+
+
+.vellano-catalogue-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  flex-wrap: nowrap;
+}
+
+.vellano-catalogue-overflow-menu.cds--overflow-menu-options,
+.cds--overflow-menu-options.vellano-catalogue-overflow-menu,
+.cds--menu.vellano-catalogue-overflow-menu {
+  z-index: 9100;
+}
+
+/* Productive form modals: end-aligned Cancel/Save instead of full-bleed 50/50. */
+.vellano-modal--actions-end .cds--modal-footer {
+  justify-content: flex-end;
+  gap: 0;
+}
+
+.vellano-modal--actions-end .cds--modal-footer .cds--btn {
+  flex: 0 0 auto;
+  inline-size: auto;
+  max-inline-size: none;
+  min-inline-size: 5.5rem;
+}
