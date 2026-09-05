@@ -278,7 +278,7 @@ export function NiaScheduleSettings() {
       ) : (
         <DataTable rows={rows} headers={[...HEADERS]}>
           {({ rows: tableRows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-            <TableContainer>
+            <TableContainer className="vellano-nia-schedule-table">
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>
@@ -340,12 +340,13 @@ export function NiaScheduleSettings() {
                                   enableV12Overflowmenu
                                   enableV12DynamicFloatingStyles
                                 >
-                                  {/* Classic OverflowMenu typings omit v12 autoAlign/menuAlignment. */}
+                                  {/* Prefer top-end so last rows stay in viewport; autoAlign flips if needed. */}
                                   <OverflowMenu
                                     size="sm"
+                                    menuOptionsClass="vellano-nia-overflow-menu"
                                     {...({
                                       autoAlign: true,
-                                      menuAlignment: "bottom-end",
+                                      menuAlignment: "top-end",
                                       label: `Actions for ${task.name}`,
                                     } as Record<string, unknown>)}
                                   >

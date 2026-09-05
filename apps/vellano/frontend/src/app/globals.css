@@ -1150,7 +1150,14 @@ body {
 
 /* Schedule OverflowMenu (portaled) — keep above header/dock even if Carbon floating layer regresses. */
 .vellano-nia-overflow-menu.cds--overflow-menu-options,
-.cds--overflow-menu-options.vellano-nia-overflow-menu {
+.cds--overflow-menu-options.vellano-nia-overflow-menu,
+.cds--menu.vellano-nia-overflow-menu {
   z-index: 9100;
+}
+
+/* Let schedule row menus escape DataTable clipping when flipped into viewport. */
+.vellano-nia-schedule-table .cds--data-table-content,
+.vellano-nia-schedule-table .cds--data-table-container {
+  overflow: visible;
 }
 
