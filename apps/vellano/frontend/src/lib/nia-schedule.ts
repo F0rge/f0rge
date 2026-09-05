@@ -23,6 +23,40 @@ export function formatNextRun(iso: string | null, timezone: string): string {
   });
 }
 
+
+const SCHEDULE_ERROR_LABELS: Record<string, string> = {
+  nia_cap_exceeded: "usage cap exceeded",
+  nia_llm_unconfigured: "Nia is not configured",
+};
+
+const SCHEDULE_STATUS_LABELS: Record<string, string> = {
+  ok: "Succeeded",
+  skipped: "Skipped",
+  error: "Failed",
+  needs_ok: "Needs approval",
+};
+
+export function formatScheduleLastStatus(
+  lastStatus: string | null | undefined,
+  lastError?: string | null,
+): string {
+  if (!lastStatus) {
+    return "—";
+  }
+  const statusKey = lastStatus.trim().toLowerCase();
+  const statusLabel = SCHEDULE_STATUS_LABELS[statusKey] ?? lastStatus;
+  if (statusKey !== "error") {
+    return statusLabel;
+  }
+  const rawError = (lastError ?? "").trim();
+  if (!rawError) {
+    return statusLabel;
+  }
+  const errorKey = rawError.toLowerCase();
+  const errorLabel = SCHEDULE_ERROR_LABELS[errorKey] ?? rawError.replaceAll("_", " ");
+  return `${statusLabel} — ${errorLabel}`;
+}
+
 export function scheduleToggleStateLabel(enabled: boolean): "On" | "Paused" {
   return enabled ? "On" : "Paused";
 }

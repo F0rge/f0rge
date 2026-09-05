@@ -39,6 +39,7 @@ import {
 } from "@/lib/api";
 import {
   formatNextRun,
+  formatScheduleLastStatus,
   replaceScheduleTask,
   scheduleToggleLabel,
   shouldHandleScheduleRowToggleKey,
@@ -105,13 +106,7 @@ function draftFromTask(task: NiaScheduledTask): Draft {
 }
 
 function statusLabel(task: NiaScheduledTask): string {
-  if (!task.last_status) {
-    return "—";
-  }
-  if (task.last_status === "error" && task.last_error) {
-    return `error (${task.last_error})`;
-  }
-  return task.last_status;
+  return formatScheduleLastStatus(task.last_status, task.last_error);
 }
 
 export function NiaScheduleSettings() {

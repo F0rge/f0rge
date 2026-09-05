@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatNextRun,
+  formatScheduleLastStatus,
   isScheduleToggleKey,
   replaceScheduleTask,
   scheduleToggleLabel,
@@ -148,5 +149,30 @@ describe("shouldHandleScheduleRowToggleKey", () => {
     expect(
       shouldHandleScheduleRowToggleKey(targetMatching('[role="menuitem"]'), " ", false),
     ).toBe(false);
+  });
+});
+
+describe("formatScheduleLastStatus", () => {
+  it("returns an em dash when status is missing", () => {
+    expect(formatScheduleLastStatus(null)).toBe("—");
+  });
+
+  it("maps success and needs-approval statuses", () => {
+    expect(formatScheduleLastStatus("ok")).toBe("Succeeded");
+    expect(formatScheduleLastStatus("needs_ok")).toBe("Needs approval");
+    expect(formatScheduleLastStatus("skipped")).toBe("Skipped");
+  });
+
+  it("maps known error codes to human-readable copy", () => {
+    expect(formatScheduleLastStatus("error", "nia_cap_exceeded")).toBe(
+      "Failed — usage cap exceeded",
+    );
+  });
+
+  it("falls back gracefully for unknown errors", () => {
+    expect(formatScheduleLastStatus("error", "timeout_waiting")).toBe(
+      "Failed — timeout waiting",
+    );
+    expect(formatScheduleLastStatus("error")).toBe("Failed");
   });
 });
