@@ -338,6 +338,8 @@ export function NiaScheduleSettings() {
                                 <OverflowMenu
                                   size="sm"
                                   flipped
+                                  direction="bottom"
+                                  menuOptionsClass="vellano-nia-overflow-menu"
                                   aria-label={`Actions for ${task.name}`}
                                   iconDescription={`Actions for ${task.name}`}
                                 >

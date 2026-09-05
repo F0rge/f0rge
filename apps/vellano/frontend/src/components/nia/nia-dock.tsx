@@ -287,6 +287,8 @@ function NiaConversation({
             size="md"
             label="Dictate"
             aria-label="Dictate"
+            align="left"
+            autoAlign
             disabled={!speechSupported || streaming}
             title={
               speechSupported
@@ -765,6 +767,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                 kind="ghost"
                 size="sm"
                 label="New conversation"
+                align="bottom-end"
+                autoAlign
                 onClick={() => void handleNewThread()}
               >
                 <Add />
@@ -773,6 +777,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                 kind="ghost"
                 size="sm"
                 label="History"
+                align="bottom-end"
+                autoAlign
                 onClick={() => {
                   void loadThreads();
                   setHistoryOpen(true);
@@ -784,11 +790,20 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                 kind="ghost"
                 size="sm"
                 label="Expand"
+                align="bottom-end"
+                autoAlign
                 onClick={() => setModalOpen(true)}
               >
                 <FitToScreen />
               </IconButton>
-              <IconButton kind="ghost" size="sm" label="Close Nia" onClick={toggle}>
+              <IconButton
+                kind="ghost"
+                size="sm"
+                label="Close Nia"
+                align="bottom-end"
+                autoAlign
+                onClick={toggle}
+              >
                 <Close />
               </IconButton>
             </div>
@@ -872,6 +887,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                     kind="ghost"
                     size="sm"
                     label={`Rename ${thread.title}`}
+                    align="left"
+                    autoAlign
                     onClick={() => openRename(thread)}
                   >
                     <Edit />
@@ -880,6 +897,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
                     kind="ghost"
                     size="sm"
                     label={`Archive ${thread.title}`}
+                    align="left"
+                    autoAlign
                     onClick={() => void handleArchive(thread.id)}
                   >
                     <Archive />
