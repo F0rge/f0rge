@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, cn } from '@f0rge/ui'
 import { Download, FileText } from 'lucide-react'
 import type { Lab, SourceKind } from '@/lib/api/types'
@@ -42,12 +42,9 @@ function SourceFilename({ filename }: { filename: string | null }) {
 }
 
 function LabImageAttachment({ lab }: { lab: Lab }) {
+  // imgError resets via remount: LabAttachment keys this component with lab.id.
   const [imgError, setImgError] = useState(false)
   const src = labAttachmentSrc(lab.id)
-
-  useEffect(() => {
-    setImgError(false)
-  }, [lab.id])
 
   return (
     <div className="min-w-0 space-y-2">

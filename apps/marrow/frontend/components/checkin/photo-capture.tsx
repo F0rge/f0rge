@@ -48,7 +48,9 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
   // Serialize uploads so concurrent picks cannot race on backend filename allocation.
   const uploadChainRef = useRef(Promise.resolve())
   const photosRef = useRef(photos)
-  photosRef.current = photos
+  useEffect(() => {
+    photosRef.current = photos
+  }, [photos])
 
   useEffect(() => {
     return () => {

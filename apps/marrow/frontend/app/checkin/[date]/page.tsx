@@ -47,13 +47,8 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
     flushRef.current?.()
   }, [])
 
-  // Close the focus overlay when navigating to another day — same idea as
-  // MealGrids' "focused id must still be in the active list" guard (#wrong-image).
-  useEffect(() => {
-    setFocusedPhotoId(null)
-    flushRef.current?.()
-  }, [date])
-
+  // MealGrids-style guard: drop overlay if focused id left the active list
+  // (also closes overlay when date changes and photos are for another day).
   const entryPhotos = entry?.photos ?? []
   const focusedPhoto =
     focusedPhotoId !== null && entryPhotos.some((p) => p.id === focusedPhotoId)
