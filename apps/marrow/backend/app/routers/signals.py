@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
 from app.dependencies.signals import get_signals_service
 from app.middleware.auth import get_current_session
@@ -18,9 +18,10 @@ router = APIRouter(
 
 @router.get("", response_model=SignalsResponse)
 async def get_signals(
+    background_tasks: BackgroundTasks,
     outcome: str = Query(...),
     start: datetime.date | None = Query(default=None),
     end: datetime.date | None = Query(default=None),
     service: SignalsService = Depends(get_signals_service),
 ) -> SignalsResponse:
-    return await service.compute(outcome, start, end)
+    return await service.compute(outcome, start, end, background_tasks)

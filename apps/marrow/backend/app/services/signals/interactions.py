@@ -9,6 +9,7 @@ from app.services.signals.baseline import BaselineResult, compute_baseline_resid
 from app.services.signals.effects import (
     BLOCK_LENGTH_DAYS,
     BOOTSTRAP_B,
+    EffectResult,
     _block_bootstrap_indices,
     _ci_from_bootstrap,
     _count_runs,
@@ -176,12 +177,23 @@ def _exposure_mask_from_effect(
     return np.asarray(effect.exposed_mask, dtype=bool)
 
 
+def _mask_from_effects_map(
+    effects_by_column: dict[str, EffectResult],
+    column: str,
+) -> np.ndarray | None:
+    effect = effects_by_column.get(column)
+    if effect is None or effect.exposed_mask is None:
+        return None
+    return np.asarray(effect.exposed_mask, dtype=bool)
+
+
 def compute_interactions(
     rows: list[dict],
     columns: list[str],
     baseline: BaselineResult | None = None,
     *,
     eligible_columns: list[str] | None = None,
+    effects: list[EffectResult] | None = None,
     bootstrap_n: int = BOOTSTRAP_B,
     rng: np.random.Generator | None = None,
 ) -> list[InteractionResult]:
@@ -191,11 +203,16 @@ def compute_interactions(
     base = baseline if baseline is not None else compute_baseline_residuals(rows, columns)
     gen = rng if rng is not None else np.random.default_rng()
 
+    effects_list = list(effects) if effects is not None else []
+    effects_by_column = {e.column: e for e in effects_list}
+
     if eligible_columns is None:
         from app.services.signals.effects import _candidate_driver_columns, estimate_all_effects
 
-        effects = estimate_all_effects(rows, columns, base, bootstrap_n=50, rng=gen)
-        eligible = [e.column for e in effects if e.tier in ("established", "emerging")]
+        if not effects_list:
+            effects_list = estimate_all_effects(rows, columns, base, bootstrap_n=50, rng=gen)
+            effects_by_column = {e.column: e for e in effects_list}
+        eligible = [e.column for e in effects_list if e.tier in ("established", "emerging")]
         if not eligible:
             eligible = _candidate_driver_columns(columns)[:8]
     else:
@@ -236,8 +253,12 @@ def compute_interactions(
             continue
 
         residuals = residuals_a
-        mask_a = _exposure_mask_from_effect(rows, base, columns, col_a, lag_a)
-        mask_b = _exposure_mask_from_effect(rows, base, columns, col_b, lag_b)
+        mask_a = _mask_from_effects_map(effects_by_column, col_a)
+        mask_b = _mask_from_effects_map(effects_by_column, col_b)
+        if mask_a is None:
+            mask_a = _exposure_mask_from_effect(rows, base, columns, col_a, lag_a)
+        if mask_b is None:
+            mask_b = _exposure_mask_from_effect(rows, base, columns, col_b, lag_b)
         if mask_a is None or mask_b is None:
             continue
         mask_a = mask_a & valid

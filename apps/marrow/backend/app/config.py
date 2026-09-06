@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     cache_ttl_entry_seconds: int = 300
     cache_ttl_feature_matrix_seconds: int = 600
     cache_ttl_signals_seconds: int = 1800
+    # When True, compute on the request (still to_thread) instead of BackgroundTasks.
+    # Tests with savepoint DB isolation set this so the request session sees seeded rows.
+    signals_sync_compute: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

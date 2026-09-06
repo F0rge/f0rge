@@ -49,3 +49,21 @@ def signals_key(
 
 def signals_prefix(user_id: uuid.UUID) -> str:
     return f"u:{user_id}:signals:"
+
+
+def signals_inflight_key(
+    user_id: uuid.UUID,
+    outcome: str,
+    start: datetime.date | None,
+    end: datetime.date | None,
+) -> str:
+    return f"{signals_key(user_id, outcome, start, end)}:inflight"
+
+
+def signals_failed_key(
+    user_id: uuid.UUID,
+    outcome: str,
+    start: datetime.date | None,
+    end: datetime.date | None,
+) -> str:
+    return f"{signals_key(user_id, outcome, start, end)}:failed"

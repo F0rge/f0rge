@@ -47,6 +47,19 @@ async def set(key: str, value: str, ttl_seconds: int) -> None:
         logger.exception("Redis SET failed for key %s", key)
 
 
+async def set_nx(key: str, value: str, ttl_seconds: int) -> bool:
+    """SET key only if absent (NX). Returns True if this caller acquired the key."""
+    client = await _get_client()
+    if client is None:
+        return False
+    try:
+        result = await client.set(key, value, ex=ttl_seconds, nx=True)
+        return bool(result)
+    except Exception:
+        logger.exception("Redis SET NX failed for key %s", key)
+        return False
+
+
 async def delete(key: str) -> None:
     client = await _get_client()
     if client is None:

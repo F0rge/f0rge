@@ -14,6 +14,9 @@ export interface SignalsMeta {
   outcome: string
   start: string | null
   end: string | null
+  computing?: boolean
+  quality_deferred?: boolean
+  compute_error?: string | null
 }
 
 export interface SignalsModel {

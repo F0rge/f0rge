@@ -118,14 +118,18 @@ async def test_signals_cache_hit_skips_recompute(
 
     def counting_estimate(*args, **kwargs):
         calls["n"] += 1
-        return real(*args, bootstrap_n=50, **kwargs)
+        kwargs = dict(kwargs)
+        kwargs["bootstrap_n"] = 50
+        return real(*args, **kwargs)
 
     monkeypatch.setattr("app.services.signals.service.estimate_all_effects", counting_estimate)
 
     resp1 = await authed_client.get("/api/v1/signals", params={"outcome": "overall"})
-    resp2 = await authed_client.get("/api/v1/signals", params={"outcome": "overall"})
     assert resp1.status_code == 200
+    assert resp1.json()["meta"]["computing"] is False
+    resp2 = await authed_client.get("/api/v1/signals", params={"outcome": "overall"})
     assert resp2.status_code == 200
+    assert resp2.json()["meta"]["computing"] is False
     assert calls["n"] == 1
 
 
@@ -142,7 +146,9 @@ async def test_signals_invalidate_clears_cache(
 
     def counting_estimate(*args, **kwargs):
         calls["n"] += 1
-        return real(*args, bootstrap_n=50, **kwargs)
+        kwargs = dict(kwargs)
+        kwargs["bootstrap_n"] = 50
+        return real(*args, **kwargs)
 
     monkeypatch.setattr("app.services.signals.service.estimate_all_effects", counting_estimate)
 
@@ -152,6 +158,56 @@ async def test_signals_invalidate_clears_cache(
     await invalidate_user_insights_cache(user_id, today)
     await authed_client.get("/api/v1/signals", params={"outcome": "overall"})
     assert calls["n"] == 2
+
+
+async def test_signals_inflight_dedupes_concurrent_compute(
+    authed_client: AsyncClient,
+    memory_redis: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GET while inflight marker is set returns computing without recomputing."""
+    await _seed_usable_window(authed_client, days=62)
+    calls = {"n": 0}
+    real = __import__(
+        "app.services.signals.effects", fromlist=["estimate_all_effects"]
+    ).estimate_all_effects
+
+    def counting_estimate(*args, **kwargs):
+        calls["n"] += 1
+        kwargs = dict(kwargs)
+        kwargs["bootstrap_n"] = 50
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr("app.services.signals.service.estimate_all_effects", counting_estimate)
+
+    user_id = await authed_user_id(authed_client)
+    from app.cache.keys import signals_inflight_key
+
+    inflight = signals_inflight_key(user_id, "overall", None, None)
+    memory_redis["store"][inflight] = "1"
+
+    resp = await authed_client.get("/api/v1/signals", params={"outcome": "overall"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["meta"]["computing"] is True
+    assert calls["n"] == 0
+
+
+async def test_signals_background_returns_computing_stub(
+    authed_client: AsyncClient,
+    memory_redis: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With sync_compute off, cache miss returns computing and enqueues work."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "signals_sync_compute", False)
+    await _seed_usable_window(authed_client, days=10)
+    resp = await authed_client.get("/api/v1/signals", params={"outcome": "overall"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["meta"]["computing"] is True
+    assert body["drivers"] == []
 
 
 async def test_signals_no_mirrors_in_drivers_with_symptoms(

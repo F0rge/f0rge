@@ -14262,6 +14262,27 @@
               }
             ],
             "title": "End"
+          },
+          "computing": {
+            "type": "boolean",
+            "title": "Computing",
+            "default": false
+          },
+          "quality_deferred": {
+            "type": "boolean",
+            "title": "Quality Deferred",
+            "default": false
+          },
+          "compute_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compute Error"
           }
         },
         "type": "object",

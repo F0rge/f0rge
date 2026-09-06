@@ -3761,6 +3761,18 @@ export interface components {
             start?: string | null;
             /** End */
             end?: string | null;
+            /**
+             * Computing
+             * @default false
+             */
+            computing: boolean;
+            /**
+             * Quality Deferred
+             * @default false
+             */
+            quality_deferred: boolean;
+            /** Compute Error */
+            compute_error?: string | null;
         };
         /** SignalsMirrorResponse */
         SignalsMirrorResponse: {
