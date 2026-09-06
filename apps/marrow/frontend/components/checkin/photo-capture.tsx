@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { BookOpen, Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
 import { MealLibrarySheet } from './meal-library-sheet'
 import { MealTimeChips } from './meal-time-chips'
@@ -14,6 +14,8 @@ import { statusText } from '@/lib/ui/status'
 interface StagedPhoto {
   id: string
   file: File
+  /** Stable object URL — created once per file, revoked on remove/unmount. */
+  previewUrl: string
   label: string
   mealTime: Date
   taggedHandles: string[]
@@ -43,6 +45,27 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
 
   const [photos, setPhotos] = useState<StagedPhoto[]>([])
   const [libraryOpen, setLibraryOpen] = useState(false)
+  // Serialize uploads so concurrent picks cannot race on backend filename allocation.
+  const uploadChainRef = useRef(Promise.resolve())
+  const photosRef = useRef(photos)
+  photosRef.current = photos
+
+  useEffect(() => {
+    return () => {
+      for (const photo of photosRef.current) {
+        URL.revokeObjectURL(photo.previewUrl)
+      }
+    }
+  }, [])
+
+  const enqueueUpload = useCallback((task: () => Promise<void>) => {
+    const next = uploadChainRef.current.then(task, task)
+    uploadChainRef.current = next.then(
+      () => undefined,
+      () => undefined,
+    )
+    return next
+  }, [])
 
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return
@@ -54,6 +77,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     const staged: StagedPhoto[] = incoming.map((file) => ({
       id: generateId(),
       file,
+      previewUrl: URL.createObjectURL(file),
       label: '',
       mealTime: new Date(now),
       taggedHandles: [],
@@ -64,11 +88,15 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
   }, [])
 
   const removePhoto = useCallback((id: string) => {
-    setPhotos((prev) => prev.filter((p) => p.id !== id))
+    setPhotos((prev) => {
+      const target = prev.find((p) => p.id === id)
+      if (target) URL.revokeObjectURL(target.previewUrl)
+      return prev.filter((p) => p.id !== id)
+    })
   }, [])
 
-  const retryUpload = useCallback(async (id: string) => {
-    const photo = photos.find((p) => p.id === id)
+  const runUpload = useCallback(async (id: string) => {
+    const photo = photosRef.current.find((p) => p.id === id)
     if (!photo) return
 
     setPhotos((prev) =>
@@ -88,41 +116,11 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         taggedGroupIds: photo.taggedGroupIds,
       })
 
-      setPhotos((prev) => prev.filter((p) => p.id !== id))
-    } catch (err) {
-      const msg = getErrorDetail(err, 'Upload failed')
-      setPhotos((prev) =>
-        prev.map((p) =>
-          p.id === id
-            ? { ...p, status: 'error', errorMessage: msg }
-            : p,
-        ),
-      )
-    }
-  }, [photos, date, ensureEntryExists, onEntryEnsured, uploadPhoto])
-
-  const triggerUpload = useCallback(async (id: string) => {
-    const photo = photos.find((p) => p.id === id)
-    if (!photo || photo.status !== 'staged') return
-
-    setPhotos((prev) =>
-      prev.map((p) => p.id === id ? { ...p, status: 'uploading', errorMessage: undefined } : p),
-    )
-
-    await ensureEntryExists()
-    onEntryEnsured?.()
-
-    try {
-      await uploadPhoto.mutateAsync({
-        date,
-        file: photo.file,
-        label: photo.label || undefined,
-        mealTime: photo.mealTime,
-        taggedHandles: photo.taggedHandles,
-        taggedGroupIds: photo.taggedGroupIds,
+      setPhotos((prev) => {
+        const target = prev.find((p) => p.id === id)
+        if (target) URL.revokeObjectURL(target.previewUrl)
+        return prev.filter((p) => p.id !== id)
       })
-
-      setPhotos((prev) => prev.filter((p) => p.id !== id))
     } catch (err) {
       const msg = getErrorDetail(err, 'Upload failed')
       setPhotos((prev) =>
@@ -133,7 +131,17 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         ),
       )
     }
-  }, [photos, date, ensureEntryExists, onEntryEnsured, uploadPhoto])
+  }, [date, ensureEntryExists, onEntryEnsured, uploadPhoto])
+
+  const retryUpload = useCallback((id: string) => {
+    void enqueueUpload(() => runUpload(id))
+  }, [enqueueUpload, runUpload])
+
+  const triggerUpload = useCallback((id: string) => {
+    const photo = photosRef.current.find((p) => p.id === id)
+    if (!photo || photo.status !== 'staged') return
+    void enqueueUpload(() => runUpload(id))
+  }, [enqueueUpload, runUpload])
 
   return (
     <div className="space-y-3">
@@ -190,7 +198,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                 <div className="relative size-16 shrink-0 overflow-hidden rounded-md bg-muted">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={URL.createObjectURL(photo.file)}
+                    src={photo.previewUrl}
                     alt={`Photo ${photo.label || photo.file.name}`}
                     className="size-full object-cover"
                   />
@@ -231,7 +239,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                       )}
                       <button
                         type="button"
-                        onClick={() => void retryUpload(photo.id)}
+                        onClick={() => retryUpload(photo.id)}
                         className={cn('mt-1 text-xs underline underline-offset-2', statusText.warn)}
                       >
                         Retry upload
@@ -250,7 +258,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
               {photo.status === 'staged' && (
                 <button
                   type="button"
-                  onClick={() => void triggerUpload(photo.id)}
+                  onClick={() => triggerUpload(photo.id)}
                   className="mt-2 flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                 >
                   Upload

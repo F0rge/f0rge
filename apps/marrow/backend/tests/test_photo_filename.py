@@ -245,3 +245,66 @@ def test_save_photo_writes_when_target_does_not_exist(
     save_photo(b"hello", "fresh.jpg")
 
     assert (photo_dir / "fresh.jpg").read_bytes() == b"hello"
+
+
+# ---------------------------------------------------------------------------
+# Concurrent-upload TOCTOU: advisory lock around allocate + save
+# ---------------------------------------------------------------------------
+
+
+async def test_next_photo_filename_collides_without_intervening_save(
+    async_db: AsyncSession, real_storage: None
+) -> None:
+    """Two naked picks return the same name — the race upload must serialize."""
+    from app.services.photos import next_photo_filename
+
+    day = datetime.date(2026, 5, 18)
+    entry = await _make_entry(async_db, day)
+
+    first = await next_photo_filename(async_db, entry)
+    second = await next_photo_filename(async_db, entry)
+    assert first == second == "2026-05-18_photo-1.jpg"
+
+
+async def test_upload_holds_advisory_lock_during_filename_pick(
+    async_db: AsyncSession, real_storage: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PhotoService.upload must hold pg_advisory_lock while picking the name."""
+    from sqlalchemy import text
+
+    import app.services.photos as photos_mod
+
+    day = datetime.date(2026, 5, 18)
+    await _make_entry(async_db, day)
+
+    held: list[bool] = []
+    original = photos_mod.next_photo_filename
+
+    async def _spy(db: AsyncSession, entry: Entry, ext: str = ".jpg") -> str:
+        row = (
+            await db.execute(
+                text(
+                    "SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()"
+                )
+            )
+        ).first()
+        held.append(row is not None)
+        return await original(db, entry, ext)
+
+    monkeypatch.setattr(photos_mod, "next_photo_filename", _spy)
+
+    await _upload(async_db, day)
+    assert held == [True], "upload must hold an advisory lock across next_photo_filename"
+
+
+async def test_sequential_uploads_under_lock_still_increment(
+    async_db: AsyncSession, real_storage: None
+) -> None:
+    """Sanity: lock path still assigns photo-1 then photo-2."""
+    day = datetime.date(2026, 5, 18)
+    await _make_entry(async_db, day)
+
+    first = await _upload(async_db, day)
+    second = await _upload(async_db, day)
+    assert first.filename == "2026-05-18_photo-1.jpg"
+    assert second.filename == "2026-05-18_photo-2.jpg"

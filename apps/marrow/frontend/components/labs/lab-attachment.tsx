@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, cn } from '@f0rge/ui'
 import { Download, FileText } from 'lucide-react'
 import type { Lab, SourceKind } from '@/lib/api/types'
@@ -45,6 +45,10 @@ function LabImageAttachment({ lab }: { lab: Lab }) {
   const [imgError, setImgError] = useState(false)
   const src = labAttachmentSrc(lab.id)
 
+  useEffect(() => {
+    setImgError(false)
+  }, [lab.id])
+
   return (
     <div className="min-w-0 space-y-2">
       <SourceFilename filename={humanSourceFilename(lab.source_path)} />
@@ -57,6 +61,7 @@ function LabImageAttachment({ lab }: { lab: Lab }) {
           aria-label="View original image"
         >
           <img
+            key={lab.id}
             src={src}
             alt="Lab scan"
             className="max-h-[min(70dvh,36rem)] w-full cursor-zoom-in object-contain"
@@ -91,6 +96,7 @@ function LabPdfAttachment({ lab, preview }: { lab: Lab; preview: boolean }) {
       {preview ? (
         <div className="min-w-0 overflow-hidden rounded-lg border border-border">
           <iframe
+            key={lab.id}
             src={inlineSrc}
             title="Lab PDF preview"
             className="h-64 w-full bg-muted/30"
@@ -124,11 +130,11 @@ export function LabAttachment({ lab, className, pdfPreview = false }: LabAttachm
   return (
     <div className={cn('min-w-0', className)}>
       {isImageAttachment(source_kind, attachment_path) ? (
-        <LabImageAttachment lab={lab} />
+        <LabImageAttachment key={lab.id} lab={lab} />
       ) : isPdfAttachment(source_kind, attachment_path) ? (
-        <LabPdfAttachment lab={lab} preview={pdfPreview} />
+        <LabPdfAttachment key={lab.id} lab={lab} preview={pdfPreview} />
       ) : (
-        <LabFileAttachment lab={lab} />
+        <LabFileAttachment key={lab.id} lab={lab} />
       )}
     </div>
   )
