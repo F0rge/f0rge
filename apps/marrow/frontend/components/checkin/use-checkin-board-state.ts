@@ -248,6 +248,9 @@ export function useCheckinBoardState({
       setAlcoholUnits(existingEntry.alcohol_units ?? 0)
       setCaffeineServings(existingEntry.caffeine_servings ?? 0)
       setExistingPhotos(existingEntry.photos || [])
+    } else {
+      // Entry gone (or never existed) — drop stale thumbnails from a prior load.
+      setExistingPhotos([])
     }
   }, [existingEntry])
 
