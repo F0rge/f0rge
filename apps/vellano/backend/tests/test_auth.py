@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import subprocess
+from pathlib import Path
 
+import pytest
 from httpx import AsyncClient
 
 from app.services.auth import JWT_COOKIE_NAME
@@ -95,16 +96,27 @@ async def test_disabled_user_cannot_login(
     assert JWT_COOKIE_NAME not in login_resp.cookies
 
 
+@pytest.mark.no_db
 def test_no_ht_session_string_in_implementation() -> None:
-    result = subprocess.run(
-        [
-            "rg",
-            "ht_session",
-            "/workspace/apps/vellano/backend/app",
-            "/workspace/apps/vellano/frontend/src",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 1, result.stdout
+    """Vellano must not reuse Marrow's ht_session cookie name."""
+    backend_root = Path(__file__).resolve().parents[1]
+    app_roots = [
+        backend_root / "app",
+        backend_root.parent / "frontend" / "src",
+    ]
+    hits: list[str] = []
+    for root in app_roots:
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in {".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}:
+                continue
+            try:
+                content = path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            if "ht_session" in content:
+                hits.append(str(path.relative_to(backend_root.parent.parent.parent)))
+    assert hits == [], f"ht_session found in: {hits}"
