@@ -20,7 +20,13 @@ function normalizeSignals(body: Omit<SignalsResponse, 'drivers'> & { drivers: Si
 
 export function useSignals(outcome: string, start: string, end: string) {
   const params = new URLSearchParams({ outcome, start, end })
-  const [computingTimedOut, setComputingTimedOut] = useState(false)
+  const scopeKey = `${outcome}|${start}|${end}`
+  const [timeoutState, setTimeoutState] = useState({ scopeKey, timedOut: false })
+  // Reset timeout when query params change (render-time adjust — no setState-in-effect).
+  if (timeoutState.scopeKey !== scopeKey) {
+    setTimeoutState({ scopeKey, timedOut: false })
+  }
+  const computingTimedOut = timeoutState.timedOut
 
   const query = useQuery<SignalsResponse>({
     queryKey: ['signals', outcome, start, end],
@@ -44,22 +50,18 @@ export function useSignals(outcome: string, start: string, end: string) {
   const computeError = query.data?.meta?.compute_error ?? null
 
   useEffect(() => {
-    setComputingTimedOut(false)
-  }, [outcome, start, end])
-
-  useEffect(() => {
     if (!computing || computeError) return
     const started = Date.now()
     const id = window.setInterval(() => {
       if (Date.now() - started >= COMPUTING_TIMEOUT_MS) {
-        setComputingTimedOut(true)
+        setTimeoutState({ scopeKey, timedOut: true })
       }
     }, 1000)
     return () => window.clearInterval(id)
-  }, [computing, computeError, outcome, start, end])
+  }, [computing, computeError, scopeKey])
 
   function refetchAndReset() {
-    setComputingTimedOut(false)
+    setTimeoutState({ scopeKey, timedOut: false })
     return query.refetch()
   }
 
