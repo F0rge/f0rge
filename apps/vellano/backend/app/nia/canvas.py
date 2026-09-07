@@ -198,13 +198,13 @@ def set_canvas_spec(title: str, components: list[Any]) -> Optional[dict[str, Any
     }
 
 
-def add_canvas_component(spec: Optional[dict[str, Any]], component: Any) -> Optional[dict[str, Any]]:
+def add_canvas_component(
+    spec: Optional[dict[str, Any]], component: Any
+) -> Optional[dict[str, Any]]:
     parsed = parse_canvas_component(component)
     if parsed is None:
         return None
-    current = parse_canvas_spec(spec) or empty_canvas_spec(
-        str((spec or {}).get("title") or "")
-    )
+    current = parse_canvas_spec(spec) or empty_canvas_spec(str((spec or {}).get("title") or ""))
     components = [entry for entry in current["components"] if entry.get("id") != parsed["id"]]
     components.append(parsed)
     return {
@@ -216,9 +216,7 @@ def add_canvas_component(spec: Optional[dict[str, Any]], component: Any) -> Opti
 
 
 def remove_canvas_component(spec: Optional[dict[str, Any]], component_id: str) -> dict[str, Any]:
-    current = parse_canvas_spec(spec) or empty_canvas_spec(
-        str((spec or {}).get("title") or "")
-    )
+    current = parse_canvas_spec(spec) or empty_canvas_spec(str((spec or {}).get("title") or ""))
     return {
         "kind": CANVAS_SPEC_KIND,
         "path": CANVAS_PATH,
