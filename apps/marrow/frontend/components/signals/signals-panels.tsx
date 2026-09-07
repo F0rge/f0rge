@@ -15,6 +15,9 @@ interface FetchProps {
   isFetching: boolean
   isError: boolean
   hasData: boolean
+  computing?: boolean
+  computingTimedOut?: boolean
+  computeError?: string | null
   onRetry: () => void
 }
 
@@ -23,11 +26,54 @@ export function SignalsFetchStatus({
   isFetching,
   isError,
   hasData,
+  computing = false,
+  computingTimedOut = false,
+  computeError = null,
   onRetry,
 }: FetchProps) {
   return (
     <>
-      {isPending && !hasData && (
+      {computing && !computingTimedOut && !computeError && (
+        <div
+          role="status"
+          className="mb-3 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm"
+          aria-label="Computing signals"
+        >
+          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          <span>Computing signals…</span>
+        </div>
+      )}
+      {computing && computingTimedOut && (
+        <div
+          role="status"
+          className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs"
+        >
+          <span>Signals are taking longer than expected.</span>
+          <button
+            type="button"
+            className="font-medium underline-offset-4 hover:underline"
+            onClick={onRetry}
+          >
+            Keep waiting
+          </button>
+        </div>
+      )}
+      {computeError && (
+        <div
+          role="status"
+          className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+        >
+          <span>Signals compute failed. Retry to try again.</span>
+          <button
+            type="button"
+            className="font-medium underline-offset-4 hover:underline"
+            onClick={onRetry}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {isPending && !hasData && !computing && (
         <div
           role="status"
           className="flex items-center justify-center py-12"
@@ -36,7 +82,7 @@ export function SignalsFetchStatus({
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       )}
-      {isFetching && hasData && (
+      {isFetching && hasData && !computing && (
         <p className="text-xs text-muted-foreground" role="status">
           Updating…
         </p>

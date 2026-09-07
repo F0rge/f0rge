@@ -17,6 +17,9 @@ class SignalsMetaResponse(BaseModel):
     outcome: str
     start: Optional[str] = None
     end: Optional[str] = None
+    computing: bool = False
+    quality_deferred: bool = False
+    compute_error: Optional[str] = None
 
 
 class SignalsModelResponse(BaseModel):

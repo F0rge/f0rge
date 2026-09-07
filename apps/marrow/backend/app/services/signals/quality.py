@@ -44,8 +44,8 @@ class ModelQuality:
     noise_floor_mae: float
     noise_sd: float
     skill: float
-    holdout_rmse: float
-    holdout_r2: float
+    holdout_rmse: float | None
+    holdout_r2: float | None
     r2_basis: Literal["variance"]
 
 
@@ -282,8 +282,14 @@ def compute_model_quality(
     ctx: AttributionContext | None = None,
     noise: NoiseFloorEstimate | None = None,
     effects: list[EffectResult] | None = None,
+    *,
+    compute_holdout: bool = True,
 ) -> ModelQuality:
-    """Model-quality block — MAE, skill, holdout RMSE/R² with explicit ``r2_basis``."""
+    """Model-quality block — MAE, skill, holdout RMSE/R² with explicit ``r2_basis``.
+
+    Interactive GET passes ``compute_holdout=False`` to skip expensive 5-fold OOF
+    re-estimation; holdout metrics stay None until a full offline pass.
+    """
     base = baseline if baseline is not None else compute_baseline_residuals(rows, columns)
     context = ctx if ctx is not None else build_attribution_context(rows, columns, base)
     floor = noise if noise is not None else estimate_noise_floor(rows, columns, base, effects)
@@ -292,20 +298,22 @@ def compute_model_quality(
     errors = actuals - predicted
     mae = float(np.mean(np.abs(errors))) if errors.size else 0.0
 
-    holdout_actuals, holdout_predicted = _model_predictions(rows, columns, base, context)
-    holdout_errors = holdout_actuals - holdout_predicted
-    holdout_rmse = float(np.sqrt(np.mean(holdout_errors**2))) if holdout_errors.size else 0.0
-
     usable_residuals = [
         float(base.residuals[i]) for i in context.usable_indices if base.residuals[i] is not None
     ]
     baseline_mae = float(np.mean(np.abs(usable_residuals))) if usable_residuals else 0.0
 
-    var_y = float(np.var(holdout_actuals, ddof=1)) if holdout_actuals.size > 1 else 0.0
-    if var_y > 0.0:
-        holdout_r2 = float(1.0 - np.mean(holdout_errors**2) / var_y)
-    else:
-        holdout_r2 = 0.0
+    holdout_rmse: float | None = None
+    holdout_r2: float | None = None
+    if compute_holdout:
+        holdout_actuals, holdout_predicted = _model_predictions(rows, columns, base, context)
+        holdout_errors = holdout_actuals - holdout_predicted
+        holdout_rmse = float(np.sqrt(np.mean(holdout_errors**2))) if holdout_errors.size else 0.0
+        var_y = float(np.var(holdout_actuals, ddof=1)) if holdout_actuals.size > 1 else 0.0
+        if var_y > 0.0:
+            holdout_r2 = float(1.0 - np.mean(holdout_errors**2) / var_y)
+        else:
+            holdout_r2 = 0.0
 
     denom = baseline_mae - floor.noise_floor_mae
     if abs(denom) < 1e-12:

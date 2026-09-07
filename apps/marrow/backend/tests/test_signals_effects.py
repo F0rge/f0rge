@@ -210,3 +210,30 @@ def test_perf_full_pass_under_8s() -> None:
     assert len(effects) >= 8
     assert elapsed < 8.0, f"perf {elapsed:.2f}s exceeded 8s budget"
     pytest.perf_seconds = elapsed  # noqa: B018 — for reporting
+
+
+def test_precondition_fail_skips_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Failed preconditions must not run the B-bootstrap loop."""
+    import app.services.signals.effects as effects_mod
+
+    calls = {"n": 0}
+    real_boot = effects_mod._bootstrap_theta
+
+    def counting_boot(*args, **kwargs):
+        calls["n"] += 1
+        return real_boot(*args, **kwargs)
+
+    monkeypatch.setattr(effects_mod, "_bootstrap_theta", counting_boot)
+
+    rng = np.random.default_rng(5)
+    n = 92
+    exposed = np.zeros(n, dtype=bool)
+    exposed[20:35] = True  # single run → fails MIN_EXPOSED_RUNS
+    x = exposed.astype(float)
+    residuals = rng.normal(0, 0.3, n)
+    result = effects_mod.estimate_effect_from_arrays(
+        residuals, x, shape="binary", bootstrap_n=200, rng=rng
+    )
+    assert result.tier == "insufficient"
+    assert calls["n"] == 0
+    assert result.exposed_mask is not None
