@@ -127,14 +127,20 @@ class LocationBinService:
         if data.is_default is False and bin_row.is_default:
             raise ConflictError("Cannot clear default without assigning another")
 
+        promote_default = False
         if data.is_default is True:
             if bin_row.is_archived:
                 raise ConflictError("Archived bin cannot become default")
             await self.crud.clear_default(location_id, bin_row.id)
-            bin_row.is_default = True
+            promote_default = True
 
         try:
             async with unit_of_work(self.db):
+                # Persist clear_default before promoting so the partial unique
+                # index uq_location_bins_one_active_default is not violated.
+                if promote_default:
+                    await self.crud.flush()
+                    bin_row.is_default = True
                 await self.crud.flush()
         except IntegrityError as exc:
             raise ConflictError("A bin already exists at this location") from exc

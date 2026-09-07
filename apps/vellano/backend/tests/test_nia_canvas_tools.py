@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 from pydantic_ai import models
+from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.models.test import TestModel
 
 from app.config import settings
@@ -23,7 +24,29 @@ import app.nia  # noqa: F401 — register tools
 models.ALLOW_MODEL_REQUESTS = False
 
 
-class ArgsTestModel(TestModel):
+class MultiTurnTestModel(TestModel):
+    """Force tool calls on each new user turn even when agent_messages exist.
+
+    Stock ``TestModel`` only emits tool calls when the message list has no
+    ``ModelResponse`` yet — that matches a single-run tool→text cycle, but
+    Nia restores prior ``agent_messages`` on later turns, so turn 2+ would
+    skip tools and leave ``structured_payload`` null. Trim to the latest user
+    prompt before applying that gate.
+    """
+
+    def _request(self, messages, model_settings, model_request_parameters):
+        trimmed = messages
+        for i in range(len(messages) - 1, -1, -1):
+            message = messages[i]
+            if isinstance(message, ModelRequest) and any(
+                isinstance(part, UserPromptPart) for part in message.parts
+            ):
+                trimmed = messages[i:]
+                break
+        return super()._request(trimmed, model_settings, model_request_parameters)
+
+
+class ArgsTestModel(MultiTurnTestModel):
     def __init__(self, tool_name: str, tool_args: dict, **kwargs) -> None:
         self._fixed_tool_name = tool_name
         self._fixed_tool_args = tool_args
@@ -60,6 +83,17 @@ async def _create_thread(client: AsyncClient) -> str:
     return create.json()["id"]
 
 
+def _force_tool_model(model: TestModel) -> TestModel:
+    """Ensure multi-turn force-calls; wrap plain TestModel when needed."""
+    if isinstance(model, MultiTurnTestModel):
+        return model
+    wrapped = MultiTurnTestModel(call_tools=model.call_tools)
+    wrapped.custom_output_text = model.custom_output_text
+    wrapped.custom_output_args = model.custom_output_args
+    wrapped.seed = model.seed
+    return wrapped
+
+
 async def _run_tool(
     client: AsyncClient,
     thread_id: str,
@@ -67,7 +101,8 @@ async def _run_tool(
     model: TestModel,
     message: str,
 ) -> dict:
-    monkeypatch.setattr("app.services.nia_run.build_nia_model", lambda: model)
+    forced = _force_tool_model(model)
+    monkeypatch.setattr("app.services.nia_run.build_nia_model", lambda: forced)
     run = await client.post(
         f"/api/v1/nia/threads/{thread_id}/run",
         json={"message": message},
@@ -78,7 +113,12 @@ async def _run_tool(
     assert thread.status_code == 200
     assistants = [m for m in thread.json()["messages"] if m["role"] == "assistant"]
     assert assistants
-    return assistants[-1]["structured_payload"]
+    payload = assistants[-1]["structured_payload"]
+    assert payload is not None, (
+        "expected structured_payload on latest assistant message; "
+        f"last content={assistants[-1].get('content')!r}"
+    )
+    return payload
 
 
 @pytest.mark.no_db

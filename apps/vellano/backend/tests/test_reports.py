@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import subprocess
 from decimal import Decimal
+from pathlib import Path
 
+import pytest
 from httpx import AsyncClient
 
 
@@ -111,12 +112,16 @@ async def test_vat201_pdf_download(owner_client: AsyncClient) -> None:
     assert resp.content.startswith(b"%PDF")
 
 
+@pytest.mark.no_db
 def test_no_sars_http_client_in_vellano_backend() -> None:
-    result = subprocess.run(
-        ["rg", "-l", "sars\\.gov\\.za", "apps/vellano/backend/app"],
-        capture_output=True,
-        text=True,
-        cwd="/workspace",
-        check=False,
-    )
-    assert result.stdout.strip() == "", f"Found sars.gov.za references: {result.stdout}"
+    """VAT201 is a draft export only — no SARS eFiling HTTP client."""
+    app_root = Path(__file__).resolve().parents[1] / "app"
+    hits: list[str] = []
+    for path in app_root.rglob("*.py"):
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        if "sars.gov.za" in content:
+            hits.append(str(path.relative_to(app_root)))
+    assert hits == [], f"Found sars.gov.za references: {hits}"
