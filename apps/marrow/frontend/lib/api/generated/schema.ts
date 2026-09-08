@@ -3657,6 +3657,11 @@ export interface components {
             has_image: boolean;
             /** Icon Key */
             icon_key?: string | null;
+            /**
+             * Ingredients
+             * @default []
+             */
+            ingredients: string[];
         };
         /**
          * SettingsResponse
@@ -5372,6 +5377,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                /** @description Filter by dish name or ingredient */
+                q?: string | null;
             };
             header?: never;
             path?: never;

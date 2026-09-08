@@ -6,6 +6,7 @@ export interface RecentMeal {
   diet_flags: string[]
   has_image?: boolean
   icon_key?: string | null
+  ingredients?: string[]
 }
 
 export interface PlatformMeal {

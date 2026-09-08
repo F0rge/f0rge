@@ -19,10 +19,13 @@ function mergePhotoIntoEntry(queryClient: ReturnType<typeof useQueryClient>, dat
   invalidateSignals(queryClient)
 }
 
-export function useRecentMeals(limit = 12) {
+export function useRecentMeals(limit = 100, q?: string) {
+  const trimmed = q?.trim() || undefined
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (trimmed) params.set('q', trimmed)
   return useQuery<RecentMeal[]>({
-    queryKey: ['meals', 'recent', limit],
-    queryFn: () => apiGet(`/meals/recent?limit=${limit}`),
+    queryKey: ['meals', 'recent', limit, trimmed ?? ''],
+    queryFn: () => apiGet(`/meals/recent?${params.toString()}`),
   })
 }
 

@@ -45,9 +45,19 @@ class MealService:
         self.platform_crud = PlatformMealCRUD(db)
         self.lookup = IngredientLookupService(db)
 
-    async def list_recent(self, limit: int = 12) -> list[RecentMealResponse]:
-        """Distinct recently-logged meals, most-recent first, deduped by dish name."""
+    async def list_recent(
+        self,
+        limit: int = 100,
+        q: Optional[str] = None,
+    ) -> list[RecentMealResponse]:
+        """Distinct recently-logged meals, most-recent first, deduped by dish name.
+
+        Optional ``q`` matches dish name or any ingredient name/canonical name
+        (case-insensitive substring). Cap is intentional for payload size — not
+        a tiny strip hard-limit; callers that need paging can raise ``limit``.
+        """
         rows = await self.analysis_crud.list_confirmed_with_entry_dates()
+        needle = (q or "").strip().lower() or None
 
         dates_per_dish: dict[str, set[datetime.date]] = {}
         for analysis, entry_date, _photo_id, _filename, _icon_key in rows:
@@ -58,6 +68,11 @@ class MealService:
         for analysis, entry_date, photo_id, filename, icon_key in rows:
             dish = analysis.dish_name
             if dish in seen:
+                continue
+            ingredients = self._ingredient_labels(analysis.ingredients)
+            if needle is not None and not self._matches_recent_query(
+                dish, ingredients, analysis.ingredients, needle
+            ):
                 continue
             seen.add(dish)
             signal = compute_signal_from_analyses([analysis])
@@ -70,11 +85,48 @@ class MealService:
                     diet_flags=sorted(signal.flags),
                     has_image=filename is not None,
                     icon_key=icon_key,
+                    ingredients=ingredients,
                 )
             )
             if len(out) >= limit:
                 break
         return out
+
+    @staticmethod
+    def _ingredient_labels(ingredients: list[PhotoIngredient]) -> list[str]:
+        labels: list[str] = []
+        seen: set[str] = set()
+        for ing in ingredients:
+            if not ing.visible:
+                continue
+            label = (ing.name or ing.canonical_name or "").strip()
+            if not label:
+                continue
+            key = label.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            labels.append(label)
+        return labels
+
+    @staticmethod
+    def _matches_recent_query(
+        dish: str,
+        labels: list[str],
+        ingredients: list[PhotoIngredient],
+        needle: str,
+    ) -> bool:
+        if needle in dish.lower():
+            return True
+        if any(needle in label.lower() for label in labels):
+            return True
+        for ing in ingredients:
+            if not ing.visible:
+                continue
+            for candidate in (ing.name, ing.canonical_name):
+                if candidate and needle in candidate.lower():
+                    return True
+        return False
 
     async def list_library(
         self,

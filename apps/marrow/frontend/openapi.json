@@ -1561,11 +1561,29 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 50,
+              "maximum": 500,
               "minimum": 1,
-              "default": 12,
+              "default": 100,
               "title": "Limit"
             }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by dish name or ingredient",
+              "title": "Q"
+            },
+            "description": "Filter by dish name or ingredient"
           },
           {
             "name": "ht_session",
@@ -13972,6 +13990,14 @@
               }
             ],
             "title": "Icon Key"
+          },
+          "ingredients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ingredients",
+            "default": []
           }
         },
         "type": "object",
