@@ -24,10 +24,11 @@ router = APIRouter(
 
 @router.get("/meals/recent", response_model=list[RecentMealResponse])
 async def recent_meals(
-    limit: int = Query(default=12, ge=1, le=50),
+    limit: int = Query(default=100, ge=1, le=500),
+    q: str | None = Query(default=None, description="Filter by dish name or ingredient"),
     service: MealService = Depends(get_meal_service),
 ) -> list[RecentMealResponse]:
-    return await service.list_recent(limit)
+    return await service.list_recent(limit=limit, q=q)
 
 
 @router.get("/meals/library", response_model=list[PlatformMealResponse])

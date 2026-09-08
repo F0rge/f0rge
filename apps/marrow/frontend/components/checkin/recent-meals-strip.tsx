@@ -51,6 +51,7 @@ function RecentMealChip({
             src={src}
             alt={meal.dish_name}
             className="size-full object-cover"
+            loading="lazy"
             onError={onError}
           />
         ) : (
@@ -77,7 +78,9 @@ function RecentMealChip({
 }
 
 export function RecentMealsStrip({ date }: { date: string }) {
-  const { data: meals = [], isLoading } = useRecentMeals(24)
+  // No tiny hard cap — horizontal row scrolls through the full recent set.
+  // API allows up to 500; 100 keeps payload sane for typical history.
+  const { data: meals = [], isLoading } = useRecentMeals(100)
   const cloneMeal = useCloneMeal()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [cloningId, setCloningId] = useState<number | null>(null)
@@ -100,20 +103,18 @@ export function RecentMealsStrip({ date }: { date: string }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">Log again</span>
-        {meals.length > 8 && (
-          <button
-            type="button"
-            onClick={() => setSheetOpen(true)}
-            className="text-xs font-medium text-primary hover:underline"
-          >
-            Search all
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="shrink-0 text-xs font-medium text-primary hover:underline"
+        >
+          Search all
+        </button>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {meals.slice(0, 8).map((meal) => (
+      <div className="flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
+        {meals.map((meal) => (
           <RecentMealChip
             key={meal.source_photo_id}
             meal={meal}
