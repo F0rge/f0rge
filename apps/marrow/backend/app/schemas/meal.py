@@ -20,6 +20,7 @@ class RecentMealResponse(BaseModel):
     diet_flags: list[str] = []
     has_image: bool = True
     icon_key: Optional[str] = None
+    ingredients: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 

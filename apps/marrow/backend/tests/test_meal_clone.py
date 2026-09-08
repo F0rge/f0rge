@@ -583,6 +583,43 @@ async def test_recent_endpoint_requires_auth(
     assert resp.status_code == 401
 
 
+async def test_recent_includes_ingredients_and_q_matches_ingredient(
+    async_db: AsyncSession, storage
+) -> None:
+    """Log-again search must hit ingredients, not only dish titles."""
+    entry = await _ensure_entry(async_db, SRC_DAY)
+    await _add_meal(async_db, entry, f"{SRC_DAY}_photo-ing.jpg", dish_name="Greek bowl")
+
+    recent = await MealService(async_db).list_recent()
+    bowl = next(r for r in recent if r.dish_name == "Greek bowl")
+    assert "Feta" in bowl.ingredients
+
+    by_ing = await MealService(async_db).list_recent(q="feta")
+    assert {r.dish_name for r in by_ing} == {"Greek bowl"}
+
+    by_canonical = await MealService(async_db).list_recent(q="feta cheese")
+    assert {r.dish_name for r in by_canonical} == {"Greek bowl"}
+
+    miss = await MealService(async_db).list_recent(q="pineapple")
+    assert miss == []
+
+
+async def test_recent_accepts_high_limit(
+    async_db: AsyncSession, storage, authed_client: AsyncClient
+) -> None:
+    user_id = await authed_user_id(authed_client)
+    await apply_session_user_id(async_db, user_id)
+    entry = await _ensure_entry(async_db, SRC_DAY, user_id=user_id)
+    await _add_meal(async_db, entry, f"{SRC_DAY}_photo-limit.jpg", dish_name="Limit meal")
+    resp = await authed_client.get("/api/v1/meals/recent?limit=200")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert any(r["dish_name"] == "Limit meal" for r in body)
+    hit = next(r for r in body if r["dish_name"] == "Limit meal")
+    assert "ingredients" in hit
+    assert "Feta" in hit["ingredients"]
+
+
 # ---------------------------------------------------------------------------
 # clone() — Redis entry cache invalidation
 # ---------------------------------------------------------------------------
