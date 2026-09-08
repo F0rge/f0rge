@@ -1,0 +1,476 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="view-transition" content="same-origin">
+  <title>Vellano - Stock Adjustment</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/994e0004-8500-4354-96a7-a56705d8dbee" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/4853836c-39e8-47d5-89dc-2ef9943e03bb" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/1ef5ed63-3050-4bc4-ae65-a3307b5a8378" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/7dc0776c-8ae6-4f9c-803d-2dad50346c36" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/de9a5ce8-d75a-4c9f-bd57-2f3caa81b55e" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/4cac3240-cf43-45d6-9fdd-d9d067a4d35e" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/85c3d7eb-f0b5-44fc-85f3-5223dd62f364" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/3b26c41b-a7bd-4a1a-91b2-4605848cd20d" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/cc5ffaf0-b29e-4e81-9923-db9b813e318c" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/bc6b9795-edc3-403d-bc9e-a1adc644e3d0" as="document">
+  <style>
+    :root {
+      --cds-background: #f4f4f4;
+      --cds-layer-01: #ffffff;
+      --cds-layer-02: #393939;
+      --cds-text-primary: #161616;
+      --cds-text-secondary: #525252;
+      --cds-interactive: #0f62fe;
+      --cds-border: #e0e0e0;
+      --cds-border-strong: #8d8d8d;
+      --cds-nav-bg: #161616;
+      --cds-nav-text: #c6c6c6;
+      --cds-nav-active: #ffffff;
+      --cds-nav-active-bg: #393939;
+    }
+    html {
+        background-color: var(--cds-background);
+    }
+    @view-transition {
+        navigation: auto;
+    }
+    ::view-transition {
+        background-color: var(--cds-background);
+    }
+    ::view-transition-old(header),
+    ::view-transition-new(header) {
+        animation: none;
+        mix-blend-mode: normal;
+    }
+    ::view-transition-old(sidenav),
+    ::view-transition-new(sidenav) {
+        animation: none;
+        mix-blend-mode: normal;
+    }
+    ::view-transition-old(main-content) {
+        animation: 0.25s ease-out both fade-out;
+    }
+    ::view-transition-new(main-content) {
+        animation: 0.25s ease-in 0.1s both fade-in;
+    }
+    @keyframes fade-out {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+    @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+        animation: none;
+        mix-blend-mode: normal;
+    }
+
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background-color: var(--cds-background);
+      color: var(--cds-text-primary);
+      margin: 0;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1.28572;
+    }
+    .header {
+      height: 48px;
+      background-color: var(--cds-nav-bg);
+      color: var(--cds-nav-active);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      border-bottom: 1px solid var(--cds-layer-02);
+    }
+    .sidenav {
+      width: 16rem;
+      background-color: var(--cds-nav-bg);
+      position: fixed;
+      top: 48px;
+      bottom: 0;
+      left: 0;
+      overflow-y: auto;
+      z-index: 40;
+      border-right: 1px solid var(--cds-layer-02);
+    }
+    .sidenav-item {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 16px;
+      color: var(--cds-nav-text);
+      text-decoration: none;
+      border-left: 4px solid transparent;
+    }
+    .sidenav-item:hover {
+      background-color: var(--cds-layer-02);
+      color: var(--cds-nav-active);
+    }
+    .sidenav-item.active {
+      background-color: var(--cds-nav-active-bg);
+      color: var(--cds-nav-active);
+      border-left-color: var(--cds-interactive);
+    }
+    .sidenav-icon {
+      margin-right: 16px;
+      font-size: 16px;
+    }
+    .main-content {
+      margin-top: 48px;
+      margin-left: 16rem;
+      padding: 24px;
+      min-height: calc(100vh - 48px);
+    }
+    .tile {
+      background-color: var(--cds-layer-01);
+      border: 1px solid var(--cds-border);
+      padding: 16px;
+      height: 100%;
+    }
+    .btn-primary {
+      background-color: var(--cds-interactive);
+      color: #fff;
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-primary:hover {
+      background-color: #0353e9;
+    }
+    .btn-secondary {
+      background-color: #393939;
+      color: #fff;
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-secondary:hover {
+      background-color: #4c4c4c;
+    }
+    .header-search {
+      background-color: var(--cds-layer-02);
+      border: none;
+      border-bottom: 1px solid var(--cds-border-strong);
+      color: #fff;
+      height: 32px;
+      padding: 0 16px 0 40px;
+      width: 280px;
+      font-family: inherit;
+    }
+    .header-search:focus {
+      outline: 2px solid #fff;
+      outline-offset: -2px;
+    }
+    .cds-input, .cds-select {
+      width: 100%;
+      height: 40px;
+      background-color: var(--cds-layer-01);
+      border: none;
+      border-bottom: 1px solid var(--cds-border-strong);
+      padding: 0 16px;
+      color: var(--cds-text-primary);
+      font-family: inherit;
+      font-size: 14px;
+    }
+    .cds-input:focus, .cds-select:focus {
+      outline: 2px solid var(--cds-interactive);
+      outline-offset: -2px;
+    }
+    .cds-label {
+      display: block;
+      font-size: 12px;
+      color: var(--cds-text-secondary);
+      margin-bottom: 8px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .data-table th {
+      text-align: left;
+      padding: 8px 16px;
+      background-color: var(--cds-border);
+      font-weight: 600;
+      border-bottom: 1px solid var(--cds-border-strong);
+    }
+    .data-table td {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--cds-border);
+      background-color: var(--cds-layer-01);
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <!-- Header -->
+    <header class="header" style="view-transition-name: header">
+      <div class="flex items-center h-full">
+        <button class="w-12 h-12 flex items-center justify-center border-r border-[#393939] hover:bg-[#393939]">
+          <iconify-icon icon="carbon:menu" class="text-xl"></iconify-icon>
+        </button>
+        <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" class="px-4 text-[14px] font-semibold text-white tracking-wide flex items-center h-full">
+          <span class="font-normal mr-1">F0rge</span> Vellano
+        </a>
+      </div>
+      <div class="flex items-center h-full">
+        <div class="relative flex items-center h-full border-l border-[#393939]">
+          <iconify-icon icon="carbon:search" class="absolute left-4 text-white"></iconify-icon>
+          <input type="text" class="header-search" placeholder="Search...">
+        </div>
+        <div class="px-4 flex items-center border-l border-[#393939] h-full">
+          <span class="text-[14px]">admin@vellano.co.za</span>
+        </div>
+        <button class="w-12 h-12 flex items-center justify-center border-l border-[#393939] hover:bg-[#393939]">
+          <iconify-icon icon="carbon:logout" class="text-xl"></iconify-icon>
+        </button>
+      </div>
+    </header>
+
+    <!-- SideNav -->
+    <nav class="sidenav" style="view-transition-name: sidenav">
+      <div class="py-2">
+        <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" class="sidenav-item">
+          <iconify-icon icon="carbon:home" class="sidenav-icon"></iconify-icon>
+          Home
+        </a>
+        <a href="#locations" class="sidenav-item">
+          <iconify-icon icon="carbon:location" class="sidenav-icon"></iconify-icon>
+          Locations
+        </a>
+        <a href="#suppliers" class="sidenav-item">
+          <iconify-icon icon="carbon:industry" class="sidenav-icon"></iconify-icon>
+          Suppliers
+        </a>
+        <a href="#proformas" class="sidenav-item">
+          <iconify-icon icon="carbon:document" class="sidenav-icon"></iconify-icon>
+          Proformas
+        </a>
+        <a href="https://p.superdesign.dev/draft/85c3d7eb-f0b5-44fc-85f3-5223dd62f364" class="sidenav-item">
+          <iconify-icon icon="carbon:catalog" class="sidenav-icon"></iconify-icon>
+          Catalogue
+        </a>
+        <a href="#stock" class="sidenav-item">
+          <iconify-icon icon="carbon:product" class="sidenav-icon"></iconify-icon>
+          Stock
+        </a>
+        <a href="https://p.superdesign.dev/draft/4853836c-39e8-47d5-89dc-2ef9943e03bb" class="sidenav-item pl-12">
+          Stocktakes
+        </a>
+        <a href="https://p.superdesign.dev/draft/1ef5ed63-3050-4bc4-ae65-a3307b5a8378" class="sidenav-item pl-12 active">
+          Adjustments
+        </a>
+        <a href="https://p.superdesign.dev/draft/7dc0776c-8ae6-4f9c-803d-2dad50346c36" class="sidenav-item pl-12">
+          Import
+        </a>
+        <a href="#purchase-orders" class="sidenav-item">
+          <iconify-icon icon="carbon:purchase" class="sidenav-icon"></iconify-icon>
+          Purchase orders
+        </a>
+        <a href="#transit" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery" class="sidenav-icon"></iconify-icon>
+          Transit
+        </a>
+        <a href="#receive" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery-parcel" class="sidenav-icon"></iconify-icon>
+          Receive
+        </a>
+        <a href="#transfers" class="sidenav-item">
+          <iconify-icon icon="carbon:movement" class="sidenav-icon"></iconify-icon>
+          Transfers
+        </a>
+        <a href="https://p.superdesign.dev/draft/bc6b9795-edc3-403d-bc9e-a1adc644e3d0" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery-truck" class="sidenav-icon"></iconify-icon>
+          Deliveries
+        </a>
+        <a href="https://p.superdesign.dev/draft/3b26c41b-a7bd-4a1a-91b2-4605848cd20d" class="sidenav-item">
+          <iconify-icon icon="carbon:store" class="sidenav-icon"></iconify-icon>
+          Till
+        </a>
+        <a href="https://p.superdesign.dev/draft/cc5ffaf0-b29e-4e81-9923-db9b813e318c" class="sidenav-item">
+          <iconify-icon icon="carbon:user-multiple" class="sidenav-icon"></iconify-icon>
+          Customers
+        </a>
+        <div class="mt-4 mb-2 px-4 text-xs font-semibold uppercase text-[#8d8d8d] tracking-wider">Books</div>
+        <a href="#chart-of-accounts" class="sidenav-item">
+          <iconify-icon icon="carbon:finance" class="sidenav-icon"></iconify-icon>
+          Chart of accounts
+        </a>
+        <a href="#contacts" class="sidenav-item pl-12">Contacts</a>
+        <a href="#invoices" class="sidenav-item pl-12">Invoices</a>
+        <a href="#credit-notes" class="sidenav-item pl-12">Credit notes</a>
+        <a href="#bills" class="sidenav-item pl-12">Bills</a>
+        <a href="#payments" class="sidenav-item pl-12">Payments</a>
+        <a href="#bank-reconciliation" class="sidenav-item pl-12">Bank reconciliation</a>
+        <a href="#reports" class="sidenav-item pl-12">Reports</a>
+        <a href="#vat201" class="sidenav-item pl-12">VAT201</a>
+        
+        <div class="mt-4 border-t border-[#393939] pt-2">
+          <a href="#users" class="sidenav-item">
+            <iconify-icon icon="carbon:user-admin" class="sidenav-icon"></iconify-icon>
+            Users
+          </a>
+          <a href="#profile" class="sidenav-item">
+            <iconify-icon icon="carbon:user" class="sidenav-icon"></iconify-icon>
+            Profile
+          </a>
+          <a href="#settings" class="sidenav-item">
+            <iconify-icon icon="carbon:settings" class="sidenav-icon"></iconify-icon>
+            Settings
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" style="view-transition-name: main-content">
+      <div class="max-w-[1000px]">
+        <div class="mb-6 flex items-center justify-between">
+            <div>
+                <h1 class="text-[28px] font-light text-[#161616] mb-2">Stock Adjustment</h1>
+                <p class="text-[14px] text-[#525252]">Create an adjustment to correct on-hand inventory levels or write off damaged stock.</p>
+            </div>
+            <div class="text-right bg-[#e5f6ff] border-l-4 border-[#00539a] p-3 text-[13px] text-[#161616]">
+                <strong>GL Impact:</strong><br>
+                Adjustments post to the selected reason code's expense account<br>
+                and offset against Inventory Asset.
+            </div>
+        </div>
+
+        <!-- Header Details -->
+        <div class="tile mb-6">
+            <h2 class="text-[16px] font-semibold mb-4 border-b border-[#e0e0e0] pb-2">Adjustment Header</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="cds-label">Location</label>
+                    <select class="cds-select">
+                        <option>Sandton Warehouse</option>
+                        <option>Cape Town Store</option>
+                        <option>Durban Outlet</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="cds-label">Reason Code</label>
+                    <select class="cds-select">
+                        <option>Opening Stock (Equity)</option>
+                        <option>Damage / Breakage (Expense)</option>
+                        <option>Theft / Shrinkage (Expense)</option>
+                        <option>Count Fix (COGS)</option>
+                        <option>Write-off (Expense)</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="cds-label">Reference / Notes</label>
+                    <input type="text" class="cds-input" placeholder="e.g., Found during Q3 audit, pallet damage...">
+                </div>
+            </div>
+        </div>
+
+        <!-- Lines -->
+        <div class="tile mb-6 p-0">
+            <div class="p-4 border-b border-[#e0e0e0] flex items-end gap-4 bg-[#f4f4f4]">
+                <div class="flex-1">
+                    <label class="cds-label">Search SKU or Product Name</label>
+                    <div class="relative">
+                        <iconify-icon icon="carbon:search" class="absolute left-3 top-3 text-[#525252]"></iconify-icon>
+                        <input type="text" class="cds-input pl-10" placeholder="Type to search...">
+                    </div>
+                </div>
+                <button class="btn-secondary">
+                    Add Line
+                </button>
+            </div>
+            
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th class="w-[40%]">Product</th>
+                        <th>Current Qty</th>
+                        <th>Delta (+/-)</th>
+                        <th>New Qty</th>
+                        <th>Unit Cost (ZAR)</th>
+                        <th class="w-12"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <div class="font-semibold">Dining Chair - Velvet Blue</div>
+                            <div class="text-[12px] text-[#525252]">SKU: DC-VB-001</div>
+                        </td>
+                        <td class="text-[#525252]">2</td>
+                        <td>
+                            <input type="number" class="cds-input h-8 text-center" value="-1" style="width: 80px;">
+                        </td>
+                        <td>1</td>
+                        <td>
+                            <input type="number" class="cds-input h-8 text-right" value="850.00" style="width: 120px;">
+                        </td>
+                        <td class="text-center">
+                            <button class="text-[#da1e28] hover:bg-[#fff1f1] p-2">
+                                <iconify-icon icon="carbon:trash-can"></iconify-icon>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class="font-semibold">Oak Dining Table 6-Seater</div>
+                            <div class="text-[12px] text-[#525252]">SKU: TB-OK-006</div>
+                        </td>
+                        <td class="text-[#525252]">14</td>
+                        <td>
+                            <input type="number" class="cds-input h-8 text-center" value="2" style="width: 80px;">
+                        </td>
+                        <td>16</td>
+                        <td>
+                            <input type="number" class="cds-input h-8 text-right" value="4500.00" style="width: 120px;">
+                        </td>
+                        <td class="text-center">
+                            <button class="text-[#da1e28] hover:bg-[#fff1f1] p-2">
+                                <iconify-icon icon="carbon:trash-can"></iconify-icon>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="p-4 text-right bg-[#f4f4f4] border-t border-[#e0e0e0]">
+                <p class="text-[12px] text-[#525252] mb-1">Total Value Impact (ZAR)</p>
+                <p class="text-[20px] font-semibold text-[#161616]">+8,150.00</p>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end gap-4">
+            <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" class="btn-secondary bg-transparent text-[#161616] border border-[#161616] hover:bg-[#e0e0e0]">
+                Cancel
+            </a>
+            <button class="btn-primary">
+                Complete Adjustment
+            </button>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

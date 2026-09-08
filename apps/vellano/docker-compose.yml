@@ -1,0 +1,18 @@
+# Local Postgres only. Do not reuse ht-postgres or Marrow DATABASE_URL.
+# API :8003 and frontend :3003 run on the host (see apps/vellano/AGENTS.md).
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: vellano-postgres
+    environment:
+      POSTGRES_USER: vellano
+      POSTGRES_PASSWORD: vellano
+      POSTGRES_DB: vellano
+    ports:
+      - "5433:5432"
+    volumes:
+      - vellano-pg:/var/lib/postgresql/data
+
+volumes:
+  vellano-pg:

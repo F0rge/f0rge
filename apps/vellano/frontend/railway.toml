@@ -1,0 +1,21 @@
+# Config-as-code for vellano-frontend in the *Vellano* Railway project
+# (not Marrow zoological-fulfillment / not Marrow develop).
+# Point that service's Config File path here. Do NOT set Root Directory.
+# CoS provisions the Vellano project + services separately; this file is repo config only.
+# Set Docker build-arg API_URL after the Vellano API service exists.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/vellano/frontend/Dockerfile"
+watchPatterns = [
+  "apps/vellano/**",
+  "package.json",
+  "package-lock.json",
+]
+
+[deploy]
+startCommand = "node apps/vellano/frontend/server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

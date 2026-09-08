@@ -42,11 +42,17 @@ One row per user per calendar date (`UNIQUE(user_id, date)`). All symptom scores
 | `medications_json` | jsonb | List of medication intake events |
 | `notes` | text | Free-text notes |
 | `symptoms_json` | jsonb | Per-symptom severities keyed by catalog key |
+| `symptom_events_json` | jsonb | Timed symptom stamps (`key`, `severity`, `time`) |
 | `created_at` / `updated_at` | timestamp | Audit timestamps |
 
 ## `symptoms_json`
 
 Dynamic symptom scores keyed by `symptom_catalog.key` (e.g. `{{"vss": 6, "tinnitus": 3}}`). Empty object when no extra symptoms logged. Static entry columns (`overall`, `bloating`, etc.) remain the primary daily metrics.
+
+## `symptom_events_json`
+
+List of intra-day stamps, same clock convention as `medications_json`:
+`[{{"key": "vss", "severity": 7, "time": "15:20"}}]`. `symptoms_json` is the day's current score; this list is when it was logged.
 
 ## Diet flags and `effective_flags`
 

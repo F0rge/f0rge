@@ -2061,6 +2061,102 @@
         }
       }
     },
+    "/api/v1/health-metrics/range": {
+      "get": {
+        "tags": [
+          "health-metrics"
+        ],
+        "summary": "List Health Metrics",
+        "operationId": "list_health_metrics_api_v1_health_metrics_range_get",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "End"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HealthMetricResponse"
+                  },
+                  "title": "Response List Health Metrics Api V1 Health Metrics Range Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health-metrics/{date}": {
       "get": {
         "tags": [
@@ -5293,6 +5389,72 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/labs/{lab_id}/attachment": {
+      "get": {
+        "tags": [
+          "labs"
+        ],
+        "summary": "Serve Lab Attachment",
+        "operationId": "serve_lab_attachment_api_v1_labs__lab_id__attachment_get",
+        "parameters": [
+          {
+            "name": "lab_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Lab Id"
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Download"
+            }
+          },
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -9678,6 +9840,13 @@
             },
             "type": "array",
             "title": "Medications"
+          },
+          "symptom_events": {
+            "items": {
+              "$ref": "#/components/schemas/SymptomEvent"
+            },
+            "type": "array",
+            "title": "Symptom Events"
           }
         },
         "type": "object",
@@ -9895,6 +10064,13 @@
             },
             "type": "array",
             "title": "Medications"
+          },
+          "symptom_events": {
+            "items": {
+              "$ref": "#/components/schemas/SymptomEvent"
+            },
+            "type": "array",
+            "title": "Symptom Events"
           },
           "photos": {
             "items": {
@@ -10251,6 +10427,20 @@
               }
             ],
             "title": "Medications"
+          },
+          "symptom_events": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SymptomEvent"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symptom Events"
           }
         },
         "type": "object",
@@ -11170,6 +11360,18 @@
               }
             ],
             "title": "Wrist Temp Deviation"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "ios_healthkit (default), manual_import, or health_auto_export"
           }
         },
         "type": "object",
@@ -11417,7 +11619,7 @@
           "samples"
         ],
         "title": "HealthSamplesPayload",
-        "description": "Validated body for POST /health-metrics/samples (iOS HealthKit sync)."
+        "description": "Validated body for POST /health-metrics/samples (iOS HealthKit or manual import)."
       },
       "IncomingMealTagItem": {
         "properties": {
@@ -14060,6 +14262,27 @@
               }
             ],
             "title": "End"
+          },
+          "computing": {
+            "type": "boolean",
+            "title": "Computing",
+            "default": false
+          },
+          "quality_deferred": {
+            "type": "boolean",
+            "title": "Quality Deferred",
+            "default": false
+          },
+          "compute_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compute Error"
           }
         },
         "type": "object",
@@ -14773,6 +14996,39 @@
         },
         "type": "object",
         "title": "SymptomCatalogItemUpdate"
+      },
+      "SymptomEvent": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Key"
+          },
+          "severity": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Severity"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "severity"
+        ],
+        "title": "SymptomEvent"
       },
       "SymptomOrderRequest": {
         "properties": {

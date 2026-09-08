@@ -143,24 +143,35 @@ function MedicationsSection({ medications }: { medications: Entry['medications']
   )
 }
 
-function SymptomsSection({ symptoms }: { symptoms: Record<string, number> }) {
+function SymptomsSection({
+  symptoms,
+  events,
+}: {
+  symptoms: Record<string, number>
+  events: { key: string; severity: number; time?: string }[]
+}) {
   const { data: catalog = [] } = useSymptomCatalog(true)
   const labelFor = (key: string) => catalog.find((s) => s.key === key)?.label ?? key
   const entries = Object.entries(symptoms).filter(([, severity]) => severity > 0)
 
-  if (entries.length === 0) return null
+  if (entries.length === 0 && events.length === 0) return null
 
   return (
     <div className="border-t border-border px-4 py-3">
       <p className="mb-2 text-xs font-medium text-muted-foreground">Symptoms</p>
       <div className="space-y-2">
-        {entries.map(([key, severity]) => (
-          <DetailRow
-            key={key}
-            label={labelFor(key)}
-            value={`${severity}/10`}
-          />
-        ))}
+        {entries.map(([key, severity]) => {
+          const times = events
+            .filter((e) => e.key === key && e.time)
+            .map((e) => `${e.severity}/10 ${e.time}`)
+          return (
+            <DetailRow
+              key={key}
+              label={labelFor(key)}
+              value={times.length > 0 ? times.join(' · ') : `${severity}/10`}
+            />
+          )
+        })}
       </div>
     </div>
   )
@@ -216,7 +227,10 @@ function EntryDetail({ entry }: { entry: Entry }) {
         )}
       </div>
 
-      <SymptomsSection symptoms={entry.symptoms_json ?? {}} />
+      <SymptomsSection
+        symptoms={entry.symptoms_json ?? {}}
+        events={entry.symptom_events ?? []}
+      />
 
       {entry.notes && (
         <div className="border-t border-border px-4 py-3">

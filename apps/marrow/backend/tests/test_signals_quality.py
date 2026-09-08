@@ -102,3 +102,47 @@ def test_r2_basis_populated_on_compute() -> None:
     quality = compute_model_quality(rows, columns)
     assert quality.r2_basis == "variance"
     assert quality.noise_floor_mae == pytest.approx(quality.noise_sd * MAE_FROM_SD, rel=0.05)
+
+
+def test_compute_holdout_false_skips_oof(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.services.signals.quality as quality_mod
+
+    calls = {"n": 0}
+    real = quality_mod._model_predictions
+
+    def counting(*args, **kwargs):
+        calls["n"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(quality_mod, "_model_predictions", counting)
+
+    n = WARMUP_DAYS + 64
+    rows = []
+    start = datetime.date(2025, 1, 1)
+    for i in range(n):
+        d = start + datetime.timedelta(days=i)
+        rows.append(
+            {
+                "date": d.isoformat(),
+                "schema_version": 4,
+                "overall": 3.4 + 0.01 * i,
+                "sick": False,
+                "photo_count": 1,
+                "ingredient_count": 2,
+                "hm_sleep_hours": 7.0,
+            }
+        )
+    columns = [
+        "date",
+        "schema_version",
+        "overall",
+        "sick",
+        "photo_count",
+        "ingredient_count",
+        "hm_sleep_hours",
+    ]
+    quality = compute_model_quality(rows, columns, compute_holdout=False)
+    assert calls["n"] == 0
+    assert quality.holdout_rmse is None
+    assert quality.holdout_r2 is None
+    assert quality.mae >= 0.0

@@ -13,6 +13,7 @@ from app.services.medication_catalog import MedicationCatalogService
 from app.services.supplement_catalog import SupplementCatalogService
 from app.services.symptom_catalog import SymptomCatalogService
 from app.services.trackers import sync_seed_tracker_log_from_entry
+from app.services.weather import attach_weather_for_date
 
 
 class EntryOrchestrator:
@@ -34,7 +35,12 @@ class EntryOrchestrator:
     async def _touch_catalogs(self, entry: Entry) -> None:
         supplement_keys = [s.strip() for s in (entry.supplements or "").split(",") if s.strip()]
         await SupplementCatalogService(self.db).touch(supplement_keys)
-        await SymptomCatalogService(self.db).touch(list((entry.symptoms_json or {}).keys()))
+        symptom_keys = set((entry.symptoms_json or {}).keys())
+        for event in entry.symptom_events_json or []:
+            key = event.get("key") if isinstance(event, dict) else None
+            if key:
+                symptom_keys.add(key)
+        await SymptomCatalogService(self.db).touch(list(symptom_keys))
         await MedicationCatalogService(self.db).touch(
             [m["key"] for m in entry.medications_json if m.get("key")]
         )
@@ -44,7 +50,9 @@ class EntryOrchestrator:
             entry = await self.entry_service.stage_create(body)
             await self._touch_catalogs(entry)
             await sync_seed_tracker_log_from_entry(self.db, entry)
-        await invalidate_user_insights_cache(entry.user_id, entry.date)
+        user_id, entry_date = entry.user_id, entry.date
+        await attach_weather_for_date(self.db, entry_date)
+        await invalidate_user_insights_cache(user_id, entry_date)
         # Unlike every other write path, this one genuinely needs a refresh:
         # ``entry`` was *constructed*, never loaded via a SELECT, so the
         # mapper's ``lazy="selectin"`` companion query for ``photos`` (which
@@ -60,5 +68,7 @@ class EntryOrchestrator:
             entry = await self.entry_service.stage_update(date, body)
             await self._touch_catalogs(entry)
             await sync_seed_tracker_log_from_entry(self.db, entry)
-        await invalidate_user_insights_cache(entry.user_id, entry.date)
+        user_id, entry_date = entry.user_id, entry.date
+        await attach_weather_for_date(self.db, entry_date)
+        await invalidate_user_insights_cache(user_id, entry_date)
         return await _build_response(self.db, entry)

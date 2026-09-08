@@ -5,10 +5,11 @@ from app.cache.keys import (
     entry_key,
     feature_matrix_key,
     feature_matrix_prefix,
+    signals_inflight_key,
     signals_key,
     signals_prefix,
 )
-from app.cache.redis_client import close, delete, delete_pattern, get, set
+from app.cache.redis_client import close, delete, delete_pattern, get, set, set_nx
 
 __all__ = [
     "catalog_key",
@@ -18,8 +19,10 @@ __all__ = [
     "entry_key",
     "feature_matrix_key",
     "feature_matrix_prefix",
+    "signals_inflight_key",
     "signals_key",
     "signals_prefix",
     "get",
     "set",
+    "set_nx",
 ]

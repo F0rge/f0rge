@@ -11,6 +11,7 @@ from app.services.signals.taxonomy import FeatureClass, FeatureShape, resolve_cl
 
 # Layer 3 constants — see apps/marrow/backend/docs/signals_method.md §Layer 3
 BOOTSTRAP_B = 2000  # §Layer 3 — moving-block bootstrap resamples
+INTERACTIVE_BOOTSTRAP_B = 300  # request-path / interactive compute (lower fidelity)
 BLOCK_LENGTH_DAYS = 7  # §Layer 3 — circular block length L
 CV_FOLDS = 5  # §Layer 3 — time-blocked K-fold stability
 THRESHOLD_PERCENTILES = (20, 25, 33, 50, 67, 75, 80)  # §Layer 3 — in-fold threshold grid
@@ -565,6 +566,29 @@ def estimate_effect(
         confounded,
     )
 
+    if not pre_ok:
+        return EffectResult(
+            column=column,
+            lag=use_lag,
+            feature_class=feature_class,
+            shape=shape,
+            tier="insufficient",
+            reason=pre_reason,
+            theta_hat=theta_hat,
+            ci_lower=None,
+            ci_upper=None,
+            bootstrap_se=None,
+            naive_se=None,
+            se_ratio=None,
+            fold_count=0,
+            exposed_days=exposed_days,
+            unexposed_days=unexposed_days,
+            exposed_runs=exposed_runs,
+            observed_days=observed_days,
+            threshold_c=threshold_c,
+            exposed_mask=exposed.tolist(),
+        )
+
     fold_thetas = [_fold_theta(shape, residuals, x, valid, folds, k) for k in range(CV_FOLDS)]
     if abs(theta_hat) < 1e-12:
         fold_count = sum(1 for ft in fold_thetas if abs(ft) < 1e-12)
@@ -728,6 +752,29 @@ def estimate_effect_from_arrays(
         exposed_runs,
         confounded,
     )
+
+    if not pre_ok:
+        return EffectResult(
+            column="array",
+            lag=0,
+            feature_class=feature_class,
+            shape=shape,
+            tier="insufficient",
+            reason=pre_reason,
+            theta_hat=theta_hat,
+            ci_lower=None,
+            ci_upper=None,
+            bootstrap_se=None,
+            naive_se=None,
+            se_ratio=None,
+            fold_count=0,
+            exposed_days=exposed_days,
+            unexposed_days=unexposed_days,
+            exposed_runs=exposed_runs,
+            observed_days=observed_days,
+            threshold_c=threshold_c,
+            exposed_mask=exposed.tolist(),
+        )
 
     fold_thetas = [_fold_theta(shape, residuals, x, valid, folds, k) for k in range(CV_FOLDS)]
     if abs(theta_hat) < 1e-12:

@@ -23,6 +23,10 @@ const boundaryRule = {
           sourceTag: "scope:dk",
           onlyDependOnLibsWithTags: ["scope:shared", "scope:dk"],
         },
+        {
+          sourceTag: "scope:vellano",
+          onlyDependOnLibsWithTags: ["scope:shared", "scope:vellano"],
+        },
       ],
     },
   ],

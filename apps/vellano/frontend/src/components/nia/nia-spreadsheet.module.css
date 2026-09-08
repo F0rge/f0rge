@@ -1,0 +1,79 @@
+/* Carbon tokens so the sheet follows g10 content and g100 chrome. */
+.root {
+  --border_color: var(--cds-border-subtle-01, #e0e0e0);
+  --header_background: var(--cds-layer-accent-01, #e0e0e0);
+  --header_color: var(--cds-text-secondary, #525252);
+  --header_background_highlighted: var(--cds-layer-selected-01, #e0e0e0);
+  --header_color_highlighted: var(--cds-text-primary, #161616);
+  --content_background: var(--cds-field-01, #f4f4f4);
+  --content_color: var(--cds-text-primary, #161616);
+  --content_background_highlighted: var(--cds-layer-hover-01, #e8e8e8);
+  --content_color_highlighted: var(--cds-text-primary, #161616);
+  --selection: var(--cds-layer-selected-01, #e0e0e0);
+  --cursor: var(--cds-layer-selected-hover-01, #cacaca);
+  --border_color_highlighted: var(--cds-interactive, #0f62fe);
+  --menu_background: var(--cds-layer-02, #ffffff);
+  --menu_color: var(--cds-text-primary, #161616);
+  --menu_background_highlighted: var(--cds-layer-hover-01, #e8e8e8);
+  --menu_color_highlighted: var(--cds-text-primary, #161616);
+  --menu_box_shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  min-width: 0;
+}
+
+.heading {
+  margin: 0 0 0.5rem;
+}
+
+.host {
+  width: 100%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.compact .host {
+  max-height: 12rem;
+}
+
+.root :global(.jss_container),
+.root :global(.jss_worksheet) {
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.125rem;
+}
+
+.root :global(.jss_worksheet > thead > tr > td),
+.root :global(.jss_worksheet > tbody > tr > td) {
+  font-family: inherit;
+  padding: 0.5rem 0.75rem;
+  border-color: var(--cds-border-subtle-01, #e0e0e0);
+}
+
+.root :global(.jss_worksheet > thead > tr > td) {
+  font-weight: 600;
+  background-color: var(--cds-layer-accent-01, #e0e0e0);
+  color: var(--cds-text-secondary, #525252);
+}
+
+.root :global(.jss_worksheet > tbody > tr > td:first-child) {
+  background-color: var(--cds-layer-accent-01, #e0e0e0);
+  color: var(--cds-text-secondary, #525252);
+}
+
+.root :global(.jss_worksheet > tbody > tr > td) {
+  background-color: var(--cds-field-01, #f4f4f4);
+  color: var(--cds-text-primary, #161616);
+}
+
+.root :global(.jss_worksheet .highlight) {
+  background-color: var(--cds-layer-selected-01, #e0e0e0);
+}
+
+.root :global(.jss_worksheet .highlight-selected) {
+  outline: 2px solid var(--cds-focus, #0f62fe);
+  outline-offset: -2px;
+}
+
+.root :global(.jss_tabs),
+.root :global(.jss_toolbar) {
+  display: none;
+}

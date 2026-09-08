@@ -2,6 +2,7 @@
 
 import { Button } from '@f0rge/ui'
 import { cn } from '@f0rge/ui'
+import { LabAttachment } from './lab-attachment'
 import { MarkerSparkline } from './marker-sparkline'
 import type { Lab, LabType } from '@/lib/api/types'
 import { labFlagClass, statusPill } from '@/lib/ui/status'
@@ -37,6 +38,7 @@ interface LabDetailContentProps {
   deletePending: boolean
   onDelete: () => void
   onEdit: () => void
+  pdfPreview?: boolean
 }
 
 function MarkerMobileCard({
@@ -88,11 +90,8 @@ export function LabDetailContent({
   deletePending,
   onDelete,
   onEdit,
+  pdfPreview = false,
 }: LabDetailContentProps) {
-  const filename = lab.attachment_path
-    ? lab.attachment_path.split('/').pop() ?? lab.attachment_path
-    : null
-
   return (
     <div className="min-w-0 space-y-4 overflow-x-hidden">
       <div className="flex items-start justify-between gap-2">
@@ -114,11 +113,7 @@ export function LabDetailContent({
         <p className="break-words text-sm text-muted-foreground">{lab.notes}</p>
       )}
 
-      {filename && (
-        <div className="break-all text-xs text-muted-foreground">
-          Source: {filename}
-        </div>
-      )}
+      <LabAttachment lab={lab} pdfPreview={pdfPreview} />
 
       {lab.extraction_model && (
         <div className="break-words text-xs text-muted-foreground">
@@ -183,20 +178,19 @@ export function LabDetailContent({
         <p className="py-4 text-center text-sm text-muted-foreground">No markers recorded.</p>
       )}
 
-      <div className="flex gap-2 pt-2">
+      <div className="flex min-w-0 gap-2 pt-2">
         <Button
           variant="destructive"
-          size="sm"
           onClick={onDelete}
           disabled={deletePending}
-          className="mr-auto"
+          className="mr-auto min-h-[44px]"
         >
           {confirmDelete ? 'Confirm delete' : 'Delete'}
         </Button>
         <Button
           variant="outline"
-          size="sm"
           onClick={onEdit}
+          className="min-h-[44px]"
         >
           Edit
         </Button>

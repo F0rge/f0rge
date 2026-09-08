@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
+import logging
+import uuid
 from typing import Optional
 
 import numpy as np
+from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import redis_client
-from app.cache.keys import signals_key
+from app.cache.keys import signals_failed_key, signals_inflight_key, signals_key
 from app.config import settings
 from app.schemas.insights import TrendsResponse
 from app.schemas.signals import (
@@ -37,6 +41,7 @@ from app.services.signals.attribution import (
 )
 from app.services.signals.baseline import WARMUP_DAYS, BaselineResult, compute_baseline_residuals
 from app.services.signals.effects import (
+    INTERACTIVE_BOOTSTRAP_B,
     MIN_OBSERVED_DAYS,
     EffectResult,
     _extract_exposure_series,
@@ -52,11 +57,15 @@ from app.utils.dates import local_today
 from f0rge_core.exceptions import ValidationError
 from f0rge_db.tenant import current_user_id
 
-SIGNALS_SCHEMA_VERSION = 1
+SIGNALS_SCHEMA_VERSION = 2
 CALIBRATION_SERIES_DAYS = 14
 BAND_Z_80 = 1.282
 BAND_LEVEL = 80
 MIRROR_REASON = "Moves with the day rather than ahead of it"
+
+logger = logging.getLogger(__name__)
+SIGNALS_INFLIGHT_TTL_SECONDS = 180
+SIGNALS_FAILED_TTL_SECONDS = 60
 
 _SKIP_MIRROR_SCAN = frozenset(
     {
@@ -246,6 +255,12 @@ def _driver_from_effect(
     rows: list[dict],
     columns: list[str],
 ) -> SignalsDriverResponse:
+    slim_strips = effect.tier in ("watching", "insufficient")
+    day_strips = (
+        DayStripsResponse(exposed=[], unexposed=[])
+        if slim_strips
+        else _build_day_strips(effect, baseline, rows, columns)
+    )
     return SignalsDriverResponse(
         feature=effect.column,
         label=_humanize(effect.column),
@@ -260,7 +275,7 @@ def _driver_from_effect(
         unexposed_days=effect.unexposed_days,
         exposed_runs=effect.exposed_runs,
         dose_table=_build_dose_table(effect, baseline, rows, columns),
-        day_strips=_build_day_strips(effect, baseline, rows, columns),
+        day_strips=day_strips,
         good_direction=_good_direction(effect.column),
         se_ratio=_round_optional(effect.se_ratio),
     )
@@ -439,7 +454,9 @@ def _today_block(
         return SignalsTodayResponse()
     day_index = len(baseline.dates) - 1
     day = compute_day_attribution(day_index, baseline, ctx)
-    holdout_rmse = quality.holdout_rmse if quality is not None else 0.77
+    holdout_rmse = (
+        quality.holdout_rmse if quality is not None and quality.holdout_rmse is not None else 0.77
+    )
     band_half = BAND_Z_80 * holdout_rmse
     predicted_display = day.display_predicted
     calibration = compute_calibration_series(rows, columns, baseline, ctx)
@@ -559,63 +576,79 @@ class SignalsService:
             f"{WARMUP_DAYS}-day warm-up; have {days_usable}."
         )
 
-    async def _build_payload(
+    def _computing_response(
         self,
         outcome: str,
         start: Optional[datetime.date],
         end: Optional[datetime.date],
+        *,
+        compute_error: Optional[str] = None,
     ) -> SignalsResponse:
-        rows, columns = await build_feature_matrix(self.db, start, end)
-        await self._validate_outcome(outcome, columns)
-
-        baseline = compute_baseline_residuals(rows, columns, outcome=outcome)
-        diag = baseline.diagnostics
-        insufficient = diag.days_usable < MIN_OBSERVED_DAYS
         start_str = start.isoformat() if start is not None else None
         end_str = end.isoformat() if end is not None else None
-
-        meta = SignalsMetaResponse(
-            days_total=diag.days_total,
-            days_usable=diag.days_usable,
-            warmup=diag.warmup_days,
-            drop_reasons=dict(diag.drop_reasons),
-            insufficient_data=insufficient,
-            insufficient_reason=self._insufficient_reason(diag.days_usable)
-            if insufficient
-            else None,
-            outcome=outcome,
-            start=start_str,
-            end=end_str,
+        return SignalsResponse(
+            meta=SignalsMetaResponse(
+                days_total=0,
+                days_usable=0,
+                warmup=WARMUP_DAYS,
+                drop_reasons={},
+                insufficient_data=False,
+                insufficient_reason=None,
+                outcome=outcome,
+                start=start_str,
+                end=end_str,
+                computing=True,
+                quality_deferred=True,
+                compute_error=compute_error,
+            ),
+            model=SignalsModelResponse(),
+            today=SignalsTodayResponse(),
+            drivers=[],
+            mirrors=[],
+            unexplained=_unexplained_block(_empty_unexplained()),
+            trends=SignalsTrendsResponse(series=[]),
         )
 
-        trends = _trends_block(await self.insights.compute_trends(start, end))
-        mirrors = _build_mirrors(rows, columns, baseline, outcome)
-
-        if insufficient:
-            unexplained = _empty_unexplained()
-            return SignalsResponse(
-                meta=meta,
-                model=SignalsModelResponse(),
-                today=SignalsTodayResponse(),
-                drivers=[],
-                mirrors=mirrors,
-                unexplained=_unexplained_block(unexplained),
-                trends=trends,
-            )
-
-        effects = estimate_all_effects(rows, columns, baseline)
+    def _assemble_heavy(
+        self,
+        rows: list[dict],
+        columns: list[str],
+        baseline: BaselineResult,
+        outcome: str,
+        *,
+        bootstrap_n: int,
+        compute_holdout: bool,
+    ) -> tuple[
+        list[EffectResult],
+        list[InteractionResult],
+        AttributionContext,
+        Optional[ModelQuality],
+        UnexplainedResult,
+        list[SignalsDriverResponse],
+    ]:
+        effects = estimate_all_effects(rows, columns, baseline, bootstrap_n=bootstrap_n)
         eligible = [e.column for e in effects if e.tier in ("established", "emerging")]
         interactions = compute_interactions(
             rows,
             columns,
             baseline,
             eligible_columns=eligible or None,
+            effects=effects,
+            bootstrap_n=bootstrap_n,
         )
         ctx = build_attribution_context(
             rows, columns, baseline, effects=effects, interactions=interactions
         )
         noise = estimate_noise_floor(rows, columns, baseline, effects)
-        quality = compute_model_quality(rows, columns, baseline, ctx, noise, effects)
+        quality = compute_model_quality(
+            rows,
+            columns,
+            baseline,
+            ctx,
+            noise,
+            effects,
+            compute_holdout=compute_holdout,
+        )
         unexplained = detect_unexplained(
             rows, columns, baseline, ctx, good_direction=_good_direction(outcome)
         )
@@ -642,6 +675,73 @@ class SignalsService:
         drivers.sort(
             key=lambda d: (-(abs(d.theta_hat) if d.theta_hat is not None else -1.0), d.feature)
         )
+        return effects, interactions, ctx, quality, unexplained, drivers
+
+    async def _build_payload(
+        self,
+        outcome: str,
+        start: Optional[datetime.date],
+        end: Optional[datetime.date],
+        *,
+        bootstrap_n: int = INTERACTIVE_BOOTSTRAP_B,
+        compute_holdout: bool = False,
+    ) -> SignalsResponse:
+        rows, columns = await build_feature_matrix(self.db, start, end)
+        await self._validate_outcome(outcome, columns)
+
+        baseline = compute_baseline_residuals(rows, columns, outcome=outcome)
+        diag = baseline.diagnostics
+        insufficient = diag.days_usable < MIN_OBSERVED_DAYS
+        start_str = start.isoformat() if start is not None else None
+        end_str = end.isoformat() if end is not None else None
+
+        meta = SignalsMetaResponse(
+            days_total=diag.days_total,
+            days_usable=diag.days_usable,
+            warmup=diag.warmup_days,
+            drop_reasons=dict(diag.drop_reasons),
+            insufficient_data=insufficient,
+            insufficient_reason=self._insufficient_reason(diag.days_usable)
+            if insufficient
+            else None,
+            outcome=outcome,
+            start=start_str,
+            end=end_str,
+            computing=False,
+            quality_deferred=not compute_holdout and not insufficient,
+        )
+
+        trends = _trends_block(await self.insights.compute_trends(start, end))
+        mirrors = _build_mirrors(rows, columns, baseline, outcome)
+
+        if insufficient:
+            unexplained = _empty_unexplained()
+            return SignalsResponse(
+                meta=meta,
+                model=SignalsModelResponse(),
+                today=SignalsTodayResponse(),
+                drivers=[],
+                mirrors=mirrors,
+                unexplained=_unexplained_block(unexplained),
+                trends=trends,
+            )
+
+        (
+            _effects,
+            _interactions,
+            ctx,
+            quality,
+            unexplained,
+            drivers,
+        ) = await asyncio.to_thread(
+            self._assemble_heavy,
+            rows,
+            columns,
+            baseline,
+            outcome,
+            bootstrap_n=bootstrap_n,
+            compute_holdout=compute_holdout,
+        )
 
         return SignalsResponse(
             meta=meta,
@@ -653,11 +753,19 @@ class SignalsService:
             trends=trends,
         )
 
+    async def _cache_payload(self, cache_key: str, payload: SignalsResponse) -> None:
+        await redis_client.set(
+            cache_key,
+            redis_client.dumps_json(payload.model_dump(mode="json", by_alias=True)),
+            settings.cache_ttl_signals_seconds,
+        )
+
     async def compute(
         self,
         outcome: str,
         start: Optional[datetime.date] = None,
         end: Optional[datetime.date] = None,
+        background_tasks: Optional[BackgroundTasks] = None,
     ) -> SignalsResponse:
         user_id = current_user_id()
         cache_key = signals_key(user_id, outcome, start, end)
@@ -665,10 +773,82 @@ class SignalsService:
         if cached is not None:
             return SignalsResponse.model_validate(redis_client.loads_json(cached))
 
-        payload = await self._build_payload(outcome, start, end)
-        await redis_client.set(
-            cache_key,
-            redis_client.dumps_json(payload.model_dump(mode="json", by_alias=True)),
-            settings.cache_ttl_signals_seconds,
+        failed_key = signals_failed_key(user_id, outcome, start, end)
+        use_background = (
+            bool(settings.redis_url)
+            and background_tasks is not None
+            and not settings.signals_sync_compute
         )
-        return payload
+        if not bool(settings.redis_url):
+            payload = await self._build_payload(outcome, start, end)
+            await self._cache_payload(cache_key, payload)
+            return payload
+
+        inflight_key = signals_inflight_key(user_id, outcome, start, end)
+        prior_error = await redis_client.get(failed_key)
+        acquired = await redis_client.set_nx(inflight_key, "1", SIGNALS_INFLIGHT_TTL_SECONDS)
+        if not acquired:
+            return self._computing_response(outcome, start, end, compute_error=prior_error)
+
+        await redis_client.delete(failed_key)
+        if use_background:
+            background_tasks.add_task(
+                compute_signals_background,
+                user_id,
+                outcome,
+                start,
+                end,
+                cache_key,
+                inflight_key,
+                failed_key,
+            )
+            return self._computing_response(outcome, start, end)
+
+        try:
+            payload = await self._build_payload(outcome, start, end)
+            await self._cache_payload(cache_key, payload)
+            return payload
+        except Exception as exc:
+            logger.exception("Signals sync compute failed for %s", cache_key)
+            await redis_client.set(
+                failed_key,
+                f"{type(exc).__name__}: {str(exc)[:200]}",
+                SIGNALS_FAILED_TTL_SECONDS,
+            )
+            return self._computing_response(outcome, start, end, compute_error=str(exc)[:200])
+        finally:
+            await redis_client.delete(inflight_key)
+
+
+async def compute_signals_background(
+    user_id: uuid.UUID,
+    outcome: str,
+    start: Optional[datetime.date],
+    end: Optional[datetime.date],
+    cache_key: str,
+    inflight_key: str,
+    failed_key: str,
+) -> None:
+    """Build + cache signals payload after the request returns (own DB session)."""
+    from app.database import async_session_maker
+    from f0rge_db.tenant import apply_session_user_id, clear_tenant_session
+
+    try:
+        async with async_session_maker() as db:
+            await apply_session_user_id(db, user_id)
+            try:
+                service = SignalsService(db)
+                payload = await service._build_payload(outcome, start, end)
+                await service._cache_payload(cache_key, payload)
+                await redis_client.delete(failed_key)
+            finally:
+                await clear_tenant_session(db)
+    except Exception as exc:
+        logger.exception("Signals background compute failed for %s", cache_key)
+        await redis_client.set(
+            failed_key,
+            f"{type(exc).__name__}: {str(exc)[:200]}",
+            SIGNALS_FAILED_TTL_SECONDS,
+        )
+    finally:
+        await redis_client.delete(inflight_key)

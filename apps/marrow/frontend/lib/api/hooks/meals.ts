@@ -14,6 +14,8 @@ function mergePhotoIntoEntry(queryClient: ReturnType<typeof useQueryClient>, dat
   queryClient.invalidateQueries({ queryKey: ['entry', date] })
   queryClient.invalidateQueries({ queryKey: ['entries'] })
   queryClient.invalidateQueries({ queryKey: ['meals', 'recent'] })
+  queryClient.invalidateQueries({ queryKey: ['weather'] })
+  queryClient.invalidateQueries({ queryKey: ['enriched'] })
   invalidateSignals(queryClient)
 }
 

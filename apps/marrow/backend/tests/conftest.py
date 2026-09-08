@@ -261,6 +261,19 @@ def jwt_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "jwt_secret", TEST_JWT_SECRET)
 
 
+@pytest.fixture(autouse=True)
+def stub_open_meteo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep suite HTTP-free: entry creates must not call Open-Meteo.
+
+    Weather-specific tests remonkeypatch ``app.services.weather.fetch_open_meteo_day``.
+    """
+
+    async def _no_weather(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr("app.services.weather.fetch_open_meteo_day", _no_weather)
+
+
 @pytest.fixture
 async def authed_client(async_client: AsyncClient) -> AsyncClient:
     """Log in via a real signup round-trip (rolled back with the test savepoint)."""

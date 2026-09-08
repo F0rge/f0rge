@@ -48,6 +48,7 @@ export function LabDetailInline({ lab, onClose }: LabDetailInlineProps) {
           deletePending={deleteLab.isPending}
           onDelete={handleDelete}
           onEdit={() => setEditOpen(true)}
+          pdfPreview
         />
       </div>
 

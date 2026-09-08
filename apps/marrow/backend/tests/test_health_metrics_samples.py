@@ -137,3 +137,123 @@ async def test_bearer_only_samples_post(async_client: AsyncClient) -> None:
     fetched = await async_client.get("/api/v1/health-metrics/2026-07-06", headers=headers)
     assert fetched.status_code == 200
     assert fetched.json()["steps"] == 8000
+
+
+async def test_manual_import_source_is_stored(authed_client: AsyncClient) -> None:
+    posted = await authed_client.post(
+        SAMPLES_URL,
+        json={
+            "samples": [
+                {
+                    "date": "2026-08-01",
+                    "sleep_hours": 7.5,
+                    "hrv_mean": 45.0,
+                    "source": "manual_import",
+                }
+            ]
+        },
+    )
+    assert posted.status_code == 200
+    row = await authed_client.get("/api/v1/health-metrics/2026-08-01")
+    assert row.status_code == 200
+    body = row.json()
+    assert body["source"] == "manual_import"
+    assert body["sleep_hours"] == 7.5
+    assert body["hrv_mean"] == 45.0
+
+
+async def test_unknown_source_rejected(authed_client: AsyncClient) -> None:
+    resp = await authed_client.post(
+        SAMPLES_URL,
+        json={"samples": [{"date": "2026-08-02", "steps": 100, "source": "fitbit"}]},
+    )
+    assert resp.status_code == 400
+
+
+async def test_range_lists_imported_days(authed_client: AsyncClient) -> None:
+    await authed_client.post(
+        SAMPLES_URL,
+        json={
+            "samples": [
+                {"date": "2026-08-10", "sleep_hours": 8.0, "source": "manual_import"},
+                {"date": "2026-08-11", "steps": 9000, "source": "manual_import"},
+            ]
+        },
+    )
+    resp = await authed_client.get(
+        "/api/v1/health-metrics/range",
+        params={"start": "2026-08-10", "end": "2026-08-11"},
+    )
+    assert resp.status_code == 200
+    dates = {row["date"] for row in resp.json()}
+    assert dates == {"2026-08-10", "2026-08-11"}
+
+
+async def test_range_rejects_inverted_dates(authed_client: AsyncClient) -> None:
+    resp = await authed_client.get(
+        "/api/v1/health-metrics/range",
+        params={"start": "2026-08-11", "end": "2026-08-10"},
+    )
+    assert resp.status_code == 400
+
+
+async def test_range_rejects_limit_over_page_size(authed_client: AsyncClient) -> None:
+    resp = await authed_client.get(
+        "/api/v1/health-metrics/range",
+        params={"start": "2026-08-01", "end": "2026-08-31", "limit": 101},
+    )
+    assert resp.status_code == 422
+
+
+async def test_range_pages_with_offset(authed_client: AsyncClient) -> None:
+    await authed_client.post(
+        SAMPLES_URL,
+        json={
+            "samples": [
+                {"date": "2026-08-10", "steps": 1000, "source": "manual_import"},
+                {"date": "2026-08-11", "steps": 2000, "source": "manual_import"},
+                {"date": "2026-08-12", "steps": 3000, "source": "manual_import"},
+            ]
+        },
+    )
+    first = await authed_client.get(
+        "/api/v1/health-metrics/range",
+        params={"start": "2026-08-10", "end": "2026-08-12", "limit": 2, "offset": 0},
+    )
+    assert first.status_code == 200
+    assert [row["date"] for row in first.json()] == ["2026-08-12", "2026-08-11"]
+
+    rest = await authed_client.get(
+        "/api/v1/health-metrics/range",
+        params={"start": "2026-08-10", "end": "2026-08-12", "limit": 2, "offset": 2},
+    )
+    assert rest.status_code == 200
+    assert [row["date"] for row in rest.json()] == ["2026-08-10"]
+
+
+async def test_date_only_sample_rejected(authed_client: AsyncClient) -> None:
+    resp = await authed_client.post(
+        SAMPLES_URL,
+        json={"samples": [{"date": "2026-08-03", "source": "manual_import"}]},
+    )
+    assert resp.status_code == 400
+
+
+async def test_date_only_samples_are_skipped_in_mixed_batch(
+    authed_client: AsyncClient,
+) -> None:
+    resp = await authed_client.post(
+        SAMPLES_URL,
+        json={
+            "samples": [
+                {"date": "2026-08-03", "source": "manual_import"},
+                {"date": "2026-08-04", "steps": 1000, "source": "manual_import"},
+            ]
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok", "dates_upserted": 1}
+    assert (await authed_client.get("/api/v1/health-metrics/2026-08-03")).status_code == 404
+    row = await authed_client.get("/api/v1/health-metrics/2026-08-04")
+    assert row.status_code == 200
+    assert row.json()["steps"] == 1000

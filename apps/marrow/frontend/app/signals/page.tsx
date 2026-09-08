@@ -44,7 +44,16 @@ function SignalsContent() {
   const tabParam = searchParams.get('tab')
   const tab = parseTab(tabParam)
 
-  const { data, isPending, isFetching, isError, refetch } = useSignals(outcome, start, end)
+  const {
+    data,
+    isPending,
+    isFetching,
+    isError,
+    refetch,
+    computing,
+    computingTimedOut,
+    computeError,
+  } = useSignals(outcome, start, end)
 
   function updateParams(next: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
@@ -105,10 +114,13 @@ function SignalsContent() {
             isFetching={isFetching}
             isError={isError}
             hasData={data != null}
+            computing={computing}
+            computingTimedOut={computingTimedOut}
+            computeError={computeError}
             onRetry={() => refetch()}
           />
 
-          {data && (
+          {data && !computing && (
             <SignalsTabPanels data={data} goodDirection={goodDirection} />
           )}
         </Tabs>

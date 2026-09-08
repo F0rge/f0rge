@@ -1,0 +1,415 @@
+from __future__ import annotations
+
+import uuid
+
+from fastapi import Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.middleware.auth import get_current_user_id
+from app.permissions import (
+    BOOKS_MUTATE,
+    CATALOGUE_MUTATE,
+    NIA_ADMIN,
+    NIA_USE,
+    PO_RAISE,
+    SALES_CUSTOMERS,
+    SALES_DELIVERIES,
+    SALES_LAYBYS,
+    SALES_RETURNS,
+    SETTINGS_MUTATE,
+    STOCK_COST_VIEW,
+    STOCK_RECEIVE,
+    STOCK_TRANSFER,
+    TILL_SELL,
+    USERS_MANAGE,
+)
+from app.services.auth import AuthService
+from app.services.permissions import PermissionService
+from app.services.bills import BillService
+from app.services.books_events import BooksEventService
+from app.services.contacts import ContactService
+from app.services.credit_notes import CreditNoteService
+from app.services.customers_crm import CustomersCrmService
+from app.services.accounts import AccountService
+from app.services.cost_audit import CostAuditService
+from app.services.home import HomeService
+from app.services.inventory import InventoryService
+from app.services.invoices import InvoiceService
+from app.services.repeating_invoices import RepeatingInvoiceService
+from app.services.journal_imports import JournalImportService
+from app.services.journals import JournalService
+from app.services.location_bins import LocationBinService
+from app.services.locations import LocationService
+from app.services.payments import PaymentService
+from app.services.bank_imports import BankImportService
+from app.services.bank_rules import BankRuleService
+from app.services.catalogue_imports import CatalogueImportService
+from app.services.category_maps import CategoryMapService
+from app.services.reports import ReportsService
+from app.services.search import SearchService
+from app.services.settings import SettingsService
+from app.services.proformas import ProformaService
+from app.services.purchase_orders import PurchaseOrderService
+from app.services.reorder import ReorderService
+from app.services.sku_bom import SkuBomService
+from app.services.skus import SkuService
+from app.services.stock_adjustments import StockAdjustmentService
+from app.services.laybys import LaybysService
+from app.services.deliveries import DeliveriesService
+from app.services.stock_returns import StockReturnsService
+from app.services.stocktakes import StocktakeService
+from app.services.suppliers import SupplierService
+from app.services.transfers import TransferService
+from app.services.picks import PickService
+from app.services.till_orchestrator import TillOrchestrator
+from app.services.roles import RoleService
+from app.services.users import BootstrapService, ProfileService, UserService
+from app.services.vat201_periods import Vat201PeriodService
+from app.services.nia_audit import NiaAuditService
+from app.services.nia_caps import NiaCapsService
+from app.services.nia_run import NiaRunService
+from app.services.nia_schedule import NiaScheduleService
+from app.services.nia_threads import NiaThreadsService
+from app.services.nia_usage import NiaUsageService
+
+
+def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
+    return AuthService(db)
+
+
+def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
+    return UserService(db)
+
+
+def get_profile_service(db: AsyncSession = Depends(get_db)) -> ProfileService:
+    return ProfileService(db)
+
+
+def get_bootstrap_service(db: AsyncSession = Depends(get_db)) -> BootstrapService:
+    return BootstrapService(db)
+
+
+def get_location_service(db: AsyncSession = Depends(get_db)) -> LocationService:
+    return LocationService(db)
+
+
+def get_location_bin_service(db: AsyncSession = Depends(get_db)) -> LocationBinService:
+    return LocationBinService(db)
+
+
+def get_supplier_service(db: AsyncSession = Depends(get_db)) -> SupplierService:
+    return SupplierService(db)
+
+
+def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:
+    return ProformaService(db)
+
+
+def get_sku_service(db: AsyncSession = Depends(get_db)) -> SkuService:
+    return SkuService(db)
+
+
+def get_sku_bom_service(db: AsyncSession = Depends(get_db)) -> SkuBomService:
+    return SkuBomService(db)
+
+
+def get_purchase_order_service(db: AsyncSession = Depends(get_db)) -> PurchaseOrderService:
+    return PurchaseOrderService(db)
+
+
+def get_reorder_service(db: AsyncSession = Depends(get_db)) -> ReorderService:
+    return ReorderService(db)
+
+
+def get_inventory_service(db: AsyncSession = Depends(get_db)) -> InventoryService:
+    return InventoryService(db)
+
+
+def get_home_service(db: AsyncSession = Depends(get_db)) -> HomeService:
+    return HomeService(db)
+
+
+def get_search_service(db: AsyncSession = Depends(get_db)) -> SearchService:
+    return SearchService(db)
+
+
+def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
+    return SettingsService(db)
+
+
+def get_cost_audit_service(db: AsyncSession = Depends(get_db)) -> CostAuditService:
+    return CostAuditService(db)
+
+
+def get_account_service(db: AsyncSession = Depends(get_db)) -> AccountService:
+    return AccountService(db)
+
+
+def get_category_map_service(db: AsyncSession = Depends(get_db)) -> CategoryMapService:
+    return CategoryMapService(db)
+
+
+def get_contact_service(db: AsyncSession = Depends(get_db)) -> ContactService:
+    return ContactService(db)
+
+
+def get_customers_crm_service(db: AsyncSession = Depends(get_db)) -> CustomersCrmService:
+    return CustomersCrmService(db)
+
+
+def get_invoice_service(db: AsyncSession = Depends(get_db)) -> InvoiceService:
+    return InvoiceService(db)
+
+
+def get_repeating_invoice_service(
+    db: AsyncSession = Depends(get_db),
+) -> RepeatingInvoiceService:
+    return RepeatingInvoiceService(db)
+
+
+def get_journal_service(db: AsyncSession = Depends(get_db)) -> JournalService:
+    return JournalService(db)
+
+
+def get_journal_import_service(
+    db: AsyncSession = Depends(get_db),
+) -> JournalImportService:
+    return JournalImportService(db)
+
+
+def get_credit_note_service(db: AsyncSession = Depends(get_db)) -> CreditNoteService:
+    return CreditNoteService(db)
+
+
+def get_bill_service(db: AsyncSession = Depends(get_db)) -> BillService:
+    return BillService(db)
+
+
+def get_books_event_service(db: AsyncSession = Depends(get_db)) -> BooksEventService:
+    return BooksEventService(db)
+
+
+def get_payment_service(db: AsyncSession = Depends(get_db)) -> PaymentService:
+    return PaymentService(db)
+
+
+def get_bank_import_service(db: AsyncSession = Depends(get_db)) -> BankImportService:
+    return BankImportService(db)
+
+
+def get_bank_rule_service(db: AsyncSession = Depends(get_db)) -> BankRuleService:
+    return BankRuleService(db)
+
+
+def get_catalogue_import_service(
+    db: AsyncSession = Depends(get_db),
+) -> CatalogueImportService:
+    return CatalogueImportService(db)
+
+
+def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:
+    return ReportsService(db)
+
+
+def get_vat201_period_service(db: AsyncSession = Depends(get_db)) -> Vat201PeriodService:
+    return Vat201PeriodService(db)
+
+
+def get_transfer_service(db: AsyncSession = Depends(get_db)) -> TransferService:
+    return TransferService(db)
+
+
+def get_stocktake_service(db: AsyncSession = Depends(get_db)) -> StocktakeService:
+    return StocktakeService(db)
+
+
+def get_adjustment_service(db: AsyncSession = Depends(get_db)) -> StockAdjustmentService:
+    return StockAdjustmentService(db)
+
+
+def get_stock_returns_service(db: AsyncSession = Depends(get_db)) -> StockReturnsService:
+    return StockReturnsService(db)
+
+
+def get_deliveries_service(db: AsyncSession = Depends(get_db)) -> DeliveriesService:
+    return DeliveriesService(db)
+
+
+def get_layby_service(db: AsyncSession = Depends(get_db)) -> LaybysService:
+    return LaybysService(db)
+
+
+def get_till_orchestrator(db: AsyncSession = Depends(get_db)) -> TillOrchestrator:
+    return TillOrchestrator(db)
+
+
+def get_pick_service(db: AsyncSession = Depends(get_db)) -> PickService:
+    return PickService(db)
+
+
+def get_role_service(db: AsyncSession = Depends(get_db)) -> RoleService:
+    return RoleService(db)
+
+
+async def _require_keys(
+    user_id: uuid.UUID,
+    db: AsyncSession,
+    keys: tuple[str, ...],
+) -> uuid.UUID:
+    if not await PermissionService(db).has_any(user_id, keys):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden",
+        )
+    return user_id
+
+
+async def require_till(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (TILL_SELL,))
+
+
+async def require_laybys(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_LAYBYS,))
+
+
+async def require_owner(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (USERS_MANAGE,))
+
+
+async def require_settings(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SETTINGS_MUTATE,))
+
+
+async def require_location_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (STOCK_RECEIVE,))
+
+
+async def require_catalogue_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (CATALOGUE_MUTATE,))
+
+
+async def require_returns_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_RETURNS,))
+
+
+async def require_deliveries_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_DELIVERIES,))
+
+
+async def require_receive(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (STOCK_RECEIVE,))
+
+
+async def require_transfer(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (STOCK_TRANSFER,))
+
+
+async def require_transfer_receive(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL))
+
+
+async def require_books_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (BOOKS_MUTATE,))
+
+
+async def require_customers_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_CUSTOMERS,))
+
+
+async def require_customers_patch(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_CUSTOMERS, USERS_MANAGE, PO_RAISE))
+
+
+async def require_cost_audit_view(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (STOCK_COST_VIEW,))
+
+
+async def require_picks_mutate(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES))
+
+
+async def require_nia_use(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (NIA_USE,))
+
+
+async def require_nia_admin(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (NIA_ADMIN,))
+
+
+def get_nia_threads_service(db: AsyncSession = Depends(get_db)) -> NiaThreadsService:
+    return NiaThreadsService(db)
+
+
+def get_nia_usage_service(db: AsyncSession = Depends(get_db)) -> NiaUsageService:
+    return NiaUsageService(db)
+
+
+def get_nia_run_service(db: AsyncSession = Depends(get_db)) -> NiaRunService:
+    return NiaRunService(db)
+
+
+def get_nia_audit_service(db: AsyncSession = Depends(get_db)) -> NiaAuditService:
+    return NiaAuditService(db)
+
+
+def get_nia_caps_service(db: AsyncSession = Depends(get_db)) -> NiaCapsService:
+    return NiaCapsService(db)
+
+
+def get_nia_schedule_service(db: AsyncSession = Depends(get_db)) -> NiaScheduleService:
+    return NiaScheduleService(db)

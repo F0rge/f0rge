@@ -47,6 +47,14 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
     flushRef.current?.()
   }, [])
 
+  // MealGrids-style guard: drop overlay if focused id left the active list
+  // (also closes overlay when date changes and photos are for another day).
+  const entryPhotos = entry?.photos ?? []
+  const focusedPhoto =
+    focusedPhotoId !== null && entryPhotos.some((p) => p.id === focusedPhotoId)
+      ? focusedPhotoId
+      : null
+
   const handleAutosaveStateChange = useCallback((state: AutosaveState) => {
     setAutosaveState(state)
   }, [])
@@ -117,8 +125,8 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
       )}
 
       <PhotoFocusOverlay
-        photoId={focusedPhotoId}
-        photos={entry?.photos ?? []}
+        photoId={focusedPhoto}
+        photos={entryPhotos}
         onClose={handleClosePhotoFocus}
         onSelectPhoto={setFocusedPhotoId}
       />

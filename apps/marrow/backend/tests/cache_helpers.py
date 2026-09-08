@@ -21,6 +21,13 @@ def memory_redis(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         metrics["set"] += 1
         store[key] = value
 
+    async def fake_set_nx(key: str, value: str, ttl_seconds: int) -> bool:
+        metrics["set"] += 1
+        if key in store:
+            return False
+        store[key] = value
+        return True
+
     async def fake_delete(key: str) -> None:
         store.pop(key, None)
 
@@ -32,9 +39,11 @@ def memory_redis(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return len(keys)
 
     monkeypatch.setattr(settings, "redis_url", "redis://memory/0")
+    monkeypatch.setattr(settings, "signals_sync_compute", True)
     monkeypatch.setattr("app.cache.redis_client._client", None)
     monkeypatch.setattr("app.cache.redis_client.get", fake_get)
     monkeypatch.setattr("app.cache.redis_client.set", fake_set)
+    monkeypatch.setattr("app.cache.redis_client.set_nx", fake_set_nx)
     monkeypatch.setattr("app.cache.redis_client.delete", fake_delete)
     monkeypatch.setattr("app.cache.redis_client.delete_pattern", fake_delete_pattern)
 

@@ -46,7 +46,6 @@ from app.routers import (
 )
 from app.services.push import apns_configured
 from app.services.reminders import reminder_background_loop
-from app.services.weather import weather_background_loop
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +78,6 @@ def _maybe_init_sentry() -> None:
 _configure_logging()
 _maybe_init_sentry()
 
-_weather_task = None
 _reminder_task = None
 
 
@@ -103,11 +101,6 @@ def _warn_misconfigured_features() -> None:
         logger.warning(
             "FOOD_ANALYSIS_VIA_AIRFLOW=true but AIRFLOW_URL is empty. "
             "Meal photo uploads will fall back to in-process analysis if credentials exist."
-        )
-    if settings.weather_fetch_enabled and not settings.openweathermap_api_key:
-        logger.warning(
-            "WEATHER_FETCH_ENABLED=true but OPENWEATHERMAP_API_KEY is empty. "
-            "Weather background loop will not start."
         )
     if settings.dose_reminders_enabled and not apns_configured():
         logger.warning(
@@ -180,16 +173,12 @@ async def _seed_dietary_db_if_empty() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _weather_task, _reminder_task
+    global _reminder_task
     await _seed_dietary_db_if_empty()
     _warn_misconfigured_features()
-    if settings.weather_fetch_enabled and settings.openweathermap_api_key:
-        _weather_task = asyncio.create_task(weather_background_loop())
     if settings.dose_reminders_enabled:
         _reminder_task = asyncio.create_task(reminder_background_loop())
     yield
-    if _weather_task:
-        _weather_task.cancel()
     if _reminder_task:
         _reminder_task.cancel()
 

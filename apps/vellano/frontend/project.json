@@ -1,0 +1,23 @@
+{
+  "name": "vellano-frontend",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/vellano/frontend",
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/vellano/frontend",
+        "command": "npm run typecheck"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/vellano/frontend",
+        "command": "npm run test"
+      }
+    }
+  },
+  "tags": ["platform:ts", "scope:vellano"]
+}

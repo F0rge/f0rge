@@ -14,14 +14,14 @@ export function WeatherSection() {
       await weatherFetch.mutateAsync()
       toast.success('Weather data fetched')
     } catch (err) {
-      handleMutationError(err, 'Weather fetch failed — check API key')
+      handleMutationError(err, 'Weather fetch failed')
     }
   }
 
   return (
     <SettingsCard icon={Cloud} iconClassName="text-muted-foreground" title="Weather Data">
       <p className="text-sm text-muted-foreground">
-        Fetches hourly from OpenWeatherMap for Luxembourg. Barometric pressure drops correlate with symptom flares.
+        Saves one free Open-Meteo snapshot for the day when you check in. Fetch Now retries today if that missed.
       </p>
       <button
         type="button"

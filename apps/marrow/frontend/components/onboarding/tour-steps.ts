@@ -204,7 +204,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="settings-page"]',
     title: 'Settings',
     content:
-      'Connect weather, Apple Health, and optional AI keys. External API tokens for integrations also live here.',
+      'Connect weather, import health data, and optional AI keys. External API tokens for integrations also live here.',
     placement: 'bottom',
   },
   {

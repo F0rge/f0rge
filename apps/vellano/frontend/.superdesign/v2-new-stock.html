@@ -1,0 +1,487 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vellano - New Stock</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <meta name="view-transition" content="same-origin">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" as="document">
+  <style>
+    :root {
+      --cds-background: #f4f4f4;
+      --cds-layer-01: #ffffff;
+      --cds-layer-02: #393939;
+      --cds-text-primary: #161616;
+      --cds-text-secondary: #525252;
+      --cds-interactive: #0f62fe;
+      --cds-border: #e0e0e0;
+      --cds-border-strong: #8d8d8d;
+      --cds-nav-bg: #161616;
+      --cds-nav-text: #c6c6c6;
+      --cds-nav-active: #ffffff;
+      --cds-nav-active-bg: #393939;
+    }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background-color: var(--cds-background);
+      color: var(--cds-text-primary);
+      margin: 0;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1.28572;
+    }
+    
+    /* View Transitions Setup */
+    html { background-color: var(--cds-background); }
+    @view-transition { navigation: auto; }
+    ::view-transition { background-color: var(--cds-background); }
+
+    ::view-transition-old(main-nav),
+    ::view-transition-new(main-nav) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+    
+    ::view-transition-old(header),
+    ::view-transition-new(header) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+
+    ::view-transition-old(main-content) {
+      animation: 0.2s ease-out both fade-out;
+    }
+    ::view-transition-new(main-content) {
+      animation: 0.2s ease-in 0.1s both fade-in;
+    }
+
+    @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+
+    /* Layout & Form Styles */
+    .header {
+      height: 48px;
+      background-color: var(--cds-nav-bg);
+      color: var(--cds-nav-active);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      border-bottom: 1px solid var(--cds-layer-02);
+    }
+    .sidenav {
+      width: 16rem;
+      background-color: var(--cds-nav-bg);
+      position: fixed;
+      top: 48px;
+      bottom: 0;
+      left: 0;
+      overflow-y: auto;
+      z-index: 40;
+      border-right: 1px solid var(--cds-layer-02);
+    }
+    .sidenav-item {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 16px;
+      color: var(--cds-nav-text);
+      text-decoration: none;
+      border-left: 4px solid transparent;
+    }
+    .sidenav-item:hover {
+      background-color: var(--cds-layer-02);
+      color: var(--cds-nav-active);
+    }
+    .sidenav-item.active {
+      background-color: var(--cds-nav-active-bg);
+      color: var(--cds-nav-active);
+      border-left-color: var(--cds-interactive);
+    }
+    .sidenav-icon {
+      margin-right: 16px;
+      font-size: 16px;
+    }
+    .main-content {
+      margin-top: 48px;
+      margin-left: 16rem;
+      padding: 24px;
+      min-height: calc(100vh - 48px);
+    }
+    .tile {
+      background-color: var(--cds-layer-01);
+      border: 1px solid var(--cds-border);
+      padding: 16px;
+    }
+    
+    /* IBM Carbon Forms */
+    .cds-label {
+      display: block;
+      font-size: 12px;
+      color: var(--cds-text-secondary);
+      margin-bottom: 4px;
+    }
+    .cds-input, .cds-select {
+      width: 100%;
+      height: 40px;
+      background-color: var(--cds-background);
+      border: none;
+      border-bottom: 1px solid var(--cds-border-strong);
+      padding: 0 16px;
+      color: var(--cds-text-primary);
+      font-family: inherit;
+      font-size: 14px;
+      transition: background-color 70ms;
+    }
+    .cds-input:hover, .cds-select:hover {
+      background-color: #e5e5e5;
+    }
+    .cds-input:focus, .cds-select:focus {
+      outline: 2px solid var(--cds-interactive);
+      outline-offset: -2px;
+      border-bottom-color: transparent;
+    }
+    .cds-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23161616' d='M8 11L3 6l.7-.7L8 9.6l4.3-4.3.7.7z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 16px;
+      padding-right: 40px;
+    }
+    
+    .btn-primary {
+      background-color: var(--cds-interactive);
+      color: #fff;
+      border: none;
+      padding: 11px 16px 11px 16px;
+      font-size: 14px;
+      min-height: 48px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+      justify-content: space-between;
+      min-width: 160px;
+    }
+    .btn-primary:hover {
+      background-color: #0353e9;
+    }
+    .btn-secondary {
+      background-color: #393939;
+      color: #fff;
+      border: none;
+      padding: 11px 16px 11px 16px;
+      font-size: 14px;
+      min-height: 48px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+      justify-content: space-between;
+    }
+    .btn-secondary:hover {
+      background-color: #4c4c4c;
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--cds-interactive);
+      border: none;
+      padding: 11px 16px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn-ghost:hover {
+      background-color: #e5e5e5;
+      color: #0043ce;
+    }
+
+    .header-search {
+      background-color: var(--cds-layer-02);
+      border: none;
+      border-bottom: 1px solid var(--cds-border-strong);
+      color: #fff;
+      height: 32px;
+      padding: 0 16px 0 40px;
+      width: 280px;
+      font-family: inherit;
+    }
+    .header-search:focus {
+      outline: 2px solid #fff;
+      outline-offset: -2px;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <!-- Header -->
+    <header class="header" style="view-transition-name: header">
+      <div class="flex items-center h-full">
+        <button class="w-12 h-12 flex items-center justify-center border-r border-[#393939] hover:bg-[#393939]">
+          <iconify-icon icon="carbon:menu" class="text-xl"></iconify-icon>
+        </button>
+        <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" class="px-4 text-[14px] font-semibold text-white tracking-wide flex items-center h-full">
+          <span class="font-normal mr-1">F0rge</span> Vellano
+        </a>
+      </div>
+      <div class="flex items-center h-full">
+        <div class="relative flex items-center h-full border-l border-[#393939]">
+          <iconify-icon icon="carbon:search" class="absolute left-4 text-white"></iconify-icon>
+          <input type="text" class="header-search" placeholder="Search...">
+        </div>
+        <div class="px-4 flex items-center border-l border-[#393939] h-full">
+          <span class="text-[14px]">admin@vellano.co.za</span>
+        </div>
+        <button class="w-12 h-12 flex items-center justify-center border-l border-[#393939] hover:bg-[#393939]">
+          <iconify-icon icon="carbon:logout" class="text-xl"></iconify-icon>
+        </button>
+      </div>
+    </header>
+
+    <!-- SideNav -->
+    <nav class="sidenav" style="view-transition-name: main-nav">
+      <div class="py-2">
+        <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" class="sidenav-item">
+          <iconify-icon icon="carbon:home" class="sidenav-icon"></iconify-icon>
+          Home
+        </a>
+        <a href="#" class="sidenav-item">
+          <iconify-icon icon="carbon:location" class="sidenav-icon"></iconify-icon>
+          Locations
+        </a>
+        <a href="#" class="sidenav-item">
+          <iconify-icon icon="carbon:industry" class="sidenav-icon"></iconify-icon>
+          Suppliers
+        </a>
+        <a href="#" class="sidenav-item">
+          <iconify-icon icon="carbon:document" class="sidenav-icon"></iconify-icon>
+          Proformas
+        </a>
+        <a href="https://p.superdesign.dev/draft/85c3d7eb-f0b5-44fc-85f3-5223dd62f364" class="sidenav-item">
+          <iconify-icon icon="carbon:catalog" class="sidenav-icon"></iconify-icon>
+          Catalogue
+        </a>
+        <a href="#" class="sidenav-item active">
+          <iconify-icon icon="carbon:product" class="sidenav-icon"></iconify-icon>
+          Stock
+        </a>
+        <a href="https://p.superdesign.dev/draft/4853836c-39e8-47d5-89dc-2ef9943e03bb" class="sidenav-item pl-12">
+          Stocktakes
+        </a>
+        <a href="https://p.superdesign.dev/draft/1ef5ed63-3050-4bc4-ae65-a3307b5a8378" class="sidenav-item pl-12">
+          Adjustments
+        </a>
+        <a href="https://p.superdesign.dev/draft/7dc0776c-8ae6-4f9c-803d-2dad50346c36" class="sidenav-item pl-12">
+          Import
+        </a>
+        <a href="#" class="sidenav-item">
+          <iconify-icon icon="carbon:purchase" class="sidenav-icon"></iconify-icon>
+          Purchase orders
+        </a>
+        <a href="#" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery" class="sidenav-icon"></iconify-icon>
+          Transit
+        </a>
+        <a href="#" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery-parcel" class="sidenav-icon"></iconify-icon>
+          Receive
+        </a>
+        <a href="#" class="sidenav-item">
+          <iconify-icon icon="carbon:movement" class="sidenav-icon"></iconify-icon>
+          Transfers
+        </a>
+        <a href="https://p.superdesign.dev/draft/bc6b9795-edc3-403d-bc9e-a1adc644e3d0" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery-truck" class="sidenav-icon"></iconify-icon>
+          Deliveries
+        </a>
+        <a href="https://p.superdesign.dev/draft/3b26c41b-a7bd-4a1a-91b2-4605848cd20d" class="sidenav-item">
+          <iconify-icon icon="carbon:store" class="sidenav-icon"></iconify-icon>
+          Till
+        </a>
+        <a href="https://p.superdesign.dev/draft/cc5ffaf0-b29e-4e81-9923-db9b813e318c" class="sidenav-item">
+          <iconify-icon icon="carbon:user-multiple" class="sidenav-icon"></iconify-icon>
+          Customers
+        </a>
+        <div class="mt-4 mb-2 px-4 text-xs font-semibold uppercase text-[#8d8d8d] tracking-wider">Books</div>
+        <a href="#" class="sidenav-item">
+          <iconify-icon icon="carbon:finance" class="sidenav-icon"></iconify-icon>
+          Chart of accounts
+        </a>
+        <a href="#" class="sidenav-item pl-12">Contacts</a>
+        <a href="#" class="sidenav-item pl-12">Invoices</a>
+        <a href="#" class="sidenav-item pl-12">Credit notes</a>
+        <a href="#" class="sidenav-item pl-12">Bills</a>
+        <a href="#" class="sidenav-item pl-12">Payments</a>
+        <a href="#" class="sidenav-item pl-12">Bank reconciliation</a>
+        <a href="#" class="sidenav-item pl-12">Reports</a>
+        <a href="#" class="sidenav-item pl-12">VAT201</a>
+        
+        <div class="mt-4 border-t border-[#393939] pt-2">
+          <a href="#" class="sidenav-item">
+            <iconify-icon icon="carbon:user-admin" class="sidenav-icon"></iconify-icon>
+            Users
+          </a>
+          <a href="#" class="sidenav-item">
+            <iconify-icon icon="carbon:user" class="sidenav-icon"></iconify-icon>
+            Profile
+          </a>
+          <a href="#" class="sidenav-item">
+            <iconify-icon icon="carbon:settings" class="sidenav-icon"></iconify-icon>
+            Settings
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" style="view-transition-name: main-content">
+      <div class="max-w-[800px]">
+        
+        <div class="mb-8 flex items-center">
+          <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" class="mr-4 text-[#0f62fe] flex items-center justify-center w-8 h-8 hover:bg-[#e5e5e5]">
+            <iconify-icon icon="carbon:arrow-left" class="text-xl"></iconify-icon>
+          </a>
+          <div>
+            <h1 class="text-[28px] font-light text-[#161616] mb-1">Create new SKU</h1>
+            <p class="text-[14px] text-[#525252]">Add a new item to catalogue and optional opening stock</p>
+          </div>
+        </div>
+
+        <form class="bg-white border border-[#e0e0e0]">
+          
+          <!-- Section 1: Item Details -->
+          <div class="p-6 border-b border-[#e0e0e0]">
+            <h2 class="text-[16px] font-semibold text-[#161616] mb-6 flex items-center">
+              <iconify-icon icon="carbon:information" class="mr-2 text-[#0f62fe]"></iconify-icon>
+              Item Details
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="cds-label">Reference (SKU) *</label>
+                <input type="text" class="cds-input" placeholder="e.g. DC-VB-001" required>
+              </div>
+              <div>
+                <label class="cds-label">Barcode (EAN/UPC)</label>
+                <div class="relative">
+                  <input type="text" class="cds-input" placeholder="Scan or type barcode">
+                  <iconify-icon icon="carbon:barcode" class="absolute right-3 top-3 text-[#525252] text-lg"></iconify-icon>
+                </div>
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="cds-label">Product Name *</label>
+                <input type="text" class="cds-input" placeholder="e.g. Dining Chair - Velvet Blue" required>
+              </div>
+
+              <div>
+                <label class="cds-label">Category</label>
+                <select class="cds-select">
+                  <option value="" disabled selected>Select category...</option>
+                  <option value="seating">Seating (Chairs, Sofas)</option>
+                  <option value="tables">Tables</option>
+                  <option value="storage">Storage</option>
+                  <option value="beds">Beds & Headboards</option>
+                  <option value="decor">Decor & Accessories</option>
+                </select>
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="cds-label">Design style</label>
+                  <input type="text" class="cds-input" placeholder="e.g. Modern">
+                </div>
+                <div>
+                  <label class="cds-label">Fabric / Material</label>
+                  <input type="text" class="cds-input" placeholder="e.g. Velvet">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Pricing -->
+          <div class="p-6 border-b border-[#e0e0e0]">
+            <h2 class="text-[16px] font-semibold text-[#161616] mb-6 flex items-center">
+              <iconify-icon icon="carbon:currency" class="mr-2 text-[#0f62fe]"></iconify-icon>
+              Pricing (ZAR, includes 15% VAT)
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="cds-label">Retail Price (ZAR) *</label>
+                <input type="number" step="0.01" class="cds-input" placeholder="0.00" required>
+              </div>
+              <div>
+                <label class="cds-label">Wholesale Price (ZAR)</label>
+                <input type="number" step="0.01" class="cds-input" placeholder="0.00">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Opening Stock -->
+          <div class="p-6 bg-[#f4f4f4]">
+            <div class="flex items-center justify-between mb-6">
+              <h2 class="text-[16px] font-semibold text-[#161616] flex items-center">
+                <iconify-icon icon="carbon:box" class="mr-2 text-[#0f62fe]"></iconify-icon>
+                Initial Opening Stock (Optional)
+              </h2>
+              <div class="flex items-center">
+                <input type="checkbox" id="add-stock" class="mr-2 cursor-pointer w-4 h-4">
+                <label for="add-stock" class="text-[14px] cursor-pointer">Record stock now</label>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 border-l-2 border-[#e0e0e0]">
+              <div>
+                <label class="cds-label">Location</label>
+                <select class="cds-select">
+                  <option value="kramerville">Kramerville Showroom</option>
+                  <option value="bedfordview">Bedfordview Store</option>
+                  <option value="warehouse">Main Warehouse</option>
+                </select>
+              </div>
+              <div>
+                <label class="cds-label">Quantity on Hand</label>
+                <input type="number" class="cds-input" placeholder="0">
+              </div>
+              
+              <div>
+                <label class="cds-label">Unit Cost (ZAR)</label>
+                <input type="number" step="0.01" class="cds-input" placeholder="0.00">
+                <p class="text-[12px] text-[#525252] mt-1">Used for inventory valuation</p>
+              </div>
+              <div>
+                <label class="cds-label">Received Date</label>
+                <input type="date" class="cds-input">
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Bar -->
+          <div class="p-4 bg-[#393939] flex justify-end gap-4">
+            <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" class="btn-ghost text-white hover:text-white hover:bg-[#4c4c4c]">Cancel</a>
+            <button type="submit" class="btn-primary">
+              Save SKU
+              <iconify-icon icon="carbon:save"></iconify-icon>
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

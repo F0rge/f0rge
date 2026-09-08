@@ -44,6 +44,13 @@ export default function CheckinPage() {
     flushRef.current?.()
   }, [])
 
+  // MealGrids-style guard: drop overlay if the focused photo left the feed.
+  const entryPhotos = entry?.photos ?? []
+  const focusedPhoto =
+    focusedPhotoId !== null && entryPhotos.some((p) => p.id === focusedPhotoId)
+      ? focusedPhotoId
+      : null
+
   const handleAutosaveStateChange = useCallback((state: AutosaveState) => {
     setAutosaveState(state)
   }, [])
@@ -107,8 +114,8 @@ export default function CheckinPage() {
       )}
 
       <PhotoFocusOverlay
-        photoId={focusedPhotoId}
-        photos={entry?.photos ?? []}
+        photoId={focusedPhoto}
+        photos={entryPhotos}
         onClose={handleClosePhotoFocus}
         onSelectPhoto={setFocusedPhotoId}
       />

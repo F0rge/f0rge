@@ -472,6 +472,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/health-metrics/range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Health Metrics */
+        get: operations["list_health_metrics_api_v1_health_metrics_range_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health-metrics/{date}": {
         parameters: {
             query?: never;
@@ -1125,6 +1142,23 @@ export interface paths {
         post?: never;
         /** Delete Lab */
         delete: operations["delete_lab_api_v1_labs__lab_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/labs/{lab_id}/attachment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Serve Lab Attachment */
+        get: operations["serve_lab_attachment_api_v1_labs__lab_id__attachment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2349,6 +2383,8 @@ export interface components {
             } | null;
             /** Medications */
             medications?: components["schemas"]["MedicationIntake"][];
+            /** Symptom Events */
+            symptom_events?: components["schemas"]["SymptomEvent"][];
         };
         /** EntryResponse */
         EntryResponse: {
@@ -2410,6 +2446,8 @@ export interface components {
             };
             /** Medications */
             medications?: components["schemas"]["MedicationIntake"][];
+            /** Symptom Events */
+            symptom_events?: components["schemas"]["SymptomEvent"][];
             /**
              * Photos
              * @default []
@@ -2494,6 +2532,8 @@ export interface components {
             } | null;
             /** Medications */
             medications?: components["schemas"]["MedicationIntake"][] | null;
+            /** Symptom Events */
+            symptom_events?: components["schemas"]["SymptomEvent"][] | null;
         };
         /**
          * ExternalTokenResponse
@@ -2775,6 +2815,11 @@ export interface components {
             spo2?: number | null;
             /** Wrist Temp Deviation */
             wrist_temp_deviation?: number | null;
+            /**
+             * Source
+             * @description ios_healthkit (default), manual_import, or health_auto_export
+             */
+            source?: string | null;
         };
         /** HealthMetricResponse */
         HealthMetricResponse: {
@@ -2834,7 +2879,7 @@ export interface components {
         };
         /**
          * HealthSamplesPayload
-         * @description Validated body for POST /health-metrics/samples (iOS HealthKit sync).
+         * @description Validated body for POST /health-metrics/samples (iOS HealthKit or manual import).
          */
         HealthSamplesPayload: {
             /** Samples */
@@ -3716,6 +3761,18 @@ export interface components {
             start?: string | null;
             /** End */
             end?: string | null;
+            /**
+             * Computing
+             * @default false
+             */
+            computing: boolean;
+            /**
+             * Quality Deferred
+             * @default false
+             */
+            quality_deferred: boolean;
+            /** Compute Error */
+            compute_error?: string | null;
         };
         /** SignalsMirrorResponse */
         SignalsMirrorResponse: {
@@ -3905,6 +3962,15 @@ export interface components {
             archived?: boolean | null;
             /** Sort Order */
             sort_order?: number | null;
+        };
+        /** SymptomEvent */
+        SymptomEvent: {
+            /** Key */
+            key: string;
+            /** Severity */
+            severity: number;
+            /** Time */
+            time?: string | null;
         };
         /** SymptomOrderRequest */
         SymptomOrderRequest: {
@@ -5565,6 +5631,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_health_metrics_api_v1_health_metrics_range_get: {
+        parameters: {
+            query: {
+                start: string;
+                end: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthMetricResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -7295,6 +7397,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    serve_lab_attachment_api_v1_labs__lab_id__attachment_get: {
+        parameters: {
+            query?: {
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                lab_id: number;
+            };
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {

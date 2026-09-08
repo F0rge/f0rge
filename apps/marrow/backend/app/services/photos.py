@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-from typing import TYPE_CHECKING, Optional
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, AsyncIterator, Optional
 
 from fastapi import BackgroundTasks, UploadFile
 from fastapi.responses import Response
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache.invalidation import invalidate_user_insights_cache
@@ -44,6 +46,23 @@ PHOTO_CACHE_CONTROL = "private, max-age=240"
 # Single GET /photos response ceiling. Clients that need the full feed
 # (profile grid) page with offset; see usePhotos.
 PHOTO_LIST_PAGE_SIZE = 100
+
+# Advisory-lock namespace for serializing filename allocation + object write per entry.
+# hashtext keeps the key in int4 range; session-level lock spans file I/O outside
+# unit_of_work so two Railway workers cannot TOCTOU the same next number.
+_PHOTO_UPLOAD_LOCK_PREFIX = "marrow:photo-upload:"
+
+
+@asynccontextmanager
+async def entry_photo_upload_lock(db: AsyncSession, entry_id: int) -> AsyncIterator[None]:
+    """Serialize photo filename pick + save for one entry across app workers."""
+    key = f"{_PHOTO_UPLOAD_LOCK_PREFIX}{entry_id}"
+    await db.execute(text("SELECT pg_advisory_lock(hashtext(:key))"), {"key": key})
+    try:
+        yield
+    finally:
+        await db.execute(text("SELECT pg_advisory_unlock(hashtext(:key))"), {"key": key})
+
 
 if TYPE_CHECKING:
     from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
@@ -206,17 +225,13 @@ class PhotoService:
             tagged_handles, tagged_group_ids
         )
 
-        filename = await next_photo_filename(self.db, entry)
-
+        # Resize outside the lock — CPU work does not need the filename yet.
         raw_bytes = await file.read()
         processed_bytes = await asyncio.to_thread(resize_image, raw_bytes)
-        user_id_str = str(current_user_id())
-        await asyncio.to_thread(save_photo, processed_bytes, filename, user_id=user_id_str)
         thumb_bytes = await asyncio.to_thread(
             resize_image, processed_bytes, max_dim=THUMB_MAX_DIM, quality=THUMB_QUALITY
         )
-        thumb_name = thumb_filename(filename)
-        await asyncio.to_thread(save_photo, thumb_bytes, thumb_name, user_id=user_id_str)
+        user_id_str = str(current_user_id())
 
         now = datetime.datetime.utcnow()
 
@@ -230,26 +245,6 @@ class PhotoService:
         effective_meal_time = normalized_meal_time if normalized_meal_time is not None else now
         user_id = current_user_id()
 
-        # Invariant: a file on disk implies a DB row exists.
-        # If the commit fails we clean up the file so the next upload
-        # doesn't collide with a phantom on disk.
-        meal = Meal(
-            owner_user_id=user_id,
-            filename=filename,
-            label=label,
-            original_filename=file.filename,
-            meal_time=effective_meal_time,
-            created_at=now,
-        )
-        photo = Photo(
-            user_id=user_id,
-            entry_id=entry.id,
-            filename=filename,
-            label=label,
-            original_filename=file.filename,
-            meal_time=effective_meal_time,
-            created_at=now,
-        )
         # Queue analysis when enabled. Airflow path uses platform OpenRouter on
         # the worker; BackgroundTasks path still needs Marrow credentials (env/BYOK).
         analysis_will_run = False
@@ -266,22 +261,54 @@ class PhotoService:
                 if api_key:
                     analysis_will_run = True
 
-        try:
-            async with unit_of_work(self.db):
-                await self.meal_crud.add_and_flush(meal)
-                photo.meal_id = meal.id
-                self.crud.add(photo)
-                await self.db.flush()
-                if recipients:
-                    await self.meal_tags.insert_tags_for_photo(photo, entry_date, recipients)
-                if recipients:
-                    await self.meal_tags.delivery.process_photo_only_source_in_transaction(
-                        self.db, photo.id, user_id
-                    )
-        except Exception:
-            await asyncio.to_thread(delete_photo, filename, user_id=str(user_id))
-            await asyncio.to_thread(delete_photo, thumb_filename(filename), user_id=str(user_id))
-            raise
+        # Hold an advisory lock across allocate + object write + DB insert so two
+        # concurrent uploads for the same entry cannot pick the same next number
+        # (S3 save_bytes is HEAD-then-PUT and is not atomic without this).
+        async with entry_photo_upload_lock(self.db, entry.id):
+            filename = await next_photo_filename(self.db, entry)
+            await asyncio.to_thread(save_photo, processed_bytes, filename, user_id=user_id_str)
+            thumb_name = thumb_filename(filename)
+            await asyncio.to_thread(save_photo, thumb_bytes, thumb_name, user_id=user_id_str)
+
+            # Invariant: a file on disk implies a DB row exists.
+            # If the commit fails we clean up the file so the next upload
+            # doesn't collide with a phantom on disk.
+            meal = Meal(
+                owner_user_id=user_id,
+                filename=filename,
+                label=label,
+                original_filename=file.filename,
+                meal_time=effective_meal_time,
+                created_at=now,
+            )
+            photo = Photo(
+                user_id=user_id,
+                entry_id=entry.id,
+                filename=filename,
+                label=label,
+                original_filename=file.filename,
+                meal_time=effective_meal_time,
+                created_at=now,
+            )
+
+            try:
+                async with unit_of_work(self.db):
+                    await self.meal_crud.add_and_flush(meal)
+                    photo.meal_id = meal.id
+                    self.crud.add(photo)
+                    await self.db.flush()
+                    if recipients:
+                        await self.meal_tags.insert_tags_for_photo(photo, entry_date, recipients)
+                    if recipients:
+                        await self.meal_tags.delivery.process_photo_only_source_in_transaction(
+                            self.db, photo.id, user_id
+                        )
+            except Exception:
+                await asyncio.to_thread(delete_photo, filename, user_id=str(user_id))
+                await asyncio.to_thread(
+                    delete_photo, thumb_filename(filename), user_id=str(user_id)
+                )
+                raise
 
         if analysis_will_run:
             from app.services.food_analysis_enqueue import enqueue_food_analysis

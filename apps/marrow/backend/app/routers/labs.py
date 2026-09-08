@@ -4,6 +4,7 @@ import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, UploadFile, status
+from fastapi.responses import Response
 
 from app.dependencies.labs import (
     get_lab_extraction_orchestrator,
@@ -43,6 +44,15 @@ async def list_labs(
 @router.get("/{lab_id}", response_model=LabResponse)
 async def get_lab(lab_id: int, service: LabsService = Depends(get_labs_service)):
     return await service.get_lab(lab_id)
+
+
+@router.get("/{lab_id}/attachment", response_model=None)
+async def serve_lab_attachment(
+    lab_id: int,
+    download: bool = Query(False),
+    service: LabsService = Depends(get_labs_service),
+) -> Response:
+    return await service.serve_lab_attachment(lab_id, download=download)
 
 
 @router.post("", response_model=LabResponse, status_code=status.HTTP_201_CREATED)

@@ -1,0 +1,483 @@
+<!DOCTYPE html><html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vellano Home Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
+  <meta name="view-transition" content="same-origin">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/994e0004-8500-4354-96a7-a56705d8dbee" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/4853836c-39e8-47d5-89dc-2ef9943e03bb" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/1ef5ed63-3050-4bc4-ae65-a3307b5a8378" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/7dc0776c-8ae6-4f9c-803d-2dad50346c36" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/de9a5ce8-d75a-4c9f-bd57-2f3caa81b55e" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/4cac3240-cf43-45d6-9fdd-d9d067a4d35e" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/85c3d7eb-f0b5-44fc-85f3-5223dd62f364" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/3b26c41b-a7bd-4a1a-91b2-4605848cd20d" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/cc5ffaf0-b29e-4e81-9923-db9b813e318c" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/bc6b9795-edc3-403d-bc9e-a1adc644e3d0" as="document">
+  <style>
+    @view-transition { navigation: auto; }
+    .header { view-transition-name: header; }
+    .sidenav { view-transition-name: sidenav; }
+    .main-content { view-transition-name: main-content; }
+    ::view-transition-old(header), ::view-transition-new(header),
+    ::view-transition-old(sidenav), ::view-transition-new(sidenav) {
+      animation: none; mix-blend-mode: normal;
+    }
+    ::view-transition-old(main-content) { animation: 0.25s ease-out both fade-out; }
+    ::view-transition-new(main-content) { animation: 0.25s ease-in 0.1s both fade-in; }
+    @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    :root {
+      --cds-background: #f4f4f4;
+      --cds-layer-01: #ffffff;
+      --cds-layer-02: #393939;
+      --cds-text-primary: #161616;
+      --cds-text-secondary: #525252;
+      --cds-interactive: #0f62fe;
+      --cds-border: #e0e0e0;
+      --cds-border-strong: #8d8d8d;
+      --cds-nav-bg: #161616;
+      --cds-nav-text: #c6c6c6;
+      --cds-nav-active: #ffffff;
+      --cds-nav-active-bg: #393939;
+    }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background-color: var(--cds-background);
+      color: var(--cds-text-primary);
+      margin: 0;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1.28572;
+    }
+    .header {
+      height: 48px;
+      background-color: var(--cds-nav-bg);
+      color: var(--cds-nav-active);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      border-bottom: 1px solid var(--cds-layer-02);
+    }
+    .sidenav {
+      width: 16rem;
+      background-color: var(--cds-nav-bg);
+      position: fixed;
+      top: 48px;
+      bottom: 0;
+      left: 0;
+      overflow-y: auto;
+      z-index: 40;
+      border-right: 1px solid var(--cds-layer-02);
+    }
+    .sidenav-item {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 16px;
+      color: var(--cds-nav-text);
+      text-decoration: none;
+      border-left: 4px solid transparent;
+    }
+    .sidenav-item:hover {
+      background-color: var(--cds-layer-02);
+      color: var(--cds-nav-active);
+    }
+    .sidenav-item.active {
+      background-color: var(--cds-nav-active-bg);
+      color: var(--cds-nav-active);
+      border-left-color: var(--cds-interactive);
+    }
+    .sidenav-icon {
+      margin-right: 16px;
+      font-size: 16px;
+    }
+    .main-content {
+      margin-top: 48px;
+      margin-left: 16rem;
+      padding: 24px;
+      min-height: calc(100vh - 48px);
+    }
+    .tile {
+      background-color: var(--cds-layer-01);
+      border: 1px solid var(--cds-border);
+      padding: 16px;
+      height: 100%;
+    }
+    .btn-primary {
+      background-color: var(--cds-interactive);
+      color: #fff;
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-primary:hover {
+      background-color: #0353e9;
+    }
+    .btn-secondary {
+      background-color: #393939;
+      color: #fff;
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-secondary:hover {
+      background-color: #4c4c4c;
+    }
+    .header-search {
+      background-color: var(--cds-layer-02);
+      border: none;
+      border-bottom: 1px solid var(--cds-border-strong);
+      color: #fff;
+      height: 32px;
+      padding: 0 16px 0 40px;
+      width: 280px;
+      font-family: inherit;
+    }
+    .header-search:focus {
+      outline: 2px solid #fff;
+      outline-offset: -2px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .data-table th {
+      text-align: left;
+      padding: 8px 16px;
+      background-color: var(--cds-border);
+      font-weight: 600;
+      border-bottom: 1px solid var(--cds-border-strong);
+    }
+    .data-table td {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--cds-border);
+    }
+  </style>
+</head>
+<body>
+  <div data-sd-id="1">
+    <!-- Header -->
+    <header class="header" data-sd-id="2">
+      <div class="flex items-center h-full" data-sd-id="3">
+        <button class="w-12 h-12 flex items-center justify-center border-r border-[#393939] hover:bg-[#393939]" data-sd-id="4">
+          <iconify-icon icon="carbon:menu" class="text-xl"></iconify-icon>
+        </button>
+        <a href="#" class="px-4 text-[14px] font-semibold text-white tracking-wide flex items-center h-full" data-sd-id="5">
+          <span class="font-normal mr-1" data-sd-id="6">F0rge</span> Vellano
+        </a>
+      </div>
+      <div class="flex items-center h-full" data-sd-id="7">
+        <div class="relative flex items-center h-full border-l border-[#393939]" data-sd-id="8">
+          <iconify-icon icon="carbon:search" class="absolute left-4 text-white"></iconify-icon>
+          <input type="text" class="header-search" placeholder="Search..." data-sd-id="9">
+        </div>
+        <div class="px-4 flex items-center border-l border-[#393939] h-full" data-sd-id="10">
+          <span class="text-[14px]" data-sd-id="11">admin@vellano.co.za</span>
+        </div>
+        <button class="w-12 h-12 flex items-center justify-center border-l border-[#393939] hover:bg-[#393939]" data-sd-id="12">
+          <iconify-icon icon="carbon:logout" class="text-xl"></iconify-icon>
+        </button>
+      </div>
+    </header>
+
+    <!-- SideNav -->
+    <nav class="sidenav" data-sd-id="13">
+      <div class="py-2" data-sd-id="14">
+        <a href="#" class="sidenav-item active" data-sd-id="15">
+          <iconify-icon icon="carbon:home" class="sidenav-icon"></iconify-icon>
+          Home
+        </a>
+        <a href="#" class="sidenav-item" data-sd-id="16">
+          <iconify-icon icon="carbon:location" class="sidenav-icon"></iconify-icon>
+          Locations
+        </a>
+        <a href="#" class="sidenav-item" data-sd-id="17">
+          <iconify-icon icon="carbon:industry" class="sidenav-icon"></iconify-icon>
+          Suppliers
+        </a>
+        <a href="#" class="sidenav-item" data-sd-id="18">
+          <iconify-icon icon="carbon:document" class="sidenav-icon"></iconify-icon>
+          Proformas
+        </a>
+        <a href="https://p.superdesign.dev/draft/85c3d7eb-f0b5-44fc-85f3-5223dd62f364" class="sidenav-item" data-sd-id="19">
+          <iconify-icon icon="carbon:catalog" class="sidenav-icon"></iconify-icon>
+          Catalogue
+        </a>
+        <a href="#" class="sidenav-item" data-sd-id="20">
+          <iconify-icon icon="carbon:product" class="sidenav-icon"></iconify-icon>
+          Stock
+        </a>
+        <a href="https://p.superdesign.dev/draft/4853836c-39e8-47d5-89dc-2ef9943e03bb" class="sidenav-item pl-12" data-sd-id="21">
+          Stocktakes
+        </a>
+        <a href="https://p.superdesign.dev/draft/1ef5ed63-3050-4bc4-ae65-a3307b5a8378" class="sidenav-item pl-12" data-sd-id="22">
+          Adjustments
+        </a>
+        <a href="https://p.superdesign.dev/draft/7dc0776c-8ae6-4f9c-803d-2dad50346c36" class="sidenav-item pl-12" data-sd-id="23">
+          Import
+        </a>
+        <a href="#" class="sidenav-item" data-sd-id="24">
+          <iconify-icon icon="carbon:purchase" class="sidenav-icon"></iconify-icon>
+          Purchase orders
+        </a>
+        <a href="#" class="sidenav-item" data-sd-id="25">
+          <iconify-icon icon="carbon:delivery" class="sidenav-icon"></iconify-icon>
+          Transit
+        </a>
+        <a href="#" class="sidenav-item" data-sd-id="26">
+          <iconify-icon icon="carbon:delivery-parcel" class="sidenav-icon"></iconify-icon>
+          Receive
+        </a>
+        <a href="#" class="sidenav-item" data-sd-id="27">
+          <iconify-icon icon="carbon:movement" class="sidenav-icon"></iconify-icon>
+          Transfers
+        </a>
+        <a href="https://p.superdesign.dev/draft/bc6b9795-edc3-403d-bc9e-a1adc644e3d0" class="sidenav-item" data-sd-id="28">
+          <iconify-icon icon="carbon:delivery-truck" class="sidenav-icon"></iconify-icon>
+          Deliveries
+        </a>
+        <a href="https://p.superdesign.dev/draft/3b26c41b-a7bd-4a1a-91b2-4605848cd20d" class="sidenav-item" data-sd-id="29">
+          <iconify-icon icon="carbon:store" class="sidenav-icon"></iconify-icon>
+          Till
+        </a>
+        <a href="https://p.superdesign.dev/draft/cc5ffaf0-b29e-4e81-9923-db9b813e318c" class="sidenav-item" data-sd-id="30">
+          <iconify-icon icon="carbon:user-multiple" class="sidenav-icon"></iconify-icon>
+          Customers
+        </a>
+        <div class="mt-4 mb-2 px-4 text-xs font-semibold uppercase text-[#8d8d8d] tracking-wider" data-sd-id="31">Books</div>
+        <a href="#" class="sidenav-item" data-sd-id="32">
+          <iconify-icon icon="carbon:finance" class="sidenav-icon"></iconify-icon>
+          Chart of accounts
+        </a>
+        <a href="#" class="sidenav-item pl-12" data-sd-id="33">Contacts</a>
+        <a href="#" class="sidenav-item pl-12" data-sd-id="34">Invoices</a>
+        <a href="#" class="sidenav-item pl-12" data-sd-id="35">Credit notes</a>
+        <a href="#" class="sidenav-item pl-12" data-sd-id="36">Bills</a>
+        <a href="#" class="sidenav-item pl-12" data-sd-id="37">Payments</a>
+        <a href="#" class="sidenav-item pl-12" data-sd-id="38">Bank reconciliation</a>
+        <a href="#" class="sidenav-item pl-12" data-sd-id="39">Reports</a>
+        <a href="#" class="sidenav-item pl-12" data-sd-id="40">VAT201</a>
+        
+        <div class="mt-4 border-t border-[#393939] pt-2" data-sd-id="41">
+          <a href="#" class="sidenav-item" data-sd-id="42">
+            <iconify-icon icon="carbon:user-admin" class="sidenav-icon"></iconify-icon>
+            Users
+          </a>
+          <a href="#" class="sidenav-item" data-sd-id="43">
+            <iconify-icon icon="carbon:user" class="sidenav-icon"></iconify-icon>
+            Profile
+          </a>
+          <a href="#" class="sidenav-item" data-sd-id="44">
+            <iconify-icon icon="carbon:settings" class="sidenav-icon"></iconify-icon>
+            Settings
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" data-sd-id="45">
+      <div class="max-w-[1200px]" data-sd-id="46">
+        <div class="mb-6" data-sd-id="47">
+          <h1 class="text-[28px] font-light text-[#161616] mb-2" data-sd-id="48">Home</h1>
+          <p class="text-[14px] text-[#525252]" data-sd-id="49">Stock cockpit — overview of operations, inventory, and laybys.</p>
+        </div>
+
+        <!-- Primary Actions Row -->
+        <div class="flex flex-wrap gap-4 mb-8" data-sd-id="50">
+          <a href="https://p.superdesign.dev/draft/994e0004-8500-4354-96a7-a56705d8dbee" class="btn-primary" data-sd-id="51">
+            New stock
+            <iconify-icon icon="carbon:add" class="ml-2"></iconify-icon>
+          </a>
+          <a href="https://p.superdesign.dev/draft/4853836c-39e8-47d5-89dc-2ef9943e03bb" class="btn-secondary" data-sd-id="52">
+            Stocktake
+          </a>
+          <a href="https://p.superdesign.dev/draft/1ef5ed63-3050-4bc4-ae65-a3307b5a8378" class="btn-secondary" data-sd-id="53">
+            Stock adjustment
+          </a>
+          <a href="https://p.superdesign.dev/draft/7dc0776c-8ae6-4f9c-803d-2dad50346c36" class="btn-secondary" data-sd-id="54">
+            Import CSV
+            <iconify-icon icon="carbon:document-import" class="ml-2"></iconify-icon>
+          </a>
+          <a href="https://p.superdesign.dev/draft/4cac3240-cf43-45d6-9fdd-d9d067a4d35e" class="btn-secondary" data-sd-id="55">
+            New layby
+          </a>
+          <a href="https://p.superdesign.dev/draft/de9a5ce8-d75a-4c9f-bd57-2f3caa81b55e" class="btn-secondary" data-sd-id="56">
+            Process return
+          </a>
+        </div>
+
+        <!-- KPI Strip -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8" data-sd-id="57">
+          <div class="tile" data-sd-id="58">
+            <h2 class="text-[14px] font-semibold text-[#161616] mb-2" data-sd-id="59">On order</h2>
+            <p class="text-[28px] font-semibold mb-1" data-sd-id="60">1,204 <span class="text-[14px] font-normal" data-sd-id="61">units</span></p>
+            <p class="text-[12px] text-[#525252]" data-sd-id="62">450,200.00 ZAR estimated</p>
+          </div>
+          <div class="tile" data-sd-id="63">
+            <h2 class="text-[14px] font-semibold text-[#161616] mb-2" data-sd-id="64">On hand</h2>
+            <p class="text-[28px] font-semibold mb-1" data-sd-id="65">8,432 <span class="text-[14px] font-normal" data-sd-id="66">units</span></p>
+            <p class="text-[12px] text-[#525252]" data-sd-id="67">2,140,500.00 ZAR landed cost</p>
+          </div>
+          <div class="tile" data-sd-id="68">
+            <h2 class="text-[14px] font-semibold text-[#161616] mb-2" data-sd-id="69">Aged stock value</h2>
+            <p class="text-[28px] font-semibold mb-1" data-sd-id="70">142,000.00 <span class="text-[14px] font-normal" data-sd-id="71">ZAR</span></p>
+            <p class="text-[12px] text-[#525252]" data-sd-id="72">&gt; 180 days</p>
+          </div>
+          <div class="tile" data-sd-id="73">
+            <h2 class="text-[14px] font-semibold text-[#161616] mb-2" data-sd-id="74">Open laybys</h2>
+            <p class="text-[28px] font-semibold mb-1" data-sd-id="75">24 <span class="text-[14px] font-normal" data-sd-id="76">active</span></p>
+            <p class="text-[12px] text-[#525252]" data-sd-id="77">85,400.00 ZAR balance</p>
+          </div>
+          <div class="tile" data-sd-id="78">
+            <h2 class="text-[14px] font-semibold text-[#161616] mb-2" data-sd-id="79">Low-stock SKUs</h2>
+            <p class="text-[28px] font-semibold text-[#da1e28] mb-1" data-sd-id="80">18 <span class="text-[14px] font-normal text-[#161616]" data-sd-id="81">items</span></p>
+            <p class="text-[12px] text-[#525252]" data-sd-id="82">Below reorder point</p>
+          </div>
+          <div class="tile" data-sd-id="83">
+            <h2 class="text-[14px] font-semibold text-[#161616] mb-2" data-sd-id="84">Returns open</h2>
+            <p class="text-[28px] font-semibold mb-1" data-sd-id="85">3 <span class="text-[14px] font-normal" data-sd-id="86">pending</span></p>
+            <p class="text-[12px] text-[#525252]" data-sd-id="87">Requires processing</p>
+          </div>
+        </div>
+
+        <!-- Two Columns Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" data-sd-id="88">
+          <!-- Needs Attention -->
+          <div data-sd-id="89">
+            <h2 class="text-[20px] font-light text-[#161616] mb-4" data-sd-id="90">Needs attention</h2>
+            <div class="tile p-0 overflow-hidden" data-sd-id="91">
+              <table class="data-table" data-sd-id="92">
+                <thead data-sd-id="93">
+                  <tr data-sd-id="94">
+                    <th data-sd-id="95">Item / Task</th>
+                    <th data-sd-id="96">Status</th>
+                    <th data-sd-id="97">Action</th>
+                  </tr>
+                </thead>
+                <tbody data-sd-id="98">
+                  <tr data-sd-id="99">
+                    <td data-sd-id="100">
+                      <div class="font-semibold" data-sd-id="101">Dining Chair - Velvet Blue</div>
+                      <div class="text-[12px] text-[#525252]" data-sd-id="102">SKU: DC-VB-001 • Low Stock</div>
+                    </td>
+                    <td data-sd-id="103"><span class="text-[#da1e28]" data-sd-id="104">2 on hand</span></td>
+                    <td data-sd-id="105"><a href="#" class="text-[#0f62fe] hover:underline" data-sd-id="106">Order</a></td>
+                  </tr>
+                  <tr data-sd-id="107">
+                    <td data-sd-id="108">
+                      <div class="font-semibold" data-sd-id="109">Monthly Stocktake - Sandton</div>
+                      <div class="text-[12px] text-[#525252]" data-sd-id="110">Started 2 days ago</div>
+                    </td>
+                    <td data-sd-id="111">In progress</td>
+                    <td data-sd-id="112"><a href="#" class="text-[#0f62fe] hover:underline" data-sd-id="113">Resume</a></td>
+                  </tr>
+                  <tr data-sd-id="114">
+                    <td data-sd-id="115">
+                      <div class="font-semibold" data-sd-id="116">Unmatched Bank Lines</div>
+                      <div class="text-[12px] text-[#525252]" data-sd-id="117">FNB Cheque Account</div>
+                    </td>
+                    <td data-sd-id="118">14 lines</td>
+                    <td data-sd-id="119"><a href="#" class="text-[#0f62fe] hover:underline" data-sd-id="120">Reconcile</a></td>
+                  </tr>
+                  <tr data-sd-id="121">
+                    <td data-sd-id="122">
+                      <div class="font-semibold" data-sd-id="123">Layby #LB-1042 Overdue</div>
+                      <div class="text-[12px] text-[#525252]" data-sd-id="124">John Smith</div>
+                    </td>
+                    <td data-sd-id="125">12 days late</td>
+                    <td data-sd-id="126"><a href="#" class="text-[#0f62fe] hover:underline" data-sd-id="127">Review</a></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Recent Movements -->
+          <div data-sd-id="128">
+            <h2 class="text-[20px] font-light text-[#161616] mb-4" data-sd-id="129">Recent movements</h2>
+            <div class="tile p-0 overflow-hidden" data-sd-id="130">
+              <table class="data-table" data-sd-id="131">
+                <thead data-sd-id="132">
+                  <tr data-sd-id="133">
+                    <th data-sd-id="134">Type</th>
+                    <th data-sd-id="135">Reference</th>
+                    <th data-sd-id="136">Date</th>
+                  </tr>
+                </thead>
+                <tbody data-sd-id="137">
+                  <tr data-sd-id="138">
+                    <td data-sd-id="139">
+                      <span class="inline-flex items-center px-2 py-1 bg-[#defbe6] text-[#0e6027] text-[12px]" data-sd-id="140">
+                        Till Sale
+                      </span>
+                    </td>
+                    <td data-sd-id="141">
+                      <div class="font-semibold" data-sd-id="142">INV-2045</div>
+                      <div class="text-[12px] text-[#525252]" data-sd-id="143">2 items • 14,500.00 ZAR</div>
+                    </td>
+                    <td class="text-[#525252]" data-sd-id="144">10 mins ago</td>
+                  </tr>
+                  <tr data-sd-id="145">
+                    <td data-sd-id="146">
+                      <span class="inline-flex items-center px-2 py-1 bg-[#e5f6ff] text-[#00539a] text-[12px]" data-sd-id="147">
+                        Transfer
+                      </span>
+                    </td>
+                    <td data-sd-id="148">
+                      <div class="font-semibold" data-sd-id="149">TR-089</div>
+                      <div class="text-[12px] text-[#525252]" data-sd-id="150">WH → Sandton (12 units)</div>
+                    </td>
+                    <td class="text-[#525252]" data-sd-id="151">2 hours ago</td>
+                  </tr>
+                  <tr data-sd-id="152">
+                    <td data-sd-id="153">
+                      <span class="inline-flex items-center px-2 py-1 bg-[#f4f4f4] text-[#161616] text-[12px] border border-[#e0e0e0]" data-sd-id="154">
+                        Adjustment
+                      </span>
+                    </td>
+                    <td data-sd-id="155">
+                      <div class="font-semibold" data-sd-id="156">ADJ-442</div>
+                      <div class="text-[12px] text-[#525252]" data-sd-id="157">-1 unit (Damaged)</div>
+                    </td>
+                    <td class="text-[#525252]" data-sd-id="158">Yesterday</td>
+                  </tr>
+                  <tr data-sd-id="159">
+                    <td data-sd-id="160">
+                      <span class="inline-flex items-center px-2 py-1 bg-[#e8daff] text-[#6929c4] text-[12px]" data-sd-id="161">
+                        Receive
+                      </span>
+                    </td>
+                    <td data-sd-id="162">
+                      <div class="font-semibold" data-sd-id="163">PO-1092</div>
+                      <div class="text-[12px] text-[#525252]" data-sd-id="164">Supplier X (45 units)</div>
+                    </td>
+                    <td class="text-[#525252]" data-sd-id="165">Yesterday</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+</body></html>

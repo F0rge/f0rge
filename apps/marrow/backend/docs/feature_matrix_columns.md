@@ -67,7 +67,7 @@ Populated from Apple Health auto-export via `/api/v1/health-metrics/import`. All
 
 ## Weather fields (`wx_` prefix)
 
-Aggregated from hourly OpenWeatherMap readings. All `null` when no readings exist for the date.
+Aggregated from the daily Open-Meteo snapshot stored on check-in. All `null` when no readings exist for the date.
 `wx_pressure_delta` is additionally `null` when no readings exist for the prior day.
 
 | Column | Type | Source | Description | Nullable |

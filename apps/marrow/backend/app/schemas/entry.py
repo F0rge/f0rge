@@ -26,6 +26,19 @@ class MedicationIntake(BaseModel):
     time: Optional[str] = None  # wall-clock "HH:MM" display string, no tz logic
 
 
+class SymptomEvent(BaseModel):
+    key: str = Field(min_length=1, max_length=64)
+    severity: int = Field(ge=0, le=10)
+    time: Optional[str] = None  # wall-clock "HH:MM", stamped client-side
+
+    @field_validator("key", mode="after")
+    @classmethod
+    def validate_event_key(cls, v: str) -> str:
+        if not _SYMPTOM_KEY_RE.match(v):
+            raise ValueError("symptom key must match ^[a-z0-9_]+$")
+        return v
+
+
 class EntryCreate(BaseModel):
     date: datetime.date
     # v4 = 5-point core scales (overall/sleep_quality/stress/neuro) + stool_completeness.
@@ -61,6 +74,7 @@ class EntryCreate(BaseModel):
     notes: Optional[str] = None
     symptoms_json: Optional[dict] = None
     medications: list[MedicationIntake] = Field(default_factory=list)
+    symptom_events: list[SymptomEvent] = Field(default_factory=list)
 
     _validate_stool_completeness = field_validator("stool_completeness")(
         _validate_stool_completeness
@@ -120,6 +134,7 @@ class EntryUpdate(BaseModel):
     notes: Optional[str] = None
     symptoms_json: Optional[dict] = None
     medications: Optional[list[MedicationIntake]] = None
+    symptom_events: Optional[list[SymptomEvent]] = None
 
     _validate_stool_completeness = field_validator("stool_completeness")(
         _validate_stool_completeness
@@ -177,6 +192,7 @@ class EntryResponse(BaseModel):
     notes: Optional[str] = None
     symptoms_json: dict = Field(default_factory=dict)
     medications: list[MedicationIntake] = Field(default_factory=list)
+    symptom_events: list[SymptomEvent] = Field(default_factory=list)
     photos: list[PhotoResponse] = []
     created_at: datetime.datetime
     updated_at: datetime.datetime

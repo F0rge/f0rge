@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vellano - Returns / RMA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <meta name="view-transition" content="same-origin">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/994e0004-8500-4354-96a7-a56705d8dbee" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/4853836c-39e8-47d5-89dc-2ef9943e03bb" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/1ef5ed63-3050-4bc4-ae65-a3307b5a8378" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/7dc0776c-8ae6-4f9c-803d-2dad50346c36" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/de9a5ce8-d75a-4c9f-bd57-2f3caa81b55e" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/4cac3240-cf43-45d6-9fdd-d9d067a4d35e" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/85c3d7eb-f0b5-44fc-85f3-5223dd62f364" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/3b26c41b-a7bd-4a1a-91b2-4605848cd20d" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/cc5ffaf0-b29e-4e81-9923-db9b813e318c" as="document">
+  <link rel="prefetch" href="https://p.superdesign.dev/draft/bc6b9795-edc3-403d-bc9e-a1adc644e3d0" as="document">
+  <style>
+    :root {
+      --cds-background: #f4f4f4;
+      --cds-layer-01: #ffffff;
+      --cds-layer-02: #393939;
+      --cds-text-primary: #161616;
+      --cds-text-secondary: #525252;
+      --cds-interactive: #0f62fe;
+      --cds-border: #e0e0e0;
+      --cds-border-strong: #8d8d8d;
+      --cds-nav-bg: #161616;
+      --cds-nav-text: #c6c6c6;
+      --cds-nav-active: #ffffff;
+      --cds-nav-active-bg: #393939;
+    }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background-color: var(--cds-background);
+      color: var(--cds-text-primary);
+      margin: 0;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1.28572;
+    }
+    .header {
+      height: 48px;
+      background-color: var(--cds-nav-bg);
+      color: var(--cds-nav-active);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      border-bottom: 1px solid var(--cds-layer-02);
+    }
+    .sidenav {
+      width: 16rem;
+      background-color: var(--cds-nav-bg);
+      position: fixed;
+      top: 48px;
+      bottom: 0;
+      left: 0;
+      overflow-y: auto;
+      z-index: 40;
+      border-right: 1px solid var(--cds-layer-02);
+    }
+    .sidenav-item {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 16px;
+      color: var(--cds-nav-text);
+      text-decoration: none;
+      border-left: 4px solid transparent;
+    }
+    .sidenav-item:hover {
+      background-color: var(--cds-layer-02);
+      color: var(--cds-nav-active);
+    }
+    .sidenav-item.active {
+      background-color: var(--cds-nav-active-bg);
+      color: var(--cds-nav-active);
+      border-left-color: var(--cds-interactive);
+    }
+    .sidenav-icon {
+      margin-right: 16px;
+      font-size: 16px;
+    }
+    .main-content {
+      margin-top: 48px;
+      margin-left: 16rem;
+      padding: 24px;
+      min-height: calc(100vh - 48px);
+    }
+    .tile {
+      background-color: var(--cds-layer-01);
+      border: 1px solid var(--cds-border);
+      padding: 16px;
+      height: 100%;
+    }
+    .btn-primary {
+      background-color: var(--cds-interactive);
+      color: #fff;
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-primary:hover {
+      background-color: #0353e9;
+    }
+    .btn-secondary {
+      background-color: #393939;
+      color: #fff;
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-secondary:hover {
+      background-color: #4c4c4c;
+    }
+    .btn-ghost {
+      background-color: transparent;
+      color: var(--cds-interactive);
+      border: none;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+    }
+    .btn-ghost:hover {
+      background-color: #e5e5e5;
+    }
+    .header-search {
+      background-color: var(--cds-layer-02);
+      border: none;
+      border-bottom: 1px solid var(--cds-border-strong);
+      color: #fff;
+      height: 32px;
+      padding: 0 16px 0 40px;
+      width: 280px;
+      font-family: inherit;
+    }
+    .header-search:focus {
+      outline: 2px solid #fff;
+      outline-offset: -2px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .data-table th {
+      text-align: left;
+      padding: 8px 16px;
+      background-color: var(--cds-border);
+      font-weight: 600;
+      border-bottom: 1px solid var(--cds-border-strong);
+    }
+    .data-table td {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--cds-border);
+    }
+    .form-input {
+      width: 100%;
+      padding: 11px 16px;
+      border: none;
+      border-bottom: 1px solid var(--cds-border-strong);
+      background-color: #f4f4f4;
+      font-family: inherit;
+      font-size: 14px;
+    }
+    .form-input:focus {
+      outline: 2px solid var(--cds-interactive);
+      outline-offset: -2px;
+    }
+    .form-label {
+      display: block;
+      font-size: 12px;
+      color: var(--cds-text-secondary);
+      margin-bottom: 8px;
+    }
+
+    html {
+        background-color: #f4f4f4;
+    }
+    @view-transition {
+        navigation: auto;
+    }
+    ::view-transition {
+        background-color: #f4f4f4;
+    }
+    ::view-transition-old(main-nav),
+    ::view-transition-new(main-nav) {
+        animation: none;
+        mix-blend-mode: normal;
+    }
+    ::view-transition-old(header),
+    ::view-transition-new(header) {
+        animation: none;
+        mix-blend-mode: normal;
+    }
+    ::view-transition-old(main-content) {
+        animation: 0.25s ease-out both fade-out;
+    }
+    ::view-transition-new(main-content) {
+        animation: 0.25s ease-in 0.1s both fade-in;
+    }
+    @keyframes fade-out {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+    @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+        animation: none;
+        mix-blend-mode: normal;
+    }
+  </style>
+
+<meta name="preview-version" content="de9a5ce8-d75a-4c9f-bd57-2f3caa81b55e" />
+<meta name="preview-timestamp" content="2026-09-01T07:52:32.308Z" />
+
+<style>
+  html::-webkit-scrollbar, body::-webkit-scrollbar, *::-webkit-scrollbar {
+    display: none !important; width: 0 !important; height: 0 !important;
+  }
+  html, body, * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+</style>
+<style>
+          body:not(.sd-ready) { opacity: 0 !important; }
+          body.sd-ready { opacity: 1 !important; transition: opacity 0.1s ease-in; }
+          sd-component { display: block; }
+        </style>
+
+<script type="module">
+  (function() {
+    document.addEventListener('wheel', function(e) {
+      if (e.ctrlKey) e.preventDefault();
+    }, { passive: false });
+  })();
+</script>
+<script type="module">
+    // SuperDesign Runtime
+    console.log('[SuperDesign] Preview loaded for versionId:', "de9a5ce8-d75a-4c9f-bd57-2f3caa81b55e");
+
+    window.__SUPERDESIGN_PREVIEW__ = {
+      versionId: "de9a5ce8-d75a-4c9f-bd57-2f3caa81b55e",
+      timestamp: "2026-09-01T07:52:32.308Z",
+      _modernScreenshotModule: null,
+
+      sendMessage: function(type, data) {
+        if (window.parent) {
+          window.parent.postMessage({
+            source: 'superdesign-preview',
+            type: type,
+            data: data,
+            versionId: this.versionId
+          }, '*');
+        }
+      },
+
+      ready: function() {
+        this.sendMessage('ready', { timestamp: Date.now() });
+      },
+
+      
+      _captureScreenshotInternal: async function() {
+        if (!this._modernScreenshotModule) {
+          console.log('[SuperDesign] Loading modern-screenshot library...');
+          this._modernScreenshotModule = await import('https://esm.sh/modern-screenshot@4.6.6');
+        }
+        var modernScreenshot = this._modernScreenshotModule;
+        if (!modernScreenshot || !modernScreenshot.domToCanvas) {
+          throw new Error('modern-screenshot library not loaded');
+        }
+
+        var scrollX = window.scrollX || window.pageXOffset;
+        var scrollY = window.scrollY || window.pageYOffset;
+        var viewportWidth = window.innerWidth;
+        var viewportHeight = window.innerHeight;
+        var documentWidth = Math.max(
+          document.documentElement.scrollWidth,
+          document.documentElement.offsetWidth,
+          document.documentElement.clientWidth,
+          document.body.scrollWidth,
+          document.body.offsetWidth
+        );
+        var documentHeight = Math.max(
+          document.documentElement.scrollHeight,
+          document.documentElement.offsetHeight,
+          document.documentElement.clientHeight,
+          document.body.scrollHeight,
+          document.body.offsetHeight
+        );
+
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        var pixelRatio = isMobile ? 1 : (window.devicePixelRatio || 1);
+
+        var dataUrl;
+
+        if (isMobile) {
+          var wrapper = document.createElement('div');
+          wrapper.style.cssText = 'position:fixed;top:0;left:0;width:' + viewportWidth + 'px;height:' + viewportHeight + 'px;overflow:hidden;z-index:999999;pointer-events:none;';
+          var clone = document.body.cloneNode(true);
+          clone.style.cssText = 'position:absolute;top:' + (-scrollY) + 'px;left:' + (-scrollX) + 'px;margin:0;width:' + documentWidth + 'px;';
+          wrapper.appendChild(clone);
+          document.body.appendChild(wrapper);
+          try {
+            var viewportCanvas = await modernScreenshot.domToCanvas(wrapper, {
+              scale: 1, backgroundColor: '#ffffff',
+              width: viewportWidth, height: viewportHeight,
+            });
+            dataUrl = viewportCanvas.toDataURL('image/png', 0.5);
+          } finally {
+            document.body.removeChild(wrapper);
+          }
+        } else {
+          var fullCanvas = await modernScreenshot.domToCanvas(document.documentElement, {
+            scale: pixelRatio, backgroundColor: '#ffffff',
+            width: documentWidth, height: documentHeight,
+          });
+          var viewportCanvas = document.createElement('canvas');
+          viewportCanvas.width = viewportWidth * pixelRatio;
+          viewportCanvas.height = viewportHeight * pixelRatio;
+          var ctx = viewportCanvas.getContext('2d');
+          if (!ctx) throw new Error('Failed to get canvas context');
+          ctx.drawImage(
+            fullCanvas,
+            scrollX * pixelRatio, scrollY * pixelRatio,
+            viewportWidth * pixelRatio, viewportHeight * pixelRatio,
+            0, 0, viewportWidth * pixelRatio, viewportHeight * pixelRatio
+          );
+          dataUrl = viewportCanvas.toDataURL('image/png', 1.0);
+        }
+
+        if (!dataUrl || !dataUrl.startsWith('data:image/png;base64,') || dataUrl.length < 100) {
+          throw new Error('Invalid screenshot data');
+        }
+
+        return {
+          dataUrl: dataUrl,
+          viewportWidth: viewportWidth,
+          viewportHeight: viewportHeight,
+          pixelRatio: pixelRatio
+        };
+      },
+
+      autoCapture: async function() {
+        if (window === window.parent) return;
+        try {
+          var result = await this._captureScreenshotInternal();
+          this.sendMessage('auto-screenshot', {
+            dataUrl: result.dataUrl,
+            timestamp: Date.now(),
+            viewportWidth: result.viewportWidth,
+            viewportHeight: result.viewportHeight,
+            pixelRatio: result.pixelRatio,
+          });
+        } catch (error) {
+          console.error('[SuperDesign] Auto-capture failed:', error);
+        }
+      },
+
+      captureScreenshot: async function(requestId, autoCaptureId) {
+        try {
+          this._currentRequestId = requestId;
+          this._currentAutoCaptureId = autoCaptureId;
+          var result = await this._captureScreenshotInternal();
+          this.sendMessage('screenshot-captured', {
+            dataUrl: result.dataUrl,
+            timestamp: Date.now(),
+            viewportWidth: result.viewportWidth,
+            viewportHeight: result.viewportHeight,
+            pixelRatio: result.pixelRatio,
+            requestId: this._currentRequestId,
+            autoCaptureId: this._currentAutoCaptureId
+          });
+          return result.dataUrl;
+        } catch (error) {
+          console.error('[SuperDesign] Screenshot capture failed:', error);
+          this.sendMessage('screenshot-error', {
+            error: error.message || String(error),
+            timestamp: Date.now(),
+            requestId: this._currentRequestId,
+            autoCaptureId: this._currentAutoCaptureId
+          });
+          throw error;
+        }
+      }
+  
+    };
+
+    
+    // Font loading helpers
+    window.__SUPERDESIGN_PREVIEW__.loadedFonts = new Set();
+    window.__SUPERDESIGN_PREVIEW__.loadGoogleFont = function(fontFamily) {
+      if (!fontFamily || this.loadedFonts.has(fontFamily)) return;
+      if (fontFamily.startsWith('Custom-')) return;
+
+      var systemFonts = ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI',
+        'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Georgia', 'Times New Roman',
+        'Times', 'serif', 'Menlo', 'Monaco', 'Consolas', 'Courier New', 'monospace'];
+      if (systemFonts.some(function(sf) { return fontFamily.toLowerCase().includes(sf.toLowerCase()); })) return;
+
+      if (!document.querySelector('link[href*="fonts.googleapis.com"]')) {
+        var preconnect1 = document.createElement('link');
+        preconnect1.rel = 'preconnect';
+        preconnect1.href = 'https://fonts.googleapis.com';
+        document.head.appendChild(preconnect1);
+        var preconnect2 = document.createElement('link');
+        preconnect2.rel = 'preconnect';
+        preconnect2.href = 'https://fonts.gstatic.com';
+        preconnect2.crossOrigin = 'anonymous';
+        document.head.appendChild(preconnect2);
+      }
+
+      var linkId = 'google-font-' + fontFamily.replace(/\\s+/g, '-').toLowerCase();
+      if (!document.getElementById(linkId)) {
+        var link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(fontFamily) + ':wght@400;500;600;700&display=swap';
+        link.onerror = function() { console.error('[SuperDesign] Failed to load Google Font:', fontFamily); };
+        document.head.appendChild(link);
+      }
+      this.loadedFonts.add(fontFamily);
+    };
+
+    window.__SUPERDESIGN_PREVIEW__.loadedCustomFonts = new Set();
+    window.__SUPERDESIGN_PREVIEW__.loadCustomFont = function(fontInfo) {
+      if (!fontInfo || !fontInfo.family || !fontInfo.url) return;
+      if (this.loadedCustomFonts.has(fontInfo.family)) return;
+      var styleId = 'custom-font-' + fontInfo.family.replace(/[^a-zA-Z0-9]/g, '-');
+      if (document.getElementById(styleId)) return;
+      var style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = '@font-face { ' +
+        'font-family: "' + fontInfo.family + '"; ' +
+        'src: url("' + fontInfo.url + '") format("' + (fontInfo.format || 'woff2') + '"); ' +
+        'font-weight: 100 900; font-style: normal; font-display: swap; }';
+      document.head.appendChild(style);
+      this.loadedCustomFonts.add(fontInfo.family);
+    };
+  
+    
+    // Theme sync
+    window.__SUPERDESIGN_PREVIEW__.applyTheme = function(payload, isDark) {
+      var root = document.documentElement;
+      var colorVars = isDark ? payload.dark : payload.light;
+      for (var name in colorVars) {
+        if (colorVars.hasOwnProperty(name)) {
+          root.style.setProperty(name, colorVars[name]);
+        }
+      }
+
+      if (payload.customFonts && Array.isArray(payload.customFonts)) {
+        payload.customFonts.forEach(function(fontInfo) {
+          window.__SUPERDESIGN_PREVIEW__.loadCustomFont(fontInfo);
+        });
+      }
+
+      if (payload.typography) {
+        var t = payload.typography;
+        if (t.fontSans && !t.fontSans.startsWith('Custom-')) window.__SUPERDESIGN_PREVIEW__.loadGoogleFont(t.fontSans);
+        if (t.fontSerif && !t.fontSerif.startsWith('Custom-')) window.__SUPERDESIGN_PREVIEW__.loadGoogleFont(t.fontSerif);
+        if (t.fontMono && !t.fontMono.startsWith('Custom-')) window.__SUPERDESIGN_PREVIEW__.loadGoogleFont(t.fontMono);
+
+        var formatFontValue = function(ff) {
+          if (!ff) return ff;
+          var first = ff.split(',')[0].trim().replace(/^["']|["']$/g, '');
+          return first.startsWith('var(') ? first : '"' + first + '"';
+        };
+        root.style.setProperty('--font-sans', formatFontValue(t.fontSans));
+        root.style.setProperty('--font-serif', formatFontValue(t.fontSerif));
+        root.style.setProperty('--font-mono', formatFontValue(t.fontMono));
+        root.style.setProperty('--font-size', t.fontSize);
+        root.style.setProperty('--line-height', t.lineHeight);
+        root.style.setProperty('--letter-spacing-body', t.letterSpacing);
+        root.style.setProperty('--letter-spacing-heading', t.headingLetterSpacing);
+        root.style.setProperty('--font-weight-regular', t.fontWeightRegular);
+        root.style.setProperty('--font-weight-bold', t.fontWeightBold);
+      }
+
+      if (payload.effects) {
+        root.style.setProperty('--radius', payload.effects.radius);
+        root.style.setProperty('--shadow', payload.effects.shadow);
+      }
+
+      if (isDark) { root.classList.add('dark'); } else { root.classList.remove('dark'); }
+    };
+  
+    
+    // Message listener
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'request-screenshot') {
+        if (window.__SUPERDESIGN_PREVIEW__) {
+          window.__SUPERDESIGN_PREVIEW__.captureScreenshot(event.data.requestId, event.data.autoCaptureId);
+        }
+      }
+
+      if (event.data && event.data.type === 'superdesign-theme-update') {
+        if (window.__SUPERDESIGN_PREVIEW__ && event.data.payload) {
+          var isDark = event.data.isDark || false;
+          window.__SUPERDESIGN_PREVIEW__.applyTheme(event.data.payload, isDark);
+          window.__SUPERDESIGN_PREVIEW__.sendMessage('theme-applied', { timestamp: Date.now(), isDark: isDark });
+        }
+      }
+
+      if (event.data && event.data.type === 'navigate-to-route') {
+        var route = event.data.route;
+        if (route) {
+          if (route === '/') {
+            if (window.location.hash) {
+              history.pushState(null, '', window.location.pathname + window.location.search);
+              window.dispatchEvent(new HashChangeEvent('hashchange'));
+            }
+          } else {
+            var newHash = '#' + route;
+            if (window.location.hash !== newHash) {
+              window.location.hash = route;
+            }
+          }
+        }
+      }
+    });
+  
+    
+    // Page lifecycle
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() { window.__SUPERDESIGN_PREVIEW__.ready(); });
+    } else {
+      window.__SUPERDESIGN_PREVIEW__.ready();
+    }
+
+    function onPageFullyLoaded() {
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          setTimeout(function() {
+            window.__SUPERDESIGN_PREVIEW__.sendMessage('loaded', { timestamp: Date.now() });
+          }, 1500);
+          // Auto-capture disabled for this preview type
+        });
+      });
+    }
+
+    if (document.readyState === 'complete') {
+      onPageFullyLoaded();
+    } else {
+      window.addEventListener('load', onPageFullyLoaded);
+    }
+  
+  </script>
+<script type="module">
+  window.addEventListener('error', function(event) {
+    var msg = event.message || '';
+    var name = (event.error && event.error.name) || msg.split(':')[0] || '';
+    if (name === 'HierarchyRequestError' || msg.includes("Failed to execute 'appendChild' on 'Node'")) return;
+    if (window.__SUPERDESIGN_PREVIEW__) {
+      var err = event.error;
+      window.__SUPERDESIGN_PREVIEW__.sendMessage('error', {
+        message: event.message, filename: event.filename,
+        lineno: event.lineno, colno: event.colno,
+        name: (err && err.name) || name || 'Error',
+        stack: (err && err.stack) || null
+      });
+    }
+  });
+  window.addEventListener('unhandledrejection', function(event) {
+    var reason = event.reason;
+    var msg = (reason && reason.message) || (typeof reason === 'string' ? reason : '');
+    var name = (reason && reason.name) || 'UnhandledRejection';
+    if (name === 'HierarchyRequestError' || msg.includes("Failed to execute 'appendChild' on 'Node'")) return;
+    if (window.__SUPERDESIGN_PREVIEW__) {
+      window.__SUPERDESIGN_PREVIEW__.sendMessage('unhandled-rejection', {
+        reason: (reason && reason.message) || String(reason),
+        name: name,
+        stack: (reason && reason.stack) || null
+      });
+    }
+  });
+</script>
+<script type="module">import '/__visual-edit-bridge/iframe-runtime.mjs?v=81349612';</script>
+<script  src="https://cdn.jsdelivr.net/npm/petite-vue@0.4.1/dist/petite-vue.iife.js"></script>
+<script type="module">
+  (function() {
+    'use strict';
+
+    var MAX_RENDER_DEPTH = 5;
+
+    function showPage() {
+      document.body.classList.add('sd-ready');
+    }
+
+    var componentRegistry = new Map();
+    var instanceRegistry = new Map();
+    var API_BASE = "https://api.superdesign.dev";
+    var DRAFT_ID = "de9a5ce8-d75a-4c9f-bd57-2f3caa81b55e";
+
+    function buildDefaultProps(definition) {
+      var defaultProps = {};
+      var props = definition.props;
+      if (!props || !Array.isArray(props)) return defaultProps;
+      for (var i = 0; i < props.length; i++) {
+        var prop = props[i];
+        if (prop.defaultValue === undefined) continue;
+        var path = prop.name.split('.');
+        var current = defaultProps;
+        for (var j = 0; j < path.length - 1; j++) {
+          var key = path[j];
+          if (!(key in current) || typeof current[key] !== 'object' || current[key] === null) {
+            current[key] = {};
+          }
+          current = current[key];
+        }
+        current[path[path.length - 1]] = prop.defaultValue;
+      }
+      return defaultProps;
+    }
+
+    function deepMerge(target, source) {
+      var result = Object.assign({}, target);
+      for (var key in source) {
+        if (!source.hasOwnProperty(key)) continue;
+        if (
+          source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) &&
+          result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])
+        ) {
+          result[key] = deepMerge(result[key], source[key]);
+        } else {
+          result[key] = source[key];
+        }
+      }
+      return result;
+    }
+
+    function registerComponent(id, definition) {
+      componentRegistry.set(id, definition);
+      console.log('[SDComponent] Registered component:', id);
+    }
+
+    function renderComponent(element, depth) {
+      depth = depth || 0;
+      var componentId = element.getAttribute('componentid') || element.getAttribute('ref');
+      var instanceId = element.getAttribute('instance');
+      var propsAttr = element.getAttribute('props');
+
+      if (!componentId) {
+        console.warn('[SDComponent] Missing componentId attribute on sd-component');
+        return;
+      }
+
+      if (depth >= MAX_RENDER_DEPTH) {
+        console.warn('[SDComponent] Max render depth reached for:', componentId);
+        element.setAttribute('data-error', 'max-depth');
+        return;
+      }
+
+      var definition = componentRegistry.get(componentId);
+      if (!definition) {
+        console.warn('[SDComponent] Component not found:', componentId);
+        element.setAttribute('data-pending', 'true');
+        return;
+      }
+
+      var instanceProps = {};
+      if (propsAttr) {
+        try { instanceProps = JSON.parse(propsAttr); }
+        catch (e) { console.warn('[SDComponent] Invalid props JSON:', propsAttr); }
+      }
+
+      var defaultProps = buildDefaultProps(definition);
+      var finalProps = deepMerge(defaultProps, instanceProps);
+
+      element.innerHTML = definition.htmlContent;
+
+      if (window.PetiteVue) {
+        finalProps.$emit = function(eventName, payload) {
+          if (payload && typeof payload === 'object' && payload.href) {
+            window.location.href = payload.href;
+            return;
+          }
+          var customEvent = new CustomEvent('sd-' + eventName, {
+            detail: payload, bubbles: true, composed: true,
+          });
+          element.dispatchEvent(customEvent);
+        };
+        window.PetiteVue.createApp(finalProps).mount(element);
+      } else {
+        console.warn('[SDComponent] Petite-Vue not loaded, template syntax will not be resolved');
+      }
+
+      instanceRegistry.set(instanceId, {
+        componentId: componentId,
+        element: element,
+        props: finalProps,
+        version: definition.version,
+      });
+
+      element.removeAttribute('data-pending');
+      element.setAttribute('data-rendered', 'true');
+      element.setAttribute('data-version', String(definition.version));
+      console.log('[SDComponent] Rendered:', componentId, instanceId);
+
+      // Render any nested sd-component children that were just injected
+      var nestedElements = element.querySelectorAll('sd-component[componentid], sd-component[ref]');
+      if (nestedElements.length > 0) {
+        var missingIds = [];
+        nestedElements.forEach(function(nested) {
+          var nestedId = nested.getAttribute('componentid') || nested.getAttribute('ref');
+          if (nestedId && !componentRegistry.has(nestedId)) {
+            missingIds.push(nestedId);
+          }
+        });
+
+        if (missingIds.length > 0) {
+          // Fetch missing nested components, then render
+          loadComponentsByIds(missingIds).then(function() {
+            nestedElements.forEach(function(nested) {
+              if (!nested.getAttribute('data-rendered')) {
+                renderComponent(nested, depth + 1);
+              }
+            });
+          });
+        } else {
+          // All nested definitions already loaded — render immediately
+          nestedElements.forEach(function(nested) {
+            if (!nested.getAttribute('data-rendered')) {
+              renderComponent(nested, depth + 1);
+            }
+          });
+        }
+      }
+    }
+
+    function updateComponentInstances(componentId) {
+      var elements = document.querySelectorAll('sd-component[componentid="' + componentId + '"], sd-component[ref="' + componentId + '"]');
+      elements.forEach(function(el) { renderComponent(el); });
+    }
+
+    function initializeComponents() {
+      var elements = document.querySelectorAll('sd-component[componentid], sd-component[ref]');
+      elements.forEach(function(el) {
+        if (!el.getAttribute('data-rendered')) { renderComponent(el); }
+      });
+    }
+
+    async function loadComponentsByIds(ids) {
+      if (!ids || ids.length === 0) return;
+      // Deduplicate and filter already-loaded
+      var uniqueIds = ids.filter(function(id, i, arr) {
+        return arr.indexOf(id) === i && !componentRegistry.has(id);
+      });
+      if (uniqueIds.length === 0) return;
+
+      try {
+        console.log('[SDComponent] Batch loading components:', uniqueIds);
+        var response = await fetch(API_BASE + '/v1/design-drafts/components/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ componentIds: uniqueIds }),
+        });
+        if (!response.ok) throw new Error('Batch load failed: ' + response.status);
+        var components = await response.json();
+        console.log('[SDComponent] Batch loaded', components.length, 'components');
+        components.forEach(function(comp) { registerComponent(comp.id, comp); });
+      } catch (error) {
+        console.error('[SDComponent] Failed to batch load components:', error);
+      }
+    }
+
+    async function loadComponentsForDraft() {
+      if (!DRAFT_ID) {
+        console.warn('[SDComponent] No draft ID configured');
+        showPage();
+        return;
+      }
+      try {
+        console.log('[SDComponent] Loading components for draft:', DRAFT_ID);
+        var response = await fetch(API_BASE + '/v1/design-drafts/' + DRAFT_ID + '/components', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) throw new Error('Failed to load components: ' + response.status);
+        var components = await response.json();
+        console.log('[SDComponent] Loaded', components.length, 'components');
+        components.forEach(function(comp) { registerComponent(comp.id, comp); });
+        initializeComponents();
+        showPage();
+      } catch (error) {
+        console.error('[SDComponent] Failed to load components:', error);
+        showPage();
+      }
+    }
+
+    function findReferencedComponents() {
+      var elements = document.querySelectorAll('sd-component[componentid], sd-component[ref]');
+      var ids = new Set();
+      elements.forEach(function(el) {
+        var ref = el.getAttribute('componentid') || el.getAttribute('ref');
+        if (ref) ids.add(ref);
+      });
+      return Array.from(ids);
+    }
+
+    window.__SD_COMPONENTS__ = {
+      register: registerComponent,
+      render: renderComponent,
+      update: updateComponentInstances,
+      loadForDraft: loadComponentsForDraft,
+      loadByIds: loadComponentsByIds,
+      init: initializeComponents,
+      findRefs: findReferencedComponents,
+      getRegistry: function() { return componentRegistry; },
+      getInstances: function() { return instanceRegistry; },
+      getDraftId: function() { return DRAFT_ID; },
+    };
+
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'SD_COMPONENT_UPDATE') {
+        var cId = event.data.componentId;
+        var def = event.data.definition;
+        if (cId && def) { registerComponent(cId, def); updateComponentInstances(cId); }
+      }
+      if (event.data && event.data.type === 'SD_COMPONENTS_REGISTER') {
+        var comps = event.data.components;
+        if (Array.isArray(comps)) {
+          comps.forEach(function(c) { registerComponent(c.id, c); });
+          initializeComponents();
+        }
+      }
+    });
+
+    function bootComponents() {
+      // Pre-register components from __SD_COMPONENT_PRELOAD__ (injected by backend for standalone previews)
+      if (window.__SD_COMPONENT_PRELOAD__ && Array.isArray(window.__SD_COMPONENT_PRELOAD__)) {
+        console.log('[SDComponent] Pre-registering', window.__SD_COMPONENT_PRELOAD__.length, 'preloaded components');
+        window.__SD_COMPONENT_PRELOAD__.forEach(function(comp) {
+          registerComponent(comp.id, comp);
+        });
+      }
+
+      var refs = findReferencedComponents();
+      var unloaded = refs.filter(function(id) { return !componentRegistry.has(id); });
+
+      if (unloaded.length > 0) {
+        if (DRAFT_ID) {
+          loadComponentsForDraft();
+        } else {
+          // No draft ID — try batch loading the missing IDs directly
+          loadComponentsByIds(unloaded).then(function() {
+            initializeComponents();
+            showPage();
+          });
+        }
+      } else if (refs.length > 0) {
+        // All components already registered (e.g. from preload) — render immediately
+        initializeComponents();
+        showPage();
+      } else {
+        showPage();
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootComponents);
+    } else {
+      bootComponents();
+    }
+
+    var observer = new MutationObserver(function(mutations) {
+      var hasNew = false;
+      mutations.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+          if (node.nodeType === 1) {
+            if (node.tagName === 'SD-COMPONENT') { hasNew = true; }
+            else if (node.querySelector) {
+              if (node.querySelectorAll('sd-component[componentid], sd-component[ref]').length > 0) hasNew = true;
+            }
+          }
+        });
+      });
+      if (hasNew) {
+        var refs = findReferencedComponents();
+        var unloaded = refs.filter(function(id) { return !componentRegistry.has(id); });
+        if (unloaded.length > 0) {
+          loadComponentsByIds(unloaded).then(function() {
+            initializeComponents();
+          });
+        } else {
+          initializeComponents();
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    console.log('[SDComponent] Runtime initialized');
+  })();
+  </script>
+</head>
+<body>
+  <div class="min-h-screen bg-[#f4f4f4]">
+    <!-- Header -->
+    <header class="header" style="view-transition-name: header;">
+      <div class="flex items-center h-full">
+        <button class="w-12 h-12 flex items-center justify-center border-r border-[#393939] hover:bg-[#393939]">
+          <iconify-icon icon="carbon:menu" class="text-xl"></iconify-icon>
+        </button>
+        <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" id="nav-brand" class="px-4 text-[14px] font-semibold text-white tracking-wide flex items-center h-full">
+          <span class="font-normal mr-1">F0rge</span> Vellano
+        </a>
+      </div>
+      <div class="flex items-center h-full">
+        <div class="relative flex items-center h-full border-l border-[#393939]">
+          <iconify-icon icon="carbon:search" class="absolute left-4 text-white"></iconify-icon>
+          <input type="text" class="header-search" placeholder="Search...">
+        </div>
+        <div class="px-4 flex items-center border-l border-[#393939] h-full">
+          <span class="text-[14px]">admin@vellano.co.za</span>
+        </div>
+        <button class="w-12 h-12 flex items-center justify-center border-l border-[#393939] hover:bg-[#393939]">
+          <iconify-icon icon="carbon:logout" class="text-xl"></iconify-icon>
+        </button>
+      </div>
+    </header>
+
+    <!-- SideNav -->
+    <nav class="sidenav" style="view-transition-name: main-nav;">
+      <div class="py-2">
+        <a href="https://p.superdesign.dev/draft/2d67462c-32c2-4baf-90c8-bdef3893e5bd" id="nav-home" class="sidenav-item">
+          <iconify-icon icon="carbon:home" class="sidenav-icon"></iconify-icon>
+          Home
+        </a>
+        <a href="#locations" id="nav-locations" class="sidenav-item">
+          <iconify-icon icon="carbon:location" class="sidenav-icon"></iconify-icon>
+          Locations
+        </a>
+        <a href="#suppliers" id="nav-suppliers" class="sidenav-item">
+          <iconify-icon icon="carbon:industry" class="sidenav-icon"></iconify-icon>
+          Suppliers
+        </a>
+        <a href="#proformas" id="nav-proformas" class="sidenav-item">
+          <iconify-icon icon="carbon:document" class="sidenav-icon"></iconify-icon>
+          Proformas
+        </a>
+        <a href="https://p.superdesign.dev/draft/85c3d7eb-f0b5-44fc-85f3-5223dd62f364" id="nav-catalogue" class="sidenav-item">
+          <iconify-icon icon="carbon:catalog" class="sidenav-icon"></iconify-icon>
+          Catalogue
+        </a>
+        <a href="https://p.superdesign.dev/draft/994e0004-8500-4354-96a7-a56705d8dbee" id="nav-stock" class="sidenav-item">
+          <iconify-icon icon="carbon:product" class="sidenav-icon"></iconify-icon>
+          Stock
+        </a>
+        <a href="https://p.superdesign.dev/draft/4853836c-39e8-47d5-89dc-2ef9943e03bb" id="nav-stocktakes" class="sidenav-item pl-12">
+          Stocktakes
+        </a>
+        <a href="https://p.superdesign.dev/draft/1ef5ed63-3050-4bc4-ae65-a3307b5a8378" id="nav-adjustments" class="sidenav-item pl-12">
+          Adjustments
+        </a>
+        <a href="https://p.superdesign.dev/draft/7dc0776c-8ae6-4f9c-803d-2dad50346c36" id="nav-import" class="sidenav-item pl-12">
+          Import
+        </a>
+        <a href="#purchase-orders" id="nav-po" class="sidenav-item">
+          <iconify-icon icon="carbon:purchase" class="sidenav-icon"></iconify-icon>
+          Purchase orders
+        </a>
+        <a href="#transit" id="nav-transit" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery" class="sidenav-icon"></iconify-icon>
+          Transit
+        </a>
+        <a href="#receive" id="nav-receive" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery-parcel" class="sidenav-icon"></iconify-icon>
+          Receive
+        </a>
+        <a href="#transfers" id="nav-transfers" class="sidenav-item">
+          <iconify-icon icon="carbon:movement" class="sidenav-icon"></iconify-icon>
+          Transfers
+        </a>
+        <a href="https://p.superdesign.dev/draft/bc6b9795-edc3-403d-bc9e-a1adc644e3d0" id="nav-deliveries" class="sidenav-item">
+          <iconify-icon icon="carbon:delivery-truck" class="sidenav-icon"></iconify-icon>
+          Deliveries
+        </a>
+        <a href="https://p.superdesign.dev/draft/3b26c41b-a7bd-4a1a-91b2-4605848cd20d" id="nav-till" class="sidenav-item">
+          <iconify-icon icon="carbon:store" class="sidenav-icon"></iconify-icon>
+          Till
+        </a>
+        <a href="https://p.superdesign.dev/draft/cc5ffaf0-b29e-4e81-9923-db9b813e318c" id="nav-customers" class="sidenav-item">
+          <iconify-icon icon="carbon:user-multiple" class="sidenav-icon"></iconify-icon>
+          Customers
+        </a>
+        <a href="https://p.superdesign.dev/draft/de9a5ce8-d75a-4c9f-bd57-2f3caa81b55e" id="nav-returns" class="sidenav-item pl-12 active">
+          Returns / RMA
+        </a>
+        <a href="https://p.superdesign.dev/draft/4cac3240-cf43-45d6-9fdd-d9d067a4d35e" id="nav-layby" class="sidenav-item pl-12">
+          Laybys
+        </a>
+        <div class="mt-4 mb-2 px-4 text-xs font-semibold uppercase text-[#8d8d8d] tracking-wider">Books</div>
+        <a href="#chart-of-accounts" id="nav-coa" class="sidenav-item">
+          <iconify-icon icon="carbon:finance" class="sidenav-icon"></iconify-icon>
+          Chart of accounts
+        </a>
+        <a href="#contacts" id="nav-books-contacts" class="sidenav-item pl-12">Contacts</a>
+        <a href="#invoices" id="nav-invoices" class="sidenav-item pl-12">Invoices</a>
+        <a href="#credit-notes" id="nav-credit-notes" class="sidenav-item pl-12">Credit notes</a>
+        <a href="#bills" id="nav-bills" class="sidenav-item pl-12">Bills</a>
+        <a href="#payments" id="nav-payments" class="sidenav-item pl-12">Payments</a>
+        <a href="#bank-rec" id="nav-bank-rec" class="sidenav-item pl-12">Bank reconciliation</a>
+        <a href="#reports" id="nav-reports" class="sidenav-item pl-12">Reports</a>
+        <a href="#vat201" id="nav-vat201" class="sidenav-item pl-12">VAT201</a>
+        
+        <div class="mt-4 border-t border-[#393939] pt-2">
+          <a href="#users" id="nav-users" class="sidenav-item">
+            <iconify-icon icon="carbon:user-admin" class="sidenav-icon"></iconify-icon>
+            Users
+          </a>
+          <a href="#profile" id="nav-profile" class="sidenav-item">
+            <iconify-icon icon="carbon:user" class="sidenav-icon"></iconify-icon>
+            Profile
+          </a>
+          <a href="#settings" id="nav-settings" class="sidenav-item">
+            <iconify-icon icon="carbon:settings" class="sidenav-icon"></iconify-icon>
+            Settings
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" style="view-transition-name: main-content;">
+      <div class="max-w-[1200px]">
+        
+        <div class="flex justify-between items-end mb-6">
+          <div>
+            <h1 class="text-[28px] font-light text-[#161616] mb-2">Returns & RMA</h1>
+            <p class="text-[14px] text-[#525252]">Process customer returns from till sales or invoices.</p>
+          </div>
+          <div class="flex gap-4">
+            <button class="btn-secondary">
+              Export List
+            </button>
+            <button class="btn-primary">
+              New Return
+              <iconify-icon icon="carbon:add" class="ml-2"></iconify-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- Returns List -->
+        <div class="tile p-0 overflow-hidden">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Return ID</th>
+                <th>Original Sale</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="font-semibold">RTN-1042</div>
+                  <div class="text-[12px] text-[#525252]">Damaged goods</div>
+                </td>
+                <td>
+                  <a href="#" id="link-inv-1" class="text-[#0f62fe] hover:underline">INV-2045</a>
+                </td>
+                <td>John Smith</td>
+                <td><span class="inline-flex items-center px-2 py-1 bg-[#e5f6ff] text-[#00539a] text-[12px]">Pending inspection</span></td>
+                <td class="text-[#525252]">Today</td>
+                <td><a href="#" id="link-process-1" class="text-[#0f62fe] hover:underline">Process</a></td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="font-semibold">RTN-1041</div>
+                  <div class="text-[12px] text-[#525252]">Wrong item shipped</div>
+                </td>
+                <td>
+                  <a href="#" id="link-inv-2" class="text-[#0f62fe] hover:underline">INV-2038</a>
+                </td>
+                <td>Sarah Jones</td>
+                <td><span class="inline-flex items-center px-2 py-1 bg-[#defbe6] text-[#0e6027] text-[12px]">Completed</span></td>
+                <td class="text-[#525252]">Yesterday</td>
+                <td><a href="#" id="link-view-1" class="text-[#0f62fe] hover:underline">View CN</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

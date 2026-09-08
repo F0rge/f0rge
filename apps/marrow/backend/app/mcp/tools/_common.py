@@ -77,5 +77,6 @@ def _entry_to_dict(row: Entry) -> dict[str, Any]:
         "bristol_type": row.bristol_type,
         "notes": row.notes,
         "symptoms_json": row.symptoms_json,
+        "symptom_events": row.symptom_events_json or [],
         "period_of_day": row.period_of_day,
     }
