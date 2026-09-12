@@ -18,6 +18,8 @@ PROTECTED_ROUTES: list[tuple[str, str]] = [
     ("GET", "/api/v1/symptoms/catalog"),
     ("GET", "/api/v1/trackers"),
     ("GET", "/api/v1/treatments"),
+    ("GET", "/api/v1/hypotheses"),
+    ("GET", "/api/v1/hypotheses/n-of-1"),
     ("GET", "/api/v1/labs"),
     ("GET", "/api/v1/settings"),
     ("GET", "/api/v1/catalog/suggestions"),
