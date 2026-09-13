@@ -11,7 +11,10 @@ type WmsLocationBarProps = {
 };
 
 export function WmsLocationBar({ floor, locationId, onChange }: WmsLocationBarProps) {
-  const selectedIndex = locationId === floor.bedfordview.id ? 1 : 0;
+  const selectedIndex = Math.max(
+    0,
+    floor.findIndex((location) => location.id === locationId),
+  );
 
   return (
     <div className="vellano-wms-location" role="region" aria-label="Where you are standing">
@@ -21,11 +24,15 @@ export function WmsLocationBar({ floor, locationId, onChange }: WmsLocationBarPr
         size="lg"
         onChange={(event) => {
           const index = event.index ?? 0;
-          onChange(index === 1 ? floor.bedfordview.id : floor.kramerville.id);
+          const location = floor[index];
+          if (location) {
+            onChange(location.id);
+          }
         }}
       >
-        <Switch name="kramerville" text={floor.kramerville.name} />
-        <Switch name="bedfordview" text={floor.bedfordview.name} />
+        {floor.map((location) => (
+          <Switch key={location.id} name={location.id} text={location.name} />
+        ))}
       </ContentSwitcher>
     </div>
   );

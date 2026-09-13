@@ -50,9 +50,9 @@ import { optionalMovementBinId } from "@/lib/bin-helpers";
 import { formatExpectedCartons } from "@/lib/carton-helpers";
 import { useAuth } from "@/lib/auth";
 import {
-  getNarrowViewportServerSnapshot,
-  getNarrowViewportSnapshot,
-  subscribeNarrowViewport,
+  getWmsMobileViewportServerSnapshot,
+  getWmsMobileViewportSnapshot,
+  subscribeWmsMobileViewport,
 } from "@/lib/viewport";
 import { useWmsFloorLocation } from "@/lib/wms-location";
 
@@ -111,13 +111,13 @@ function WmsDesktopInterstitial() {
 }
 
 export default function WmsPage() {
-  const narrow = useSyncExternalStore(
-    subscribeNarrowViewport,
-    getNarrowViewportSnapshot,
-    getNarrowViewportServerSnapshot,
+  const mobile = useSyncExternalStore(
+    subscribeWmsMobileViewport,
+    getWmsMobileViewportSnapshot,
+    getWmsMobileViewportServerSnapshot,
   );
 
-  if (!narrow) {
+  if (!mobile) {
     return <WmsDesktopInterstitial />;
   }
 
@@ -526,11 +526,11 @@ function CountTab({
     }
   }
 
-  async function handleLookup() {
+  async function handleLookup(scannedCode?: string) {
     if (!stocktake) {
       return;
     }
-    const trimmed = barcode.trim();
+    const trimmed = (scannedCode ?? barcode).trim();
     if (!trimmed) {
       return;
     }
@@ -647,7 +647,7 @@ function CountTab({
         placeholder="Scan or type our barcode"
         value={barcode}
         onChange={setBarcode}
-        onSubmit={() => void handleLookup()}
+        onSubmit={(code) => void handleLookup(code)}
       />
       <Button
         size="lg"
