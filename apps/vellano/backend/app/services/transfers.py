@@ -23,6 +23,7 @@ from app.schemas.transfer import (
     TransferReceive,
     TransferResponse,
 )
+from app.services.books_periods import assert_date_postable
 from app.services.location_bins import LocationBinService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
@@ -120,6 +121,7 @@ class TransferService:
         return self._to_response(await self._get_or_404(transfer.id))
 
     async def dispatch(self, transfer_id: uuid.UUID, user_id: uuid.UUID) -> TransferResponse:
+        await assert_date_postable(self.db, datetime.date.today())
         transfer = await self._get_or_404(transfer_id)
         if transfer.status != TransferStatus.DRAFT:
             raise ConflictError("Transfer is not a draft")
@@ -161,6 +163,7 @@ class TransferService:
         data: TransferReceive,
         user_id: uuid.UUID,
     ) -> TransferResponse:
+        await assert_date_postable(self.db, datetime.date.today())
         transfer = await self._get_or_404(transfer_id)
         if transfer.status != TransferStatus.IN_TRANSIT:
             raise ConflictError("Transfer is not in transit")

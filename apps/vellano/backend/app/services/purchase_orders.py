@@ -37,6 +37,7 @@ from app.schemas.purchase_order import (
     ReceiveRequest,
 )
 from app.models.unit_cost_audit import UnitCostAuditSource
+from app.services.books_periods import assert_date_postable
 from app.services.cost_audit import CostAuditService
 from app.services.object_storage import save_bytes
 from app.services.stock_movements import StockMovementService
@@ -334,6 +335,7 @@ class PurchaseOrderService:
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def receive(self, data: ReceiveRequest, user_id: uuid.UUID) -> PurchaseOrderResponse:
+        await assert_date_postable(self.db, datetime.date.today())
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         po = await self._get_po_or_404(data.purchase_order_id)
 
