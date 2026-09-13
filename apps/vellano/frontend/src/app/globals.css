@@ -634,6 +634,34 @@ body {
   justify-content: center;
 }
 
+/* Home KPIs: viewport lg assumes full main width; Nia dock narrows the column. */
+.vellano-shell[data-nia-dock-open="true"] .vellano-home-kpis {
+  container-type: inline-size;
+  container-name: vellano-home-kpis;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.vellano-shell[data-nia-dock-open="true"] .vellano-home-tile {
+  min-width: 0;
+}
+
+.vellano-shell[data-nia-dock-open="true"] .vellano-home-metric {
+  font-size: clamp(1.125rem, 4.5cqi, 1.75rem);
+  line-height: 1.25;
+}
+
+@container vellano-home-kpis (max-width: 42rem) {
+  .vellano-shell[data-nia-dock-open="true"] .vellano-home-kpis {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container vellano-home-kpis (min-width: 56rem) {
+  .vellano-shell[data-nia-dock-open="true"] .vellano-home-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .cds--modal {
   z-index: 9000;
 }
