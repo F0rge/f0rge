@@ -634,10 +634,14 @@ body {
   justify-content: center;
 }
 
-/* Home KPIs: viewport lg assumes full main width; Nia dock narrows the column. */
-.vellano-shell[data-nia-dock-open="true"] .vellano-home-kpis {
+/* Home KPIs: viewport lg assumes full main width; Nia dock narrows the column.
+   Size queries match descendants only — name the parent, then restyle the grid. */
+.vellano-shell[data-nia-dock-open="true"] .vellano-home {
   container-type: inline-size;
   container-name: vellano-home-kpis;
+}
+
+.vellano-shell[data-nia-dock-open="true"] .vellano-home-kpis {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
