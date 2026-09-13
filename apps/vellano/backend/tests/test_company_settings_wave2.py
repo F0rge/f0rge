@@ -167,6 +167,7 @@ async def test_po_threshold_converts_factory_currency_to_zar(
         },
     )
     assert blocked_raw.status_code == 409
+    assert "FX" in blocked_raw.json()["detail"]
 
     allowed_zar = await buyer.post(
         "/api/v1/purchase-orders",
@@ -229,6 +230,106 @@ async def test_po_threshold_converts_factory_currency_to_zar(
         },
     )
     assert over.status_code == 409
+
+
+async def test_po_threshold_rechecks_land_fx(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    await owner_client.patch(
+        "/api/v1/settings",
+        json={"po_approval_threshold_zar": "1000.00"},
+    )
+    usd = await owner_client.post(
+        "/api/v1/suppliers",
+        json={"name": "USD Land Cap Supplier", "default_currency": "USD"},
+    )
+    assert usd.status_code == 201
+    usd_id = usd.json()["id"]
+    sku = await _create_sku(
+        owner_client,
+        "CAP-LAND-USD",
+        "CAP-LAND-USD-BAR",
+        "Cap land USD SKU",
+        "CapLand",
+        "FabricLand",
+    )
+    seed = await owner_client.post(
+        "/api/v1/purchase-orders",
+        json={
+            "supplier_id": usd_id,
+            "lines": [{"sku_id": sku["id"], "qty": 1, "factory_unit_amount": "10.00"}],
+        },
+    )
+    assert seed.status_code == 201
+    seed_id = seed.json()["id"]
+    await owner_client.post(f"/api/v1/purchase-orders/{seed_id}/on-water")
+    seed_land = await owner_client.post(
+        f"/api/v1/purchase-orders/{seed_id}/land",
+        data={
+            "fx_to_zar": "18.00",
+            "factory_invoice_number": "FAC-SEED",
+            "factory_amount": "10.00",
+            "factory_currency": "USD",
+            "freight_invoice_number": "FRE-SEED",
+            "freight_amount": "1.00",
+            "freight_currency": "ZAR",
+            "clearance_invoice_number": "CLR-SEED",
+            "clearance_amount": "1.00",
+            "clearance_currency": "ZAR",
+        },
+        files={
+            "factory_file": ("f.pdf", MINIMAL_PDF, "application/pdf"),
+            "freight_file": ("fr.pdf", MINIMAL_PDF, "application/pdf"),
+            "clearance_file": ("c.pdf", MINIMAL_PDF, "application/pdf"),
+        },
+    )
+    assert seed_land.status_code == 200
+
+    buyer = await _create_buyer(async_client, owner_client)
+    created = await buyer.post(
+        "/api/v1/purchase-orders",
+        json={
+            "supplier_id": usd_id,
+            "lines": [{"sku_id": sku["id"], "qty": 1, "factory_unit_amount": "50.00"}],
+        },
+    )
+    assert created.status_code == 201
+    po_id = created.json()["id"]
+    water = await buyer.post(f"/api/v1/purchase-orders/{po_id}/on-water")
+    assert water.status_code == 200
+
+    land_payload = {
+        "fx_to_zar": "25.00",
+        "factory_invoice_number": "FAC-LAND",
+        "factory_amount": "50.00",
+        "factory_currency": "USD",
+        "freight_invoice_number": "FRE-LAND",
+        "freight_amount": "1.00",
+        "freight_currency": "ZAR",
+        "clearance_invoice_number": "CLR-LAND",
+        "clearance_amount": "1.00",
+        "clearance_currency": "ZAR",
+    }
+    land_files = {
+        "factory_file": ("f.pdf", MINIMAL_PDF, "application/pdf"),
+        "freight_file": ("fr.pdf", MINIMAL_PDF, "application/pdf"),
+        "clearance_file": ("c.pdf", MINIMAL_PDF, "application/pdf"),
+    }
+    blocked = await buyer.post(
+        f"/api/v1/purchase-orders/{po_id}/land",
+        data=land_payload,
+        files=land_files,
+    )
+    assert blocked.status_code == 409
+
+    await _relogin_owner(owner_client)
+    allowed = await owner_client.post(
+        f"/api/v1/purchase-orders/{po_id}/land",
+        data=land_payload,
+        files=land_files,
+    )
+    assert allowed.status_code == 200
 
 
 async def test_books_invoice_uses_wholesale_for_trade_customer(

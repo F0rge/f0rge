@@ -125,22 +125,8 @@ class PurchaseOrderService:
             if sku is None:
                 raise NotFoundError("SKU not found")
 
-        user = await self.user_crud.get_by_id(user_id)
-        if user is None:
-            raise NotFoundError("User not found")
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
-        threshold = team_settings.po_approval_threshold_zar
-        if threshold is not None:
-            total_zar = await self._factory_total_zar(supplier, data.lines)
-            # No FX yet: cannot treat supplier-currency units as ZAR — never under-block.
-            if total_zar is None or total_zar > threshold:
-                can_override = await PermissionService(self.db).has_permission(
-                    user_id, USERS_MANAGE
-                )
-                if not can_override:
-                    raise ConflictError(
-                        f"Purchase order total exceeds approval threshold ({threshold} ZAR)"
-                    )
+        total_zar = await self._factory_total_zar(supplier, data.lines)
+        await self._assert_po_cap(user_id, total_zar)
 
         po = PurchaseOrder(
             po_number="",
@@ -215,15 +201,21 @@ class PurchaseOrderService:
         freight_cur = SupplierService.normalize_currency(freight_currency)
         clearance_cur = SupplierService.normalize_currency(clearance_currency)
 
+        factory_zar = convert_bill_to_zar(factory_amount, factory_cur, fx_to_zar)
+        freight_zar = convert_bill_to_zar(freight_amount, freight_cur, fx_to_zar)
+        clearance_zar = convert_bill_to_zar(clearance_amount, clearance_cur, fx_to_zar)
+        line_factory_total = sum(
+            (Decimal(line.qty) * line.factory_unit_amount for line in po.lines),
+            Decimal(0),
+        )
+        line_zar = convert_bill_to_zar(line_factory_total, factory_cur, fx_to_zar)
+        await self._assert_po_cap(user_id, max(factory_zar, line_zar))
+
         factory_pdf = await factory_file.read()
         freight_pdf = await freight_file.read()
         clearance_pdf = await clearance_file.read()
         if not factory_pdf or not freight_pdf or not clearance_pdf:
             raise ValidationError("All three bill PDFs are required")
-
-        factory_zar = convert_bill_to_zar(factory_amount, factory_cur, fx_to_zar)
-        freight_zar = convert_bill_to_zar(freight_amount, freight_cur, fx_to_zar)
-        clearance_zar = convert_bill_to_zar(clearance_amount, clearance_cur, fx_to_zar)
 
         line_inputs = [(line.qty, line.factory_unit_amount) for line in po.lines]
         unit_costs = compute_landed_unit_costs(
@@ -389,6 +381,24 @@ class PurchaseOrderService:
         if fx is None:
             return None
         return convert_bill_to_zar(factory_total, currency, fx)
+
+    async def _assert_po_cap(self, user_id: uuid.UUID, total_zar: Optional[Decimal]) -> None:
+        user = await self.user_crud.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
+        threshold = team_settings.po_approval_threshold_zar
+        if threshold is None:
+            return
+        if total_zar is not None and total_zar <= threshold:
+            return
+        if await PermissionService(self.db).has_permission(user_id, USERS_MANAGE):
+            return
+        if total_zar is None:
+            raise ConflictError(
+                "Cannot convert PO total to ZAR without a prior FX rate for this supplier"
+            )
+        raise ConflictError(f"Purchase order total exceeds approval threshold ({threshold} ZAR)")
 
     @staticmethod
     def _to_list_item(po: PurchaseOrder) -> PurchaseOrderListItem:
