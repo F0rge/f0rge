@@ -34,9 +34,10 @@ const AUDIT_HEADERS = [
 
 type CostAuditPanelProps = {
   skuOptions: Array<{ id: string; label: string }>;
+  selectedSkuId?: string | null;
 };
 
-export function CostAuditPanel({ skuOptions }: CostAuditPanelProps) {
+export function CostAuditPanel({ skuOptions, selectedSkuId = null }: CostAuditPanelProps) {
   const { user } = useAuth();
   const canView = canViewCostAudit(user);
   const [skuId, setSkuId] = useState("");
@@ -63,10 +64,10 @@ export function CostAuditPanel({ skuOptions }: CostAuditPanelProps) {
   }, []);
 
   useEffect(() => {
-    if (skuOptions.length > 0 && !skuId) {
-      setSkuId(skuOptions[0].id);
+    if (selectedSkuId) {
+      setSkuId(selectedSkuId);
     }
-  }, [skuOptions, skuId]);
+  }, [selectedSkuId]);
 
   useEffect(() => {
     if (canView && skuId) {
@@ -90,12 +91,10 @@ export function CostAuditPanel({ skuOptions }: CostAuditPanelProps) {
 
   return (
     <Stack gap={4} className="vellano-cost-audit">
-      <div>
-        <h2 className="cds--type-productive-heading-03">Unit cost history</h2>
-        <p className="cds--type-body-01">
-          Audit trail for landed and corrected unit costs.
-        </p>
-      </div>
+      <p className="cds--type-body-01">
+        Audit trail for landed and corrected unit costs. Select a row in the table above, or pick a
+        SKU here.
+      </p>
       {skuOptions.length === 0 ? (
         <InlineNotification
           kind="info"
