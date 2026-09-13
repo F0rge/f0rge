@@ -22,6 +22,7 @@ from app.schemas.invoice import (
 )
 from app.schemas.page import Page, PageParams
 from app.services.books_events import BooksEventService
+from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
 from app.services.customer_credit import CustomerCreditService
 from app.services.chart_of_accounts import (
@@ -30,8 +31,10 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.contacts import ContactService
-from app.services.invoice_pdf import build_tax_invoice_pdf, seller_details_from_settings
+from app.services.invoice_pdf import build_tax_invoice_pdf
 from app.services.payment_terms import compute_due_date
+from app.services.pricing import resolve_unit_ex_vat
+from app.services.settings import SettingsService
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -69,6 +72,7 @@ class InvoiceService:
         self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
     ) -> InvoiceResponse:
         customer = await self.contact_service.get_customer(data.customer_id)
+        await assert_date_postable(self.db, data.issue_date)
 
         subtotal = Decimal(0)
         vat_total = Decimal(0)
@@ -76,7 +80,14 @@ class InvoiceService:
         line_models: list[InvoiceLine] = []
 
         for index, line in enumerate(data.lines):
-            ex_vat = (Decimal(line.qty) * line.unit_ex_vat).quantize(CENT, rounding=ROUND_HALF_UP)
+            unit_ex_vat = line.unit_ex_vat
+            sku_id = line.sku_id
+            if unit_ex_vat is None:
+                sku = await self.sku_crud.get_by_id(sku_id)
+                if sku is None:
+                    raise NotFoundError("SKU not found")
+                unit_ex_vat = resolve_unit_ex_vat(sku, customer)
+            ex_vat = (Decimal(line.qty) * unit_ex_vat).quantize(CENT, rounding=ROUND_HALF_UP)
             inc_vat = ex_to_inc(ex_vat)
             line_vat = inc_vat - ex_vat
             subtotal += ex_vat
@@ -86,11 +97,12 @@ class InvoiceService:
                 InvoiceLine(
                     description=line.description,
                     qty=line.qty,
-                    unit_ex_vat=line.unit_ex_vat,
+                    unit_ex_vat=unit_ex_vat,
                     ex_vat=ex_vat,
                     inc_vat=inc_vat,
                     vat_amount=line_vat,
                     sort_order=index,
+                    sku_id=sku_id,
                 )
             )
 
@@ -189,7 +201,7 @@ class InvoiceService:
             subtotal_ex_vat=f"{invoice.subtotal_ex_vat:.2f}",
             vat_amount=f"{invoice.vat_amount:.2f}",
             total_inc_vat=f"{invoice.total_inc_vat:.2f}",
-            seller=seller_details_from_settings(await self._team_settings()),
+            seller=await SettingsService(self.db).build_seller_details(),
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
 

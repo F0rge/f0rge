@@ -26,7 +26,8 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.packing_sheet import convert_bill_to_zar
-from app.services.invoice_pdf import seller_details_from_settings
+from app.services.books_periods import assert_date_postable
+from app.services.settings import SettingsService
 from app.services.payment_pdf import build_payment_receipt_pdf
 from app.services.suppliers import SupplierService
 from f0rge_core.exceptions import NotFoundError, ValidationError
@@ -83,6 +84,8 @@ class PaymentService:
             raise ValidationError("Invoice is already fully paid")
         if data.amount != remaining:
             raise ValidationError("Payment amount must equal the remaining invoice balance")
+
+        await assert_date_postable(self.db, data.paid_on)
 
         payment = Payment(
             payment_number="",
@@ -161,6 +164,8 @@ class PaymentService:
         elif diff < 0:
             journal_lines.append((CODE_FX, Decimal(0), abs(diff)))
 
+        await assert_date_postable(self.db, data.paid_on)
+
         payment = Payment(
             payment_number="",
             direction=PaymentDirection.OUT,
@@ -215,7 +220,7 @@ class PaymentService:
             amount_zar=f"{payment.amount_zar:.2f}",
             tender=payment.tender,
             linked_document=linked_document,
-            seller=seller_details_from_settings(await self._team_settings()),
+            seller=await SettingsService(self.db).build_seller_details(),
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
 

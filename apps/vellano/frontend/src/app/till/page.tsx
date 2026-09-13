@@ -58,6 +58,7 @@ import {
   listSkus,
   parsePriceInput,
   roundHalfUp,
+  settingsLogoUrl,
   skuPhotoUrl,
   type AppSettings,
   type CustomerCrm,
@@ -109,7 +110,10 @@ type CartLine = {
   discountPercent: number;
 };
 
-function unitExVat(sku: Sku): number {
+function unitExVat(sku: Sku, customer: CustomerCrm | null): number {
+  if (customer?.customer_type === "trade" && sku.wholesale_ex_vat) {
+    return Number(sku.wholesale_ex_vat);
+  }
   if (sku.retail_ex_vat) {
     return Number(sku.retail_ex_vat);
   }
@@ -119,7 +123,10 @@ function unitExVat(sku: Sku): number {
   return 0;
 }
 
-function unitIncVat(sku: Sku): number {
+function unitIncVat(sku: Sku, customer: CustomerCrm | null): number {
+  if (customer?.customer_type === "trade" && sku.wholesale_ex_vat) {
+    return exVatToIncVat(Number(sku.wholesale_ex_vat));
+  }
   if (sku.retail_inc_vat) {
     return Number(sku.retail_inc_vat);
   }
@@ -129,27 +136,31 @@ function unitIncVat(sku: Sku): number {
   return 0;
 }
 
-function lineDiscountedEx(line: CartLine): number {
+function lineDiscountedEx(line: CartLine, customer: CustomerCrm | null): number {
   const factor = 1 - line.discountPercent / 100;
-  return roundHalfUp(unitExVat(line.sku) * factor * line.qty, 2);
+  return roundHalfUp(unitExVat(line.sku, customer) * factor * line.qty, 2);
 }
 
-function lineIncTotal(line: CartLine): number {
+function lineIncTotal(line: CartLine, customer: CustomerCrm | null): number {
   const factor = 1 - line.discountPercent / 100;
-  return roundHalfUp(unitIncVat(line.sku) * factor * line.qty, 2);
+  return roundHalfUp(unitIncVat(line.sku, customer) * factor * line.qty, 2);
 }
 
-function cartSummary(lines: CartLine[]) {
+function cartSummary(lines: CartLine[], customer: CustomerCrm | null) {
   const subtotalIncBeforeDiscount = lines.reduce(
-    (sum, line) => sum + roundHalfUp(unitIncVat(line.sku) * line.qty, 2),
+    (sum, line) => sum + roundHalfUp(unitIncVat(line.sku, customer) * line.qty, 2),
     0,
   );
   const lineDiscounts = lines.reduce(
     (sum, line) =>
-      sum + roundHalfUp(unitIncVat(line.sku) * line.qty * (line.discountPercent / 100), 2),
+      sum +
+      roundHalfUp(unitIncVat(line.sku, customer) * line.qty * (line.discountPercent / 100), 2),
     0,
   );
-  const discountedExSubtotal = lines.reduce((sum, line) => sum + lineDiscountedEx(line), 0);
+  const discountedExSubtotal = lines.reduce(
+    (sum, line) => sum + lineDiscountedEx(line, customer),
+    0,
+  );
   const preview = computeInvoicePreview(discountedExSubtotal);
   return {
     subtotalIncBeforeDiscount,
@@ -399,7 +410,7 @@ export default function TillPage() {
     };
   }, [cartKitKey]);
 
-  const summary = cartSummary(cart);
+  const summary = cartSummary(cart, selectedCustomer);
   const totalIncLabel = formatPriceAmount(summary.totalIncVat);
 
   useEffect(() => {
@@ -417,7 +428,7 @@ export default function TillPage() {
     numericQty > 0 &&
     (selectedSku?.is_kit ||
       numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0)) &&
-    unitExVat(selectedSku ?? ({} as Sku)) > 0;
+    unitExVat(selectedSku ?? ({} as Sku), selectedCustomer) > 0;
 
   const floorOnHandFor = useCallback(
     (id: string) =>
@@ -825,7 +836,11 @@ export default function TillPage() {
                                 }}
                               />
                             </TableCell>
-                            <TableCell>{formatZarAmount(formatPriceAmount(unitIncVat(line.sku)))}</TableCell>
+                            <TableCell>
+                              {formatZarAmount(
+                                formatPriceAmount(unitIncVat(line.sku, selectedCustomer)),
+                              )}
+                            </TableCell>
                             {canDiscount ? (
                               <TableCell>
                                 <NumberInput
@@ -849,7 +864,11 @@ export default function TillPage() {
                               </TableCell>
                             ) : null}
                             <TableCell>
-                              <strong>{formatZarAmount(formatPriceAmount(lineIncTotal(line)))}</strong>
+                              <strong>
+                                {formatZarAmount(
+                                  formatPriceAmount(lineIncTotal(line, selectedCustomer)),
+                                )}
+                              </strong>
                             </TableCell>
                             <TableCell>
                               <Button
@@ -1046,6 +1065,14 @@ export default function TillPage() {
             <div className="vellano-tax-invoice__parties">
               <div>
                 <strong>Seller</strong>
+                {companySettings?.has_logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
+                  <img
+                    className="vellano-company-logo"
+                    src={settingsLogoUrl()}
+                    alt=""
+                  />
+                ) : null}
                 <p>{companySettings?.legal_name ?? "—"}</p>
                 <p>{companySettings?.address ?? "—"}</p>
                 <p>VAT no. {companySettings?.vat_number ?? "—"}</p>

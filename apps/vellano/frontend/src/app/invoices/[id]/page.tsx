@@ -28,6 +28,7 @@ import {
   getInvoice,
   getSettings,
   listContacts,
+  settingsLogoUrl,
   listCreditNotes,
   type AppSettings,
   type Contact,
@@ -265,6 +266,10 @@ export default function InvoiceDetailPage() {
         <div className="vellano-tax-invoice__parties">
           <div>
             <p className="cds--type-label-01">Seller</p>
+            {companySettings?.has_logo ? (
+              // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
+              <img className="vellano-company-logo" src={settingsLogoUrl()} alt="" />
+            ) : null}
             <p className="cds--type-body-01">{companySettings?.legal_name ?? "—"}</p>
             <p className="cds--type-body-01">{companySettings?.address ?? "—"}</p>
             <p className="cds--type-body-01">

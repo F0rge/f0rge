@@ -95,6 +95,15 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
     )
+    logo_storage_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    max_till_discount_percent: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(5, 2),
+        nullable=True,
+    )
+    po_approval_threshold_zar: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(14, 2),
+        nullable=True,
+    )
 
     team: Mapped["Team"] = relationship()
     default_receive_location: Mapped[Optional["Location"]] = relationship(

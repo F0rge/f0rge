@@ -29,9 +29,14 @@ class SellerDetails:
     bank_name: Optional[str] = None
     bank_account: Optional[str] = None
     bank_branch_code: Optional[str] = None
+    logo_bytes: Optional[bytes] = None
 
 
-def seller_details_from_settings(settings: TeamSettings) -> SellerDetails:
+def seller_details_from_settings(
+    settings: TeamSettings,
+    *,
+    logo_bytes: Optional[bytes] = None,
+) -> SellerDetails:
     vat_pct = (settings.vat_rate * Decimal("100")).quantize(Decimal("0.01"))
     return SellerDetails(
         name=settings.legal_name,
@@ -41,7 +46,36 @@ def seller_details_from_settings(settings: TeamSettings) -> SellerDetails:
         bank_name=settings.bank_name,
         bank_account=settings.bank_account,
         bank_branch_code=settings.bank_branch_code,
+        logo_bytes=logo_bytes,
     )
+
+
+def draw_seller_logo(
+    pdf: canvas.Canvas,
+    seller_details: SellerDetails,
+    *,
+    page_width: float,
+    anchor_y: float,
+) -> None:
+    if not seller_details.logo_bytes:
+        return
+    try:
+        from io import BytesIO
+
+        from reportlab.lib.utils import ImageReader
+
+        image = ImageReader(BytesIO(seller_details.logo_bytes))
+        img_w, img_h = image.getSize()
+        max_w = 35 * mm
+        max_h = 20 * mm
+        scale = min(max_w / img_w, max_h / img_h)
+        draw_w = img_w * scale
+        draw_h = img_h * scale
+        x = page_width - 25 * mm - draw_w
+        y = anchor_y - draw_h + 2 * mm
+        pdf.drawImage(image, x, y, width=draw_w, height=draw_h, mask="auto")
+    except Exception:
+        return
 
 
 def build_tax_invoice_pdf(
@@ -97,6 +131,7 @@ def build_tax_invoice_pdf(
 
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(25 * mm, y, "Seller")
+    draw_seller_logo(pdf, seller_details, page_width=width, anchor_y=y)
     y -= 6 * mm
     pdf.setFont("Helvetica", 10)
     pdf.drawString(25 * mm, y, seller_details.name)

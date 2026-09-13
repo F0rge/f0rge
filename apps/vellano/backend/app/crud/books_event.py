@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.books_event import BooksDocumentType, BooksEvent
@@ -25,5 +25,20 @@ class BooksEventCRUD(BaseCRUD):
                 BooksEvent.document_id == document_id,
             )
             .order_by(BooksEvent.created_at.asc(), BooksEvent.id.asc())
+        )
+        return list(result.scalars().all())
+
+    async def count_all(self) -> int:
+        result = await self.db.execute(select(func.count()).select_from(BooksEvent))
+        return int(result.scalar_one())
+
+    async def list_newest(self, limit: int) -> list[BooksEvent]:
+        result = await self.db.execute(
+            select(BooksEvent)
+            .order_by(
+                BooksEvent.created_at.desc(),
+                BooksEvent.id.desc(),
+            )
+            .limit(limit)
         )
         return list(result.scalars().all())

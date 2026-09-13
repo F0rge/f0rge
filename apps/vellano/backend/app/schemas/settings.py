@@ -40,6 +40,9 @@ class SettingsResponse(BaseModel):
     payment_terms_days: int
     default_receive_location_id: Optional[uuid.UUID] = None
     default_till_location_id: Optional[uuid.UUID] = None
+    max_till_discount_percent: Optional[Decimal] = None
+    po_approval_threshold_zar: Optional[Decimal] = None
+    has_logo: bool = False
     document_sequences: list[DocumentSequenceResponse]
 
 
@@ -60,4 +63,6 @@ class SettingsUpdate(BaseModel):
     payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)
     default_receive_location_id: Optional[uuid.UUID] = None
     default_till_location_id: Optional[uuid.UUID] = None
+    max_till_discount_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    po_approval_threshold_zar: Optional[Decimal] = Field(default=None, ge=0)
     document_sequences: Optional[list[DocumentSequenceUpdateItem]] = None

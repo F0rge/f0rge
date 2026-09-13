@@ -319,7 +319,8 @@ class PlaygroundBiPack:
             fx = Decimal("1.00") if currency == "ZAR" else EUR_FX
             await self.seed._ensure_transaction()
             po = await po_service.create(
-                PurchaseOrderCreate(supplier_id=supplier_id, lines=po_lines)
+                PurchaseOrderCreate(supplier_id=supplier_id, lines=po_lines),
+                owner_id,
             )
             await self.seed._ensure_transaction()
             await po_service.mark_on_water(po.id)

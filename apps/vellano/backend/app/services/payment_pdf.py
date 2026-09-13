@@ -11,6 +11,7 @@ from app.services.invoice_pdf import (
     SELLER_NAME,
     SELLER_VAT_NUMBER,
     SellerDetails,
+    draw_seller_logo,
 )
 
 
@@ -36,7 +37,7 @@ def build_payment_receipt_pdf(
 
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
-    height = A4[1]
+    width, height = A4
     y = height - 25 * mm
 
     pdf.setFont("Helvetica-Bold", 16)
@@ -53,6 +54,7 @@ def build_payment_receipt_pdf(
 
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(25 * mm, y, "Seller")
+    draw_seller_logo(pdf, seller_details, page_width=width, anchor_y=y)
     y -= 6 * mm
     pdf.setFont("Helvetica", 10)
     pdf.drawString(25 * mm, y, seller_details.name)

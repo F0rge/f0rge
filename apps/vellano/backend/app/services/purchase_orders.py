@@ -15,6 +15,8 @@ from app.crud.proforma import ProformaCRUD
 from app.crud.purchase_order import PurchaseOrderCRUD, SkuStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import UserCRUD
 from app.models.inventory import SkuStock
 from app.models.purchase_order import (
     LandingBill,
@@ -43,6 +45,8 @@ from app.services.packing_sheet import (
     convert_bill_to_zar,
 )
 from app.services.suppliers import SupplierService
+from app.permissions import USERS_MANAGE
+from app.services.permissions import PermissionService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -73,6 +77,7 @@ class PurchaseOrderService:
         self.location_crud = LocationCRUD(db)
         self.cost_audit = CostAuditService(db)
         self.stock_movements = StockMovementService(db)
+        self.user_crud = UserCRUD(db)
 
     async def list(
         self,
@@ -94,7 +99,7 @@ class PurchaseOrderService:
         po = await self._get_po_or_404(po_id)
         return self._to_response(po)
 
-    async def create(self, data: PurchaseOrderCreate) -> PurchaseOrderResponse:
+    async def create(self, data: PurchaseOrderCreate, user_id: uuid.UUID) -> PurchaseOrderResponse:
         supplier = await self.supplier_crud.get_by_id(data.supplier_id)
         if supplier is None:
             raise NotFoundError("Supplier not found")
@@ -117,6 +122,22 @@ class PurchaseOrderService:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
+
+        total_value = sum(
+            (Decimal(line.qty) * line.factory_unit_amount for line in data.lines),
+            Decimal(0),
+        )
+        user = await self.user_crud.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
+        threshold = team_settings.po_approval_threshold_zar
+        if threshold is not None and total_value > threshold:
+            can_override = await PermissionService(self.db).has_permission(user_id, USERS_MANAGE)
+            if not can_override:
+                raise ConflictError(
+                    f"Purchase order total exceeds approval threshold ({threshold} ZAR)"
+                )
 
         po = PurchaseOrder(
             po_number="",

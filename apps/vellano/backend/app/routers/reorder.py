@@ -30,7 +30,7 @@ async def list_reorder(
 )
 async def create_reorder_draft_po(
     body: ReorderDraftPoCreate,
-    _: uuid.UUID = Depends(require_catalogue_mutate),
+    user_id: uuid.UUID = Depends(require_catalogue_mutate),
     service: ReorderService = Depends(get_reorder_service),
 ):
-    return await service.create_draft_pos(body)
+    return await service.create_draft_pos(body, user_id)

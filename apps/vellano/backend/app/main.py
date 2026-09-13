@@ -19,11 +19,13 @@ from app.middleware.auth import AuthContextMiddleware
 from app.routers import (
     accounts,
     adjustments,
+    audit,
     auth,
     bank_imports,
     bank_rules,
     bills,
     books_events,
+    books_periods,
     catalogue_imports,
     category_maps,
     contacts,
@@ -207,6 +209,8 @@ app.include_router(credit_notes.credit_notes_router)
 app.include_router(bills.bills_router)
 app.include_router(payments.payments_router)
 app.include_router(books_events.books_events_router)
+app.include_router(books_periods.books_periods_router)
+app.include_router(audit.audit_router)
 app.include_router(bank_imports.bank_imports_router)
 app.include_router(bank_rules.bank_rules_router)
 app.include_router(reports.reports_router)

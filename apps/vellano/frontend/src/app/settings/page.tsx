@@ -2,6 +2,7 @@
 
 import {
   Button,
+  FileUploaderDropContainer,
   InlineNotification,
   Loading,
   NumberInput,
@@ -29,7 +30,9 @@ import {
   getSettings,
   isActiveLocation,
   listLocations,
+  settingsLogoUrl,
   updateSettings,
+  uploadCompanyLogo,
   type AppSettings,
   type DocumentSequence,
   type Location,
@@ -99,6 +102,11 @@ export default function SettingsPage() {
   const [bankAccount, setBankAccount] = useState("");
   const [bankBranchCode, setBankBranchCode] = useState("");
   const [paymentTermsDays, setPaymentTermsDays] = useState(30);
+  const [maxTillDiscountPercent, setMaxTillDiscountPercent] = useState("");
+  const [poApprovalThresholdZar, setPoApprovalThresholdZar] = useState("");
+  const [hasLogo, setHasLogo] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoVersion, setLogoVersion] = useState(0);
   const [defaultReceiveLocationId, setDefaultReceiveLocationId] = useState("");
   const [defaultTillLocationId, setDefaultTillLocationId] = useState("");
   const [documentSequences, setDocumentSequences] = useState<DocumentSequence[]>([]);
@@ -135,6 +143,9 @@ export default function SettingsPage() {
     setBankAccount(data.bank_account ?? "");
     setBankBranchCode(data.bank_branch_code ?? "");
     setPaymentTermsDays(data.payment_terms_days);
+    setMaxTillDiscountPercent(data.max_till_discount_percent ?? "");
+    setPoApprovalThresholdZar(data.po_approval_threshold_zar ?? "");
+    setHasLogo(data.has_logo);
     setDefaultReceiveLocationId(data.default_receive_location_id ?? "");
     setDefaultTillLocationId(data.default_till_location_id ?? "");
     setDocumentSequences(data.document_sequences);
@@ -185,6 +196,12 @@ export default function SettingsPage() {
         bank_account: bankAccount.trim() || null,
         bank_branch_code: bankBranchCode.trim() || null,
         payment_terms_days: paymentTermsDays,
+        max_till_discount_percent: maxTillDiscountPercent.trim()
+          ? maxTillDiscountPercent.trim()
+          : null,
+        po_approval_threshold_zar: poApprovalThresholdZar.trim()
+          ? poApprovalThresholdZar.trim()
+          : null,
         default_receive_location_id: defaultReceiveLocationId || null,
         default_till_location_id: defaultTillLocationId || null,
         document_sequences: documentSequences.map((row) => ({
@@ -203,6 +220,22 @@ export default function SettingsPage() {
       setError(err instanceof ApiError ? err.message : "Failed to save settings");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleLogoUpload(file: File) {
+    setLogoUploading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const updated = await uploadCompanyLogo(file);
+      applySettings(updated);
+      setLogoVersion((version) => version + 1);
+      setNotice("Company logo uploaded.");
+    } catch (err: unknown) {
+      setError(err instanceof ApiError ? err.message : "Failed to upload logo");
+    } finally {
+      setLogoUploading(false);
     }
   }
 
@@ -402,6 +435,39 @@ export default function SettingsPage() {
                     disabled={!canMutate || saving}
                     onChange={(event) => setBankBranchCode(event.target.value)}
                   />
+                  <div>
+                    <p className="cds--type-label-01">Company logo</p>
+                    <p className="vellano-muted-text cds--type-helper-text-01">
+                      JPEG or PNG. Shown on tax invoices and till receipts. Upload replaces any
+                      existing logo.
+                    </p>
+                    {hasLogo ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- session cookie, follow 302
+                      <img
+                        className="vellano-company-logo"
+                        src={`${settingsLogoUrl()}?v=${logoVersion}`}
+                        alt="Company logo"
+                      />
+                    ) : null}
+                    {canMutate ? (
+                      <FileUploaderDropContainer
+                        accept={["image/jpeg", "image/png"]}
+                        labelText={
+                          logoUploading
+                            ? "Uploading logo…"
+                            : "Drag and drop a logo here or click to upload"
+                        }
+                        multiple={false}
+                        disabled={logoUploading}
+                        onAddFiles={(_event, { addedFiles }) => {
+                          const file = addedFiles[0];
+                          if (file) {
+                            void handleLogoUpload(file);
+                          }
+                        }}
+                      />
+                    ) : null}
+                  </div>
                   <NumberInput
                     id="vat-percent"
                     label="VAT rate (%)"
@@ -561,6 +627,35 @@ export default function SettingsPage() {
                     onChange={(_, { value }) => {
                       if (typeof value === "number") {
                         setPaymentTermsDays(value);
+                      }
+                    }}
+                  />
+                  <NumberInput
+                    id="max-till-discount-percent"
+                    label="Max till discount (%)"
+                    helperText="Empty = no cap. 0 is a valid cap."
+                    value={maxTillDiscountPercent}
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    disabled={!canMutate || saving}
+                    onChange={(_, { value }) => {
+                      if (typeof value === "number" || typeof value === "string") {
+                        setMaxTillDiscountPercent(String(value));
+                      }
+                    }}
+                  />
+                  <NumberInput
+                    id="po-approval-threshold-zar"
+                    label="PO approval threshold (ZAR)"
+                    helperText="Empty = no cap. POs above this need users.manage to create."
+                    value={poApprovalThresholdZar}
+                    min={0}
+                    step={0.01}
+                    disabled={!canMutate || saving}
+                    onChange={(_, { value }) => {
+                      if (typeof value === "number" || typeof value === "string") {
+                        setPoApprovalThresholdZar(String(value));
                       }
                     }}
                   />

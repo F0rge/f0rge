@@ -27,7 +27,9 @@ class ReorderService:
         rows = await self.crud.list_below_min()
         return await self._to_responses(rows)
 
-    async def create_draft_pos(self, data: ReorderDraftPoCreate) -> ReorderDraftPoResponse:
+    async def create_draft_pos(
+        self, data: ReorderDraftPoCreate, user_id: uuid.UUID
+    ) -> ReorderDraftPoResponse:
         rows = await self.crud.list_below_min(sku_ids=data.sku_ids)
         by_sku_id = {row.sku_id: row for row in rows}
 
@@ -63,7 +65,8 @@ class ReorderService:
                     supplier_id=supplier_id,
                     proforma_id=None,
                     lines=lines,
-                )
+                ),
+                user_id,
             )
             purchase_orders.append(po)
 

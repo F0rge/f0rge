@@ -17,6 +17,7 @@ import {
 } from "@carbon/react";
 import {
   Barcode,
+  Calendar,
   Catalog,
   Delivery,
   DeliveryParcel,
@@ -50,6 +51,7 @@ import {
   ChartColumn,
   ChartLine,
   DocumentSubtract,
+  Security,
   DocumentTasks,
 } from "@carbon/icons-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -125,7 +127,9 @@ const ICONS = {
   "/reports": ChartLine,
   "/canvas": ChartColumn,
   "/vat201": Document,
+  "/books-periods": Calendar,
   "/till": Store,
+  "/audit": Security,
   "/users": UserMultiple,
   "/roles": UserAdmin,
   "/profile": User,

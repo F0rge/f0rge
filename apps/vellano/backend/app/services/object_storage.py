@@ -42,3 +42,4 @@ read_bytes = _storage.read_bytes
 read_relative = _storage.read_relative
 presigned_get_url = _storage.presigned_get_url
 is_remote_storage_ref = _storage.is_remote_storage_ref
+delete_object = _storage.delete_object

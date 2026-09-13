@@ -29,6 +29,7 @@ from app.schemas.layby import (
     LaybyResponse,
 )
 from app.schemas.page import Page, PageParams
+from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
 from app.services.payment_terms import compute_due_date
 from app.services.chart_of_accounts import (
@@ -184,6 +185,8 @@ class LaybysService:
             await self.stocktakes.assert_location_unlocked(layby.location_id)
 
         issue_date = datetime.date.today()
+        await assert_date_postable(self.db, issue_date)
+
         invoice_line_models: list[InvoiceLine] = []
         subtotal = Decimal(0)
         vat_total = Decimal(0)

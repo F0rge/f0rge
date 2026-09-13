@@ -179,7 +179,8 @@ class PlaygroundSeedService:
                         factory_unit_amount=Decimal("80.00"),
                     ),
                 ],
-            )
+            ),
+            owner.id,
         )
 
         await po_service.mark_on_water(po.id)

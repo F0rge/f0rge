@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from decimal import Decimal
 from typing import Optional
 
+from fastapi import UploadFile
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.document_sequence import DOCUMENT_TYPE_DEFAULTS, DocumentSequenceCRUD
@@ -11,15 +15,28 @@ from app.crud.location import LocationCRUD
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
 from app.models.location import LocationType
-from app.models.team_settings import DEFAULT_HOME_CURRENCY, DEFAULT_VAT_RATE
+from app.models.team_settings import DEFAULT_HOME_CURRENCY, DEFAULT_VAT_RATE, TeamSettings
 from app.schemas.settings import (
     DocumentSequenceResponse,
     SettingsResponse,
     SettingsUpdate,
 )
 from app.services.document_numbering import DocumentNumberingService
+from app.services.invoice_pdf import SellerDetails, seller_details_from_settings
+from app.services.object_storage import (
+    delete_object,
+    is_remote_storage_ref,
+    presigned_get_url,
+    read_bytes,
+    save_bytes,
+)
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+from f0rge_storage.images import resize_image
+
+logger = logging.getLogger(__name__)
+
+_ALLOWED_LOGO_CONTENT_TYPES = frozenset({"image/jpeg", "image/png"})
 
 
 class SettingsService:
@@ -92,10 +109,87 @@ class SettingsService:
                     LocationType.SHOWROOM,
                     "till",
                 )
+            if "max_till_discount_percent" in payload:
+                if data.max_till_discount_percent is not None and (
+                    data.max_till_discount_percent < 0 or data.max_till_discount_percent > 100
+                ):
+                    raise ValidationError("max_till_discount_percent must be between 0 and 100")
+                settings.max_till_discount_percent = data.max_till_discount_percent
+            if "po_approval_threshold_zar" in payload:
+                if (
+                    data.po_approval_threshold_zar is not None
+                    and data.po_approval_threshold_zar < 0
+                ):
+                    raise ValidationError("po_approval_threshold_zar must be >= 0")
+                settings.po_approval_threshold_zar = data.po_approval_threshold_zar
             if data.document_sequences is not None:
                 await self._apply_sequence_updates(user.team_id, data.document_sequences)
 
         return await self._to_response(settings, include_warning=True)
+
+    async def upload_logo(self, user_id: uuid.UUID, file: UploadFile) -> SettingsResponse:
+        user = await self._get_user(user_id)
+        settings = await self.crud.get_or_create_for_team(user.team_id)
+
+        content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+        if content_type and content_type not in _ALLOWED_LOGO_CONTENT_TYPES:
+            raise ValidationError("Logo must be JPEG or PNG")
+
+        raw_bytes = await file.read()
+        if not raw_bytes:
+            raise ValidationError("Logo file is required")
+
+        image_bytes = await asyncio.to_thread(resize_image, raw_bytes)
+        relative_path = f"company/logo-{uuid.uuid4()}.jpg"
+        storage_key = await asyncio.to_thread(save_bytes, relative_path, image_bytes)
+        old_key = settings.logo_storage_key
+
+        async with unit_of_work(self.db):
+            settings.logo_storage_key = storage_key
+
+        if old_key:
+            try:
+                await asyncio.to_thread(delete_object, old_key)
+            except Exception:
+                logger.warning("Failed to delete previous logo %s", old_key, exc_info=True)
+
+        return await self._to_response(settings)
+
+    async def serve_logo(self, user_id: uuid.UUID) -> Response:
+        user = await self._get_user(user_id)
+        settings = await self.crud.get_or_create_for_team(user.team_id)
+        if not settings.logo_storage_key:
+            raise NotFoundError("Logo not found")
+
+        storage_key = settings.logo_storage_key
+        if is_remote_storage_ref(storage_key):
+            url = presigned_get_url(storage_key)
+            if url:
+                return RedirectResponse(url)
+
+        try:
+            data = await asyncio.to_thread(read_bytes, storage_key)
+        except FileNotFoundError as exc:
+            raise NotFoundError("Logo not found") from exc
+        return Response(content=data, media_type="image/jpeg")
+
+    async def load_logo_bytes(self, settings: TeamSettings) -> Optional[bytes]:
+        if not settings.logo_storage_key:
+            return None
+        try:
+            return await asyncio.to_thread(read_bytes, settings.logo_storage_key)
+        except FileNotFoundError:
+            return None
+
+    async def build_seller_details(self) -> SellerDetails:
+        from app.crud.user import TeamCRUD
+
+        team = await TeamCRUD(self.db).get_first()
+        if team is None:
+            raise NotFoundError("Team not found")
+        settings = await self.crud.get_or_create_for_team(team.id)
+        logo_bytes = await self.load_logo_bytes(settings)
+        return seller_details_from_settings(settings, logo_bytes=logo_bytes)
 
     async def _validate_default_location(
         self,
@@ -177,6 +271,9 @@ class SettingsService:
             payment_terms_days=int(settings.payment_terms_days),
             default_receive_location_id=settings.default_receive_location_id,
             default_till_location_id=settings.default_till_location_id,
+            max_till_discount_percent=settings.max_till_discount_percent,
+            po_approval_threshold_zar=settings.po_approval_threshold_zar,
+            has_logo=bool(settings.logo_storage_key),
             document_sequences=sequence_rows,
         )
 

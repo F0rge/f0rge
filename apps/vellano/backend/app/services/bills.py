@@ -14,9 +14,10 @@ from app.crud.supplier import SupplierCRUD
 from app.models.bill import Bill, BillLine
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
-from app.services.books_events import BooksEventService
 from app.schemas.bill import BillCreate, BillLineResponse, BillListItem, BillResponse
 from app.schemas.page import Page, PageParams
+from app.services.books_events import BooksEventService
+from app.services.books_periods import assert_date_postable
 from app.services.chart_of_accounts import CODE_AP, CODE_INVENTORY, LedgerPostingService
 from app.services.object_storage import save_bytes
 from app.services.packing_sheet import convert_bill_to_zar
@@ -53,6 +54,7 @@ class BillService:
         return self._to_response(bill)
 
     async def create(self, data: BillCreate, user_id: Optional[uuid.UUID] = None) -> BillResponse:
+        await assert_date_postable(self.db, data.issue_date)
         supplier = await self.supplier_crud.get_by_id(data.supplier_id)
         if supplier is None:
             raise NotFoundError("Supplier not found")

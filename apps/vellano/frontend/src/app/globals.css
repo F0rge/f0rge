@@ -455,6 +455,13 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.vellano-company-logo {
+  max-height: 64px;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 0.5rem;
+}
+
 .vellano-tax-invoice__totals {
   margin-top: 1.5rem;
   text-align: right;

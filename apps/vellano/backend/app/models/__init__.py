@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.models.account import Account, AccountType, TaxTreatment
 from app.models.bank_import import BankImport, BankImportLine
+from app.models.books_period import BooksPeriod, BooksPeriodStatus
 from app.models.bank_rule import BankRule
 from app.models.bill import Bill, BillLine
 from app.models.books_event import BooksDocumentType, BooksEvent, BooksEventAction
@@ -75,6 +76,8 @@ __all__ = [
     "BankImport",
     "BankImportLine",
     "BankRule",
+    "BooksPeriod",
+    "BooksPeriodStatus",
     "Bill",
     "BillLine",
     "BooksDocumentType",

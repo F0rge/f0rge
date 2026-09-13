@@ -1523,7 +1523,8 @@ export type Invoice = InvoiceListItem & {
 export type CreateInvoiceLinePayload = {
   description: string;
   qty: number;
-  unit_ex_vat: string;
+  unit_ex_vat?: string;
+  sku_id?: string;
 };
 
 export type CreateInvoicePayload = {
@@ -3023,6 +3024,9 @@ export type AppSettings = {
   bank_name: string | null;
   bank_account: string | null;
   bank_branch_code: string | null;
+  has_logo: boolean;
+  max_till_discount_percent: string | null;
+  po_approval_threshold_zar: string | null;
   payment_terms_days: number;
   default_receive_location_id: string | null;
   default_till_location_id: string | null;
@@ -3097,6 +3101,9 @@ export function updateSettings(payload: {
   bank_name?: string | null;
   bank_account?: string | null;
   bank_branch_code?: string | null;
+  has_logo?: boolean;
+  max_till_discount_percent?: string | null;
+  po_approval_threshold_zar?: string | null;
   payment_terms_days?: number;
   default_receive_location_id?: string | null;
   default_till_location_id?: string | null;
@@ -3106,6 +3113,86 @@ export function updateSettings(payload: {
     method: "PATCH",
     body: JSON.stringify(payload),
   }).then(withPickSettings);
+}
+
+export function uploadCompanyLogo(file: File): Promise<AppSettings> {
+  const formData = new FormData();
+  formData.append("logo", file);
+  return apiUpload<AppSettings>("/settings/logo", formData).then(withPickSettings);
+}
+
+export function settingsLogoUrl(): string {
+  return "/api/v1/settings/logo";
+}
+
+export type BooksPeriodStatus = "open" | "locked";
+
+export type BooksPeriod = {
+  id: string;
+  period_from: string;
+  period_to: string;
+  status: BooksPeriodStatus;
+  locked_at: string | null;
+  locked_by_user_id: string | null;
+  reopen_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateBooksPeriodPayload = {
+  period_from: string;
+  period_to: string;
+};
+
+export function listBooksPeriods(): Promise<BooksPeriod[]> {
+  return apiFetch<BooksPeriod[]>("/books-periods");
+}
+
+export function createBooksPeriod(payload: CreateBooksPeriodPayload): Promise<BooksPeriod> {
+  const period_from = payload.period_from.trim();
+  const period_to = payload.period_to.trim();
+  if (!period_from || !period_to) {
+    throw new ApiError(400, "period_from and period_to are required");
+  }
+  return apiFetch<BooksPeriod>("/books-periods", {
+    method: "POST",
+    body: JSON.stringify({ period_from, period_to }),
+  });
+}
+
+export function lockBooksPeriod(id: string): Promise<BooksPeriod> {
+  return apiFetch<BooksPeriod>(`/books-periods/${id}/lock`, { method: "POST" });
+}
+
+export function reopenBooksPeriod(id: string, reason: string): Promise<BooksPeriod> {
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    throw new ApiError(400, "reason is required");
+  }
+  return apiFetch<BooksPeriod>(`/books-periods/${id}/reopen`, {
+    method: "POST",
+    body: JSON.stringify({ reason: trimmed }),
+  });
+}
+
+export type AuditSource = "books" | "nia" | "cost";
+
+export type AuditEvent = {
+  at: string;
+  source: AuditSource;
+  actor: string;
+  summary: string;
+  href: string;
+};
+
+export function listAuditEvents(params?: {
+  limit?: number;
+  offset?: number;
+}): Promise<Page<AuditEvent>> {
+  const search = new URLSearchParams();
+  search.set("limit", String(params?.limit ?? 50));
+  search.set("offset", String(params?.offset ?? 0));
+  return apiFetch<Page<AuditEvent>>(`/audit/events?${search.toString()}`);
 }
 
 export function getNiaUsageMe(): Promise<NiaUsageMe> {
