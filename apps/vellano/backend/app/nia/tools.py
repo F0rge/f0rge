@@ -98,9 +98,9 @@ def _is_allowed_nav_path(normalized: str) -> bool:
     """Exact allowlisted routes, plus invoice/catalogue detail `/{segment}/{uuid}`."""
     if normalized in ALLOWED_NAV_PATHS:
         return True
-    return _is_uuid_detail_path(
-        _INVOICE_DETAIL_PREFIX, normalized
-    ) or _is_uuid_detail_path(_CATALOGUE_DETAIL_PREFIX, normalized)
+    return _is_uuid_detail_path(_INVOICE_DETAIL_PREFIX, normalized) or _is_uuid_detail_path(
+        _CATALOGUE_DETAIL_PREFIX, normalized
+    )
 
 
 def _has_permission(deps: NiaDeps, key: str) -> bool:
