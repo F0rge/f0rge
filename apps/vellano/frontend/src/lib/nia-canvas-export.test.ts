@@ -99,6 +99,51 @@ describe("canvasExportSheets", () => {
     ]);
   });
 
+  it("avoids Excel sheet-name collisions across suffixes and case", () => {
+    const sheets = canvasExportSheets({
+      kind: "canvas_spec",
+      path: "/canvas",
+      title: "Collisions",
+      components: [
+        {
+          type: "table",
+          id: "one",
+          title: "Sales",
+          headers: ["A"],
+          rows: [["1"]],
+        },
+        {
+          type: "table",
+          id: "two",
+          title: "Sales",
+          headers: ["B"],
+          rows: [["2"]],
+        },
+        {
+          type: "table",
+          id: "three",
+          title: "Sales 2",
+          headers: ["C"],
+          rows: [["3"]],
+        },
+        {
+          type: "table",
+          id: "four",
+          title: "sales",
+          headers: ["D"],
+          rows: [["4"]],
+        },
+      ],
+    });
+
+    expect(sheets.map((sheet) => sheet.name)).toEqual([
+      "Sales",
+      "Sales 2",
+      "Sales 2 2",
+      "sales 3",
+    ]);
+  });
+
   it("returns an empty list for empty specs", () => {
     expect(canvasExportSheets(null)).toEqual([]);
     expect(

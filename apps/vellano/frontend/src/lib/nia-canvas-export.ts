@@ -31,17 +31,19 @@ function sanitizeSheetBaseName(raw: string): string {
 }
 
 function uniquifySheetNames(sheets: CanvasExportSheet[]): CanvasExportSheet[] {
-  const used = new Map<string, number>();
+  const used = new Set<string>();
   return sheets.map((sheet) => {
     const base = sanitizeSheetBaseName(sheet.name);
-    const count = used.get(base) ?? 0;
-    used.set(base, count + 1);
-    if (count === 0) {
-      return { ...sheet, name: base };
+    let candidate = base;
+    let n = 2;
+    while (used.has(candidate.toLowerCase())) {
+      const suffix = ` ${n}`;
+      const maxBaseLen = Math.max(1, 31 - suffix.length);
+      candidate = `${base.slice(0, maxBaseLen)}${suffix}`;
+      n += 1;
     }
-    const suffix = ` ${count + 1}`;
-    const maxBaseLen = Math.max(1, 31 - suffix.length);
-    return { ...sheet, name: `${base.slice(0, maxBaseLen)}${suffix}` };
+    used.add(candidate.toLowerCase());
+    return { ...sheet, name: candidate };
   });
 }
 
