@@ -334,3 +334,12 @@ def test_navigate_allows_invoice_list_and_uuid_detail() -> None:
     assert _is_allowed_nav_path("/invoices/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
     assert not _is_allowed_nav_path("/invoices/not-a-uuid")
     assert not _is_allowed_nav_path("/not-a-route")
+
+
+@pytest.mark.no_db
+def test_navigate_allows_catalogue_list_and_uuid_detail() -> None:
+    valid_uuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    assert _is_allowed_nav_path("/catalogue")
+    assert _is_allowed_nav_path(f"/catalogue/{valid_uuid}")
+    assert not _is_allowed_nav_path("/catalogue/not-a-uuid")
+    assert not _is_allowed_nav_path("/stock")

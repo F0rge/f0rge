@@ -117,9 +117,7 @@ export function HeaderSearch({ className }: HeaderSearchProps) {
                         <button
                           type="button"
                           className="vellano-header-search__hit"
-                          onClick={() =>
-                            goTo(`/catalogue?barcode=${encodeURIComponent(sku.our_barcode)}`)
-                          }
+                          onClick={() => goTo(`/catalogue/${sku.id}`)}
                         >
                           {sku.our_barcode} — {sku.name} ({sku.our_ref})
                         </button>

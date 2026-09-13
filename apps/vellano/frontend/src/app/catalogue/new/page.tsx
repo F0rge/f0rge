@@ -176,7 +176,7 @@ export default function NewSkuPage() {
         await uploadSkuPhoto(created.id, photoFile);
       }
 
-      router.push("/catalogue");
+      router.push(`/catalogue/${created.id}`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setError(err.message);

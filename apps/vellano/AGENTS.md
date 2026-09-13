@@ -644,7 +644,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | UI route | API prefix (`/api/v1`) |
 |----------|------------------------|
 | `/catalogue` | `/skus` |
-| `/stock` | `/inventory` |
+| `/catalogue/[id]` | `/skus/{id}` (+ `/inventory` rollup on Stock tab) |
 | `/ledger` | `/accounts`, `/category-maps` |
 | `/journals` | `/journals`, `/journal-imports`, `/books-events` |
 | `/contacts` | `/contacts` |
