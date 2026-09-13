@@ -33,7 +33,7 @@ export function NiaMark({ size = 20, className = "" }: NiaMarkProps) {
           <stop offset="0%" stopColor="#4589ff" />
           <stop offset="100%" stopColor="#a56eff" />
         </linearGradient>
-        <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+        <filter id={glowId} filterUnits="userSpaceOnUse" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="1.1" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
