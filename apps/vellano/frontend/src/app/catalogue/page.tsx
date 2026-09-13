@@ -268,6 +268,13 @@ function CataloguePageContent() {
     router.replace("/catalogue/new");
   }, [searchParams, router]);
 
+  useEffect(() => {
+    const query = searchParams.get("q")?.trim();
+    if (query) {
+      setSearchFilter(query);
+    }
+  }, [searchParams]);
+
   const categories = useMemo(() => {
     const values = new Set<string>();
     for (const sku of skus) {
