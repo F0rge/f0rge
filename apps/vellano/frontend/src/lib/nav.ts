@@ -22,6 +22,7 @@ export const TILL_NAV_ITEM = { href: "/till", label: "Till" } as const;
 export const CATALOGUE_NAV_ITEMS = [
   { href: "/catalogue", label: "Catalogue" },
   { href: "/suppliers", label: "Suppliers" },
+  { href: "/price-lists", label: "Price lists" },
   { href: "/proformas", label: "Proformas" },
   { href: "/locations", label: "Locations" },
 ] as const;

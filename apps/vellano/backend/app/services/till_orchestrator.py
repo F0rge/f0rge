@@ -125,7 +125,7 @@ class TillOrchestrator:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
-            base_unit = resolve_unit_ex_vat(sku, customer)
+            base_unit = await resolve_unit_ex_vat(self.db, sku, customer)
 
             bom_lines = await self.bom_crud.list_by_parent(sku.id)
             if bom_lines:

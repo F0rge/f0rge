@@ -16,9 +16,11 @@ import {
   canMutateCustomers,
   formatZarAmount,
   getCustomer,
+  listPriceLists,
   updateCustomer,
   type CreateCustomerPayload,
   type CustomerCrm,
+  type PriceList,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatIsoDate } from "@/lib/customer-crm";
@@ -39,6 +41,7 @@ export default function CustomerDetailPage() {
   const canMutate = canMutateCustomers(user);
   const canEditCredit = canManageCustomerCredit(user);
   const [customer, setCustomer] = useState<CustomerCrm | null>(null);
+  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [form, setForm] = useState<CreateCustomerPayload>(emptyCustomerForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,8 +52,9 @@ export default function CustomerDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getCustomer(params.id);
+      const [data, lists] = await Promise.all([getCustomer(params.id), listPriceLists()]);
       setCustomer(data);
+      setPriceLists(lists);
       setForm(formFromCustomer(data));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load customer.");
@@ -159,6 +163,15 @@ export default function CustomerDetailPage() {
                   }
                 />
                 <DetailRow label="Last purchase" value={formatIsoDate(customer.last_purchase_date)} />
+                <DetailRow
+                  label="Price list"
+                  value={
+                    customer.price_list_id
+                      ? (priceLists.find((entry) => entry.id === customer.price_list_id)?.name ??
+                        customer.price_list_id)
+                      : "—"
+                  }
+                />
                 <DetailRow label="Phone" value={customer.phone ?? "—"} />
                 <DetailRow label="Email" value={customer.email ?? "—"} />
                 <DetailRow label="VAT number" value={customer.vat_number ?? "—"} />

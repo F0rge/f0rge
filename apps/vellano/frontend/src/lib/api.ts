@@ -438,6 +438,73 @@ export function createSupplier(payload: CreateSupplierPayload): Promise<Supplier
   });
 }
 
+export type PriceListItem = {
+  sku_id: string;
+  our_ref: string;
+  unit_ex_vat: string;
+};
+
+export type PriceList = {
+  id: string;
+  name: string;
+  items: PriceListItem[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreatePriceListPayload = {
+  name: string;
+};
+
+export type UpdatePriceListPayload = {
+  name: string;
+};
+
+export type UpsertPriceListItemPayload = {
+  sku_id: string;
+  unit_ex_vat: string;
+};
+
+export function listPriceLists(): Promise<PriceList[]> {
+  return apiFetch<PriceList[]>("/price-lists");
+}
+
+export function createPriceList(payload: CreatePriceListPayload): Promise<PriceList> {
+  return apiFetch<PriceList>("/price-lists", {
+    method: "POST",
+    body: JSON.stringify({ name: payload.name.trim() }),
+  });
+}
+
+export function updatePriceList(id: string, payload: UpdatePriceListPayload): Promise<PriceList> {
+  return apiFetch<PriceList>(`/price-lists/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name: payload.name.trim() }),
+  });
+}
+
+export function deletePriceList(id: string): Promise<void> {
+  return apiFetch<void>(`/price-lists/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function upsertPriceListItem(
+  priceListId: string,
+  payload: UpsertPriceListItemPayload,
+): Promise<PriceList> {
+  return apiFetch<PriceList>(`/price-lists/${priceListId}/items`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deletePriceListItem(priceListId: string, skuId: string): Promise<PriceList> {
+  return apiFetch<PriceList>(`/price-lists/${priceListId}/items/${skuId}`, {
+    method: "DELETE",
+  });
+}
+
 export type Proforma = {
   id: string;
   supplier_id: string;
@@ -3741,6 +3808,7 @@ export type CustomerCrm = {
   on_hold: boolean;
   on_hold_reason: string | null;
   payment_terms_days: number | null;
+  price_list_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -3763,6 +3831,7 @@ export type CreateCustomerPayload = {
   on_hold?: boolean;
   on_hold_reason?: string | null;
   payment_terms_days?: number | null;
+  price_list_id?: string | null;
 };
 
 export type UpdateCustomerPayload = {
@@ -3777,6 +3846,7 @@ export type UpdateCustomerPayload = {
   on_hold?: boolean;
   on_hold_reason?: string | null;
   payment_terms_days?: number | null;
+  price_list_id?: string | null;
 };
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
@@ -3846,6 +3916,10 @@ function buildCustomerPayload(
   }
   if ("payment_terms_days" in payload && payload.payment_terms_days !== undefined) {
     body.payment_terms_days = payload.payment_terms_days;
+  }
+  if ("price_list_id" in payload && payload.price_list_id !== undefined) {
+    const listId = payload.price_list_id?.trim?.() ?? payload.price_list_id;
+    body.price_list_id = listId ? listId : null;
   }
   return body;
 }

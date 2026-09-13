@@ -41,6 +41,7 @@ from app.routers import (
     locations,
     payments,
     picks,
+    price_lists,
     proformas,
     purchase_orders,
     reorder,
@@ -182,6 +183,7 @@ app.include_router(users.profile_router)
 app.include_router(roles.roles_router)
 app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
+app.include_router(price_lists.price_lists_router)
 app.include_router(proformas.proformas_router)
 app.include_router(skus.skus_router)
 app.include_router(catalogue_imports.catalogue_imports_router)

@@ -500,7 +500,7 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 
 **Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Land re-checks with the posted FX. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not).
 
-**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins).
+**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins). Optional `customers.price_list_id` overrides with named list item prices (list → trade wholesale → retail).
 
 ## S6 ledger (books)
 
@@ -654,6 +654,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 |----------|------------------------|
 | `/catalogue` | `/skus` |
 | `/catalogue/[id]` | `/skus/{id}` (+ `/inventory` rollup on Stock tab) |
+| `/price-lists` | `/price-lists` |
 | `/ledger` | `/accounts`, `/category-maps` |
 | `/journals` | `/journals`, `/journal-imports`, `/books-events` |
 | `/contacts` | `/contacts` |
