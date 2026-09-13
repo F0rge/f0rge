@@ -1,7 +1,8 @@
 "use client";
 
 import { Button, InlineNotification, Stack } from "@carbon/react";
-import { useEffect } from "react";
+import { DocumentExport } from "@carbon/icons-react";
+import { useEffect, useState } from "react";
 
 import { CanvasSurface } from "@/components/nia/canvas-surface";
 import { useAuth } from "@/lib/auth";
@@ -13,8 +14,14 @@ import {
   useCanvasSpec,
 } from "@/lib/nia-canvas-store";
 import { isEmptyCanvasSpec } from "@/lib/nia-canvas-types";
+import { canvasExportSheets, exportFilename } from "@/lib/nia-canvas-export";
 import { hydrateCanvasFromThreadMessages } from "@/lib/nia-thread-utils";
 import { canUseNia } from "@/lib/permissions";
+import { downloadXlsx } from "@/lib/xlsx";
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 const HYDRATE_THREAD_CAP = 10;
 const EMPTY_COPY =
@@ -36,6 +43,8 @@ export default function CanvasPage() {
   const { user } = useAuth();
   const spec = useCanvasSpec();
   const empty = isEmptyCanvasSpec(spec);
+  const exportSheets = spec ? canvasExportSheets(spec) : [];
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || !canUseNia(user)) {
@@ -70,10 +79,42 @@ export default function CanvasPage() {
             {empty ? EMPTY_COPY : spec?.title}
           </p>
         </div>
-        <Button kind="ghost" size="sm" onClick={() => clearCanvasSpec()}>
-          Clear canvas
-        </Button>
+        <div className="vellano-catalogue-actions">
+          {exportSheets.length > 0 && spec ? (
+            <Button
+              kind="secondary"
+              size="sm"
+              renderIcon={DocumentExport}
+              onClick={() => {
+                setExportError(null);
+                try {
+                  downloadXlsx(
+                    exportFilename(spec.title, todayIso()),
+                    exportSheets,
+                  );
+                } catch (error) {
+                  const message =
+                    error instanceof Error ? error.message : "Export failed.";
+                  setExportError(message);
+                }
+              }}
+            >
+              Export to Excel
+            </Button>
+          ) : null}
+          <Button kind="ghost" size="sm" onClick={() => clearCanvasSpec()}>
+            Clear canvas
+          </Button>
+        </div>
       </div>
+      {exportError ? (
+        <InlineNotification
+          kind="error"
+          title="Export failed"
+          subtitle={exportError}
+          onCloseButtonClick={() => setExportError(null)}
+        />
+      ) : null}
       {empty || !spec ? null : <CanvasSurface spec={spec} />}
     </Stack>
   );
