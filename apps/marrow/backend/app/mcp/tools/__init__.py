@@ -21,6 +21,7 @@ def register_tools(server: FastMCP) -> None:
     """Register all MCP tools onto the server instance."""
     from app.mcp.tools.entries import register_entries_tools
     from app.mcp.tools.food import register_food_tools
+    from app.mcp.tools.hypotheses import register_hypotheses_tools
     from app.mcp.tools.labs import register_labs_tools
     from app.mcp.tools.metrics import register_metrics_tools
     from app.mcp.tools.search import register_search_tools
@@ -33,6 +34,7 @@ def register_tools(server: FastMCP) -> None:
     register_entries_tools(server)
     register_labs_tools(server)
     register_treatments_tools(server)
+    register_hypotheses_tools(server)
     register_food_tools(server)
     register_trackers_tools(server)
     register_metrics_tools(server)

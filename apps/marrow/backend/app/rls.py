@@ -50,6 +50,8 @@ USER_OWNED_TABLES: tuple[str, ...] = (
     "ingredient_aliases",
     "photo_diet_tags",
     "device_tokens",
+    "hypotheses",
+    "n_of_1_slots",
 )
 
 # The four catalog tables the signup copy touches (mirrors migration 032).

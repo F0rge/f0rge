@@ -81,4 +81,14 @@ def test_alembic_upgrade_head(migration_postgres_container: PostgresContainer) -
         ).fetchone()
         assert has_users, "users table missing after upgrade head"
 
+        for table in ("hypotheses", "n_of_1_slots"):
+            present = conn.execute(
+                text(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema='public' AND table_name=:table"
+                ),
+                {"table": table},
+            ).fetchone()
+            assert present, f"{table} missing after upgrade head"
+
     engine.dispose()
