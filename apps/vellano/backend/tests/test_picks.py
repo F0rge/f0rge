@@ -476,5 +476,6 @@ async def test_does_not_patch_invoice_description(
     pdf = await owner_client.get(f"/api/v1/picks/{pick_id}/pdf")
     assert pdf.status_code == 200
     text = _pdf_text(pdf.content)
+    assert "Vellano" in text
     assert created.json()["number"] in text
     assert "Set completeness" in text

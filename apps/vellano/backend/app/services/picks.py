@@ -48,7 +48,7 @@ from app.services.pick_allocator import (
     first_warehouse_id,
 )
 from app.services.pick_sheet import build_pick_sheet_pdf
-from app.services.settings import parse_pick_priority
+from app.services.settings import SettingsService, parse_pick_priority
 from app.services.transfers import TransferService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -275,12 +275,14 @@ class PickService:
                 )
         customer_name = pick.customer.name if pick.customer is not None else None
         kit_label = f"{pick.kit_sku.our_ref} {pick.kit_sku.name} × {pick.kit_qty}"
+        seller = await SettingsService(self.db).build_seller_details()
         pdf_bytes = build_pick_sheet_pdf(
             pick_number=pick.number,
             customer_name=customer_name,
             kit_label=kit_label,
             sections=list(sections_map.items()),
             completeness=completeness,
+            seller=seller,
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
 

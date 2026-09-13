@@ -26,6 +26,7 @@ from app.schemas.transfer import (
 from app.services.location_bins import LocationBinService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
+from app.services.settings import SettingsService
 from app.services.transfer_note import build_transfer_note_pdf
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -247,6 +248,7 @@ class TransferService:
     async def serve_pdf(self, transfer_id: uuid.UUID) -> Response:
         transfer = await self._get_or_404(transfer_id)
         dispatcher = transfer.dispatched_by
+        seller = await SettingsService(self.db).build_seller_details()
         pdf_bytes = build_transfer_note_pdf(
             transfer_number=transfer.transfer_number,
             status=transfer.status.value,
@@ -265,6 +267,7 @@ class TransferService:
                 )
                 for line in transfer.lines
             ],
+            seller=seller,
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
 

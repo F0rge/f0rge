@@ -46,6 +46,7 @@ from app.services.packing_sheet import (
     compute_landed_unit_costs,
     convert_bill_to_zar,
 )
+from app.services.settings import SettingsService
 from app.services.suppliers import SupplierService
 from app.permissions import USERS_MANAGE
 from app.services.permissions import PermissionService
@@ -321,7 +322,8 @@ class PurchaseOrderService:
             )
             for line in po.lines
         ]
-        pdf_bytes = build_packing_sheet_pdf(po.po_number, lines_data)
+        seller = await SettingsService(self.db).build_seller_details()
+        pdf_bytes = build_packing_sheet_pdf(po.po_number, lines_data, seller=seller)
 
         relative_path = f"packing-sheets/{po_id}.pdf"
         try:
