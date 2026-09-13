@@ -11,13 +11,13 @@ export function NiaMark({ size = 20, className = "" }: NiaMarkProps) {
   const gradientId = `vellano-nia-mark-gradient-${uid}`;
   const glowId = `vellano-nia-mark-glow-${uid}`;
 
+  const fill = `url(#${gradientId})`;
   const stroke = {
     fill: "none",
-    stroke: `url(#${gradientId})`,
+    stroke: fill,
     strokeWidth: 3.25,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
-    filter: `url(#${glowId})`,
   };
 
   return (
@@ -33,7 +33,15 @@ export function NiaMark({ size = 20, className = "" }: NiaMarkProps) {
           <stop offset="0%" stopColor="#4589ff" />
           <stop offset="100%" stopColor="#a56eff" />
         </linearGradient>
-        <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+        {/* userSpaceOnUse — objectBoundingBox collapses on zero-width vertical strokes */}
+        <filter
+          id={glowId}
+          filterUnits="userSpaceOnUse"
+          x="-3"
+          y="-3"
+          width="30"
+          height="30"
+        >
           <feGaussianBlur stdDeviation="1.1" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
@@ -41,16 +49,19 @@ export function NiaMark({ size = 20, className = "" }: NiaMarkProps) {
           </feMerge>
         </filter>
       </defs>
-      {/* Left pillar */}
-      <path d="M 6.25 4.75 L 6.25 19.25" {...stroke} />
-      {/* Right pillar */}
-      <path d="M 17.75 4.75 L 17.75 19.25" {...stroke} />
-      {/* Upper diagonal stub */}
-      <path d="M 7.9 4.75 L 12.25 10.25" {...stroke} />
-      {/* Smile — lower diagonal of the N */}
-      <path d="M 7.9 12.75 C 10.25 17.25, 13.75 18.25, 16.1 19.25" {...stroke} />
-      <circle cx="10" cy="11.25" r="1.2" fill={`url(#${gradientId})`} filter={`url(#${glowId})`} />
-      <circle cx="14" cy="11.25" r="1.2" fill={`url(#${gradientId})`} filter={`url(#${glowId})`} />
+      <g filter={`url(#${glowId})`}>
+        {/* Pillars — filled rects so stems stay visible under the glow filter */}
+        <rect x="4.5" y="4.5" width="3.5" height="15" rx="1.75" fill={fill} />
+        <rect x="16" y="4.5" width="3.5" height="15" rx="1.75" fill={fill} />
+        {/* Upper diagonal stub */}
+        <path d="M 7.9 5 L 12.25 10.25" {...stroke} />
+        {/* Lower diagonal stub */}
+        <path d="M 16.1 19 L 13.25 14.25" {...stroke} />
+        {/* Smile — lower diagonal of the N */}
+        <path d="M 7.9 12.75 C 10.25 17.25, 13.75 18.25, 16.1 19" {...stroke} />
+        <circle cx="10" cy="11.25" r="1.2" fill={fill} />
+        <circle cx="14" cy="11.25" r="1.2" fill={fill} />
+      </g>
     </svg>
   );
 }
