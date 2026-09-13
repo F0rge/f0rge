@@ -4,7 +4,17 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +28,7 @@ DEFAULT_LEGAL_NAME = "Vellano"
 DEFAULT_ADDRESS = "Kramerville, Johannesburg, South Africa"
 DEFAULT_VAT_NUMBER = "4123456789"
 DEFAULT_PAYMENT_TERMS_DAYS = 30
+DEFAULT_SESSION_TTL_HOURS = 12
 
 
 class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
@@ -104,6 +115,12 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         Numeric(14, 2),
         nullable=True,
     )
+    session_ttl_hours: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=DEFAULT_SESSION_TTL_HOURS,
+        server_default=text("12"),
+    )
 
     team: Mapped["Team"] = relationship()
     default_receive_location: Mapped[Optional["Location"]] = relationship(
@@ -113,7 +130,13 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         foreign_keys=[default_till_location_id],
     )
 
-    __table_args__ = (UniqueConstraint("team_id", name="uq_team_settings_team_id"),)
+    __table_args__ = (
+        UniqueConstraint("team_id", name="uq_team_settings_team_id"),
+        CheckConstraint(
+            "session_ttl_hours >= 1 AND session_ttl_hours <= 720",
+            name="ck_team_settings_session_ttl_hours",
+        ),
+    )
 
 
 from app.models.location import Location  # noqa: E402

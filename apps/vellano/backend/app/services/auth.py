@@ -9,6 +9,7 @@ from fastapi import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
 from app.permissions import role_slug
 from app.services.permissions import PermissionService
@@ -16,7 +17,6 @@ from f0rge_core.exceptions import UnauthorizedError, ValidationError
 
 JWT_ALGORITHM = "HS256"
 JWT_COOKIE_NAME = "vellano_session"
-JWT_TTL_DAYS = 90
 MIN_PASSWORD_LENGTH = 8
 
 
@@ -34,12 +34,12 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
-def create_access_token(user_id: uuid.UUID) -> str:
+def create_access_token(user_id: uuid.UUID, ttl_hours: int) -> str:
     now = datetime.datetime.utcnow()
     payload = {
         "sub": str(user_id),
         "iat": now,
-        "exp": now + datetime.timedelta(days=JWT_TTL_DAYS),
+        "exp": now + datetime.timedelta(hours=ttl_hours),
     }
     return jwt.encode(payload, _require_jwt_secret(), algorithm=JWT_ALGORITHM)
 
@@ -60,7 +60,7 @@ def decode_access_token(token: str) -> uuid.UUID:
         raise UnauthorizedError("Invalid session") from exc
 
 
-def set_session_cookie(response: Response, token: str) -> None:
+def set_session_cookie(response: Response, token: str, *, max_age: int) -> None:
     response.set_cookie(
         key=JWT_COOKIE_NAME,
         value=token,
@@ -68,7 +68,7 @@ def set_session_cookie(response: Response, token: str) -> None:
         samesite="lax",
         path="/",
         secure=settings.cookie_secure,
-        max_age=JWT_TTL_DAYS * 24 * 60 * 60,
+        max_age=max_age,
     )
 
 
@@ -97,8 +97,10 @@ class AuthService:
         if user.is_disabled:
             raise UnauthorizedError("Invalid email or password")
 
-        token = create_access_token(user.id)
-        set_session_cookie(response, token)
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
+        ttl_hours = int(team_settings.session_ttl_hours)
+        token = create_access_token(user.id, ttl_hours)
+        set_session_cookie(response, token, max_age=ttl_hours * 3600)
         return {"email": user.email}
 
     async def logout(self, response: Response) -> None:

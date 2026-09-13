@@ -71,7 +71,7 @@ It then creates these role users if the email is missing (idempotent; owner is n
 | `warehouse@example.com` | warehouse | `SEED_WAREHOUSE_PASSWORD` | `change-me-warehouse` |
 | `buyer@example.com` | buyer | `SEED_BUYER_PASSWORD` | `change-me-buyer` |
 
-Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSite=Lax, `Path=/`). Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
+Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSite=Lax, `Path=/`). Session cookie TTL is team-configurable via `team_settings.session_ttl_hours` (default **12 hours**, range 1–720); login sets JWT `exp` and cookie `Max-Age` from the current setting — no sliding refresh; changing the setting does not revoke already-issued tokens. Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
 
 Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally.
 
@@ -549,7 +549,7 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: `books.mutate`.
 - **Journal CSV (SimplePay):** `POST /journal-imports/preview` and `/commit` (multipart `file`); source `import:simplepay`; same-month 409. UI on `/journals`.
 - **Books history:** append-only `GET /books-events?document_type=&document_id=` (`invoice` | `bill` | `payment` | `journal`). Journal post + void = two rows on the original id. No PATCH/DELETE.
-- **Books periods (wave 2):** `GET/POST /api/v1/books-periods`, `GET /{id}`, `POST /{id}/lock` (`books.mutate`), `POST /{id}/reopen` (`users.manage` + reason). Independent of VAT201 — no snapshot sync. Locked period covering a date blocks GL posting (invoice, bill, payment, journal, credit note, till sale, layby complete) with 409 `"Books period is locked for this date"`. Does **not** lock stock receive/transfer.
+- **Books periods (wave 2):** `GET/POST /api/v1/books-periods`, `GET /{id}`, `POST /{id}/lock` (`books.mutate`), `POST /{id}/reopen` (`users.manage` + reason). Independent of VAT201 — no snapshot sync. VAT201 lock may opt in (`lock_books: true`) to lock a matching books period in the same transaction; reopening VAT201 does not unlock books. Locked period covering a date blocks GL posting (invoice, bill, payment, journal, credit note, till sale, layby complete) with 409 `"Books period is locked for this date"`. Does **not** lock stock receive/transfer.
 - **Audit hub (wave 2):** `GET /api/v1/audit/events?limit=&offset=` merges books + optional Nia + optional cost rows (newest first). Nia rows only for `nia.admin` OR `users.manage`; cost rows only when caller has `stock.cost.view` (omitted silently otherwise). **Skips VAT201 events** in v1. Per-document `GET /books-events` unchanged.
 
 | Action | Permission |
