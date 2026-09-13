@@ -498,7 +498,7 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 - **Roles:** PATCH prices requires `catalogue.mutate`; GET is any authenticated role.
 - **Quotes:** out of V1 — no quote entity, table, or routes.
 
-**Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create (`catalogue.mutate`) above threshold without `users.manage` → **409** (`po.raise` does not bypass).
+**Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Land re-checks with the posted FX. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not).
 
 **Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins).
 
