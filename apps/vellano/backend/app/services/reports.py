@@ -11,6 +11,8 @@ from sqlalchemy.orm import selectinload
 
 from app.crud.account import AccountCRUD
 from app.crud.purchase_order import PurchaseOrderCRUD
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
 from app.models.account import AccountType
 from app.models.bill import Bill
 from app.models.credit_note import CreditNote
@@ -336,9 +338,19 @@ class ReportsService:
         output_tax = Decimal(invoice_vat) - Decimal(cn_vat)
         input_tax = Decimal(0)
 
+        team = await TeamCRUD(self.db).get_first()
+        vendor_name = "Vellano"
+        vendor_vat_number = "4123456789"
+        if team is not None:
+            settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
+            vendor_name = settings.legal_name
+            vendor_vat_number = settings.vat_number
+
         return Vat201Draft(
             period_from=period_from,
             period_to=period_to,
+            vendor_name=vendor_name,
+            vendor_vat_number=vendor_vat_number,
             standard_rated_supplies_ex_vat=standard_rated,
             output_tax=output_tax,
             input_tax=input_tax,

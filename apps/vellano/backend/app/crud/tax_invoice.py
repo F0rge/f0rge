@@ -93,11 +93,6 @@ class TaxInvoiceCRUD(BaseCRUD):
         return list(result.scalars().unique().all()), total
 
     async def get_next_invoice_number(self) -> str:
-        result = await self.db.execute(
-            select(TaxInvoice.invoice_number).order_by(TaxInvoice.invoice_number.desc()).limit(1)
-        )
-        last = result.scalar_one_or_none()
-        if last is None:
-            return "INV-0001"
-        num = int(last.split("-")[1]) + 1
-        return f"INV-{num:04d}"
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("invoice")

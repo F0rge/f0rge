@@ -81,9 +81,8 @@ class BillService:
             raise ValidationError("Bill total must be positive")
 
         amount_zar = convert_bill_to_zar(amount_foreign, currency, fx_to_zar)
-        bill_number = await self.crud.get_next_bill_number()
         bill = Bill(
-            bill_number=bill_number,
+            bill_number="",
             supplier_id=data.supplier_id,
             supplier_ref=data.supplier_ref,
             issue_date=data.issue_date,
@@ -96,11 +95,12 @@ class BillService:
         )
 
         async with unit_of_work(self.db):
+            bill.bill_number = await self.crud.get_next_bill_number()
             await self.crud.add_and_flush(bill)
             await self.posting.post(
                 JournalDocumentType.BILL,
                 bill.id,
-                f"Supplier bill {bill_number}",
+                f"Supplier bill {bill.bill_number}",
                 [
                     (CODE_INVENTORY, amount_zar, Decimal(0)),
                     (CODE_AP, Decimal(0), amount_zar),

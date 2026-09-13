@@ -15,6 +15,8 @@ from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
 from app.models.pick import Pick, PickStatus
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
@@ -26,6 +28,7 @@ from app.schemas.till import TillSaleCreate, TillSaleLocationStock, TillSaleResp
 from app.services.books_events import BooksEventService
 from app.services.category_posting import CategoryPostingService
 from app.services.customer_credit import CustomerCreditService
+from app.services.payment_terms import compute_due_date
 from app.services.stock_movements import StockMovementService
 from app.services.chart_of_accounts import (
     CODE_AR,
@@ -187,34 +190,41 @@ class TillOrchestrator:
                 customer, total_inc, credit_override=data.credit_override
             )
 
-        invoice_number = await self.invoice_crud.get_next_invoice_number()
-        payment_number = await self.payment_crud.get_next_payment_number()
-
-        invoice = TaxInvoice(
-            invoice_number=invoice_number,
-            customer_id=customer.id,
-            issue_date=sale_date,
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat_total,
-            total_inc_vat=total_inc,
-            amount_paid=Decimal(0),
-            lines=invoice_line_models,
-        )
-
-        payment = Payment(
-            payment_number=payment_number,
-            direction=PaymentDirection.IN,
-            invoice_id=None,
-            amount=total_inc,
-            currency="ZAR",
-            fx_to_zar=Decimal("1"),
-            amount_zar=total_inc,
-            fx_gain_loss_zar=Decimal(0),
-            paid_on=sale_date,
-            tender=data.tender,
-        )
+        team = await TeamCRUD(self.db).get_first()
+        if team is None:
+            raise NotFoundError("Team not found")
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
+        due_date = compute_due_date(sale_date, customer, team_settings)
 
         async with unit_of_work(self.db):
+            invoice_number = await self.invoice_crud.get_next_invoice_number()
+            payment_number = await self.payment_crud.get_next_payment_number()
+
+            invoice = TaxInvoice(
+                invoice_number=invoice_number,
+                customer_id=customer.id,
+                issue_date=sale_date,
+                due_date=due_date,
+                subtotal_ex_vat=subtotal,
+                vat_amount=vat_total,
+                total_inc_vat=total_inc,
+                amount_paid=Decimal(0),
+                lines=invoice_line_models,
+            )
+
+            payment = Payment(
+                payment_number=payment_number,
+                direction=PaymentDirection.IN,
+                invoice_id=None,
+                amount=total_inc,
+                currency="ZAR",
+                fx_to_zar=Decimal("1"),
+                amount_zar=total_inc,
+                fx_gain_loss_zar=Decimal(0),
+                paid_on=sale_date,
+                tender=data.tender,
+            )
+
             await self.invoice_crud.add_and_flush(invoice)
             payment.invoice_id = invoice.id
 

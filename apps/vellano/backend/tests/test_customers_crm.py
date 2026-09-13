@@ -98,6 +98,32 @@ async def test_unpaid_invoice_increases_open_invoices_zar(owner_client: AsyncCli
     assert body["last_purchase_date"] == "2026-09-01"
 
 
+async def test_overdue_uses_custom_customer_terms(owner_client: AsyncClient) -> None:
+    customer = await owner_client.post(
+        "/api/v1/customers",
+        json={"name": "CRM Custom Terms Customer", "payment_terms_days": 7},
+    )
+    assert customer.status_code == 201
+    customer_id = customer.json()["id"]
+
+    issue_date = (date.today() - timedelta(days=10)).isoformat()
+    invoice = await owner_client.post(
+        "/api/v1/invoices",
+        json={
+            "customer_id": customer_id,
+            "issue_date": issue_date,
+            "lines": [{"description": "Sofa", "qty": 1, "unit_ex_vat": "1000.00"}],
+        },
+    )
+    assert invoice.status_code == 201
+
+    detail = await owner_client.get(f"/api/v1/customers/{customer_id}")
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["overdue_invoices_count"] == 1
+    assert Decimal(body["overdue_invoices_zar"]) == Decimal("1150.00")
+
+
 async def test_overdue_invoice_increments_overdue_count(owner_client: AsyncClient) -> None:
     customer = await owner_client.post(
         "/api/v1/customers",

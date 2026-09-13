@@ -57,7 +57,6 @@ class JournalService:
             raise ValidationError("Cannot create a voided journal")
         amounts = self._validated_line_amounts(data.lines)
         entry_id = uuid.uuid4()
-        journal_number = await self.crud.get_next_journal_number()
         entry = JournalEntry(
             id=entry_id,
             document_type=JournalDocumentType.MANUAL,
@@ -66,9 +65,10 @@ class JournalService:
             status=data.status,
             entry_date=data.entry_date,
             source=data.source,
-            journal_number=journal_number,
+            journal_number=None,
         )
         async with unit_of_work(self.db):
+            entry.journal_number = await self.crud.get_next_journal_number()
             await self.crud.add_and_flush(entry)
             for line, debit, credit in amounts:
                 account = await self.account_crud.get_by_id(line.account_id)
@@ -122,7 +122,6 @@ class JournalService:
             raise ValidationError("Only posted journals can be voided")
 
         reversing_id = uuid.uuid4()
-        reversing_number = await self.crud.get_next_journal_number()
         reversing = JournalEntry(
             id=reversing_id,
             document_type=JournalDocumentType.MANUAL,
@@ -131,9 +130,10 @@ class JournalService:
             status=JournalStatus.POSTED,
             entry_date=entry.entry_date,
             source="void",
-            journal_number=reversing_number,
+            journal_number=None,
         )
         async with unit_of_work(self.db):
+            reversing.journal_number = await self.crud.get_next_journal_number()
             await self.crud.add_and_flush(reversing)
             for line in entry.lines:
                 await self.crud.add_line(

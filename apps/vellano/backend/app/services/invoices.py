@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.sku import SkuCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
@@ -28,7 +30,8 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.contacts import ContactService
-from app.services.invoice_pdf import build_tax_invoice_pdf
+from app.services.invoice_pdf import build_tax_invoice_pdf, seller_details_from_settings
+from app.services.payment_terms import compute_due_date
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -102,19 +105,22 @@ class InvoiceService:
             user_id=user_id,
         )
 
-        invoice_number = await self.crud.get_next_invoice_number()
-        invoice = TaxInvoice(
-            invoice_number=invoice_number,
-            customer_id=data.customer_id,
-            issue_date=data.issue_date,
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat_total,
-            total_inc_vat=total_inc,
-            amount_paid=Decimal(0),
-            lines=line_models,
-        )
+        team_settings = await self._team_settings()
+        due_date = compute_due_date(data.issue_date, customer, team_settings)
 
         async with unit_of_work(self.db):
+            invoice_number = await self.crud.get_next_invoice_number()
+            invoice = TaxInvoice(
+                invoice_number=invoice_number,
+                customer_id=data.customer_id,
+                issue_date=data.issue_date,
+                due_date=due_date,
+                subtotal_ex_vat=subtotal,
+                vat_amount=vat_total,
+                total_inc_vat=total_inc,
+                amount_paid=Decimal(0),
+                lines=line_models,
+            )
             await self.crud.add_and_flush(invoice)
             sales_parts: list[tuple[str, Decimal, Decimal]] = []
             for line in line_models:
@@ -175,6 +181,7 @@ class InvoiceService:
         pdf_bytes = build_tax_invoice_pdf(
             invoice_number=invoice.invoice_number,
             issue_date=invoice.issue_date.isoformat(),
+            due_date=invoice.due_date.isoformat() if invoice.due_date else None,
             customer_name=invoice.customer.name,
             customer_vat=invoice.customer.vat_number,
             customer_address=invoice.customer.billing_address,
@@ -182,8 +189,15 @@ class InvoiceService:
             subtotal_ex_vat=f"{invoice.subtotal_ex_vat:.2f}",
             vat_amount=f"{invoice.vat_amount:.2f}",
             total_inc_vat=f"{invoice.total_inc_vat:.2f}",
+            seller=seller_details_from_settings(await self._team_settings()),
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
+
+    async def _team_settings(self):
+        team = await TeamCRUD(self.db).get_first()
+        if team is None:
+            raise NotFoundError("Team not found")
+        return await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
 
     @staticmethod
     def _to_list_item(invoice: TaxInvoice) -> InvoiceListItem:
@@ -194,6 +208,7 @@ class InvoiceService:
             customer_id=invoice.customer_id,
             customer_name=invoice.customer.name,
             issue_date=invoice.issue_date,
+            due_date=invoice.due_date,
             subtotal_ex_vat=invoice.subtotal_ex_vat,
             vat_amount=invoice.vat_amount,
             total_inc_vat=invoice.total_inc_vat,
@@ -212,6 +227,7 @@ class InvoiceService:
             customer_id=invoice.customer_id,
             customer_name=invoice.customer.name,
             issue_date=invoice.issue_date,
+            due_date=invoice.due_date,
             subtotal_ex_vat=invoice.subtotal_ex_vat,
             vat_amount=invoice.vat_amount,
             total_inc_vat=invoice.total_inc_vat,

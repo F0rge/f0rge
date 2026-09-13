@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.credit_note import CreditNoteCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
 from app.models.credit_note import CreditNote
 from app.models.journal import JournalDocumentType
 from app.models.sku import Sku
@@ -23,7 +25,7 @@ from app.services.chart_of_accounts import (
     CODE_VAT,
     LedgerPostingService,
 )
-from app.services.invoice_pdf import build_tax_invoice_pdf
+from app.services.invoice_pdf import build_tax_invoice_pdf, seller_details_from_settings
 from f0rge_core.exceptions import ConflictError, NotFoundError
 from f0rge_db.crud import unit_of_work
 
@@ -108,8 +110,15 @@ class CreditNoteService:
             title="Credit Note",
             original_invoice_number=invoice.invoice_number,
             credit_reason=credit_note.reason,
+            seller=seller_details_from_settings(await self._team_settings()),
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
+
+    async def _team_settings(self):
+        team = await TeamCRUD(self.db).get_first()
+        if team is None:
+            raise NotFoundError("Team not found")
+        return await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
 
     async def create_for_return(
         self,

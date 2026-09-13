@@ -633,6 +633,28 @@ body {
   gap: 0.5rem;
 }
 
+.vellano-settings-sequences {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vellano-settings-sequences__header,
+.vellano-settings-sequences__row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1.25fr) minmax(5rem, 1fr) minmax(5rem, 0.75fr) minmax(
+      5rem,
+      0.75fr
+    );
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.vellano-settings-sequences__header {
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+
 .vellano-nia-usage-meter {
   width: 100%;
   max-width: 28rem;

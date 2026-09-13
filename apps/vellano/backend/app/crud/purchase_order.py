@@ -107,14 +107,9 @@ class PurchaseOrderCRUD(BaseCRUD):
         return list(result.scalars().unique().all())
 
     async def get_next_po_number(self) -> str:
-        result = await self.db.execute(
-            select(PurchaseOrder.po_number).order_by(PurchaseOrder.po_number.desc()).limit(1)
-        )
-        last = result.scalar_one_or_none()
-        if last is None:
-            return "PO-0001"
-        num = int(last.split("-")[1]) + 1
-        return f"PO-{num:04d}"
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("purchase_order")
 
 
 class SkuStockCRUD(BaseCRUD):

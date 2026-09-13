@@ -13,6 +13,7 @@ export const emptyCustomerForm: CreateCustomerPayload = {
   credit_limit: "",
   on_hold: false,
   on_hold_reason: "",
+  payment_terms_days: undefined,
 };
 
 export function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
@@ -27,6 +28,7 @@ export function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
     credit_limit: customer.credit_limit ?? "",
     on_hold: customer.on_hold,
     on_hold_reason: customer.on_hold_reason ?? "",
+    payment_terms_days: customer.payment_terms_days ?? undefined,
   };
 }
 
@@ -51,6 +53,11 @@ export function customerWritePayload(
     payload.on_hold = form.on_hold ?? false;
     payload.on_hold_reason = form.on_hold_reason;
   }
+  if (form.payment_terms_days != null && form.payment_terms_days !== undefined) {
+    payload.payment_terms_days = form.payment_terms_days;
+  } else {
+    payload.payment_terms_days = null;
+  }
   return payload;
 }
 
@@ -69,6 +76,8 @@ export function CustomerFormFields({
 }) {
   const creditLimitValue =
     form.credit_limit === "" || form.credit_limit == null ? "" : Number(form.credit_limit);
+  const paymentTermsValue =
+    form.payment_terms_days == null ? "" : Number(form.payment_terms_days);
 
   return (
     <Stack gap={5}>
@@ -95,6 +104,22 @@ export function CustomerFormFields({
         labelText="Price tier"
         value={form.price_tier ?? "standard"}
         onChange={(event) => onChange({ price_tier: event.target.value })}
+        disabled={disabled}
+      />
+      <NumberInput
+        id={`${idPrefix}-payment-terms`}
+        label="Payment terms (days)"
+        helperText="Leave empty to use the company default."
+        min={0}
+        max={365}
+        step={1}
+        allowEmpty
+        value={Number.isFinite(paymentTermsValue) ? paymentTermsValue : ""}
+        onChange={(_, { value }) =>
+          onChange({
+            payment_terms_days: value === "" ? undefined : Number(value),
+          })
+        }
         disabled={disabled}
       />
       <TextInput

@@ -91,9 +91,8 @@ class StockReturnsService:
             data.disposition,
         )
 
-        return_number = await self.crud.get_next_return_number()
         stock_return = StockReturn(
-            return_number=return_number,
+            return_number="",
             invoice_id=invoice.id,
             location_id=data.location_id,
             reason=data.reason,
@@ -105,6 +104,7 @@ class StockReturnsService:
         )
 
         async with unit_of_work(self.db):
+            stock_return.return_number = await self.crud.get_next_return_number()
             await self.crud.add_and_flush(stock_return)
 
         return self._to_response(await self._get_or_404(stock_return.id))

@@ -74,12 +74,23 @@ class DeliveriesService:
 
         if data.source_type == DeliverySourceType.INVOICE:
             assert data.invoice_id is not None
-            delivery = await self._create_from_invoice(data, user_id, lines_override)
+            delivery = await self._create_from_invoice(
+                data,
+                user_id,
+                lines_override,
+                delivery_number="",
+            )
         else:
             assert data.layby_id is not None
-            delivery = await self._create_from_layby(data, user_id, lines_override)
+            delivery = await self._create_from_layby(
+                data,
+                user_id,
+                lines_override,
+                delivery_number="",
+            )
 
         async with unit_of_work(self.db):
+            delivery.delivery_number = await self.crud.get_next_delivery_number()
             await self.crud.add_and_flush(delivery)
 
         return self._to_response(await self._get_or_404(delivery.id))
@@ -119,6 +130,8 @@ class DeliveriesService:
         data: DeliveryCreate,
         user_id: uuid.UUID,
         lines_override: Optional[list[DeliveryLine]] = None,
+        *,
+        delivery_number: str,
     ) -> Delivery:
         invoice = await self.invoice_crud.get_by_id(data.invoice_id)
         if invoice is None:
@@ -138,7 +151,6 @@ class DeliveriesService:
             else self._lines_from_invoice(invoice.lines, skus_by_id)
         )
 
-        delivery_number = await self.crud.get_next_delivery_number()
         return Delivery(
             delivery_number=delivery_number,
             source_type=DeliverySourceType.INVOICE,
@@ -156,6 +168,8 @@ class DeliveriesService:
         data: DeliveryCreate,
         user_id: uuid.UUID,
         lines_override: Optional[list[DeliveryLine]] = None,
+        *,
+        delivery_number: str,
     ) -> Delivery:
         layby = await self.layby_crud.get_by_id(data.layby_id)
         if layby is None:
@@ -170,7 +184,6 @@ class DeliveriesService:
         lines = (
             lines_override if lines_override is not None else self._lines_from_layby(layby.lines)
         )
-        delivery_number = await self.crud.get_next_delivery_number()
         return Delivery(
             delivery_number=delivery_number,
             source_type=DeliverySourceType.LAYBY,

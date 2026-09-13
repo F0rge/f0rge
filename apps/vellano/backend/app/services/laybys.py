@@ -13,6 +13,8 @@ from app.crud.location import LocationCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
 from app.models.journal import JournalDocumentType
 from app.models.layby import Layby, LaybyLine, LaybyPayment, LaybyStatus
 from app.models.location import LocationType
@@ -28,6 +30,7 @@ from app.schemas.layby import (
 )
 from app.schemas.page import Page, PageParams
 from app.services.category_posting import CategoryPostingService
+from app.services.payment_terms import compute_due_date
 from app.services.chart_of_accounts import (
     CODE_AR,
     CODE_BANK,
@@ -101,10 +104,9 @@ class LaybysService:
         if data.deposit_amount > total_inc:
             raise ValidationError("Deposit cannot exceed layby total")
 
-        layby_number = await self.crud.get_next_layby_number()
         paid_on = datetime.date.today()
         layby = Layby(
-            layby_number=layby_number,
+            layby_number="",
             customer_id=data.customer_id,
             location_id=data.location_id,
             due_date=data.due_date,
@@ -125,6 +127,7 @@ class LaybysService:
         )
 
         async with unit_of_work(self.db):
+            layby.layby_number = await self.crud.get_next_layby_number()
             await self.crud.add_and_flush(layby)
             payment.layby_id = layby.id
             await self.crud.add_and_flush(payment)
@@ -139,7 +142,7 @@ class LaybysService:
                         qty=line.qty,
                         user_id=user_id,
                         source=UnitCostAuditSource.LAYBY,
-                        note=f"Layby {layby_number} hold",
+                        note=f"Layby {layby.layby_number} hold",
                     )
 
             layby.amount_paid = data.deposit_amount
@@ -209,19 +212,25 @@ class LaybysService:
                 )
             )
 
-        invoice_number = await self.invoice_crud.get_next_invoice_number()
-        invoice = TaxInvoice(
-            invoice_number=invoice_number,
-            customer_id=layby.customer_id,
-            issue_date=issue_date,
-            subtotal_ex_vat=subtotal,
-            vat_amount=vat_total,
-            total_inc_vat=total_inc,
-            amount_paid=total_inc,
-            lines=invoice_line_models,
-        )
+        team = await TeamCRUD(self.db).get_first()
+        if team is None:
+            raise NotFoundError("Team not found")
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
+        due_date = compute_due_date(issue_date, layby.customer, team_settings)
 
         async with unit_of_work(self.db):
+            invoice_number = await self.invoice_crud.get_next_invoice_number()
+            invoice = TaxInvoice(
+                invoice_number=invoice_number,
+                customer_id=layby.customer_id,
+                issue_date=issue_date,
+                due_date=due_date,
+                subtotal_ex_vat=subtotal,
+                vat_amount=vat_total,
+                total_inc_vat=total_inc,
+                amount_paid=total_inc,
+                lines=invoice_line_models,
+            )
             await self.invoice_crud.add_and_flush(invoice)
 
             await self.posting.post(

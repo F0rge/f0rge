@@ -12,6 +12,7 @@ from app.models.team_settings import (
     DEFAULT_VAT_RATE,
     TeamSettings,
 )
+from app.services.document_numbering import DocumentNumberingService
 from f0rge_db.crud import BaseCRUD, unit_of_work
 
 
@@ -25,7 +26,9 @@ class TeamSettingsCRUD(BaseCRUD):
 
     async def get_or_create_for_team(self, team_id: uuid.UUID) -> TeamSettings:
         existing = await self.get_by_team_id(team_id)
+        numbering = DocumentNumberingService(self.db)
         if existing is not None:
+            await numbering.ensure_all_for_team(team_id)
             return existing
         settings = TeamSettings(
             team_id=team_id,
@@ -37,4 +40,5 @@ class TeamSettingsCRUD(BaseCRUD):
         )
         async with unit_of_work(self.db):
             await self.add_and_flush(settings)
+        await numbering.ensure_all_for_team(team_id)
         return settings

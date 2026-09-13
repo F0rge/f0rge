@@ -68,17 +68,9 @@ class JournalCRUD(BaseCRUD):
         return list(result.scalars().unique().all()), total
 
     async def get_next_journal_number(self) -> str:
-        result = await self.db.execute(
-            select(JournalEntry.journal_number)
-            .where(JournalEntry.journal_number.is_not(None))
-            .order_by(JournalEntry.journal_number.desc())
-            .limit(1)
-        )
-        last = result.scalar_one_or_none()
-        if last is None:
-            return "JE-0001"
-        num = int(last.split("-")[1]) + 1
-        return f"JE-{num:04d}"
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("journal")
 
     async def add_line(self, line: JournalLine) -> None:
         await self.add_and_flush(line)

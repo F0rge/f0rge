@@ -26,20 +26,16 @@ import {
   downloadInvoicePdf,
   formatZarAmount,
   getInvoice,
+  getSettings,
   listContacts,
   listCreditNotes,
+  type AppSettings,
   type Contact,
   type CreditNote,
   type Invoice,
   type Payment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-
-const SELLER = {
-  name: "Vellano",
-  address: "Kramerville, Johannesburg, South Africa",
-  vat: "4123456789",
-};
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -55,6 +51,7 @@ export default function InvoiceDetailPage() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [companySettings, setCompanySettings] = useState<AppSettings | null>(null);
   const [customer, setCustomer] = useState<Contact | null>(null);
   const [creditNote, setCreditNote] = useState<CreditNote | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,12 +69,14 @@ export default function InvoiceDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const [invoiceData, contacts, creditNotePage] = await Promise.all([
+      const [invoiceData, contacts, creditNotePage, settingsData] = await Promise.all([
         getInvoice(params.id),
         listContacts(),
         listCreditNotes({ limit: 100 }),
+        getSettings(),
       ]);
       setInvoice(invoiceData);
+      setCompanySettings(settingsData);
       setCustomer(contacts.find((entry) => entry.id === invoiceData.customer_id) ?? null);
       setCreditNote(
         creditNotePage.items.find((entry) => entry.invoice_id === invoiceData.id) ?? null,
@@ -258,14 +257,19 @@ export default function InvoiceDetailPage() {
             <p className="cds--type-productive-heading-03">Tax invoice</p>
             <p className="cds--type-body-01">{invoice.invoice_number}</p>
             <p className="cds--type-body-01">Issue date: {invoice.issue_date}</p>
+            {invoice.due_date ? (
+              <p className="cds--type-body-01">Due date: {invoice.due_date}</p>
+            ) : null}
           </div>
         </div>
         <div className="vellano-tax-invoice__parties">
           <div>
             <p className="cds--type-label-01">Seller</p>
-            <p className="cds--type-body-01">{SELLER.name}</p>
-            <p className="cds--type-body-01">{SELLER.address}</p>
-            <p className="cds--type-body-01">VAT {SELLER.vat}</p>
+            <p className="cds--type-body-01">{companySettings?.legal_name ?? "—"}</p>
+            <p className="cds--type-body-01">{companySettings?.address ?? "—"}</p>
+            <p className="cds--type-body-01">
+              VAT {companySettings?.vat_number ?? "—"}
+            </p>
           </div>
           <div>
             <p className="cds--type-label-01">Buyer</p>
@@ -287,7 +291,7 @@ export default function InvoiceDetailPage() {
                 <TableHeader>Qty</TableHeader>
                 <TableHeader>Unit ex VAT</TableHeader>
                 <TableHeader>Ex VAT</TableHeader>
-                <TableHeader>VAT (15%)</TableHeader>
+                <TableHeader>VAT ({companySettings?.vat_percent ?? "15"}%)</TableHeader>
                 <TableHeader>Inc VAT</TableHeader>
               </TableRow>
             </TableHead>
@@ -309,7 +313,9 @@ export default function InvoiceDetailPage() {
           <p className="cds--type-body-01">
             Subtotal ex VAT: {formatZarAmount(invoice.subtotal_ex_vat)}
           </p>
-          <p className="cds--type-body-01">VAT (15%): {formatZarAmount(invoice.vat_amount)}</p>
+          <p className="cds--type-body-01">
+            VAT ({companySettings?.vat_percent ?? "15"}%): {formatZarAmount(invoice.vat_amount)}
+          </p>
           <p className="cds--type-productive-heading-02">
             Total inc VAT: {formatZarAmount(invoice.total_inc_vat)}
           </p>

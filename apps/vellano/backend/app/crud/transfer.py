@@ -53,11 +53,6 @@ class TransferCRUD(BaseCRUD):
         return list(result.scalars().all())
 
     async def get_next_transfer_number(self) -> str:
-        result = await self.db.execute(
-            select(Transfer.transfer_number).order_by(Transfer.transfer_number.desc()).limit(1)
-        )
-        last = result.scalar_one_or_none()
-        if last is None:
-            return "TRF-0001"
-        num = int(last.split("-")[1]) + 1
-        return f"TRF-{num:04d}"
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("transfer")

@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
 from app.models.layby import Layby, LaybyStatus
 from app.models.tax_invoice import TaxInvoice
+from app.services.payment_terms import invoice_overdue_predicate
 from f0rge_db.crud import BaseCRUD
 
 
@@ -51,8 +52,8 @@ class CustomerCRUD(BaseCRUD):
         if not customer_ids:
             return {}
 
-        overdue_cutoff = as_of - datetime.timedelta(days=30)
         balance = TaxInvoice.total_inc_vat - TaxInvoice.amount_paid
+        overdue_clause = invoice_overdue_predicate(as_of)
         stmt = (
             select(
                 TaxInvoice.customer_id,
@@ -61,16 +62,11 @@ class CustomerCRUD(BaseCRUD):
                     func.sum(case((balance > 0, balance), else_=Decimal("0"))),
                     Decimal("0"),
                 ).label("open_zar"),
-                func.count()
-                .filter(and_(balance > 0, TaxInvoice.issue_date <= overdue_cutoff))
-                .label("overdue_count"),
+                func.count().filter(overdue_clause).label("overdue_count"),
                 func.coalesce(
                     func.sum(
                         case(
-                            (
-                                and_(balance > 0, TaxInvoice.issue_date <= overdue_cutoff),
-                                balance,
-                            ),
+                            (overdue_clause, balance),
                             else_=Decimal("0"),
                         )
                     ),

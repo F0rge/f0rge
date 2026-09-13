@@ -24,6 +24,7 @@ class TaxInvoice(UUIDPkMixin, TimestampMixin, Base):
         index=True,
     )
     issue_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    due_date: Mapped[Optional[datetime.date]] = mapped_column(Date, nullable=True)
     subtotal_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)

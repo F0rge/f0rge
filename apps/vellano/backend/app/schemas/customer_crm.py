@@ -18,6 +18,7 @@ class CustomerCrmCreate(BaseModel):
     billing_address: Optional[str] = None
     customer_type: CustomerType = "retail"
     price_tier: str = "standard"
+    payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)
 
 
 class CustomerCrmUpdate(BaseModel):
@@ -31,6 +32,7 @@ class CustomerCrmUpdate(BaseModel):
     credit_limit: Optional[Decimal] = None
     on_hold: Optional[bool] = None
     on_hold_reason: Optional[str] = None
+    payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)
 
 
 class CustomerCrmResponse(BaseModel):
@@ -45,6 +47,7 @@ class CustomerCrmResponse(BaseModel):
     credit_limit: Optional[Decimal] = None
     on_hold: bool
     on_hold_reason: Optional[str] = None
+    payment_terms_days: Optional[int] = None
     open_invoices_count: int
     open_invoices_zar: Decimal
     overdue_invoices_count: int

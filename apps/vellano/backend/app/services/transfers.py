@@ -104,7 +104,7 @@ class TransferService:
                 raise NotFoundError("Pick not found")
 
         transfer = Transfer(
-            transfer_number=await self.crud.get_next_transfer_number(),
+            transfer_number="",
             status=TransferStatus.DRAFT,
             from_location_id=from_location.id,
             to_location_id=to_location.id,
@@ -114,6 +114,7 @@ class TransferService:
             lines=lines,
         )
         async with unit_of_work(self.db):
+            transfer.transfer_number = await self.crud.get_next_transfer_number()
             await self.crud.add_and_flush(transfer)
         return self._to_response(await self._get_or_404(transfer.id))
 

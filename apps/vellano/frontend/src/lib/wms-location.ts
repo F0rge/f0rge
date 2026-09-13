@@ -47,7 +47,13 @@ function writeStoredLocationId(id: string): void {
   window.sessionStorage.setItem(WMS_LOCATION_STORAGE_KEY, id);
 }
 
-export function defaultFloorLocationId(floor: WmsFloorLocations): string {
+export function defaultFloorLocationId(
+  floor: WmsFloorLocations,
+  teamDefaultId?: string | null,
+): string {
+  if (teamDefaultId && floor.some((location) => location.id === teamDefaultId)) {
+    return teamDefaultId;
+  }
   const warehouse = floor.find((location) => location.type === "warehouse");
   return warehouse?.id ?? floor[0].id;
 }
@@ -55,21 +61,25 @@ export function defaultFloorLocationId(floor: WmsFloorLocations): string {
 export function resolveFloorLocationId(
   floor: WmsFloorLocations,
   stored: string | null,
+  teamDefaultId?: string | null,
 ): string {
   if (stored && floor.some((location) => location.id === stored)) {
     return stored;
   }
-  return defaultFloorLocationId(floor);
+  return defaultFloorLocationId(floor, teamDefaultId);
 }
 
-export function useWmsFloorLocation(locations: Location[]) {
+export function useWmsFloorLocation(
+  locations: Location[],
+  teamDefaultId?: string | null,
+) {
   const floor = useMemo(() => floorLocations(locations), [locations]);
   const defaultLocationId = useMemo(() => {
     if (!floor) {
       return "";
     }
-    return resolveFloorLocationId(floor, readStoredLocationId());
-  }, [floor]);
+    return resolveFloorLocationId(floor, readStoredLocationId(), teamDefaultId);
+  }, [floor, teamDefaultId]);
   const [overrideId, setOverrideId] = useState<string | null>(null);
   const locationId = overrideId ?? defaultLocationId;
 

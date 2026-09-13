@@ -1506,6 +1506,7 @@ export type InvoiceListItem = {
   customer_id: string;
   customer_name: string;
   issue_date: string;
+  due_date?: string | null;
   subtotal_ex_vat: string;
   vat_amount: string;
   total_inc_vat: string;
@@ -2992,6 +2993,19 @@ export type SearchResponse = {
   invoices: InvoiceSearchHit[];
 };
 
+export type DocumentSequence = {
+  doc_type: string;
+  prefix: string;
+  padding: number;
+  next_value: number;
+};
+
+export type DocumentSequenceUpdate = {
+  doc_type: string;
+  prefix?: string;
+  padding?: number;
+};
+
 export type AppSettings = {
   vat_rate: string;
   vat_percent: string;
@@ -3001,6 +3015,18 @@ export type AppSettings = {
   always_prefer_warehouse: boolean;
   pick_priority: string[];
   nia_monthly_token_cap: number;
+  legal_name: string;
+  trading_name: string | null;
+  address: string;
+  vat_number: string;
+  cipc_number: string | null;
+  bank_name: string | null;
+  bank_account: string | null;
+  bank_branch_code: string | null;
+  payment_terms_days: number;
+  default_receive_location_id: string | null;
+  default_till_location_id: string | null;
+  document_sequences: DocumentSequence[];
 };
 
 export type NiaUsageMe = {
@@ -3063,6 +3089,18 @@ export function updateSettings(payload: {
   always_prefer_warehouse?: boolean;
   pick_priority?: string[];
   nia_monthly_token_cap?: number;
+  legal_name?: string;
+  trading_name?: string | null;
+  address?: string;
+  vat_number?: string;
+  cipc_number?: string | null;
+  bank_name?: string | null;
+  bank_account?: string | null;
+  bank_branch_code?: string | null;
+  payment_terms_days?: number;
+  default_receive_location_id?: string | null;
+  default_till_location_id?: string | null;
+  document_sequences?: DocumentSequenceUpdate[];
 }): Promise<AppSettings> {
   return apiFetch<AppSettings>("/settings", {
     method: "PATCH",
@@ -3615,6 +3653,7 @@ export type CustomerCrm = {
   credit_limit: string | null;
   on_hold: boolean;
   on_hold_reason: string | null;
+  payment_terms_days: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -3636,6 +3675,7 @@ export type CreateCustomerPayload = {
   credit_limit?: string | null;
   on_hold?: boolean;
   on_hold_reason?: string | null;
+  payment_terms_days?: number | null;
 };
 
 export type UpdateCustomerPayload = {
@@ -3649,6 +3689,7 @@ export type UpdateCustomerPayload = {
   credit_limit?: string | null;
   on_hold?: boolean;
   on_hold_reason?: string | null;
+  payment_terms_days?: number | null;
 };
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
@@ -3715,6 +3756,9 @@ function buildCustomerPayload(
   const holdReason = payload.on_hold_reason?.trim();
   if (holdReason) {
     body.on_hold_reason = holdReason;
+  }
+  if ("payment_terms_days" in payload && payload.payment_terms_days !== undefined) {
+    body.payment_terms_days = payload.payment_terms_days;
   }
   return body;
 }

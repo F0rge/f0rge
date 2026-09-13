@@ -39,9 +39,6 @@ class PickCRUD(BaseCRUD):
         return list(result.scalars().all())
 
     async def get_next_pick_number(self) -> str:
-        result = await self.db.execute(select(Pick.number).order_by(Pick.number.desc()).limit(1))
-        last = result.scalar_one_or_none()
-        if last is None:
-            return "PCK-0001"
-        num = int(last.split("-")[1]) + 1
-        return f"PCK-{num:04d}"
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("pick")
