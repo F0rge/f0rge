@@ -27,7 +27,9 @@ class ReorderService:
         rows = await self.crud.list_below_min()
         return await self._to_responses(rows)
 
-    async def create_draft_pos(self, data: ReorderDraftPoCreate) -> ReorderDraftPoResponse:
+    async def create_draft_pos(
+        self, data: ReorderDraftPoCreate, user_id: uuid.UUID
+    ) -> ReorderDraftPoResponse:
         rows = await self.crud.list_below_min(sku_ids=data.sku_ids)
         by_sku_id = {row.sku_id: row for row in rows}
 
@@ -38,8 +40,10 @@ class ReorderService:
             if row.preferred_supplier_id is None:
                 raise ValidationError("Preferred supplier is required")
 
-        landed_costs = await self.unit_cost_audit_crud.latest_landed_costs_by_sku_ids(
-            list(data.sku_ids)
+        factory_amounts = (
+            await self.purchase_order_service.crud.latest_factory_unit_amounts_by_sku_ids(
+                list(data.sku_ids)
+            )
         )
 
         by_supplier: dict[uuid.UUID, list[ReorderRow]] = defaultdict(list)
@@ -54,7 +58,7 @@ class ReorderService:
                 PoLineCreate(
                     sku_id=row.sku_id,
                     qty=row.suggested_qty,
-                    factory_unit_amount=landed_costs.get(row.sku_id, Decimal("1")),
+                    factory_unit_amount=factory_amounts.get(row.sku_id, Decimal("1")),
                 )
                 for row in supplier_rows
             ]
@@ -63,7 +67,8 @@ class ReorderService:
                     supplier_id=supplier_id,
                     proforma_id=None,
                     lines=lines,
-                )
+                ),
+                user_id,
             )
             purchase_orders.append(po)
 

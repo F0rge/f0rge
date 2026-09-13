@@ -10,6 +10,7 @@ export const BOOKS_NAV_ITEMS = [
   { href: "/bank-reconciliation", label: "Bank reconciliation" },
   { href: "/reports", label: "Reports" },
   { href: "/vat201", label: "VAT201" },
+  { href: "/books-periods", label: "Books periods" },
 ] as const;
 
 export type BooksNavItem = (typeof BOOKS_NAV_ITEMS)[number];
@@ -54,6 +55,7 @@ export const NIA_NAV_ITEMS = [{ href: "/canvas", label: "Canvas" }] as const;
 export const ADMIN_NAV_ITEMS = [
   { href: "/users", label: "Users", permission: "users.manage" as const },
   { href: "/roles", label: "Roles", permission: "users.manage" as const },
+  { href: "/audit", label: "Audit" },
   { href: "/profile", label: "Profile" },
   { href: "/settings", label: "Settings" },
 ] as const;
@@ -81,7 +83,8 @@ export function isBooksPath(pathname: string): boolean {
     pathname.startsWith("/invoices/") ||
     pathname.startsWith("/repeating-invoices/") ||
     pathname.startsWith("/credit-notes/") ||
-    pathname.startsWith("/bills/")
+    pathname.startsWith("/bills/") ||
+    pathname.startsWith("/books-periods")
   );
 }
 

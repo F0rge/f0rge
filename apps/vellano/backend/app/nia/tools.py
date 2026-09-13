@@ -78,6 +78,8 @@ ALLOWED_NAV_PATHS: frozenset[str] = frozenset(
         "/roles",
         "/profile",
         "/settings",
+        "/audit",
+        "/books-periods",
         "/canvas",
     }
 )

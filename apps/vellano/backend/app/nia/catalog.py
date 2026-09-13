@@ -235,7 +235,7 @@ async def _get_purchase_order(deps: NiaDeps, data: PurchaseOrderIdArgs) -> Any:
 
 
 async def _create_purchase_order(deps: NiaDeps, data: PurchaseOrderCreate) -> Any:
-    return await PurchaseOrderService(deps.db).create(data)
+    return await PurchaseOrderService(deps.db).create(data, deps.user_id)
 
 
 async def _mark_on_water(deps: NiaDeps, data: PurchaseOrderIdArgs) -> Any:
@@ -255,7 +255,7 @@ async def _list_reorder(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
 
 
 async def _create_reorder_draft_po(deps: NiaDeps, data: ReorderDraftPoCreate) -> Any:
-    return await ReorderService(deps.db).create_draft_pos(data)
+    return await ReorderService(deps.db).create_draft_pos(data, deps.user_id)
 
 
 async def _list_transfers(deps: NiaDeps, data: NiaEmptyArgs) -> Any:

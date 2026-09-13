@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 
 from app.dependencies.auth import get_current_user_id, get_settings_service, require_settings
 from app.schemas.settings import SettingsResponse, SettingsUpdate
@@ -26,3 +26,20 @@ async def update_settings(
     service: SettingsService = Depends(get_settings_service),
 ) -> SettingsResponse:
     return await service.update(user_id, data)
+
+
+@settings_router.post("/logo", response_model=SettingsResponse)
+async def upload_logo(
+    logo: UploadFile = File(...),
+    user_id: uuid.UUID = Depends(require_settings),
+    service: SettingsService = Depends(get_settings_service),
+) -> SettingsResponse:
+    return await service.upload_logo(user_id, logo)
+
+
+@settings_router.get("/logo")
+async def get_logo(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    service: SettingsService = Depends(get_settings_service),
+):
+    return await service.serve_logo(user_id)

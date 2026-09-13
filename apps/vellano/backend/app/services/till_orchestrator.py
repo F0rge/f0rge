@@ -40,8 +40,10 @@ from app.services.chart_of_accounts import (
 from app.services.stocktakes import StocktakeService
 from app.services.till_seed import WALK_IN_CUSTOMER_NAME
 from app.exceptions import ForbiddenError
-from app.permissions import TILL_DISCOUNT
+from app.permissions import TILL_DISCOUNT, USERS_MANAGE
 from app.services.permissions import PermissionService
+from app.services.books_periods import assert_date_postable
+from app.services.pricing import resolve_unit_ex_vat
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -71,6 +73,19 @@ class TillOrchestrator:
             if not allowed:
                 raise ForbiddenError("Till discount permission required")
 
+        team = await TeamCRUD(self.db).get_first()
+        if team is None:
+            raise NotFoundError("Team not found")
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
+        max_discount = team_settings.max_till_discount_percent
+        if max_discount is not None and user_id is not None:
+            if any(line.discount_percent > max_discount for line in data.lines):
+                can_override = await PermissionService(self.db).has_permission(
+                    user_id, USERS_MANAGE
+                )
+                if not can_override:
+                    raise ConflictError(f"Discount exceeds maximum allowed ({max_discount}%)")
+
         await StocktakeService(self.db).assert_location_unlocked(data.location_id)
         from app.crud.location import LocationCRUD
 
@@ -97,6 +112,7 @@ class TillOrchestrator:
             )
             await self.credit.assert_not_held(customer, credit_override=data.credit_override)
         sale_date = datetime.date.today()
+        await assert_date_postable(self.db, sale_date)
 
         line_inputs: list[tuple] = []
         cogs_parts: list[tuple[str, Decimal, Decimal]] = []
@@ -109,8 +125,7 @@ class TillOrchestrator:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
-            if sku.retail_ex_vat is None or sku.retail_ex_vat <= 0:
-                raise ValidationError(f"SKU {sku.our_ref} has no retail price")
+            base_unit = resolve_unit_ex_vat(sku, customer)
 
             bom_lines = await self.bom_crud.list_by_parent(sku.id)
             if bom_lines:
@@ -149,7 +164,7 @@ class TillOrchestrator:
             total_cogs += line_cogs
             cogs_code = await self.category_posting.cogs_code_for_sku(sku)
             cogs_parts.append((cogs_code, line_cogs, Decimal(0)))
-            line_inputs.append((sku, line.qty, line.discount_percent))
+            line_inputs.append((sku, line.qty, line.discount_percent, base_unit))
 
         subtotal = Decimal(0)
         vat_total = Decimal(0)
@@ -157,9 +172,9 @@ class TillOrchestrator:
         invoice_line_models: list[InvoiceLine] = []
         sales_parts: list[tuple[str, Decimal, Decimal]] = []
 
-        for index, (sku, qty, discount_percent) in enumerate(line_inputs):
+        for index, (sku, qty, discount_percent, base_unit) in enumerate(line_inputs):
             discounted_unit = (
-                sku.retail_ex_vat * (Decimal(100) - discount_percent) / Decimal(100)
+                base_unit * (Decimal(100) - discount_percent) / Decimal(100)
             ).quantize(CENT, rounding=ROUND_HALF_UP)
             ex_vat = (Decimal(qty) * discounted_unit).quantize(CENT, rounding=ROUND_HALF_UP)
             inc_vat = ex_to_inc(ex_vat)
@@ -190,10 +205,6 @@ class TillOrchestrator:
                 customer, total_inc, credit_override=data.credit_override
             )
 
-        team = await TeamCRUD(self.db).get_first()
-        if team is None:
-            raise NotFoundError("Team not found")
-        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
         due_date = compute_due_date(sale_date, customer, team_settings)
 
         async with unit_of_work(self.db):

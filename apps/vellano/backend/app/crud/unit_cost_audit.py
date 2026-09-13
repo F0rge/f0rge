@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
@@ -33,6 +33,25 @@ class UnitCostAuditCRUD(BaseCRUD):
         )
         if location_id is not None:
             stmt = stmt.where(UnitCostAudit.location_id == location_id)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def count_all(self) -> int:
+        result = await self.db.execute(select(func.count()).select_from(UnitCostAudit))
+        return int(result.scalar_one())
+
+    async def list_newest(self, limit: int) -> list[UnitCostAudit]:
+        from sqlalchemy.orm import selectinload
+
+        stmt = (
+            select(UnitCostAudit)
+            .options(
+                selectinload(UnitCostAudit.changed_by),
+                selectinload(UnitCostAudit.sku),
+            )
+            .order_by(UnitCostAudit.created_at.desc(), UnitCostAudit.id.desc())
+            .limit(limit)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

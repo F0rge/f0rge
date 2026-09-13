@@ -5,13 +5,20 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class InvoiceLineCreate(BaseModel):
     description: str = Field(min_length=1)
     qty: int = Field(gt=0)
-    unit_ex_vat: Decimal = Field(gt=0)
+    unit_ex_vat: Optional[Decimal] = Field(default=None, gt=0)
+    sku_id: Optional[uuid.UUID] = None
+
+    @model_validator(mode="after")
+    def unit_or_sku(self) -> "InvoiceLineCreate":
+        if self.unit_ex_vat is None and self.sku_id is None:
+            raise ValueError("Each line must have unit_ex_vat or sku_id")
+        return self
 
 
 class InvoiceCreate(BaseModel):

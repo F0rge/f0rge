@@ -498,11 +498,15 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 - **Roles:** PATCH prices requires `catalogue.mutate`; GET is any authenticated role.
 - **Quotes:** out of V1 — no quote entity, table, or routes.
 
+**Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create (`catalogue.mutate`) above threshold without `users.manage` → **409** (`po.raise` does not bypass).
+
+**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins).
+
 ## S6 ledger (books)
 
 Document-centric double-entry in ZAR. Every invoice, credit note, bill, and payment posts a balanced journal. Payments **record** cash/bank movement only — no PSP, EFT origination, or email.
 
-**Seller particulars (tax invoice face):** from `GET/PATCH /api/v1/settings` (`legal_name`, `trading_name`, `address`, `vat_number`, optional bank lines). PDFs and live VAT201 draft read these; locked VAT201 period snapshots are unchanged.
+**Seller particulars (tax invoice face):** from `GET/PATCH /api/v1/settings` (`legal_name`, `trading_name`, `address`, `vat_number`, optional bank lines). Company logo: `GET/POST /api/v1/settings/logo` (`settings.mutate`; replace allowed; storage key not exposed on settings JSON — optional `has_logo`). `GET /settings/logo` any authenticated (presign redirect or JPEG bytes). PDFs draw logo top-right via ReportLab `ImageReader`; missing/corrupt bytes skip silently (never 500). PDFs and live VAT201 draft read seller fields from settings; locked VAT201 period snapshots are unchanged.
 
 **Numbering:** `document_sequences` table — `allocate()` under row lock inside the creating transaction. Defaults: `INV`, `CN`, `BILL`, `PAY`, `PO`, `DLV`, `RTN`, `JE`, `LB`, `TRF`, `PCK` (padding 4). Prefix editable via settings; `next_value` read-only on GET. Auto-posted GL journals keep `journal_number` null.
 
@@ -545,6 +549,8 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: `books.mutate`.
 - **Journal CSV (SimplePay):** `POST /journal-imports/preview` and `/commit` (multipart `file`); source `import:simplepay`; same-month 409. UI on `/journals`.
 - **Books history:** append-only `GET /books-events?document_type=&document_id=` (`invoice` | `bill` | `payment` | `journal`). Journal post + void = two rows on the original id. No PATCH/DELETE.
+- **Books periods (wave 2):** `GET/POST /api/v1/books-periods`, `GET /{id}`, `POST /{id}/lock` (`books.mutate`), `POST /{id}/reopen` (`users.manage` + reason). Independent of VAT201 — no snapshot sync. Locked period covering a date blocks GL posting (invoice, bill, payment, journal, credit note, till sale, layby complete) with 409 `"Books period is locked for this date"`. Does **not** lock stock receive/transfer.
+- **Audit hub (wave 2):** `GET /api/v1/audit/events?limit=&offset=` merges books + optional Nia + optional cost rows (newest first). Nia rows only for `nia.admin` OR `users.manage`; cost rows only when caller has `stock.cost.view` (omitted silently otherwise). **Skips VAT201 events** in v1. Per-document `GET /books-events` unchanged.
 
 | Action | Permission |
 |--------|------------|

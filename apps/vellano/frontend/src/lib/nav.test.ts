@@ -38,8 +38,15 @@ describe("nav path helpers", () => {
   it("groups admin and books paths", () => {
     expect(isAdminPath("/settings")).toBe(true);
     expect(isAdminPath("/users")).toBe(true);
+    expect(isAdminPath("/audit")).toBe(true);
     expect(isBooksPath("/invoices/abc")).toBe(true);
     expect(isBooksPath("/ledger")).toBe(true);
+    expect(isBooksPath("/books-periods")).toBe(true);
+  });
+
+  it("labels audit and books periods nav paths", () => {
+    expect(labelForNavPath("/audit")).toBe("Audit");
+    expect(labelForNavPath("/books-periods")).toBe("Books periods");
   });
 
   it("labels nested paths for Nia cards", () => {

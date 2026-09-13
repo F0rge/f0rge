@@ -16,6 +16,7 @@ from app.models.journal import (
     JournalStatus,
 )
 from app.services.books_events import BooksEventService
+from app.services.books_periods import assert_date_postable
 from app.schemas.journal import (
     JournalCreate,
     JournalLineCreate,
@@ -55,6 +56,7 @@ class JournalService:
     ) -> JournalResponse:
         if data.status == JournalStatus.VOIDED:
             raise ValidationError("Cannot create a voided journal")
+        await assert_date_postable(self.db, data.entry_date)
         amounts = self._validated_line_amounts(data.lines)
         entry_id = uuid.uuid4()
         entry = JournalEntry(
@@ -102,6 +104,7 @@ class JournalService:
         entry = await self._get_or_404(journal_id)
         if entry.status != JournalStatus.DRAFT:
             raise ValidationError("Journal is not a draft")
+        await assert_date_postable(self.db, entry.entry_date)
         async with unit_of_work(self.db):
             entry.status = JournalStatus.POSTED
             await self.events.record(
@@ -120,6 +123,8 @@ class JournalService:
             raise ValidationError("Only manual journals can be voided")
         if entry.status != JournalStatus.POSTED:
             raise ValidationError("Only posted journals can be voided")
+
+        await assert_date_postable(self.db, entry.entry_date)
 
         reversing_id = uuid.uuid4()
         reversing = JournalEntry(

@@ -329,6 +329,12 @@ async def test_till_navigate_allowed_and_unknown_denied(
 
 
 @pytest.mark.no_db
+def test_navigate_allows_audit_and_books_periods() -> None:
+    assert _is_allowed_nav_path("/audit")
+    assert _is_allowed_nav_path("/books-periods")
+
+
+@pytest.mark.no_db
 def test_navigate_allows_invoice_list_and_uuid_detail() -> None:
     assert _is_allowed_nav_path("/invoices")
     assert _is_allowed_nav_path("/invoices/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")

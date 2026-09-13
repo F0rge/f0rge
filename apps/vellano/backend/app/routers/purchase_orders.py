@@ -44,10 +44,10 @@ async def list_purchase_orders(
 )
 async def create_purchase_order(
     data: PurchaseOrderCreate,
-    _: uuid.UUID = Depends(require_catalogue_mutate),
+    user_id: uuid.UUID = Depends(require_catalogue_mutate),
     service: PurchaseOrderService = Depends(get_purchase_order_service),
 ):
-    return await service.create(data)
+    return await service.create(data, user_id)
 
 
 @purchase_orders_router.get("/{po_id}", response_model=PurchaseOrderResponse)

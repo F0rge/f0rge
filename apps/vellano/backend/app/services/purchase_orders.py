@@ -15,6 +15,8 @@ from app.crud.proforma import ProformaCRUD
 from app.crud.purchase_order import PurchaseOrderCRUD, SkuStockCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import UserCRUD
 from app.models.inventory import SkuStock
 from app.models.purchase_order import (
     LandingBill,
@@ -23,9 +25,11 @@ from app.models.purchase_order import (
     PurchaseOrder,
     PurchaseOrderStatus,
 )
+from app.models.supplier import Supplier
 from app.schemas.page import Page, PageParams
 from app.schemas.purchase_order import (
     LandingBillResponse,
+    PoLineCreate,
     PoLineResponse,
     PurchaseOrderCreate,
     PurchaseOrderListItem,
@@ -43,6 +47,8 @@ from app.services.packing_sheet import (
     convert_bill_to_zar,
 )
 from app.services.suppliers import SupplierService
+from app.permissions import USERS_MANAGE
+from app.services.permissions import PermissionService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -73,6 +79,7 @@ class PurchaseOrderService:
         self.location_crud = LocationCRUD(db)
         self.cost_audit = CostAuditService(db)
         self.stock_movements = StockMovementService(db)
+        self.user_crud = UserCRUD(db)
 
     async def list(
         self,
@@ -94,7 +101,7 @@ class PurchaseOrderService:
         po = await self._get_po_or_404(po_id)
         return self._to_response(po)
 
-    async def create(self, data: PurchaseOrderCreate) -> PurchaseOrderResponse:
+    async def create(self, data: PurchaseOrderCreate, user_id: uuid.UUID) -> PurchaseOrderResponse:
         supplier = await self.supplier_crud.get_by_id(data.supplier_id)
         if supplier is None:
             raise NotFoundError("Supplier not found")
@@ -117,6 +124,23 @@ class PurchaseOrderService:
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
+
+        user = await self.user_crud.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
+        threshold = team_settings.po_approval_threshold_zar
+        if threshold is not None:
+            total_zar = await self._factory_total_zar(supplier, data.lines)
+            # No FX yet: cannot treat supplier-currency units as ZAR — never under-block.
+            if total_zar is None or total_zar > threshold:
+                can_override = await PermissionService(self.db).has_permission(
+                    user_id, USERS_MANAGE
+                )
+                if not can_override:
+                    raise ConflictError(
+                        f"Purchase order total exceeds approval threshold ({threshold} ZAR)"
+                    )
 
         po = PurchaseOrder(
             po_number="",
@@ -348,6 +372,23 @@ class PurchaseOrderService:
         if po is None:
             raise NotFoundError("Purchase order not found")
         return po
+
+    async def _factory_total_zar(
+        self,
+        supplier: Supplier,
+        lines: list[PoLineCreate],
+    ) -> Optional[Decimal]:
+        factory_total = sum(
+            (Decimal(line.qty) * line.factory_unit_amount for line in lines),
+            Decimal(0),
+        )
+        currency = SupplierService.normalize_currency(supplier.default_currency)
+        if currency == "ZAR":
+            return factory_total
+        fx = await self.crud.latest_fx_to_zar_for_supplier(supplier.id)
+        if fx is None:
+            return None
+        return convert_bill_to_zar(factory_total, currency, fx)
 
     @staticmethod
     def _to_list_item(po: PurchaseOrder) -> PurchaseOrderListItem:

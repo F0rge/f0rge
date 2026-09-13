@@ -66,6 +66,8 @@ from app.services.till_orchestrator import TillOrchestrator
 from app.services.roles import RoleService
 from app.services.users import BootstrapService, ProfileService, UserService
 from app.services.vat201_periods import Vat201PeriodService
+from app.services.books_periods import BooksPeriodService
+from app.services.audit_hub import AuditHubService
 from app.services.nia_audit import NiaAuditService
 from app.services.nia_caps import NiaCapsService
 from app.services.nia_run import NiaRunService
@@ -214,6 +216,14 @@ def get_reports_service(db: AsyncSession = Depends(get_db)) -> ReportsService:
 
 def get_vat201_period_service(db: AsyncSession = Depends(get_db)) -> Vat201PeriodService:
     return Vat201PeriodService(db)
+
+
+def get_books_period_service(db: AsyncSession = Depends(get_db)) -> BooksPeriodService:
+    return BooksPeriodService(db)
+
+
+def get_audit_hub_service(db: AsyncSession = Depends(get_db)) -> AuditHubService:
+    return AuditHubService(db)
 
 
 def get_transfer_service(db: AsyncSession = Depends(get_db)) -> TransferService:
