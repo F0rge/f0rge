@@ -15,6 +15,10 @@ class Vat201PeriodCreate(BaseModel):
     period_to: datetime.date
 
 
+class Vat201PeriodLock(BaseModel):
+    lock_books: bool = False
+
+
 class Vat201PeriodReopen(BaseModel):
     reason: str = Field(min_length=1, max_length=512)
 

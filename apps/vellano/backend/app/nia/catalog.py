@@ -647,7 +647,9 @@ async def _create_period(deps: NiaDeps, data: Vat201PeriodCreate) -> Any:
 
 
 async def _lock_period(deps: NiaDeps, data: PeriodIdArgs) -> Any:
-    return await Vat201PeriodService(deps.db).lock(data.period_id, deps.user_id)
+    from app.schemas.vat201_period import Vat201PeriodLock
+
+    return await Vat201PeriodService(deps.db).lock(data.period_id, deps.user_id, Vat201PeriodLock())
 
 
 async def _reopen_period(deps: NiaDeps, data: ReopenPeriodArgs) -> Any:

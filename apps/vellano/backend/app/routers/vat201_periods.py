@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Body, Depends, status
 from fastapi.responses import Response
 
 from app.dependencies.auth import (
@@ -14,6 +14,7 @@ from app.dependencies.auth import (
 from app.schemas.vat201_period import (
     Vat201PeriodCreate,
     Vat201PeriodDetailResponse,
+    Vat201PeriodLock,
     Vat201PeriodReopen,
     Vat201PeriodResponse,
 )
@@ -53,10 +54,11 @@ async def get_period(
 @vat201_periods_router.post("/{period_id}/lock", response_model=Vat201PeriodDetailResponse)
 async def lock_period(
     period_id: uuid.UUID,
+    body: Vat201PeriodLock = Body(default_factory=Vat201PeriodLock),
     user_id: uuid.UUID = Depends(require_books_mutate),
     service: Vat201PeriodService = Depends(get_vat201_period_service),
 ):
-    return await service.lock(period_id, user_id)
+    return await service.lock(period_id, user_id, body)
 
 
 @vat201_periods_router.post("/{period_id}/reopen", response_model=Vat201PeriodDetailResponse)

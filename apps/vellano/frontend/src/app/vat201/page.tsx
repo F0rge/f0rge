@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Checkbox,
   DataTable,
   InlineNotification,
   Modal,
@@ -173,6 +174,7 @@ export default function Vat201Page() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [locking, setLocking] = useState(false);
+  const [lockBooks, setLockBooks] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
   const [reopening, setReopening] = useState(false);
@@ -259,7 +261,7 @@ export default function Vat201Page() {
     setLocking(true);
     setError(null);
     try {
-      const locked = await lockVat201Period(selected.id);
+      const locked = await lockVat201Period(selected.id, { lock_books: lockBooks });
       setSelected(locked);
       setPeriods((current) =>
         current.map((period) => (period.id === locked.id ? { ...period, ...locked } : period)),
@@ -465,9 +467,17 @@ export default function Vat201Page() {
               Download PDF
             </Button>
             {canMutate && selected.status !== "locked" ? (
-              <Button kind="primary" disabled={locking} onClick={() => void handleLock()}>
-                {locking ? "Locking…" : "Lock"}
-              </Button>
+              <>
+                <Checkbox
+                  id="vat201-lock-books"
+                  labelText="Also lock matching books period"
+                  checked={lockBooks}
+                  onChange={(_, { checked }) => setLockBooks(checked)}
+                />
+                <Button kind="primary" disabled={locking} onClick={() => void handleLock()}>
+                  {locking ? "Locking…" : "Lock"}
+                </Button>
+              </>
             ) : null}
             {canReopen && selected.status === "locked" ? (
               <Button

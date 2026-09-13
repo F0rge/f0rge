@@ -2490,8 +2490,18 @@ export function getVat201Period(id: string): Promise<Vat201PeriodDetail> {
   return apiFetch<Vat201PeriodDetail>(`/vat201/periods/${id}`);
 }
 
-export function lockVat201Period(id: string): Promise<Vat201PeriodDetail> {
-  return apiFetch<Vat201PeriodDetail>(`/vat201/periods/${id}/lock`, { method: "POST" });
+export function lockVat201Period(
+  id: string,
+  options?: { lock_books?: boolean },
+): Promise<Vat201PeriodDetail> {
+  const body: { lock_books?: boolean } = {};
+  if (options?.lock_books) {
+    body.lock_books = true;
+  }
+  return apiFetch<Vat201PeriodDetail>(`/vat201/periods/${id}/lock`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function reopenVat201Period(id: string, reason: string): Promise<Vat201PeriodDetail> {
@@ -3114,6 +3124,7 @@ export type AppSettings = {
   has_logo: boolean;
   max_till_discount_percent: string | null;
   po_approval_threshold_zar: string | null;
+  session_ttl_hours: number;
   payment_terms_days: number;
   default_receive_location_id: string | null;
   default_till_location_id: string | null;
@@ -3191,6 +3202,7 @@ export function updateSettings(payload: {
   has_logo?: boolean;
   max_till_discount_percent?: string | null;
   po_approval_threshold_zar?: string | null;
+  session_ttl_hours?: number;
   payment_terms_days?: number;
   default_receive_location_id?: string | null;
   default_till_location_id?: string | null;
