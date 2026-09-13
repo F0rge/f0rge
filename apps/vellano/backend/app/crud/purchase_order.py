@@ -79,10 +79,14 @@ class PurchaseOrderCRUD(BaseCRUD):
         )
         if filters:
             stmt = stmt.where(*filters)
-        stmt = stmt.order_by(
-            PurchaseOrder.created_at.desc(),
-            PurchaseOrder.po_number.desc(),
-        ).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(
+                PurchaseOrder.created_at.desc(),
+                PurchaseOrder.po_number.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().unique().all()), total
 

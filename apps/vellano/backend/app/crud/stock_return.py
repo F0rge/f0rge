@@ -80,10 +80,14 @@ class StockReturnCRUD(BaseCRUD):
         )
         if filters:
             stmt = stmt.where(*filters)
-        stmt = stmt.order_by(
-            StockReturn.created_at.desc(),
-            StockReturn.return_number.desc(),
-        ).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(
+                StockReturn.created_at.desc(),
+                StockReturn.return_number.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().unique().all()), total
 

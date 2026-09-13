@@ -94,10 +94,14 @@ class DeliveryCRUD(BaseCRUD):
         )
         if filters:
             stmt = stmt.where(*filters)
-        stmt = stmt.order_by(
-            Delivery.created_at.desc(),
-            Delivery.delivery_number.desc(),
-        ).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(
+                Delivery.created_at.desc(),
+                Delivery.delivery_number.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().unique().all()), total
 

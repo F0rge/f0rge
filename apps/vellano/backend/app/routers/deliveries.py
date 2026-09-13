@@ -11,7 +11,12 @@ from app.dependencies.auth import (
     require_deliveries_mutate,
 )
 from app.models.delivery import DeliveryStatus
-from app.schemas.delivery import DeliveryComplete, DeliveryCreate, DeliveryListItem, DeliveryResponse
+from app.schemas.delivery import (
+    DeliveryComplete,
+    DeliveryCreate,
+    DeliveryListItem,
+    DeliveryResponse,
+)
 from app.schemas.page import Page, PageParams, get_page_params
 from app.services.deliveries import DeliveriesService
 

@@ -77,10 +77,14 @@ class CreditNoteCRUD(BaseCRUD):
         )
         if filters:
             stmt = stmt.where(*filters)
-        stmt = stmt.order_by(
-            CreditNote.issue_date.desc(),
-            CreditNote.credit_note_number.desc(),
-        ).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(
+                CreditNote.issue_date.desc(),
+                CreditNote.credit_note_number.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().unique().all()), total
 

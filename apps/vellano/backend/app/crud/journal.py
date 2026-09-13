@@ -56,10 +56,14 @@ class JournalCRUD(BaseCRUD):
         stmt = select(JournalEntry).options(selectinload(JournalEntry.lines))
         if filters:
             stmt = stmt.where(*filters)
-        stmt = stmt.order_by(
-            JournalEntry.entry_date.desc(),
-            JournalEntry.journal_number.desc().nulls_last(),
-        ).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(
+                JournalEntry.entry_date.desc(),
+                JournalEntry.journal_number.desc().nulls_last(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().unique().all()), total
 

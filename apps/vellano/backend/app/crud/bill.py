@@ -68,8 +68,10 @@ class BillCRUD(BaseCRUD):
         )
         if filters:
             stmt = stmt.where(*filters)
-        stmt = stmt.order_by(Bill.issue_date.desc(), Bill.bill_number.desc()).limit(limit).offset(
-            offset
+        stmt = (
+            stmt.order_by(Bill.issue_date.desc(), Bill.bill_number.desc())
+            .limit(limit)
+            .offset(offset)
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().unique().all()), total

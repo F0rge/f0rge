@@ -83,9 +83,11 @@ class PaymentCRUD(BaseCRUD):
                 .outerjoin(Supplier, Bill.supplier_id == Supplier.id)
                 .where(*filters)
             )
-        stmt = stmt.order_by(Payment.paid_on.desc(), Payment.payment_number.desc()).limit(
-            limit
-        ).offset(offset)
+        stmt = (
+            stmt.order_by(Payment.paid_on.desc(), Payment.payment_number.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().unique().all()), total
 
