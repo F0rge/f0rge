@@ -15,6 +15,8 @@ from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 
 class PurchaseOrderStatus(str, enum.Enum):
+    PENDING_APPROVAL = "pending_approval"
+    REJECTED = "rejected"
     OPEN = "open"
     ON_WATER = "on_water"
     LANDED = "landed"

@@ -8,6 +8,14 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
+from app.services.invoice_pdf import (
+    SELLER_ADDRESS,
+    SELLER_NAME,
+    SELLER_VAT_NUMBER,
+    SellerDetails,
+    draw_seller_logo,
+)
+
 
 def _fmt_ts(value: Optional[datetime]) -> str:
     if value is None:
@@ -25,16 +33,28 @@ def build_transfer_note_pdf(
     receiver_name: Optional[str],
     received_at: Optional[datetime],
     lines: list[tuple[str, str, int, Optional[int]]],
+    seller: Optional[SellerDetails] = None,
 ) -> bytes:
     """Build an in-app Transfer Note. Each line: our_ref, name, qty_dispatched, qty_received."""
+    seller_details = seller or SellerDetails(
+        name=SELLER_NAME,
+        address=SELLER_ADDRESS,
+        vat_number=SELLER_VAT_NUMBER,
+        vat_percent_label="15%",
+    )
+
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
-    height = A4[1]
+    width, height = A4
     y = height - 30 * mm
 
     pdf.setFont("Helvetica-Bold", 14)
     pdf.drawString(30 * mm, y, f"Transfer Note — {transfer_number}")
-    y -= 10 * mm
+    draw_seller_logo(pdf, seller_details, page_width=width, anchor_y=y)
+    y -= 6 * mm
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(30 * mm, y, seller_details.name)
+    y -= 4 * mm
 
     pdf.setFont("Helvetica", 10)
     pdf.drawString(30 * mm, y, f"Status: {status}")

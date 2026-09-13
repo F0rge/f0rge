@@ -23,9 +23,11 @@ from app.schemas.transfer import (
     TransferReceive,
     TransferResponse,
 )
+from app.services.books_periods import assert_date_postable
 from app.services.location_bins import LocationBinService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
+from app.services.settings import SettingsService
 from app.services.transfer_note import build_transfer_note_pdf
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -119,6 +121,7 @@ class TransferService:
         return self._to_response(await self._get_or_404(transfer.id))
 
     async def dispatch(self, transfer_id: uuid.UUID, user_id: uuid.UUID) -> TransferResponse:
+        await assert_date_postable(self.db, datetime.date.today())
         transfer = await self._get_or_404(transfer_id)
         if transfer.status != TransferStatus.DRAFT:
             raise ConflictError("Transfer is not a draft")
@@ -160,6 +163,7 @@ class TransferService:
         data: TransferReceive,
         user_id: uuid.UUID,
     ) -> TransferResponse:
+        await assert_date_postable(self.db, datetime.date.today())
         transfer = await self._get_or_404(transfer_id)
         if transfer.status != TransferStatus.IN_TRANSIT:
             raise ConflictError("Transfer is not in transit")
@@ -247,6 +251,7 @@ class TransferService:
     async def serve_pdf(self, transfer_id: uuid.UUID) -> Response:
         transfer = await self._get_or_404(transfer_id)
         dispatcher = transfer.dispatched_by
+        seller = await SettingsService(self.db).build_seller_details()
         pdf_bytes = build_transfer_note_pdf(
             transfer_number=transfer.transfer_number,
             status=transfer.status.value,
@@ -265,6 +270,7 @@ class TransferService:
                 )
                 for line in transfer.lines
             ],
+            seller=seller,
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
 

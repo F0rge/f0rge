@@ -7,6 +7,14 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
+from app.services.invoice_pdf import (
+    SELLER_ADDRESS,
+    SELLER_NAME,
+    SELLER_VAT_NUMBER,
+    SellerDetails,
+    draw_seller_logo,
+)
+
 
 def build_pick_sheet_pdf(
     pick_number: str,
@@ -14,16 +22,28 @@ def build_pick_sheet_pdf(
     kit_label: str,
     sections: list[tuple[str, list[tuple[str, str, int]]]],
     completeness: list[tuple[str, int, int]],
+    seller: Optional[SellerDetails] = None,
 ) -> bytes:
     """Pick sheet. sections: (location_name, [(our_ref, name, qty)]). completeness: (name, allocated, needed)."""
+    seller_details = seller or SellerDetails(
+        name=SELLER_NAME,
+        address=SELLER_ADDRESS,
+        vat_number=SELLER_VAT_NUMBER,
+        vat_percent_label="15%",
+    )
+
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
-    height = A4[1]
+    width, height = A4
     y = height - 30 * mm
 
     pdf.setFont("Helvetica-Bold", 14)
     pdf.drawString(30 * mm, y, f"Pick — {pick_number}")
-    y -= 10 * mm
+    draw_seller_logo(pdf, seller_details, page_width=width, anchor_y=y)
+    y -= 6 * mm
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(30 * mm, y, seller_details.name)
+    y -= 4 * mm
 
     pdf.setFont("Helvetica", 10)
     pdf.drawString(30 * mm, y, f"Customer: {customer_name or '—'}")

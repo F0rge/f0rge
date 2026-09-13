@@ -7,10 +7,19 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
+from app.services.invoice_pdf import (
+    SELLER_ADDRESS,
+    SELLER_NAME,
+    SELLER_VAT_NUMBER,
+    SellerDetails,
+    draw_seller_logo,
+)
+
 
 def build_packing_sheet_pdf(
     po_number: str,
     lines: list[tuple[str, str, str, str, int, int]],
+    seller: Optional[SellerDetails] = None,
 ) -> bytes:
     """Build packing sheet PDF.
 
@@ -19,6 +28,13 @@ def build_packing_sheet_pdf(
     """
     from io import BytesIO
 
+    seller_details = seller or SellerDetails(
+        name=SELLER_NAME,
+        address=SELLER_ADDRESS,
+        vat_number=SELLER_VAT_NUMBER,
+        vat_percent_label="15%",
+    )
+
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -26,7 +42,11 @@ def build_packing_sheet_pdf(
 
     pdf.setFont("Helvetica-Bold", 14)
     pdf.drawString(30 * mm, y, f"Packing Sheet — {po_number}")
-    y -= 15 * mm
+    draw_seller_logo(pdf, seller_details, page_width=width, anchor_y=y)
+    y -= 6 * mm
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(30 * mm, y, seller_details.name)
+    y -= 9 * mm
 
     pdf.setFont("Helvetica", 10)
     for our_ref, our_barcode, name, fabric, qty, carton_count in lines:

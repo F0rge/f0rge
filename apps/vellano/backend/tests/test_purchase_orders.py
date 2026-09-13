@@ -7,6 +7,7 @@ from io import BytesIO
 from typing import Optional
 
 from httpx import AsyncClient
+from PIL import Image
 from pypdf import PdfReader
 
 from app.services.auth import JWT_COOKIE_NAME
@@ -194,6 +195,7 @@ async def test_packing_sheet_pdf_content(owner_client: AsyncClient) -> None:
     assert sheet_resp.headers["content-type"].startswith("application/pdf")
 
     text = _pdf_text(sheet_resp.content)
+    assert "Vellano" in text
     assert "PACK-REF" in text
     assert "PACK-BARCODE" in text
     assert "Pack Name" in text
@@ -201,6 +203,50 @@ async def test_packing_sheet_pdf_content(owner_client: AsyncClient) -> None:
     assert "3" in text
     assert po_number in text
     assert "SUPPLIER-REF-ONLY" not in text
+
+
+def _tiny_jpeg() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", (40, 30), color=(120, 80, 40)).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+async def test_packing_sheet_pdf_embeds_logo_when_configured(
+    owner_client: AsyncClient,
+) -> None:
+    supplier_id = await _create_supplier(owner_client, "Logo Pack Supplier")
+    sku = await _create_sku(
+        owner_client,
+        "PACK-LOGO-REF",
+        "PACK-LOGO-BAR",
+        "Logo Pack Name",
+        "Logo Pack Design",
+        "Logo Pack Fabric",
+    )
+    po_resp = await owner_client.post(
+        "/api/v1/purchase-orders",
+        json={
+            "supplier_id": supplier_id,
+            "lines": [
+                {"sku_id": sku["id"], "qty": 1, "factory_unit_amount": "50.00"},
+            ],
+        },
+    )
+    assert po_resp.status_code == 201
+    po_id = po_resp.json()["id"]
+
+    before_logo = await owner_client.get(f"/api/v1/purchase-orders/{po_id}/packing-sheet")
+    assert before_logo.status_code == 200
+
+    upload = await owner_client.post(
+        "/api/v1/settings/logo",
+        files={"logo": ("logo.jpg", _tiny_jpeg(), "image/jpeg")},
+    )
+    assert upload.status_code == 200
+
+    with_logo = await owner_client.get(f"/api/v1/purchase-orders/{po_id}/packing-sheet")
+    assert with_logo.status_code == 200
+    assert len(with_logo.content) > len(before_logo.content)
 
 
 async def test_packing_sheet_carton_count_when_gt_one(owner_client: AsyncClient) -> None:

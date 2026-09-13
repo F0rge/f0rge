@@ -9,7 +9,9 @@ from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.books_period import BooksPeriodCRUD
 from app.crud.vat201_period import Vat201PeriodCRUD
+from app.models.books_period import BooksPeriod, BooksPeriodStatus
 from app.models.vat201_period import (
     Vat201Period,
     Vat201PeriodEvent,
@@ -20,6 +22,7 @@ from app.schemas.bank_import import Vat201Draft
 from app.schemas.vat201_period import (
     Vat201PeriodCreate,
     Vat201PeriodDetailResponse,
+    Vat201PeriodLock,
     Vat201PeriodReopen,
     Vat201PeriodResponse,
 )
@@ -69,15 +72,30 @@ class Vat201PeriodService:
         period = await self._get_or_404(period_id)
         return self._to_detail_response(period, await self._draft_for(period))
 
-    async def lock(self, period_id: uuid.UUID, user_id: uuid.UUID) -> Vat201PeriodDetailResponse:
+    async def lock(
+        self, period_id: uuid.UUID, user_id: uuid.UUID, body: Vat201PeriodLock
+    ) -> Vat201PeriodDetailResponse:
         period = await self._get_or_404(period_id)
         if period.status == Vat201PeriodStatus.LOCKED:
             raise ConflictError("VAT201 period is already locked")
+
+        if body.lock_books:
+            books_crud = BooksPeriodCRUD(self.db)
+            overlapping = await books_crud.find_overlapping(period.period_from, period.period_to)
+            if overlapping is not None and (
+                overlapping.period_from != period.period_from
+                or overlapping.period_to != period.period_to
+            ):
+                raise ConflictError("Books period overlaps an existing period")
 
         draft = await self.reports.vat201_draft(period.period_from, period.period_to)
         snapshot = draft.model_dump(mode="json")
         locked_at = datetime.datetime.utcnow()
         async with unit_of_work(self.db):
+            if body.lock_books:
+                await self._lock_matching_books_period(
+                    period.period_from, period.period_to, user_id, locked_at
+                )
             period.status = Vat201PeriodStatus.LOCKED
             period.snapshot_json = snapshot
             period.locked_at = locked_at
@@ -135,6 +153,37 @@ class Vat201PeriodService:
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+    async def _lock_matching_books_period(
+        self,
+        period_from: datetime.date,
+        period_to: datetime.date,
+        user_id: uuid.UUID,
+        locked_at: datetime.datetime,
+    ) -> None:
+        books_crud = BooksPeriodCRUD(self.db)
+        overlapping = await books_crud.find_overlapping(period_from, period_to)
+        if overlapping is not None:
+            if overlapping.period_from != period_from or overlapping.period_to != period_to:
+                raise ConflictError("Books period overlaps an existing period")
+            if overlapping.status == BooksPeriodStatus.LOCKED:
+                return
+            overlapping.status = BooksPeriodStatus.LOCKED
+            overlapping.locked_at = locked_at
+            overlapping.locked_by_user_id = user_id
+            return
+
+        books_period = BooksPeriod(
+            period_from=period_from,
+            period_to=period_to,
+            status=BooksPeriodStatus.LOCKED,
+            locked_at=locked_at,
+            locked_by_user_id=user_id,
+        )
+        try:
+            await books_crud.add_and_flush(books_period)
+        except IntegrityError as exc:
+            raise ConflictError("Books period overlaps an existing period") from exc
 
     async def _get_or_404(self, period_id: uuid.UUID) -> Vat201Period:
         period = await self.crud.get_by_id(period_id)

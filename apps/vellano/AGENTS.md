@@ -71,7 +71,7 @@ It then creates these role users if the email is missing (idempotent; owner is n
 | `warehouse@example.com` | warehouse | `SEED_WAREHOUSE_PASSWORD` | `change-me-warehouse` |
 | `buyer@example.com` | buyer | `SEED_BUYER_PASSWORD` | `change-me-buyer` |
 
-Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSite=Lax, `Path=/`). Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
+Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSite=Lax, `Path=/`). Session cookie TTL is team-configurable via `team_settings.session_ttl_hours` (default **12 hours**, range 1–720); login sets JWT `exp` and cookie `Max-Age` from the current setting — no sliding refresh; changing the setting does not revoke already-issued tokens. Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
 
 Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally.
 
@@ -99,7 +99,7 @@ Product name is **Nia** — never “Copilot” in UI copy.
 
 - **Stack:** PydanticAI + AG-UI on existing `vellano-api` (same cookie `vellano_session`). No CopilotKit, no extra Railway service, no Marrow `OPENROUTER_API_KEY`.
 - **Permissions:** `nia.use` to talk to Nia; `nia.admin` to view/edit per-user token caps (owner preset includes both via all catalog keys).
-- **Env on `vellano-api` (develop):** `OPENROUTER_API_KEY` (required for LLM). Optional `OPENROUTER_MODEL` (default `openai/gpt-4o-mini`; develop Railway uses `z-ai/glm-5.3-flash`). Optional `OPENROUTER_REASONING_EFFORT` (default `low`) + `OPENROUTER_REASONING_EXCLUDE` (default `true`) → pydantic-ai `openrouter_reasoning` / OpenRouter `reasoning:{effort,exclude}` (exclude keeps thinking out of content; closest "off" when GLM mandates reasoning). `OPENROUTER_BASE_URL` is stored on settings but **unused** — pydantic-ai 2.37 `OpenRouterProvider` has no `base_url`. Health: `GET /api/v1/nia/health` → `{ok, llm}` (`llm` false if key missing). Do **not** add these to `vellano-frontend`.
+- **Env on `vellano-api` (develop):** `OPENROUTER_API_KEY` (required for LLM). Optional `OPENROUTER_MODEL` (default `deepseek/deepseek-v4-flash`; same on develop Railway). Optional `OPENROUTER_REASONING_EFFORT` (default `none`) + `OPENROUTER_REASONING_EXCLUDE` (default `false`) → pydantic-ai `openrouter_reasoning` / OpenRouter `reasoning`. `none` / `off` / empty+exclude false sends `enabled: false` (DeepSeek V4 Flash skips thinking). GLM-class models still reason; `exclude` only hides thinking from content. `OPENROUTER_BASE_URL` is stored on settings but **unused** — pydantic-ai 2.37 `OpenRouterProvider` has no `base_url`. Health: `GET /api/v1/nia/health` → `{ok, llm}` (`llm` false if key missing). Do **not** add these to `vellano-frontend`.
 - **Railway click-path:** Railway → project **Vellano** → service **vellano-api** → environment **develop** → Variables → `OPENROUTER_API_KEY`. Never copy Marrow `zoological-fulfillment` keys into git or this project.
 - **Hard no:** Nia must not send email, take payment, or file with SARS/RCS.
 - **Local:** ports remain `:8003` / `:3003`. Superdesign try-first for Nia UI (see [UI — IBM Carbon](#ui--ibm-carbon-explicit-exception-to-ui-kitmdc)).
@@ -498,9 +498,9 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 - **Roles:** PATCH prices requires `catalogue.mutate`; GET is any authenticated role.
 - **Quotes:** out of V1 — no quote entity, table, or routes.
 
-**Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Land re-checks with the posted FX. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not).
+**Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Over-cap **create** without `users.manage` → **201** `pending_approval` (still allocates `po_number`); owner/manage create stays `open`. Land re-checks with the posted FX; over-cap land without `users.manage` still **409**. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not). `POST /purchase-orders/{id}/approve|reject` (`users.manage`): pending → open/rejected.
 
-**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins).
+**Wholesale (trade):** trade customers with `sku.wholesale_ex_vat` set use wholesale ex-VAT on till and books (`sku_id` on invoice lines resolves price when `unit_ex_vat` omitted; explicit unit wins). Optional `customers.price_list_id` overrides with named list item prices (list → trade wholesale → retail).
 
 ## S6 ledger (books)
 
@@ -549,7 +549,7 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: `books.mutate`.
 - **Journal CSV (SimplePay):** `POST /journal-imports/preview` and `/commit` (multipart `file`); source `import:simplepay`; same-month 409. UI on `/journals`.
 - **Books history:** append-only `GET /books-events?document_type=&document_id=` (`invoice` | `bill` | `payment` | `journal`). Journal post + void = two rows on the original id. No PATCH/DELETE.
-- **Books periods (wave 2):** `GET/POST /api/v1/books-periods`, `GET /{id}`, `POST /{id}/lock` (`books.mutate`), `POST /{id}/reopen` (`users.manage` + reason). Independent of VAT201 — no snapshot sync. Locked period covering a date blocks GL posting (invoice, bill, payment, journal, credit note, till sale, layby complete) with 409 `"Books period is locked for this date"`. Does **not** lock stock receive/transfer.
+- **Books periods (wave 2):** `GET/POST /api/v1/books-periods`, `GET /{id}`, `POST /{id}/lock` (`books.mutate`), `POST /{id}/reopen` (`users.manage` + reason). Independent of VAT201 — no snapshot sync. VAT201 lock may opt in (`lock_books: true`) to lock a matching books period in the same transaction; reopening VAT201 does not unlock books. Locked period covering a date blocks GL posting (invoice, bill, payment, journal, credit note, till sale, layby complete) and stock movement posting (PO receive, transfer dispatch, transfer receive) with 409 `"Books period is locked for this date"`. Does **not** lock PO land, stocktake, or adjustments. `users.manage` is not a bypass.
 - **Audit hub (wave 2):** `GET /api/v1/audit/events?limit=&offset=` merges books + optional Nia + optional cost rows (newest first). Nia rows only for `nia.admin` OR `users.manage`; cost rows only when caller has `stock.cost.view` (omitted silently otherwise). **Skips VAT201 events** in v1. Per-document `GET /books-events` unchanged.
 
 | Action | Permission |
@@ -654,6 +654,7 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 |----------|------------------------|
 | `/catalogue` | `/skus` |
 | `/catalogue/[id]` | `/skus/{id}` (+ `/inventory` rollup on Stock tab) |
+| `/price-lists` | `/price-lists` |
 | `/ledger` | `/accounts`, `/category-maps` |
 | `/journals` | `/journals`, `/journal-imports`, `/books-events` |
 | `/contacts` | `/contacts` |

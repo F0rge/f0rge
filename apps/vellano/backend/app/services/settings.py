@@ -122,6 +122,8 @@ class SettingsService:
                 ):
                     raise ValidationError("po_approval_threshold_zar must be >= 0")
                 settings.po_approval_threshold_zar = data.po_approval_threshold_zar
+            if data.session_ttl_hours is not None:
+                settings.session_ttl_hours = data.session_ttl_hours
             if data.document_sequences is not None:
                 await self._apply_sequence_updates(user.team_id, data.document_sequences)
 
@@ -273,6 +275,7 @@ class SettingsService:
             default_till_location_id=settings.default_till_location_id,
             max_till_discount_percent=settings.max_till_discount_percent,
             po_approval_threshold_zar=settings.po_approval_threshold_zar,
+            session_ttl_hours=int(settings.session_ttl_hours),
             has_logo=bool(settings.logo_storage_key),
             document_sequences=sequence_rows,
         )

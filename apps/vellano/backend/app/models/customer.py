@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -39,3 +41,9 @@ class Customer(UUIDPkMixin, TimestampMixin, Base):
     )
     on_hold_reason: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     payment_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    price_list_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("price_lists.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )

@@ -54,4 +54,9 @@ describe("nav path helpers", () => {
     expect(labelForNavPath("/catalogue/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")).toBe("Catalogue");
     expect(labelForNavPath("/invoices/abc")).toBe("Invoices");
   });
+
+  it("includes price lists in catalogue menu", () => {
+    expect(isCatalogueMenuPath("/price-lists")).toBe(true);
+    expect(labelForNavPath("/price-lists")).toBe("Price lists");
+  });
 });

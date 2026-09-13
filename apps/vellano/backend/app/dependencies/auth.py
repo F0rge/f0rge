@@ -50,6 +50,7 @@ from app.services.reports import ReportsService
 from app.services.search import SearchService
 from app.services.settings import SettingsService
 from app.services.proformas import ProformaService
+from app.services.price_lists import PriceListService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.reorder import ReorderService
 from app.services.sku_bom import SkuBomService
@@ -102,6 +103,10 @@ def get_location_bin_service(db: AsyncSession = Depends(get_db)) -> LocationBinS
 
 def get_supplier_service(db: AsyncSession = Depends(get_db)) -> SupplierService:
     return SupplierService(db)
+
+
+def get_price_list_service(db: AsyncSession = Depends(get_db)) -> PriceListService:
+    return PriceListService(db)
 
 
 def get_proforma_service(db: AsyncSession = Depends(get_db)) -> ProformaService:

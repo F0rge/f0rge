@@ -1,6 +1,13 @@
 import { NumberInput, Select, SelectItem, Stack, TextArea, TextInput, Toggle } from "@carbon/react";
+import { useEffect, useState } from "react";
 
-import type { CreateCustomerPayload, CustomerCrm, CustomerType } from "@/lib/api";
+import {
+  listPriceLists,
+  type CreateCustomerPayload,
+  type CustomerCrm,
+  type CustomerType,
+  type PriceList,
+} from "@/lib/api";
 
 export const emptyCustomerForm: CreateCustomerPayload = {
   name: "",
@@ -14,6 +21,7 @@ export const emptyCustomerForm: CreateCustomerPayload = {
   on_hold: false,
   on_hold_reason: "",
   payment_terms_days: undefined,
+  price_list_id: "",
 };
 
 export function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
@@ -29,6 +37,7 @@ export function formFromCustomer(customer: CustomerCrm): CreateCustomerPayload {
     on_hold: customer.on_hold,
     on_hold_reason: customer.on_hold_reason ?? "",
     payment_terms_days: customer.payment_terms_days ?? undefined,
+    price_list_id: customer.price_list_id ?? "",
   };
 }
 
@@ -58,6 +67,8 @@ export function customerWritePayload(
   } else {
     payload.payment_terms_days = null;
   }
+  const listId = form.price_list_id?.trim?.() ?? form.price_list_id;
+  payload.price_list_id = listId ? listId : null;
   return payload;
 }
 
@@ -74,6 +85,26 @@ export function CustomerFormFields({
   disabled?: boolean;
   showCreditFields?: boolean;
 }) {
+  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listPriceLists()
+      .then((lists) => {
+        if (!cancelled) {
+          setPriceLists(lists);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPriceLists([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const creditLimitValue =
     form.credit_limit === "" || form.credit_limit == null ? "" : Number(form.credit_limit);
   const paymentTermsValue =
@@ -106,6 +137,18 @@ export function CustomerFormFields({
         onChange={(event) => onChange({ price_tier: event.target.value })}
         disabled={disabled}
       />
+      <Select
+        id={`${idPrefix}-price-list`}
+        labelText="Price list"
+        value={form.price_list_id ?? ""}
+        onChange={(event) => onChange({ price_list_id: event.target.value })}
+        disabled={disabled}
+      >
+        <SelectItem value="" text="None" />
+        {priceLists.map((entry) => (
+          <SelectItem key={entry.id} value={entry.id} text={entry.name} />
+        ))}
+      </Select>
       <NumberInput
         id={`${idPrefix}-payment-terms`}
         label="Payment terms (days)"

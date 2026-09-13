@@ -104,6 +104,7 @@ export default function SettingsPage() {
   const [paymentTermsDays, setPaymentTermsDays] = useState(30);
   const [maxTillDiscountPercent, setMaxTillDiscountPercent] = useState("");
   const [poApprovalThresholdZar, setPoApprovalThresholdZar] = useState("");
+  const [sessionTtlHours, setSessionTtlHours] = useState(12);
   const [hasLogo, setHasLogo] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoVersion, setLogoVersion] = useState(0);
@@ -145,6 +146,7 @@ export default function SettingsPage() {
     setPaymentTermsDays(data.payment_terms_days);
     setMaxTillDiscountPercent(data.max_till_discount_percent ?? "");
     setPoApprovalThresholdZar(data.po_approval_threshold_zar ?? "");
+    setSessionTtlHours(data.session_ttl_hours);
     setHasLogo(data.has_logo);
     setDefaultReceiveLocationId(data.default_receive_location_id ?? "");
     setDefaultTillLocationId(data.default_till_location_id ?? "");
@@ -202,6 +204,7 @@ export default function SettingsPage() {
         po_approval_threshold_zar: poApprovalThresholdZar.trim()
           ? poApprovalThresholdZar.trim()
           : null,
+        session_ttl_hours: sessionTtlHours,
         default_receive_location_id: defaultReceiveLocationId || null,
         default_till_location_id: defaultTillLocationId || null,
         document_sequences: documentSequences.map((row) => ({
@@ -656,6 +659,21 @@ export default function SettingsPage() {
                     onChange={(_, { value }) => {
                       if (typeof value === "number" || typeof value === "string") {
                         setPoApprovalThresholdZar(String(value));
+                      }
+                    }}
+                  />
+                  <NumberInput
+                    id="session-ttl-hours"
+                    label="Session duration (hours)"
+                    helperText="Does not revoke sessions already issued."
+                    value={sessionTtlHours}
+                    min={1}
+                    max={720}
+                    step={1}
+                    disabled={!canMutate || saving}
+                    onChange={(_, { value }) => {
+                      if (typeof value === "number") {
+                        setSessionTtlHours(value);
                       }
                     }}
                   />

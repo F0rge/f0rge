@@ -29,6 +29,7 @@ from app.models.nia import (
     NiaUsageEvent,
 )
 from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
+from app.models.price_list import PriceList, PriceListItem
 from app.models.payment import Payment, PaymentDirection
 from app.models.proforma import Proforma
 from app.models.purchase_order import (
@@ -120,6 +121,8 @@ __all__ = [
     "PickLine",
     "PickSourceType",
     "PickStatus",
+    "PriceList",
+    "PriceListItem",
     "PoLine",
     "Proforma",
     "PurchaseOrder",

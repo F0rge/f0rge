@@ -86,7 +86,7 @@ class InvoiceService:
                 sku = await self.sku_crud.get_by_id(sku_id)
                 if sku is None:
                     raise NotFoundError("SKU not found")
-                unit_ex_vat = resolve_unit_ex_vat(sku, customer)
+                unit_ex_vat = await resolve_unit_ex_vat(self.db, sku, customer)
             ex_vat = (Decimal(line.qty) * unit_ex_vat).quantize(CENT, rounding=ROUND_HALF_UP)
             inc_vat = ex_to_inc(ex_vat)
             line_vat = inc_vat - ex_vat

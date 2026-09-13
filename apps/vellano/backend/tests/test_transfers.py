@@ -225,6 +225,7 @@ async def test_dispatch_decrements_source_only_and_pdf_ok(
     assert pdf.headers["content-type"].startswith("application/pdf")
     assert pdf.content.startswith(b"%PDF")
     text = _pdf_text(pdf.content)
+    assert "Vellano" in text
     assert "TRF-" in text
 
 

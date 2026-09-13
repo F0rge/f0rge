@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD, CustomerInvoiceAgg, CustomerLaybyAgg
+from app.crud.price_list import PriceListCRUD
 from app.exceptions import ForbiddenError
 from app.models.customer import Customer
 from app.permissions import SALES_CUSTOMERS
@@ -33,6 +34,7 @@ PROFILE_PATCH_FIELDS = frozenset(
         "customer_type",
         "price_tier",
         "payment_terms_days",
+        "price_list_id",
     }
 )
 
@@ -68,6 +70,7 @@ class CustomersCrmService:
 
     async def create(self, data: CustomerCrmCreate) -> CustomerCrmResponse:
         self._validate_customer_type(data.customer_type)
+        await self._assert_price_list_id(data.price_list_id)
         customer = Customer(
             name=data.name,
             email=data.email,
@@ -77,6 +80,7 @@ class CustomersCrmService:
             customer_type=data.customer_type,
             price_tier=data.price_tier,
             payment_terms_days=data.payment_terms_days,
+            price_list_id=data.price_list_id,
         )
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(customer)
@@ -120,6 +124,9 @@ class CustomersCrmService:
             customer.price_tier = data.price_tier
         if "payment_terms_days" in fields_set:
             customer.payment_terms_days = data.payment_terms_days
+        if "price_list_id" in fields_set:
+            await self._assert_price_list_id(data.price_list_id)
+            customer.price_list_id = data.price_list_id
         if "credit_limit" in fields_set:
             customer.credit_limit = data.credit_limit
         if "on_hold" in fields_set:
@@ -178,6 +185,7 @@ class CustomersCrmService:
             on_hold=customer.on_hold,
             on_hold_reason=customer.on_hold_reason,
             payment_terms_days=customer.payment_terms_days,
+            price_list_id=customer.price_list_id,
             open_invoices_count=invoice_agg.open_count,
             open_invoices_zar=invoice_agg.open_zar.quantize(Decimal("0.01")),
             overdue_invoices_count=invoice_agg.overdue_count,
@@ -200,3 +208,8 @@ class CustomersCrmService:
     def _validate_customer_type(self, customer_type: str) -> None:
         if customer_type not in ("retail", "trade"):
             raise ValidationError("customer_type must be retail or trade")
+
+    async def _assert_price_list_id(self, price_list_id: Optional[uuid.UUID]) -> None:
+        if price_list_id is None:
+            return
+        await PriceListCRUD(self.db).get_by_id(price_list_id)
