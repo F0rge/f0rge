@@ -4,7 +4,7 @@ import datetime
 import uuid
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,6 +31,41 @@ class JournalCRUD(BaseCRUD):
             self._with_lines().order_by(JournalEntry.created_at.desc(), JournalEntry.id.desc())
         )
         return list(result.scalars().all())
+
+    async def list_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        q: Optional[str] = None,
+    ) -> tuple[list[JournalEntry], int]:
+        filters = []
+        if q:
+            pattern = f"%{q}%"
+            filters.append(
+                or_(
+                    JournalEntry.journal_number.ilike(pattern),
+                    JournalEntry.memo.ilike(pattern),
+                )
+            )
+        count_stmt = select(func.count(JournalEntry.id))
+        if filters:
+            count_stmt = count_stmt.where(*filters)
+        total = await self.db.scalar(count_stmt) or 0
+
+        stmt = select(JournalEntry).options(selectinload(JournalEntry.lines))
+        if filters:
+            stmt = stmt.where(*filters)
+        stmt = (
+            stmt.order_by(
+                JournalEntry.entry_date.desc(),
+                JournalEntry.journal_number.desc().nulls_last(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().unique().all()), total
 
     async def get_next_journal_number(self) -> str:
         result = await self.db.execute(

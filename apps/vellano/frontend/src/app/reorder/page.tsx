@@ -5,6 +5,7 @@ import {
   Checkbox,
   DataTable,
   InlineNotification,
+  Pagination,
   Stack,
   Table,
   TableBody,
@@ -64,6 +65,8 @@ export default function ReorderPage() {
   const [createdPos, setCreatedPos] = useState<PurchaseOrder[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [creating, setCreating] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -107,7 +110,12 @@ export default function ReorderPage() {
   const selectedRows = rows.filter((entry) => selectedIds.has(entry.sku_id));
   const missingSupplier = selectedRows.some((entry) => !entry.preferred_supplier_id);
 
-  const tableRows: ReorderTableRow[] = rows.map((entry) => ({
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, page, pageSize]);
+
+  const tableRows: ReorderTableRow[] = pagedRows.map((entry) => ({
     id: entry.sku_id,
     select: entry.sku_id,
     our_ref: entry.our_ref,
@@ -242,6 +250,7 @@ export default function ReorderPage() {
           lowContrast
         />
       ) : (
+        <>
         <DataTable rows={tableRows} headers={[...tableHeaders]}>
           {({ rows: dataRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer
@@ -316,6 +325,17 @@ export default function ReorderPage() {
             </TableContainer>
           )}
         </DataTable>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 25, 50]}
+          totalItems={rows.length}
+          onChange={({ page: nextPage, pageSize: nextSize }) => {
+            setPage(nextPage);
+            setPageSize(nextSize);
+          }}
+        />
+        </>
       )}
     </Stack>
   );

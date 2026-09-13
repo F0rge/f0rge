@@ -6,6 +6,7 @@ import {
   InlineNotification,
   Modal,
   NumberInput,
+  Pagination,
   Select,
   SelectItem,
   Stack,
@@ -32,7 +33,7 @@ import {
   listSuppliers,
   type CreatePoLinePayload,
   type Proforma,
-  type PurchaseOrder,
+  type PurchaseOrderListItem,
   type Sku,
   type Supplier,
 } from "@/lib/api";
@@ -77,12 +78,15 @@ export default function PurchaseOrdersPage() {
   const router = useRouter();
   const { user } = useAuth();
   const canRaise = canRaisePo(user);
-  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [orders, setOrders] = useState<PurchaseOrderListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [proformas, setProformas] = useState<Proforma[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
@@ -94,14 +98,18 @@ export default function PurchaseOrdersPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listPurchaseOrders();
-      setOrders(data);
+      const data = await listPurchaseOrders({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      setOrders(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load purchase orders.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     if (user) {
@@ -206,7 +214,7 @@ export default function PurchaseOrdersPage() {
     po_number: entry.po_number,
     supplier_name: entry.supplier_name,
     status: PO_STATUS_LABELS[entry.status],
-    line_count: String(entry.lines.length),
+    line_count: String(entry.line_count),
     created_at: formatDate(entry.created_at),
     actions: entry.id,
   }));
@@ -245,7 +253,7 @@ export default function PurchaseOrdersPage() {
 
       {loading ? (
         <p className="cds--type-body-01">Loading purchase orders…</p>
-      ) : orders.length === 0 ? (
+      ) : total === 0 ? (
         <InlineNotification
           kind="info"
           title="No purchase orders"
@@ -254,6 +262,7 @@ export default function PurchaseOrdersPage() {
           lowContrast
         />
       ) : (
+        <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Purchase orders" description="All Vellano purchase orders">
@@ -301,6 +310,17 @@ export default function PurchaseOrdersPage() {
             </TableContainer>
           )}
         </DataTable>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 25, 50]}
+          totalItems={total}
+          onChange={({ page: nextPage, pageSize: nextSize }) => {
+            setPage(nextPage);
+            setPageSize(nextSize);
+          }}
+        />
+        </>
       )}
 
       <Modal

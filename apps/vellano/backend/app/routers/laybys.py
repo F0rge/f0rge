@@ -1,22 +1,27 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, status
 
 from app.dependencies.auth import get_current_user_id, get_layby_service, require_laybys
-from app.schemas.layby import LaybyCreate, LaybyPaymentCreate, LaybyResponse
+from app.models.layby import LaybyStatus
+from app.schemas.layby import LaybyCreate, LaybyListItem, LaybyPaymentCreate, LaybyResponse
+from app.schemas.page import Page, PageParams, get_page_params
 from app.services.laybys import LaybysService
 
 laybys_router = APIRouter(prefix="/api/v1/laybys", tags=["laybys"])
 
 
-@laybys_router.get("", response_model=list[LaybyResponse])
+@laybys_router.get("", response_model=Page[LaybyListItem])
 async def list_laybys(
+    params: PageParams = Depends(get_page_params),
+    status: Optional[LaybyStatus] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: LaybysService = Depends(get_layby_service),
 ):
-    return await service.list()
+    return await service.list(params, status=status)
 
 
 @laybys_router.post(

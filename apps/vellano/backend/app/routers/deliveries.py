@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, status
 
@@ -9,18 +10,27 @@ from app.dependencies.auth import (
     get_deliveries_service,
     require_deliveries_mutate,
 )
-from app.schemas.delivery import DeliveryComplete, DeliveryCreate, DeliveryResponse
+from app.models.delivery import DeliveryStatus
+from app.schemas.delivery import (
+    DeliveryComplete,
+    DeliveryCreate,
+    DeliveryListItem,
+    DeliveryResponse,
+)
+from app.schemas.page import Page, PageParams, get_page_params
 from app.services.deliveries import DeliveriesService
 
 deliveries_router = APIRouter(prefix="/api/v1/deliveries", tags=["deliveries"])
 
 
-@deliveries_router.get("", response_model=list[DeliveryResponse])
+@deliveries_router.get("", response_model=Page[DeliveryListItem])
 async def list_deliveries(
+    params: PageParams = Depends(get_page_params),
+    status: Optional[DeliveryStatus] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: DeliveriesService = Depends(get_deliveries_service),
 ):
-    return await service.list()
+    return await service.list(params, status=status)
 
 
 @deliveries_router.post(

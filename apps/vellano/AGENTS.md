@@ -641,6 +641,8 @@ V1 routes (stock, till, books, reports, VAT201, etc.) remain live. V2-S7 home hu
 
 Nav hrefs are not always the API prefix. When debugging network tabs:
 
+**List pagination:** Books and operations list GETs return `{ items: T[], total: number }` with optional query params `limit` (default 50, max 100), `offset` (default 0), and `q` (search). Some lists also accept `status` (purchase orders, laybys, deliveries, returns). Detail GET `/{id}` still returns full documents with nested lines. Frontend table pages use Carbon `Pagination` (10/25/50) driven by API `total`, not client-side array length.
+
 | UI route | API prefix (`/api/v1`) |
 |----------|------------------------|
 | `/catalogue` | `/skus` |

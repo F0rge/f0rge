@@ -6,6 +6,7 @@ import {
   InlineNotification,
   Modal,
   NumberInput,
+  Pagination,
   Select,
   SelectItem,
   Stack,
@@ -27,7 +28,7 @@ import {
   formatZarAmount,
   listBills,
   listSuppliers,
-  type Bill,
+  type BillListItem,
   type CreateBillLinePayload,
   type Supplier,
 } from "@/lib/api";
@@ -76,12 +77,15 @@ export default function BillsPage() {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [bills, setBills] = useState<Bill[]>([]);
+  const [bills, setBills] = useState<BillListItem[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const [supplierId, setSupplierId] = useState("");
   const [supplierRef, setSupplierRef] = useState("");
   const [issueDate, setIssueDate] = useState(todayIso());
@@ -93,14 +97,18 @@ export default function BillsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listBills();
-      setBills(data);
+      const data = await listBills({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      setBills(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load bills.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   const loadCreateData = useCallback(async () => {
     try {
@@ -244,7 +252,7 @@ export default function BillsPage() {
 
       {loading ? (
         <p className="cds--type-body-01">Loading bills…</p>
-      ) : bills.length === 0 ? (
+      ) : total === 0 ? (
         <InlineNotification
           kind="info"
           title="No bills"
@@ -253,6 +261,7 @@ export default function BillsPage() {
           lowContrast
         />
       ) : (
+        <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Bills" description="All Vellano supplier bills">
@@ -300,6 +309,17 @@ export default function BillsPage() {
             </TableContainer>
           )}
         </DataTable>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 25, 50]}
+          totalItems={total}
+          onChange={({ page: nextPage, pageSize: nextSize }) => {
+            setPage(nextPage);
+            setPageSize(nextSize);
+          }}
+        />
+        </>
       )}
 
       <Modal

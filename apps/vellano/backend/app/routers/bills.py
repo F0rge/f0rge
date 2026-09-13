@@ -10,18 +10,20 @@ from app.dependencies.auth import (
     get_current_user_id,
     require_books_mutate,
 )
-from app.schemas.bill import BillCreate, BillResponse
+from app.schemas.bill import BillCreate, BillListItem, BillResponse
+from app.schemas.page import Page, PageParams, get_page_params
 from app.services.bills import BillService
 
 bills_router = APIRouter(prefix="/api/v1/bills", tags=["bills"])
 
 
-@bills_router.get("", response_model=list[BillResponse])
+@bills_router.get("", response_model=Page[BillListItem])
 async def list_bills(
+    params: PageParams = Depends(get_page_params),
     _: uuid.UUID = Depends(get_current_user_id),
     service: BillService = Depends(get_bill_service),
 ):
-    return await service.list()
+    return await service.list(params)
 
 
 @bills_router.post("", response_model=BillResponse, status_code=status.HTTP_201_CREATED)

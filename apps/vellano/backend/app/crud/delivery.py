@@ -3,10 +3,11 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
+from app.models.customer import Customer
 from app.models.delivery import Delivery, DeliveryLine, DeliveryStatus
 from app.models.layby import Layby
 from app.models.tax_invoice import TaxInvoice
@@ -43,6 +44,66 @@ class DeliveryCRUD(BaseCRUD):
             .order_by(Delivery.created_at.desc())
         )
         return list(result.scalars().all())
+
+    async def list_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        q: Optional[str] = None,
+        status: Optional[DeliveryStatus] = None,
+    ) -> tuple[list[Delivery], int]:
+        invoice_customer = aliased(Customer)
+        layby_customer = aliased(Customer)
+        filters = []
+        if q:
+            pattern = f"%{q}%"
+            filters.append(
+                or_(
+                    Delivery.delivery_number.ilike(pattern),
+                    invoice_customer.name.ilike(pattern),
+                    layby_customer.name.ilike(pattern),
+                )
+            )
+        if status is not None:
+            filters.append(Delivery.status == status)
+
+        count_stmt = (
+            select(func.count(Delivery.id))
+            .select_from(Delivery)
+            .outerjoin(TaxInvoice, Delivery.invoice_id == TaxInvoice.id)
+            .outerjoin(invoice_customer, TaxInvoice.customer_id == invoice_customer.id)
+            .outerjoin(Layby, Delivery.layby_id == Layby.id)
+            .outerjoin(layby_customer, Layby.customer_id == layby_customer.id)
+        )
+        if filters:
+            count_stmt = count_stmt.where(*filters)
+        total = await self.db.scalar(count_stmt) or 0
+
+        stmt = (
+            select(Delivery)
+            .options(
+                selectinload(Delivery.invoice).selectinload(TaxInvoice.customer),
+                selectinload(Delivery.layby).selectinload(Layby.customer),
+                selectinload(Delivery.location),
+            )
+            .outerjoin(TaxInvoice, Delivery.invoice_id == TaxInvoice.id)
+            .outerjoin(invoice_customer, TaxInvoice.customer_id == invoice_customer.id)
+            .outerjoin(Layby, Delivery.layby_id == Layby.id)
+            .outerjoin(layby_customer, Layby.customer_id == layby_customer.id)
+        )
+        if filters:
+            stmt = stmt.where(*filters)
+        stmt = (
+            stmt.order_by(
+                Delivery.created_at.desc(),
+                Delivery.delivery_number.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().unique().all()), total
 
     async def get_active_by_invoice_id(self, invoice_id: uuid.UUID) -> Optional[Delivery]:
         return (

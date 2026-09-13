@@ -21,7 +21,7 @@ import {
   listInventory,
   listPurchaseOrders,
   type InventorySku,
-  type PurchaseOrder,
+  type PurchaseOrderListItem,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -45,7 +45,7 @@ type TransitRow = {
 export default function TransitPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [orders, setOrders] = useState<PurchaseOrderListItem[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,11 +55,13 @@ export default function TransitPage() {
     setError(null);
     try {
       const [orderData, inventoryData] = await Promise.all([
-        listPurchaseOrders(),
+        listPurchaseOrders({ status: "on_water", limit: 100 }),
         listInventory(),
       ]);
       setOrders(
-        orderData.filter((entry) => entry.status === "on_water" || entry.status === "landed"),
+        orderData.items.filter(
+          (entry) => entry.status === "on_water" || entry.status === "landed",
+        ),
       );
       setInventory(inventoryData);
     } catch (err) {
@@ -85,7 +87,7 @@ export default function TransitPage() {
     po_number: entry.po_number,
     supplier_name: entry.supplier_name,
     status: PO_STATUS_LABELS[entry.status],
-    line_count: String(entry.lines.length),
+    line_count: String(entry.line_count),
     actions: entry.id,
   }));
 

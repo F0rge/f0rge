@@ -15,7 +15,8 @@ from app.models.bill import Bill, BillLine
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.services.books_events import BooksEventService
-from app.schemas.bill import BillCreate, BillLineResponse, BillResponse
+from app.schemas.bill import BillCreate, BillLineResponse, BillListItem, BillResponse
+from app.schemas.page import Page, PageParams
 from app.services.chart_of_accounts import CODE_AP, CODE_INVENTORY, LedgerPostingService
 from app.services.object_storage import save_bytes
 from app.services.packing_sheet import convert_bill_to_zar
@@ -34,9 +35,16 @@ class BillService:
         self.posting = LedgerPostingService(db)
         self.events = BooksEventService(db)
 
-    async def list(self) -> list[BillResponse]:
-        bills = await self.crud.list_all()
-        return [self._to_response(bill) for bill in bills]
+    async def list(self, params: PageParams) -> Page[BillListItem]:
+        bills, total = await self.crud.list_page(
+            limit=params.limit,
+            offset=params.offset,
+            q=params.q,
+        )
+        return Page(
+            items=[self._to_list_item(bill) for bill in bills],
+            total=total,
+        )
 
     async def get(self, bill_id: uuid.UUID) -> BillResponse:
         bill = await self.crud.get_by_id(bill_id)
@@ -149,6 +157,27 @@ class BillService:
         if fx_to_zar is None or fx_to_zar <= 0:
             raise ValidationError("fx_to_zar is required and must be positive for foreign currency")
         return fx_to_zar
+
+    @staticmethod
+    def _to_list_item(bill: Bill) -> BillListItem:
+        balance_zar = bill.amount_zar - bill.amount_paid_zar
+        return BillListItem(
+            id=bill.id,
+            bill_number=bill.bill_number,
+            supplier_id=bill.supplier_id,
+            supplier_name=bill.supplier.name,
+            supplier_ref=bill.supplier_ref,
+            issue_date=bill.issue_date,
+            currency=bill.currency,
+            fx_to_zar=bill.fx_to_zar,
+            amount_foreign=bill.amount_foreign,
+            amount_zar=bill.amount_zar,
+            amount_paid_zar=bill.amount_paid_zar,
+            balance_zar=balance_zar,
+            pdf_storage_key=bill.pdf_storage_key,
+            created_at=bill.created_at,
+            updated_at=bill.updated_at,
+        )
 
     @staticmethod
     def _to_response(bill: Bill) -> BillResponse:

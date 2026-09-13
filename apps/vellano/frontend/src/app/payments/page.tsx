@@ -5,6 +5,7 @@ import {
   DataTable,
   InlineNotification,
   Modal,
+  Pagination,
   Stack,
   Table,
   TableBody,
@@ -55,19 +56,26 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [historyPayment, setHistoryPayment] = useState<Payment | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
 
   const loadPayments = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listPayments();
-      setPayments(data);
+      const data = await listPayments({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      setPayments(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load payments.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     if (user) {
@@ -122,7 +130,7 @@ export default function PaymentsPage() {
 
       {loading ? (
         <p className="cds--type-body-01">Loading payments…</p>
-      ) : payments.length === 0 ? (
+      ) : total === 0 ? (
         <InlineNotification
           kind="info"
           title="No payments"
@@ -131,6 +139,7 @@ export default function PaymentsPage() {
           lowContrast
         />
       ) : (
+        <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Payments" description="All recorded payments">
@@ -185,6 +194,17 @@ export default function PaymentsPage() {
             </TableContainer>
           )}
         </DataTable>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 25, 50]}
+          totalItems={total}
+          onChange={({ page: nextPage, pageSize: nextSize }) => {
+            setPage(nextPage);
+            setPageSize(nextSize);
+          }}
+        />
+        </>
       )}
 
       <Modal

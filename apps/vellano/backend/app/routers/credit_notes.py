@@ -11,17 +11,19 @@ from app.dependencies.auth import (
     require_books_mutate,
 )
 from app.schemas.credit_note import CreditNoteCreate, CreditNoteResponse
+from app.schemas.page import Page, PageParams, get_page_params
 from app.services.credit_notes import CreditNoteService
 
 credit_notes_router = APIRouter(prefix="/api/v1/credit-notes", tags=["credit-notes"])
 
 
-@credit_notes_router.get("", response_model=list[CreditNoteResponse])
+@credit_notes_router.get("", response_model=Page[CreditNoteResponse])
 async def list_credit_notes(
+    params: PageParams = Depends(get_page_params),
     _: uuid.UUID = Depends(get_current_user_id),
     service: CreditNoteService = Depends(get_credit_note_service),
 ):
-    return await service.list()
+    return await service.list(params)
 
 
 @credit_notes_router.post(

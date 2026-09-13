@@ -72,14 +72,16 @@ export default function InvoiceDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const [invoiceData, contacts, creditNotes] = await Promise.all([
+      const [invoiceData, contacts, creditNotePage] = await Promise.all([
         getInvoice(params.id),
         listContacts(),
-        listCreditNotes(),
+        listCreditNotes({ limit: 100 }),
       ]);
       setInvoice(invoiceData);
       setCustomer(contacts.find((entry) => entry.id === invoiceData.customer_id) ?? null);
-      setCreditNote(creditNotes.find((entry) => entry.invoice_id === invoiceData.id) ?? null);
+      setCreditNote(
+        creditNotePage.items.find((entry) => entry.invoice_id === invoiceData.id) ?? null,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load invoice.");
     } finally {

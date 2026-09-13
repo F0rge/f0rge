@@ -12,7 +12,13 @@ from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
-from app.schemas.invoice import InvoiceCreate, InvoiceLineResponse, InvoiceResponse
+from app.schemas.invoice import (
+    InvoiceCreate,
+    InvoiceLineResponse,
+    InvoiceListItem,
+    InvoiceResponse,
+)
+from app.schemas.page import Page, PageParams
 from app.services.books_events import BooksEventService
 from app.services.category_posting import CategoryPostingService
 from app.services.customer_credit import CustomerCreditService
@@ -39,9 +45,16 @@ class InvoiceService:
         self.events = BooksEventService(db)
         self.credit = CustomerCreditService(db)
 
-    async def list(self) -> list[InvoiceResponse]:
-        invoices = await self.crud.list_all()
-        return [self._to_response(invoice) for invoice in invoices]
+    async def list(self, params: PageParams) -> Page[InvoiceListItem]:
+        invoices, total = await self.crud.list_page(
+            limit=params.limit,
+            offset=params.offset,
+            q=params.q,
+        )
+        return Page(
+            items=[self._to_list_item(invoice) for invoice in invoices],
+            total=total,
+        )
 
     async def get(self, invoice_id: uuid.UUID) -> InvoiceResponse:
         invoice = await self.crud.get_by_id(invoice_id)
@@ -171,6 +184,24 @@ class InvoiceService:
             total_inc_vat=f"{invoice.total_inc_vat:.2f}",
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
+
+    @staticmethod
+    def _to_list_item(invoice: TaxInvoice) -> InvoiceListItem:
+        balance = invoice.total_inc_vat - invoice.amount_paid
+        return InvoiceListItem(
+            id=invoice.id,
+            invoice_number=invoice.invoice_number,
+            customer_id=invoice.customer_id,
+            customer_name=invoice.customer.name,
+            issue_date=invoice.issue_date,
+            subtotal_ex_vat=invoice.subtotal_ex_vat,
+            vat_amount=invoice.vat_amount,
+            total_inc_vat=invoice.total_inc_vat,
+            amount_paid=invoice.amount_paid,
+            balance=balance,
+            created_at=invoice.created_at,
+            updated_at=invoice.updated_at,
+        )
 
     @staticmethod
     def _to_response(invoice: TaxInvoice) -> InvoiceResponse:

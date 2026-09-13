@@ -20,8 +20,10 @@ from app.schemas.journal import (
     JournalCreate,
     JournalLineCreate,
     JournalLineResponse,
+    JournalListItem,
     JournalResponse,
 )
+from app.schemas.page import Page, PageParams
 from app.services.vat import CENT
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -34,8 +36,16 @@ class JournalService:
         self.account_crud = AccountCRUD(db)
         self.events = BooksEventService(db)
 
-    async def list(self) -> list[JournalResponse]:
-        return [self._to_response(entry) for entry in await self.crud.list_all()]
+    async def list(self, params: PageParams) -> Page[JournalListItem]:
+        entries, total = await self.crud.list_page(
+            limit=params.limit,
+            offset=params.offset,
+            q=params.q,
+        )
+        return Page(
+            items=[self._to_list_item(entry) for entry in entries],
+            total=total,
+        )
 
     async def get(self, journal_id: uuid.UUID) -> JournalResponse:
         return self._to_response(await self._get_or_404(journal_id))
@@ -172,6 +182,25 @@ class JournalService:
         if total_debit != total_credit:
             raise ValidationError("Journal entry must balance")
         return amounts
+
+    @staticmethod
+    def _to_list_item(entry: JournalEntry) -> JournalListItem:
+        debit_total = sum((line.debit_zar for line in entry.lines), Decimal(0))
+        credit_total = sum((line.credit_zar for line in entry.lines), Decimal(0))
+        return JournalListItem(
+            id=entry.id,
+            document_type=entry.document_type,
+            document_id=entry.document_id,
+            memo=entry.memo,
+            status=entry.status,
+            source=entry.source,
+            journal_number=entry.journal_number,
+            entry_date=entry.entry_date,
+            voided_by_id=entry.voided_by_id,
+            debit_total_zar=debit_total,
+            credit_total_zar=credit_total,
+            created_at=entry.created_at,
+        )
 
     @staticmethod
     def _to_response(entry: JournalEntry) -> JournalResponse:

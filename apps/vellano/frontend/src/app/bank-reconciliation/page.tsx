@@ -40,7 +40,7 @@ import {
   type BankImportLine,
   type BankImportSummary,
   type BankUnmatchedCount,
-  type Journal,
+  type JournalListItem,
   type Payment,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -69,7 +69,7 @@ function isLineMatched(line: BankImportLine): boolean {
   return Boolean(line.matched_payment_id || line.matched_journal_id);
 }
 
-function lineStatus(line: BankImportLine, journals: Journal[]): string {
+function lineStatus(line: BankImportLine, journals: JournalListItem[]): string {
   if (line.matched_payment_id) {
     return `Matched ${line.matched_payment_number ?? ""}`.trim();
   }
@@ -156,7 +156,7 @@ export default function BankReconciliationPage() {
   const [imports, setImports] = useState<BankImportSummary[]>([]);
   const [selectedImport, setSelectedImport] = useState<BankImport | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [journals, setJournals] = useState<Journal[]>([]);
+  const [journals, setJournals] = useState<JournalListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -216,9 +216,9 @@ export default function BankReconciliationPage() {
     try {
       const [importList, paymentList, accountList, journalList, counts] = await Promise.all([
         listBankImports(),
-        listPayments(),
+        listPayments({ limit: 100 }),
         listAccounts(),
-        listJournals(),
+        listJournals({ limit: 100 }),
         listUnmatchedCounts(),
       ]);
       const banks = accountList
@@ -226,8 +226,8 @@ export default function BankReconciliationPage() {
         .sort((left, right) => left.code.localeCompare(right.code));
       setAccounts(accountList);
       setImports(importList);
-      setPayments(paymentList);
-      setJournals(journalList);
+      setPayments(paymentList.items);
+      setJournals(journalList.items);
       setUnmatchedCounts(counts);
       setAccountId((current) => {
         if (current && banks.some((account) => account.id === current)) {
@@ -313,17 +313,17 @@ export default function BankReconciliationPage() {
   const refreshAfterMutation = useCallback(
     async (importId: string | null) => {
       const [paymentList, unmatched, counts, importList, journalList] = await Promise.all([
-        listPayments(),
+        listPayments({ limit: 100 }),
         accountId ? listUnmatchedLines(accountId) : Promise.resolve([]),
         listUnmatchedCounts(),
         listBankImports(),
-        listJournals(),
+        listJournals({ limit: 100 }),
       ]);
-      setPayments(paymentList);
+      setPayments(paymentList.items);
       setUnmatchedLines(unmatched);
       setUnmatchedCounts(counts);
       setImports(importList);
-      setJournals(journalList);
+      setJournals(journalList.items);
       if (importId) {
         const detail = await getBankImport(importId);
         rememberImportLines(detail);

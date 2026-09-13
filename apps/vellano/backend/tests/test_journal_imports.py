@@ -48,7 +48,7 @@ async def test_commit_balanced_csv_posts_journal_and_moves_pnl(
 
     listed = await owner_client.get("/api/v1/journals")
     assert listed.status_code == 200
-    assert any(item["id"] == body["id"] for item in listed.json())
+    assert any(item["id"] == body["id"] for item in listed.json()["items"])
 
     balances = await _account_balances(owner_client)
     assert balances["5000"] == "100.00"

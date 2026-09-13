@@ -6,6 +6,7 @@ import {
   InlineNotification,
   Modal,
   NumberInput,
+  Pagination,
   Select,
   SelectItem,
   Stack,
@@ -28,15 +29,15 @@ import {
   downloadInvoicePdf,
   formatPriceAmount,
   formatZarAmount,
+  getCustomer,
   listContacts,
   listInvoices,
   sumInvoiceLinesExVat,
   type Contact,
   type CreateInvoiceLinePayload,
-  type Invoice,
+  type InvoiceListItem,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { matchesCustomerQuery } from "@/lib/customer-crm";
 
 const TABLE_HEADERS = [
   { key: "invoice_number", header: "Number" },
@@ -91,7 +92,7 @@ function InvoicesPageContent() {
   const customerFilter = searchParams.get("customer")?.trim() ?? "";
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
   const [customers, setCustomers] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,19 +101,56 @@ function InvoicesPageContent() {
   const [customerId, setCustomerId] = useState("");
   const [issueDate, setIssueDate] = useState(todayIso());
   const [lines, setLines] = useState<InvoiceLineForm[]>([emptyLine()]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [customerSearchQ, setCustomerSearchQ] = useState<string | undefined>();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    if (!customerFilter) {
+      setCustomerSearchQ(undefined);
+      return;
+    }
+    let cancelled = false;
+    void getCustomer(customerFilter)
+      .then((customer) => {
+        if (!cancelled) {
+          setCustomerSearchQ(customer.name);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCustomerSearchQ(undefined);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, customerFilter]);
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listInvoices();
-      setInvoices(data);
+      const q = searchQuery.trim() || customerSearchQ;
+      const data = await listInvoices({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+        q: q || undefined,
+      });
+      setInvoices(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load invoices.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize, searchQuery, customerSearchQ]);
 
   const loadCreateData = useCallback(async () => {
     try {
@@ -207,15 +245,7 @@ function InvoicesPageContent() {
     }
   }
 
-  const visibleInvoices = useMemo(
-    () =>
-      invoices.filter((entry) =>
-        matchesCustomerQuery(entry.customer_id, entry.customer_name, customerFilter),
-      ),
-    [invoices, customerFilter],
-  );
-
-  const rows: InvoiceRow[] = visibleInvoices.map((entry) => ({
+  const rows: InvoiceRow[] = invoices.map((entry) => ({
     id: entry.id,
     invoice_number: entry.invoice_number,
     customer_name: entry.customer_name,
@@ -265,25 +295,34 @@ function InvoicesPageContent() {
         </div>
       ) : null}
 
+      <div className="vellano-catalogue-panel">
+        <div className="vellano-catalogue-toolbar">
+          <TextInput
+            id="invoices-search"
+            labelText="Search invoices"
+            hideLabel
+            placeholder="Search by invoice number or customer…"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </div>
+
       {loading ? (
         <p className="cds--type-body-01">Loading invoices…</p>
-      ) : invoices.length === 0 ? (
+      ) : total === 0 ? (
         <InlineNotification
           kind="info"
           title="No invoices"
-          subtitle="No tax invoices have been created yet."
-          hideCloseButton
-          lowContrast
-        />
-      ) : visibleInvoices.length === 0 ? (
-        <InlineNotification
-          kind="info"
-          title="No invoices"
-          subtitle="No invoices match this customer."
+          subtitle={
+            searchQuery.trim() || customerFilter
+              ? "No invoices match the current filters."
+              : "No tax invoices have been created yet."
+          }
           hideCloseButton
           lowContrast
         />
       ) : (
+        <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Invoices" description="All Vellano tax invoices">
@@ -346,7 +385,19 @@ function InvoicesPageContent() {
             </TableContainer>
           )}
         </DataTable>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 25, 50]}
+          totalItems={total}
+          onChange={({ page: nextPage, pageSize: nextSize }) => {
+            setPage(nextPage);
+            setPageSize(nextSize);
+          }}
+        />
+        </>
       )}
+      </div>
 
       <Modal
         open={createOpen}

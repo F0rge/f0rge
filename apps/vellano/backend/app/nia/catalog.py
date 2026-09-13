@@ -84,6 +84,7 @@ from app.schemas.credit_note import CreditNoteCreate
 from app.schemas.customer_crm import CustomerCrmCreate
 from app.schemas.delivery import DeliveryCreate
 from app.schemas.invoice import InvoiceCreate
+from app.schemas.page import PageParams
 from app.schemas.journal import JournalCreate
 from app.schemas.layby import LaybyCreate
 from app.schemas.location import LocationCreate, LocationResponse
@@ -225,7 +226,8 @@ async def _create_proforma(_deps: NiaDeps, _data: ProformaCreateArgs) -> Any:
 
 
 async def _list_purchase_orders(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await PurchaseOrderService(deps.db).list()
+    page = await PurchaseOrderService(deps.db).list(PageParams())
+    return page.model_dump()
 
 
 async def _get_purchase_order(deps: NiaDeps, data: PurchaseOrderIdArgs) -> Any:
@@ -424,7 +426,8 @@ async def _update_customer(deps: NiaDeps, data: CustomerUpdateArgs) -> Any:
 
 
 async def _list_returns(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await StockReturnsService(deps.db).list()
+    page = await StockReturnsService(deps.db).list(PageParams())
+    return page.model_dump()
 
 
 async def _get_return(deps: NiaDeps, data: ReturnIdArgs) -> Any:
@@ -444,7 +447,8 @@ async def _cancel_return(deps: NiaDeps, data: ReturnIdArgs) -> Any:
 
 
 async def _list_laybys(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await LaybysService(deps.db).list()
+    page = await LaybysService(deps.db).list(PageParams())
+    return page.model_dump()
 
 
 async def _get_layby(deps: NiaDeps, data: LaybyIdArgs) -> Any:
@@ -468,7 +472,8 @@ async def _cancel_layby(deps: NiaDeps, data: LaybyIdArgs) -> Any:
 
 
 async def _list_deliveries(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await DeliveriesService(deps.db).list()
+    page = await DeliveriesService(deps.db).list(PageParams())
+    return page.model_dump()
 
 
 async def _get_delivery(deps: NiaDeps, data: DeliveryIdArgs) -> Any:
@@ -512,7 +517,8 @@ async def _create_contact(deps: NiaDeps, data: ContactCreate) -> Any:
 
 
 async def _list_invoices(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await InvoiceService(deps.db).list()
+    page = await InvoiceService(deps.db).list(PageParams())
+    return page.model_dump()
 
 
 async def _get_invoice(deps: NiaDeps, data: InvoiceIdArgs) -> Any:
@@ -524,7 +530,8 @@ async def _create_invoice(deps: NiaDeps, data: InvoiceCreate) -> Any:
 
 
 async def _list_bills(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await BillService(deps.db).list()
+    page = await BillService(deps.db).list(PageParams())
+    return page.model_dump()
 
 
 async def _get_bill(deps: NiaDeps, data: BillIdArgs) -> Any:
@@ -536,7 +543,8 @@ async def _create_bill(deps: NiaDeps, data: BillCreate) -> Any:
 
 
 async def _list_credit_notes(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await CreditNoteService(deps.db).list()
+    page = await CreditNoteService(deps.db).list(PageParams())
+    return page.model_dump()
 
 
 async def _get_credit_note(deps: NiaDeps, data: CreditNoteIdArgs) -> Any:
@@ -548,7 +556,8 @@ async def _create_credit_note(deps: NiaDeps, data: CreditNoteCreate) -> Any:
 
 
 async def _list_payments(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await PaymentService(deps.db).list()
+    page = await PaymentService(deps.db).list(PageParams())
+    return page.model_dump()
 
 
 async def _create_payment(deps: NiaDeps, data: PaymentCreate) -> Any:
@@ -556,7 +565,8 @@ async def _create_payment(deps: NiaDeps, data: PaymentCreate) -> Any:
 
 
 async def _list_journals(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await JournalService(deps.db).list()
+    page = await JournalService(deps.db).list(PageParams())
+    return page.model_dump()
 
 
 async def _get_journal(deps: NiaDeps, data: JournalIdArgs) -> Any:

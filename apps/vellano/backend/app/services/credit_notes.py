@@ -16,6 +16,7 @@ from app.models.journal import JournalDocumentType
 from app.models.sku import Sku
 from app.models.tax_invoice import TaxInvoice
 from app.schemas.credit_note import CreditNoteCreate, CreditNoteResponse
+from app.schemas.page import Page, PageParams
 from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
     CODE_AR,
@@ -36,9 +37,16 @@ class CreditNoteService:
         self.posting = LedgerPostingService(db)
         self.category_posting = CategoryPostingService(db)
 
-    async def list(self) -> list[CreditNoteResponse]:
-        credit_notes = await self.crud.list_all()
-        return [self._to_response(cn) for cn in credit_notes]
+    async def list(self, params: PageParams) -> Page[CreditNoteResponse]:
+        credit_notes, total = await self.crud.list_page(
+            limit=params.limit,
+            offset=params.offset,
+            q=params.q,
+        )
+        return Page(
+            items=[self._to_response(cn) for cn in credit_notes],
+            total=total,
+        )
 
     async def get(self, credit_note_id: uuid.UUID) -> CreditNoteResponse:
         credit_note = await self.crud.get_by_id(credit_note_id)

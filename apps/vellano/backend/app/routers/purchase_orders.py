@@ -15,8 +15,11 @@ from app.dependencies.auth import (
     require_receive,
 )
 from app.schemas.inventory import InventorySkuResponse
+from app.models.purchase_order import PurchaseOrderStatus
+from app.schemas.page import Page, PageParams, get_page_params
 from app.schemas.purchase_order import (
     PurchaseOrderCreate,
+    PurchaseOrderListItem,
     PurchaseOrderResponse,
     ReceiveRequest,
 )
@@ -26,12 +29,14 @@ from app.services.purchase_orders import PurchaseOrderService
 purchase_orders_router = APIRouter(prefix="/api/v1/purchase-orders", tags=["purchase-orders"])
 
 
-@purchase_orders_router.get("", response_model=list[PurchaseOrderResponse])
+@purchase_orders_router.get("", response_model=Page[PurchaseOrderListItem])
 async def list_purchase_orders(
+    params: PageParams = Depends(get_page_params),
+    status: Optional[PurchaseOrderStatus] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: PurchaseOrderService = Depends(get_purchase_order_service),
 ):
-    return await service.list()
+    return await service.list(params, status=status)
 
 
 @purchase_orders_router.post(

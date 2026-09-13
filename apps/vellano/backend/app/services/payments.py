@@ -13,6 +13,7 @@ from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
 from app.models.payment import Payment, PaymentDirection
+from app.schemas.page import Page, PageParams
 from app.schemas.payment import PaymentCreate, PaymentResponse
 from app.services.books_events import BooksEventService
 from app.services.chart_of_accounts import (
@@ -38,9 +39,16 @@ class PaymentService:
         self.posting = LedgerPostingService(db)
         self.events = BooksEventService(db)
 
-    async def list(self) -> list[PaymentResponse]:
-        payments = await self.crud.list_all()
-        return [self._to_response(payment) for payment in payments]
+    async def list(self, params: PageParams) -> Page[PaymentResponse]:
+        payments, total = await self.crud.list_page(
+            limit=params.limit,
+            offset=params.offset,
+            q=params.q,
+        )
+        return Page(
+            items=[self._to_response(payment) for payment in payments],
+            total=total,
+        )
 
     async def create(
         self, data: PaymentCreate, user_id: Optional[uuid.UUID] = None

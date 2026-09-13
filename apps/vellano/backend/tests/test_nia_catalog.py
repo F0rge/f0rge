@@ -574,7 +574,7 @@ async def test_create_invoice_hitl_before_mutate(
 
     invoices_before = await owner.get("/api/v1/invoices")
     assert invoices_before.status_code == 200
-    assert not any(row["customer_id"] == customer_id for row in invoices_before.json())
+    assert not any(row["customer_id"] == customer_id for row in invoices_before.json()["items"])
 
     resume = await owner.post(
         f"/api/v1/nia/threads/{thread_id}/resume",
@@ -588,7 +588,7 @@ async def test_create_invoice_hitl_before_mutate(
 
     invoices_after = await owner.get("/api/v1/invoices")
     assert invoices_after.status_code == 200
-    assert any(row["customer_id"] == customer_id for row in invoices_after.json())
+    assert any(row["customer_id"] == customer_id for row in invoices_after.json()["items"])
 
 
 async def test_create_sku_needs_fields_then_hitl(
