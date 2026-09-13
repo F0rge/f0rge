@@ -36,6 +36,23 @@ class InvoiceLineResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InvoiceListItem(BaseModel):
+    id: uuid.UUID
+    invoice_number: str
+    customer_id: uuid.UUID
+    customer_name: str
+    issue_date: datetime.date
+    subtotal_ex_vat: Decimal
+    vat_amount: Decimal
+    total_inc_vat: Decimal
+    amount_paid: Decimal
+    balance: Decimal
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class InvoiceResponse(BaseModel):
     id: uuid.UUID
     invoice_number: str

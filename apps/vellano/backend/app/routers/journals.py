@@ -9,18 +9,20 @@ from app.dependencies.auth import (
     get_journal_service,
     require_books_mutate,
 )
-from app.schemas.journal import JournalCreate, JournalResponse
+from app.schemas.journal import JournalCreate, JournalListItem, JournalResponse
+from app.schemas.page import Page, PageParams, get_page_params
 from app.services.journals import JournalService
 
 journals_router = APIRouter(prefix="/api/v1/journals", tags=["journals"])
 
 
-@journals_router.get("", response_model=list[JournalResponse])
+@journals_router.get("", response_model=Page[JournalListItem])
 async def list_journals(
+    params: PageParams = Depends(get_page_params),
     _: uuid.UUID = Depends(get_current_user_id),
     service: JournalService = Depends(get_journal_service),
 ):
-    return await service.list()
+    return await service.list(params)
 
 
 @journals_router.post("", response_model=JournalResponse, status_code=status.HTTP_201_CREATED)

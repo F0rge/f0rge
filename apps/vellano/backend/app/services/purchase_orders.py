@@ -23,10 +23,12 @@ from app.models.purchase_order import (
     PurchaseOrder,
     PurchaseOrderStatus,
 )
+from app.schemas.page import Page, PageParams
 from app.schemas.purchase_order import (
     LandingBillResponse,
     PoLineResponse,
     PurchaseOrderCreate,
+    PurchaseOrderListItem,
     PurchaseOrderResponse,
     ReceiveRequest,
 )
@@ -72,9 +74,21 @@ class PurchaseOrderService:
         self.cost_audit = CostAuditService(db)
         self.stock_movements = StockMovementService(db)
 
-    async def list(self) -> list[PurchaseOrderResponse]:
-        orders = await self.crud.list_all()
-        return [self._to_response(po) for po in orders]
+    async def list(
+        self,
+        params: PageParams,
+        status: Optional[PurchaseOrderStatus] = None,
+    ) -> Page[PurchaseOrderListItem]:
+        orders, total = await self.crud.list_page(
+            limit=params.limit,
+            offset=params.offset,
+            q=params.q,
+            status=status,
+        )
+        return Page(
+            items=[self._to_list_item(po) for po in orders],
+            total=total,
+        )
 
     async def get(self, po_id: uuid.UUID) -> PurchaseOrderResponse:
         po = await self._get_po_or_404(po_id)
@@ -334,6 +348,26 @@ class PurchaseOrderService:
         if po is None:
             raise NotFoundError("Purchase order not found")
         return po
+
+    @staticmethod
+    def _to_list_item(po: PurchaseOrder) -> PurchaseOrderListItem:
+        return PurchaseOrderListItem(
+            id=po.id,
+            po_number=po.po_number,
+            status=po.status.value,
+            supplier_id=po.supplier_id,
+            supplier_name=po.supplier.name,
+            proforma_id=po.proforma_id,
+            fx_to_zar=po.fx_to_zar,
+            line_count=len(po.lines),
+            received_location_id=po.received_location_id,
+            ordered_at=po.ordered_at,
+            on_water_at=po.on_water_at,
+            landed_at=po.landed_at,
+            received_at=po.received_at,
+            created_at=po.created_at,
+            updated_at=po.updated_at,
+        )
 
     @staticmethod
     def _to_response(po: PurchaseOrder) -> PurchaseOrderResponse:

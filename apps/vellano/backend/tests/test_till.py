@@ -141,7 +141,7 @@ async def test_till_card_sale_records_tender(
 
     payments = await owner_client.get("/api/v1/payments")
     assert payments.status_code == 200
-    payment = next(p for p in payments.json() if p["id"] == sale.json()["payment_id"])
+    payment = next(p for p in payments.json()["items"] if p["id"] == sale.json()["payment_id"])
     assert payment["tender"] == "card"
 
 
@@ -185,7 +185,8 @@ async def test_till_cannot_sell_on_water(
 
     invoices = await owner_client.get("/api/v1/invoices")
     assert invoices.status_code == 200
-    assert len(invoices.json()) == 0
+    assert invoices.json()["items"] == []
+    assert invoices.json()["total"] == 0
 
 
 async def test_till_cannot_sell_at_warehouse(
@@ -340,7 +341,7 @@ async def test_till_deposit_tender_records_payment_tender(
 
     payments = await owner_client.get("/api/v1/payments")
     assert payments.status_code == 200
-    payment = next(p for p in payments.json() if p["id"] == sale.json()["payment_id"])
+    payment = next(p for p in payments.json()["items"] if p["id"] == sale.json()["payment_id"])
     assert payment["tender"] == "deposit"
 
 
@@ -401,7 +402,7 @@ async def test_till_eft_sale_records_tender(
 
     payments = await owner_client.get("/api/v1/payments")
     assert payments.status_code == 200
-    payment = next(p for p in payments.json() if p["id"] == sale.json()["payment_id"])
+    payment = next(p for p in payments.json()["items"] if p["id"] == sale.json()["payment_id"])
     assert payment["tender"] == "eft"
 
 

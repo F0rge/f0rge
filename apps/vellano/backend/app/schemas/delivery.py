@@ -40,6 +40,26 @@ class DeliveryLineResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DeliveryListItem(BaseModel):
+    id: uuid.UUID
+    delivery_number: str
+    source_type: DeliverySourceType
+    invoice_id: Optional[uuid.UUID]
+    invoice_number: Optional[str]
+    layby_id: Optional[uuid.UUID]
+    layby_number: Optional[str]
+    customer_name: str
+    location_id: uuid.UUID
+    location_name: str
+    status: DeliveryStatus
+    delivery_date: Optional[datetime.date]
+    notes: Optional[str]
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class DeliveryResponse(BaseModel):
     id: uuid.UUID
     delivery_number: str

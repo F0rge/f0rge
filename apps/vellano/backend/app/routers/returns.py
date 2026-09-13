@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, status
 
@@ -9,18 +10,22 @@ from app.dependencies.auth import (
     get_stock_returns_service,
     require_returns_mutate,
 )
-from app.schemas.stock_return import StockReturnCreate, StockReturnResponse
+from app.models.stock_return import StockReturnStatus
+from app.schemas.page import Page, PageParams, get_page_params
+from app.schemas.stock_return import StockReturnCreate, StockReturnListItem, StockReturnResponse
 from app.services.stock_returns import StockReturnsService
 
 returns_router = APIRouter(prefix="/api/v1/returns", tags=["returns"])
 
 
-@returns_router.get("", response_model=list[StockReturnResponse])
+@returns_router.get("", response_model=Page[StockReturnListItem])
 async def list_returns(
+    params: PageParams = Depends(get_page_params),
+    status: Optional[StockReturnStatus] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: StockReturnsService = Depends(get_stock_returns_service),
 ):
-    return await service.list()
+    return await service.list(params, status=status)
 
 
 @returns_router.post(

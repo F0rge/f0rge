@@ -97,6 +97,25 @@ export class ApiError extends Error {
   }
 }
 
+export type Page<T> = { items: T[]; total: number };
+export const PAGE_SIZES = [10, 25, 50] as const;
+export type ListParams = { limit?: number; offset?: number; q?: string; status?: string };
+
+function buildListQuery(params?: ListParams): string {
+  const search = new URLSearchParams();
+  search.set("limit", String(params?.limit ?? 50));
+  search.set("offset", String(params?.offset ?? 0));
+  const q = params?.q?.trim();
+  if (q) {
+    search.set("q", q);
+  }
+  const status = params?.status?.trim();
+  if (status) {
+    search.set("status", status);
+  }
+  return search.toString();
+}
+
 async function parseErrorMessage(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as {
@@ -726,7 +745,7 @@ export type LandingBill = {
   currency: string;
 };
 
-export type PurchaseOrder = {
+export type PurchaseOrderListItem = {
   id: string;
   po_number: string;
   status: PurchaseOrderStatus;
@@ -734,8 +753,7 @@ export type PurchaseOrder = {
   supplier_name: string;
   proforma_id: string | null;
   fx_to_zar: string | null;
-  lines: PoLine[];
-  bills: LandingBill[];
+  line_count: number;
   received_location_id: string | null;
   ordered_at: string | null;
   on_water_at: string | null;
@@ -743,6 +761,11 @@ export type PurchaseOrder = {
   received_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type PurchaseOrder = PurchaseOrderListItem & {
+  lines: PoLine[];
+  bills: LandingBill[];
 };
 
 export type CreatePoLinePayload = {
@@ -824,8 +847,8 @@ export function createTillSale(payload: TillSalePayload): Promise<TillSaleResult
   });
 }
 
-export function listPurchaseOrders(): Promise<PurchaseOrder[]> {
-  return apiFetch<PurchaseOrder[]>("/purchase-orders");
+export function listPurchaseOrders(params?: ListParams): Promise<Page<PurchaseOrderListItem>> {
+  return apiFetch<Page<PurchaseOrderListItem>>(`/purchase-orders?${buildListQuery(params)}`);
 }
 
 export function createPurchaseOrder(payload: CreatePurchaseOrderPayload): Promise<PurchaseOrder> {
@@ -1477,7 +1500,7 @@ export type InvoiceLine = {
   sku_id?: string | null;
 };
 
-export type Invoice = {
+export type InvoiceListItem = {
   id: string;
   invoice_number: string;
   customer_id: string;
@@ -1488,9 +1511,12 @@ export type Invoice = {
   total_inc_vat: string;
   amount_paid: string;
   balance: string;
-  lines: InvoiceLine[];
   created_at: string;
   updated_at: string;
+};
+
+export type Invoice = InvoiceListItem & {
+  lines: InvoiceLine[];
 };
 
 export type CreateInvoiceLinePayload = {
@@ -1505,8 +1531,8 @@ export type CreateInvoicePayload = {
   lines: CreateInvoiceLinePayload[];
 };
 
-export function listInvoices(): Promise<Invoice[]> {
-  return apiFetch<Invoice[]>("/invoices");
+export function listInvoices(params?: ListParams): Promise<Page<InvoiceListItem>> {
+  return apiFetch<Page<InvoiceListItem>>(`/invoices?${buildListQuery(params)}`);
 }
 
 export function createInvoice(payload: CreateInvoicePayload): Promise<Invoice> {
@@ -1613,8 +1639,8 @@ export type CreateCreditNotePayload = {
   reason?: string;
 };
 
-export function listCreditNotes(): Promise<CreditNote[]> {
-  return apiFetch<CreditNote[]>("/credit-notes");
+export function listCreditNotes(params?: ListParams): Promise<Page<CreditNote>> {
+  return apiFetch<Page<CreditNote>>(`/credit-notes?${buildListQuery(params)}`);
 }
 
 export function createCreditNote(payload: CreateCreditNotePayload): Promise<CreditNote> {
@@ -1688,8 +1714,10 @@ export type CreateBillPayload = {
   lines: CreateBillLinePayload[];
 };
 
-export function listBills(): Promise<Bill[]> {
-  return apiFetch<Bill[]>("/bills");
+export type BillListItem = Omit<Bill, "lines">;
+
+export function listBills(params?: ListParams): Promise<Page<BillListItem>> {
+  return apiFetch<Page<BillListItem>>(`/bills?${buildListQuery(params)}`);
 }
 
 export function createBill(payload: CreateBillPayload): Promise<Bill> {
@@ -1769,8 +1797,8 @@ export type CreatePaymentOutPayload = {
 
 export type CreatePaymentPayload = CreatePaymentInPayload | CreatePaymentOutPayload;
 
-export function listPayments(): Promise<Payment[]> {
-  return apiFetch<Payment[]>("/payments");
+export function listPayments(params?: ListParams): Promise<Page<Payment>> {
+  return apiFetch<Page<Payment>>(`/payments?${buildListQuery(params)}`);
 }
 
 export type BooksDocumentType = "invoice" | "bill" | "payment" | "journal";
@@ -1876,8 +1904,10 @@ export type CreateJournalPayload = {
   lines: CreateJournalLinePayload[];
 };
 
-export function listJournals(): Promise<Journal[]> {
-  return apiFetch<Journal[]>("/journals");
+export type JournalListItem = Omit<Journal, "lines">;
+
+export function listJournals(params?: ListParams): Promise<Page<JournalListItem>> {
+  return apiFetch<Page<JournalListItem>>(`/journals?${buildListQuery(params)}`);
 }
 
 export function getJournal(id: string): Promise<Journal> {
@@ -3417,8 +3447,10 @@ export const RETURN_DISPOSITION_LABELS: Record<StockReturnDisposition, string> =
   write_off: "Write-off",
 };
 
-export function listReturns(): Promise<StockReturn[]> {
-  return apiFetch<StockReturn[]>("/returns");
+export type StockReturnListItem = Omit<StockReturn, "lines">;
+
+export function listReturns(params?: ListParams): Promise<Page<StockReturnListItem>> {
+  return apiFetch<Page<StockReturnListItem>>(`/returns?${buildListQuery(params)}`);
 }
 
 export function getReturn(id: string): Promise<StockReturn> {
@@ -3471,7 +3503,7 @@ export type LaybyPayment = {
   paid_on: string;
 };
 
-export type Layby = {
+export type LaybyListItem = {
   id: string;
   layby_number: string;
   customer_id: string;
@@ -3488,10 +3520,14 @@ export type Layby = {
   amount_paid: string;
   balance: string;
   notes: string | null;
-  lines: LaybyLine[];
-  payments: LaybyPayment[];
+  items_label: string;
   created_at: string;
   updated_at: string;
+};
+
+export type Layby = LaybyListItem & {
+  lines: LaybyLine[];
+  payments: LaybyPayment[];
 };
 
 export type CreateLaybyLinePayload = {
@@ -3515,8 +3551,8 @@ export type AddLaybyPaymentPayload = {
   tender: LaybyTender;
 };
 
-export function listLaybys(): Promise<Layby[]> {
-  return apiFetch<Layby[]>("/laybys");
+export function listLaybys(params?: ListParams): Promise<Page<LaybyListItem>> {
+  return apiFetch<Page<LaybyListItem>>(`/laybys?${buildListQuery(params)}`);
 }
 
 export function getLayby(id: string): Promise<Layby> {
@@ -3711,7 +3747,7 @@ export type DeliveryLine = {
   qty: number;
 };
 
-export type Delivery = {
+export type DeliveryListItem = {
   id: string;
   delivery_number: string;
   source_type: DeliverySourceType;
@@ -3725,9 +3761,12 @@ export type Delivery = {
   status: DeliveryStatus;
   delivery_date: string | null;
   notes: string | null;
-  lines: DeliveryLine[];
   created_at: string;
   updated_at: string;
+};
+
+export type Delivery = DeliveryListItem & {
+  lines: DeliveryLine[];
 };
 
 export type CreateDeliveryPayload = {
@@ -3749,8 +3788,8 @@ export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
   cancelled: "Cancelled",
 };
 
-export function listDeliveries(): Promise<Delivery[]> {
-  return apiFetch<Delivery[]>("/deliveries");
+export function listDeliveries(params?: ListParams): Promise<Page<DeliveryListItem>> {
+  return apiFetch<Page<DeliveryListItem>>(`/deliveries?${buildListQuery(params)}`);
 }
 
 export function getDelivery(id: string): Promise<Delivery> {
@@ -3801,7 +3840,7 @@ export function cancelDelivery(id: string): Promise<Delivery> {
   return apiFetch<Delivery>(`/deliveries/${id}/cancel`, { method: "POST" });
 }
 
-export function isInvoiceFullyPaid(invoice: Invoice): boolean {
+export function isInvoiceFullyPaid(invoice: InvoiceListItem): boolean {
   if (invoice.amount_paid === invoice.total_inc_vat) {
     return true;
   }

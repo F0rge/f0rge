@@ -195,7 +195,7 @@ async def test_till_restock_return_restores_on_hand_and_creates_cn(
 
     credit_notes = await owner_client.get("/api/v1/credit-notes")
     assert credit_notes.status_code == 200
-    assert any(cn["id"] == body["credit_note_id"] for cn in credit_notes.json())
+    assert any(cn["id"] == body["credit_note_id"] for cn in credit_notes.json()["items"])
 
 
 async def test_till_write_off_keeps_stock_decremented_but_creates_cn(

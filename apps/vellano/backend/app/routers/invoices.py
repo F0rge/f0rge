@@ -10,18 +10,20 @@ from app.dependencies.auth import (
     get_invoice_service,
     require_books_mutate,
 )
-from app.schemas.invoice import InvoiceCreate, InvoiceResponse
+from app.schemas.invoice import InvoiceCreate, InvoiceListItem, InvoiceResponse
+from app.schemas.page import Page, PageParams, get_page_params
 from app.services.invoices import InvoiceService
 
 invoices_router = APIRouter(prefix="/api/v1/invoices", tags=["invoices"])
 
 
-@invoices_router.get("", response_model=list[InvoiceResponse])
+@invoices_router.get("", response_model=Page[InvoiceListItem])
 async def list_invoices(
+    params: PageParams = Depends(get_page_params),
     _: uuid.UUID = Depends(get_current_user_id),
     service: InvoiceService = Depends(get_invoice_service),
 ):
-    return await service.list()
+    return await service.list(params)
 
 
 @invoices_router.post("", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)

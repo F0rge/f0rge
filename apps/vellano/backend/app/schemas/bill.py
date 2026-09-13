@@ -34,6 +34,26 @@ class BillLineResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class BillListItem(BaseModel):
+    id: uuid.UUID
+    bill_number: str
+    supplier_id: uuid.UUID
+    supplier_name: str
+    supplier_ref: str
+    issue_date: datetime.date
+    currency: str
+    fx_to_zar: Decimal
+    amount_foreign: Decimal
+    amount_zar: Decimal
+    amount_paid_zar: Decimal
+    balance_zar: Decimal
+    pdf_storage_key: Optional[str]
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class BillResponse(BaseModel):
     id: uuid.UUID
     bill_number: str

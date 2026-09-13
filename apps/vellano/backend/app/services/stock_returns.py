@@ -20,9 +20,11 @@ from app.models.stock_return import (
 )
 from app.models.tax_invoice import InvoiceLine
 from app.models.unit_cost_audit import UnitCostAuditSource
+from app.schemas.page import Page, PageParams
 from app.schemas.stock_return import (
     StockReturnCreate,
     StockReturnLineResponse,
+    StockReturnListItem,
     StockReturnResponse,
 )
 from app.services.category_posting import CategoryPostingService
@@ -49,9 +51,21 @@ class StockReturnsService:
         self.credit_notes = CreditNoteService(db)
         self.category_posting = CategoryPostingService(db)
 
-    async def list(self) -> list[StockReturnResponse]:
-        rows = await self.crud.list_all()
-        return [self._to_response(row) for row in rows]
+    async def list(
+        self,
+        params: PageParams,
+        status: Optional[StockReturnStatus] = None,
+    ) -> Page[StockReturnListItem]:
+        rows, total = await self.crud.list_page(
+            limit=params.limit,
+            offset=params.offset,
+            q=params.q,
+            status=status,
+        )
+        return Page(
+            items=[self._to_list_item(row) for row in rows],
+            total=total,
+        )
 
     async def get(self, return_id: uuid.UUID) -> StockReturnResponse:
         return self._to_response(await self._get_or_404(return_id))
@@ -265,6 +279,24 @@ class StockReturnsService:
             total_inc += inc_vat
             sales_splits.append((invoice_line.sku_id, ex_vat))
         return subtotal, vat_total, total_inc, sales_splits
+
+    @staticmethod
+    def _to_list_item(stock_return: StockReturn) -> StockReturnListItem:
+        return StockReturnListItem(
+            id=stock_return.id,
+            return_number=stock_return.return_number,
+            invoice_id=stock_return.invoice_id,
+            invoice_number=stock_return.invoice.invoice_number,
+            location_id=stock_return.location_id,
+            location_name=stock_return.location.name,
+            credit_note_id=stock_return.credit_note_id,
+            reason=stock_return.reason,
+            disposition=stock_return.disposition,
+            status=stock_return.status,
+            notes=stock_return.notes,
+            created_at=stock_return.created_at,
+            updated_at=stock_return.updated_at,
+        )
 
     def _to_response(self, stock_return: StockReturn) -> StockReturnResponse:
         return StockReturnResponse(

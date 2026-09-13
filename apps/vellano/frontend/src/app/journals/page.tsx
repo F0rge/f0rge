@@ -7,6 +7,7 @@ import {
   FileUploaderItem,
   InlineNotification,
   Modal,
+  Pagination,
   Select,
   SelectItem,
   Stack,
@@ -29,6 +30,7 @@ import {
   createJournal,
   formatPriceAmount,
   formatZarAmount,
+  getJournal,
   listAccounts,
   listJournals,
   parsePriceInput,
@@ -40,6 +42,7 @@ import {
   type CreateJournalLinePayload,
   type Journal,
   type JournalImportPreview,
+  type JournalListItem,
   type JournalStatus,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -122,19 +125,22 @@ function statusTagType(status: JournalStatus): "blue" | "green" | "gray" {
 export default function JournalsPage() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
-  const [journals, setJournals] = useState<Journal[]>([]);
+  const [journals, setJournals] = useState<JournalListItem[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const [entryDate, setEntryDate] = useState(todayIso());
   const [memo, setMemo] = useState("");
   const [createStatus, setCreateStatus] = useState<CreateStatus>("posted");
   const [lines, setLines] = useState<JournalLineForm[]>([emptyLine(), emptyLine()]);
   const [viewJournal, setViewJournal] = useState<Journal | null>(null);
-  const [voidTarget, setVoidTarget] = useState<Journal | null>(null);
+  const [voidTarget, setVoidTarget] = useState<JournalListItem | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<JournalImportPreview | null>(null);
@@ -156,14 +162,18 @@ export default function JournalsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listJournals();
-      setJournals(data);
+      const data = await listJournals({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      setJournals(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load journals.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   const loadCreateData = useCallback(async () => {
     try {
@@ -348,6 +358,16 @@ export default function JournalsPage() {
     }
   }
 
+  async function openViewJournal(journalId: string) {
+    setError(null);
+    try {
+      const journal = await getJournal(journalId);
+      setViewJournal(journal);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load journal.");
+    }
+  }
+
   const rows: JournalRow[] = journals.map((entry) => ({
     id: entry.id,
     entry_date: entry.entry_date,
@@ -412,7 +432,7 @@ export default function JournalsPage() {
 
       {loading ? (
         <p className="cds--type-body-01">Loading journals…</p>
-      ) : journals.length === 0 ? (
+      ) : total === 0 ? (
         <InlineNotification
           kind="info"
           title="No journals"
@@ -421,6 +441,7 @@ export default function JournalsPage() {
           lowContrast
         />
       ) : (
+        <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Journals" description="General ledger journal entries">
@@ -443,9 +464,7 @@ export default function JournalsPage() {
                         {...getRowProps({ row })}
                         key={row.id}
                         onClick={() => {
-                          if (entry) {
-                            setViewJournal(entry);
-                          }
+                          void openViewJournal(row.id);
                         }}
                         style={{ cursor: entry ? "pointer" : undefined }}
                       >
@@ -468,7 +487,7 @@ export default function JournalsPage() {
                                     size="sm"
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      setViewJournal(entry);
+                                      void openViewJournal(entry.id);
                                     }}
                                   >
                                     View
@@ -515,6 +534,17 @@ export default function JournalsPage() {
             </TableContainer>
           )}
         </DataTable>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 25, 50]}
+          totalItems={total}
+          onChange={({ page: nextPage, pageSize: nextSize }) => {
+            setPage(nextPage);
+            setPageSize(nextSize);
+          }}
+        />
+        </>
       )}
 
       <Modal

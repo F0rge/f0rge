@@ -24,8 +24,10 @@ from app.schemas.delivery import (
     DeliveryComplete,
     DeliveryCreate,
     DeliveryLineResponse,
+    DeliveryListItem,
     DeliveryResponse,
 )
+from app.schemas.page import Page, PageParams
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -39,9 +41,21 @@ class DeliveriesService:
         self.location_crud = LocationCRUD(db)
         self.sku_crud = SkuCRUD(db)
 
-    async def list(self) -> list[DeliveryResponse]:
-        rows = await self.crud.list_all()
-        return [self._to_response(row) for row in rows]
+    async def list(
+        self,
+        params: PageParams,
+        status: Optional[DeliveryStatus] = None,
+    ) -> Page[DeliveryListItem]:
+        rows, total = await self.crud.list_page(
+            limit=params.limit,
+            offset=params.offset,
+            q=params.q,
+            status=status,
+        )
+        return Page(
+            items=[self._to_list_item(row) for row in rows],
+            total=total,
+        )
 
     async def get(self, delivery_id: uuid.UUID) -> DeliveryResponse:
         return self._to_response(await self._get_or_404(delivery_id))
@@ -224,6 +238,36 @@ class DeliveriesService:
         if delivery is None:
             raise NotFoundError("Delivery not found")
         return delivery
+
+    def _to_list_item(self, delivery: Delivery) -> DeliveryListItem:
+        customer_name = ""
+        invoice_number: Optional[str] = None
+        layby_number: Optional[str] = None
+
+        if delivery.source_type == DeliverySourceType.INVOICE and delivery.invoice is not None:
+            customer_name = delivery.invoice.customer.name
+            invoice_number = delivery.invoice.invoice_number
+        elif delivery.source_type == DeliverySourceType.LAYBY and delivery.layby is not None:
+            customer_name = delivery.layby.customer.name
+            layby_number = delivery.layby.layby_number
+
+        return DeliveryListItem(
+            id=delivery.id,
+            delivery_number=delivery.delivery_number,
+            source_type=delivery.source_type,
+            invoice_id=delivery.invoice_id,
+            invoice_number=invoice_number,
+            layby_id=delivery.layby_id,
+            layby_number=layby_number,
+            customer_name=customer_name,
+            location_id=delivery.location_id,
+            location_name=delivery.location.name,
+            status=delivery.status,
+            delivery_date=delivery.delivery_date,
+            notes=delivery.notes,
+            created_at=delivery.created_at,
+            updated_at=delivery.updated_at,
+        )
 
     def _to_response(self, delivery: Delivery) -> DeliveryResponse:
         customer_name = ""

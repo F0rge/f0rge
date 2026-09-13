@@ -51,6 +51,30 @@ class LaybyPaymentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class LaybyListItem(BaseModel):
+    id: uuid.UUID
+    layby_number: str
+    customer_id: uuid.UUID
+    customer_name: str
+    location_id: uuid.UUID
+    location_name: str
+    invoice_id: Optional[uuid.UUID]
+    due_date: datetime.date
+    hold_stock: bool
+    status: LaybyStatus
+    subtotal_ex_vat: Decimal
+    vat_amount: Decimal
+    total_inc_vat: Decimal
+    amount_paid: Decimal
+    balance: Decimal
+    notes: Optional[str]
+    items_label: str
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class LaybyResponse(BaseModel):
     id: uuid.UUID
     layby_number: str

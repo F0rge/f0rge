@@ -3,12 +3,13 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.inventory import LocationStock, SkuStock
 from app.models.purchase_order import PoLine, PurchaseOrder, PurchaseOrderStatus
+from app.models.supplier import Supplier
 from f0rge_db.crud import BaseCRUD
 
 
@@ -40,6 +41,50 @@ class PurchaseOrderCRUD(BaseCRUD):
             .order_by(PurchaseOrder.po_number)
         )
         return list(result.scalars().all())
+
+    async def list_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        q: Optional[str] = None,
+        status: Optional[PurchaseOrderStatus] = None,
+    ) -> tuple[list[PurchaseOrder], int]:
+        filters = []
+        if q:
+            pattern = f"%{q}%"
+            filters.append(
+                or_(
+                    PurchaseOrder.po_number.ilike(pattern),
+                    Supplier.name.ilike(pattern),
+                )
+            )
+        if status is not None:
+            filters.append(PurchaseOrder.status == status)
+
+        count_stmt = select(func.count(PurchaseOrder.id)).join(
+            Supplier, PurchaseOrder.supplier_id == Supplier.id
+        )
+        if filters:
+            count_stmt = count_stmt.where(*filters)
+        total = await self.db.scalar(count_stmt) or 0
+
+        stmt = (
+            select(PurchaseOrder)
+            .options(
+                selectinload(PurchaseOrder.supplier),
+                selectinload(PurchaseOrder.lines),
+            )
+            .join(Supplier, PurchaseOrder.supplier_id == Supplier.id)
+        )
+        if filters:
+            stmt = stmt.where(*filters)
+        stmt = stmt.order_by(
+            PurchaseOrder.created_at.desc(),
+            PurchaseOrder.po_number.desc(),
+        ).limit(limit).offset(offset)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().unique().all()), total
 
     async def list_received_dated(self) -> list[PurchaseOrder]:
         result = await self.db.execute(

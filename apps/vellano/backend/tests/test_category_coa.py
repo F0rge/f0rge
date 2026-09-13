@@ -115,7 +115,7 @@ async def test_damage_on_seating_sku_hits_stock_adj_5110(owner_client: AsyncClie
     assert journals.status_code == 200
     adj_journal = next(
         row
-        for row in journals.json()
+        for row in journals.json()["items"]
         if row["document_type"] == "stock_adjustment" and row["document_id"] == adjustment_id
     )
     assert Decimal(adj_journal["debit_total_zar"]) == Decimal(adj_journal["credit_total_zar"])

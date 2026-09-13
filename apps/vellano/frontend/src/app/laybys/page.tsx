@@ -8,6 +8,7 @@ import {
   InlineNotification,
   Modal,
   NumberInput,
+  Pagination,
   Select,
   SelectItem,
   Stack,
@@ -35,6 +36,7 @@ import {
   createLayby,
   formatPriceAmount,
   formatZarAmount,
+  getCustomer,
   getLayby,
   isActiveLocation,
   listContacts,
@@ -44,12 +46,12 @@ import {
   roundHalfUp,
   type Contact,
   type Layby,
+  type LaybyListItem,
   type LaybyTender,
   type Location,
   type Sku,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { matchesCustomerQuery } from "@/lib/customer-crm";
 import { printHtml } from "@/lib/print-html";
 
 const TABLE_HEADERS = [
@@ -101,14 +103,14 @@ function formatDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-ZA");
 }
 
-function isOverdue(layby: Layby): boolean {
+function isOverdue(layby: LaybyListItem): boolean {
   if (layby.status !== "open") {
     return false;
   }
   return layby.due_date < todayIso();
 }
 
-function statusLabel(layby: Layby): string {
+function statusLabel(layby: LaybyListItem): string {
   if (layby.status === "completed") {
     return "Completed";
   }
@@ -124,7 +126,7 @@ function statusLabel(layby: Layby): string {
   return "Active";
 }
 
-function statusTagType(layby: Layby): "blue" | "green" | "gray" | "red" {
+function statusTagType(layby: LaybyListItem): "blue" | "green" | "gray" | "red" {
   if (layby.status === "completed") {
     return "green";
   }
@@ -140,17 +142,6 @@ function statusTagType(layby: Layby): "blue" | "green" | "gray" | "red" {
   return "blue";
 }
 
-function formatItems(layby: Layby): string {
-  if (layby.lines.length === 0) {
-    return "—";
-  }
-  const first = layby.lines[0];
-  const base = `${first.name} × ${first.qty}`;
-  if (layby.lines.length === 1) {
-    return base;
-  }
-  return `${base} +${layby.lines.length - 1}`;
-}
 
 function defaultLocationId(locations: Location[]): string {
   const bedfordview = locations.find((entry) => entry.name.toLowerCase() === "bedfordview");
@@ -169,7 +160,17 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function matchesStatusFilter(layby: Layby, filter: StatusFilter): boolean {
+function laybyListStatus(filter: StatusFilter): string | undefined {
+  if (filter === "ready") {
+    return "ready";
+  }
+  if (filter === "active" || filter === "overdue") {
+    return "open";
+  }
+  return undefined;
+}
+
+function matchesStatusFilter(layby: LaybyListItem, filter: StatusFilter): boolean {
   if (filter === "all") {
     return true;
   }
@@ -241,7 +242,7 @@ function LaybysPageContent() {
   const searchParams = useSearchParams();
   const customerFilter = searchParams.get("customer")?.trim() ?? "";
   const canMutate = canMutateLaybys(user);
-  const [laybys, setLaybys] = useState<Layby[]>([]);
+  const [laybys, setLaybys] = useState<LaybyListItem[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
@@ -265,6 +266,36 @@ function LaybysPageContent() {
   const [paymentTender, setPaymentTender] = useState<LaybyTender>("cash");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [customerSearchQ, setCustomerSearchQ] = useState<string | undefined>();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    if (!customerFilter) {
+      setCustomerSearchQ(undefined);
+      return;
+    }
+    let cancelled = false;
+    void getCustomer(customerFilter)
+      .then((customer) => {
+        if (!cancelled) {
+          setCustomerSearchQ(customer.name);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCustomerSearchQ(undefined);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter, customerFilter]);
 
   const customers = useMemo(
     () => contacts.filter((entry) => entry.kind === "customer"),
@@ -308,14 +339,25 @@ function LaybysPageContent() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listLaybys();
-      setLaybys(data);
+      const q = searchQuery.trim() || customerSearchQ;
+      const data = await listLaybys({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+        q: q || undefined,
+        status: laybyListStatus(statusFilter),
+      });
+      let items = data.items;
+      if (statusFilter === "overdue" || statusFilter === "active") {
+        items = items.filter((entry) => matchesStatusFilter(entry, statusFilter));
+      }
+      setLaybys(items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load laybys.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize, searchQuery, statusFilter, customerSearchQ]);
 
   const loadCreateData = useCallback(async () => {
     try {
@@ -512,34 +554,11 @@ function LaybysPageContent() {
     [laybys],
   );
 
-  const filteredLaybys = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return laybys
-      .slice()
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
-      .filter((entry) => {
-        if (!matchesCustomerQuery(entry.customer_id, entry.customer_name, customerFilter)) {
-          return false;
-        }
-        if (!matchesStatusFilter(entry, statusFilter)) {
-          return false;
-        }
-        if (!query) {
-          return true;
-        }
-        return (
-          entry.layby_number.toLowerCase().includes(query) ||
-          entry.customer_name.toLowerCase().includes(query) ||
-          entry.location_name.toLowerCase().includes(query)
-        );
-      });
-  }, [laybys, searchQuery, statusFilter, customerFilter]);
-
-  const rows: LaybyRow[] = filteredLaybys.map((entry) => ({
+  const rows: LaybyRow[] = laybys.map((entry) => ({
     id: entry.id,
     layby_number: entry.layby_number,
     customer_name: entry.customer_name,
-    items: formatItems(entry),
+    items: entry.items_label,
     total_inc_vat: formatZarAmount(entry.total_inc_vat),
     amount_paid: formatZarAmount(entry.amount_paid),
     balance: formatZarAmount(entry.balance),
@@ -627,7 +646,7 @@ function LaybysPageContent() {
             </div>
           </div>
 
-          {laybys.length === 0 ? (
+          {total === 0 ? (
             <InlineNotification
               kind="info"
               title="No laybys"
@@ -637,6 +656,7 @@ function LaybysPageContent() {
               style={{ margin: "1rem" }}
             />
           ) : (
+            <>
             <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
               {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
                 <TableContainer title="Laybys" description="Open laybys and payment progress">
@@ -711,6 +731,17 @@ function LaybysPageContent() {
                 </TableContainer>
               )}
             </DataTable>
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              pageSizes={[10, 25, 50]}
+              totalItems={total}
+              onChange={({ page: nextPage, pageSize: nextSize }) => {
+                setPage(nextPage);
+                setPageSize(nextSize);
+              }}
+            />
+            </>
           )}
         </div>
       )}

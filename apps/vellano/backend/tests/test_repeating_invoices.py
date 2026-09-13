@@ -39,7 +39,7 @@ async def test_run_creates_posted_invoice(owner_client: AsyncClient) -> None:
 
     listed = await owner_client.get("/api/v1/invoices")
     assert listed.status_code == 200
-    ids = {row["id"] for row in listed.json()}
+    ids = {row["id"] for row in listed.json()["items"]}
     assert invoice["id"] in ids
 
 

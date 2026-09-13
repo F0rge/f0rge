@@ -26,6 +26,7 @@ import {
   dispatchTransfer,
   downloadTransferPdf,
   getStocktake,
+  getPurchaseOrder,
   isActiveLocation,
   listInventory,
   listLocations,
@@ -41,6 +42,7 @@ import {
   type InventorySku,
   type Location,
   type PurchaseOrder,
+  type PurchaseOrderListItem,
   type Sku,
   type Stocktake,
   type StocktakeLine,
@@ -135,7 +137,7 @@ function WmsMobileConsole() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [locations, setLocations] = useState<Location[]>([]);
-  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [orders, setOrders] = useState<PurchaseOrderListItem[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
   const [stocktake, setStocktake] = useState<Stocktake | null>(null);
@@ -147,13 +149,13 @@ function WmsMobileConsole() {
       const [locationData, orderData, skuData, inventoryData, stocktakeSummaries] =
         await Promise.all([
           listLocations(),
-          listPurchaseOrders(),
+          listPurchaseOrders({ limit: 100 }),
           listSkus(),
           listInventory(),
           listStocktakes(),
         ]);
       setLocations(locationData.filter(isActiveLocation));
-      setOrders(orderData);
+      setOrders(orderData.items);
       setSkus(skuData);
       setInventory(inventoryData);
       const activeSummary = stocktakeSummaries.find(
@@ -291,7 +293,7 @@ type ReceiveTabProps = {
   canMutate: boolean;
   locationId: string;
   locations: Location[];
-  landedOrders: PurchaseOrder[];
+  landedOrders: PurchaseOrderListItem[];
   skus: Sku[];
   onError: (message: string) => void;
   onSuccess: (message: string) => void;
@@ -312,17 +314,40 @@ function ReceiveTab({
   const [binId, setBinId] = useState("");
   const [barcode, setBarcode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [selectedPoDetail, setSelectedPoDetail] = useState<PurchaseOrder | null>(null);
   const { activeBins, defaultBinId } = useLocationBins(locationId);
 
   useEffect(() => {
     setBinId(defaultBinId);
   }, [locationId, defaultBinId]);
 
-  const selectedPo = landedOrders.find((entry) => entry.id === poId);
+  useEffect(() => {
+    if (!poId) {
+      setSelectedPoDetail(null);
+      return;
+    }
+    let cancelled = false;
+    void getPurchaseOrder(poId)
+      .then((po) => {
+        if (!cancelled) {
+          setSelectedPoDetail(po);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedPoDetail(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [poId]);
+
+  const selectedPoSummary = landedOrders.find((entry) => entry.id === poId);
   const matchedSku = findSkuByBarcode(skus, barcode);
   const poLine =
-    matchedSku && selectedPo
-      ? selectedPo.lines.find((line) => line.sku_id === matchedSku.id)
+    matchedSku && selectedPoDetail
+      ? selectedPoDetail.lines.find((line) => line.sku_id === matchedSku.id)
       : undefined;
 
   const formValid = Boolean(poId && locationId);
@@ -406,8 +431,8 @@ function ReceiveTab({
           />
         ))}
       </Select>
-      {selectedPo ? (
-        <p className="cds--type-body-01">{formatExpectedCartons(selectedPo, skus)}</p>
+      {selectedPoDetail ? (
+        <p className="cds--type-body-01">{formatExpectedCartons(selectedPoDetail, skus)}</p>
       ) : null}
       {landedOrders.length === 0 ? (
         <InlineNotification
@@ -436,7 +461,7 @@ function ReceiveTab({
           </p>
         </div>
       ) : null}
-      {barcode.trim() && matchedSku && selectedPo && !poLine ? (
+      {barcode.trim() && matchedSku && selectedPoSummary && !poLine ? (
         <InlineNotification
           kind="warning"
           title="Not on PO"

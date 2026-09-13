@@ -2,11 +2,11 @@
 
 import {
   Button,
+  ComboBox,
   DataTable,
   InlineNotification,
   Modal,
-  Select,
-  SelectItem,
+  Pagination,
   Stack,
   Table,
   TableBody,
@@ -28,7 +28,7 @@ import {
   listCreditNotes,
   listInvoices,
   type CreditNote,
-  type Invoice,
+  type InvoiceListItem,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -56,49 +56,53 @@ type CreditNoteRow = {
   actions: string;
 };
 
+type InvoiceOption = {
+  id: string;
+  label: string;
+};
+
+function invoiceToOption(invoice: InvoiceListItem): InvoiceOption {
+  return {
+    id: invoice.id,
+    label: `${invoice.invoice_number} — ${invoice.customer_name}`,
+  };
+}
+
 export default function CreditNotesPage() {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
+  const [creditedInvoiceIds, setCreditedInvoiceIds] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [invoiceId, setInvoiceId] = useState("");
+  const [invoiceQuery, setInvoiceQuery] = useState("");
+  const [debouncedInvoiceQuery, setDebouncedInvoiceQuery] = useState("");
   const [reason, setReason] = useState("");
-
-  const creditedInvoiceIds = useMemo(
-    () => new Set(creditNotes.map((entry) => entry.invoice_id)),
-    [creditNotes],
-  );
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
 
   const loadCreditNotes = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listCreditNotes();
-      setCreditNotes(data);
+      const data = await listCreditNotes({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      setCreditNotes(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load credit notes.");
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const loadCreateData = useCallback(async () => {
-    try {
-      const [invoiceData, creditNoteData] = await Promise.all([
-        listInvoices(),
-        listCreditNotes(),
-      ]);
-      setInvoices(invoiceData);
-      setCreditNotes(creditNoteData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load invoices.");
-    }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     if (user) {
@@ -107,20 +111,56 @@ export default function CreditNotesPage() {
   }, [user, loadCreditNotes]);
 
   useEffect(() => {
-    if (createOpen && canMutate) {
-      void loadCreateData();
+    const timer = setTimeout(() => setDebouncedInvoiceQuery(invoiceQuery), 300);
+    return () => clearTimeout(timer);
+  }, [invoiceQuery]);
+
+  useEffect(() => {
+    if (!createOpen || !canMutate) {
+      return;
     }
-  }, [createOpen, canMutate, loadCreateData]);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [invoicePage, creditPage] = await Promise.all([
+          listInvoices({ limit: 25, q: debouncedInvoiceQuery || undefined }),
+          listCreditNotes({ limit: 100 }),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setCreditedInvoiceIds(new Set(creditPage.items.map((entry) => entry.invoice_id)));
+        setInvoiceOptions(
+          invoicePage.items
+            .filter((invoice) => !creditPage.items.some((cn) => cn.invoice_id === invoice.id))
+            .map(invoiceToOption),
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load invoices.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen, canMutate, debouncedInvoiceQuery]);
 
   const availableInvoices = useMemo(
-    () => invoices.filter((invoice) => !creditedInvoiceIds.has(invoice.id)),
-    [invoices, creditedInvoiceIds],
+    () => invoiceOptions.filter((option) => !creditedInvoiceIds.has(option.id)),
+    [invoiceOptions, creditedInvoiceIds],
+  );
+
+  const selectedInvoiceOption = useMemo(
+    () => availableInvoices.find((option) => option.id === invoiceId) ?? null,
+    [availableInvoices, invoiceId],
   );
 
   const formValid = Boolean(invoiceId);
 
   function resetCreateForm() {
     setInvoiceId("");
+    setInvoiceQuery("");
     setReason("");
   }
 
@@ -205,7 +245,7 @@ export default function CreditNotesPage() {
 
       {loading ? (
         <p className="cds--type-body-01">Loading credit notes…</p>
-      ) : creditNotes.length === 0 ? (
+      ) : total === 0 ? (
         <InlineNotification
           kind="info"
           title="No credit notes"
@@ -214,80 +254,92 @@ export default function CreditNotesPage() {
           lowContrast
         />
       ) : (
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Credit notes" description="All Vellano credit notes">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.map((row) => {
-                    const invoiceIdForRow = invoiceIdByCreditNoteId[row.id];
-                    const creditNote = creditNotes.find((entry) => entry.id === row.id);
-                    return (
-                      <TableRow
-                        {...getRowProps({ row })}
-                        key={row.id}
-                        onClick={() => {
-                          if (invoiceIdForRow) {
-                            router.push(`/invoices/${invoiceIdForRow}`);
-                          }
-                        }}
-                        style={{ cursor: invoiceIdForRow ? "pointer" : undefined }}
-                      >
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "actions") {
-                            return (
-                              <TableCell key={cell.id}>
-                                <Stack gap={3} orientation="horizontal">
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      if (invoiceIdForRow) {
-                                        router.push(`/invoices/${invoiceIdForRow}`);
-                                      }
-                                    }}
-                                  >
-                                    View invoice
-                                  </Button>
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      if (creditNote) {
-                                        void handleDownload(
-                                          creditNote.id,
-                                          creditNote.credit_note_number,
-                                        );
-                                      }
-                                    }}
-                                  >
-                                    Download PDF
-                                  </Button>
-                                </Stack>
-                              </TableCell>
-                            );
-                          }
-                          return <TableCell key={cell.id}>{cell.value}</TableCell>;
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
+        <>
+          <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
+            {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+              <TableContainer title="Credit notes" description="All Vellano credit notes">
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                          {header.header}
+                        </TableHeader>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {tableRows.map((row) => {
+                      const invoiceIdForRow = invoiceIdByCreditNoteId[row.id];
+                      const creditNote = creditNotes.find((entry) => entry.id === row.id);
+                      return (
+                        <TableRow
+                          {...getRowProps({ row })}
+                          key={row.id}
+                          onClick={() => {
+                            if (invoiceIdForRow) {
+                              router.push(`/invoices/${invoiceIdForRow}`);
+                            }
+                          }}
+                          style={{ cursor: invoiceIdForRow ? "pointer" : undefined }}
+                        >
+                          {row.cells.map((cell) => {
+                            if (cell.info.header === "actions") {
+                              return (
+                                <TableCell key={cell.id}>
+                                  <Stack gap={3} orientation="horizontal">
+                                    <Button
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (invoiceIdForRow) {
+                                          router.push(`/invoices/${invoiceIdForRow}`);
+                                        }
+                                      }}
+                                    >
+                                      View invoice
+                                    </Button>
+                                    <Button
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (creditNote) {
+                                          void handleDownload(
+                                            creditNote.id,
+                                            creditNote.credit_note_number,
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      Download PDF
+                                    </Button>
+                                  </Stack>
+                                </TableCell>
+                              );
+                            }
+                            return <TableCell key={cell.id}>{cell.value}</TableCell>;
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            pageSizes={[10, 25, 50]}
+            totalItems={total}
+            onChange={({ page: nextPage, pageSize: nextSize }) => {
+              setPage(nextPage);
+              setPageSize(nextSize);
+            }}
+          />
+        </>
       )}
 
       <Modal
@@ -304,30 +356,27 @@ export default function CreditNotesPage() {
             <InlineNotification
               kind="info"
               title="No invoices available"
-              subtitle="Every tax invoice already has a credit note, or no invoices exist yet."
+              subtitle="Every tax invoice already has a credit note, or no invoices match your search."
               hideCloseButton
               lowContrast
             />
           ) : (
-            <Select
+            <ComboBox
               id="credit-note-invoice"
-              labelText="Tax invoice"
-              value={invoiceId}
-              onChange={(event) => setInvoiceId(event.target.value)}
-            >
-              <SelectItem value="" text="Select an invoice" />
-              {invoices.map((invoice) => {
-                const hasCreditNote = creditedInvoiceIds.has(invoice.id);
-                return (
-                  <SelectItem
-                    key={invoice.id}
-                    value={invoice.id}
-                    text={`${invoice.invoice_number} — ${invoice.customer_name}`}
-                    disabled={hasCreditNote}
-                  />
-                );
-              })}
-            </Select>
+              titleText="Tax invoice"
+              placeholder="Search invoice number or customer…"
+              items={availableInvoices}
+              itemToString={(item) => item?.label ?? ""}
+              selectedItem={selectedInvoiceOption}
+              shouldFilterItem={() => true}
+              onInputChange={(value) => setInvoiceQuery(value)}
+              onChange={({ selectedItem }) => {
+                setInvoiceId(selectedItem?.id ?? "");
+                if (selectedItem) {
+                  setInvoiceQuery(selectedItem.label);
+                }
+              }}
+            />
           )}
           <TextArea
             id="credit-note-reason"

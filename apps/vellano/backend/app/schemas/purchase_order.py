@@ -39,6 +39,24 @@ class LandingBillResponse(BaseModel):
     currency: str
 
 
+class PurchaseOrderListItem(BaseModel):
+    id: uuid.UUID
+    po_number: str
+    status: str
+    supplier_id: uuid.UUID
+    supplier_name: str
+    proforma_id: Optional[uuid.UUID] = None
+    fx_to_zar: Optional[Decimal] = None
+    line_count: int
+    received_location_id: Optional[uuid.UUID] = None
+    ordered_at: Optional[datetime.datetime] = None
+    on_water_at: Optional[datetime.datetime] = None
+    landed_at: Optional[datetime.datetime] = None
+    received_at: Optional[datetime.datetime] = None
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+
 class PurchaseOrderResponse(BaseModel):
     id: uuid.UUID
     po_number: str

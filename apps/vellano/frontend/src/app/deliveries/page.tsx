@@ -2,9 +2,11 @@
 
 import {
   Button,
+  ComboBox,
   DataTable,
   InlineNotification,
   Modal,
+  Pagination,
   Select,
   SelectItem,
   Stack,
@@ -27,6 +29,7 @@ import {
   canMutateDeliveries,
   completeDelivery,
   createDelivery,
+  getDelivery,
   getInvoice,
   getLayby,
   isActiveLocation,
@@ -37,6 +40,7 @@ import {
   listLocations,
   packDelivery,
   type Delivery,
+  type DeliveryListItem,
   type DeliverySourceType,
   type DeliveryStatus,
   type Invoice,
@@ -99,7 +103,7 @@ function statusTagType(status: DeliveryStatus): "blue" | "teal" | "green" | "gra
   return "gray";
 }
 
-function sourceLabel(entry: Delivery): string {
+function sourceLabel(entry: DeliveryListItem): string {
   if (entry.source_type === "invoice") {
     return entry.invoice_number ?? "Invoice";
   }
@@ -116,9 +120,9 @@ function DeliveriesPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const canMutate = canMutateDeliveries(user);
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [laybys, setLaybys] = useState<Layby[]>([]);
+  const [deliveries, setDeliveries] = useState<DeliveryListItem[]>([]);
+  const [invoiceOptions, setInvoiceOptions] = useState<{ id: string; label: string }[]>([]);
+  const [laybyOptions, setLaybyOptions] = useState<{ id: string; label: string }[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,47 +138,99 @@ function DeliveriesPageContent() {
   const [notes, setNotes] = useState("");
   const [sourcePreview, setSourcePreview] = useState<Invoice | Layby | null>(null);
   const [sourceLoading, setSourceLoading] = useState(false);
+  const [sourceQuery, setSourceQuery] = useState("");
+  const [debouncedSourceQuery, setDebouncedSourceQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const prefillConsumed = useRef(false);
-
-  const paidInvoices = useMemo(
-    () => invoices.filter(isInvoiceFullyPaid),
-    [invoices],
-  );
-
-  const eligibleLaybys = useMemo(
-    () => laybys.filter((entry) => entry.status !== "cancelled"),
-    [laybys],
-  );
 
   const loadDeliveries = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listDeliveries();
-      setDeliveries(data);
+      const data = await listDeliveries({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      setDeliveries(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load deliveries.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   const loadCreateData = useCallback(async () => {
     try {
-      const [invoiceData, laybyData, locationData] = await Promise.all([
-        listInvoices(),
-        listLaybys(),
-        listLocations(),
-      ]);
+      const locationData = await listLocations();
       const active = locationData.filter(isActiveLocation);
-      setInvoices(invoiceData);
-      setLaybys(laybyData);
       setLocations(active);
       setLocationId((current) => current || defaultLocationId(active));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load create form data.");
     }
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSourceQuery(sourceQuery), 300);
+    return () => clearTimeout(timer);
+  }, [sourceQuery]);
+
+  useEffect(() => {
+    if (!createOpen || !canMutate) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (sourceType === "invoice") {
+          const data = await listInvoices({ limit: 25, q: debouncedSourceQuery || undefined });
+          if (!cancelled) {
+            setInvoiceOptions(
+              data.items.filter(isInvoiceFullyPaid).map((invoice) => ({
+                id: invoice.id,
+                label: `${invoice.invoice_number} — ${invoice.customer_name}`,
+              })),
+            );
+          }
+        } else {
+          const data = await listLaybys({
+            limit: 25,
+            q: debouncedSourceQuery || undefined,
+          });
+          if (!cancelled) {
+            setLaybyOptions(
+              data.items
+                .filter((entry) => entry.status !== "cancelled")
+                .map((layby) => ({
+                  id: layby.id,
+                  label: `${layby.layby_number} — ${layby.customer_name}`,
+                })),
+            );
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load sources.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen, canMutate, sourceType, debouncedSourceQuery]);
+
+  const selectedInvoiceOption = useMemo(
+    () => invoiceOptions.find((option) => option.id === invoiceId) ?? null,
+    [invoiceOptions, invoiceId],
+  );
+
+  const selectedLaybyOption = useMemo(
+    () => laybyOptions.find((option) => option.id === laybyId) ?? null,
+    [laybyOptions, laybyId],
+  );
 
   useEffect(() => {
     if (user) {
@@ -279,6 +335,7 @@ function DeliveriesPageContent() {
     setSourceType("invoice");
     setInvoiceId("");
     setLaybyId("");
+    setSourceQuery("");
     setNotes("");
     setSourcePreview(null);
     setLocationId(defaultLocationId(locations));
@@ -356,10 +413,7 @@ function DeliveriesPageContent() {
     [deliveries],
   );
 
-  const rows: DeliveryRow[] = deliveries
-    .slice()
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .map((entry) => ({
+  const rows: DeliveryRow[] = deliveries.map((entry) => ({
       id: entry.id,
       delivery_number: entry.delivery_number,
       source: sourceLabel(entry),
@@ -370,9 +424,15 @@ function DeliveriesPageContent() {
       actions: entry.id,
     }));
 
-  function openDetail(entry: Delivery) {
-    setSelectedDelivery(entry);
-    setDetailOpen(true);
+  async function openDetail(entry: DeliveryListItem) {
+    setError(null);
+    try {
+      const delivery = await getDelivery(entry.id);
+      setSelectedDelivery(delivery);
+      setDetailOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load delivery.");
+    }
   }
 
   return (
@@ -408,7 +468,7 @@ function DeliveriesPageContent() {
 
       {loading ? (
         <p className="cds--type-body-01">Loading deliveries…</p>
-      ) : deliveries.length === 0 ? (
+      ) : total === 0 ? (
         <InlineNotification
           kind="info"
           title="No deliveries"
@@ -417,6 +477,7 @@ function DeliveriesPageContent() {
           lowContrast
         />
       ) : (
+        <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Deliveries" description="Outbound packing and dispatch">
@@ -507,6 +568,17 @@ function DeliveriesPageContent() {
             </TableContainer>
           )}
         </DataTable>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 25, 50]}
+          totalItems={total}
+          onChange={({ page: nextPage, pageSize: nextSize }) => {
+            setPage(nextPage);
+            setPageSize(nextSize);
+          }}
+        />
+        </>
       )}
 
       <Modal
@@ -528,6 +600,7 @@ function DeliveriesPageContent() {
               setSourceType(next);
               setInvoiceId("");
               setLaybyId("");
+              setSourceQuery("");
               setSourcePreview(null);
             }}
           >
@@ -535,37 +608,39 @@ function DeliveriesPageContent() {
             <SelectItem value="layby" text="Layby" />
           </Select>
           {sourceType === "invoice" ? (
-            <Select
+            <ComboBox
               id="delivery-invoice"
-              labelText="Invoice"
-              value={invoiceId}
-              onChange={(event) => setInvoiceId(event.target.value)}
-            >
-              <SelectItem value="" text="Select a paid invoice" />
-              {paidInvoices.map((invoice) => (
-                <SelectItem
-                  key={invoice.id}
-                  value={invoice.id}
-                  text={`${invoice.invoice_number} — ${invoice.customer_name}`}
-                />
-              ))}
-            </Select>
+              titleText="Invoice"
+              placeholder="Search paid invoices…"
+              items={invoiceOptions}
+              itemToString={(item) => item?.label ?? ""}
+              selectedItem={selectedInvoiceOption}
+              shouldFilterItem={() => true}
+              onInputChange={(value) => setSourceQuery(value)}
+              onChange={({ selectedItem }) => {
+                setInvoiceId(selectedItem?.id ?? "");
+                if (selectedItem) {
+                  setSourceQuery(selectedItem.label);
+                }
+              }}
+            />
           ) : (
-            <Select
+            <ComboBox
               id="delivery-layby"
-              labelText="Layby"
-              value={laybyId}
-              onChange={(event) => setLaybyId(event.target.value)}
-            >
-              <SelectItem value="" text="Select a layby" />
-              {eligibleLaybys.map((layby) => (
-                <SelectItem
-                  key={layby.id}
-                  value={layby.id}
-                  text={`${layby.layby_number} — ${layby.customer_name}`}
-                />
-              ))}
-            </Select>
+              titleText="Layby"
+              placeholder="Search laybys…"
+              items={laybyOptions}
+              itemToString={(item) => item?.label ?? ""}
+              selectedItem={selectedLaybyOption}
+              shouldFilterItem={() => true}
+              onInputChange={(value) => setSourceQuery(value)}
+              onChange={({ selectedItem }) => {
+                setLaybyId(selectedItem?.id ?? "");
+                if (selectedItem) {
+                  setSourceQuery(selectedItem.label);
+                }
+              }}
+            />
           )}
           <Select
             id="delivery-location"

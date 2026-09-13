@@ -102,7 +102,7 @@ async def test_match_marks_payment_reconciled(owner_client: AsyncClient) -> None
 
     payments_resp = await owner_client.get("/api/v1/payments")
     assert payments_resp.status_code == 200
-    matched = next(p for p in payments_resp.json() if p["id"] == payment["id"])
+    matched = next(p for p in payments_resp.json()["items"] if p["id"] == payment["id"])
     assert matched["is_reconciled"] is True
     assert matched["reconciled_at"] is not None
 

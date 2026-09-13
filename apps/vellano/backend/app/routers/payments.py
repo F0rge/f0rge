@@ -10,18 +10,20 @@ from app.dependencies.auth import (
     get_payment_service,
     require_books_mutate,
 )
+from app.schemas.page import Page, PageParams, get_page_params
 from app.schemas.payment import PaymentCreate, PaymentResponse
 from app.services.payments import PaymentService
 
 payments_router = APIRouter(prefix="/api/v1/payments", tags=["payments"])
 
 
-@payments_router.get("", response_model=list[PaymentResponse])
+@payments_router.get("", response_model=Page[PaymentResponse])
 async def list_payments(
+    params: PageParams = Depends(get_page_params),
     _: uuid.UUID = Depends(get_current_user_id),
     service: PaymentService = Depends(get_payment_service),
 ):
-    return await service.list()
+    return await service.list(params)
 
 
 @payments_router.post("", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)

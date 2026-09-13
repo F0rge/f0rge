@@ -2,10 +2,12 @@
 
 import {
   Button,
+  ComboBox,
   DataTable,
   InlineNotification,
   Modal,
   NumberInput,
+  Pagination,
   Select,
   SelectItem,
   Stack,
@@ -38,8 +40,9 @@ import {
   listLocations,
   listReturns,
   type Invoice,
+  type InvoiceListItem,
   type Location,
-  type StockReturn,
+  type StockReturnListItem,
   type StockReturnDisposition,
   type StockReturnReason,
   type StockReturnStatus,
@@ -65,6 +68,18 @@ type ReturnRow = {
   created_at: string;
   actions: string;
 };
+
+type InvoiceOption = {
+  id: string;
+  label: string;
+};
+
+function invoiceToOption(invoice: InvoiceListItem): InvoiceOption {
+  return {
+    id: invoice.id,
+    label: `${invoice.invoice_number} — ${invoice.customer_name}`,
+  };
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-ZA");
@@ -104,8 +119,8 @@ function ReturnsPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const canMutate = canMutateReturns(user);
-  const [returns, setReturns] = useState<StockReturn[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [returns, setReturns] = useState<StockReturnListItem[]>([]);
+  const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +128,8 @@ function ReturnsPageContent() {
   const [saving, setSaving] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [invoiceId, setInvoiceId] = useState("");
+  const [invoiceQuery, setInvoiceQuery] = useState("");
+  const [debouncedInvoiceQuery, setDebouncedInvoiceQuery] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [locationId, setLocationId] = useState("");
   const [reason, setReason] = useState<StockReturnReason | "">("");
@@ -120,12 +137,10 @@ function ReturnsPageContent() {
   const [notes, setNotes] = useState("");
   const [lineQtys, setLineQtys] = useState<Record<string, number | "">>({});
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const invoicePrefillConsumed = useRef(false);
-
-  const customerByInvoiceId = useMemo(
-    () => Object.fromEntries(invoices.map((entry) => [entry.id, entry.customer_name])),
-    [invoices],
-  );
 
   const canRestock = invoiceCanRestock(selectedInvoice);
 
@@ -133,15 +148,18 @@ function ReturnsPageContent() {
     setLoading(true);
     setError(null);
     try {
-      const [returnData, invoiceData] = await Promise.all([listReturns(), listInvoices()]);
-      setReturns(returnData);
-      setInvoices(invoiceData);
+      const data = await listReturns({
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      setReturns(data.items);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load returns.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   const loadCreateData = useCallback(async () => {
     try {
@@ -165,6 +183,31 @@ function ReturnsPageContent() {
       void loadCreateData();
     }
   }, [createOpen, canMutate, loadCreateData]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedInvoiceQuery(invoiceQuery), 300);
+    return () => clearTimeout(timer);
+  }, [invoiceQuery]);
+
+  useEffect(() => {
+    if (!createOpen || !canMutate) {
+      return;
+    }
+    let cancelled = false;
+    void listInvoices({ limit: 25, q: debouncedInvoiceQuery || undefined }).then((data) => {
+      if (!cancelled) {
+        setInvoiceOptions(data.items.map(invoiceToOption));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen, canMutate, debouncedInvoiceQuery]);
+
+  const selectedInvoiceOption = useMemo(
+    () => invoiceOptions.find((option) => option.id === invoiceId) ?? null,
+    [invoiceOptions, invoiceId],
+  );
 
   useEffect(() => {
     const prefilled = searchParams.get("invoice");
@@ -248,6 +291,7 @@ function ReturnsPageContent() {
 
   function resetCreateForm() {
     setInvoiceId("");
+    setInvoiceQuery("");
     setSelectedInvoice(null);
     setLineQtys({});
     setReason("");
@@ -316,18 +360,15 @@ function ReturnsPageContent() {
     [returns],
   );
 
-  const rows: ReturnRow[] = returns
-    .slice()
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .map((entry) => ({
-      id: entry.id,
-      return_number: entry.return_number,
-      invoice_number: entry.invoice_number,
-      customer_name: customerByInvoiceId[entry.invoice_id] ?? "—",
-      status: entry.status,
-      created_at: formatDate(entry.created_at),
-      actions: entry.id,
-    }));
+  const rows: ReturnRow[] = returns.map((entry) => ({
+    id: entry.id,
+    return_number: entry.return_number,
+    invoice_number: entry.invoice_number,
+    customer_name: "—",
+    status: entry.status,
+    created_at: formatDate(entry.created_at),
+    actions: entry.id,
+  }));
 
   return (
     <Stack gap={6}>
@@ -342,7 +383,7 @@ function ReturnsPageContent() {
           <Button
             kind="secondary"
             renderIcon={DocumentExport}
-            disabled={returns.length === 0}
+            disabled={total === 0}
             onClick={() => {
               downloadCsv(
                 "vellano-returns.csv",
@@ -350,7 +391,7 @@ function ReturnsPageContent() {
                 returns.map((entry) => [
                   entry.return_number,
                   entry.invoice_number,
-                  customerByInvoiceId[entry.invoice_id] ?? "",
+                  "",
                   statusLabel(entry.status),
                   formatDate(entry.created_at),
                   entry.location_name,
@@ -385,7 +426,7 @@ function ReturnsPageContent() {
 
       {loading ? (
         <p className="cds--type-body-01">Loading returns…</p>
-      ) : returns.length === 0 ? (
+      ) : total === 0 ? (
         <InlineNotification
           kind="info"
           title="No returns"
@@ -394,6 +435,7 @@ function ReturnsPageContent() {
           lowContrast
         />
       ) : (
+        <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Returns" description="Customer returns and RMA requests">
@@ -483,6 +525,17 @@ function ReturnsPageContent() {
             </TableContainer>
           )}
         </DataTable>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 25, 50]}
+          totalItems={total}
+          onChange={({ page: nextPage, pageSize: nextSize }) => {
+            setPage(nextPage);
+            setPageSize(nextSize);
+          }}
+        />
+        </>
       )}
 
       <Modal
@@ -495,21 +548,22 @@ function ReturnsPageContent() {
         onRequestSubmit={() => void handleCreate()}
       >
         <Stack gap={5}>
-          <Select
+          <ComboBox
             id="return-invoice"
-            labelText="Invoice"
-            value={invoiceId}
-            onChange={(event) => setInvoiceId(event.target.value)}
-          >
-            <SelectItem value="" text="Select an invoice" />
-            {invoices.map((invoice) => (
-              <SelectItem
-                key={invoice.id}
-                value={invoice.id}
-                text={`${invoice.invoice_number} — ${invoice.customer_name}`}
-              />
-            ))}
-          </Select>
+            titleText="Invoice"
+            placeholder="Search invoice number or customer…"
+            items={invoiceOptions}
+            itemToString={(item) => item?.label ?? ""}
+            selectedItem={selectedInvoiceOption}
+            shouldFilterItem={() => true}
+            onInputChange={(value) => setInvoiceQuery(value)}
+            onChange={({ selectedItem }) => {
+              setInvoiceId(selectedItem?.id ?? "");
+              if (selectedItem) {
+                setInvoiceQuery(selectedItem.label);
+              }
+            }}
+          />
           <Select
             id="return-location"
             labelText="Location"

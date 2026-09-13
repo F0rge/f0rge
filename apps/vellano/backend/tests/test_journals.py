@@ -171,7 +171,7 @@ async def test_void_keeps_history_and_nets_to_zero(owner_client: AsyncClient) ->
 
     listed = await owner_client.get("/api/v1/journals")
     assert listed.status_code == 200
-    ids = {row["id"] for row in listed.json()}
+    ids = {row["id"] for row in listed.json()["items"]}
     assert original_id in ids
     assert reversing_id in ids
 

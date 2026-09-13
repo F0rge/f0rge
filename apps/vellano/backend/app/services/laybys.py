@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,10 +21,12 @@ from app.models.unit_cost_audit import UnitCostAuditSource
 from app.schemas.layby import (
     LaybyCreate,
     LaybyLineResponse,
+    LaybyListItem,
     LaybyPaymentCreate,
     LaybyPaymentResponse,
     LaybyResponse,
 )
+from app.schemas.page import Page, PageParams
 from app.services.category_posting import CategoryPostingService
 from app.services.chart_of_accounts import (
     CODE_AR,
@@ -54,9 +57,21 @@ class LaybysService:
         self.posting = LedgerPostingService(db)
         self.category_posting = CategoryPostingService(db)
 
-    async def list(self) -> list[LaybyResponse]:
-        rows = await self.crud.list_all()
-        return [self._to_response(row) for row in rows]
+    async def list(
+        self,
+        params: PageParams,
+        status: Optional[LaybyStatus] = None,
+    ) -> Page[LaybyListItem]:
+        rows, total = await self.crud.list_page(
+            limit=params.limit,
+            offset=params.offset,
+            q=params.q,
+            status=status,
+        )
+        return Page(
+            items=[self._to_list_item(row) for row in rows],
+            total=total,
+        )
 
     async def get(self, layby_id: uuid.UUID) -> LaybyResponse:
         return self._to_response(await self._get_or_404(layby_id))
@@ -420,6 +435,40 @@ class LaybysService:
             layby.status = LaybyStatus.READY
         else:
             layby.status = LaybyStatus.OPEN
+
+    @staticmethod
+    def _items_label(layby: Layby) -> str:
+        if not layby.lines:
+            return "—"
+        first = layby.lines[0]
+        base = f"{first.sku.our_ref} — {first.sku.name}"
+        if len(layby.lines) == 1:
+            return base
+        return f"{base} +{len(layby.lines) - 1}"
+
+    def _to_list_item(self, layby: Layby) -> LaybyListItem:
+        balance = layby.total_inc_vat - layby.amount_paid
+        return LaybyListItem(
+            id=layby.id,
+            layby_number=layby.layby_number,
+            customer_id=layby.customer_id,
+            customer_name=layby.customer.name,
+            location_id=layby.location_id,
+            location_name=layby.location.name,
+            invoice_id=layby.invoice_id,
+            due_date=layby.due_date,
+            hold_stock=layby.hold_stock,
+            status=layby.status,
+            subtotal_ex_vat=layby.subtotal_ex_vat,
+            vat_amount=layby.vat_amount,
+            total_inc_vat=layby.total_inc_vat,
+            amount_paid=layby.amount_paid,
+            balance=balance,
+            notes=layby.notes,
+            items_label=self._items_label(layby),
+            created_at=layby.created_at,
+            updated_at=layby.updated_at,
+        )
 
     def _to_response(self, layby: Layby) -> LaybyResponse:
         balance = layby.total_inc_vat - layby.amount_paid

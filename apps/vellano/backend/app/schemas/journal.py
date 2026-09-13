@@ -35,6 +35,23 @@ class JournalLineResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class JournalListItem(BaseModel):
+    id: uuid.UUID
+    document_type: JournalDocumentType
+    document_id: uuid.UUID
+    memo: Optional[str]
+    status: JournalStatus
+    source: Optional[str]
+    journal_number: Optional[str]
+    entry_date: datetime.date
+    voided_by_id: Optional[uuid.UUID]
+    debit_total_zar: Decimal
+    credit_total_zar: Decimal
+    created_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class JournalResponse(BaseModel):
     id: uuid.UUID
     document_type: JournalDocumentType

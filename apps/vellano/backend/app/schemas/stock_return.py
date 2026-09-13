@@ -40,6 +40,24 @@ class StockReturnLineResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class StockReturnListItem(BaseModel):
+    id: uuid.UUID
+    return_number: str
+    invoice_id: uuid.UUID
+    invoice_number: str
+    location_id: uuid.UUID
+    location_name: str
+    credit_note_id: Optional[uuid.UUID]
+    reason: StockReturnReason
+    disposition: StockReturnDisposition
+    status: StockReturnStatus
+    notes: Optional[str]
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class StockReturnResponse(BaseModel):
     id: uuid.UUID
     return_number: str

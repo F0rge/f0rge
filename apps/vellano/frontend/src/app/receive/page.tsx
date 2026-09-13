@@ -23,6 +23,7 @@ import {
   ApiError,
   PO_STATUS_LABELS,
   canReceive,
+  getPurchaseOrder,
   isActiveLocation,
   listInventory,
   listLocations,
@@ -32,6 +33,7 @@ import {
   type InventorySku,
   type Location,
   type PurchaseOrder,
+  type PurchaseOrderListItem,
   type Sku,
 } from "@/lib/api";
 import { optionalMovementBinId } from "@/lib/bin-helpers";
@@ -43,7 +45,7 @@ function ReceivePageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const canRecv = canReceive(user);
-  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [orders, setOrders] = useState<PurchaseOrderListItem[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
@@ -60,12 +62,12 @@ function ReceivePageContent() {
     setError(null);
     try {
       const [orderData, locationData, inventoryData, skuData] = await Promise.all([
-        listPurchaseOrders(),
+        listPurchaseOrders({ status: "landed", limit: 100 }),
         listLocations(),
         listInventory(),
         listSkus(),
       ]);
-      setOrders(orderData);
+      setOrders(orderData.items);
       setLocations(locationData.filter(isActiveLocation));
       setInventory(inventoryData);
       setSkus(skuData);
@@ -95,8 +97,31 @@ function ReceivePageContent() {
     setBinId(defaultBinId);
   }, [locationId, defaultBinId]);
 
-  const selectedPo = orders.find((entry) => entry.id === poId);
+  const selectedPoSummary = orders.find((entry) => entry.id === poId);
+  const [selectedPoDetail, setSelectedPoDetail] = useState<PurchaseOrder | null>(null);
   const formValid = poId && locationId;
+
+  useEffect(() => {
+    if (!poId) {
+      setSelectedPoDetail(null);
+      return;
+    }
+    let cancelled = false;
+    void getPurchaseOrder(poId)
+      .then((po) => {
+        if (!cancelled) {
+          setSelectedPoDetail(po);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedPoDetail(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [poId]);
 
   async function handleReceive() {
     if (!canRecv || !formValid) {
@@ -190,7 +215,7 @@ function ReceivePageContent() {
               />
             ))}
           </Select>
-          {selectedPo && selectedPo.status !== "landed" ? (
+          {selectedPoSummary && selectedPoSummary.status !== "landed" ? (
             <InlineNotification
               kind="info"
               title="Not landed"
@@ -199,8 +224,10 @@ function ReceivePageContent() {
               lowContrast
             />
           ) : null}
-          {selectedPo && selectedPo.status === "landed" ? (
-            <p className="cds--type-body-01">{formatExpectedCartons(selectedPo, skus)}</p>
+          {selectedPoDetail && selectedPoSummary?.status === "landed" ? (
+            <p className="cds--type-body-01">
+              {formatExpectedCartons(selectedPoDetail, skus)}
+            </p>
           ) : null}
           <Select
             id="receive-location"
@@ -266,8 +293,12 @@ function ReceivePageContent() {
         )}
       </div>
 
-      {selectedPo?.status === "landed" ? (
-        <Button kind="ghost" size="sm" onClick={() => router.push(`/purchase-orders/${selectedPo.id}`)}>
+      {selectedPoSummary?.status === "landed" ? (
+        <Button
+          kind="ghost"
+          size="sm"
+          onClick={() => router.push(`/purchase-orders/${selectedPoSummary.id}`)}
+        >
           View PO detail
         </Button>
       ) : null}

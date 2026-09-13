@@ -280,5 +280,6 @@ async def test_kit_till_short_component_returns_409(
 
     invoices = await owner_client.get("/api/v1/invoices")
     assert invoices.status_code == 200
-    assert invoices.json() == []
+    assert invoices.json()["items"] == []
+    assert invoices.json()["total"] == 0
     assert await _inventory_on_hand(owner_client, frame["id"], bedford_id) == 1
