@@ -522,6 +522,16 @@ body {
   gap: 0.25rem;
 }
 
+.vellano-nav-warehouse {
+  display: none;
+}
+
+@media (max-width: 42rem) {
+  .vellano-nav-warehouse {
+    display: list-item;
+  }
+}
+
 .vellano-wms {
   max-width: 50rem;
   width: 100%;
@@ -529,11 +539,66 @@ body {
 }
 
 .vellano-wms-content {
-  padding-bottom: 1rem;
+  padding-bottom: 4.5rem;
+}
+
+.vellano-wms-location {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  margin: -1rem -1rem 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--cds-layer-01, #fff);
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+}
+
+.vellano-wms-location__label {
+  margin: 0 0 0.5rem;
+  color: var(--cds-text-secondary, #525252);
+}
+
+.vellano-wms-location .cds--content-switcher {
+  width: 100%;
 }
 
 .vellano-wms-switcher {
-  margin-bottom: 1.5rem;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 8000;
+  margin: 0;
+  padding: 0.5rem 1rem calc(0.5rem + env(safe-area-inset-bottom, 0));
+  background: var(--cds-layer-01, #fff);
+  border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.vellano-main:has(.vellano-wms) {
+  padding-bottom: 5rem;
+}
+
+.vellano-shell[data-nia-dock-open="true"] .vellano-wms-switcher {
+  right: var(--vellano-nia-dock-width, 24rem);
+}
+
+.vellano-wms-switcher .cds--content-switcher {
+  width: 100%;
+}
+
+.vellano-wms-switcher .cds--content-switcher-btn {
+  min-height: 3rem;
+}
+
+.vellano-wms-scan-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.vellano-wms-scan-row .cds--form-item {
+  flex: 1;
+  min-width: 0;
 }
 
 .vellano-wms-barcode .cds--text-input {
@@ -547,35 +612,13 @@ body {
   background: var(--cds-layer-01, #fff);
 }
 
-@media (max-width: 42rem) {
-  .vellano-main:has(.vellano-wms) {
-    padding-bottom: 5rem;
-  }
+.vellano-wms .cds--btn--lg,
+.vellano-wms .cds--btn--xl {
+  min-height: 3rem;
+}
 
-  .vellano-wms-switcher {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 8000;
-    margin: 0;
-    padding: 0.5rem 1rem calc(0.5rem + env(safe-area-inset-bottom, 0));
-    background: var(--cds-layer-01, #fff);
-    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
-  }
-
-  .vellano-shell[data-nia-dock-open="true"] .vellano-wms-switcher {
-    right: var(--vellano-nia-dock-width, 24rem);
-  }
-
-  .vellano-wms-switcher .cds--content-switcher {
-    width: 100%;
-  }
-
-  .vellano-wms-content {
-    padding-bottom: 4.5rem;
-  }
+.vellano-wms-interstitial {
+  max-width: 32rem;
 }
 
 .vellano-pick-matrix {

@@ -11,9 +11,11 @@ import {
   Switch,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { BinSelect, LocationBinFields } from "@/components/bin-select";
+import { WmsLocationBar } from "@/components/wms-location-bar";
+import { WmsScanField } from "@/components/wms-scan-field";
 import { useLocationBins } from "@/hooks/use-location-bins";
 import {
   ApiError,
@@ -47,6 +49,12 @@ import {
 import { optionalMovementBinId } from "@/lib/bin-helpers";
 import { formatExpectedCartons } from "@/lib/carton-helpers";
 import { useAuth } from "@/lib/auth";
+import {
+  getNarrowViewportServerSnapshot,
+  getNarrowViewportSnapshot,
+  subscribeNarrowViewport,
+} from "@/lib/viewport";
+import { useWmsFloorLocation } from "@/lib/wms-location";
 
 type WmsTab = "receive" | "count" | "transfer";
 
@@ -78,7 +86,45 @@ function parsePositiveInt(value: string): number | null {
   return parsed;
 }
 
+function WmsDesktopInterstitial() {
+  return (
+    <div className="vellano-wms-interstitial">
+      <Stack gap={6}>
+        <div>
+          <h1 className="cds--type-productive-heading-04">Warehouse</h1>
+          <p className="cds--type-body-01">
+            The warehouse console is built for your phone on the shop floor. Open this page on a
+            mobile device to receive, count, and transfer stock with the camera scanner.
+          </p>
+        </div>
+        <InlineNotification
+          kind="info"
+          title="Use this on your phone"
+          subtitle="Receive, count, and transfer are easier with the floor scanner and bottom tabs on a narrow screen."
+          hideCloseButton
+          lowContrast
+        />
+        <Link href="/receive">Go to Receive (desktop)</Link>
+      </Stack>
+    </div>
+  );
+}
+
 export default function WmsPage() {
+  const narrow = useSyncExternalStore(
+    subscribeNarrowViewport,
+    getNarrowViewportSnapshot,
+    getNarrowViewportServerSnapshot,
+  );
+
+  if (!narrow) {
+    return <WmsDesktopInterstitial />;
+  }
+
+  return <WmsMobileConsole />;
+}
+
+function WmsMobileConsole() {
   const { user } = useAuth();
   const canRecv = canReceive(user);
   const canXfer = canTransfer(user);
@@ -146,30 +192,21 @@ export default function WmsPage() {
     setSuccess(null);
   }
 
+  const { floor, locationId, setLocationId } = useWmsFloorLocation(locations);
+
   return (
     <div className="vellano-wms">
-      <div className="vellano-wms-switcher">
-        <ContentSwitcher
-          selectedIndex={TAB_INDEX[tab]}
-          onChange={(event) => {
-            const index = event.index ?? 0;
-            setTab(INDEX_TAB[index] ?? "receive");
-            clearFeedback();
-          }}
-        >
-          <Switch name="receive" text="Receive" />
-          <Switch name="count" text="Count" />
-          <Switch name="transfer" text="Transfer" />
-        </ContentSwitcher>
-      </div>
+      {floor ? (
+        <WmsLocationBar floor={floor} locationId={locationId} onChange={setLocationId} />
+      ) : null}
 
       <div className="vellano-wms-content">
         <Stack gap={6}>
           <div>
-            <h1 className="cds--type-productive-heading-04">Warehouse (mobile)</h1>
+            <h1 className="cds--type-productive-heading-04">Warehouse</h1>
             <p className="cds--type-body-01">
-              Phone-friendly receive, stocktake count, and two-step transfers. Destination stock
-              updates only after receive.
+              Scan-first receive, stocktake count, and two-step transfers. Destination stock updates
+              only after receive.
             </p>
           </div>
 
@@ -198,8 +235,9 @@ export default function WmsPage() {
           ) : tab === "receive" ? (
             <ReceiveTab
               canMutate={canRecv}
-              locations={locations}
+              locationId={locationId}
               landedOrders={landedOrders}
+              locations={locations}
               skus={skus}
               onError={setError}
               onSuccess={setSuccess}
@@ -208,7 +246,7 @@ export default function WmsPage() {
           ) : tab === "count" ? (
             <CountTab
               canMutate={canRecv}
-              locations={locations}
+              floorLocationId={locationId}
               stocktake={stocktake}
               onError={setError}
               onSuccess={setSuccess}
@@ -218,6 +256,7 @@ export default function WmsPage() {
           ) : (
             <TransferTab
               canMutate={canXfer}
+              floorLocationId={locationId}
               locations={locations}
               skus={skus}
               inventoryBySku={inventoryBySku}
@@ -228,12 +267,29 @@ export default function WmsPage() {
           )}
         </Stack>
       </div>
+
+      <div className="vellano-wms-switcher">
+        <ContentSwitcher
+          selectedIndex={TAB_INDEX[tab]}
+          size="lg"
+          onChange={(event) => {
+            const index = event.index ?? 0;
+            setTab(INDEX_TAB[index] ?? "receive");
+            clearFeedback();
+          }}
+        >
+          <Switch name="receive" text="Receive" />
+          <Switch name="count" text="Count" />
+          <Switch name="transfer" text="Transfer" />
+        </ContentSwitcher>
+      </div>
     </div>
   );
 }
 
 type ReceiveTabProps = {
   canMutate: boolean;
+  locationId: string;
   locations: Location[];
   landedOrders: PurchaseOrder[];
   skus: Sku[];
@@ -244,6 +300,7 @@ type ReceiveTabProps = {
 
 function ReceiveTab({
   canMutate,
+  locationId,
   locations,
   landedOrders,
   skus,
@@ -252,7 +309,6 @@ function ReceiveTab({
   onReceived,
 }: ReceiveTabProps) {
   const [poId, setPoId] = useState("");
-  const [locationId, setLocationId] = useState("");
   const [binId, setBinId] = useState("");
   const [barcode, setBarcode] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -301,7 +357,6 @@ function ReceiveTab({
         `Received ${po?.po_number ?? "PO"} into ${location?.name ?? "location"}.`,
       );
       setPoId("");
-      setLocationId("");
       setBinId("");
       setBarcode("");
       await onReceived();
@@ -316,15 +371,30 @@ function ReceiveTab({
     }
   }
 
+  const standingLocation = locations.find((entry) => entry.id === locationId);
+
   return (
     <Stack gap={5}>
+      <WmsScanField
+        id="wms-receive-barcode"
+        labelText="Scan piece"
+        placeholder="Scan or type our barcode"
+        helperText="Scan the piece coming in, then choose the landed PO."
+        value={barcode}
+        disabled={!locationId}
+        onChange={setBarcode}
+      />
+      {standingLocation ? (
+        <p className="cds--type-label-01 vellano-muted-text">
+          Receiving into <strong>{standingLocation.name}</strong> (change at top)
+        </p>
+      ) : null}
       <Select
         id="wms-receive-po"
         labelText="Landed purchase order"
         value={poId}
         onChange={(event) => {
           setPoId(event.target.value);
-          setBarcode("");
         }}
       >
         <SelectItem value="" text="Select a landed PO" />
@@ -348,17 +418,6 @@ function ReceiveTab({
           lowContrast
         />
       ) : null}
-      <Select
-        id="wms-receive-location"
-        labelText="Location"
-        value={locationId}
-        onChange={(event) => setLocationId(event.target.value)}
-      >
-        <SelectItem value="" text="Select a location" />
-        {locations.map((entry) => (
-          <SelectItem key={entry.id} value={entry.id} text={entry.name} />
-        ))}
-      </Select>
       <LocationBinFields
         idPrefix="wms-receive"
         locationId={locationId}
@@ -367,15 +426,6 @@ function ReceiveTab({
         onChange={setBinId}
         includeScan
       />
-      <div className="vellano-wms-barcode">
-        <TextInput
-          id="wms-receive-barcode"
-          labelText="Barcode (optional)"
-          placeholder="Scan our barcode to confirm SKU on PO"
-          value={barcode}
-          onChange={(event) => setBarcode(event.target.value)}
-        />
-      </div>
       {barcode.trim() && matchedSku && poLine ? (
         <div className="vellano-wms-line-card">
           <p className="cds--type-body-01">
@@ -404,7 +454,11 @@ function ReceiveTab({
           lowContrast
         />
       ) : null}
-      <Button disabled={submitting || !formValid} onClick={() => void handleReceive()}>
+      <Button
+        size="lg"
+        disabled={submitting || !formValid}
+        onClick={() => void handleReceive()}
+      >
         {submitting ? "Receiving…" : "Receive"}
       </Button>
       <Link href="/receive">Full receive page</Link>
@@ -414,7 +468,7 @@ function ReceiveTab({
 
 type CountTabProps = {
   canMutate: boolean;
-  locations: Location[];
+  floorLocationId: string;
   stocktake: Stocktake | null;
   onError: (message: string) => void;
   onSuccess: (message: string) => void;
@@ -424,14 +478,13 @@ type CountTabProps = {
 
 function CountTab({
   canMutate,
-  locations,
+  floorLocationId,
   stocktake,
   onError,
   onSuccess,
   onStocktakeChange,
   onReload,
 }: CountTabProps) {
-  const [locationId, setLocationId] = useState("");
   const [starting, setStarting] = useState(false);
   const [barcode, setBarcode] = useState("");
   const [activeLine, setActiveLine] = useState<StocktakeLine | null>(null);
@@ -453,15 +506,14 @@ function CountTab({
   }
 
   async function handleStart() {
-    if (!locationId) {
+    if (!floorLocationId) {
       return;
     }
     setStarting(true);
     onError("");
     try {
-      const created = await startStocktake({ location_id: locationId });
+      const created = await startStocktake({ location_id: floorLocationId });
       onStocktakeChange(created);
-      setLocationId("");
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         onError(err.message);
@@ -556,18 +608,14 @@ function CountTab({
   if (!stocktake) {
     return (
       <Stack gap={5}>
-        <Select
-          id="wms-count-location"
-          labelText="Location"
-          value={locationId}
-          onChange={(event) => setLocationId(event.target.value)}
+        <p className="cds--type-body-01">
+          Start a stocktake at your standing location (switch at top), then scan each SKU to count.
+        </p>
+        <Button
+          size="lg"
+          disabled={starting || !floorLocationId}
+          onClick={() => void handleStart()}
         >
-          <SelectItem value="" text="Select a location" />
-          {locations.map((entry) => (
-            <SelectItem key={entry.id} value={entry.id} text={entry.name} />
-          ))}
-        </Select>
-        <Button disabled={starting || !locationId} onClick={() => void handleStart()}>
           {starting ? "Starting…" : "Start stocktake"}
         </Button>
         <Link href="/stocktakes">Full stocktakes table</Link>
@@ -575,28 +623,37 @@ function CountTab({
     );
   }
 
+  const locationMismatch =
+    floorLocationId && stocktake.location_id !== floorLocationId;
+
   return (
     <Stack gap={5}>
       <div>
         <h2 className="cds--type-productive-heading-03">{stocktake.location_name}</h2>
-        <p className="cds--type-body-01">In-progress stocktake — scan to count.</p>
+        <p className="cds--type-body-01">In-progress stocktake — scan to count that SKU.</p>
       </div>
-      <div className="vellano-wms-barcode">
-        <TextInput
-          id="wms-count-barcode"
-          labelText="Barcode"
-          placeholder="Scan or type our barcode"
-          value={barcode}
-          onChange={(event) => setBarcode(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void handleLookup();
-            }
-          }}
+      {locationMismatch ? (
+        <InlineNotification
+          kind="warning"
+          title="Different standing location"
+          subtitle="Switch to the stocktake location at the top, or complete this count on the desktop Stocktakes page."
+          hideCloseButton
+          lowContrast
         />
-      </div>
-      <Button disabled={lookingUp || !barcode.trim()} onClick={() => void handleLookup()}>
+      ) : null}
+      <WmsScanField
+        id="wms-count-barcode"
+        labelText="Scan SKU"
+        placeholder="Scan or type our barcode"
+        value={barcode}
+        onChange={setBarcode}
+        onSubmit={() => void handleLookup()}
+      />
+      <Button
+        size="lg"
+        disabled={lookingUp || !barcode.trim()}
+        onClick={() => void handleLookup()}
+      >
         {lookingUp ? "Looking up…" : "Lookup"}
       </Button>
       {activeLine ? (
@@ -615,12 +672,12 @@ function CountTab({
             onChange={(event) => setCountQty(event.target.value)}
             inputMode="numeric"
           />
-          <Button disabled={saving} onClick={() => void handleSaveCount()}>
+          <Button size="lg" disabled={saving} onClick={() => void handleSaveCount()}>
             {saving ? "Saving…" : "Save count"}
           </Button>
         </div>
       ) : null}
-      <Button disabled={completing} onClick={() => void handleComplete()}>
+      <Button size="lg" disabled={completing} onClick={() => void handleComplete()}>
         {completing ? "Completing…" : "Complete stocktake"}
       </Button>
       <Link href="/stocktakes">Full stocktakes table</Link>
@@ -630,6 +687,7 @@ function CountTab({
 
 type TransferTabProps = {
   canMutate: boolean;
+  floorLocationId: string;
   locations: Location[];
   skus: Sku[];
   inventoryBySku: Map<string, InventorySku>;
@@ -649,6 +707,7 @@ function fullQtyReceivePayload(transfer: Transfer) {
 
 function TransferTab({
   canMutate,
+  floorLocationId,
   locations,
   skus,
   inventoryBySku,
@@ -658,14 +717,14 @@ function TransferTab({
 }: TransferTabProps) {
   const [barcode, setBarcode] = useState("");
   const [skuId, setSkuId] = useState("");
-  const [fromLocationId, setFromLocationId] = useState("");
+  const [fromLocationId, setFromLocationId] = useState(floorLocationId);
   const [toLocationId, setToLocationId] = useState("");
   const [fromBinId, setFromBinId] = useState("");
   const [toBinId, setToBinId] = useState("");
   const [qty, setQty] = useState("1");
   const [submitting, setSubmitting] = useState<"draft" | "dispatch" | null>(null);
   const [lastDraft, setLastDraft] = useState<Transfer | null>(null);
-  const [inboundDestId, setInboundDestId] = useState("");
+  const [inboundDestId, setInboundDestId] = useState(floorLocationId);
   const [inbound, setInbound] = useState<Transfer[]>([]);
   const [inboundBusyId, setInboundBusyId] = useState<string | null>(null);
   const { activeBins: fromBins, defaultBinId: fromDefaultBinId } =
@@ -696,6 +755,13 @@ function TransferTab({
     }
     setInbound(await listTransfers({ status: "in_transit", to_location_id: destId }));
   }, []);
+
+  useEffect(() => {
+    if (floorLocationId) {
+      setFromLocationId(floorLocationId);
+      setInboundDestId(floorLocationId);
+    }
+  }, [floorLocationId]);
 
   useEffect(() => {
     void loadInbound(inboundDestId).catch((err: unknown) => {
@@ -839,19 +905,14 @@ function TransferTab({
 
   return (
     <Stack gap={5}>
-      <p className="cds--type-body-01">
-        Save draft does not move stock. Dispatch decreases source only — it does not receive at
-        destination.
-      </p>
-      <div className="vellano-wms-barcode">
-        <TextInput
-          id="wms-transfer-barcode"
-          labelText="Barcode"
-          placeholder="Scan our barcode"
-          value={barcode}
-          onChange={(event) => handleBarcodeChange(event.target.value)}
-        />
-      </div>
+      <WmsScanField
+        id="wms-transfer-barcode"
+        labelText="Scan piece"
+        placeholder="Scan or type our barcode"
+        helperText="Scan the piece being moved, then set quantity and destination."
+        value={barcode}
+        onChange={handleBarcodeChange}
+      />
       {barcode.trim() && !matchedSku ? (
         <InlineNotification
           kind="warning"
@@ -868,6 +929,16 @@ function TransferTab({
           </p>
         </div>
       ) : null}
+      <TextInput
+        id="wms-transfer-qty"
+        labelText="Quantity"
+        value={qty}
+        onChange={(event) => setQty(event.target.value)}
+        inputMode="numeric"
+        invalid={numericQty !== null && sourceOnHand > 0 && numericQty > sourceOnHand}
+        invalidText={`Only ${sourceOnHand} available at source`}
+        disabled={!resolvedSkuId}
+      />
       {lastDraft ? (
         <InlineNotification
           kind="info"
@@ -930,17 +1001,12 @@ function TransferTab({
           On hand at source: <strong>{sourceOnHand}</strong>
         </p>
       ) : null}
-      <TextInput
-        id="wms-transfer-qty"
-        labelText="Quantity"
-        value={qty}
-        onChange={(event) => setQty(event.target.value)}
-        inputMode="numeric"
-        invalid={numericQty !== null && sourceOnHand > 0 && numericQty > sourceOnHand}
-        invalidText={`Only ${sourceOnHand} available at source`}
-        disabled={!resolvedSkuId}
-      />
+      <p className="cds--type-label-01 vellano-muted-text">
+        Save draft does not move stock. Dispatch decreases source only — destination stock updates on
+        receive.
+      </p>
       <Button
+        size="lg"
         disabled={submitting !== null || !formValid}
         onClick={() => void handleSaveDraft()}
       >
@@ -948,6 +1014,7 @@ function TransferTab({
       </Button>
       <Button
         kind="secondary"
+        size="lg"
         disabled={submitting !== null || (!lastDraft && !formValid)}
         onClick={() => void handleDispatch()}
       >
