@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import func, or_, select
@@ -110,6 +111,37 @@ class PurchaseOrderCRUD(BaseCRUD):
         from app.services.document_numbering import DocumentNumberingService
 
         return await DocumentNumberingService(self.db).allocate("purchase_order")
+
+    async def latest_fx_to_zar_for_supplier(self, supplier_id: uuid.UUID) -> Optional[Decimal]:
+        result = await self.db.execute(
+            select(PurchaseOrder.fx_to_zar)
+            .where(
+                PurchaseOrder.supplier_id == supplier_id,
+                PurchaseOrder.fx_to_zar.isnot(None),
+                PurchaseOrder.fx_to_zar > 0,
+            )
+            .order_by(
+                PurchaseOrder.landed_at.desc().nulls_last(),
+                PurchaseOrder.updated_at.desc(),
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def latest_factory_unit_amounts_by_sku_ids(
+        self,
+        sku_ids: list[uuid.UUID],
+    ) -> dict[uuid.UUID, Decimal]:
+        if not sku_ids:
+            return {}
+        result = await self.db.execute(
+            select(PoLine.sku_id, PoLine.factory_unit_amount)
+            .join(PurchaseOrder, PoLine.po_id == PurchaseOrder.id)
+            .where(PoLine.sku_id.in_(sku_ids))
+            .distinct(PoLine.sku_id)
+            .order_by(PoLine.sku_id, PurchaseOrder.created_at.desc())
+        )
+        return {row[0]: row[1] for row in result.all()}
 
 
 class SkuStockCRUD(BaseCRUD):
