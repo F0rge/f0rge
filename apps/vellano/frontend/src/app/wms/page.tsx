@@ -196,7 +196,7 @@ function WmsMobileConsole() {
 
   return (
     <div className="vellano-wms">
-      {floor ? (
+      {floor.length > 0 ? (
         <WmsLocationBar floor={floor} locationId={locationId} onChange={setLocationId} />
       ) : null}
 
@@ -526,11 +526,11 @@ function CountTab({
     }
   }
 
-  async function handleLookup() {
+  async function handleLookup(code?: string) {
     if (!stocktake) {
       return;
     }
-    const trimmed = barcode.trim();
+    const trimmed = (code ?? barcode).trim();
     if (!trimmed) {
       return;
     }
@@ -647,7 +647,7 @@ function CountTab({
         placeholder="Scan or type our barcode"
         value={barcode}
         onChange={setBarcode}
-        onSubmit={() => void handleLookup()}
+        onSubmit={(code) => void handleLookup(code)}
       />
       <Button
         size="lg"

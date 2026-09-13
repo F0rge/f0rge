@@ -6,19 +6,8 @@ import { isActiveLocation, type Location } from "@/lib/api";
 
 export const WMS_LOCATION_STORAGE_KEY = "vellano-wms-location-id";
 
-export type WmsFloorLocations = {
-  kramerville: Location;
-  bedfordview: Location;
-};
-
-export function floorLocations(locations: Location[]): WmsFloorLocations | null {
-  const active = locations.filter(isActiveLocation);
-  const kramerville = active.find((location) => location.name === "Kramerville");
-  const bedfordview = active.find((location) => location.name === "Bedfordview");
-  if (!kramerville || !bedfordview) {
-    return null;
-  }
-  return { kramerville, bedfordview };
+export function floorLocations(locations: Location[]): Location[] {
+  return locations.filter(isActiveLocation);
 }
 
 function readStoredLocationId(): string | null {
@@ -35,15 +24,12 @@ function writeStoredLocationId(id: string): void {
   window.sessionStorage.setItem(WMS_LOCATION_STORAGE_KEY, id);
 }
 
-export function defaultFloorLocationId(floor: WmsFloorLocations): string {
-  return floor.kramerville.id;
+export function defaultFloorLocationId(floor: Location[]): string {
+  return floor.find((location) => location.type === "warehouse")?.id ?? floor[0]?.id ?? "";
 }
 
-export function resolveFloorLocationId(
-  floor: WmsFloorLocations,
-  stored: string | null,
-): string {
-  if (stored === floor.kramerville.id || stored === floor.bedfordview.id) {
+export function resolveFloorLocationId(floor: Location[], stored: string | null): string {
+  if (stored && floor.some((location) => location.id === stored)) {
     return stored;
   }
   return defaultFloorLocationId(floor);
@@ -52,7 +38,7 @@ export function resolveFloorLocationId(
 export function useWmsFloorLocation(locations: Location[]) {
   const floor = useMemo(() => floorLocations(locations), [locations]);
   const defaultLocationId = useMemo(() => {
-    if (!floor) {
+    if (floor.length === 0) {
       return "";
     }
     return resolveFloorLocationId(floor, readStoredLocationId());

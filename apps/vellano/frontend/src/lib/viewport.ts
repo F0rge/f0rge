@@ -1,5 +1,5 @@
-/** Match the WMS / warehouse nav narrow breakpoint (42rem). */
-export const NARROW_VIEWPORT_MQ = "(max-width: 42rem)";
+/** Match the WMS / warehouse nav floor breakpoint (phone + tablet, including landscape). */
+export const NARROW_VIEWPORT_MQ = "(max-width: 64rem), (pointer: coarse)";
 
 type ViewportListener = () => void;
 

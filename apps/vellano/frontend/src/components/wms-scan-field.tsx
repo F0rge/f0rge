@@ -12,7 +12,7 @@ type WmsScanFieldProps = {
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
-  onSubmit?: () => void;
+  onSubmit?: (value?: string) => void;
   disabled?: boolean;
   helperText?: string;
 };
@@ -32,7 +32,7 @@ export function WmsScanField({
   function applyCode(code: string) {
     onChange(code);
     setScannerOpen(false);
-    onSubmit?.();
+    onSubmit?.(code);
   }
 
   return (
@@ -49,7 +49,7 @@ export function WmsScanField({
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              onSubmit?.();
+              onSubmit?.(value);
             }
           }}
         />
