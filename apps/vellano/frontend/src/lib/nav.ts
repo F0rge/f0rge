@@ -34,7 +34,7 @@ export const OPERATIONS_NAV_ITEMS = [
   { href: "/purchase-orders", label: "Purchase orders" },
   { href: "/transit", label: "Transit" },
   { href: "/receive", label: "Receive" },
-  { href: "/wms", label: "WMS" },
+  { href: "/wms", label: "Warehouse", mobileOnly: true },
   { href: "/transfers", label: "Transfers" },
   { href: "/picks", label: "Picks" },
   { href: "/deliveries", label: "Deliveries" },

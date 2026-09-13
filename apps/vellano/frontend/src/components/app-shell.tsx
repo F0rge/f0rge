@@ -194,13 +194,14 @@ export function AppShell({ children }: AppShellProps) {
     (item) => !("permission" in item) || can(user, item.permission),
   );
 
-  function renderNavLink(href: string, label: string) {
+  function renderNavLink(href: string, label: string, className?: string) {
     const Icon = navIcon(href);
     return (
       <SideNavLink
         key={href}
         href={href}
         renderIcon={Icon}
+        className={className}
         isActive={isNavLinkActive(pathname, href)}
         onClick={(event) => {
           event.preventDefault();
@@ -286,7 +287,13 @@ export function AppShell({ children }: AppShellProps) {
                 </SideNavMenuItem>
               ))}
             </SideNavMenu>
-            {OPERATIONS_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
+            {OPERATIONS_NAV_ITEMS.map((item) =>
+              renderNavLink(
+                item.href,
+                item.label,
+                "mobileOnly" in item && item.mobileOnly ? "vellano-nav-warehouse" : undefined,
+              ),
+            )}
             {SALES_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
             <SideNavMenu
               key={isBooksPath(pathname) ? "books-open" : "books-closed"}
