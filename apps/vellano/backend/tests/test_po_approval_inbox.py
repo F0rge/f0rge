@@ -52,7 +52,7 @@ async def test_owner_approves_pending_po(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    buyer = await _create_buyer(async_client, owner_client)
+    await _create_buyer(async_client, owner_client)
     po_id = await _create_pending_po(owner_client, async_client)
 
     await _relogin_owner(owner_client)
@@ -68,7 +68,7 @@ async def test_owner_rejects_pending_po(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    buyer = await _create_buyer(async_client, owner_client)
+    await _create_buyer(async_client, owner_client)
     po_id = await _create_pending_po(owner_client, async_client)
 
     await _relogin_owner(owner_client)
@@ -81,7 +81,7 @@ async def test_cannot_approve_after_reject(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
-    buyer = await _create_buyer(async_client, owner_client)
+    await _create_buyer(async_client, owner_client)
     po_id = await _create_pending_po(owner_client, async_client)
 
     await _relogin_owner(owner_client)
