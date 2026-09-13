@@ -55,6 +55,7 @@ import {
   listCustomers,
   listInventory,
   listLocations,
+  listPriceLists,
   listSkus,
   parsePriceInput,
   roundHalfUp,
@@ -64,6 +65,7 @@ import {
   type CustomerCrm,
   type InventorySku,
   type Location,
+  type PriceList,
   type Sku,
   type PickDocument,
   type TillSaleResult,
@@ -110,7 +112,28 @@ type CartLine = {
   discountPercent: number;
 };
 
-function unitExVat(sku: Sku, customer: CustomerCrm | null): number {
+function listUnitExVat(
+  sku: Sku,
+  customer: CustomerCrm | null,
+  priceLists: PriceList[],
+): number | null {
+  if (!customer?.price_list_id) {
+    return null;
+  }
+  const list = priceLists.find((entry) => entry.id === customer.price_list_id);
+  const item = list?.items.find((row) => row.sku_id === sku.id);
+  if (!item) {
+    return null;
+  }
+  const parsed = Number(item.unit_ex_vat);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function unitExVat(sku: Sku, customer: CustomerCrm | null, priceLists: PriceList[]): number {
+  const listed = listUnitExVat(sku, customer, priceLists);
+  if (listed !== null) {
+    return listed;
+  }
   if (customer?.customer_type === "trade" && sku.wholesale_ex_vat) {
     return Number(sku.wholesale_ex_vat);
   }
@@ -123,7 +146,11 @@ function unitExVat(sku: Sku, customer: CustomerCrm | null): number {
   return 0;
 }
 
-function unitIncVat(sku: Sku, customer: CustomerCrm | null): number {
+function unitIncVat(sku: Sku, customer: CustomerCrm | null, priceLists: PriceList[]): number {
+  const listed = listUnitExVat(sku, customer, priceLists);
+  if (listed !== null) {
+    return exVatToIncVat(listed);
+  }
   if (customer?.customer_type === "trade" && sku.wholesale_ex_vat) {
     return exVatToIncVat(Number(sku.wholesale_ex_vat));
   }
@@ -136,29 +163,44 @@ function unitIncVat(sku: Sku, customer: CustomerCrm | null): number {
   return 0;
 }
 
-function lineDiscountedEx(line: CartLine, customer: CustomerCrm | null): number {
+function lineDiscountedEx(
+  line: CartLine,
+  customer: CustomerCrm | null,
+  priceLists: PriceList[],
+): number {
   const factor = 1 - line.discountPercent / 100;
-  return roundHalfUp(unitExVat(line.sku, customer) * factor * line.qty, 2);
+  return roundHalfUp(unitExVat(line.sku, customer, priceLists) * factor * line.qty, 2);
 }
 
-function lineIncTotal(line: CartLine, customer: CustomerCrm | null): number {
+function lineIncTotal(
+  line: CartLine,
+  customer: CustomerCrm | null,
+  priceLists: PriceList[],
+): number {
   const factor = 1 - line.discountPercent / 100;
-  return roundHalfUp(unitIncVat(line.sku, customer) * factor * line.qty, 2);
+  return roundHalfUp(unitIncVat(line.sku, customer, priceLists) * factor * line.qty, 2);
 }
 
-function cartSummary(lines: CartLine[], customer: CustomerCrm | null) {
+function cartSummary(
+  lines: CartLine[],
+  customer: CustomerCrm | null,
+  priceLists: PriceList[],
+) {
   const subtotalIncBeforeDiscount = lines.reduce(
-    (sum, line) => sum + roundHalfUp(unitIncVat(line.sku, customer) * line.qty, 2),
+    (sum, line) => sum + roundHalfUp(unitIncVat(line.sku, customer, priceLists) * line.qty, 2),
     0,
   );
   const lineDiscounts = lines.reduce(
     (sum, line) =>
       sum +
-      roundHalfUp(unitIncVat(line.sku, customer) * line.qty * (line.discountPercent / 100), 2),
+      roundHalfUp(
+        unitIncVat(line.sku, customer, priceLists) * line.qty * (line.discountPercent / 100),
+        2,
+      ),
     0,
   );
   const discountedExSubtotal = lines.reduce(
-    (sum, line) => sum + lineDiscountedEx(line, customer),
+    (sum, line) => sum + lineDiscountedEx(line, customer, priceLists),
     0,
   );
   const preview = computeInvoicePreview(discountedExSubtotal);
@@ -266,6 +308,7 @@ export default function TillPage() {
   const [skus, setSkus] = useState<Sku[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
+  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [locationId, setLocationId] = useState("");
   const [skuId, setSkuId] = useState("");
   const [customerId, setCustomerId] = useState("");
@@ -292,13 +335,14 @@ export default function TillPage() {
     setLoading(true);
     setError(null);
     try {
-      const [locationData, skuData, inventoryData, customerData, settingsData] =
+      const [locationData, skuData, inventoryData, customerData, settingsData, priceListData] =
         await Promise.all([
           listLocations(),
           listSkus(),
           listInventory(),
           listCustomers(),
           getSettings(),
+          listPriceLists(),
         ]);
       const showrooms = locationData.filter(
         (loc) => isActiveLocation(loc) && loc.type === "showroom",
@@ -308,6 +352,7 @@ export default function TillPage() {
       setSkus(skuData);
       setInventory(inventoryData);
       setCustomers(customerData);
+      setPriceLists(priceListData);
       setLocationId((current) => {
         if (current) {
           return current;
@@ -410,7 +455,7 @@ export default function TillPage() {
     };
   }, [cartKitKey]);
 
-  const summary = cartSummary(cart, selectedCustomer);
+  const summary = cartSummary(cart, selectedCustomer, priceLists);
   const totalIncLabel = formatPriceAmount(summary.totalIncVat);
 
   useEffect(() => {
@@ -428,7 +473,7 @@ export default function TillPage() {
     numericQty > 0 &&
     (selectedSku?.is_kit ||
       numericQty <= floorOnHand - (cartQtyBySku.get(skuId) ?? 0)) &&
-    unitExVat(selectedSku ?? ({} as Sku), selectedCustomer) > 0;
+    unitExVat(selectedSku ?? ({} as Sku), selectedCustomer, priceLists) > 0;
 
   const floorOnHandFor = useCallback(
     (id: string) =>
@@ -838,7 +883,7 @@ export default function TillPage() {
                             </TableCell>
                             <TableCell>
                               {formatZarAmount(
-                                formatPriceAmount(unitIncVat(line.sku, selectedCustomer)),
+                                formatPriceAmount(unitIncVat(line.sku, selectedCustomer, priceLists)),
                               )}
                             </TableCell>
                             {canDiscount ? (
@@ -866,7 +911,7 @@ export default function TillPage() {
                             <TableCell>
                               <strong>
                                 {formatZarAmount(
-                                  formatPriceAmount(lineIncTotal(line, selectedCustomer)),
+                                  formatPriceAmount(lineIncTotal(line, selectedCustomer, priceLists)),
                                 )}
                               </strong>
                             </TableCell>
