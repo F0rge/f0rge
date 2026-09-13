@@ -25,6 +25,7 @@ import {
   createTransfer,
   dispatchTransfer,
   downloadTransferPdf,
+  getSettings,
   getStocktake,
   getPurchaseOrder,
   isActiveLocation,
@@ -141,20 +142,23 @@ function WmsMobileConsole() {
   const [skus, setSkus] = useState<Sku[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
   const [stocktake, setStocktake] = useState<Stocktake | null>(null);
+  const [teamReceiveDefaultId, setTeamReceiveDefaultId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [locationData, orderData, skuData, inventoryData, stocktakeSummaries] =
+      const [locationData, orderData, skuData, inventoryData, stocktakeSummaries, settingsData] =
         await Promise.all([
           listLocations(),
           listPurchaseOrders({ limit: 100 }),
           listSkus(),
           listInventory(),
           listStocktakes(),
+          getSettings(),
         ]);
       setLocations(locationData.filter(isActiveLocation));
+      setTeamReceiveDefaultId(settingsData.default_receive_location_id);
       setOrders(orderData.items);
       setSkus(skuData);
       setInventory(inventoryData);
@@ -194,7 +198,10 @@ function WmsMobileConsole() {
     setSuccess(null);
   }
 
-  const { floor, locationId, setLocationId } = useWmsFloorLocation(locations);
+  const { floor, locationId, setLocationId } = useWmsFloorLocation(
+    locations,
+    teamReceiveDefaultId,
+  );
 
   return (
     <div className="vellano-wms">

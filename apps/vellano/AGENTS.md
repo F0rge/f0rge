@@ -266,7 +266,7 @@ Extends the existing `customers` table (no second customer entity). Do **not** m
 
 **Columns:** `customer_type` (`retail` | `trade`, default `retail`), `price_tier` (default `standard`), `phone` (nullable), `credit_limit` (nullable Numeric 14,2), `on_hold` (bool, default false), `on_hold_reason` (nullable, 512).
 
-**Aggregates** (computed, never stored overdue bit): `open_invoices_count`, `open_invoices_zar`, `overdue_invoices_count`, `overdue_invoices_zar`, `last_purchase_date` (`max(tax_invoices.issue_date)`), `active_laybys_count`, `active_laybys_zar`. Overdue clock is `issue_date + 30` (`as_of − 30 days`). Overdue is false when invoices are paid or no longer past terms. Do not change `GET /reports/aged-ar` math.
+**Aggregates** (computed, never stored overdue bit): `open_invoices_count`, `open_invoices_zar`, `overdue_invoices_count`, `overdue_invoices_zar`, `last_purchase_date` (`max(tax_invoices.issue_date)`), `active_laybys_count`, `active_laybys_zar`. Overdue when open balance and (`due_date` passed, or legacy null `due_date` with `issue_date + 30`). New invoices snapshot `due_date` from customer `payment_terms_days` else team default (30). Customer `payment_terms_days` patchable on profile fields. Do not change `GET /reports/aged-ar` math.
 
 **List filters** (AND): `GET /customers?overdue=&active_layby=&on_hold=` — `overdue` = `overdue_invoices_count > 0`, `active_layby` = `active_laybys_count > 0`.
 
@@ -502,9 +502,10 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 
 Document-centric double-entry in ZAR. Every invoice, credit note, bill, and payment posts a balanced journal. Payments **record** cash/bank movement only — no PSP, EFT origination, or email.
 
-**Seller particulars (tax invoice face):** Vellano, Kramerville, Johannesburg, South Africa, VAT 4123456789 (demo).
+**Seller particulars (tax invoice face):** from `GET/PATCH /api/v1/settings` (`legal_name`, `trading_name`, `address`, `vat_number`, optional bank lines). PDFs and live VAT201 draft read these; locked VAT201 period snapshots are unchanged.
 
-**Chart of accounts (seeded):**
+**Numbering:** `document_sequences` table — `allocate()` under row lock inside the creating transaction. Defaults: `INV`, `CN`, `BILL`, `PAY`, `PO`, `DLV`, `RTN`, `JE`, `LB`, `TRF`, `PCK` (padding 4). Prefix editable via settings; `next_value` read-only on GET. Auto-posted GL journals keep `journal_number` null.
+
 
 | code | name | type |
 |------|------|------|
@@ -529,7 +530,7 @@ Document-centric double-entry in ZAR. Every invoice, credit note, bill, and paym
 
 SKU `category` maps to those P&L accounts via `GET/PUT /api/v1/category-maps` (seeded; owner/books can upsert). Till/layby/adj/CN post to the mapped codes when the SKU has a category; books invoices without `sku_id` still use 4000. Extra accounts are added by `ensure_category_chart()` on startup.
 
-**Numbering:** `INV-0001`, `CN-0001`, `BILL-0001`, `PAY-0001`, `JE-0001` (sequential, same algorithm as `PO-0001`).
+**Numbering:** `INV-0001`, `CN-0001`, … via `document_sequences` (row lock; prefix editable in settings). Auto-posted GL keeps `journal_number` null.
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
 

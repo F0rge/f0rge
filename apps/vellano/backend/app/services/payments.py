@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.bill import BillCRUD
 from app.crud.payment import PaymentCRUD
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
 from app.models.journal import JournalDocumentType
@@ -24,6 +26,7 @@ from app.services.chart_of_accounts import (
     LedgerPostingService,
 )
 from app.services.packing_sheet import convert_bill_to_zar
+from app.services.invoice_pdf import seller_details_from_settings
 from app.services.payment_pdf import build_payment_receipt_pdf
 from app.services.suppliers import SupplierService
 from f0rge_core.exceptions import NotFoundError, ValidationError
@@ -53,16 +56,13 @@ class PaymentService:
     async def create(
         self, data: PaymentCreate, user_id: Optional[uuid.UUID] = None
     ) -> PaymentResponse:
-        payment_number = await self.crud.get_next_payment_number()
-
         if data.direction == "in":
-            return await self._create_payment_in(data, payment_number, user_id)
-        return await self._create_payment_out(data, payment_number, user_id)
+            return await self._create_payment_in(data, user_id)
+        return await self._create_payment_out(data, user_id)
 
     async def _create_payment_in(
         self,
         data: PaymentCreate,
-        payment_number: str,
         user_id: Optional[uuid.UUID] = None,
     ) -> PaymentResponse:
         if data.invoice_id is None:
@@ -85,7 +85,7 @@ class PaymentService:
             raise ValidationError("Payment amount must equal the remaining invoice balance")
 
         payment = Payment(
-            payment_number=payment_number,
+            payment_number="",
             direction=PaymentDirection.IN,
             invoice_id=invoice.id,
             amount=data.amount,
@@ -97,11 +97,12 @@ class PaymentService:
         )
 
         async with unit_of_work(self.db):
+            payment.payment_number = await self.crud.get_next_payment_number()
             await self.crud.add_and_flush(payment)
             await self.posting.post(
                 JournalDocumentType.PAYMENT,
                 payment.id,
-                f"Payment {payment_number} received",
+                f"Payment {payment.payment_number} received",
                 [
                     (CODE_BANK, data.amount, Decimal(0)),
                     (CODE_AR, Decimal(0), data.amount),
@@ -124,7 +125,6 @@ class PaymentService:
     async def _create_payment_out(
         self,
         data: PaymentCreate,
-        payment_number: str,
         user_id: Optional[uuid.UUID] = None,
     ) -> PaymentResponse:
         if data.bill_id is None:
@@ -162,7 +162,7 @@ class PaymentService:
             journal_lines.append((CODE_FX, Decimal(0), abs(diff)))
 
         payment = Payment(
-            payment_number=payment_number,
+            payment_number="",
             direction=PaymentDirection.OUT,
             bill_id=bill.id,
             amount=data.amount,
@@ -174,11 +174,12 @@ class PaymentService:
         )
 
         async with unit_of_work(self.db):
+            payment.payment_number = await self.crud.get_next_payment_number()
             await self.crud.add_and_flush(payment)
             await self.posting.post(
                 JournalDocumentType.PAYMENT,
                 payment.id,
-                f"Payment {payment_number} sent",
+                f"Payment {payment.payment_number} sent",
                 journal_lines,
                 entry_date=payment.paid_on,
             )
@@ -214,8 +215,15 @@ class PaymentService:
             amount_zar=f"{payment.amount_zar:.2f}",
             tender=payment.tender,
             linked_document=linked_document,
+            seller=seller_details_from_settings(await self._team_settings()),
         )
         return Response(content=pdf_bytes, media_type="application/pdf")
+
+    async def _team_settings(self):
+        team = await TeamCRUD(self.db).get_first()
+        if team is None:
+            raise NotFoundError("Team not found")
+        return await TeamSettingsCRUD(self.db).get_or_create_for_team(team.id)
 
     @staticmethod
     def _resolve_fx(currency: str, fx_to_zar: Optional[Decimal]) -> Decimal:

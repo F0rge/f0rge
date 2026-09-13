@@ -42,6 +42,7 @@ class InvoiceListItem(BaseModel):
     customer_id: uuid.UUID
     customer_name: str
     issue_date: datetime.date
+    due_date: Optional[datetime.date] = None
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal
@@ -59,6 +60,7 @@ class InvoiceResponse(BaseModel):
     customer_id: uuid.UUID
     customer_name: str
     issue_date: datetime.date
+    due_date: Optional[datetime.date] = None
     subtotal_ex_vat: Decimal
     vat_amount: Decimal
     total_inc_vat: Decimal

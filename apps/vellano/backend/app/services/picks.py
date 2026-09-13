@@ -104,7 +104,7 @@ class PickService:
             for line in result.lines
         ]
         pick = Pick(
-            number=await self.crud.get_next_pick_number(),
+            number="",
             source_type=origin.source_type,
             source_id=origin.source_id,
             kit_sku_id=origin.kit_sku_id,
@@ -115,6 +115,7 @@ class PickService:
             lines=lines,
         )
         async with unit_of_work(self.db):
+            pick.number = await self.crud.get_next_pick_number()
             await self.crud.add_and_flush(pick)
         return await self.get(pick.id)
 

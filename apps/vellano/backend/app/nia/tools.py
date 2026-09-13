@@ -6,12 +6,19 @@ from decimal import Decimal
 from typing import Any, Optional, Union
 
 from pydantic_ai import ApprovalRequired, RunContext, ToolReturn
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
 from app.models.tax_invoice import TaxInvoice
+from app.services.payment_terms import (
+    effective_due_date,
+    effective_terms_days,
+    invoice_overdue_predicate,
+)
 from app.nia.agent import NiaDeps, nia_agent
 from app.nia.milestones import milestone_tool_return
 from app.nia.canvas import (
@@ -78,7 +85,6 @@ ALLOWED_NAV_PATHS: frozenset[str] = frozenset(
 PROPOSE_TRANSFER_TOOL = "propose_transfer"
 _INVOICE_DETAIL_PREFIX = "/invoices/"
 _CATALOGUE_DETAIL_PREFIX = "/catalogue/"
-_OVERDUE_TERMS_DAYS = 30
 
 
 def _is_uuid_detail_path(prefix: str, normalized: str) -> bool:
@@ -211,7 +217,7 @@ async def search(ctx: RunContext[NiaDeps], q: str) -> Union[dict[str, Any], str]
 
 @nia_agent.tool
 async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str, Any]], str]:
-    """List unpaid invoices past 30-day terms (issue_date + 30).
+    """List unpaid invoices past their due date (invoice due_date or payment terms).
 
     Summarise the requested invoice facts neutrally. Recommend chasing only when
     the current user message explicitly asks for that recommendation.
@@ -221,23 +227,27 @@ async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str
         return denied
 
     today = datetime.date.today()
-    overdue_cutoff = today - datetime.timedelta(days=_OVERDUE_TERMS_DAYS)
-    balance = TaxInvoice.total_inc_vat - TaxInvoice.amount_paid
+    team = await TeamCRUD(ctx.deps.db).get_first()
+    if team is None:
+        return "Team settings are not configured."
+    team_settings = await TeamSettingsCRUD(ctx.deps.db).get_or_create_for_team(team.id)
+
     stmt = (
         select(TaxInvoice)
         .options(selectinload(TaxInvoice.customer))
-        .where(
-            and_(
-                balance > 0,
-                TaxInvoice.issue_date <= overdue_cutoff,
-            )
-        )
+        .where(invoice_overdue_predicate(today))
         .order_by(TaxInvoice.issue_date, TaxInvoice.invoice_number)
     )
     rows = (await ctx.deps.db.execute(stmt)).scalars().all()
     invoices = []
     for inv in rows:
-        due_date = inv.issue_date + datetime.timedelta(days=_OVERDUE_TERMS_DAYS)
+        due_date = effective_due_date(
+            inv.issue_date,
+            inv.due_date,
+            inv.customer,
+            team_settings,
+        )
+        terms_days = effective_terms_days(inv.customer, team_settings)
         invoices.append(
             {
                 "id": str(inv.id),
@@ -245,7 +255,7 @@ async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str
                 "customer_name": inv.customer.name,
                 "issue_date": inv.issue_date.isoformat(),
                 "days_overdue": (today - due_date).days,
-                "terms_days": _OVERDUE_TERMS_DAYS,
+                "terms_days": terms_days,
                 "remaining_zar": str(
                     (inv.total_inc_vat - inv.amount_paid).quantize(Decimal("0.01"))
                 ),
@@ -376,7 +386,7 @@ async def chart_overdue_invoices(
     ctx: RunContext[NiaDeps],
     mode: str = "replace",
 ) -> Union[dict[str, Any], str]:
-    """Draw overdue invoices (30-day terms) as a Canvas table. Replaces the canvas by default."""
+    """Draw overdue invoices (team/customer payment terms) as a Canvas table."""
     denied = _require_nia_use(ctx.deps)
     if denied:
         return denied

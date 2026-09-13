@@ -45,6 +45,7 @@ import {
   computeInvoicePreview,
   createTillSale,
   downloadInvoicePdf,
+  getSettings,
   listPicks,
   exVatToIncVat,
   formatPriceAmount,
@@ -58,6 +59,7 @@ import {
   parsePriceInput,
   roundHalfUp,
   skuPhotoUrl,
+  type AppSettings,
   type CustomerCrm,
   type InventorySku,
   type Location,
@@ -77,14 +79,21 @@ import {
   tillScanErrorMessage,
 } from "@/lib/barcode-scan";
 
-const SELLER = {
-  name: "Vellano",
-  address: "Kramerville, Johannesburg, South Africa",
-  vat: "4123456789",
-};
-
-const VAT_RATE_LABEL = "15%";
 const WALK_IN_CUSTOMER_NAME = "Walk-in customer";
+
+function resolveTillLocationId(
+  showrooms: Location[],
+  userDefaultId: string | null | undefined,
+  teamTillDefaultId: string | null | undefined,
+): string {
+  if (userDefaultId && showrooms.some((loc) => loc.id === userDefaultId)) {
+    return userDefaultId;
+  }
+  if (teamTillDefaultId && showrooms.some((loc) => loc.id === teamTillDefaultId)) {
+    return teamTillDefaultId;
+  }
+  return showrooms[0]?.id ?? "";
+}
 
 const TENDER_OPTIONS: { value: TillTender; label: string; icon: typeof Purchase }[] = [
   { value: "card", label: "Card", icon: Purchase },
@@ -242,6 +251,7 @@ export default function TillPage() {
   const canDiscount = can(user, "till.discount");
   const canOverrideCredit = canManageCustomerCredit(user);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [companySettings, setCompanySettings] = useState<AppSettings | null>(null);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [inventory, setInventory] = useState<InventorySku[]>([]);
   const [customers, setCustomers] = useState<CustomerCrm[]>([]);
@@ -271,16 +281,19 @@ export default function TillPage() {
     setLoading(true);
     setError(null);
     try {
-      const [locationData, skuData, inventoryData, customerData] = await Promise.all([
-        listLocations(),
-        listSkus(),
-        listInventory(),
-        listCustomers(),
-      ]);
+      const [locationData, skuData, inventoryData, customerData, settingsData] =
+        await Promise.all([
+          listLocations(),
+          listSkus(),
+          listInventory(),
+          listCustomers(),
+          getSettings(),
+        ]);
       const showrooms = locationData.filter(
         (loc) => isActiveLocation(loc) && loc.type === "showroom",
       );
       setLocations(showrooms);
+      setCompanySettings(settingsData);
       setSkus(skuData);
       setInventory(inventoryData);
       setCustomers(customerData);
@@ -288,11 +301,11 @@ export default function TillPage() {
         if (current) {
           return current;
         }
-        const defaultId = user?.default_location_id;
-        if (defaultId && showrooms.some((loc) => loc.id === defaultId)) {
-          return defaultId;
-        }
-        return showrooms[0]?.id ?? "";
+        return resolveTillLocationId(
+          showrooms,
+          user?.default_location_id,
+          settingsData.default_till_location_id,
+        );
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load till data.");
@@ -311,6 +324,7 @@ export default function TillPage() {
     () => new Map(inventory.map((entry) => [entry.sku_id, entry])),
     [inventory],
   );
+  const vatRateLabel = `${companySettings?.vat_percent ?? "15"}%`;
 
   const selectedSku = skus.find((sku) => sku.id === skuId);
   const selectedInventory = skuId ? inventoryBySku.get(skuId) : undefined;
@@ -876,7 +890,7 @@ export default function TillPage() {
                     </dd>
                   </div>
                   <div className="vellano-sale-summary__row">
-                    <dt>VAT ({VAT_RATE_LABEL}) included</dt>
+                    <dt>VAT ({vatRateLabel}) included</dt>
                     <dd>{formatZarAmount(formatPriceAmount(summary.vatIncluded))}</dd>
                   </div>
                   <div className="vellano-sale-summary__row vellano-sale-summary__row--total">
@@ -1032,9 +1046,9 @@ export default function TillPage() {
             <div className="vellano-tax-invoice__parties">
               <div>
                 <strong>Seller</strong>
-                <p>{SELLER.name}</p>
-                <p>{SELLER.address}</p>
-                <p>VAT no. {SELLER.vat}</p>
+                <p>{companySettings?.legal_name ?? "—"}</p>
+                <p>{companySettings?.address ?? "—"}</p>
+                <p>VAT no. {companySettings?.vat_number ?? "—"}</p>
               </div>
               <div>
                 <strong>Buyer</strong>
@@ -1069,7 +1083,7 @@ export default function TillPage() {
 
             <div>
               <p>Subtotal ex VAT: {formatZarAmount(lastSale.subtotal_ex_vat)}</p>
-              <p>VAT ({VAT_RATE_LABEL}): {formatZarAmount(lastSale.vat_amount)}</p>
+              <p>VAT ({vatRateLabel}): {formatZarAmount(lastSale.vat_amount)}</p>
               <p>
                 <strong>Total inc VAT: {formatZarAmount(lastSale.total_inc_vat)}</strong>
               </p>

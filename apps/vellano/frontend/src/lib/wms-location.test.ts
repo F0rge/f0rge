@@ -50,6 +50,26 @@ describe("wms-location", () => {
     expect(resolveFloorLocationId(floor, null)).toBe("loc-k");
   });
 
+  it("prefers the team receive default when nothing is stored", () => {
+    const floor = floorLocations([kramerville, bedfordview, pretoria]);
+    expect(floor).not.toBeNull();
+    if (!floor) {
+      return;
+    }
+    expect(defaultFloorLocationId(floor, "loc-b")).toBe("loc-b");
+    expect(resolveFloorLocationId(floor, null, "loc-b")).toBe("loc-b");
+  });
+
+  it("ignores an invalid team default and falls back to warehouse", () => {
+    const floor = floorLocations([kramerville, bedfordview]);
+    expect(floor).not.toBeNull();
+    if (!floor) {
+      return;
+    }
+    expect(defaultFloorLocationId(floor, "loc-missing")).toBe("loc-k");
+    expect(resolveFloorLocationId(floor, null, "loc-missing")).toBe("loc-k");
+  });
+
   it("restores a stored selection for any active floor location", () => {
     const floor = floorLocations([kramerville, bedfordview, pretoria]);
     expect(floor).not.toBeNull();

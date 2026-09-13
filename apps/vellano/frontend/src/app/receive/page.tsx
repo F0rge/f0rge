@@ -24,6 +24,7 @@ import {
   PO_STATUS_LABELS,
   canReceive,
   getPurchaseOrder,
+  getSettings,
   isActiveLocation,
   listInventory,
   listLocations,
@@ -51,6 +52,7 @@ function ReceivePageContent() {
   const [skus, setSkus] = useState<Sku[]>([]);
   const [poId, setPoId] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [defaultReceiveLocationId, setDefaultReceiveLocationId] = useState<string | null>(null);
   const [binId, setBinId] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -61,16 +63,29 @@ function ReceivePageContent() {
     setLoading(true);
     setError(null);
     try {
-      const [orderData, locationData, inventoryData, skuData] = await Promise.all([
+      const [orderData, locationData, inventoryData, skuData, settingsData] = await Promise.all([
         listPurchaseOrders({ status: "landed", limit: 100 }),
         listLocations(),
         listInventory(),
         listSkus(),
+        getSettings(),
       ]);
+      const activeLocations = locationData.filter(isActiveLocation);
       setOrders(orderData.items);
-      setLocations(locationData.filter(isActiveLocation));
+      setLocations(activeLocations);
       setInventory(inventoryData);
       setSkus(skuData);
+      const teamDefault = settingsData.default_receive_location_id;
+      setDefaultReceiveLocationId(teamDefault);
+      setLocationId((current) => {
+        if (current && activeLocations.some((entry) => entry.id === current)) {
+          return current;
+        }
+        if (teamDefault && activeLocations.some((entry) => entry.id === teamDefault)) {
+          return teamDefault;
+        }
+        return "";
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load receive data.");
     } finally {
@@ -142,8 +157,13 @@ function ReceivePageContent() {
         `Received ${po?.po_number ?? "PO"} into ${location?.name ?? "location"}. Inventory updated.`,
       );
       setPoId("");
-      setLocationId("");
       setBinId("");
+      setLocationId(
+        defaultReceiveLocationId &&
+          locations.some((entry) => entry.id === defaultReceiveLocationId)
+          ? defaultReceiveLocationId
+          : "",
+      );
       await loadData();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {

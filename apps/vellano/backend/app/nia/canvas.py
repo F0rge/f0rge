@@ -5,13 +5,16 @@ import uuid
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.team_settings import TeamSettingsCRUD
+from app.crud.user import TeamCRUD
 from app.models.customer import Customer
 from app.models.sku import Sku
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.services.inventory import InventoryService
+from app.services.payment_terms import invoice_overdue_predicate
 from app.services.reports import ReportsService
 
 CANVAS_PATH = "/canvas"
@@ -345,25 +348,23 @@ async def build_dining_vs_sofas_canvas_spec(db: AsyncSession) -> dict[str, Any]:
 
 async def build_overdue_invoices_canvas_spec(db: AsyncSession) -> dict[str, Any]:
     today = datetime.date.today()
-    overdue_cutoff = today - datetime.timedelta(days=30)
-    balance = TaxInvoice.total_inc_vat - TaxInvoice.amount_paid
     stmt = (
         select(TaxInvoice, Customer.name)
         .join(Customer, TaxInvoice.customer_id == Customer.id)
-        .where(
-            and_(
-                balance > 0,
-                TaxInvoice.issue_date <= overdue_cutoff,
-            )
-        )
+        .where(invoice_overdue_predicate(today))
         .order_by(TaxInvoice.issue_date, TaxInvoice.invoice_number)
     )
     rows = (await db.execute(stmt)).all()
+    team = await TeamCRUD(db).get_first()
+    terms_label = "payment terms"
+    if team is not None:
+        settings = await TeamSettingsCRUD(db).get_or_create_for_team(team.id)
+        terms_label = f"{settings.payment_terms_days}-day default terms"
     table_rows = [
         [
             invoice.invoice_number,
             customer_name,
-            invoice.issue_date.isoformat(),
+            (invoice.due_date or invoice.issue_date).isoformat(),
             _zar_cell(invoice.total_inc_vat - invoice.amount_paid),
         ]
         for invoice, customer_name in rows
@@ -376,8 +377,8 @@ async def build_overdue_invoices_canvas_spec(db: AsyncSession) -> dict[str, Any]
             {
                 "type": "table",
                 "id": "overdue-invoices",
-                "title": "Overdue invoices (30-day terms)",
-                "headers": ["Invoice", "Customer", "Issue date", "Remaining (ZAR)"],
+                "title": f"Overdue invoices ({terms_label})",
+                "headers": ["Invoice", "Customer", "Due date", "Remaining (ZAR)"],
                 "rows": table_rows,
             }
         ],

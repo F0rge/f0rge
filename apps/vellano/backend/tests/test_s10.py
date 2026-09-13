@@ -189,6 +189,88 @@ async def test_settings_default_vat_is_15_percent(owner_client: AsyncClient) -> 
     assert Decimal(body["vat_rate"]) == Decimal("0.15")
     assert Decimal(body["vat_percent"]) == Decimal("15.00")
     assert body["defaults_locked"] is True
+    assert body["legal_name"] == "Vellano"
+    assert body["payment_terms_days"] == 30
+    assert len(body["document_sequences"]) == 11
+    assert any(
+        row["doc_type"] == "invoice" and row["prefix"] == "INV"
+        for row in body["document_sequences"]
+    )
+
+
+async def test_settings_patch_legal_name_round_trip(owner_client: AsyncClient) -> None:
+    patch = await owner_client.patch(
+        "/api/v1/settings",
+        json={"legal_name": "Acme Furnishings (Pty) Ltd"},
+    )
+    assert patch.status_code == 200
+    assert patch.json()["legal_name"] == "Acme Furnishings (Pty) Ltd"
+
+    get_resp = await owner_client.get("/api/v1/settings")
+    assert get_resp.status_code == 200
+    assert get_resp.json()["legal_name"] == "Acme Furnishings (Pty) Ltd"
+
+
+async def test_settings_receive_default_must_be_warehouse(owner_client: AsyncClient) -> None:
+    locations = await owner_client.get("/api/v1/locations")
+    assert locations.status_code == 200
+    warehouse_id = next(row["id"] for row in locations.json() if row["type"] == "warehouse")
+    showroom_id = next(row["id"] for row in locations.json() if row["type"] == "showroom")
+
+    ok = await owner_client.patch(
+        "/api/v1/settings",
+        json={"default_receive_location_id": warehouse_id},
+    )
+    assert ok.status_code == 200
+
+    bad = await owner_client.patch(
+        "/api/v1/settings",
+        json={"default_receive_location_id": showroom_id},
+    )
+    assert bad.status_code == 400
+
+    till_ok = await owner_client.patch(
+        "/api/v1/settings",
+        json={"default_till_location_id": showroom_id},
+    )
+    assert till_ok.status_code == 200
+
+    till_bad = await owner_client.patch(
+        "/api/v1/settings",
+        json={"default_till_location_id": warehouse_id},
+    )
+    assert till_bad.status_code == 400
+
+
+async def test_invoice_pdf_contains_patched_legal_name(owner_client: AsyncClient) -> None:
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    patch = await owner_client.patch(
+        "/api/v1/settings",
+        json={"legal_name": "Acme Furnishings PDF Test"},
+    )
+    assert patch.status_code == 200
+
+    customer = await owner_client.post("/api/v1/contacts", json={"name": "PDF Legal Name Customer"})
+    assert customer.status_code == 201
+    invoice = await owner_client.post(
+        "/api/v1/invoices",
+        json={
+            "customer_id": customer.json()["id"],
+            "issue_date": "2026-09-01",
+            "lines": [{"description": "Desk", "qty": 1, "unit_ex_vat": "100.00"}],
+        },
+    )
+    assert invoice.status_code == 201
+
+    pdf_resp = await owner_client.get(f"/api/v1/invoices/{invoice.json()['id']}/pdf")
+    assert pdf_resp.status_code == 200
+    text = "\n".join(
+        page.extract_text() or "" for page in PdfReader(BytesIO(pdf_resp.content)).pages
+    )
+    assert "Acme Furnishings PDF Test" in text
 
 
 async def test_settings_mutate_owner_only(

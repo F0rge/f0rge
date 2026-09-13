@@ -89,13 +89,6 @@ class CreditNoteCRUD(BaseCRUD):
         return list(result.scalars().unique().all()), total
 
     async def get_next_credit_note_number(self) -> str:
-        result = await self.db.execute(
-            select(CreditNote.credit_note_number)
-            .order_by(CreditNote.credit_note_number.desc())
-            .limit(1)
-        )
-        last = result.scalar_one_or_none()
-        if last is None:
-            return "CN-0001"
-        num = int(last.split("-")[1]) + 1
-        return f"CN-{num:04d}"
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("credit_note")

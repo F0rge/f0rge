@@ -102,11 +102,6 @@ class LaybyCRUD(BaseCRUD):
         return list(result.scalars().unique().all()), total
 
     async def get_next_layby_number(self) -> str:
-        result = await self.db.execute(
-            select(Layby.layby_number).order_by(Layby.layby_number.desc()).limit(1)
-        )
-        last = result.scalar_one_or_none()
-        if last is None:
-            return "LB-0001"
-        num = int(last.split("-")[1]) + 1
-        return f"LB-{num:04d}"
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("layby")

@@ -118,15 +118,15 @@ class PurchaseOrderService:
             if sku is None:
                 raise NotFoundError("SKU not found")
 
-        po_number = await self.crud.get_next_po_number()
         po = PurchaseOrder(
-            po_number=po_number,
+            po_number="",
             supplier_id=data.supplier_id,
             proforma_id=data.proforma_id,
             status=PurchaseOrderStatus.OPEN,
         )
 
         async with unit_of_work(self.db):
+            po.po_number = await self.crud.get_next_po_number()
             await self.crud.add_and_flush(po)
             _stamp_first(po, "ordered_at", _as_aware_utc(po.created_at))
             for line in data.lines:

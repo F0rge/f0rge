@@ -32,6 +32,7 @@ PROFILE_PATCH_FIELDS = frozenset(
         "billing_address",
         "customer_type",
         "price_tier",
+        "payment_terms_days",
     }
 )
 
@@ -75,6 +76,7 @@ class CustomersCrmService:
             billing_address=data.billing_address,
             customer_type=data.customer_type,
             price_tier=data.price_tier,
+            payment_terms_days=data.payment_terms_days,
         )
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(customer)
@@ -116,6 +118,8 @@ class CustomersCrmService:
             if data.price_tier is None:
                 raise ValidationError("price_tier cannot be null")
             customer.price_tier = data.price_tier
+        if "payment_terms_days" in fields_set:
+            customer.payment_terms_days = data.payment_terms_days
         if "credit_limit" in fields_set:
             customer.credit_limit = data.credit_limit
         if "on_hold" in fields_set:
@@ -173,6 +177,7 @@ class CustomersCrmService:
             ),
             on_hold=customer.on_hold,
             on_hold_reason=customer.on_hold_reason,
+            payment_terms_days=customer.payment_terms_days,
             open_invoices_count=invoice_agg.open_count,
             open_invoices_zar=invoice_agg.open_zar.quantize(Decimal("0.01")),
             overdue_invoices_count=invoice_agg.overdue_count,

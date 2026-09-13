@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, Numeric, String, Text
+from sqlalchemy import Boolean, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -38,3 +38,4 @@ class Customer(UUIDPkMixin, TimestampMixin, Base):
         server_default="false",
     )
     on_hold_reason: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    payment_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

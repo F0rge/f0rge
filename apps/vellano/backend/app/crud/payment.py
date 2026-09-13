@@ -92,11 +92,6 @@ class PaymentCRUD(BaseCRUD):
         return list(result.scalars().unique().all()), total
 
     async def get_next_payment_number(self) -> str:
-        result = await self.db.execute(
-            select(Payment.payment_number).order_by(Payment.payment_number.desc()).limit(1)
-        )
-        last = result.scalar_one_or_none()
-        if last is None:
-            return "PAY-0001"
-        num = int(last.split("-")[1]) + 1
-        return f"PAY-{num:04d}"
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("payment")

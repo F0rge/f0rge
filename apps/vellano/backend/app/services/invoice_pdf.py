@@ -1,14 +1,47 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from decimal import Decimal
 from typing import Optional
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
-SELLER_NAME = "Vellano"
-SELLER_ADDRESS = "Kramerville, Johannesburg, South Africa"
-SELLER_VAT_NUMBER = "4123456789"
+from app.models.team_settings import (
+    DEFAULT_ADDRESS,
+    DEFAULT_LEGAL_NAME,
+    DEFAULT_VAT_NUMBER,
+    TeamSettings,
+)
+
+SELLER_NAME = DEFAULT_LEGAL_NAME
+SELLER_ADDRESS = DEFAULT_ADDRESS
+SELLER_VAT_NUMBER = DEFAULT_VAT_NUMBER
+
+
+@dataclass(frozen=True)
+class SellerDetails:
+    name: str
+    address: str
+    vat_number: str
+    vat_percent_label: str
+    bank_name: Optional[str] = None
+    bank_account: Optional[str] = None
+    bank_branch_code: Optional[str] = None
+
+
+def seller_details_from_settings(settings: TeamSettings) -> SellerDetails:
+    vat_pct = (settings.vat_rate * Decimal("100")).quantize(Decimal("0.01"))
+    return SellerDetails(
+        name=settings.legal_name,
+        address=settings.address,
+        vat_number=settings.vat_number,
+        vat_percent_label=f"{vat_pct}%",
+        bank_name=settings.bank_name,
+        bank_account=settings.bank_account,
+        bank_branch_code=settings.bank_branch_code,
+    )
 
 
 def build_tax_invoice_pdf(
@@ -24,9 +57,18 @@ def build_tax_invoice_pdf(
     title: str = "Tax Invoice",
     original_invoice_number: Optional[str] = None,
     credit_reason: Optional[str] = None,
+    seller: Optional[SellerDetails] = None,
+    due_date: Optional[str] = None,
 ) -> bytes:
     """Each line: description, qty, unit_ex_vat, ex_vat, vat_amount, inc_vat."""
     from io import BytesIO
+
+    seller_details = seller or SellerDetails(
+        name=SELLER_NAME,
+        address=SELLER_ADDRESS,
+        vat_number=SELLER_VAT_NUMBER,
+        vat_percent_label="15%",
+    )
 
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
@@ -47,18 +89,33 @@ def build_tax_invoice_pdf(
         pdf.drawString(25 * mm, y, f"Reason: {credit_reason}")
         y -= 6 * mm
     pdf.drawString(25 * mm, y, f"Date: {issue_date}")
-    y -= 12 * mm
+    y -= 6 * mm
+    if due_date:
+        pdf.drawString(25 * mm, y, f"Due date: {due_date}")
+        y -= 6 * mm
+    y -= 6 * mm
 
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(25 * mm, y, "Seller")
     y -= 6 * mm
     pdf.setFont("Helvetica", 10)
-    pdf.drawString(25 * mm, y, SELLER_NAME)
+    pdf.drawString(25 * mm, y, seller_details.name)
     y -= 5 * mm
-    pdf.drawString(25 * mm, y, SELLER_ADDRESS)
+    pdf.drawString(25 * mm, y, seller_details.address)
     y -= 5 * mm
-    pdf.drawString(25 * mm, y, f"VAT No: {SELLER_VAT_NUMBER}")
-    y -= 12 * mm
+    pdf.drawString(25 * mm, y, f"VAT No: {seller_details.vat_number}")
+    y -= 5 * mm
+    if seller_details.bank_name and seller_details.bank_account:
+        pdf.drawString(
+            25 * mm,
+            y,
+            f"Bank: {seller_details.bank_name} — {seller_details.bank_account}",
+        )
+        y -= 5 * mm
+        if seller_details.bank_branch_code:
+            pdf.drawString(25 * mm, y, f"Branch: {seller_details.bank_branch_code}")
+            y -= 5 * mm
+    y -= 7 * mm
 
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(25 * mm, y, "Buyer")
@@ -97,7 +154,11 @@ def build_tax_invoice_pdf(
     pdf.setFont("Helvetica-Bold", 10)
     pdf.drawString(110 * mm, y, f"Subtotal ex-VAT: {subtotal_ex_vat}")
     y -= 6 * mm
-    pdf.drawString(110 * mm, y, f"VAT (15%): {vat_amount}")
+    pdf.drawString(
+        110 * mm,
+        y,
+        f"VAT ({seller_details.vat_percent_label}): {vat_amount}",
+    )
     y -= 6 * mm
     pdf.drawString(110 * mm, y, f"Total inc-VAT: {total_inc_vat}")
 

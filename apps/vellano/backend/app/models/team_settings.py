@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
+from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, UniqueConstraint, text
+from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,6 +14,10 @@ from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 DEFAULT_VAT_RATE = Decimal("0.15")
 DEFAULT_HOME_CURRENCY = "ZAR"
 DEFAULT_NIA_MONTHLY_TOKEN_CAP = 500000
+DEFAULT_LEGAL_NAME = "Vellano"
+DEFAULT_ADDRESS = "Kramerville, Johannesburg, South Africa"
+DEFAULT_VAT_NUMBER = "4123456789"
+DEFAULT_PAYMENT_TERMS_DAYS = 30
 
 
 class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
@@ -51,10 +56,56 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         default=DEFAULT_NIA_MONTHLY_TOKEN_CAP,
         server_default=text("500000"),
     )
+    legal_name: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=DEFAULT_LEGAL_NAME,
+        server_default=text("'Vellano'"),
+    )
+    trading_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    address: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=DEFAULT_ADDRESS,
+        server_default=text("'Kramerville, Johannesburg, South Africa'"),
+    )
+    vat_number: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=DEFAULT_VAT_NUMBER,
+        server_default=text("'4123456789'"),
+    )
+    cipc_number: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    bank_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    bank_account: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    bank_branch_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payment_terms_days: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=DEFAULT_PAYMENT_TERMS_DAYS,
+        server_default=text("30"),
+    )
+    default_receive_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    default_till_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     team: Mapped["Team"] = relationship()
+    default_receive_location: Mapped[Optional["Location"]] = relationship(
+        foreign_keys=[default_receive_location_id],
+    )
+    default_till_location: Mapped[Optional["Location"]] = relationship(
+        foreign_keys=[default_till_location_id],
+    )
 
     __table_args__ = (UniqueConstraint("team_id", name="uq_team_settings_team_id"),)
 
 
+from app.models.location import Location  # noqa: E402
 from app.models.team import Team  # noqa: E402

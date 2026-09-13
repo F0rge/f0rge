@@ -6,7 +6,12 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
-from app.services.invoice_pdf import SELLER_ADDRESS, SELLER_NAME, SELLER_VAT_NUMBER
+from app.services.invoice_pdf import (
+    SELLER_ADDRESS,
+    SELLER_NAME,
+    SELLER_VAT_NUMBER,
+    SellerDetails,
+)
 
 
 def build_payment_receipt_pdf(
@@ -18,8 +23,16 @@ def build_payment_receipt_pdf(
     amount_zar: str,
     tender: Optional[str],
     linked_document: Optional[str],
+    seller: Optional[SellerDetails] = None,
 ) -> bytes:
     from io import BytesIO
+
+    seller_details = seller or SellerDetails(
+        name=SELLER_NAME,
+        address=SELLER_ADDRESS,
+        vat_number=SELLER_VAT_NUMBER,
+        vat_percent_label="15%",
+    )
 
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
@@ -42,12 +55,23 @@ def build_payment_receipt_pdf(
     pdf.drawString(25 * mm, y, "Seller")
     y -= 6 * mm
     pdf.setFont("Helvetica", 10)
-    pdf.drawString(25 * mm, y, SELLER_NAME)
+    pdf.drawString(25 * mm, y, seller_details.name)
     y -= 5 * mm
-    pdf.drawString(25 * mm, y, SELLER_ADDRESS)
+    pdf.drawString(25 * mm, y, seller_details.address)
     y -= 5 * mm
-    pdf.drawString(25 * mm, y, f"VAT No: {SELLER_VAT_NUMBER}")
-    y -= 12 * mm
+    pdf.drawString(25 * mm, y, f"VAT No: {seller_details.vat_number}")
+    y -= 5 * mm
+    if seller_details.bank_name and seller_details.bank_account:
+        pdf.drawString(
+            25 * mm,
+            y,
+            f"Bank: {seller_details.bank_name} — {seller_details.bank_account}",
+        )
+        y -= 5 * mm
+        if seller_details.bank_branch_code:
+            pdf.drawString(25 * mm, y, f"Branch: {seller_details.bank_branch_code}")
+            y -= 5 * mm
+    y -= 7 * mm
 
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(25 * mm, y, "Payment")

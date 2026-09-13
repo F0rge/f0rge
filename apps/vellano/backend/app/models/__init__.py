@@ -13,6 +13,7 @@ from app.models.delivery import (
     DeliverySourceType,
     DeliveryStatus,
 )
+from app.models.document_sequence import DocumentSequence
 from app.models.customer import Customer
 from app.models.inventory import LocationStock, SkuStock
 from app.models.location_bin import BinStock, LocationBin
@@ -86,6 +87,7 @@ __all__ = [
     "DeliveryLine",
     "DeliverySourceType",
     "DeliveryStatus",
+    "DocumentSequence",
     "InvoiceLine",
     "JournalDocumentType",
     "JournalEntry",

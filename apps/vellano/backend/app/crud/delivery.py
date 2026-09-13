@@ -126,11 +126,6 @@ class DeliveryCRUD(BaseCRUD):
         ).scalar_one_or_none()
 
     async def get_next_delivery_number(self) -> str:
-        result = await self.db.execute(
-            select(Delivery.delivery_number).order_by(Delivery.delivery_number.desc()).limit(1)
-        )
-        last = result.scalar_one_or_none()
-        if last is None:
-            return "DLV-0001"
-        num = int(last.split("-")[1]) + 1
-        return f"DLV-{num:04d}"
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("delivery")

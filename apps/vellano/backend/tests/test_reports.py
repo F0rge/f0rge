@@ -90,6 +90,27 @@ async def test_vat201_draft_totals_15_percent(owner_client: AsyncClient) -> None
     assert "SARS" in body["disclaimer"]
 
 
+async def test_vat201_vendor_from_settings(owner_client: AsyncClient) -> None:
+    patch = await owner_client.patch(
+        "/api/v1/settings",
+        json={
+            "legal_name": "Vendor Legal Co",
+            "vat_number": "4999888777",
+        },
+    )
+    assert patch.status_code == 200
+
+    await _create_invoice(owner_client, ex_vat="100.00")
+    resp = await owner_client.get(
+        "/api/v1/reports/vat201",
+        params={"from": "2026-09-01", "to": "2026-09-30"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["vendor_name"] == "Vendor Legal Co"
+    assert body["vendor_vat_number"] == "4999888777"
+
+
 async def test_vat201_csv_download(owner_client: AsyncClient) -> None:
     await _create_invoice(owner_client)
     resp = await owner_client.get(
