@@ -41,7 +41,6 @@ ALLOWED_NAV_PATHS: frozenset[str] = frozenset(
         "/suppliers",
         "/proformas",
         "/catalogue",
-        "/stock",
         "/stocktakes",
         "/adjustments",
         "/import",
@@ -78,16 +77,14 @@ ALLOWED_NAV_PATHS: frozenset[str] = frozenset(
 
 PROPOSE_TRANSFER_TOOL = "propose_transfer"
 _INVOICE_DETAIL_PREFIX = "/invoices/"
+_CATALOGUE_DETAIL_PREFIX = "/catalogue/"
 _OVERDUE_TERMS_DAYS = 30
 
 
-def _is_allowed_nav_path(normalized: str) -> bool:
-    """Exact allowlisted routes, plus invoice detail `/invoices/{uuid}`."""
-    if normalized in ALLOWED_NAV_PATHS:
-        return True
-    if not normalized.startswith(_INVOICE_DETAIL_PREFIX):
+def _is_uuid_detail_path(prefix: str, normalized: str) -> bool:
+    if not normalized.startswith(prefix):
         return False
-    suffix = normalized[len(_INVOICE_DETAIL_PREFIX) :]
+    suffix = normalized[len(prefix) :]
     if not suffix or "/" in suffix:
         return False
     try:
@@ -95,6 +92,15 @@ def _is_allowed_nav_path(normalized: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _is_allowed_nav_path(normalized: str) -> bool:
+    """Exact allowlisted routes, plus invoice/catalogue detail `/{segment}/{uuid}`."""
+    if normalized in ALLOWED_NAV_PATHS:
+        return True
+    return _is_uuid_detail_path(_INVOICE_DETAIL_PREFIX, normalized) or _is_uuid_detail_path(
+        _CATALOGUE_DETAIL_PREFIX, normalized
+    )
 
 
 def _has_permission(deps: NiaDeps, key: str) -> bool:

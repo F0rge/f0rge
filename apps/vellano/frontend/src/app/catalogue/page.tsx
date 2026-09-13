@@ -7,8 +7,6 @@ import {
   FeatureFlags,
   InlineNotification,
   MenuItem,
-  Modal,
-  NumberInput,
   OverflowMenu,
   Stack,
   Tag,
@@ -26,29 +24,22 @@ import { Barcode, DocumentExport, DocumentImport, Printer } from "@carbon/icons-
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
-import { SkuBomEditor } from "@/components/sku-bom-editor";
-import { SkuPriceEditor } from "@/components/sku-price-editor";
 import {
-  ApiError,
   canMutateCatalogue,
   canViewCostAudit,
-  deleteSku,
   formatPriceAmount,
   getSkuLeadTimes,
   listInventory,
   listSkus,
   skuPhotoUrl,
-  updateSku,
   type Sku,
   type SkuLeadTimeRow,
-  type UpdateSkuPricePayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { isValidCartonCount, skuCartonCount } from "@/lib/carton-helpers";
+import { skuCartonCount } from "@/lib/carton-helpers";
 import { downloadCsv } from "@/lib/csv";
 import { formatObservedMedianLine, skuLeadTimeById } from "@/lib/lead-times";
-import { printHtml } from "@/lib/print-html";
-import JsBarcode from "jsbarcode";
+import { printSkuLabels } from "@/lib/sku-label-print";
 
 const TABLE_HEADERS = [
   { key: "select", header: "" },
@@ -64,52 +55,6 @@ const TABLE_HEADERS = [
   { key: "our_barcode", header: "Our barcode" },
   { key: "actions", header: "Actions" },
 ] as const;
-
-type SkuIdentityForm = {
-  our_ref: string;
-  our_barcode: string;
-  name: string;
-  design: string;
-  fabric: string;
-  category: string;
-  carton_count: number | "";
-};
-
-function emptyIdentityForm(): SkuIdentityForm {
-  return {
-    our_ref: "",
-    our_barcode: "",
-    name: "",
-    design: "",
-    fabric: "",
-    category: "",
-    carton_count: 1,
-  };
-}
-
-function identityFormFromSku(sku: Sku): SkuIdentityForm {
-  return {
-    our_ref: sku.our_ref,
-    our_barcode: sku.our_barcode,
-    name: sku.name,
-    design: sku.design,
-    fabric: sku.fabric,
-    category: sku.category ?? "",
-    carton_count: skuCartonCount(sku),
-  };
-}
-
-function isIdentityFormValid(form: SkuIdentityForm): boolean {
-  return (
-    Boolean(
-      form.our_ref.trim() &&
-        form.our_barcode.trim() &&
-        form.name.trim() &&
-        form.design.trim() &&
-        form.fabric.trim(),
-    ) && isValidCartonCount(form.carton_count)
-  );
-}
 
 type SkuRow = {
   id: string;
@@ -134,14 +79,6 @@ function formatLeadTime(days: number | null | undefined): string {
   return `${days} days`;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 function formatCatalogueMoney(value: string | null | undefined): string {
   if (!value) {
     return "—";
@@ -150,59 +87,11 @@ function formatCatalogueMoney(value: string | null | undefined): string {
   if (!Number.isFinite(parsed)) {
     return "—";
   }
-  // NBSP keeps the rand symbol glued to the amount under right-aligned cells.
   return `R ${formatPriceAmount(parsed)}`;
 }
 
 function formatIncVatPrice(value: string | null | undefined): string {
   return formatCatalogueMoney(value);
-}
-
-function barcodeSvg(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
-  }
-  try {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    JsBarcode(svg, trimmed, { format: "CODE128", displayValue: true, font: "monospace" });
-    return svg.outerHTML;
-  } catch {
-    return `<div class="barcode-text">${escapeHtml(trimmed)}</div>`;
-  }
-}
-
-function printSkuLabels(targetSkus: Sku[]): void {
-  if (targetSkus.length === 0) {
-    return;
-  }
-  const labelsHtml = targetSkus
-    .map(
-      (sku) => `
-    <div class="label">
-      <div class="name">${escapeHtml(sku.name)}</div>
-      <div class="ref">${escapeHtml(sku.our_ref)}</div>
-      ${barcodeSvg(sku.our_barcode)}
-    </div>`,
-    )
-    .join("");
-  printHtml(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Barcode labels</title>
-  <style>
-    body { font-family: "IBM Plex Sans", sans-serif; margin: 1.5rem; color: #161616; }
-    .label { page-break-inside: avoid; margin-bottom: 2rem; padding: 1rem; border: 1px solid #e0e0e0; }
-    .name { font-size: 1rem; margin-bottom: 0.25rem; }
-    .ref { font-weight: 600; margin-bottom: 0.5rem; }
-    .barcode-text { font-family: monospace; font-size: 1.75rem; font-weight: 600; letter-spacing: 0.05em; }
-    svg { display: block; max-width: 100%; height: auto; }
-    @media print { body { margin: 0; } .label { border: none; } }
-  </style>
-</head>
-<body>${labelsHtml}</body>
-</html>`);
 }
 
 function CataloguePageContent() {
@@ -216,14 +105,6 @@ function CataloguePageContent() {
   const [unitCostBySku, setUnitCostBySku] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [priceSku, setPriceSku] = useState<Sku | null>(null);
-  const [editSku, setEditSku] = useState<Sku | null>(null);
-  const [bomSku, setBomSku] = useState<Sku | null>(null);
-  const [editForm, setEditForm] = useState<SkuIdentityForm>(emptyIdentityForm);
-  const [skuToDelete, setSkuToDelete] = useState<Sku | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [identitySaving, setIdentitySaving] = useState(false);
-  const [deleteSaving, setDeleteSaving] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -269,7 +150,7 @@ function CataloguePageContent() {
   }, [searchParams, router]);
 
   useEffect(() => {
-    const query = searchParams.get("q")?.trim();
+    const query = searchParams.get("q")?.trim() ?? searchParams.get("barcode")?.trim();
     if (query) {
       setSearchFilter(query);
     }
@@ -337,83 +218,6 @@ function CataloguePageContent() {
     actions: entry.id,
   }));
 
-  function openPriceEditor(entry: Sku) {
-    setPriceSku(entry);
-  }
-
-  function openEditSku(entry: Sku) {
-    setEditSku(entry);
-    setEditForm(identityFormFromSku(entry));
-  }
-
-  async function handleEditSkuSave() {
-    if (!editSku || !isIdentityFormValid(editForm) || !isValidCartonCount(editForm.carton_count)) {
-      return;
-    }
-    setIdentitySaving(true);
-    setError(null);
-    try {
-      const payload: UpdateSkuPricePayload = {
-        our_ref: editForm.our_ref.trim(),
-        our_barcode: editForm.our_barcode.trim(),
-        name: editForm.name.trim(),
-        design: editForm.design.trim(),
-        fabric: editForm.fabric.trim(),
-        category: editForm.category.trim() || null,
-        carton_count: editForm.carton_count,
-      };
-      await updateSku(editSku.id, payload);
-      setEditSku(null);
-      setEditForm(emptyIdentityForm());
-      await loadSkus();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setError(err.message);
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to update SKU.");
-      }
-    } finally {
-      setIdentitySaving(false);
-    }
-  }
-
-  async function handleDeleteSku() {
-    if (!skuToDelete) {
-      return;
-    }
-    setDeleteSaving(true);
-    setError(null);
-    try {
-      await deleteSku(skuToDelete.id);
-      setSkuToDelete(null);
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(skuToDelete.id);
-        return next;
-      });
-      if (priceSku?.id === skuToDelete.id) {
-        setPriceSku(null);
-      }
-      if (editSku?.id === skuToDelete.id) {
-        setEditSku(null);
-        setEditForm(emptyIdentityForm());
-      }
-      if (bomSku?.id === skuToDelete.id) {
-        setBomSku(null);
-      }
-      await loadSkus();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setError(err.message);
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to delete SKU.");
-      }
-      setSkuToDelete(null);
-    } finally {
-      setDeleteSaving(false);
-    }
-  }
-
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -456,7 +260,7 @@ function CataloguePageContent() {
         <div>
           <h1 className="cds--type-productive-heading-04">Catalogue</h1>
           <p className="cds--type-body-01">
-            Manage products, pricing tiers, and generate barcode labels.
+            Browse products, filter by category, and print barcode labels.
           </p>
         </div>
         <div className="vellano-catalogue-actions">
@@ -523,126 +327,6 @@ function CataloguePageContent() {
         />
       ) : null}
 
-      <SkuPriceEditor
-        sku={priceSku}
-        open={priceSku !== null}
-        readOnly={!canMutate}
-        showCostAudit={canViewCost}
-        unitCostZar={priceSku ? (unitCostBySku.get(priceSku.id) ?? null) : null}
-        observedLeadTime={priceSku ? (leadBySku.get(priceSku.id) ?? null) : null}
-        saving={saving}
-        onSavingChange={setSaving}
-        onClose={() => setPriceSku(null)}
-        onSaved={loadSkus}
-        onError={setError}
-      />
-
-      <SkuBomEditor
-        sku={bomSku}
-        skus={skus}
-        open={bomSku !== null}
-        canMutate={canMutate}
-        onClose={() => setBomSku(null)}
-        onSaved={loadSkus}
-        onError={setError}
-      />
-
-      <Modal
-        open={editSku !== null}
-        modalHeading="Edit SKU"
-        primaryButtonText={identitySaving ? "Saving…" : "Save"}
-        secondaryButtonText="Cancel"
-        onRequestClose={() => {
-          setEditSku(null);
-          setEditForm(emptyIdentityForm());
-        }}
-        onRequestSubmit={() => void handleEditSkuSave()}
-        primaryButtonDisabled={identitySaving || !isIdentityFormValid(editForm)}
-        size="md"
-      >
-        <Stack gap={5}>
-          <TextInput
-            id="edit-sku-our-ref"
-            labelText="Our ref *"
-            value={editForm.our_ref}
-            onChange={(event) =>
-              setEditForm((form) => ({ ...form, our_ref: event.target.value }))
-            }
-          />
-          <TextInput
-            id="edit-sku-our-barcode"
-            labelText="Our barcode *"
-            value={editForm.our_barcode}
-            onChange={(event) =>
-              setEditForm((form) => ({ ...form, our_barcode: event.target.value }))
-            }
-          />
-          <TextInput
-            id="edit-sku-name"
-            labelText="Name *"
-            value={editForm.name}
-            onChange={(event) => setEditForm((form) => ({ ...form, name: event.target.value }))}
-          />
-          <TextInput
-            id="edit-sku-design"
-            labelText="Design *"
-            value={editForm.design}
-            onChange={(event) =>
-              setEditForm((form) => ({ ...form, design: event.target.value }))
-            }
-          />
-          <TextInput
-            id="edit-sku-fabric"
-            labelText="Fabric *"
-            value={editForm.fabric}
-            onChange={(event) =>
-              setEditForm((form) => ({ ...form, fabric: event.target.value }))
-            }
-          />
-          <TextInput
-            id="edit-sku-category"
-            labelText="Category"
-            value={editForm.category}
-            onChange={(event) =>
-              setEditForm((form) => ({ ...form, category: event.target.value }))
-            }
-          />
-          <NumberInput
-            id="edit-sku-carton-count"
-            label="Cartons"
-            helperText="Sellable unit ships in this many cartons. Default 1. Not a kit BOM."
-            min={1}
-            step={1}
-            allowEmpty
-            value={editForm.carton_count}
-            invalid={editForm.carton_count !== "" && !isValidCartonCount(editForm.carton_count)}
-            invalidText="Cartons must be 1 or more"
-            onChange={(_event, { value }) => {
-              setEditForm((form) => ({
-                ...form,
-                carton_count: value === "" ? "" : Number(value),
-              }));
-            }}
-          />
-        </Stack>
-      </Modal>
-
-      <Modal
-        open={skuToDelete !== null}
-        modalHeading="Delete SKU"
-        primaryButtonText={deleteSaving ? "Deleting…" : "Delete"}
-        secondaryButtonText="Cancel"
-        danger
-        primaryButtonDisabled={deleteSaving}
-        onRequestClose={() => setSkuToDelete(null)}
-        onRequestSubmit={() => void handleDeleteSku()}
-      >
-        <p className="cds--type-body-01">
-          Delete <strong>{skuToDelete?.our_ref}</strong> ({skuToDelete?.name})? This cannot be
-          undone.
-        </p>
-      </Modal>
-
       {loading ? (
         <p className="cds--type-body-01">Loading catalogue…</p>
       ) : skus.length === 0 ? (
@@ -706,7 +390,10 @@ function CataloguePageContent() {
                               labelText="Select all"
                               hideLabel
                               checked={allFilteredSelected}
-                              indeterminate={!allFilteredSelected && filteredSkus.some((sku) => selectedIds.has(sku.id))}
+                              indeterminate={
+                                !allFilteredSelected &&
+                                filteredSkus.some((sku) => selectedIds.has(sku.id))
+                              }
                               onChange={() => toggleSelectAllFiltered()}
                             />
                           ) : (
@@ -732,7 +419,7 @@ function CataloguePageContent() {
                               row,
                               onClick: () => {
                                 if (entry) {
-                                  openPriceEditor(entry);
+                                  router.push(`/catalogue/${entry.id}`);
                                 }
                               },
                             })}
@@ -838,29 +525,10 @@ function CataloguePageContent() {
                                             label: `Actions for ${entry.our_ref}`,
                                           } as Record<string, unknown>)}
                                         >
-                                          {canMutate ? (
-                                            <MenuItem
-                                              label="Edit SKU"
-                                              onClick={() => openEditSku(entry)}
-                                            />
-                                          ) : null}
-                                          {canMutate || entry.is_kit ? (
-                                            <MenuItem
-                                              label="Kit components"
-                                              onClick={() => setBomSku(entry)}
-                                            />
-                                          ) : null}
                                           <MenuItem
-                                            label={canMutate ? "Edit prices" : "View prices"}
-                                            onClick={() => openPriceEditor(entry)}
+                                            label="Print label"
+                                            onClick={() => printSkuLabels([entry])}
                                           />
-                                          {canMutate ? (
-                                            <MenuItem
-                                              kind="danger"
-                                              label="Delete SKU"
-                                              onClick={() => setSkuToDelete(entry)}
-                                            />
-                                          ) : null}
                                         </OverflowMenu>
                                       </FeatureFlags>
                                     </div>

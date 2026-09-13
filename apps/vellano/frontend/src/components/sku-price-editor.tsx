@@ -63,6 +63,8 @@ type SkuPriceEditorProps = {
   onClose: () => void;
   onSaved: () => Promise<void>;
   onError: (message: string) => void;
+  /** When true, renders as an embeddable section (no close/cancel chrome). */
+  embedded?: boolean;
 };
 
 const COST_AUDIT_HEADERS = [
@@ -190,6 +192,7 @@ export function SkuPriceEditor({
   onClose,
   onSaved,
   onError,
+  embedded = false,
 }: SkuPriceEditorProps) {
   const [form, setForm] = useState<EditorFormState>(emptyForm);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -197,17 +200,17 @@ export function SkuPriceEditor({
   const [costAuditLoading, setCostAuditLoading] = useState(false);
 
   useEffect(() => {
-    if (sku && open) {
+    if (sku && (open || embedded)) {
       setForm(formFromSku(sku));
     }
-    if (!open) {
+    if (!open && !embedded) {
       setForm(emptyForm);
       setCostAudit([]);
     }
-  }, [sku, open]);
+  }, [sku, open, embedded]);
 
   useEffect(() => {
-    if (!open || readOnly) {
+    if ((!open && !embedded) || readOnly) {
       return;
     }
     let cancelled = false;
@@ -225,10 +228,10 @@ export function SkuPriceEditor({
     return () => {
       cancelled = true;
     };
-  }, [open, readOnly]);
+  }, [open, embedded, readOnly]);
 
   useEffect(() => {
-    if (!open || !sku || !showCostAudit) {
+    if ((!open && !embedded) || !sku || !showCostAudit) {
       return;
     }
     let cancelled = false;
@@ -254,7 +257,7 @@ export function SkuPriceEditor({
     return () => {
       cancelled = true;
     };
-  }, [open, sku, showCostAudit]);
+  }, [open, embedded, sku, showCostAudit]);
 
   function updateWholesaleEx(value: string) {
     setForm((current) => {
@@ -312,14 +315,18 @@ export function SkuPriceEditor({
     }
     const payload = buildPayload(sku, form);
     if (Object.keys(payload).length === 0) {
-      onClose();
+      if (!embedded) {
+        onClose();
+      }
       return;
     }
 
     onSavingChange(true);
     try {
       await updateSku(sku.id, payload);
-      onClose();
+      if (!embedded) {
+        onClose();
+      }
       await onSaved();
     } catch (err) {
       if (err instanceof ApiError) {
@@ -332,7 +339,7 @@ export function SkuPriceEditor({
     }
   }
 
-  if (!open || !sku) {
+  if ((!open && !embedded) || !sku) {
     return null;
   }
 
@@ -351,23 +358,29 @@ export function SkuPriceEditor({
 
   return (
     <section
-      className="cds--layer-01"
-      style={{
-        padding: "1.5rem",
-        border: "1px solid var(--cds-border-subtle-01, #e0e0e0)",
-        maxWidth: "48rem",
-      }}
-      aria-labelledby="sku-price-editor-heading"
+      className={embedded ? undefined : "cds--layer-01"}
+      style={
+        embedded
+          ? undefined
+          : {
+              padding: "1.5rem",
+              border: "1px solid var(--cds-border-subtle-01, #e0e0e0)",
+              maxWidth: "48rem",
+            }
+      }
+      aria-labelledby={embedded ? undefined : "sku-price-editor-heading"}
     >
       <Stack gap={5}>
-        <div>
-          <h2 id="sku-price-editor-heading" className="cds--type-productive-heading-03">
-            {readOnly ? "SKU prices" : "Edit prices"}
-          </h2>
-          <p className="cds--type-body-01">
-            <strong>{sku.our_ref}</strong> — {sku.name}
-          </p>
-        </div>
+        {!embedded ? (
+          <div>
+            <h2 id="sku-price-editor-heading" className="cds--type-productive-heading-03">
+              {readOnly ? "SKU prices" : "Edit prices"}
+            </h2>
+            <p className="cds--type-body-01">
+              <strong>{sku.our_ref}</strong> — {sku.name}
+            </p>
+          </div>
+        ) : null}
         {showCostAudit && unitCostZar ? (
           <InlineNotification
             kind="info"
@@ -541,26 +554,32 @@ export function SkuPriceEditor({
             )}
           </div>
         ) : null}
-        <div style={{ display: "flex", gap: "0.75rem" }}>
-          {readOnly ? (
-            <Button type="button" kind="secondary" onClick={onClose}>
-              Close
-            </Button>
-          ) : (
-            <>
-              <Button
-                type="button"
-                disabled={saving || !hasEdits}
-                onClick={() => void handleSave()}
-              >
-                {saving ? "Saving…" : "Save"}
-              </Button>
-              <Button type="button" kind="secondary" disabled={saving} onClick={onClose}>
-                Cancel
-              </Button>
-            </>
-          )}
-        </div>
+        {!readOnly || !embedded ? (
+          <div style={{ display: "flex", gap: "0.75rem" }}>
+            {readOnly ? (
+              embedded ? null : (
+                <Button type="button" kind="secondary" onClick={onClose}>
+                  Close
+                </Button>
+              )
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  disabled={saving || !hasEdits}
+                  onClick={() => void handleSave()}
+                >
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+                {!embedded ? (
+                  <Button type="button" kind="secondary" disabled={saving} onClick={onClose}>
+                    Cancel
+                  </Button>
+                ) : null}
+              </>
+            )}
+          </div>
+        ) : null}
       </Stack>
     </section>
   );

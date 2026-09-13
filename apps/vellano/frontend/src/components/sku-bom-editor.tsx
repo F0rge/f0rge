@@ -13,6 +13,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tile,
 } from "@carbon/react";
 import { Add, TrashCan } from "@carbon/icons-react";
 import { useEffect, useMemo, useState } from "react";
@@ -33,6 +34,8 @@ type SkuBomEditorProps = {
   onClose: () => void;
   onSaved: () => Promise<void>;
   onError: (message: string) => void;
+  /** Modal (default) or embeddable section without modal chrome. */
+  variant?: "modal" | "section";
 };
 
 function skuItemToString(item: Sku | null): string {
@@ -71,6 +74,7 @@ export function SkuBomEditor({
   onClose,
   onSaved,
   onError,
+  variant = "modal",
 }: SkuBomEditorProps) {
   const [lines, setLines] = useState<SkuBomLineWrite[]>([]);
   const [selectedSku, setSelectedSku] = useState<Sku | null>(null);
@@ -79,8 +83,10 @@ export function SkuBomEditor({
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const isActive = variant === "section" ? sku !== null : open && sku !== null;
+
   useEffect(() => {
-    if (!open || !sku) {
+    if (!isActive || !sku) {
       return;
     }
     let cancelled = false;
@@ -112,7 +118,7 @@ export function SkuBomEditor({
     return () => {
       cancelled = true;
     };
-  }, [open, sku]);
+  }, [isActive, sku]);
 
   const usedIds = useMemo(() => new Set(lines.map((line) => line.component_sku_id)), [lines]);
   const skuOptions = useMemo(
@@ -142,7 +148,9 @@ export function SkuBomEditor({
     try {
       await replaceSkuBom(sku.id, { lines });
       await onSaved();
-      onClose();
+      if (variant === "modal") {
+        onClose();
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         onError(err.message);
@@ -152,6 +160,118 @@ export function SkuBomEditor({
     } finally {
       setSaving(false);
     }
+  }
+
+  const body = (
+    <Stack gap={5}>
+      <p className="cds--type-body-01">
+        Virtual kit: stock and till consume these components. Sofa cartons belong on Cartons, not
+        here.
+      </p>
+      {loadError ? (
+        <InlineNotification
+          kind="error"
+          title="Error"
+          subtitle={loadError}
+          hideCloseButton
+          lowContrast
+        />
+      ) : null}
+      {loading ? <p className="cds--type-body-01">Loading components…</p> : null}
+      {canMutate ? (
+        <Stack gap={4}>
+          <ComboBox
+            id="kit-bom-sku"
+            titleText="Component SKU"
+            placeholder="Search catalogue…"
+            items={skuOptions}
+            itemToString={skuItemToString}
+            shouldFilterItem={shouldFilterSku}
+            selectedItem={selectedSku}
+            onChange={({ selectedItem }) => setSelectedSku(selectedItem ?? null)}
+            helperText="Parent SKU is excluded."
+            disabled={loading || saving}
+          />
+          <NumberInput
+            id="kit-bom-qty"
+            label="Qty"
+            min={1}
+            step={1}
+            allowEmpty
+            value={qty}
+            invalid={qty !== "" && !qtyValid}
+            invalidText="Qty must be 1 or more"
+            onChange={(_event, { value }) => {
+              setQty(value === "" ? "" : Number(value));
+            }}
+            disabled={loading || saving}
+          />
+          <Button
+            kind="secondary"
+            size="sm"
+            renderIcon={Add}
+            disabled={loading || saving || !selectedSku || !qtyValid}
+            onClick={addLine}
+          >
+            Add component
+          </Button>
+        </Stack>
+      ) : null}
+      {lines.length === 0 && !loading ? (
+        <p className="cds--type-body-01">No kit components.</p>
+      ) : (
+        <Table size="sm">
+          <TableHead>
+            <TableRow>
+              <TableHeader>Component</TableHeader>
+              <TableHeader>Qty</TableHeader>
+              {canMutate ? <TableHeader> </TableHeader> : null}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {lines.map((line) => (
+              <TableRow key={line.component_sku_id}>
+                <TableCell>{componentLabel(skus, line.component_sku_id)}</TableCell>
+                <TableCell>{line.qty}</TableCell>
+                {canMutate ? (
+                  <TableCell>
+                    <Button
+                      kind="ghost"
+                      size="sm"
+                      hasIconOnly
+                      iconDescription="Remove"
+                      renderIcon={TrashCan}
+                      disabled={saving}
+                      onClick={() =>
+                        setLines((prev) =>
+                          prev.filter((entry) => entry.component_sku_id !== line.component_sku_id),
+                        )
+                      }
+                    />
+                  </TableCell>
+                ) : null}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+      {variant === "section" && canMutate ? (
+        <Button
+          kind="primary"
+          disabled={saving || loading || !linesValid}
+          onClick={() => void handleSave()}
+        >
+          {saving ? "Saving…" : "Save kit"}
+        </Button>
+      ) : null}
+    </Stack>
+  );
+
+  if (variant === "section") {
+    if (!sku) {
+      return null;
+    }
+    return <Tile>{body}</Tile>;
   }
 
   return (
@@ -166,99 +286,7 @@ export function SkuBomEditor({
       primaryButtonDisabled={saving || loading || !linesValid}
       size="md"
     >
-      <Stack gap={5}>
-        <p className="cds--type-body-01">
-          Virtual kit: stock and till consume these components. Sofa cartons belong on Cartons,
-          not here.
-        </p>
-        {loadError ? (
-          <InlineNotification
-            kind="error"
-            title="Error"
-            subtitle={loadError}
-            hideCloseButton
-            lowContrast
-          />
-        ) : null}
-        {loading ? <p className="cds--type-body-01">Loading components…</p> : null}
-        {canMutate ? (
-          <Stack gap={4}>
-            <ComboBox
-              id="kit-bom-sku"
-              titleText="Component SKU"
-              placeholder="Search catalogue…"
-              items={skuOptions}
-              itemToString={skuItemToString}
-              shouldFilterItem={shouldFilterSku}
-              selectedItem={selectedSku}
-              onChange={({ selectedItem }) => setSelectedSku(selectedItem ?? null)}
-              helperText="Parent SKU is excluded."
-              disabled={loading || saving}
-            />
-            <NumberInput
-              id="kit-bom-qty"
-              label="Qty"
-              min={1}
-              step={1}
-              allowEmpty
-              value={qty}
-              invalid={qty !== "" && !qtyValid}
-              invalidText="Qty must be 1 or more"
-              onChange={(_event, { value }) => {
-                setQty(value === "" ? "" : Number(value));
-              }}
-              disabled={loading || saving}
-            />
-            <Button
-              kind="secondary"
-              size="sm"
-              renderIcon={Add}
-              disabled={loading || saving || !selectedSku || !qtyValid}
-              onClick={addLine}
-            >
-              Add component
-            </Button>
-          </Stack>
-        ) : null}
-        {lines.length === 0 && !loading ? (
-          <p className="cds--type-body-01">No kit components.</p>
-        ) : (
-          <Table size="sm">
-            <TableHead>
-              <TableRow>
-                <TableHeader>Component</TableHeader>
-                <TableHeader>Qty</TableHeader>
-                {canMutate ? <TableHeader> </TableHeader> : null}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {lines.map((line) => (
-                <TableRow key={line.component_sku_id}>
-                  <TableCell>{componentLabel(skus, line.component_sku_id)}</TableCell>
-                  <TableCell>{line.qty}</TableCell>
-                  {canMutate ? (
-                    <TableCell>
-                      <Button
-                        kind="ghost"
-                        size="sm"
-                        hasIconOnly
-                        iconDescription="Remove"
-                        renderIcon={TrashCan}
-                        disabled={saving}
-                        onClick={() =>
-                          setLines((prev) =>
-                            prev.filter((entry) => entry.component_sku_id !== line.component_sku_id),
-                          )
-                        }
-                      />
-                    </TableCell>
-                  ) : null}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Stack>
+      {body}
     </Modal>
   );
 }

@@ -33,27 +33,29 @@ const AUDIT_HEADERS = [
 ] as const;
 
 type CostAuditPanelProps = {
-  skuOptions: Array<{ id: string; label: string }>;
-  selectedSkuId?: string | null;
+  skuOptions?: Array<{ id: string; label: string }>;
+  /** When set, pins audit to this SKU and hides the selector. */
+  pinnedSkuId?: string | null;
 };
 
-export function CostAuditPanel({ skuOptions, selectedSkuId = null }: CostAuditPanelProps) {
+export function CostAuditPanel({ skuOptions = [], pinnedSkuId = null }: CostAuditPanelProps) {
   const { user } = useAuth();
   const canView = canViewCostAudit(user);
-  const [skuId, setSkuId] = useState("");
+  const isPinned = Boolean(pinnedSkuId);
+  const [skuId, setSkuId] = useState(pinnedSkuId ?? "");
   const [entries, setEntries] = useState<UnitCostAuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadAudit = useCallback(async (selectedSkuId: string) => {
-    if (!selectedSkuId) {
+  const loadAudit = useCallback(async (targetSkuId: string) => {
+    if (!targetSkuId) {
       setEntries([]);
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const rows = await listCostAudit(selectedSkuId);
+      const rows = await listCostAudit(targetSkuId);
       setEntries(rows);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cost audit");
@@ -64,16 +66,18 @@ export function CostAuditPanel({ skuOptions, selectedSkuId = null }: CostAuditPa
   }, []);
 
   useEffect(() => {
-    if (selectedSkuId) {
-      setSkuId(selectedSkuId);
+    if (pinnedSkuId) {
+      setSkuId(pinnedSkuId);
     }
-  }, [selectedSkuId]);
+  }, [pinnedSkuId]);
+
+  const activeSkuId = isPinned ? (pinnedSkuId ?? "") : skuId;
 
   useEffect(() => {
-    if (canView && skuId) {
-      void loadAudit(skuId);
+    if (canView && activeSkuId) {
+      void loadAudit(activeSkuId);
     }
-  }, [canView, skuId, loadAudit]);
+  }, [canView, activeSkuId, loadAudit]);
 
   if (!canView) {
     return null;
@@ -91,34 +95,37 @@ export function CostAuditPanel({ skuOptions, selectedSkuId = null }: CostAuditPa
 
   return (
     <Stack gap={4} className="vellano-cost-audit">
-      <p className="cds--type-body-01">
-        Audit trail for landed and corrected unit costs. Select a row in the table above, or pick a
-        SKU here.
-      </p>
-      {skuOptions.length === 0 ? (
-        <InlineNotification
-          kind="info"
-          title="No SKUs"
-          subtitle="Cost history appears once stock exists."
-          hideCloseButton
-        />
-      ) : (
-        <Select
-          id="cost-audit-sku"
-          labelText="SKU"
-          value={skuId}
-          onChange={(event) => setSkuId(event.target.value)}
-        >
-          {skuOptions.map((option) => (
-            <SelectItem key={option.id} value={option.id} text={option.label} />
-          ))}
-        </Select>
-      )}
+      {!isPinned ? (
+        <>
+          <p className="cds--type-body-01">
+            Audit trail for landed and corrected unit costs. Pick a SKU to view its cost history.
+          </p>
+          {skuOptions.length === 0 ? (
+            <InlineNotification
+              kind="info"
+              title="No SKUs"
+              subtitle="Cost history appears once stock exists."
+              hideCloseButton
+            />
+          ) : (
+            <Select
+              id="cost-audit-sku"
+              labelText="SKU"
+              value={skuId}
+              onChange={(event) => setSkuId(event.target.value)}
+            >
+              {skuOptions.map((option) => (
+                <SelectItem key={option.id} value={option.id} text={option.label} />
+              ))}
+            </Select>
+          )}
+        </>
+      ) : null}
       {error ? (
         <InlineNotification kind="error" title="Cost audit" subtitle={error} hideCloseButton />
       ) : null}
       {loading ? <p className="cds--type-body-01">Loading cost history…</p> : null}
-      {!loading && skuId && entries.length === 0 ? (
+      {!loading && activeSkuId && entries.length === 0 ? (
         <InlineNotification
           kind="info"
           title="No audit rows"

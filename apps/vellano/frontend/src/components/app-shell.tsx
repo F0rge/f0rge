@@ -61,16 +61,22 @@ import { clearDockSession } from "@/lib/nia-dock-session";
 import { resetMainScroll } from "@/lib/reset-main-scroll";
 import { can } from "@/lib/permissions";
 import {
-  ACCOUNT_NAV_ITEMS,
+  ADMIN_NAV_ITEMS,
   BOOKS_NAV_ITEMS,
+  CATALOGUE_NAV_ITEMS,
+  HOME_NAV_ITEM,
   NIA_NAV_ITEMS,
-  OPERATIONS_NAV_ITEMS,
-  PRIMARY_NAV_ITEMS,
   SALES_NAV_ITEMS,
   STOCK_NAV_ITEMS,
+  TILL_NAV_ITEM,
+  WAREHOUSE_NAV_ITEMS,
+  isAdminPath,
   isBooksPath,
+  isCatalogueMenuPath,
   isNavLinkActive,
+  isSalesPath,
   isStockPath,
+  isWarehousePath,
 } from "@/lib/nav";
 import { HeaderSearch } from "@/components/header-search";
 import {
@@ -93,7 +99,6 @@ const ICONS = {
   "/suppliers": Industry,
   "/proformas": Document,
   "/catalogue": Catalog,
-  "/stock": Product,
   "/stocktakes": InventoryManagement,
   "/adjustments": Report,
   "/import": DocumentImport,
@@ -190,9 +195,42 @@ export function AppShell({ children }: AppShellProps) {
     return null;
   }
 
-  const accountItems = ACCOUNT_NAV_ITEMS.filter(
+  const adminItems = ADMIN_NAV_ITEMS.filter(
     (item) => !("permission" in item) || can(user, item.permission),
   );
+
+  function renderNavMenu(
+    title: string,
+    icon: typeof Product,
+    pathActive: boolean,
+    items: ReadonlyArray<{ href: string; label: string; mobileOnly?: boolean }>,
+    keyPrefix: string,
+  ) {
+    return (
+      <SideNavMenu
+        key={pathActive ? `${keyPrefix}-open` : `${keyPrefix}-closed`}
+        renderIcon={icon}
+        title={title}
+        defaultExpanded={pathActive}
+        isActive={pathActive}
+      >
+        {items.map((item) => (
+          <SideNavMenuItem
+            key={item.href}
+            href={item.href}
+            className={item.mobileOnly ? "vellano-nav-warehouse" : undefined}
+            isActive={isNavLinkActive(pathname, item.href)}
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+              event.preventDefault();
+              router.push(item.href);
+            }}
+          >
+            {item.label}
+          </SideNavMenuItem>
+        ))}
+      </SideNavMenu>
+    );
+  }
 
   function renderNavLink(href: string, label: string, className?: string) {
     const Icon = navIcon(href);
@@ -265,61 +303,29 @@ export function AppShell({ children }: AppShellProps) {
           onOverlayClick={() => setSideNavExpanded(false)}
         >
           <SideNavItems>
-            {PRIMARY_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
-            <SideNavMenu
-              key={isStockPath(pathname) ? "stock-open" : "stock-closed"}
-              renderIcon={Product}
-              title="Stock"
-              defaultExpanded={isStockPath(pathname)}
-              isActive={isStockPath(pathname)}
-            >
-              {STOCK_NAV_ITEMS.map((stockItem) => (
-                <SideNavMenuItem
-                  key={stockItem.href}
-                  href={stockItem.href}
-                  isActive={isNavLinkActive(pathname, stockItem.href)}
-                  onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-                    event.preventDefault();
-                    router.push(stockItem.href);
-                  }}
-                >
-                  {stockItem.label}
-                </SideNavMenuItem>
-              ))}
-            </SideNavMenu>
-            {OPERATIONS_NAV_ITEMS.map((item) =>
-              renderNavLink(
-                item.href,
-                item.label,
-                "mobileOnly" in item && item.mobileOnly ? "vellano-nav-warehouse" : undefined,
-              ),
+            {renderNavLink(HOME_NAV_ITEM.href, HOME_NAV_ITEM.label)}
+            {renderNavMenu(
+              "Catalogue",
+              Catalog,
+              isCatalogueMenuPath(pathname),
+              CATALOGUE_NAV_ITEMS,
+              "catalogue",
             )}
-            {SALES_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))}
-            <SideNavMenu
-              key={isBooksPath(pathname) ? "books-open" : "books-closed"}
-              renderIcon={Finance}
-              title="Books"
-              defaultExpanded={isBooksPath(pathname)}
-              isActive={isBooksPath(pathname)}
-            >
-              {BOOKS_NAV_ITEMS.map((booksItem) => (
-                <SideNavMenuItem
-                  key={booksItem.href}
-                  href={booksItem.href}
-                  isActive={isNavLinkActive(pathname, booksItem.href)}
-                  onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-                    event.preventDefault();
-                    router.push(booksItem.href);
-                  }}
-                >
-                  {booksItem.label}
-                </SideNavMenuItem>
-              ))}
-            </SideNavMenu>
+            {renderNavMenu("Stock", Product, isStockPath(pathname), STOCK_NAV_ITEMS, "stock")}
+            {renderNavMenu(
+              "Warehouse",
+              InventoryManagement,
+              isWarehousePath(pathname),
+              WAREHOUSE_NAV_ITEMS,
+              "warehouse",
+            )}
+            {renderNavLink(TILL_NAV_ITEM.href, TILL_NAV_ITEM.label)}
+            {renderNavMenu("Sales", Store, isSalesPath(pathname), SALES_NAV_ITEMS, "sales")}
+            {renderNavMenu("Books", Finance, isBooksPath(pathname), BOOKS_NAV_ITEMS, "books")}
             {canUseNia(user)
               ? NIA_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))
               : null}
-            {accountItems.map((item) => renderNavLink(item.href, item.label))}
+            {renderNavMenu("Admin", Settings, isAdminPath(pathname), adminItems, "admin")}
           </SideNavItems>
         </SideNav>
       </Theme>

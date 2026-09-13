@@ -581,6 +581,10 @@ export function listSkus(options?: { category?: string }): Promise<Sku[]> {
   return apiFetch<Sku[]>(`/skus${qs ? `?${qs}` : ""}`);
 }
 
+export function getSku(id: string): Promise<Sku> {
+  return apiFetch<Sku>(`/skus/${id}`);
+}
+
 export function createSku(payload: CreateSkuPayload): Promise<Sku> {
   const body: CreateSkuPayload = { ...payload };
   const category = body.category?.trim();

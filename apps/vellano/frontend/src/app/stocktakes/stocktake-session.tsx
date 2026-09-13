@@ -176,7 +176,7 @@ export function StocktakeSession({
   return (
     <Stack gap={6}>
       <p className="cds--type-body-01">
-        <Link href="/stock">Stock</Link>
+        <Link href="/catalogue">Catalogue</Link>
         {" / "}
         <span className="cds--type-helper-text-01">Stocktakes</span>
       </p>
