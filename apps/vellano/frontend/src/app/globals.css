@@ -526,7 +526,7 @@ body {
   display: none;
 }
 
-@media (max-width: 42rem) {
+@media (max-width: 42rem), (hover: none) and (pointer: coarse) {
   .vellano-nav-warehouse {
     display: list-item;
   }

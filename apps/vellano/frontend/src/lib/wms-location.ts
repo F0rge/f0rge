@@ -2,23 +2,35 @@
 
 import { useCallback, useMemo, useState } from "react";
 
-import { isActiveLocation, type Location } from "@/lib/api";
+import { isActiveLocation, type Location, type LocationType } from "@/lib/api";
 
 export const WMS_LOCATION_STORAGE_KEY = "vellano-wms-location-id";
 
-export type WmsFloorLocations = {
-  kramerville: Location;
-  bedfordview: Location;
+/** Active warehouse and showroom locations for the floor sticky bar. */
+export type WmsFloorLocations = Location[];
+
+const FLOOR_TYPE_ORDER: Record<LocationType, number> = {
+  warehouse: 0,
+  showroom: 1,
 };
 
+function compareFloorLocations(a: Location, b: Location): number {
+  const typeDelta = FLOOR_TYPE_ORDER[a.type] - FLOOR_TYPE_ORDER[b.type];
+  if (typeDelta !== 0) {
+    return typeDelta;
+  }
+  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+}
+
 export function floorLocations(locations: Location[]): WmsFloorLocations | null {
-  const active = locations.filter(isActiveLocation);
-  const kramerville = active.find((location) => location.name === "Kramerville");
-  const bedfordview = active.find((location) => location.name === "Bedfordview");
-  if (!kramerville || !bedfordview) {
+  const active = locations
+    .filter(isActiveLocation)
+    .filter((location) => location.type === "warehouse" || location.type === "showroom")
+    .sort(compareFloorLocations);
+  if (active.length === 0) {
     return null;
   }
-  return { kramerville, bedfordview };
+  return active;
 }
 
 function readStoredLocationId(): string | null {
@@ -36,14 +48,15 @@ function writeStoredLocationId(id: string): void {
 }
 
 export function defaultFloorLocationId(floor: WmsFloorLocations): string {
-  return floor.kramerville.id;
+  const warehouse = floor.find((location) => location.type === "warehouse");
+  return warehouse?.id ?? floor[0].id;
 }
 
 export function resolveFloorLocationId(
   floor: WmsFloorLocations,
   stored: string | null,
 ): string {
-  if (stored === floor.kramerville.id || stored === floor.bedfordview.id) {
+  if (stored && floor.some((location) => location.id === stored)) {
     return stored;
   }
   return defaultFloorLocationId(floor);
