@@ -126,13 +126,13 @@ class PurchaseOrderService:
                 raise NotFoundError("SKU not found")
 
         total_zar = await self._factory_total_zar(supplier, data.lines)
-        await self._assert_po_cap(user_id, total_zar)
+        create_status = await self._resolve_create_status(user_id, total_zar)
 
         po = PurchaseOrder(
             po_number="",
             supplier_id=data.supplier_id,
             proforma_id=data.proforma_id,
-            status=PurchaseOrderStatus.OPEN,
+            status=create_status,
         )
 
         async with unit_of_work(self.db):
@@ -149,6 +149,24 @@ class PurchaseOrderService:
                 await self.crud.add_and_flush(po_line)
 
         reloaded = await self._get_po_or_404(po.id)
+        return self._to_response(reloaded)
+
+    async def approve(self, po_id: uuid.UUID) -> PurchaseOrderResponse:
+        po = await self._get_po_or_404(po_id)
+        if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
+            raise ConflictError("Purchase order is not pending approval")
+        async with unit_of_work(self.db):
+            po.status = PurchaseOrderStatus.OPEN
+        reloaded = await self._get_po_or_404(po_id)
+        return self._to_response(reloaded)
+
+    async def reject(self, po_id: uuid.UUID) -> PurchaseOrderResponse:
+        po = await self._get_po_or_404(po_id)
+        if po.status != PurchaseOrderStatus.PENDING_APPROVAL:
+            raise ConflictError("Purchase order is not pending approval")
+        async with unit_of_work(self.db):
+            po.status = PurchaseOrderStatus.REJECTED
+        reloaded = await self._get_po_or_404(po_id)
         return self._to_response(reloaded)
 
     async def mark_on_water(self, po_id: uuid.UUID) -> PurchaseOrderResponse:
@@ -381,6 +399,24 @@ class PurchaseOrderService:
         if fx is None:
             return None
         return convert_bill_to_zar(factory_total, currency, fx)
+
+    async def _resolve_create_status(
+        self,
+        user_id: uuid.UUID,
+        total_zar: Optional[Decimal],
+    ) -> PurchaseOrderStatus:
+        user = await self.user_crud.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+        team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
+        threshold = team_settings.po_approval_threshold_zar
+        if threshold is None:
+            return PurchaseOrderStatus.OPEN
+        if total_zar is not None and total_zar <= threshold:
+            return PurchaseOrderStatus.OPEN
+        if await PermissionService(self.db).has_permission(user_id, USERS_MANAGE):
+            return PurchaseOrderStatus.OPEN
+        return PurchaseOrderStatus.PENDING_APPROVAL
 
     async def _assert_po_cap(self, user_id: uuid.UUID, total_zar: Optional[Decimal]) -> None:
         user = await self.user_crud.get_by_id(user_id)

@@ -81,7 +81,7 @@ async def test_till_discount_cap_409_without_manage(
     assert allowed.status_code == 201
 
 
-async def test_po_threshold_409_for_buyer(
+async def test_po_threshold_pending_approval_for_buyer(
     async_client: AsyncClient,
     owner_client: AsyncClient,
 ) -> None:
@@ -100,14 +100,15 @@ async def test_po_threshold_409_for_buyer(
     )
     buyer = await _create_buyer(async_client, owner_client)
 
-    blocked = await buyer.post(
+    pending = await buyer.post(
         "/api/v1/purchase-orders",
         json={
             "supplier_id": supplier_id,
             "lines": [{"sku_id": sku["id"], "qty": 1, "factory_unit_amount": "500.00"}],
         },
     )
-    assert blocked.status_code == 409
+    assert pending.status_code == 201
+    assert pending.json()["status"] == "pending_approval"
 
     await _relogin_owner(owner_client)
     allowed = await owner_client.post(
@@ -118,6 +119,7 @@ async def test_po_threshold_409_for_buyer(
         },
     )
     assert allowed.status_code == 201
+    assert allowed.json()["status"] == "open"
 
 
 async def test_po_threshold_converts_factory_currency_to_zar(
@@ -158,16 +160,16 @@ async def test_po_threshold_converts_factory_currency_to_zar(
     )
     buyer = await _create_buyer(async_client, owner_client)
 
-    # 80 USD looks under 1000 if compared raw; no prior FX so it must not slip through.
-    blocked_raw = await buyer.post(
+    # 80 USD looks under 1000 if compared raw; no prior FX → pending approval.
+    pending_no_fx = await buyer.post(
         "/api/v1/purchase-orders",
         json={
             "supplier_id": usd_id,
             "lines": [{"sku_id": sku_usd["id"], "qty": 1, "factory_unit_amount": "80.00"}],
         },
     )
-    assert blocked_raw.status_code == 409
-    assert "FX" in blocked_raw.json()["detail"]
+    assert pending_no_fx.status_code == 201
+    assert pending_no_fx.json()["status"] == "pending_approval"
 
     allowed_zar = await buyer.post(
         "/api/v1/purchase-orders",
@@ -229,7 +231,11 @@ async def test_po_threshold_converts_factory_currency_to_zar(
             "lines": [{"sku_id": sku_usd["id"], "qty": 1, "factory_unit_amount": "80.00"}],
         },
     )
-    assert over.status_code == 409
+    assert over.status_code == 201
+    assert over.json()["status"] == "pending_approval"
+    po_id = over.json()["id"]
+    on_water = await buyer.post(f"/api/v1/purchase-orders/{po_id}/on-water")
+    assert on_water.status_code == 409
 
 
 async def test_po_threshold_rechecks_land_fx(

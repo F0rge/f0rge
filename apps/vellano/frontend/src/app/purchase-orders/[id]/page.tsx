@@ -21,6 +21,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   PO_STATUS_LABELS,
+  approvePurchaseOrder,
+  can,
   canRaisePo,
   canReceive,
   downloadPackingSheet,
@@ -28,6 +30,7 @@ import {
   landPurchaseOrder,
   listSuppliers,
   markOnWater,
+  rejectPurchaseOrder,
   type PurchaseOrder,
   type Supplier,
 } from "@/lib/api";
@@ -53,6 +56,7 @@ export default function PurchaseOrderDetailPage() {
   const { user } = useAuth();
   const canRaise = canRaisePo(user);
   const canRecv = canReceive(user);
+  const canApprovePo = can(user, "users.manage");
   const [order, setOrder] = useState<PurchaseOrder | null>(null);
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,6 +103,38 @@ export default function PurchaseOrderDetailPage() {
       await downloadPackingSheet(order.id, order.po_number);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to download packing sheet.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleApprove() {
+    if (!order) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      const updated = await approvePurchaseOrder(order.id);
+      setOrder(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to approve purchase order.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleReject() {
+    if (!order) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      const updated = await rejectPurchaseOrder(order.id);
+      setOrder(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reject purchase order.");
     } finally {
       setActionLoading(false);
     }
@@ -236,6 +272,9 @@ export default function PurchaseOrderDetailPage() {
     );
   }
 
+  const poWorkflowOpen =
+    order.status !== "pending_approval" && order.status !== "rejected";
+
   return (
     <Stack gap={6}>
       <div>
@@ -260,33 +299,56 @@ export default function PurchaseOrderDetailPage() {
         />
       ) : null}
 
-      <Stack gap={4} orientation="horizontal">
-        <Button kind="secondary" disabled={actionLoading} onClick={() => void handleDownload()}>
-          Download packing sheet
-        </Button>
-        {canRaise && order.status === "open" ? (
-          <Button disabled={actionLoading} onClick={() => void handleMarkOnWater()}>
-            Mark on water
+      {order.status === "pending_approval" && canApprovePo ? (
+        <Stack gap={4} orientation="horizontal">
+          <Button disabled={actionLoading} onClick={() => void handleApprove()}>
+            Approve
           </Button>
-        ) : null}
-        {canRaise && order.status === "on_water" ? (
-          <Button disabled={actionLoading} onClick={openLandModal}>
-            Land costs
-          </Button>
-        ) : null}
-        {canRecv && order.status === "landed" ? (
           <Button
-            kind="primary"
+            kind="danger--tertiary"
             disabled={actionLoading}
-            onClick={() => router.push(`/receive?po=${order.id}`)}
+            onClick={() => void handleReject()}
           >
-            Receive
+            Reject
           </Button>
-        ) : null}
-      </Stack>
-      <p className="cds--type-helper-text-01">
-        Download or print. The app does not send email.
-      </p>
+        </Stack>
+      ) : null}
+
+      {poWorkflowOpen ? (
+        <>
+          <Stack gap={4} orientation="horizontal">
+            <Button
+              kind="secondary"
+              disabled={actionLoading}
+              onClick={() => void handleDownload()}
+            >
+              Download packing sheet
+            </Button>
+            {canRaise && order.status === "open" ? (
+              <Button disabled={actionLoading} onClick={() => void handleMarkOnWater()}>
+                Mark on water
+              </Button>
+            ) : null}
+            {canRaise && order.status === "on_water" ? (
+              <Button disabled={actionLoading} onClick={openLandModal}>
+                Land costs
+              </Button>
+            ) : null}
+            {canRecv && order.status === "landed" ? (
+              <Button
+                kind="primary"
+                disabled={actionLoading}
+                onClick={() => router.push(`/receive?po=${order.id}`)}
+              >
+                Receive
+              </Button>
+            ) : null}
+          </Stack>
+          <p className="cds--type-helper-text-01">
+            Download or print. The app does not send email.
+          </p>
+        </>
+      ) : null}
 
       <TableContainer title="Lines" description="PO line items">
         <Table>

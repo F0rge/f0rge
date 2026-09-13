@@ -12,6 +12,7 @@ from app.dependencies.auth import (
     get_inventory_service,
     get_purchase_order_service,
     require_catalogue_mutate,
+    require_owner,
     require_receive,
 )
 from app.schemas.inventory import InventorySkuResponse
@@ -66,6 +67,24 @@ async def get_packing_sheet(
     service: PurchaseOrderService = Depends(get_purchase_order_service),
 ) -> Response:
     return await service.packing_sheet(po_id)
+
+
+@purchase_orders_router.post("/{po_id}/approve", response_model=PurchaseOrderResponse)
+async def approve_purchase_order(
+    po_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_owner),
+    service: PurchaseOrderService = Depends(get_purchase_order_service),
+):
+    return await service.approve(po_id)
+
+
+@purchase_orders_router.post("/{po_id}/reject", response_model=PurchaseOrderResponse)
+async def reject_purchase_order(
+    po_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_owner),
+    service: PurchaseOrderService = Depends(get_purchase_order_service),
+):
+    return await service.reject(po_id)
 
 
 @purchase_orders_router.post("/{po_id}/on-water", response_model=PurchaseOrderResponse)

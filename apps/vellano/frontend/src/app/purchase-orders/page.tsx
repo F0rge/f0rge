@@ -34,6 +34,7 @@ import {
   type CreatePoLinePayload,
   type Proforma,
   type PurchaseOrderListItem,
+  type PurchaseOrderStatus,
   type Sku,
   type Supplier,
 } from "@/lib/api";
@@ -74,6 +75,17 @@ function formatDate(iso: string): string {
   return iso.slice(0, 10);
 }
 
+type StatusFilter = "all" | PurchaseOrderStatus;
+
+const PO_STATUS_FILTER_ORDER: PurchaseOrderStatus[] = [
+  "pending_approval",
+  "rejected",
+  "open",
+  "on_water",
+  "landed",
+  "received",
+];
+
 export default function PurchaseOrdersPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -87,6 +99,7 @@ export default function PurchaseOrdersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [proformas, setProformas] = useState<Proforma[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
@@ -101,6 +114,7 @@ export default function PurchaseOrdersPage() {
       const data = await listPurchaseOrders({
         limit: pageSize,
         offset: (page - 1) * pageSize,
+        status: statusFilter === "all" ? undefined : statusFilter,
       });
       setOrders(data.items);
       setTotal(data.total);
@@ -109,13 +123,17 @@ export default function PurchaseOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [page, pageSize, statusFilter]);
 
   useEffect(() => {
     if (user) {
       void loadOrders();
     }
   }, [user, loadOrders]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
 
   const loadCreateData = useCallback(async () => {
     try {
@@ -196,7 +214,11 @@ export default function PurchaseOrdersPage() {
       const created = await createPurchaseOrder(payload);
       setCreateOpen(false);
       resetCreateForm();
-      setSuccess(`Purchase order ${created.po_number} created.`);
+      setSuccess(
+        created.status === "pending_approval"
+          ? `Purchase order ${created.po_number} is waiting for owner approval.`
+          : `Purchase order ${created.po_number} created.`,
+      );
       await loadOrders();
     } catch (err) {
       if (err instanceof ApiError) {
@@ -251,13 +273,30 @@ export default function PurchaseOrdersPage() {
         />
       ) : null}
 
+      <Select
+        id="po-status-filter"
+        labelText="Status"
+        value={statusFilter}
+        onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+        style={{ maxWidth: "16rem" }}
+      >
+        <SelectItem value="all" text="All" />
+        {PO_STATUS_FILTER_ORDER.map((status) => (
+          <SelectItem key={status} value={status} text={PO_STATUS_LABELS[status]} />
+        ))}
+      </Select>
+
       {loading ? (
         <p className="cds--type-body-01">Loading purchase orders…</p>
       ) : total === 0 ? (
         <InlineNotification
           kind="info"
           title="No purchase orders"
-          subtitle="No purchase orders have been raised yet."
+          subtitle={
+            statusFilter === "all"
+              ? "No purchase orders have been raised yet."
+              : `No purchase orders with status "${PO_STATUS_LABELS[statusFilter as PurchaseOrderStatus]}".`
+          }
           hideCloseButton
           lowContrast
         />

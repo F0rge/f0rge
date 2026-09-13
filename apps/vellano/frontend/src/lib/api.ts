@@ -791,7 +791,13 @@ export function commitCatalogueImport(formData: FormData): Promise<CatalogueImpo
   return apiUpload<CatalogueImportCommit>("/imports/commit", formData);
 }
 
-export type PurchaseOrderStatus = "open" | "on_water" | "landed" | "received";
+export type PurchaseOrderStatus =
+  | "pending_approval"
+  | "rejected"
+  | "open"
+  | "on_water"
+  | "landed"
+  | "received";
 
 export type PoLine = {
   id: string;
@@ -865,6 +871,8 @@ export type InventorySku = {
 };
 
 export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
+  pending_approval: "Pending approval",
+  rejected: "Rejected",
   open: "Open",
   on_water: "On water",
   landed: "Landed",
@@ -958,6 +966,18 @@ export function markOnWater(id: string): Promise<PurchaseOrder> {
 
 export function landPurchaseOrder(id: string, formData: FormData): Promise<PurchaseOrder> {
   return apiUpload<PurchaseOrder>(`/purchase-orders/${id}/land`, formData);
+}
+
+export function approvePurchaseOrder(id: string): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/approve`, {
+    method: "POST",
+  });
+}
+
+export function rejectPurchaseOrder(id: string): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/reject`, {
+    method: "POST",
+  });
 }
 
 export function receivePurchaseOrder(payload: {
