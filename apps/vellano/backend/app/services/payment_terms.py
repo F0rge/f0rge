@@ -26,12 +26,10 @@ def compute_due_date(
 def effective_due_date(
     issue_date: datetime.date,
     due_date: Optional[datetime.date],
-    customer: Customer,
-    team_settings: TeamSettings,
 ) -> datetime.date:
     if due_date is not None:
         return due_date
-    return issue_date + datetime.timedelta(days=effective_terms_days(customer, team_settings))
+    return issue_date + datetime.timedelta(days=DEFAULT_TERMS_DAYS)
 
 
 def invoice_overdue_predicate(as_of: datetime.date):
@@ -46,6 +44,6 @@ def invoice_overdue_predicate(as_of: datetime.date):
         balance > 0,
         or_(
             and_(TaxInvoice.due_date.is_not(None), TaxInvoice.due_date < as_of),
-            and_(TaxInvoice.due_date.is_(None), TaxInvoice.issue_date <= legacy_cutoff),
+            and_(TaxInvoice.due_date.is_(None), TaxInvoice.issue_date < legacy_cutoff),
         ),
     )

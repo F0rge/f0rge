@@ -14,7 +14,7 @@ from app.models.customer import Customer
 from app.models.sku import Sku
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.services.inventory import InventoryService
-from app.services.payment_terms import invoice_overdue_predicate
+from app.services.payment_terms import effective_due_date, invoice_overdue_predicate
 from app.services.reports import ReportsService
 
 CANVAS_PATH = "/canvas"
@@ -364,7 +364,7 @@ async def build_overdue_invoices_canvas_spec(db: AsyncSession) -> dict[str, Any]
         [
             invoice.invoice_number,
             customer_name,
-            (invoice.due_date or invoice.issue_date).isoformat(),
+            effective_due_date(invoice.issue_date, invoice.due_date).isoformat(),
             _zar_cell(invoice.total_inc_vat - invoice.amount_paid),
         ]
         for invoice, customer_name in rows

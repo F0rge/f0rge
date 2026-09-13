@@ -11,12 +11,9 @@ from sqlalchemy.orm import selectinload
 
 from app.crud.location import LocationCRUD
 from app.crud.sku import SkuCRUD
-from app.crud.team_settings import TeamSettingsCRUD
-from app.crud.user import TeamCRUD
 from app.models.tax_invoice import TaxInvoice
 from app.services.payment_terms import (
     effective_due_date,
-    effective_terms_days,
     invoice_overdue_predicate,
 )
 from app.nia.agent import NiaDeps, nia_agent
@@ -227,10 +224,6 @@ async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str
         return denied
 
     today = datetime.date.today()
-    team = await TeamCRUD(ctx.deps.db).get_first()
-    if team is None:
-        return "Team settings are not configured."
-    team_settings = await TeamSettingsCRUD(ctx.deps.db).get_or_create_for_team(team.id)
 
     stmt = (
         select(TaxInvoice)
@@ -241,13 +234,7 @@ async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str
     rows = (await ctx.deps.db.execute(stmt)).scalars().all()
     invoices = []
     for inv in rows:
-        due_date = effective_due_date(
-            inv.issue_date,
-            inv.due_date,
-            inv.customer,
-            team_settings,
-        )
-        terms_days = effective_terms_days(inv.customer, team_settings)
+        due_date = effective_due_date(inv.issue_date, inv.due_date)
         invoices.append(
             {
                 "id": str(inv.id),
@@ -255,7 +242,7 @@ async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str
                 "customer_name": inv.customer.name,
                 "issue_date": inv.issue_date.isoformat(),
                 "days_overdue": (today - due_date).days,
-                "terms_days": terms_days,
+                "terms_days": (due_date - inv.issue_date).days,
                 "remaining_zar": str(
                     (inv.total_inc_vat - inv.amount_paid).quantize(Decimal("0.01"))
                 ),
