@@ -378,7 +378,7 @@ Complete restock while a stocktake is `in_progress` at that location → 409 `"L
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
-- **Laybys:** `GET/POST /laybys`, `GET /laybys/{id}`, `POST /laybys/{id}/payments`, `POST /laybys/{id}/complete`, `POST /laybys/{id}/cancel`.
+- **Laybys:** `GET/POST /laybys`, `GET /laybys/{id}`, `GET /laybys/{id}/pdf`, `POST /laybys/{id}/send`, `POST /laybys/{id}/payments`, `POST /laybys/{id}/complete`, `POST /laybys/{id}/cancel`. Send uses `require_comms_send` (not only `sales.laybys`). Cancelled layby send is 409. Print HTML receipt remains.
 
 Customer layaway with optional stock hold at a showroom. Numbering: `LB-0001`. Status: `open` | `ready` | `completed` | `cancelled` (overdue is derived from `due_date`, not stored).
 
@@ -547,7 +547,7 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Contacts:** `GET/POST /contacts` — unified customers (`kind: customer`) and suppliers (`kind: supplier`). `POST` creates customers only; suppliers via `POST /suppliers`.
 - **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf`, `POST /invoices/{id}/send` `{channel: email|whatsapp}` — `require_comms_send` (till.sell or books.mutate). Email attaches the tax-invoice PDF. Warehouse 403. Missing customer email 409. SMTP unconfigured 503. Do not write `books_events` on send.
 - **Repeating invoices:** `GET/POST /repeating-invoices`, `GET/PATCH /repeating-invoices/{id}`, `POST /repeating-invoices/{id}/run` — run-now only (no cron, no email). Posted invoices have no draft status.
-- **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}`, `GET /credit-notes/{id}/pdf` — one CN per invoice; reverses AR/sales/VAT. PDF reuses the tax-invoice canvas with title Credit Note.
+- **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}`, `GET /credit-notes/{id}/pdf`, `POST /credit-notes/{id}/send` — one CN per invoice; reverses AR/sales/VAT. PDF reuses the tax-invoice canvas with title Credit Note. Send attaches that PDF (`require_comms_send`).
 - **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR). Attachment GET streams bytes via `serve_stored_pdf` (same-origin; no S3 302).
 - **Payments:** `GET/POST /payments`, `GET /payments/{id}/pdf` — `direction: in` (invoice, ZAR) or `out` (bill, foreign FX). Response includes `fx_gain_loss_zar` (positive = gain, negative = loss).
 - **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: `books.mutate`.

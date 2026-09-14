@@ -4,11 +4,20 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import Response
 
-from app.dependencies.auth import get_current_user_id, get_layby_service, require_laybys
+from app.dependencies.auth import (
+    get_comms_send_service,
+    get_current_user_id,
+    get_layby_service,
+    require_comms_send,
+    require_laybys,
+)
 from app.models.layby import LaybyStatus
+from app.schemas.comms import CommsSendRequest, CommsSendResponse
 from app.schemas.layby import LaybyCreate, LaybyListItem, LaybyPaymentCreate, LaybyResponse
 from app.schemas.page import Page, PageParams, get_page_params
+from app.services.comms.send import CommsSendService
 from app.services.laybys import LaybysService
 
 laybys_router = APIRouter(prefix="/api/v1/laybys", tags=["laybys"])
@@ -44,6 +53,25 @@ async def get_layby(
     service: LaybysService = Depends(get_layby_service),
 ):
     return await service.get(layby_id)
+
+
+@laybys_router.get("/{layby_id}/pdf", response_model=None)
+async def get_layby_pdf(
+    layby_id: uuid.UUID,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: LaybysService = Depends(get_layby_service),
+) -> Response:
+    return await service.serve_pdf(layby_id)
+
+
+@laybys_router.post("/{layby_id}/send", response_model=CommsSendResponse)
+async def send_layby(
+    layby_id: uuid.UUID,
+    body: CommsSendRequest,
+    user_id: uuid.UUID = Depends(require_comms_send),
+    service: CommsSendService = Depends(get_comms_send_service),
+) -> CommsSendResponse:
+    return await service.send_layby(layby_id, body, user_id)
 
 
 @laybys_router.post(

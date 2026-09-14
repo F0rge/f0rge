@@ -1721,6 +1721,7 @@ export type CreditNote = {
   credit_note_number: string;
   invoice_id: string;
   invoice_number: string;
+  customer_email?: string | null;
   reason: string | null;
   issue_date: string;
   subtotal_ex_vat: string;
@@ -1761,6 +1762,27 @@ export async function downloadCreditNotePdf(id: string, creditNoteNumber: string
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `${creditNoteNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadLaybyPdf(id: string, laybyNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/laybys/${id}/pdf`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${laybyNumber}.pdf`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
@@ -3802,6 +3824,7 @@ export type LaybyListItem = {
   layby_number: string;
   customer_id: string;
   customer_name: string;
+  customer_email?: string | null;
   location_id: string;
   location_name: string;
   invoice_id: string | null;

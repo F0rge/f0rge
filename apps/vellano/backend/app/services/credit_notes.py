@@ -84,7 +84,7 @@ class CreditNoteService:
         assert reloaded is not None
         return self._to_response(reloaded)
 
-    async def serve_pdf(self, credit_note_id: uuid.UUID) -> Response:
+    async def build_pdf_bytes(self, credit_note_id: uuid.UUID) -> tuple[bytes, str, CreditNote]:
         credit_note = await self.crud.get_by_id(credit_note_id)
         if credit_note is None:
             raise NotFoundError("Credit note not found")
@@ -116,6 +116,10 @@ class CreditNoteService:
             credit_reason=credit_note.reason,
             seller=await SettingsService(self.db).build_seller_details(),
         )
+        return pdf_bytes, f"{credit_note.credit_note_number}.pdf", credit_note
+
+    async def serve_pdf(self, credit_note_id: uuid.UUID) -> Response:
+        pdf_bytes, _, _ = await self.build_pdf_bytes(credit_note_id)
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def _team_settings(self):
@@ -196,6 +200,9 @@ class CreditNoteService:
             credit_note_number=credit_note.credit_note_number,
             invoice_id=credit_note.invoice_id,
             invoice_number=credit_note.invoice.invoice_number,
+            customer_email=credit_note.invoice.customer.email
+            if credit_note.invoice.customer
+            else None,
             reason=credit_note.reason,
             issue_date=credit_note.issue_date,
             subtotal_ex_vat=credit_note.subtotal_ex_vat,

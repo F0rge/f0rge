@@ -8,11 +8,14 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.exceptions import CommsSmtpFailedError
 from app.models.comms_message import CommsChannel, CommsDocumentType, CommsProvider
+from app.models.layby import LaybyStatus
 from app.models.team_settings import TeamSettings
 from app.schemas.comms import CommsSendRequest, CommsSendResponse
 from app.services.comms.outbox import CommsOutboxService
 from app.services.comms.smtp import load_smtp_config, send_message
+from app.services.credit_notes import CreditNoteService
 from app.services.invoices import InvoiceService
+from app.services.laybys import LaybysService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 
 
@@ -21,6 +24,8 @@ class CommsSendService:
         self.db = db
         self.outbox = CommsOutboxService(db)
         self.invoices = InvoiceService(db)
+        self.credit_notes = CreditNoteService(db)
+        self.laybys = LaybysService(db)
         self.settings_crud = TeamSettingsCRUD(db)
         self.team_crud = TeamCRUD(db)
 
@@ -54,6 +59,73 @@ class CommsSendService:
             settings=settings,
             subject=subject,
             body_text=" ".join(lines),
+            pdf_bytes=pdf_bytes,
+            pdf_filename=filename,
+        )
+
+    async def send_credit_note(
+        self,
+        credit_note_id: uuid.UUID,
+        data: CommsSendRequest,
+        actor_user_id: uuid.UUID,
+    ) -> CommsSendResponse:
+        if data.channel != "email":
+            raise ValidationError("channel must be email")
+        pdf_bytes, filename, credit_note = await self.credit_notes.build_pdf_bytes(credit_note_id)
+        customer = credit_note.invoice.customer
+        to_address = (customer.email or "").strip() if customer else ""
+        if not to_address:
+            raise ConflictError("Customer has no email")
+        settings = await self._team_settings()
+        shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
+        subject = f"{shop} credit note {credit_note.credit_note_number}"
+        body = (
+            f"{shop} credit note {credit_note.credit_note_number}. "
+            f"Total inc VAT: {credit_note.total_inc_vat:.2f}."
+        )
+        return await self._send_smtp(
+            document_type=CommsDocumentType.CREDIT_NOTE,
+            document_id=credit_note.id,
+            to_address=to_address,
+            actor_user_id=actor_user_id,
+            settings=settings,
+            subject=subject,
+            body_text=body,
+            pdf_bytes=pdf_bytes,
+            pdf_filename=filename,
+        )
+
+    async def send_layby(
+        self,
+        layby_id: uuid.UUID,
+        data: CommsSendRequest,
+        actor_user_id: uuid.UUID,
+    ) -> CommsSendResponse:
+        if data.channel != "email":
+            raise ValidationError("channel must be email")
+        pdf_bytes, filename, layby = await self.laybys.build_pdf_bytes(layby_id)
+        if layby.status == LaybyStatus.CANCELLED:
+            raise ConflictError("Cannot send a cancelled layby")
+        to_address = (layby.customer.email or "").strip()
+        if not to_address:
+            raise ConflictError("Customer has no email")
+        settings = await self._team_settings()
+        shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
+        subject = f"{shop} layby {layby.layby_number}"
+        balance = layby.total_inc_vat - layby.amount_paid
+        body = (
+            f"{shop} layby {layby.layby_number}. "
+            f"Paid {layby.amount_paid:.2f}. Balance {balance:.2f}. "
+            f"Due {layby.due_date.isoformat()}."
+        )
+        return await self._send_smtp(
+            document_type=CommsDocumentType.LAYBY,
+            document_id=layby.id,
+            to_address=to_address,
+            actor_user_id=actor_user_id,
+            settings=settings,
+            subject=subject,
+            body_text=body,
             pdf_bytes=pdf_bytes,
             pdf_filename=filename,
         )
