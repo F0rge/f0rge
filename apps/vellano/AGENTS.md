@@ -545,7 +545,7 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on posted journal lines), `tax_treatment` (`none` | `vat15`), and `is_bank`. Extra bank codes 1110–1140 are seeded by `ensure_bank_accounts()`.
 - **Category maps:** `GET/PUT /category-maps` — SKU category → sales/COGS/stock-adj/count-var codes. Mutate: `books.mutate`.
 - **Contacts:** `GET/POST /contacts` — unified customers (`kind: customer`) and suppliers (`kind: supplier`). `POST` creates customers only; suppliers via `POST /suppliers`.
-- **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf` — 15% VAT on face; journal Dr AR, Cr Sales + VAT control.
+- **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf`, `POST /invoices/{id}/send` `{channel: email|whatsapp}` — `require_comms_send` (till.sell or books.mutate). Email attaches the tax-invoice PDF. Warehouse 403. Missing customer email 409. SMTP unconfigured 503. Do not write `books_events` on send.
 - **Repeating invoices:** `GET/POST /repeating-invoices`, `GET/PATCH /repeating-invoices/{id}`, `POST /repeating-invoices/{id}/run` — run-now only (no cron, no email). Posted invoices have no draft status.
 - **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}`, `GET /credit-notes/{id}/pdf` — one CN per invoice; reverses AR/sales/VAT. PDF reuses the tax-invoice canvas with title Credit Note.
 - **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR). Attachment GET streams bytes via `serve_stored_pdf` (same-origin; no S3 302).

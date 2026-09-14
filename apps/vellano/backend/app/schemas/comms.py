@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -51,3 +51,16 @@ class CommsTestEmailRequest(BaseModel):
 
 class CommsTestEmailResponse(BaseModel):
     ok: bool
+
+
+class CommsSendRequest(BaseModel):
+    channel: Literal["email", "whatsapp"]
+
+
+class CommsSendResponse(BaseModel):
+    id: uuid.UUID
+    status: str
+    channel: str
+    provider: str
+    mode: Optional[str] = None
+    url: Optional[str] = None

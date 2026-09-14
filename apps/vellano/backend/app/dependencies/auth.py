@@ -49,6 +49,7 @@ from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
 from app.services.search import SearchService
 from app.services.comms.outbox import CommsOutboxService
+from app.services.comms.send import CommsSendService
 from app.services.settings import SettingsService
 from app.services.proformas import ProformaService
 from app.services.price_lists import PriceListService
@@ -148,6 +149,10 @@ def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
 
 def get_comms_outbox_service(db: AsyncSession = Depends(get_db)) -> CommsOutboxService:
     return CommsOutboxService(db)
+
+
+def get_comms_send_service(db: AsyncSession = Depends(get_db)) -> CommsSendService:
+    return CommsSendService(db)
 
 
 def get_cost_audit_service(db: AsyncSession = Depends(get_db)) -> CostAuditService:

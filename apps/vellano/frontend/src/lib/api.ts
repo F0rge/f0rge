@@ -3233,6 +3233,28 @@ export function testCommsEmail(to: string): Promise<{ ok: boolean }> {
   });
 }
 
+export type CommsSendChannel = "email" | "whatsapp";
+
+export type CommsSendResult = {
+  id: string;
+  status: string;
+  channel: string;
+  provider: string;
+  mode?: string | null;
+  url?: string | null;
+};
+
+export function sendDocument(
+  kind: "invoices" | "credit-notes" | "laybys",
+  id: string,
+  channel: CommsSendChannel,
+): Promise<CommsSendResult> {
+  return apiFetch<CommsSendResult>(`/${kind}/${id}/send`, {
+    method: "POST",
+    body: JSON.stringify({ channel }),
+  });
+}
+
 export function updateSettings(payload: {
   vat_rate?: string;
   home_currency?: string;
