@@ -32,6 +32,14 @@ class CommsSettingsResponse(BaseModel):
     smtp_reply_to: Optional[str] = None
     smtp_configured: bool = False
     has_smtp_password: bool = False
+    wa_phone_number_id: Optional[str] = None
+    wa_business_account_id: Optional[str] = None
+    wa_invoice_template_name: Optional[str] = None
+    wa_template_lang: str = "en"
+    wa_configured: bool = False
+    has_wa_token: bool = False
+    has_wa_app_secret: bool = False
+    whatsapp_mode: Literal["off", "click", "cloud"] = "click"
 
 
 class CommsSettingsUpdate(BaseModel):
@@ -43,6 +51,12 @@ class CommsSettingsUpdate(BaseModel):
     smtp_from_address: Optional[str] = None
     smtp_from_name: Optional[str] = None
     smtp_reply_to: Optional[str] = None
+    wa_phone_number_id: Optional[str] = None
+    wa_business_account_id: Optional[str] = None
+    wa_access_token: Optional[str] = None
+    wa_app_secret: Optional[str] = None
+    wa_invoice_template_name: Optional[str] = None
+    wa_template_lang: Optional[str] = None
 
 
 class CommsTestEmailRequest(BaseModel):

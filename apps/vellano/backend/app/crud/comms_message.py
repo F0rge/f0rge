@@ -14,6 +14,12 @@ class CommsMessageCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
 
+    async def get_by_provider_message_id(self, provider_message_id: str) -> Optional[CommsMessage]:
+        result = await self.db.execute(
+            select(CommsMessage).where(CommsMessage.provider_message_id == provider_message_id)
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_id(self, message_id: uuid.UUID) -> Optional[CommsMessage]:
         result = await self.db.execute(select(CommsMessage).where(CommsMessage.id == message_id))
         return result.scalar_one_or_none()

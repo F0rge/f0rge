@@ -3225,6 +3225,14 @@ export type CommsSettings = {
   smtp_reply_to: string | null;
   smtp_configured: boolean;
   has_smtp_password: boolean;
+  wa_phone_number_id?: string | null;
+  wa_business_account_id?: string | null;
+  wa_invoice_template_name?: string | null;
+  wa_template_lang?: string;
+  wa_configured?: boolean;
+  has_wa_token?: boolean;
+  has_wa_app_secret?: boolean;
+  whatsapp_mode?: "off" | "click" | "cloud";
 };
 
 export type CommsSettingsUpdate = {
@@ -3236,6 +3244,12 @@ export type CommsSettingsUpdate = {
   smtp_from_address?: string | null;
   smtp_from_name?: string | null;
   smtp_reply_to?: string | null;
+  wa_phone_number_id?: string | null;
+  wa_business_account_id?: string | null;
+  wa_access_token?: string;
+  wa_app_secret?: string;
+  wa_invoice_template_name?: string | null;
+  wa_template_lang?: string;
 };
 
 export function getCommsSettings(): Promise<CommsSettings> {

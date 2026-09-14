@@ -31,6 +31,7 @@ from app.schemas.settings import (
 )
 from app.services.comms.secrets import encrypt
 from app.services.comms.smtp import load_smtp_config, send_message
+from app.services.comms.whatsapp import wa_configured, whatsapp_mode
 from app.services.document_numbering import DocumentNumberingService
 from app.services.invoice_pdf import SellerDetails, seller_details_from_settings
 from app.services.object_storage import (
@@ -178,6 +179,25 @@ class SettingsService:
                 settings.smtp_from_name = _blank_to_none(data.smtp_from_name)
             if "smtp_reply_to" in payload:
                 settings.smtp_reply_to = _validated_email_or_none(data.smtp_reply_to)
+            if "wa_phone_number_id" in payload:
+                settings.wa_phone_number_id = _blank_to_none(data.wa_phone_number_id)
+            if "wa_business_account_id" in payload:
+                settings.wa_business_account_id = _blank_to_none(data.wa_business_account_id)
+            if "wa_access_token" in payload:
+                if data.wa_access_token:
+                    settings.wa_access_token_encrypted = encrypt(data.wa_access_token)
+                else:
+                    settings.wa_access_token_encrypted = None
+            if "wa_app_secret" in payload:
+                if data.wa_app_secret:
+                    settings.wa_app_secret_encrypted = encrypt(data.wa_app_secret)
+                else:
+                    settings.wa_app_secret_encrypted = None
+            if "wa_invoice_template_name" in payload:
+                settings.wa_invoice_template_name = _blank_to_none(data.wa_invoice_template_name)
+            if "wa_template_lang" in payload:
+                lang = (data.wa_template_lang or "en").strip() or "en"
+                settings.wa_template_lang = lang
 
         return self._to_comms_response(settings)
 
@@ -362,6 +382,14 @@ class SettingsService:
             smtp_reply_to=settings.smtp_reply_to,
             smtp_configured=bool(host and from_address),
             has_smtp_password=bool(settings.smtp_password_encrypted),
+            wa_phone_number_id=settings.wa_phone_number_id,
+            wa_business_account_id=settings.wa_business_account_id,
+            wa_invoice_template_name=settings.wa_invoice_template_name,
+            wa_template_lang=settings.wa_template_lang or "en",
+            wa_configured=wa_configured(settings),
+            has_wa_token=bool(settings.wa_access_token_encrypted),
+            has_wa_app_secret=bool(settings.wa_app_secret_encrypted),
+            whatsapp_mode=whatsapp_mode(settings),
         )
 
 

@@ -72,6 +72,7 @@ from app.routers import (
     transfers,
     users,
     vat201_periods,
+    whatsapp_webhook,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
@@ -257,6 +258,7 @@ app.include_router(search.search_router)
 app.include_router(home.home_router)
 app.include_router(settings_router.settings_router)
 app.include_router(comms.comms_router)
+app.include_router(whatsapp_webhook.whatsapp_webhook_router)
 app.include_router(cost_audit.cost_audit_router)
 app.include_router(nia.nia_router)
 app.include_router(nia_threads.nia_threads_router)

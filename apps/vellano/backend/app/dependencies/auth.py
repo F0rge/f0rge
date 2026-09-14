@@ -50,6 +50,7 @@ from app.services.reports import ReportsService
 from app.services.search import SearchService
 from app.services.comms.outbox import CommsOutboxService
 from app.services.comms.send import CommsSendService
+from app.services.comms.whatsapp import WhatsAppWebhookService
 from app.services.settings import SettingsService
 from app.services.proformas import ProformaService
 from app.services.price_lists import PriceListService
@@ -153,6 +154,10 @@ def get_comms_outbox_service(db: AsyncSession = Depends(get_db)) -> CommsOutboxS
 
 def get_comms_send_service(db: AsyncSession = Depends(get_db)) -> CommsSendService:
     return CommsSendService(db)
+
+
+def get_whatsapp_webhook_service(db: AsyncSession = Depends(get_db)) -> WhatsAppWebhookService:
+    return WhatsAppWebhookService(db)
 
 
 def get_cost_audit_service(db: AsyncSession = Depends(get_db)) -> CostAuditService:

@@ -45,6 +45,15 @@ export function CommunicationsSettings() {
   const [replyTo, setReplyTo] = useState("");
   const [hasPassword, setHasPassword] = useState(false);
   const [testTo, setTestTo] = useState("");
+  const [waPhoneId, setWaPhoneId] = useState("");
+  const [waBusinessId, setWaBusinessId] = useState("");
+  const [waToken, setWaToken] = useState("");
+  const [waAppSecret, setWaAppSecret] = useState("");
+  const [waTemplate, setWaTemplate] = useState("");
+  const [waLang, setWaLang] = useState("en");
+  const [hasWaToken, setHasWaToken] = useState(false);
+  const [hasWaAppSecret, setHasWaAppSecret] = useState(false);
+  const [whatsappMode, setWhatsappMode] = useState<"off" | "click" | "cloud">("click");
 
   const apply = useCallback((data: CommsSettings) => {
     setHost(data.smtp_host ?? "");
@@ -56,6 +65,15 @@ export function CommunicationsSettings() {
     setReplyTo(data.smtp_reply_to ?? "");
     setHasPassword(data.has_smtp_password);
     setPassword("");
+    setWaPhoneId(data.wa_phone_number_id ?? "");
+    setWaBusinessId(data.wa_business_account_id ?? "");
+    setWaTemplate(data.wa_invoice_template_name ?? "");
+    setWaLang(data.wa_template_lang || "en");
+    setHasWaToken(Boolean(data.has_wa_token));
+    setHasWaAppSecret(Boolean(data.has_wa_app_secret));
+    setWhatsappMode(data.whatsapp_mode ?? "click");
+    setWaToken("");
+    setWaAppSecret("");
   }, []);
 
   useEffect(() => {
@@ -106,6 +124,33 @@ export function CommunicationsSettings() {
       setNotice("Mailbox saved. The password is not shown again.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save mailbox.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveWhatsApp() {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const payload: Parameters<typeof updateCommsSettings>[0] = {
+        wa_phone_number_id: waPhoneId,
+        wa_business_account_id: waBusinessId,
+        wa_invoice_template_name: waTemplate,
+        wa_template_lang: waLang,
+      };
+      if (waToken.length > 0) {
+        payload.wa_access_token = waToken;
+      }
+      if (waAppSecret.length > 0) {
+        payload.wa_app_secret = waAppSecret;
+      }
+      const saved = await updateCommsSettings(payload);
+      apply(saved);
+      setNotice("WhatsApp Cloud API saved. Secrets are not shown again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save WhatsApp.");
     } finally {
       setSaving(false);
     }
@@ -252,6 +297,80 @@ export function CommunicationsSettings() {
           onClick={() => void handleTest()}
         >
           {testing ? "Sending…" : "Send test email"}
+        </Button>
+      ) : null}
+
+      <div>
+        <h3 className="cds--type-productive-heading-02">WhatsApp Cloud API</h3>
+        <p className="cds--type-body-01 vellano-muted-text">
+          Keep the WhatsApp Business app on this number. Paste the Cloud API token here; we do not
+          replace the Business app. Unofficial WhatsApp libraries are not used.
+        </p>
+        <p className="cds--type-helper-text-01 vellano-muted-text">
+          Mode: {whatsappMode === "cloud" ? "Cloud API" : "click-to-chat (wa.me)"}. Webhook:{" "}
+          https://vellano-dev-api.leo-figueiredo.com/api/v1/webhooks/whatsapp
+        </p>
+      </div>
+      <TextInput
+        id="wa-phone-id"
+        labelText="Phone number ID"
+        value={waPhoneId}
+        disabled={!canMutate || saving}
+        onChange={(event) => setWaPhoneId(event.target.value)}
+      />
+      <TextInput
+        id="wa-business-id"
+        labelText="Business account ID"
+        value={waBusinessId}
+        disabled={!canMutate || saving}
+        onChange={(event) => setWaBusinessId(event.target.value)}
+      />
+      <TextInput
+        id="wa-token"
+        type="password"
+        labelText="Access token"
+        helperText={
+          hasWaToken
+            ? "Leave blank to keep the current token."
+            : "Stored encrypted. Never returned on reload."
+        }
+        placeholder={hasWaToken ? "Leave blank to keep current" : undefined}
+        value={waToken}
+        disabled={!canMutate || saving}
+        onChange={(event) => setWaToken(event.target.value)}
+      />
+      <TextInput
+        id="wa-app-secret"
+        type="password"
+        labelText="App secret"
+        helperText={
+          hasWaAppSecret
+            ? "Leave blank to keep the current secret. Used to verify webhook HMAC."
+            : "Optional. Required for X-Hub-Signature-256 on the webhook."
+        }
+        placeholder={hasWaAppSecret ? "Leave blank to keep current" : undefined}
+        value={waAppSecret}
+        disabled={!canMutate || saving}
+        onChange={(event) => setWaAppSecret(event.target.value)}
+      />
+      <TextInput
+        id="wa-template"
+        labelText="Utility template name"
+        helperText="Create this template in WhatsApp Manager (for example invoice_notice)."
+        value={waTemplate}
+        disabled={!canMutate || saving}
+        onChange={(event) => setWaTemplate(event.target.value)}
+      />
+      <TextInput
+        id="wa-lang"
+        labelText="Template language"
+        value={waLang}
+        disabled={!canMutate || saving}
+        onChange={(event) => setWaLang(event.target.value)}
+      />
+      {canMutate ? (
+        <Button kind="primary" disabled={saving} onClick={() => void handleSaveWhatsApp()}>
+          {saving ? "Saving…" : "Save WhatsApp"}
         </Button>
       ) : null}
     </Stack>

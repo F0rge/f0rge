@@ -91,6 +91,21 @@ class CommsOutboxService:
         rows = await self.crud.list_for_document(document_type, document_id)
         return [self._to_response(row) for row in rows]
 
+    async def apply_provider_status(
+        self,
+        provider_message_id: str,
+        status: str,
+        error: Optional[str] = None,
+    ) -> None:
+        row = await self.crud.get_by_provider_message_id(provider_message_id)
+        if row is None:
+            return
+        lowered = status.lower()
+        if lowered in {"delivered", "read"}:
+            await self.mark_opened(row.id)
+        elif lowered == "failed":
+            await self.mark_failed(row.id, error or "WhatsApp delivery failed")
+
     async def _get(self, message_id: uuid.UUID) -> CommsMessage:
         row = await self.crud.get_by_id(message_id)
         if row is None:

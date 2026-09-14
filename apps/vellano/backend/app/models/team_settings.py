@@ -135,6 +135,17 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
     smtp_from_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     smtp_from_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     smtp_reply_to: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    wa_phone_number_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    wa_business_account_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    wa_access_token_encrypted: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    wa_app_secret_encrypted: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    wa_invoice_template_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    wa_template_lang: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="en",
+        server_default=text("'en'"),
+    )
 
     team: Mapped["Team"] = relationship()
     default_receive_location: Mapped[Optional["Location"]] = relationship(
