@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -121,6 +122,19 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         default=DEFAULT_SESSION_TTL_HOURS,
         server_default=text("12"),
     )
+    smtp_host: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    smtp_port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    smtp_security: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="starttls",
+        server_default=text("'starttls'"),
+    )
+    smtp_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    smtp_password_encrypted: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    smtp_from_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    smtp_from_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    smtp_reply_to: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     team: Mapped["Team"] = relationship()
     default_receive_location: Mapped[Optional["Location"]] = relationship(
@@ -135,6 +149,14 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         CheckConstraint(
             "session_ttl_hours >= 1 AND session_ttl_hours <= 720",
             name="ck_team_settings_session_ttl_hours",
+        ),
+        CheckConstraint(
+            "smtp_port IS NULL OR (smtp_port >= 1 AND smtp_port <= 65535)",
+            name="ck_team_settings_smtp_port",
+        ),
+        CheckConstraint(
+            "smtp_security IN ('starttls', 'ssl', 'plain')",
+            name="ck_team_settings_smtp_security",
         ),
     )
 

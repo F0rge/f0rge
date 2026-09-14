@@ -135,6 +135,12 @@ async function parseErrorMessage(response: Response): Promise<string> {
       if (code === "nia_cap_exceeded") {
         return "Monthly Nia allowance used";
       }
+      if (code === "comms_encryption_unconfigured") {
+        return "Communications encryption is not configured";
+      }
+      if (code === "comms_smtp_unconfigured") {
+        return "SMTP mailbox is not configured";
+      }
       if (typeof body.detail.message === "string" && body.detail.message.trim()) {
         return body.detail.message;
       }
@@ -3184,6 +3190,47 @@ export function searchAll(q: string): Promise<SearchResponse> {
 
 export function getSettings(): Promise<AppSettings> {
   return apiFetch<AppSettings>("/settings").then(withPickSettings);
+}
+
+export type CommsSettings = {
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_security: string;
+  smtp_username: string | null;
+  smtp_from_address: string | null;
+  smtp_from_name: string | null;
+  smtp_reply_to: string | null;
+  smtp_configured: boolean;
+  has_smtp_password: boolean;
+};
+
+export type CommsSettingsUpdate = {
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_security?: string;
+  smtp_username?: string | null;
+  smtp_password?: string;
+  smtp_from_address?: string | null;
+  smtp_from_name?: string | null;
+  smtp_reply_to?: string | null;
+};
+
+export function getCommsSettings(): Promise<CommsSettings> {
+  return apiFetch<CommsSettings>("/settings/comms");
+}
+
+export function updateCommsSettings(payload: CommsSettingsUpdate): Promise<CommsSettings> {
+  return apiFetch<CommsSettings>("/settings/comms", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testCommsEmail(to: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>("/settings/comms/test-email", {
+    method: "POST",
+    body: JSON.stringify({ to }),
+  });
 }
 
 export function updateSettings(payload: {

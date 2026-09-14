@@ -39,6 +39,7 @@ import {
 } from "@/lib/api";
 import { NiaCapsSettings } from "@/components/nia/nia-caps-settings";
 import { NiaScheduleSettings } from "@/components/nia/nia-schedule-settings";
+import { CommunicationsSettings } from "@/app/settings/communications-settings";
 import { useAuth } from "@/lib/auth";
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -374,6 +375,7 @@ export default function SettingsPage() {
             <Tab>Documents</Tab>
             <Tab>Locations</Tab>
             <Tab>Operations</Tab>
+            <Tab>Communications</Tab>
             {canUseNiaAssistant || canAdminNiaCaps ? <Tab>Nia</Tab> : null}
           </TabList>
           <TabPanels>
@@ -683,6 +685,12 @@ export default function SettingsPage() {
                     onSave={() => void handleSave()}
                   />
                 </Stack>
+              </Tile>
+            </TabPanel>
+
+            <TabPanel>
+              <Tile>
+                <CommunicationsSettings />
               </Tile>
             </TabPanel>
 

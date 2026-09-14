@@ -10,17 +10,27 @@ from fastapi import UploadFile
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from email_validator import EmailNotValidError, validate_email
+
 from app.crud.document_sequence import DOCUMENT_TYPE_DEFAULTS, DocumentSequenceCRUD
 from app.crud.location import LocationCRUD
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
 from app.models.location import LocationType
 from app.models.team_settings import DEFAULT_HOME_CURRENCY, DEFAULT_VAT_RATE, TeamSettings
+from app.schemas.comms import (
+    CommsSettingsResponse,
+    CommsSettingsUpdate,
+    CommsTestEmailRequest,
+    CommsTestEmailResponse,
+)
 from app.schemas.settings import (
     DocumentSequenceResponse,
     SettingsResponse,
     SettingsUpdate,
 )
+from app.services.comms.secrets import encrypt
+from app.services.comms.smtp import load_smtp_config, send_message
 from app.services.document_numbering import DocumentNumberingService
 from app.services.invoice_pdf import SellerDetails, seller_details_from_settings
 from app.services.object_storage import (
@@ -128,6 +138,64 @@ class SettingsService:
                 await self._apply_sequence_updates(user.team_id, data.document_sequences)
 
         return await self._to_response(settings, include_warning=True)
+
+    async def get_comms(self, user_id: uuid.UUID) -> CommsSettingsResponse:
+        user = await self._get_user(user_id)
+        settings = await self.crud.get_or_create_for_team(user.team_id)
+        return self._to_comms_response(settings)
+
+    async def update_comms(
+        self,
+        user_id: uuid.UUID,
+        data: CommsSettingsUpdate,
+    ) -> CommsSettingsResponse:
+        user = await self._get_user(user_id)
+        settings = await self.crud.get_or_create_for_team(user.team_id)
+        payload = data.model_dump(exclude_unset=True)
+        if not payload:
+            raise ValidationError("No communications fields to update")
+
+        async with unit_of_work(self.db):
+            if "smtp_host" in payload:
+                settings.smtp_host = _blank_to_none(data.smtp_host)
+            if "smtp_port" in payload:
+                settings.smtp_port = data.smtp_port
+            if "smtp_security" in payload:
+                security = (data.smtp_security or "starttls").strip().lower()
+                if security not in {"starttls", "ssl", "plain"}:
+                    raise ValidationError("smtp_security must be starttls, ssl, or plain")
+                settings.smtp_security = security
+            if "smtp_username" in payload:
+                settings.smtp_username = _blank_to_none(data.smtp_username)
+            if "smtp_password" in payload:
+                if data.smtp_password:
+                    settings.smtp_password_encrypted = encrypt(data.smtp_password)
+                else:
+                    settings.smtp_password_encrypted = None
+            if "smtp_from_address" in payload:
+                settings.smtp_from_address = _validated_email_or_none(data.smtp_from_address)
+            if "smtp_from_name" in payload:
+                settings.smtp_from_name = _blank_to_none(data.smtp_from_name)
+            if "smtp_reply_to" in payload:
+                settings.smtp_reply_to = _validated_email_or_none(data.smtp_reply_to)
+
+        return self._to_comms_response(settings)
+
+    async def test_email(
+        self,
+        user_id: uuid.UUID,
+        data: CommsTestEmailRequest,
+    ) -> CommsTestEmailResponse:
+        user = await self._get_user(user_id)
+        settings = await self.crud.get_or_create_for_team(user.team_id)
+        config = load_smtp_config(settings)
+        await send_message(
+            config,
+            to=str(data.to),
+            subject="Vellano test",
+            body_text="This is a Vellano SMTP test.",
+        )
+        return CommsTestEmailResponse(ok=True)
 
     async def upload_logo(self, user_id: uuid.UUID, file: UploadFile) -> SettingsResponse:
         user = await self._get_user(user_id)
@@ -279,6 +347,39 @@ class SettingsService:
             has_logo=bool(settings.logo_storage_key),
             document_sequences=sequence_rows,
         )
+
+    @staticmethod
+    def _to_comms_response(settings: TeamSettings) -> CommsSettingsResponse:
+        host = (settings.smtp_host or "").strip()
+        from_address = (settings.smtp_from_address or "").strip()
+        return CommsSettingsResponse(
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+            smtp_security=settings.smtp_security or "starttls",
+            smtp_username=settings.smtp_username,
+            smtp_from_address=settings.smtp_from_address,
+            smtp_from_name=settings.smtp_from_name,
+            smtp_reply_to=settings.smtp_reply_to,
+            smtp_configured=bool(host and from_address),
+            has_smtp_password=bool(settings.smtp_password_encrypted),
+        )
+
+
+def _blank_to_none(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _validated_email_or_none(value: Optional[str]) -> Optional[str]:
+    stripped = _blank_to_none(value)
+    if stripped is None:
+        return None
+    try:
+        return validate_email(stripped, check_deliverability=False).normalized
+    except EmailNotValidError as exc:
+        raise ValidationError("Must be a valid email address") from exc
 
 
 def parse_pick_priority(raw: object) -> list[uuid.UUID]:

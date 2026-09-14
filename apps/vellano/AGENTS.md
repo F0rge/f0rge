@@ -73,7 +73,11 @@ It then creates these role users if the email is missing (idempotent; owner is n
 
 Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSite=Lax, `Path=/`). Session cookie TTL is team-configurable via `team_settings.session_ttl_hours` (default **12 hours**, range 1–720); login sets JWT `exp` and cookie `Max-Age` from the current setting — no sliding refresh; changing the setting does not revoke already-issued tokens. Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
 
-Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally.
+Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally. Generate `SETTINGS_ENCRYPTION_KEY` with Fernet (`cryptography.fernet.Fernet.generate_key()`) before saving an SMTP password in Settings → Communications.
+
+### Communications (outbound SMTP)
+
+Settings tab **Communications** (after Operations, before Nia). Owner (`settings.mutate`) saves one shop mailbox: host, port, STARTTLS/SSL/plain, username, password (Fernet-encrypted; GET never returns it), From, From name, Reply-To. `GET /api/v1/settings/comms` is any authenticated user (`smtp_configured`, `has_smtp_password`). `PATCH` and `POST /settings/comms/test-email` require `settings.mutate`. Test send uses stdlib `smtplib` in a worker thread. Missing mailbox → 503 `comms_smtp_unconfigured`. SMTP reject → 502 `comms_smtp_failed`. Missing/invalid `SETTINGS_ENCRYPTION_KEY` → 503 `comms_encryption_unconfigured`. Set the same Fernet key on Railway `vellano-api` develop. Nia still must not send.
 
 ### Permissions (F5)
 
@@ -631,6 +635,7 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 - **`watchPatterns`:** `apps/vellano/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `vellano-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
 - **Manifest:** `.github/deploy/manifest.yml` — `branches: [develop]` only. No `health_url.main`, no production.
 - **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Every startup also seeds missing role users `till@` / `books@` / `warehouse@` / `buyer@example.com` (`SEED_*_PASSWORD`, defaults `change-me-<role>`). Cookie `vellano_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+- **Comms encryption:** `SETTINGS_ENCRYPTION_KEY` (Fernet) on `vellano-api` develop — required to save SMTP/WhatsApp secrets. Same value locally in `.env`.
 - **Playground dataset:** set `SEED_PLAYGROUND=true` on `vellano-api` and redeploy to fill catalogue / PO / till / books for demos. Default off. See [Playground seed](#playground-seed-develop--local-demos).
 - **Object storage:** dedicated Railway Tigris bucket `vellano-dev` in this project only — never Marrow `photos` / `photos-dev`, never Marrow project buckets. On `vellano-api` develop: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{vellano-dev.*}}`; `AWS_ENDPOINT_URL_S3=https://fly.storage.tigris.dev`; `AWS_REGION=auto`. Keep `COOKIE_SECURE`, `JWT_SECRET`, `DATABASE_URL`. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Production is not wired.
 

@@ -5,6 +5,12 @@ import uuid
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from app.dependencies.auth import get_current_user_id, get_settings_service, require_settings
+from app.schemas.comms import (
+    CommsSettingsResponse,
+    CommsSettingsUpdate,
+    CommsTestEmailRequest,
+    CommsTestEmailResponse,
+)
 from app.schemas.settings import SettingsResponse, SettingsUpdate
 from app.services.settings import SettingsService
 
@@ -26,6 +32,32 @@ async def update_settings(
     service: SettingsService = Depends(get_settings_service),
 ) -> SettingsResponse:
     return await service.update(user_id, data)
+
+
+@settings_router.get("/comms", response_model=CommsSettingsResponse)
+async def get_comms_settings(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    service: SettingsService = Depends(get_settings_service),
+) -> CommsSettingsResponse:
+    return await service.get_comms(user_id)
+
+
+@settings_router.patch("/comms", response_model=CommsSettingsResponse)
+async def update_comms_settings(
+    data: CommsSettingsUpdate,
+    user_id: uuid.UUID = Depends(require_settings),
+    service: SettingsService = Depends(get_settings_service),
+) -> CommsSettingsResponse:
+    return await service.update_comms(user_id, data)
+
+
+@settings_router.post("/comms/test-email", response_model=CommsTestEmailResponse)
+async def test_comms_email(
+    data: CommsTestEmailRequest,
+    user_id: uuid.UUID = Depends(require_settings),
+    service: SettingsService = Depends(get_settings_service),
+) -> CommsTestEmailResponse:
+    return await service.test_email(user_id, data)
 
 
 @settings_router.post("/logo", response_model=SettingsResponse)
