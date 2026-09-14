@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # When true, set reasoning.exclude (clear_thinking) so thinking is not in content.
     openrouter_reasoning_exclude: bool = True
     nia_schedule_ticker: bool = True
+    settings_encryption_key: str = ""
+    wa_verify_token: str = ""
 
     storage_dir: str = "storage"
     bucket_name: str = ""

@@ -11,7 +11,14 @@ from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
 from f0rge_core.handlers import register_exception_handlers
 
-from app.exceptions import ForbiddenError, NiaCapExceededError, NiaLlmUnconfiguredError
+from app.exceptions import (
+    CommsEncryptionUnconfiguredError,
+    CommsSmtpFailedError,
+    CommsSmtpUnconfiguredError,
+    ForbiddenError,
+    NiaCapExceededError,
+    NiaLlmUnconfiguredError,
+)
 
 from app.config import settings
 from app.database import async_session_maker
@@ -28,6 +35,7 @@ from app.routers import (
     books_periods,
     catalogue_imports,
     category_maps,
+    comms,
     contacts,
     cost_audit,
     credit_notes,
@@ -64,6 +72,7 @@ from app.routers import (
     transfers,
     users,
     vat201_periods,
+    whatsapp_webhook,
 )
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService
@@ -157,6 +166,22 @@ async def _nia_cap_exceeded_handler(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
+async def _comms_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, (CommsEncryptionUnconfiguredError, CommsSmtpUnconfiguredError))
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": {"code": exc.detail}},
+    )
+
+
+async def _comms_smtp_failed_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, CommsSmtpFailedError)
+    return JSONResponse(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        content={"detail": {"code": exc.detail, "message": exc.message}},
+    )
+
+
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
 app.add_exception_handler(
     NiaLlmUnconfiguredError,
@@ -165,6 +190,18 @@ app.add_exception_handler(
 app.add_exception_handler(
     NiaCapExceededError,
     cast(ExceptionHandler, _nia_cap_exceeded_handler),
+)
+app.add_exception_handler(
+    CommsEncryptionUnconfiguredError,
+    cast(ExceptionHandler, _comms_unconfigured_handler),
+)
+app.add_exception_handler(
+    CommsSmtpUnconfiguredError,
+    cast(ExceptionHandler, _comms_unconfigured_handler),
+)
+app.add_exception_handler(
+    CommsSmtpFailedError,
+    cast(ExceptionHandler, _comms_smtp_failed_handler),
 )
 
 app.add_middleware(
@@ -220,6 +257,8 @@ app.include_router(vat201_periods.vat201_periods_router)
 app.include_router(search.search_router)
 app.include_router(home.home_router)
 app.include_router(settings_router.settings_router)
+app.include_router(comms.comms_router)
+app.include_router(whatsapp_webhook.whatsapp_webhook_router)
 app.include_router(cost_audit.cost_audit_router)
 app.include_router(nia.nia_router)
 app.include_router(nia_threads.nia_threads_router)

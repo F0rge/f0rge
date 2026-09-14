@@ -18,6 +18,7 @@ from app.schemas.customer_crm import (
     CustomerCrmResponse,
     CustomerCrmUpdate,
 )
+from app.services.comms.phone import to_whatsapp_e164
 from app.services.customer_credit import CREDIT_OVERRIDE_KEYS
 from app.services.permissions import PermissionService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -193,6 +194,7 @@ class CustomersCrmService:
             last_purchase_date=invoice_agg.last_purchase_date,
             active_laybys_count=layby_agg.active_count,
             active_laybys_zar=layby_agg.active_zar.quantize(Decimal("0.01")),
+            whatsapp_e164=to_whatsapp_e164(customer.phone),
             created_at=customer.created_at,
             updated_at=customer.updated_at,
         )

@@ -167,7 +167,7 @@ class InvoiceService:
         assert reloaded is not None
         return self._to_response(reloaded)
 
-    async def serve_pdf(self, invoice_id: uuid.UUID) -> Response:
+    async def build_pdf_bytes(self, invoice_id: uuid.UUID) -> tuple[bytes, str, TaxInvoice]:
         invoice = await self.crud.get_by_id(invoice_id)
         if invoice is None:
             raise NotFoundError("Invoice not found")
@@ -203,6 +203,10 @@ class InvoiceService:
             total_inc_vat=f"{invoice.total_inc_vat:.2f}",
             seller=await SettingsService(self.db).build_seller_details(),
         )
+        return pdf_bytes, f"{invoice.invoice_number}.pdf", invoice
+
+    async def serve_pdf(self, invoice_id: uuid.UUID) -> Response:
+        pdf_bytes, _, _ = await self.build_pdf_bytes(invoice_id)
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def _team_settings(self):

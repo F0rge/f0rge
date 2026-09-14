@@ -73,7 +73,11 @@ It then creates these role users if the email is missing (idempotent; owner is n
 
 Login requires `JWT_SECRET`. Cookie name is `vellano_session` (HttpOnly, SameSite=Lax, `Path=/`). Session cookie TTL is team-configurable via `team_settings.session_ttl_hours` (default **12 hours**, range 1–720); login sets JWT `exp` and cookie `Max-Age` from the current setting — no sliding refresh; changing the setting does not revoke already-issued tokens. Set `COOKIE_SECURE=true` when serving over HTTPS (Railway); leave `false` for local HTTP or the browser will not store the cookie.
 
-Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally.
+Copy `apps/vellano/backend/.env.example` to `.env` and set a real `JWT_SECRET` before testing login locally. Generate `SETTINGS_ENCRYPTION_KEY` with Fernet (`cryptography.fernet.Fernet.generate_key()`) before saving an SMTP password in Settings → Communications.
+
+### Communications (outbound SMTP)
+
+Settings tab **Communications** (after Operations, before Nia). Owner (`settings.mutate`) saves one shop mailbox: host, port, STARTTLS/SSL/plain, username, password (Fernet-encrypted; GET never returns it), From, From name, Reply-To. `GET /api/v1/settings/comms` is any authenticated user (`smtp_configured`, `has_smtp_password`). `PATCH` and `POST /settings/comms/test-email` require `settings.mutate`. Test send uses stdlib `smtplib` in a worker thread. Missing mailbox → 503 `comms_smtp_unconfigured`. SMTP reject → 502 `comms_smtp_failed`. Missing/invalid `SETTINGS_ENCRYPTION_KEY` → 503 `comms_encryption_unconfigured`. Set the same Fernet key on Railway `vellano-api` develop. Nia still must not send.
 
 ### Permissions (F5)
 
@@ -374,7 +378,7 @@ Complete restock while a stocktake is `in_progress` at that location → 409 `"L
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
-- **Laybys:** `GET/POST /laybys`, `GET /laybys/{id}`, `POST /laybys/{id}/payments`, `POST /laybys/{id}/complete`, `POST /laybys/{id}/cancel`.
+- **Laybys:** `GET/POST /laybys`, `GET /laybys/{id}`, `GET /laybys/{id}/pdf`, `POST /laybys/{id}/send`, `POST /laybys/{id}/payments`, `POST /laybys/{id}/complete`, `POST /laybys/{id}/cancel`. Send uses `require_comms_send` (not only `sales.laybys`). Cancelled layby send is 409. Print HTML receipt remains.
 
 Customer layaway with optional stock hold at a showroom. Numbering: `LB-0001`. Status: `open` | `ready` | `completed` | `cancelled` (overdue is derived from `due_date`, not stored).
 
@@ -452,7 +456,7 @@ Factory bills default to `supplier.default_currency` (else USD). Freight/clearan
 
 On receive, blend unit cost at a location by quantity-weighted average: when adding stock to an existing `LocationStock` row, `new_cost = (old_on_hand × old_cost + incoming_qty × incoming_cost) / (old_on_hand + incoming_qty)`; if `old_on_hand` is 0 or `old_cost` is null, use the incoming cost.
 
-The app does not send email.
+Staff send customer documents through the comms outbox, not from PO receive. POs themselves are not emailed.
 
 ## F7 actual lead times
 
@@ -541,9 +545,9 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 - **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on posted journal lines), `tax_treatment` (`none` | `vat15`), and `is_bank`. Extra bank codes 1110–1140 are seeded by `ensure_bank_accounts()`.
 - **Category maps:** `GET/PUT /category-maps` — SKU category → sales/COGS/stock-adj/count-var codes. Mutate: `books.mutate`.
 - **Contacts:** `GET/POST /contacts` — unified customers (`kind: customer`) and suppliers (`kind: supplier`). `POST` creates customers only; suppliers via `POST /suppliers`.
-- **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf` — 15% VAT on face; journal Dr AR, Cr Sales + VAT control.
+- **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf`, `POST /invoices/{id}/send` `{channel: email|whatsapp}` — `require_comms_send` (till.sell or books.mutate). Email attaches the tax-invoice PDF. Warehouse 403. Missing customer email 409. SMTP unconfigured 503. Do not write `books_events` on send.
 - **Repeating invoices:** `GET/POST /repeating-invoices`, `GET/PATCH /repeating-invoices/{id}`, `POST /repeating-invoices/{id}/run` — run-now only (no cron, no email). Posted invoices have no draft status.
-- **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}`, `GET /credit-notes/{id}/pdf` — one CN per invoice; reverses AR/sales/VAT. PDF reuses the tax-invoice canvas with title Credit Note.
+- **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}`, `GET /credit-notes/{id}/pdf`, `POST /credit-notes/{id}/send` — one CN per invoice; reverses AR/sales/VAT. PDF reuses the tax-invoice canvas with title Credit Note. Send attaches that PDF (`require_comms_send`).
 - **Bills:** `GET/POST /bills`, `GET /bills/{id}`, `POST/GET /bills/{id}/attachment` — foreign factory bills: no SA VAT; Dr Inventory, Cr AP. FX user-entered (`fx_to_zar` when currency ≠ ZAR). Attachment GET streams bytes via `serve_stored_pdf` (same-origin; no S3 302).
 - **Payments:** `GET/POST /payments`, `GET /payments/{id}/pdf` — `direction: in` (invoice, ZAR) or `out` (bill, foreign FX). Response includes `fx_gain_loss_zar` (positive = gain, negative = loss).
 - **Journals:** `GET/POST /journals`, `GET /journals/{id}`, `POST /journals/{id}/post`, `POST /journals/{id}/void` — drafts excluded from CoA/P&L; void posts a reversing journal and keeps the original. Mutate: `books.mutate`.
@@ -631,6 +635,11 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 - **`watchPatterns`:** `apps/vellano/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `vellano-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
 - **Manifest:** `.github/deploy/manifest.yml` — `branches: [develop]` only. No `health_url.main`, no production.
 - **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Every startup also seeds missing role users `till@` / `books@` / `warehouse@` / `buyer@example.com` (`SEED_*_PASSWORD`, defaults `change-me-<role>`). Cookie `vellano_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+- **Comms encryption:** `SETTINGS_ENCRYPTION_KEY` (Fernet) on `vellano-api` develop — required to save SMTP/WhatsApp secrets. Same value locally in `.env`.
+- **WhatsApp click-to-chat:** `POST .../send {channel:whatsapp}` with Cloud API off writes outbox `whatsapp_click` / `opened` and returns a `https://wa.me/{e164}?text=...` URL. Click-to-chat cannot attach a PDF.
+- **WhatsApp Cloud API:** paste phone-number id + access token in Settings → Communications (`whatsapp_mode=cloud` when both present). Token and app secret are Fernet-encrypted; GET never returns them. Keep the existing WhatsApp Business app on the number — paste-token coexistence, no Embedded Signup. Unofficial WhatsApp libraries are banned.
+- **WhatsApp webhook:** public `GET/POST https://vellano-dev-api.leo-figueiredo.com/api/v1/webhooks/whatsapp` (no cookie). Meta verify token is env `WA_VERIFY_TOKEN`, not the access token. Local challenge: `curl -G 'http://localhost:8003/api/v1/webhooks/whatsapp' --data-urlencode 'hub.mode=subscribe' --data-urlencode "hub.verify_token=$WA_VERIFY_TOKEN" --data-urlencode 'hub.challenge=ok'`. HMAC `X-Hub-Signature-256` is required when an app secret is saved. Delivery statuses update `comms_messages`; inbound chat is not ingested into Nia.
+- **WhatsApp Cloud send:** when `whatsapp_mode=cloud`, `POST .../send {channel:whatsapp}` sends a pre-approved utility template then uploads the PDF (`type=document`). Template body parameters are (1) document number (2) amount inc VAT — laybys use remaining balance as the amount. First contact must use the template named in Settings (`wa_invoice_template_name`, default language `en`). 24h window / template failures return 409 with Meta's message and outbox `failed`. If Cloud is off, the same button stays click-to-chat. Graph timeout 20s; never log the Bearer token.
 - **Playground dataset:** set `SEED_PLAYGROUND=true` on `vellano-api` and redeploy to fill catalogue / PO / till / books for demos. Default off. See [Playground seed](#playground-seed-develop--local-demos).
 - **Object storage:** dedicated Railway Tigris bucket `vellano-dev` in this project only — never Marrow `photos` / `photos-dev`, never Marrow project buckets. On `vellano-api` develop: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{vellano-dev.*}}`; `AWS_ENDPOINT_URL_S3=https://fly.storage.tigris.dev`; `AWS_REGION=auto`. Keep `COOKIE_SECURE`, `JWT_SECRET`, `DATABASE_URL`. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Production is not wired.
 
@@ -683,11 +692,11 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 
 ## Non-goals
 
-The app does not send email (including repeating invoices), originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
+Staff may send tax invoices, credit notes, and laybys via the comms outbox (`comms_messages`) using SMTP / WhatsApp adapters. **Nia must not send.** Do not use Shopify `channel_outbox` or `sales_channels` slug `email` for this — those are inbound OMS. Do not auto-email repeating invoices. The app does not originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
 
 **In V1 (do not treat as future work):** locations, catalogue, proformas, POs, land/receive, prices, ledger, journals, repeating invoices, bank import (multi-account + rules), reports (incl. trial balance / journal / cash), VAT201 periods, books history, transfers, till, search, home, settings.
 
-Still out of scope: production / `main`, Marrow, email, PSP charges, SARS eFiling, raising replicas above hobby 1.
+Still out of scope: production / `main`, Marrow, auto-email repeating invoices, Gmail OAuth, unofficial WhatsApp, PSP charges, SARS eFiling, raising replicas above hobby 1.
 
 ## Python
 

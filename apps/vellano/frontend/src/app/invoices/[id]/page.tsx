@@ -21,18 +21,22 @@ import { useCallback, useEffect, useState } from "react";
 import { BooksHistory } from "@/components/books-history";
 import {
   canMutateBooks,
+  canSendComms,
   createCreditNote,
   createPayment,
   downloadInvoicePdf,
   formatZarAmount,
+  getCommsSettings,
+  getCustomer,
   getInvoice,
   getSettings,
-  listContacts,
   settingsLogoUrl,
   listCreditNotes,
+  openCommsSend,
+  sendDocument,
   type AppSettings,
-  type Contact,
   type CreditNote,
+  type CustomerCrm,
   type Invoice,
   type Payment,
 } from "@/lib/api";
@@ -51,9 +55,11 @@ export default function InvoiceDetailPage() {
   const router = useRouter();
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
+  const canSend = canSendComms(user);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [companySettings, setCompanySettings] = useState<AppSettings | null>(null);
-  const [customer, setCustomer] = useState<Contact | null>(null);
+  const [smtpConfigured, setSmtpConfigured] = useState(false);
+  const [customer, setCustomer] = useState<CustomerCrm | null>(null);
   const [creditNote, setCreditNote] = useState<CreditNote | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,15 +76,17 @@ export default function InvoiceDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const [invoiceData, contacts, creditNotePage, settingsData] = await Promise.all([
-        getInvoice(params.id),
-        listContacts(),
+      const invoiceData = await getInvoice(params.id);
+      const [crmCustomer, creditNotePage, settingsData, comms] = await Promise.all([
+        getCustomer(invoiceData.customer_id),
         listCreditNotes({ limit: 100 }),
         getSettings(),
+        getCommsSettings(),
       ]);
       setInvoice(invoiceData);
       setCompanySettings(settingsData);
-      setCustomer(contacts.find((entry) => entry.id === invoiceData.customer_id) ?? null);
+      setSmtpConfigured(comms.smtp_configured);
+      setCustomer(crmCustomer);
       setCreditNote(
         creditNotePage.items.find((entry) => entry.invoice_id === invoiceData.id) ?? null,
       );
@@ -105,6 +113,45 @@ export default function InvoiceDetailPage() {
       await downloadInvoicePdf(invoice.id, invoice.invoice_number);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to download tax invoice.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleEmail() {
+    if (!invoice) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await sendDocument("invoices", invoice.id, "email");
+      setSuccess(`Tax invoice emailed to ${customer?.email ?? "the customer"}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to email tax invoice.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleWhatsApp() {
+    if (!invoice) {
+      return;
+    }
+    setActionLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await sendDocument("invoices", invoice.id, "whatsapp");
+      openCommsSend(result);
+      setSuccess(
+        result.mode === "click"
+          ? "WhatsApp opened with the invoice message."
+          : "Tax invoice sent on WhatsApp.",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open WhatsApp.");
     } finally {
       setActionLoading(false);
     }
@@ -223,6 +270,24 @@ export default function InvoiceDetailPage() {
         <Button kind="secondary" disabled={actionLoading} onClick={() => void handleDownload()}>
           Download tax invoice
         </Button>
+        {canSend ? (
+          <Button
+            kind="tertiary"
+            disabled={actionLoading || !customer?.email || !smtpConfigured}
+            onClick={() => void handleEmail()}
+          >
+            Email
+          </Button>
+        ) : null}
+        {canSend ? (
+          <Button
+            kind="tertiary"
+            disabled={actionLoading || !customer?.whatsapp_e164}
+            onClick={() => void handleWhatsApp()}
+          >
+            WhatsApp
+          </Button>
+        ) : null}
         {showPayment ? (
           <Button disabled={actionLoading} onClick={openPaymentModal}>
             Record payment in
@@ -234,6 +299,21 @@ export default function InvoiceDetailPage() {
           </Button>
         ) : null}
       </Stack>
+      {canSend && !customer?.email ? (
+        <p className="cds--type-helper-text-01 vellano-muted-text">
+          Add a customer email before sending this invoice.
+        </p>
+      ) : null}
+      {canSend && customer?.email && !smtpConfigured ? (
+        <p className="cds--type-helper-text-01 vellano-muted-text">
+          Connect SMTP in Settings → Communications before emailing.
+        </p>
+      ) : null}
+      {canSend && !customer?.whatsapp_e164 ? (
+        <p className="cds--type-helper-text-01 vellano-muted-text">
+          Add a South African mobile number before sending this invoice on WhatsApp.
+        </p>
+      ) : null}
 
       {creditNote ? (
         <Stack gap={3}>

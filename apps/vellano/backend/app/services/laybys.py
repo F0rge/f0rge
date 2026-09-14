@@ -5,6 +5,7 @@ import uuid
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.customer import CustomerCRUD
@@ -29,6 +30,8 @@ from app.schemas.layby import (
     LaybyResponse,
 )
 from app.schemas.page import Page, PageParams
+from app.services.comms.phone import to_whatsapp_e164
+from app.services.layby_pdf import build_layby_pdf
 from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
 from app.services.payment_terms import compute_due_date
@@ -40,6 +43,7 @@ from app.services.chart_of_accounts import (
     CODE_VAT,
     LedgerPostingService,
 )
+from app.services.settings import SettingsService
 from app.services.stock_movements import StockMovementService
 from app.services.stocktakes import StocktakeService
 from app.services.vat import CENT, ex_to_inc
@@ -79,6 +83,27 @@ class LaybysService:
 
     async def get(self, layby_id: uuid.UUID) -> LaybyResponse:
         return self._to_response(await self._get_or_404(layby_id))
+
+    async def build_pdf_bytes(self, layby_id: uuid.UUID) -> tuple[bytes, str, Layby]:
+        layby = await self._get_or_404(layby_id)
+        seller = await SettingsService(self.db).build_seller_details()
+        balance = layby.total_inc_vat - layby.amount_paid
+        pdf_bytes = build_layby_pdf(
+            layby_number=layby.layby_number,
+            customer_name=layby.customer.name,
+            due_date=layby.due_date.isoformat(),
+            lines=[(line.sku.name, line.qty) for line in layby.lines],
+            amount_paid=f"{layby.amount_paid:.2f}",
+            balance=f"{balance:.2f}",
+            total_inc_vat=f"{layby.total_inc_vat:.2f}",
+            seller=seller,
+            status=layby.status.value,
+        )
+        return pdf_bytes, f"{layby.layby_number}.pdf", layby
+
+    async def serve_pdf(self, layby_id: uuid.UUID) -> Response:
+        pdf_bytes, _, _ = await self.build_pdf_bytes(layby_id)
+        return Response(content=pdf_bytes, media_type="application/pdf")
 
     async def create(self, data: LaybyCreate, user_id: uuid.UUID) -> LaybyResponse:
         customer = await self.customer_crud.get_by_id(data.customer_id)
@@ -465,6 +490,8 @@ class LaybysService:
             layby_number=layby.layby_number,
             customer_id=layby.customer_id,
             customer_name=layby.customer.name,
+            customer_email=layby.customer.email,
+            customer_whatsapp_e164=to_whatsapp_e164(layby.customer.phone),
             location_id=layby.location_id,
             location_name=layby.location.name,
             invoice_id=layby.invoice_id,
@@ -489,6 +516,8 @@ class LaybysService:
             layby_number=layby.layby_number,
             customer_id=layby.customer_id,
             customer_name=layby.customer.name,
+            customer_email=layby.customer.email,
+            customer_whatsapp_e164=to_whatsapp_e164(layby.customer.phone),
             location_id=layby.location_id,
             location_name=layby.location.name,
             invoice_id=layby.invoice_id,

@@ -56,6 +56,8 @@ class LaybyListItem(BaseModel):
     layby_number: str
     customer_id: uuid.UUID
     customer_name: str
+    customer_email: Optional[str] = None
+    customer_whatsapp_e164: Optional[str] = None
     location_id: uuid.UUID
     location_name: str
     invoice_id: Optional[uuid.UUID]
@@ -80,6 +82,8 @@ class LaybyResponse(BaseModel):
     layby_number: str
     customer_id: uuid.UUID
     customer_name: str
+    customer_email: Optional[str] = None
+    customer_whatsapp_e164: Optional[str] = None
     location_id: uuid.UUID
     location_name: str
     invoice_id: Optional[uuid.UUID]

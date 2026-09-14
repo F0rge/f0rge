@@ -68,6 +68,10 @@ export function canMutateBooks(user: PermissionHolder): boolean {
   return can(user, "books.mutate");
 }
 
+export function canSendComms(user: PermissionHolder): boolean {
+  return can(user, "till.sell") || can(user, "books.mutate");
+}
+
 export function canViewCostAudit(user: PermissionHolder): boolean {
   return can(user, "stock.cost.view");
 }

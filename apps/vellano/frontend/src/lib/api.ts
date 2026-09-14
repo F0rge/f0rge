@@ -135,6 +135,12 @@ async function parseErrorMessage(response: Response): Promise<string> {
       if (code === "nia_cap_exceeded") {
         return "Monthly Nia allowance used";
       }
+      if (code === "comms_encryption_unconfigured") {
+        return "Communications encryption is not configured";
+      }
+      if (code === "comms_smtp_unconfigured") {
+        return "SMTP mailbox is not configured";
+      }
       if (typeof body.detail.message === "string" && body.detail.message.trim()) {
         return body.detail.message;
       }
@@ -254,6 +260,7 @@ export {
   canMutatePicks,
   canMutateReturns,
   canMutateSettings,
+  canSendComms,
   canAdminNia,
   canUseNia,
   canRaisePo,
@@ -1714,6 +1721,8 @@ export type CreditNote = {
   credit_note_number: string;
   invoice_id: string;
   invoice_number: string;
+  customer_email?: string | null;
+  customer_whatsapp_e164?: string | null;
   reason: string | null;
   issue_date: string;
   subtotal_ex_vat: string;
@@ -1754,6 +1763,27 @@ export async function downloadCreditNotePdf(id: string, creditNoteNumber: string
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `${creditNoteNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadLaybyPdf(id: string, laybyNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/laybys/${id}/pdf`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${laybyNumber}.pdf`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
@@ -3185,6 +3215,89 @@ export function getSettings(): Promise<AppSettings> {
   return apiFetch<AppSettings>("/settings").then(withPickSettings);
 }
 
+export type CommsSettings = {
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_security: string;
+  smtp_username: string | null;
+  smtp_from_address: string | null;
+  smtp_from_name: string | null;
+  smtp_reply_to: string | null;
+  smtp_configured: boolean;
+  has_smtp_password: boolean;
+  wa_phone_number_id?: string | null;
+  wa_business_account_id?: string | null;
+  wa_invoice_template_name?: string | null;
+  wa_template_lang?: string;
+  wa_configured?: boolean;
+  has_wa_token?: boolean;
+  has_wa_app_secret?: boolean;
+  whatsapp_mode?: "off" | "click" | "cloud";
+};
+
+export type CommsSettingsUpdate = {
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_security?: string;
+  smtp_username?: string | null;
+  smtp_password?: string;
+  smtp_from_address?: string | null;
+  smtp_from_name?: string | null;
+  smtp_reply_to?: string | null;
+  wa_phone_number_id?: string | null;
+  wa_business_account_id?: string | null;
+  wa_access_token?: string;
+  wa_app_secret?: string;
+  wa_invoice_template_name?: string | null;
+  wa_template_lang?: string;
+};
+
+export function getCommsSettings(): Promise<CommsSettings> {
+  return apiFetch<CommsSettings>("/settings/comms");
+}
+
+export function updateCommsSettings(payload: CommsSettingsUpdate): Promise<CommsSettings> {
+  return apiFetch<CommsSettings>("/settings/comms", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testCommsEmail(to: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>("/settings/comms/test-email", {
+    method: "POST",
+    body: JSON.stringify({ to }),
+  });
+}
+
+export type CommsSendChannel = "email" | "whatsapp";
+
+export type CommsSendResult = {
+  id: string;
+  status: string;
+  channel: string;
+  provider: string;
+  mode?: string | null;
+  url?: string | null;
+};
+
+export function sendDocument(
+  kind: "invoices" | "credit-notes" | "laybys",
+  id: string,
+  channel: CommsSendChannel,
+): Promise<CommsSendResult> {
+  return apiFetch<CommsSendResult>(`/${kind}/${id}/send`, {
+    method: "POST",
+    body: JSON.stringify({ channel }),
+  });
+}
+
+export function openCommsSend(result: CommsSendResult): void {
+  if (result.mode === "click" && result.url) {
+    window.open(result.url, "_blank", "noopener,noreferrer");
+  }
+}
+
 export function updateSettings(payload: {
   vat_rate?: string;
   home_currency?: string;
@@ -3732,6 +3845,8 @@ export type LaybyListItem = {
   layby_number: string;
   customer_id: string;
   customer_name: string;
+  customer_email?: string | null;
+  customer_whatsapp_e164?: string | null;
   location_id: string;
   location_name: string;
   invoice_id: string | null;
@@ -3825,6 +3940,7 @@ export type CustomerCrm = {
   name: string;
   email: string | null;
   phone: string | null;
+  whatsapp_e164?: string | null;
   vat_number: string | null;
   billing_address: string | null;
   customer_type: CustomerType;

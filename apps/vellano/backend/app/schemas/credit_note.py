@@ -18,6 +18,8 @@ class CreditNoteResponse(BaseModel):
     credit_note_number: str
     invoice_id: uuid.UUID
     invoice_number: str
+    customer_email: Optional[str] = None
+    customer_whatsapp_e164: Optional[str] = None
     reason: Optional[str]
     issue_date: datetime.date
     subtotal_ex_vat: Decimal
