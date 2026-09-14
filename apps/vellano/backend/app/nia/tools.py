@@ -15,8 +15,8 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.models.tax_invoice import TaxInvoice
 from app.services.payment_terms import (
+    display_terms_days,
     effective_due_date,
-    effective_terms_days,
     invoice_overdue_predicate,
 )
 from app.nia.agent import NiaDeps, nia_agent
@@ -244,13 +244,8 @@ async def list_overdue_invoices(ctx: RunContext[NiaDeps]) -> Union[list[dict[str
     rows = (await ctx.deps.db.execute(stmt)).scalars().all()
     invoices = []
     for inv in rows:
-        due_date = effective_due_date(
-            inv.issue_date,
-            inv.due_date,
-            inv.customer,
-            team_settings,
-        )
-        terms_days = effective_terms_days(inv.customer, team_settings)
+        due_date = effective_due_date(inv.issue_date, inv.due_date)
+        terms_days = display_terms_days(inv.due_date, inv.customer, team_settings)
         invoices.append(
             {
                 "id": str(inv.id),
