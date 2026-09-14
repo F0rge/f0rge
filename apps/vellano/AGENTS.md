@@ -452,7 +452,7 @@ Factory bills default to `supplier.default_currency` (else USD). Freight/clearan
 
 On receive, blend unit cost at a location by quantity-weighted average: when adding stock to an existing `LocationStock` row, `new_cost = (old_on_hand × old_cost + incoming_qty × incoming_cost) / (old_on_hand + incoming_qty)`; if `old_on_hand` is 0 or `old_cost` is null, use the incoming cost.
 
-The app does not send email.
+Staff send customer documents through the comms outbox, not from PO receive. POs themselves are not emailed.
 
 ## F7 actual lead times
 
@@ -683,11 +683,11 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 
 ## Non-goals
 
-The app does not send email (including repeating invoices), originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
+Staff may send tax invoices, credit notes, and laybys via the comms outbox (`comms_messages`) using SMTP / WhatsApp adapters. **Nia must not send.** Do not use Shopify `channel_outbox` or `sales_channels` slug `email` for this — those are inbound OMS. Do not auto-email repeating invoices. The app does not originate payments (PSP / EFT), file VAT with SARS, or open a bank account. Auth (S1) is shipped — do not re-implement it.
 
 **In V1 (do not treat as future work):** locations, catalogue, proformas, POs, land/receive, prices, ledger, journals, repeating invoices, bank import (multi-account + rules), reports (incl. trial balance / journal / cash), VAT201 periods, books history, transfers, till, search, home, settings.
 
-Still out of scope: production / `main`, Marrow, email, PSP charges, SARS eFiling, raising replicas above hobby 1.
+Still out of scope: production / `main`, Marrow, auto-email repeating invoices, Gmail OAuth, unofficial WhatsApp, PSP charges, SARS eFiling, raising replicas above hobby 1.
 
 ## Python
 

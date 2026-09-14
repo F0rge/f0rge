@@ -254,6 +254,7 @@ export {
   canMutatePicks,
   canMutateReturns,
   canMutateSettings,
+  canSendComms,
   canAdminNia,
   canUseNia,
   canRaisePo,

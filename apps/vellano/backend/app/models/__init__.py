@@ -7,6 +7,13 @@ from app.models.bank_rule import BankRule
 from app.models.bill import Bill, BillLine
 from app.models.books_event import BooksDocumentType, BooksEvent, BooksEventAction
 from app.models.category_account_map import CategoryAccountMap
+from app.models.comms_message import (
+    CommsChannel,
+    CommsDocumentType,
+    CommsMessage,
+    CommsProvider,
+    CommsStatus,
+)
 from app.models.credit_note import CreditNote
 from app.models.delivery import (
     Delivery,
@@ -85,6 +92,11 @@ __all__ = [
     "BooksEvent",
     "BooksEventAction",
     "CategoryAccountMap",
+    "CommsChannel",
+    "CommsDocumentType",
+    "CommsMessage",
+    "CommsProvider",
+    "CommsStatus",
     "CreditNote",
     "Customer",
     "Delivery",

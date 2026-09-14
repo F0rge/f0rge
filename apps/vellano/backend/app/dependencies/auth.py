@@ -48,6 +48,7 @@ from app.services.catalogue_imports import CatalogueImportService
 from app.services.category_maps import CategoryMapService
 from app.services.reports import ReportsService
 from app.services.search import SearchService
+from app.services.comms.outbox import CommsOutboxService
 from app.services.settings import SettingsService
 from app.services.proformas import ProformaService
 from app.services.price_lists import PriceListService
@@ -143,6 +144,10 @@ def get_search_service(db: AsyncSession = Depends(get_db)) -> SearchService:
 
 def get_settings_service(db: AsyncSession = Depends(get_db)) -> SettingsService:
     return SettingsService(db)
+
+
+def get_comms_outbox_service(db: AsyncSession = Depends(get_db)) -> CommsOutboxService:
+    return CommsOutboxService(db)
 
 
 def get_cost_audit_service(db: AsyncSession = Depends(get_db)) -> CostAuditService:
@@ -362,6 +367,13 @@ async def require_books_mutate(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (BOOKS_MUTATE,))
+
+
+async def require_comms_send(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (TILL_SELL, BOOKS_MUTATE))
 
 
 async def require_customers_mutate(
