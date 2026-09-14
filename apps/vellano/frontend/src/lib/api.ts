@@ -1722,6 +1722,7 @@ export type CreditNote = {
   invoice_id: string;
   invoice_number: string;
   customer_email?: string | null;
+  customer_whatsapp_e164?: string | null;
   reason: string | null;
   issue_date: string;
   subtotal_ex_vat: string;
@@ -3277,6 +3278,12 @@ export function sendDocument(
   });
 }
 
+export function openCommsSend(result: CommsSendResult): void {
+  if (result.mode === "click" && result.url) {
+    window.open(result.url, "_blank", "noopener,noreferrer");
+  }
+}
+
 export function updateSettings(payload: {
   vat_rate?: string;
   home_currency?: string;
@@ -3825,6 +3832,7 @@ export type LaybyListItem = {
   customer_id: string;
   customer_name: string;
   customer_email?: string | null;
+  customer_whatsapp_e164?: string | null;
   location_id: string;
   location_name: string;
   invoice_id: string | null;
@@ -3918,6 +3926,7 @@ export type CustomerCrm = {
   name: string;
   email: string | null;
   phone: string | null;
+  whatsapp_e164?: string | null;
   vat_number: string | null;
   billing_address: string | null;
   customer_type: CustomerType;

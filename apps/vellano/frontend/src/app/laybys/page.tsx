@@ -46,6 +46,7 @@ import {
   listLaybys,
   listLocations,
   listSkus,
+  openCommsSend,
   roundHalfUp,
   sendDocument,
   type Contact,
@@ -988,6 +989,28 @@ function LaybysPageContent() {
                   }}
                 >
                   Email
+                </Button>
+              ) : null}
+              {canSend ? (
+                <Button
+                  kind="ghost"
+                  size="sm"
+                  disabled={
+                    actionBusy ||
+                    selectedLayby.status === "cancelled" ||
+                    !selectedLayby.customer_whatsapp_e164
+                  }
+                  onClick={() => {
+                    void sendDocument("laybys", selectedLayby.id, "whatsapp")
+                      .then((result) => {
+                        openCommsSend(result);
+                      })
+                      .catch((err) => {
+                        setError(err instanceof Error ? err.message : "Failed to open WhatsApp.");
+                      });
+                  }}
+                >
+                  WhatsApp
                 </Button>
               ) : null}
             </Stack>

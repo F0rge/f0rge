@@ -29,6 +29,7 @@ import {
   getCommsSettings,
   listCreditNotes,
   listInvoices,
+  openCommsSend,
   sendDocument,
   type CreditNote,
   type InvoiceListItem,
@@ -217,6 +218,15 @@ export default function CreditNotesPage() {
     }
   }
 
+  async function handleWhatsApp(creditNote: CreditNote) {
+    setError(null);
+    try {
+      openCommsSend(await sendDocument("credit-notes", creditNote.id, "whatsapp"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open WhatsApp.");
+    }
+  }
+
   const invoiceIdByCreditNoteId = useMemo(
     () => Object.fromEntries(creditNotes.map((entry) => [entry.id, entry.invoice_id])),
     [creditNotes],
@@ -351,6 +361,21 @@ export default function CreditNotesPage() {
                                         }}
                                       >
                                         Email
+                                      </Button>
+                                    ) : null}
+                                    {canSend ? (
+                                      <Button
+                                        kind="ghost"
+                                        size="sm"
+                                        disabled={!creditNote.customer_whatsapp_e164}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          if (creditNote) {
+                                            void handleWhatsApp(creditNote);
+                                          }
+                                        }}
+                                      >
+                                        WhatsApp
                                       </Button>
                                     ) : null}
                                   </Stack>

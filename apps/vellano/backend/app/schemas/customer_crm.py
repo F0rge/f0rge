@@ -58,5 +58,6 @@ class CustomerCrmResponse(BaseModel):
     last_purchase_date: Optional[datetime.date] = None
     active_laybys_count: int
     active_laybys_zar: Decimal
+    whatsapp_e164: Optional[str] = None
     created_at: datetime.datetime
     updated_at: datetime.datetime

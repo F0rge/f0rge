@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
+from urllib.parse import quote
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +14,7 @@ from app.models.layby import LaybyStatus
 from app.models.team_settings import TeamSettings
 from app.schemas.comms import CommsSendRequest, CommsSendResponse
 from app.services.comms.outbox import CommsOutboxService
+from app.services.comms.phone import to_whatsapp_e164
 from app.services.comms.smtp import load_smtp_config, send_message
 from app.services.credit_notes import CreditNoteService
 from app.services.invoices import InvoiceService
@@ -35,14 +38,22 @@ class CommsSendService:
         data: CommsSendRequest,
         actor_user_id: uuid.UUID,
     ) -> CommsSendResponse:
-        if data.channel != "email":
-            raise ValidationError("channel must be email")
         pdf_bytes, filename, invoice = await self.invoices.build_pdf_bytes(invoice_id)
+        settings = await self._team_settings()
+        shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
+        if data.channel == "whatsapp":
+            return await self._send_whatsapp_click(
+                document_type=CommsDocumentType.INVOICE,
+                document_id=invoice.id,
+                phone=invoice.customer.phone if invoice.customer else None,
+                actor_user_id=actor_user_id,
+                text=f"{shop} tax invoice {invoice.invoice_number}",
+            )
+        if data.channel != "email":
+            raise ValidationError("channel must be email or whatsapp")
         to_address = (invoice.customer.email or "").strip()
         if not to_address:
             raise ConflictError("Customer has no email")
-        settings = await self._team_settings()
-        shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
         due = invoice.due_date.isoformat() if invoice.due_date else None
         subject = f"{shop} tax invoice {invoice.invoice_number}"
         lines = [
@@ -69,15 +80,23 @@ class CommsSendService:
         data: CommsSendRequest,
         actor_user_id: uuid.UUID,
     ) -> CommsSendResponse:
-        if data.channel != "email":
-            raise ValidationError("channel must be email")
         pdf_bytes, filename, credit_note = await self.credit_notes.build_pdf_bytes(credit_note_id)
         customer = credit_note.invoice.customer
+        settings = await self._team_settings()
+        shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
+        if data.channel == "whatsapp":
+            return await self._send_whatsapp_click(
+                document_type=CommsDocumentType.CREDIT_NOTE,
+                document_id=credit_note.id,
+                phone=customer.phone if customer else None,
+                actor_user_id=actor_user_id,
+                text=f"{shop} credit note {credit_note.credit_note_number}",
+            )
+        if data.channel != "email":
+            raise ValidationError("channel must be email or whatsapp")
         to_address = (customer.email or "").strip() if customer else ""
         if not to_address:
             raise ConflictError("Customer has no email")
-        settings = await self._team_settings()
-        shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
         subject = f"{shop} credit note {credit_note.credit_note_number}"
         body = (
             f"{shop} credit note {credit_note.credit_note_number}. "
@@ -101,16 +120,24 @@ class CommsSendService:
         data: CommsSendRequest,
         actor_user_id: uuid.UUID,
     ) -> CommsSendResponse:
-        if data.channel != "email":
-            raise ValidationError("channel must be email")
         pdf_bytes, filename, layby = await self.laybys.build_pdf_bytes(layby_id)
         if layby.status == LaybyStatus.CANCELLED:
             raise ConflictError("Cannot send a cancelled layby")
+        settings = await self._team_settings()
+        shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
+        if data.channel == "whatsapp":
+            return await self._send_whatsapp_click(
+                document_type=CommsDocumentType.LAYBY,
+                document_id=layby.id,
+                phone=layby.customer.phone,
+                actor_user_id=actor_user_id,
+                text=f"{shop} layby {layby.layby_number}",
+            )
+        if data.channel != "email":
+            raise ValidationError("channel must be email or whatsapp")
         to_address = (layby.customer.email or "").strip()
         if not to_address:
             raise ConflictError("Customer has no email")
-        settings = await self._team_settings()
-        shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
         subject = f"{shop} layby {layby.layby_number}"
         balance = layby.total_inc_vat - layby.amount_paid
         body = (
@@ -128,6 +155,40 @@ class CommsSendService:
             body_text=body,
             pdf_bytes=pdf_bytes,
             pdf_filename=filename,
+        )
+
+    async def _send_whatsapp_click(
+        self,
+        *,
+        document_type: CommsDocumentType,
+        document_id: uuid.UUID,
+        phone: Optional[str],
+        actor_user_id: uuid.UUID,
+        text: str,
+    ) -> CommsSendResponse:
+        e164 = to_whatsapp_e164(phone)
+        if not e164:
+            raise ConflictError("Customer has no WhatsApp number")
+        digits = e164[1:]
+        url = f"https://wa.me/{digits}?text={quote(text)}"
+        row = await self.outbox.enqueue(
+            channel=CommsChannel.WHATSAPP,
+            provider=CommsProvider.WHATSAPP_CLICK,
+            document_type=document_type,
+            document_id=document_id,
+            to_address=e164,
+            actor_user_id=actor_user_id,
+            from_identity="wa.me",
+            body_preview=text,
+        )
+        opened = await self.outbox.mark_opened(row.id, from_identity="wa.me")
+        return CommsSendResponse(
+            id=opened.id,
+            status=opened.status.value,
+            channel=opened.channel.value,
+            provider=opened.provider.value,
+            mode="click",
+            url=url,
         )
 
     async def _send_smtp(

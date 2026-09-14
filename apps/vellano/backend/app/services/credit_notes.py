@@ -25,6 +25,7 @@ from app.services.chart_of_accounts import (
     CODE_VAT,
     LedgerPostingService,
 )
+from app.services.comms.phone import to_whatsapp_e164
 from app.services.invoice_pdf import build_tax_invoice_pdf
 from app.services.books_periods import assert_date_postable
 from app.services.settings import SettingsService
@@ -203,6 +204,9 @@ class CreditNoteService:
             customer_email=credit_note.invoice.customer.email
             if credit_note.invoice.customer
             else None,
+            customer_whatsapp_e164=to_whatsapp_e164(
+                credit_note.invoice.customer.phone if credit_note.invoice.customer else None
+            ),
             reason=credit_note.reason,
             issue_date=credit_note.issue_date,
             subtotal_ex_vat=credit_note.subtotal_ex_vat,

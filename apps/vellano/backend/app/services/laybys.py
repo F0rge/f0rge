@@ -30,6 +30,7 @@ from app.schemas.layby import (
     LaybyResponse,
 )
 from app.schemas.page import Page, PageParams
+from app.services.comms.phone import to_whatsapp_e164
 from app.services.layby_pdf import build_layby_pdf
 from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
@@ -490,6 +491,7 @@ class LaybysService:
             customer_id=layby.customer_id,
             customer_name=layby.customer.name,
             customer_email=layby.customer.email,
+            customer_whatsapp_e164=to_whatsapp_e164(layby.customer.phone),
             location_id=layby.location_id,
             location_name=layby.location.name,
             invoice_id=layby.invoice_id,
@@ -515,6 +517,7 @@ class LaybysService:
             customer_id=layby.customer_id,
             customer_name=layby.customer.name,
             customer_email=layby.customer.email,
+            customer_whatsapp_e164=to_whatsapp_e164(layby.customer.phone),
             location_id=layby.location_id,
             location_name=layby.location.name,
             invoice_id=layby.invoice_id,
