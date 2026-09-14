@@ -352,7 +352,7 @@ export default function CreditNotesPage() {
                                       <Button
                                         kind="ghost"
                                         size="sm"
-                                        disabled={!creditNote.customer_email || !smtpConfigured}
+                                        disabled={!creditNote?.customer_email || !smtpConfigured}
                                         onClick={(event) => {
                                           event.stopPropagation();
                                           if (creditNote) {
@@ -367,7 +367,7 @@ export default function CreditNotesPage() {
                                       <Button
                                         kind="ghost"
                                         size="sm"
-                                        disabled={!creditNote.customer_whatsapp_e164}
+                                        disabled={!creditNote?.customer_whatsapp_e164}
                                         onClick={(event) => {
                                           event.stopPropagation();
                                           if (creditNote) {
