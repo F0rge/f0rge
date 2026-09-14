@@ -16,10 +16,20 @@ from app.schemas.comms import CommsSendRequest, CommsSendResponse
 from app.services.comms.outbox import CommsOutboxService
 from app.services.comms.phone import to_whatsapp_e164
 from app.services.comms.smtp import load_smtp_config, send_message
+from app.services.comms.whatsapp import (
+    load_whatsapp_cloud,
+    send_cloud_document,
+    wa_configured,
+)
 from app.services.credit_notes import CreditNoteService
 from app.services.invoices import InvoiceService
 from app.services.laybys import LaybysService
-from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
+from f0rge_core.exceptions import (
+    ConflictError,
+    ExternalServiceError,
+    NotFoundError,
+    ValidationError,
+)
 
 
 class CommsSendService:
@@ -42,12 +52,16 @@ class CommsSendService:
         settings = await self._team_settings()
         shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
         if data.channel == "whatsapp":
-            return await self._send_whatsapp_click(
+            return await self._send_whatsapp(
                 document_type=CommsDocumentType.INVOICE,
                 document_id=invoice.id,
                 phone=invoice.customer.phone if invoice.customer else None,
                 actor_user_id=actor_user_id,
                 text=f"{shop} tax invoice {invoice.invoice_number}",
+                pdf_bytes=pdf_bytes,
+                pdf_filename=filename,
+                body_params=[invoice.invoice_number, f"{invoice.total_inc_vat:.2f}"],
+                settings=settings,
             )
         if data.channel != "email":
             raise ValidationError("channel must be email or whatsapp")
@@ -85,12 +99,19 @@ class CommsSendService:
         settings = await self._team_settings()
         shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
         if data.channel == "whatsapp":
-            return await self._send_whatsapp_click(
+            return await self._send_whatsapp(
                 document_type=CommsDocumentType.CREDIT_NOTE,
                 document_id=credit_note.id,
                 phone=customer.phone if customer else None,
                 actor_user_id=actor_user_id,
                 text=f"{shop} credit note {credit_note.credit_note_number}",
+                pdf_bytes=pdf_bytes,
+                pdf_filename=filename,
+                body_params=[
+                    credit_note.credit_note_number,
+                    f"{credit_note.total_inc_vat:.2f}",
+                ],
+                settings=settings,
             )
         if data.channel != "email":
             raise ValidationError("channel must be email or whatsapp")
@@ -126,12 +147,17 @@ class CommsSendService:
         settings = await self._team_settings()
         shop = (settings.trading_name or settings.legal_name or "Vellano").strip()
         if data.channel == "whatsapp":
-            return await self._send_whatsapp_click(
+            balance = layby.total_inc_vat - layby.amount_paid
+            return await self._send_whatsapp(
                 document_type=CommsDocumentType.LAYBY,
                 document_id=layby.id,
                 phone=layby.customer.phone,
                 actor_user_id=actor_user_id,
                 text=f"{shop} layby {layby.layby_number}",
+                pdf_bytes=pdf_bytes,
+                pdf_filename=filename,
+                body_params=[layby.layby_number, f"{balance:.2f}"],
+                settings=settings,
             )
         if data.channel != "email":
             raise ValidationError("channel must be email or whatsapp")
@@ -157,7 +183,7 @@ class CommsSendService:
             pdf_filename=filename,
         )
 
-    async def _send_whatsapp_click(
+    async def _send_whatsapp(
         self,
         *,
         document_type: CommsDocumentType,
@@ -165,10 +191,43 @@ class CommsSendService:
         phone: Optional[str],
         actor_user_id: uuid.UUID,
         text: str,
+        pdf_bytes: bytes,
+        pdf_filename: str,
+        body_params: list[str],
+        settings: TeamSettings,
     ) -> CommsSendResponse:
         e164 = to_whatsapp_e164(phone)
         if not e164:
             raise ConflictError("Customer has no WhatsApp number")
+        if wa_configured(settings):
+            return await self._send_whatsapp_cloud(
+                document_type=document_type,
+                document_id=document_id,
+                e164=e164,
+                actor_user_id=actor_user_id,
+                text=text,
+                pdf_bytes=pdf_bytes,
+                pdf_filename=pdf_filename,
+                body_params=body_params,
+                settings=settings,
+            )
+        return await self._send_whatsapp_click(
+            document_type=document_type,
+            document_id=document_id,
+            e164=e164,
+            actor_user_id=actor_user_id,
+            text=text,
+        )
+
+    async def _send_whatsapp_click(
+        self,
+        *,
+        document_type: CommsDocumentType,
+        document_id: uuid.UUID,
+        e164: str,
+        actor_user_id: uuid.UUID,
+        text: str,
+    ) -> CommsSendResponse:
         digits = e164[1:]
         url = f"https://wa.me/{digits}?text={quote(text)}"
         row = await self.outbox.enqueue(
@@ -189,6 +248,55 @@ class CommsSendService:
             provider=opened.provider.value,
             mode="click",
             url=url,
+        )
+
+    async def _send_whatsapp_cloud(
+        self,
+        *,
+        document_type: CommsDocumentType,
+        document_id: uuid.UUID,
+        e164: str,
+        actor_user_id: uuid.UUID,
+        text: str,
+        pdf_bytes: bytes,
+        pdf_filename: str,
+        body_params: list[str],
+        settings: TeamSettings,
+    ) -> CommsSendResponse:
+        config = load_whatsapp_cloud(settings)
+        row = await self.outbox.enqueue(
+            channel=CommsChannel.WHATSAPP,
+            provider=CommsProvider.WHATSAPP_CLOUD,
+            document_type=document_type,
+            document_id=document_id,
+            to_address=e164,
+            actor_user_id=actor_user_id,
+            from_identity=config.phone_number_id,
+            body_preview=text,
+        )
+        try:
+            provider_id = await send_cloud_document(
+                config,
+                to_e164=e164,
+                body_params=body_params,
+                pdf_bytes=pdf_bytes,
+                pdf_filename=pdf_filename,
+                caption=text,
+            )
+        except (ConflictError, ExternalServiceError) as exc:
+            await self.outbox.mark_failed(row.id, exc.detail)
+            raise
+        sent = await self.outbox.mark_sent(
+            row.id,
+            from_identity=config.phone_number_id,
+            provider_message_id=provider_id or None,
+        )
+        return CommsSendResponse(
+            id=sent.id,
+            status=sent.status.value,
+            channel=sent.channel.value,
+            provider=sent.provider.value,
+            mode="cloud",
         )
 
     async def _send_smtp(

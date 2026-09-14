@@ -145,7 +145,11 @@ export default function InvoiceDetailPage() {
     try {
       const result = await sendDocument("invoices", invoice.id, "whatsapp");
       openCommsSend(result);
-      setSuccess("WhatsApp opened with the invoice message.");
+      setSuccess(
+        result.mode === "click"
+          ? "WhatsApp opened with the invoice message."
+          : "Tax invoice sent on WhatsApp.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to open WhatsApp.");
     } finally {
