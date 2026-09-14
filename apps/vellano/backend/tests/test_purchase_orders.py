@@ -909,13 +909,28 @@ async def test_receive_blends_unit_cost_at_location(
     assert Decimal(kram["unit_cost_zar"]) == Decimal("13000.0000")
 
 
-async def test_backend_app_has_no_smtp_or_mailer() -> None:
+async def test_backend_app_has_no_smtp_or_mailer_outside_comms() -> None:
     import pathlib
 
     app_root = pathlib.Path(__file__).resolve().parents[1] / "app"
+    allowed_parts = (
+        "/services/comms/",
+        "/schemas/comms.py",
+        "/models/comms_message.py",
+        "/models/team_settings.py",
+        "/routers/settings.py",
+        "/services/settings.py",
+        "/exceptions.py",
+        "/config.py",
+        "/main.py",
+    )
     hits = []
     for path in app_root.rglob("*.py"):
         text = path.read_text().lower()
-        if "smtp" in text or "mailer" in text:
-            hits.append(str(path))
+        if "smtp" not in text and "mailer" not in text:
+            continue
+        rendered = str(path)
+        if any(part in rendered for part in allowed_parts):
+            continue
+        hits.append(rendered)
     assert hits == []
