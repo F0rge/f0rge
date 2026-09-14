@@ -8,6 +8,7 @@ import pytest
 from httpx import AsyncClient
 from pydantic_ai import models
 from pydantic_ai.models.test import TestModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 import app.nia  # noqa: F401 — register tools
@@ -182,3 +183,43 @@ async def test_till_can_run_chart_dining_vs_sofas(
     bar = payload["components"][0]
     assert bar["categories"] == ["Dining", "Sofas"]
     assert bar["series"][0]["values"] == [0.0, 0.0]
+
+
+async def test_overdue_canvas_legacy_due_date_is_issue_plus_30(
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    from datetime import date, timedelta
+    from uuid import UUID
+
+    from sqlalchemy import update
+
+    from app.models.tax_invoice import TaxInvoice
+    from app.nia.canvas import build_overdue_invoices_canvas_spec
+
+    customer = await owner_client.post(
+        "/api/v1/customers",
+        json={"name": "Canvas Legacy Overdue"},
+    )
+    assert customer.status_code == 201
+    issue = date.today() - timedelta(days=40)
+    invoice = await owner_client.post(
+        "/api/v1/invoices",
+        json={
+            "customer_id": customer.json()["id"],
+            "issue_date": issue.isoformat(),
+            "lines": [{"description": "Chair", "qty": 1, "unit_ex_vat": "500.00"}],
+        },
+    )
+    assert invoice.status_code == 201
+    invoice_number = invoice.json()["invoice_number"]
+    await async_db.execute(
+        update(TaxInvoice).where(TaxInvoice.id == UUID(invoice.json()["id"])).values(due_date=None)
+    )
+    await async_db.flush()
+
+    spec = await build_overdue_invoices_canvas_spec(async_db)
+    table = spec["components"][0]
+    row = next(item for item in table["rows"] if item[0] == invoice_number)
+    assert row[2] == (issue + timedelta(days=30)).isoformat()
+    assert row[2] != issue.isoformat()

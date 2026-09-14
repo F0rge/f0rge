@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import json
+from datetime import date, timedelta
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 from pydantic_ai import models
 from pydantic_ai.models.test import TestModel
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.tax_invoice import TaxInvoice
 import app.nia  # noqa: F401 — register tools
 from app.nia.tools import _is_allowed_nav_path
 
@@ -135,6 +140,54 @@ async def test_list_overdue_invoices_returns_fixture_id(
     assert match["terms_days"] == 30
     assert isinstance(match["days_overdue"], int)
     assert match["days_overdue"] >= 0
+
+
+async def test_list_overdue_legacy_null_due_keeps_30_day_clock(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    customer_id = await _create_customer(owner_client, "Nia Legacy Overdue Customer")
+    issue = date.today() - timedelta(days=40)
+    invoice_resp = await owner_client.post(
+        "/api/v1/invoices",
+        json={
+            "customer_id": customer_id,
+            "issue_date": issue.isoformat(),
+            "lines": [{"description": "Legacy chair", "qty": 1, "unit_ex_vat": "500.00"}],
+        },
+    )
+    assert invoice_resp.status_code == 201
+    invoice_id = invoice_resp.json()["id"]
+    patch = await owner_client.patch("/api/v1/settings", json={"payment_terms_days": 14})
+    assert patch.status_code == 200
+    await async_db.execute(
+        update(TaxInvoice).where(TaxInvoice.id == UUID(invoice_id)).values(due_date=None)
+    )
+    await async_db.flush()
+
+    monkeypatch.setattr(
+        "app.services.nia_run.build_nia_model",
+        lambda: TestModel(call_tools=["list_overdue_invoices"]),
+    )
+    books = await _login(async_client, "books@example.com", settings.seed_books_password)
+    thread_id = await _create_thread(books)
+    run = await books.post(
+        f"/api/v1/nia/threads/{thread_id}/run",
+        json={"message": "list overdue invoices"},
+    )
+    assert run.status_code == 200
+    await _consume_stream(run)
+    thread = await books.get(f"/api/v1/nia/threads/{thread_id}")
+    payload = next(
+        m["structured_payload"]
+        for m in reversed(thread.json()["messages"])
+        if m["role"] == "assistant"
+    )
+    match = next(row for row in payload["invoices"] if row["id"] == invoice_id)
+    assert match["terms_days"] == 30
+    assert match["days_overdue"] == 10
 
 
 async def test_till_propose_transfer_denied_without_hitl(
