@@ -10,7 +10,7 @@ export function Pillars() {
             number="01"
             eyebrow="What posts"
             title="Stock, till, and books already share a chart of accounts."
-            lede="Built for companies that buy stock, hold it at locations, and sell it on account or at a till. If you only need a catalogue website, this will feel heavy."
+            lede="A pick on the floor, a take at the till, and a line on the invoice are the same numbers. Month-end is a read, not a reconstruction."
           />
         </Reveal>
         <div className="mt-12 grid gap-px bg-line lg:grid-cols-3">
