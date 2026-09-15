@@ -1,42 +1,49 @@
-import { ArrowRight } from "lucide-react";
-
 import { ButtonLink } from "@/components/button";
 import { Reveal } from "@/components/reveal";
 import { WorkspaceMock } from "@/components/workspace-mock";
 
 export function Hero() {
   return (
-    <section className="border-b border-line bg-paper-2">
-      <div className="mx-auto grid max-w-[99rem] gap-10 px-4 py-16 sm:px-8 lg:grid-cols-[minmax(0,28rem)_1fr] lg:items-start lg:py-20">
-        <Reveal>
+    <section className="border-b border-line bg-paper">
+      <div className="page-wrap grid gap-12 py-12 lg:grid-cols-16 lg:gap-8 lg:py-16">
+        <Reveal className="lg:col-span-6">
           <p className="eyebrow">South Africa · ZAR · 15% VAT</p>
-          <h1 className="mt-4 font-serif text-4xl leading-[1.15] sm:text-5xl">
-            The warehouse and the VAT201 should be looking at the same stock.
+          <h1 className="type-display mt-4 text-[2.25rem] sm:text-[3.375rem]">
+            Warehouse quantities and the VAT201 draft come from the same ledger.
           </h1>
-          <p className="mt-5 text-base leading-relaxed text-muted sm:text-lg">
-            Catalogue in one product, warehouse in another, books in a third: month-end is a reconstruction. Here a quote that is
-            accepted holds stock, a delivery can be invoiced, and the VAT201 draft is a read of that ledger.
+          <p className="mt-5 max-w-xl text-base leading-relaxed text-muted">
+            If the catalogue, the warehouse, and the books are three products, month-end is a reconstruction. Here an
+            accepted quote holds stock at a location. Pick, pack, load, and deliver are named states — skip one and the next
+            is blocked. The tax invoice reads that ledger. So does the VAT201 draft. We do not file it with SARS.
           </p>
-          <div className="mt-8 flex flex-wrap gap-0">
-            <ButtonLink href="/signup">
-              Create a company workspace <ArrowRight size={16} />
-            </ButtonLink>
-            <ButtonLink href="/#sale" variant="secondary">
+          <div className="mt-8 flex flex-wrap">
+            <ButtonLink href="/signup">Create a company workspace</ButtonLink>
+            <ButtonLink href="/#sale" variant="ghost">
               How a sale moves
             </ButtonLink>
           </div>
           <p className="mt-4 text-sm text-muted">
-            No charge while we onboard the first companies. 60 days&rsquo; notice before a price. We do not create a database until the
-            owner verifies email.
-          </p>
-          <p className="mt-6 border-l-4 border-interactive pl-3 text-sm text-muted">
-            In use at Vellano — company one, on its own database, not a row in a shared table.
+            No charge while the first companies onboard. At least 60 days&rsquo; notice before a price. Nothing is
+            provisioned until the owner verifies email.
           </p>
         </Reveal>
-        <Reveal delay={0.08}>
+        <Reveal delay={0.06} className="lg:col-span-10">
           <WorkspaceMock />
         </Reveal>
       </div>
+      <dl className="grid border-t border-line sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-line">
+        {[
+          ["Isolation", "One Postgres database and hostname per company."],
+          ["Documents", "Quote → sales order → pick/pack/deliver → tax invoice."],
+          ["Books", "GL 2300 for deposits. 15% VAT on the line. VAT201 is a draft."],
+          ["In use", "Vellano is company one — own database, not a row in a shared table."],
+        ].map(([k, v]) => (
+          <div key={k} className="border-b border-line px-4 py-5 sm:px-8 lg:border-b-0">
+            <dt className="text-sm font-medium">{k}</dt>
+            <dd className="mt-1 text-sm text-muted">{v}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

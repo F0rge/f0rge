@@ -36,7 +36,7 @@ export function VerifyFlow() {
     return (
       <>
         <p className="eyebrow">Verification</p>
-        <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">That link is not valid.</h1>
+        <h1 className="type-display mt-4 text-[2.25rem] sm:text-[3.375rem]">That link is not valid.</h1>
         <p className="mt-5 text-base text-muted">Expired or already used. Links last 24 hours and work once.</p>
         <div className="mt-8">
           <ButtonLink href="/signup">Start again</ButtonLink>
@@ -51,7 +51,7 @@ export function VerifyFlow() {
   return (
     <>
       <p className="eyebrow">Step 3 of 3</p>
-      <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">{done ? "Workspace ready." : "Provisioning the database."}</h1>
+      <h1 className="type-display mt-4 text-[2.25rem] sm:text-[3.375rem]">{done ? "Workspace ready." : "Provisioning the database."}</h1>
       <ol className="mt-10 border-y border-line" aria-live="polite">
         {order.map((s) => {
           const idx = order.indexOf(s);

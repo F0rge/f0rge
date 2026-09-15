@@ -1,4 +1,3 @@
-import { MailCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -9,19 +8,16 @@ export const metadata: Metadata = { title: "Check your email" };
 export default async function CheckEmailPage({ searchParams }: { searchParams: Promise<{ email?: string; id?: string }> }) {
   const { email, id } = await searchParams;
   return (
-    <section className="mx-auto max-w-2xl px-4 py-16 sm:px-8 sm:py-24">
-      <span className="grid h-12 w-12 place-items-center bg-ink text-white">
-        <MailCheck size={22} />
-      </span>
-      <p className="eyebrow mt-8">Step 2 of 3</p>
-      <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">Open the email we sent.</h1>
-      <p className="mt-5 text-base leading-relaxed text-muted sm:text-lg">
-        Verification goes to <strong className="font-medium text-ink">{email ?? "your email"}</strong>. The link lasts 24 hours and
-        works once. Until then there is no database.
+    <section className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-8 sm:py-24">
+      <p className="eyebrow">Step 2 of 3</p>
+      <h1 className="type-display mt-4 text-[2.25rem] sm:text-[3.375rem]">Open the email we sent.</h1>
+      <p className="mt-5 text-base leading-relaxed text-muted">
+        Verification goes to <strong className="font-medium text-ink">{email ?? "your email"}</strong>. The link lasts 24 hours
+        and works once. Until then there is no database.
       </p>
       <div className="mt-8 border border-line bg-paper-2 p-6 text-sm leading-relaxed text-muted">
         <p>Not in the inbox after a minute — check spam, then resend. Resend is rate-limited.</p>
-        <div className="mt-4 flex flex-wrap gap-0">
+        <div className="mt-4 flex flex-wrap">
           <ButtonLink href={`/signup/check-email?email=${encodeURIComponent(email ?? "")}&id=${id ?? ""}&resent=1`} variant="secondary">
             Resend link
           </ButtonLink>

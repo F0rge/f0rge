@@ -5,19 +5,20 @@ import { site } from "@/lib/site";
 
 export function SiteFooter() {
   return (
-    <footer className="bg-ink text-white">
-      <div className="mx-auto grid max-w-[99rem] gap-10 px-4 py-12 sm:px-8 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
+    <footer className="border-t border-[#393939] bg-ink text-white">
+      <div className="page-wrap grid gap-10 py-12 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
         <div>
           <Wordmark inverted />
-          <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/70">{site.tagline}</p>
-          <p className="mt-6 text-xs text-white/50">Amounts in ZAR. VAT at 15%. Hosting is outside South Africa.</p>
+          <p className="mt-4 max-w-xs text-sm leading-relaxed text-[#c6c6c6]">{site.tagline}</p>
+          <p className="mt-6 text-xs text-[#8d8d8d]">Amounts in ZAR. VAT at 15%. Hosting is in the United States.</p>
         </div>
         <FooterCol
           title="Product"
           links={[
-            { href: "/#product", label: "Stock & warehouse" },
+            { href: "/#product", label: "Stock and warehouse" },
             { href: "/#product", label: "Till, layby, quotes" },
-            { href: "/#product", label: "Books & VAT201" },
+            { href: "/#product", label: "Books and VAT201" },
+            { href: "/#company", label: "Roles and documents" },
             { href: "/#isolation", label: "Database per company" },
           ]}
         />
@@ -38,12 +39,12 @@ export function SiteFooter() {
           ]}
         />
       </div>
-      <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-[99rem] flex-col gap-2 px-4 py-4 text-xs text-white/50 sm:flex-row sm:justify-between sm:px-8">
+      <div className="border-t border-[#393939]">
+        <div className="page-wrap flex flex-col gap-2 py-4 text-xs text-[#8d8d8d] sm:flex-row sm:justify-between">
           <span>
-            © {new Date().getFullYear()} {site.name}. Placeholder brand — name pending.
+            © {new Date().getFullYear()} {site.name}. Each company is the responsible party.
           </span>
-          <span>Each company is the responsible party. We operate the software on its instructions.</span>
+          <span>We operate the software on the company’s instructions.</span>
         </div>
       </div>
     </footer>
@@ -53,11 +54,11 @@ export function SiteFooter() {
 function FooterCol({ title, links }: { title: string; links: { href: string; label: string }[] }) {
   return (
     <div>
-      <h3 className="text-xs font-medium uppercase tracking-[0.16em] text-white/50">{title}</h3>
+      <h3 className="text-xs font-normal uppercase tracking-[0.16em] text-[#8d8d8d]">{title}</h3>
       <ul className="mt-4 space-y-2">
         {links.map((l) => (
           <li key={l.label}>
-            <Link href={l.href} className="text-sm text-white/80 hover:text-white hover:underline">
+            <Link href={l.href} className="text-sm text-[#c6c6c6] hover:text-white hover:underline">
               {l.label}
             </Link>
           </li>

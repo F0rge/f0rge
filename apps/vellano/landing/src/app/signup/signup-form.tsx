@@ -103,7 +103,7 @@ export function SignupForm() {
     <div className="mt-12 grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14">
       <form onSubmit={onSubmit} noValidate className="border border-line bg-white p-6 sm:p-8">
         <fieldset className="space-y-6">
-          <legend className="font-display text-2xl">The company</legend>
+          <legend className="text-2xl font-light">The company</legend>
           <TextField
             label="Legal company name"
             hint="As registered with CIPC, e.g. Acme (Pty) Ltd"
@@ -132,7 +132,7 @@ export function SignupForm() {
         </fieldset>
 
         <fieldset className="mt-10 space-y-6">
-          <legend className="font-display text-2xl">You</legend>
+          <legend className="text-2xl font-light">You</legend>
           <TextField
             label="Your full name"
             value={values.ownerName}
@@ -165,7 +165,7 @@ export function SignupForm() {
         </fieldset>
 
         <fieldset className="mt-10 space-y-4">
-          <legend className="font-display text-2xl">Two confirmations</legend>
+          <legend className="text-2xl font-light">Two confirmations</legend>
           <CheckField checked={authorised} onChange={setAuthorised}>
             I am authorised to register <strong className="font-medium text-ink">{companyLabel}</strong> and act on its behalf.
           </CheckField>
@@ -212,13 +212,13 @@ function Preview({ slug, company, owner, legal }: { slug: string; company: strin
             </span>
           </div>
           <div className="p-5">
-            <div className="font-display text-2xl leading-tight">{company === "your company" ? "Your company" : company}</div>
+            <div className="text-2xl font-light leading-tight">{company === "your company" ? "Your company" : company}</div>
             <div className="mt-1 text-xs text-muted">{legal || "Legal name appears on invoices"}</div>
             <div className="mt-5 grid grid-cols-3 gap-2">
               {["Open orders", "Stock", "Cash"].map((k) => (
                 <div key={k} className="border border-line bg-paper-2 p-2.5">
                   <div className="text-[10px] text-muted">{k}</div>
-                  <div className="mt-1 h-4 w-10 rounded bg-paper-3" />
+                  <div className="mt-1 h-4 w-10 bg-paper-3" />
                 </div>
               ))}
             </div>
@@ -241,7 +241,7 @@ function Preview({ slug, company, owner, legal }: { slug: string; company: strin
 }
 
 const inputClass =
-  "mt-2 w-full border border-line bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted/60 focus:border-interactive aria-[invalid=true]:border-danger";
+  "mt-2 h-10 w-full border-0 border-b border-field bg-paper-2 px-4 text-sm text-ink outline-none placeholder:text-muted focus:border-b-2 focus:border-interactive aria-[invalid=true]:border-danger";
 
 function TextField({
   label,
@@ -303,9 +303,9 @@ function SlugField({ value, onChange, error, ok }: { value: string; onChange: (v
         Workspace address <span className="text-danger">*</span>
       </label>
       <div
-        className={`mt-2 flex items-stretch overflow-hidden border bg-white focus-within:border-interactive ${error ? "border-danger" : "border-line"}`}
+        className={`mt-2 flex h-10 items-stretch bg-paper-2 focus-within:shadow-[inset_0_-2px_0_0_#0f62fe] ${error ? "shadow-[inset_0_-2px_0_0_#da1e28]" : ""}`}
       >
-        <span className="hidden items-center border-r border-line bg-paper px-3 font-mono text-sm text-muted sm:flex">https://</span>
+        <span className="hidden items-center border-r border-line px-3 font-mono text-sm text-muted sm:flex">https://</span>
         <input
           id={id}
           value={value}
@@ -314,10 +314,10 @@ function SlugField({ value, onChange, error, ok }: { value: string; onChange: (v
           autoCapitalize="none"
           aria-invalid={Boolean(error)}
           aria-describedby={`${id}-hint ${error ? `${id}-err` : ""}`}
-          className="min-w-0 flex-1 bg-transparent px-4 py-3 font-mono text-base outline-none"
+          className="min-w-0 flex-1 bg-transparent px-4 font-mono text-sm outline-none"
           placeholder="acme"
         />
-        <span className="flex items-center border-l border-line bg-paper px-3 font-mono text-sm text-muted">.{site.domain}</span>
+        <span className="flex items-center border-l border-line px-3 font-mono text-sm text-muted">.{site.domain}</span>
       </div>
       <p id={`${id}-hint`} className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
         {ok && value ? <Check size={14} className="text-moss" aria-hidden /> : null}
@@ -372,7 +372,7 @@ function PasswordField({
           type="button"
           onClick={onToggle}
           aria-label={show ? "Hide password" : "Show password"}
-          className="absolute right-2 top-1/2 mt-1 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-muted hover:bg-paper-2"
+          className="absolute right-0 top-1/2 mt-1 grid h-10 w-10 -translate-y-1/2 place-items-center text-muted hover:bg-paper-3"
         >
           {show ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
@@ -397,7 +397,7 @@ function PasswordField({
 function CheckField({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
   const id = useId();
   return (
-    <label htmlFor={id} className="flex cursor-pointer items-start gap-3 border border-line bg-white p-4 text-sm leading-relaxed text-ink-2 has-[:checked]:border-ink">
+    <label htmlFor={id} className="flex cursor-pointer items-start gap-3 border border-line bg-paper-2 p-4 text-sm leading-relaxed text-ink-2 has-[:checked]:bg-white">
       <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-ink" />
       <span>{children}</span>
     </label>

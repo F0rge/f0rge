@@ -1,3 +1,4 @@
+import { CompanySetup } from "@/components/company-setup";
 import { CtaBand } from "@/components/cta-band";
 import { Faq } from "@/components/faq";
 import { Hero } from "@/components/hero";
@@ -14,8 +15,9 @@ export default function HomePage() {
     <>
       <Hero />
       <SaleMoves />
-      <Isolation />
       <Pillars />
+      <Isolation />
+      <CompanySetup />
       <SouthAfrica />
       <OnboardingSteps />
       <Highlights />

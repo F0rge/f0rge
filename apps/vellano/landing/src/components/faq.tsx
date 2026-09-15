@@ -9,8 +9,12 @@ const items = [
     a: "No. Each company is a Postgres database and a hostname. Requests that cannot be resolved to a tenant return 404. A cookie from another hostname does not open yours.",
   },
   {
-    q: "Can trade customers log in?",
-    a: "On your hostname, with a separate session cookie. They see catalogue at their prices and place draft sales orders. Staff tokens and customer tokens are not interchangeable.",
+    q: "Can warehouse staff sign in without seeing cost or the VAT201?",
+    a: "Yes. Permissions are keys on the login. Warehouse, till, and books are separate. Trade customers use a different cookie on the same host; staff and customer tokens are not interchangeable.",
+  },
+  {
+    q: "What posts when a customer pays a deposit?",
+    a: "GL 2300 Customer deposits. The remainder tax invoice later moves the balance. The VAT201 draft sees both when they belong on it.",
   },
   {
     q: "What does it cost?",
@@ -28,27 +32,25 @@ const items = [
 
 export function Faq() {
   return (
-    <section id="faq" className="scroll-mt-16 border-t border-line">
-      <div className="mx-auto max-w-[99rem] px-4 py-16 sm:px-8 sm:py-20 lg:grid lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-16">
+    <section id="faq" className="scroll-mt-16 border-t border-line bg-paper-2">
+      <div className="page-wrap py-16 sm:py-20 lg:grid lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-16">
         <Reveal>
           <SectionHeading
-            number="07"
+            number="08"
             eyebrow="Questions"
-            title="The things people ask before they type a company name."
+            title="Before you type a company name."
             lede="If a sentence would be true of any back-office product, it is not on this list."
           />
         </Reveal>
-        <div className="mt-10 divide-y divide-line border-y border-line lg:mt-0">
-          {items.map((it, i) => (
-            <Reveal key={it.q} delay={i * 0.03}>
-              <details className="group py-5 [&_summary::-webkit-details-marker]:hidden">
-                <summary className="flex cursor-pointer list-none items-start justify-between gap-6 text-left text-lg font-medium sm:text-xl">
-                  <span>{it.q}</span>
-                  <Plus aria-hidden size={18} className="mt-1 shrink-0 text-interactive transition-transform duration-200 group-open:rotate-45" />
-                </summary>
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted sm:text-base">{it.a}</p>
-              </details>
-            </Reveal>
+        <div className="mt-10 divide-y divide-line border-y border-line bg-white px-4 lg:mt-0">
+          {items.map((it) => (
+            <details key={it.q} className="group py-5 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-6 text-left text-lg font-normal">
+                <span>{it.q}</span>
+                <Plus aria-hidden size={18} className="mt-1 shrink-0 text-interactive transition-transform duration-200 group-open:rotate-45" />
+              </summary>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">{it.a}</p>
+            </details>
           ))}
         </div>
       </div>

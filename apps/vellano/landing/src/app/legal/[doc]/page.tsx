@@ -50,11 +50,11 @@ export default async function LegalPage({ params }: { params: Promise<{ doc: str
   const entry = docs[doc as Doc];
   if (!entry) notFound();
   return (
-    <article className="mx-auto max-w-2xl px-5 py-20 sm:px-8 sm:py-28">
+    <article className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-8 sm:py-24">
       <div className="inline-flex items-center gap-2 border border-line bg-paper-2 px-3 py-1 text-xs text-muted">
         Draft · version {site.privacyVersion} · legal review pending
       </div>
-      <h1 className="mt-6 font-serif text-4xl leading-tight sm:text-5xl">{entry.title}</h1>
+      <h1 className="type-display mt-6 text-[2.25rem] sm:text-[3.375rem]">{entry.title}</h1>
       <div className="mt-8 space-y-5 text-base leading-relaxed text-ink-2">
         {entry.body.map((p) => (
           <p key={p.slice(0, 32)}>{p}</p>

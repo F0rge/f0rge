@@ -4,38 +4,42 @@ import { SectionHeading } from "@/components/section-heading";
 export function Pillars() {
   return (
     <section id="product" className="scroll-mt-16">
-      <div className="mx-auto max-w-[99rem] px-4 py-16 sm:px-8 sm:py-20">
+      <div className="page-wrap py-16 sm:py-20">
         <Reveal>
           <SectionHeading
-            number="02"
+            number="01"
             eyebrow="What posts"
-            title="Three jobs that already share a chart of accounts."
-            lede="Stock movements, till takes, and invoices are not integrations stitched at month-end. They are rows in the same ledger. If you only need a catalogue website, this will feel heavy. That is honest."
+            title="Stock, till, and books already share a chart of accounts."
+            lede="Built for companies that buy stock, hold it at locations, and sell it on account or at a till. If you only need a catalogue website, this will feel heavy."
           />
         </Reveal>
         <div className="mt-12 grid gap-px bg-line lg:grid-cols-3">
           <Reveal>
             <Card
-              title="Stock & warehouse"
-              body="Locations, transfers, stocktakes, landed cost from the purchase order. Pick, pack, load, deliver on a phone — the warehouse console is the same data as the desk, not a parallel app with its own quantities."
-              facts={["Bin-level if you set bins. Location-level if you do not.", "A hold from a sales order is visible to the next picker.", "Short-picks are recorded. They do not silently become ‘delivered’."]}
+              title="Stock and warehouse"
+              body="Locations, transfers, stocktakes, landed cost from the purchase order. Pick, pack, load, deliver on a phone — the warehouse console is the same quantities as the desk."
+              facts={[
+                "Bin-level if you set bins. Location-level if you do not.",
+                "A hold from a sales order is visible to the next picker.",
+                "A short pick is recorded. It does not become ‘delivered’.",
+              ]}
             >
               <StockMock />
             </Card>
           </Reveal>
-          <Reveal delay={0.05}>
+          <Reveal delay={0.04}>
             <Card
               title="Sell"
-              body="Till with cash-up. Layby. Quotes that become sales orders with stock held. Trade customers get a login on your hostname and place orders that land as drafts — not a forwarded WhatsApp screenshot."
-              facts={["Walk-in and account customers on the same till.", "Deposit on GL 2300, not a note in the comment field."]}
+              body="Till with cash-up. Layby. Quotes that become sales orders with stock held. Trade customers log in on your hostname and place orders that land as drafts."
+              facts={["Walk-in and account customers on the same till.", "Deposit on GL 2300, not a note in a comment field."]}
             >
               <TillMock />
             </Card>
           </Reveal>
-          <Reveal delay={0.1}>
+          <Reveal delay={0.08}>
             <Card
               title="Books"
-              body="Invoices, bills, credit notes, bank import, aged AR/AP. The VAT201 is a draft you copy into eFiling. We do not file it, and we do not pretend to."
+              body="Invoices, bills, credit notes, bank import, aged AR/AP. The VAT201 is a draft you copy into eFiling. We do not file it."
               facts={["15% on the line. Credit notes reverse the tax, not just the total.", "Opening balances and Cin7/Xero-shaped CSVs after you are in."]}
             >
               <LedgerMock />
@@ -51,7 +55,7 @@ function Card({ title, body, facts, children }: { title: string; body: string; f
   return (
     <article className="flex h-full flex-col bg-white p-6 sm:p-8">
       <div className="border border-line bg-paper-2 p-4">{children}</div>
-      <h3 className="mt-6 text-xl font-medium">{title}</h3>
+      <h3 className="mt-6 text-xl font-normal">{title}</h3>
       <p className="mt-3 text-sm leading-relaxed text-muted">{body}</p>
       <ul className="mt-4 space-y-2 text-sm text-ink-2">
         {facts.map((b) => (

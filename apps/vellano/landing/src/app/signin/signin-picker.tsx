@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
 
@@ -22,10 +21,10 @@ export function SigninPicker() {
         if (ok) window.location.assign(`https://${workspaceUrl(slug)}/login`);
       }}
     >
-      <label htmlFor={id} className="block text-sm font-medium">
+      <label htmlFor={id} className="block text-sm">
         Company hostname
       </label>
-      <div className="mt-2 flex items-stretch overflow-hidden border border-line bg-white focus-within:border-interactive">
+      <div className="mt-2 flex h-10 items-stretch bg-paper-2 focus-within:shadow-[inset_0_-2px_0_0_#0f62fe]">
         <input
           id={id}
           value={value}
@@ -33,13 +32,13 @@ export function SigninPicker() {
           placeholder="yourcompany"
           autoCapitalize="none"
           spellCheck={false}
-          className="min-w-0 flex-1 bg-transparent px-4 py-3 font-mono text-base outline-none"
+          className="min-w-0 flex-1 bg-transparent px-4 text-sm outline-none"
         />
-        <span className="flex items-center border-l border-line bg-paper-2 px-3 font-mono text-sm text-muted">.{site.domain}</span>
+        <span className="flex items-center border-l border-line px-3 font-mono text-sm text-muted">.{site.domain}</span>
       </div>
       <div className="mt-6 flex flex-wrap items-center gap-4">
         <Button type="submit" disabled={!ok}>
-          Go to login <ArrowRight size={16} />
+          Go to login
         </Button>
         <span className="text-sm text-muted">
           No company yet?{" "}

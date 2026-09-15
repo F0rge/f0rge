@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, IBM_Plex_Serif } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
 import { SiteFooter } from "@/components/footer";
 import { SiteNav } from "@/components/nav";
@@ -10,16 +10,15 @@ import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["300", "400", "500", "600"],
   variable: "--font-plex-sans",
   display: "swap",
 });
 
-const plexSerif = IBM_Plex_Serif({
+const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
-  weight: ["400", "600"],
-  style: ["normal", "italic"],
-  variable: "--font-plex-serif",
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
   display: "swap",
 });
 
@@ -33,11 +32,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-ZA" className={`${plexSans.variable} ${plexSerif.variable}`}>
+    <html lang="en-ZA" className={`${plexSans.variable} ${plexMono.variable}`}>
       <body className="flex min-h-dvh flex-col">
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:bg-interactive focus:px-3 focus:py-2 focus:text-white"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:bg-interactive focus:px-4 focus:py-3 focus:text-white"
         >
           Skip to content
         </a>
