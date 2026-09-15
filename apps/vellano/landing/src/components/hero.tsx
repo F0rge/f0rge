@@ -9,9 +9,9 @@ export function Hero() {
         <Reveal className="lg:col-span-6">
           <h1 className="type-display text-[2.5rem] sm:text-[3.75rem]">Company software, built for humans.</h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-            Most teams sell in one place, pick in another, and close the books in a third — then spend Friday arguing which
-            number is real. Here they are the same number. What you sold is what you held. What you delivered is what you
-            invoiced.
+            Selling, picking, and closing the books shouldn’t be three jobs that meet once a month. Here a quote holds the
+            stock. The warehouse picks it, packs it, and sends it. The tax invoice already matches — and so does the VAT201
+            you copy into eFiling.
           </p>
           <div className="mt-10 flex flex-wrap gap-0">
             <ButtonLink href="/signup">Create a company workspace</ButtonLink>
