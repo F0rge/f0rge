@@ -5,13 +5,13 @@ import { WorkspaceMock } from "@/components/workspace-mock";
 export function Hero() {
   return (
     <section className="border-b border-line bg-paper">
-      <div className="page-wrap grid gap-12 py-20 lg:grid-cols-16 lg:items-center lg:gap-12 lg:py-28">
+      <div className="page-wrap grid gap-12 py-20 lg:grid-cols-16 lg:items-start lg:gap-12 lg:py-28">
         <Reveal className="lg:col-span-6">
           <h1 className="type-display text-[2.5rem] sm:text-[3.75rem]">Company software, built for humans.</h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-            If the catalogue, the warehouse, and the books are three products, month-end is a reconstruction. Here an
-            accepted quote holds stock at a location. Pick, pack, load, and deliver are named states — skip one and the next
-            is blocked. The tax invoice reads that ledger. So does the VAT201 draft.
+            Most teams sell in one place, pick in another, and close the books in a third — then spend Friday arguing which
+            number is real. Here they are the same number. What you sold is what you held. What you delivered is what you
+            invoiced.
           </p>
           <div className="mt-10 flex flex-wrap gap-0">
             <ButtonLink href="/signup">Create a company workspace</ButtonLink>
