@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BOOKS_NAV_ITEMS,
   isAdminPath,
   isBooksPath,
   isCatalogueMenuPath,
@@ -44,6 +45,9 @@ describe("nav path helpers", () => {
     expect(isBooksPath("/invoices/abc")).toBe(true);
     expect(isBooksPath("/ledger")).toBe(true);
     expect(isBooksPath("/books-periods")).toBe(true);
+    expect(isBooksPath("/contacts")).toBe(false);
+    const booksHrefs: string[] = BOOKS_NAV_ITEMS.map((item) => item.href);
+    expect(booksHrefs).not.toContain("/contacts");
   });
 
   it("labels audit and books periods nav paths", () => {

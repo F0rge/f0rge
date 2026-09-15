@@ -429,13 +429,15 @@ function CataloguePageContent() {
                             {row.cells.map((cell) => {
                               if (cell.info.header === "select" && entry) {
                                 return (
-                                  <TableCell key={cell.id}>
+                                  <TableCell
+                                    key={cell.id}
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
                                     <Checkbox
                                       id={`catalogue-select-${entry.id}`}
                                       labelText={`Select ${entry.our_ref}`}
                                       hideLabel
                                       checked={selectedIds.has(entry.id)}
-                                      onClick={(event) => event.stopPropagation()}
                                       onChange={() => toggleSelect(entry.id)}
                                     />
                                   </TableCell>
@@ -496,7 +498,11 @@ function CataloguePageContent() {
                               }
                               if (cell.info.header === "actions" && entry) {
                                 return (
-                                  <TableCell key={cell.id} className="vellano-catalogue-actions-cell">
+                                  <TableCell
+                                    key={cell.id}
+                                    className="vellano-catalogue-actions-cell"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
                                     <div className="vellano-catalogue-row-actions">
                                       <Button
                                         type="button"

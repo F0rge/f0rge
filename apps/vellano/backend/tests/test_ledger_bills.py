@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from httpx import AsyncClient
 
-MINIMAL_PDF = b"%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
+from tests.pdf_fixture import MINIMAL_PDF, assert_pdf_openable
 
 
 async def _create_supplier(owner_client: AsyncClient) -> str:
@@ -67,4 +67,5 @@ async def test_bill_attachment_upload_and_download(owner_client: AsyncClient) ->
     assert download_resp.status_code == 200
     assert download_resp.headers["content-type"] == "application/pdf"
     assert download_resp.content == MINIMAL_PDF
+    assert_pdf_openable(download_resp.content)
     assert "attachment" in download_resp.headers.get("content-disposition", "")

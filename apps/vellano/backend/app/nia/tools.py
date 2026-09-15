@@ -68,7 +68,6 @@ ALLOWED_NAV_PATHS: frozenset[str] = frozenset(
         "/customers",
         "/ledger",
         "/journals",
-        "/contacts",
         "/invoices",
         "/repeating-invoices",
         "/credit-notes",

@@ -13,7 +13,7 @@ from pypdf import PdfReader
 from app.services.auth import JWT_COOKIE_NAME
 from tests.conftest import assert_vellano_session_cookie
 
-MINIMAL_PDF = b"%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
+from tests.pdf_fixture import MINIMAL_PDF, assert_pdf_openable
 
 
 async def _create_supplier(client: AsyncClient, name: str = "PO Supplier") -> str:
@@ -193,6 +193,7 @@ async def test_packing_sheet_pdf_content(owner_client: AsyncClient) -> None:
     sheet_resp = await owner_client.get(f"/api/v1/purchase-orders/{po_id}/packing-sheet")
     assert sheet_resp.status_code == 200
     assert sheet_resp.headers["content-type"].startswith("application/pdf")
+    assert_pdf_openable(sheet_resp.content)
 
     text = _pdf_text(sheet_resp.content)
     assert "Vellano" in text

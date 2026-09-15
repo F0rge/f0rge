@@ -79,7 +79,6 @@ from app.schemas.account import AccountCreate
 from app.schemas.bank_rule import BankRuleCreate
 from app.schemas.bill import BillCreate
 from app.schemas.category_account_map import CategoryAccountMapUpsert
-from app.schemas.contact import ContactCreate
 from app.schemas.credit_note import CreditNoteCreate
 from app.schemas.customer_crm import CustomerCrmCreate
 from app.schemas.delivery import DeliveryCreate
@@ -108,7 +107,6 @@ from app.services.bank_imports import BankImportService
 from app.services.bank_rules import BankRuleService
 from app.services.bills import BillService
 from app.services.category_maps import CategoryMapService
-from app.services.contacts import ContactService
 from app.services.cost_audit import CostAuditService
 from app.services.credit_notes import CreditNoteService
 from app.services.customers_crm import CustomersCrmService
@@ -506,14 +504,6 @@ async def _create_account(deps: NiaDeps, data: AccountCreate) -> Any:
 
 async def _update_account(deps: NiaDeps, data: AccountUpdateArgs) -> Any:
     return await AccountService(deps.db).update(data.account_id, data)
-
-
-async def _list_contacts(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
-    return await ContactService(deps.db).list()
-
-
-async def _create_contact(deps: NiaDeps, data: ContactCreate) -> Any:
-    return await ContactService(deps.db).create_customer(data)
 
 
 async def _list_invoices(deps: NiaDeps, data: NiaEmptyArgs) -> Any:
@@ -976,8 +966,6 @@ CATALOG: tuple[NiaAction, ...] = (
     _a("list_accounts", "List accounts", None, False, NiaEmptyArgs, _list_accounts),
     _a("create_account", "Create account", _BOOKS, True, AccountCreate, _create_account),
     _a("update_account", "Update account", _BOOKS, True, AccountUpdateArgs, _update_account),
-    _a("list_contacts", "List contacts", None, False, NiaEmptyArgs, _list_contacts),
-    _a("create_contact", "Create contact", _BOOKS, True, ContactCreate, _create_contact),
     _a("list_invoices", "List invoices", None, False, NiaEmptyArgs, _list_invoices),
     _a("get_invoice", "Get invoice", None, False, InvoiceIdArgs, _get_invoice),
     _a("create_invoice", "Create invoice", _BOOKS, True, InvoiceCreate, _create_invoice),

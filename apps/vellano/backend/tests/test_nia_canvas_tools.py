@@ -226,7 +226,7 @@ async def test_replace_dining_with_overdue_invoices_table(
     owner_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    customer = await owner_client.post("/api/v1/contacts", json={"name": "Canvas Overdue Co"})
+    customer = await owner_client.post("/api/v1/customers", json={"name": "Canvas Overdue Co"})
     assert customer.status_code == 201
     invoice = await owner_client.post(
         "/api/v1/invoices",

@@ -44,7 +44,7 @@ async def test_opening_qty_two_counts_as_low_stock(owner_client: AsyncClient) ->
 
 async def test_draft_return_increments_open_returns_count(owner_client: AsyncClient) -> None:
     customer_resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Home KPI Return Customer"},
     )
     assert customer_resp.status_code == 201

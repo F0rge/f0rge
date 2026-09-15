@@ -66,9 +66,9 @@ EUR_FX = Decimal("19.50")
 
 
 def _pdf_upload(filename: str) -> UploadFile:
-    from app.services.playground_seed import MINIMAL_PDF
+    from app.services.placeholder_pdf import PLACEHOLDER_PDF
 
-    return UploadFile(file=BytesIO(MINIMAL_PDF), filename=filename)
+    return UploadFile(file=BytesIO(PLACEHOLDER_PDF), filename=filename)
 
 
 def _utc(days_ago: int) -> datetime.datetime:

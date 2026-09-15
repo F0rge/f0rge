@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 import boto3
@@ -43,3 +44,18 @@ read_relative = _storage.read_relative
 presigned_get_url = _storage.presigned_get_url
 is_remote_storage_ref = _storage.is_remote_storage_ref
 delete_object = _storage.delete_object
+
+
+def overwrite_bytes(storage_ref: str, data: bytes) -> None:
+    if object_storage_enabled() and not os.path.isabs(storage_ref):
+        client = _s3_client()
+        bucket = _config().bucket_name
+        if not bucket:
+            raise FileNotFoundError(storage_ref)
+        client.put_object(Bucket=bucket, Key=storage_ref, Body=data)
+        return
+    parent = os.path.dirname(storage_ref)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(storage_ref, "wb") as handle:
+        handle.write(data)

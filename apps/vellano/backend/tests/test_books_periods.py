@@ -18,7 +18,7 @@ from tests.test_vat201_periods import _create_period as _create_vat201_period
 
 
 async def _create_named_customer(owner_client: AsyncClient, name: str) -> str:
-    resp = await owner_client.post("/api/v1/contacts", json={"name": name})
+    resp = await owner_client.post("/api/v1/customers", json={"name": name})
     assert resp.status_code == 201
     return resp.json()["id"]
 

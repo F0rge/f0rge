@@ -7,6 +7,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.customer import CustomerCRUD
 from app.crud.repeating_invoice import RepeatingInvoiceCRUD
 from app.models.repeating_invoice import RepeatingInvoice, RepeatingInvoiceLine
 from app.schemas.invoice import InvoiceCreate, InvoiceLineCreate
@@ -17,7 +18,6 @@ from app.schemas.repeating_invoice import (
     RepeatingInvoiceRunResponse,
     RepeatingInvoiceUpdate,
 )
-from app.services.contacts import ContactService
 from app.services.invoices import InvoiceService
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -37,7 +37,7 @@ class RepeatingInvoiceService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.crud = RepeatingInvoiceCRUD(db)
-        self.contact_service = ContactService(db)
+        self.customer_crud = CustomerCRUD(db)
         self.invoice_service = InvoiceService(db)
 
     async def list(self) -> list[RepeatingInvoiceResponse]:
@@ -49,7 +49,8 @@ class RepeatingInvoiceService:
     async def create(
         self, data: RepeatingInvoiceCreate, user_id: uuid.UUID
     ) -> RepeatingInvoiceResponse:
-        await self.contact_service.get_customer(data.customer_id)
+        if await self.customer_crud.get_by_id(data.customer_id) is None:
+            raise NotFoundError("Customer not found")
         schedule = RepeatingInvoice(
             customer_id=data.customer_id,
             name=data.name,

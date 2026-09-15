@@ -81,7 +81,7 @@ def _thread_text_blob(thread_json: dict) -> str:
 
 
 async def _create_customer(owner_client: AsyncClient, name: str) -> str:
-    resp = await owner_client.post("/api/v1/contacts", json={"name": name})
+    resp = await owner_client.post("/api/v1/customers", json={"name": name})
     assert resp.status_code == 201
     return resp.json()["id"]
 

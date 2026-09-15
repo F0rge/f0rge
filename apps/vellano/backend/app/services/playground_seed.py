@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import uuid
 from decimal import Decimal
@@ -14,15 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud.bill import BillCRUD
 from app.crud.location import LocationCRUD
+from app.crud.proforma import ProformaCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.supplier import SupplierCRUD
 from app.crud.user import UserCRUD
 from app.models.customer import Customer
 from app.models.layby import Layby
+from app.models.purchase_order import LandingBill
 from app.models.tax_invoice import InvoiceLine
 from app.schemas.bank_import import BankImportMatchRequest
 from app.schemas.bill import BillCreate, BillLineCreate
-from app.schemas.contact import ContactCreate
 from app.schemas.customer_crm import CustomerCrmCreate
 from app.schemas.invoice import InvoiceCreate, InvoiceLineCreate
 from app.schemas.layby import LaybyCreate, LaybyLineCreate
@@ -39,12 +41,13 @@ from app.schemas.transfer import (
 )
 from app.services.bank_imports import BankImportService
 from app.services.bills import BillService
-from app.services.contacts import ContactService
 from app.services.customers_crm import CustomersCrmService
 from app.services.invoices import InvoiceService
 from app.services.laybys import LaybysService
 from app.services.locations import LocationSeedService
 from app.services.payments import PaymentService
+from app.services.object_storage import overwrite_bytes, read_bytes
+from app.services.placeholder_pdf import PLACEHOLDER_PDF, is_openable_pdf
 from app.services.proformas import ProformaService
 from app.services.purchase_orders import PurchaseOrderService
 from app.services.skus import SkuService
@@ -54,7 +57,7 @@ from app.services.transfers import TransferService
 from app.services.vat import ex_to_inc
 from f0rge_core.exceptions import NotFoundError
 
-MINIMAL_PDF = b"%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
+MINIMAL_PDF = PLACEHOLDER_PDF
 
 PLAYGROUND_SUPPLIER_NAME = "Playground Imports"
 MARKER_SKU_REF = "PG-TABLE"
@@ -89,6 +92,7 @@ class PlaygroundSeedService:
             return
         if not await self._already_seeded():
             await self._seed()
+        await self._repair_stub_pdfs()
         await self._seed_demo_pack()
         await self._seed_sofa_catalog_pack()
         from app.services.playground_bi_pack import seed_bi_pack
@@ -102,6 +106,27 @@ class PlaygroundSeedService:
             return True
         return False
 
+    async def _overwrite_if_stub(self, storage_key: Optional[str], pdf: bytes) -> None:
+        if not storage_key:
+            return
+        try:
+            data = await asyncio.to_thread(read_bytes, storage_key)
+        except FileNotFoundError:
+            return
+        if is_openable_pdf(data):
+            return
+        await asyncio.to_thread(overwrite_bytes, storage_key, pdf)
+
+    async def _repair_stub_pdfs(self) -> None:
+        pdf = PLACEHOLDER_PDF
+        for proforma in await ProformaCRUD(self.db).list_all():
+            await self._overwrite_if_stub(proforma.pdf_storage_key, pdf)
+        landing = await self.db.execute(select(LandingBill))
+        for bill in landing.scalars().all():
+            await self._overwrite_if_stub(bill.pdf_storage_key, pdf)
+        for bill in await BillCRUD(self.db).list_all():
+            await self._overwrite_if_stub(bill.pdf_storage_key, pdf)
+
     async def _seed(self) -> None:
         owner = await self.user_crud.get_by_email(settings.seed_owner_email)
         if owner is None:
@@ -114,7 +139,7 @@ class PlaygroundSeedService:
         proforma_service = ProformaService(self.db)
         po_service = PurchaseOrderService(self.db)
         transfer_service = TransferService(self.db)
-        contact_service = ContactService(self.db)
+        contact_service = CustomersCrmService(self.db)
         invoice_service = InvoiceService(self.db)
         till_orchestrator = TillOrchestrator(self.db)
         bill_service = BillService(self.db)
@@ -240,9 +265,7 @@ class PlaygroundSeedService:
         # Services that nest commit_refresh inside unit_of_work need an
         # already-open transaction. A prior unit_of_work commit leaves none.
         await self._ensure_transaction()
-        customer = await contact_service.create_customer(
-            ContactCreate(name=PLAYGROUND_CUSTOMER_NAME)
-        )
+        customer = await contact_service.create(CustomerCrmCreate(name=PLAYGROUND_CUSTOMER_NAME))
         await self._ensure_transaction()
         invoice = await invoice_service.create(
             InvoiceCreate(

@@ -15,7 +15,7 @@ SAMPLE_CSV = """Date,Description,Reference,Amount
 
 async def _create_customer_invoice(owner_client: AsyncClient) -> dict:
     customer_resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Bank Customer"},
     )
     assert customer_resp.status_code == 201

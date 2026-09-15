@@ -6,6 +6,7 @@ import {
   DataTable,
   InlineNotification,
   Modal,
+  Pagination,
   Select,
   SelectItem,
   Stack,
@@ -40,6 +41,7 @@ import {
   type UpsertCategoryMapPayload,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { CLIENT_PAGE_SIZES, useClientPagination } from "@/lib/use-client-pagination";
 
 const TABLE_HEADERS = [
   { key: "code", header: "Code" },
@@ -120,6 +122,8 @@ export default function ChartOfAccountsPage() {
   const [mapMode, setMapMode] = useState<"add" | "edit">("add");
   const [mapForm, setMapForm] = useState<UpsertCategoryMapPayload>(emptyMapForm);
   const [saving, setSaving] = useState(false);
+  const [accountSearch, setAccountSearch] = useState("");
+  const [mapSearch, setMapSearch] = useState("");
 
   const incomeAccounts = useMemo(() => accountsOfType(accounts, "income"), [accounts]);
   const expenseAccounts = useMemo(() => accountsOfType(accounts, "expense"), [accounts]);
@@ -144,7 +148,36 @@ export default function ChartOfAccountsPage() {
     }
   }, [user, loadLedger]);
 
-  const rows: AccountRow[] = accounts.map((entry) => ({
+  const filteredAccounts = useMemo(() => {
+    const query = accountSearch.trim().toLowerCase();
+    if (!query) {
+      return accounts;
+    }
+    return accounts.filter(
+      (entry) =>
+        entry.code.toLowerCase().includes(query) ||
+        entry.name.toLowerCase().includes(query) ||
+        entry.type.toLowerCase().includes(query),
+    );
+  }, [accounts, accountSearch]);
+
+  const filteredMaps = useMemo(() => {
+    const query = mapSearch.trim().toLowerCase();
+    if (!query) {
+      return maps;
+    }
+    return maps.filter(
+      (entry) =>
+        entry.category.toLowerCase().includes(query) ||
+        entry.sales_code.toLowerCase().includes(query) ||
+        entry.cogs_code.toLowerCase().includes(query),
+    );
+  }, [maps, mapSearch]);
+
+  const accountPage = useClientPagination(filteredAccounts, accountSearch);
+  const mapPage = useClientPagination(filteredMaps, mapSearch);
+
+  const rows: AccountRow[] = accountPage.pagedItems.map((entry) => ({
     id: entry.id,
     code: entry.code,
     name: entry.is_archived ? `${entry.name} (archived)` : entry.name,
@@ -154,7 +187,7 @@ export default function ChartOfAccountsPage() {
     actions: entry.id,
   }));
 
-  const mapRows: MapRow[] = maps.map((entry) => ({
+  const mapRows: MapRow[] = mapPage.pagedItems.map((entry) => ({
     id: entry.id,
     category: entry.category,
     sales_code: entry.sales_code,
@@ -293,6 +326,19 @@ export default function ChartOfAccountsPage() {
           lowContrast
         />
       ) : (
+        <div className="vellano-catalogue-panel">
+          <div className="vellano-catalogue-toolbar">
+            <div className="vellano-catalogue-toolbar__left">
+              <TextInput
+                id="accounts-search"
+                labelText="Filter accounts"
+                hideLabel
+                placeholder="Filter by code or name…"
+                value={accountSearch}
+                onChange={(event) => setAccountSearch(event.target.value)}
+              />
+            </div>
+          </div>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer title="Accounts" description="Vellano chart of accounts">
@@ -307,7 +353,12 @@ export default function ChartOfAccountsPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {tableRows.map((row) => {
+                  {tableRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={headers.length}>No accounts match the current filter.</TableCell>
+                    </TableRow>
+                  ) : (
+                  tableRows.map((row) => {
                     const account = accounts.find((entry) => entry.id === row.id);
                     return (
                       <TableRow {...getRowProps({ row })} key={row.id}>
@@ -328,12 +379,21 @@ export default function ChartOfAccountsPage() {
                         })}
                       </TableRow>
                     );
-                  })}
+                  })
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
         </DataTable>
+          <Pagination
+            page={accountPage.page}
+            pageSize={accountPage.pageSize}
+            pageSizes={[...CLIENT_PAGE_SIZES]}
+            totalItems={accountPage.totalItems}
+            onChange={accountPage.onPaginationChange}
+          />
+        </div>
       )}
 
       {!loading ? (
@@ -360,6 +420,19 @@ export default function ChartOfAccountsPage() {
               lowContrast
             />
           ) : (
+            <div className="vellano-catalogue-panel">
+              <div className="vellano-catalogue-toolbar">
+                <div className="vellano-catalogue-toolbar__left">
+                  <TextInput
+                    id="maps-search"
+                    labelText="Filter category maps"
+                    hideLabel
+                    placeholder="Filter by category or code…"
+                    value={mapSearch}
+                    onChange={(event) => setMapSearch(event.target.value)}
+                  />
+                </div>
+              </div>
             <DataTable rows={mapRows} headers={[...MAP_HEADERS]}>
               {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
                 <TableContainer title="Category maps" description="SKU category → ledger codes">
@@ -374,7 +447,12 @@ export default function ChartOfAccountsPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {tableRows.map((row) => {
+                      {tableRows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={headers.length}>No category maps match the current filter.</TableCell>
+                        </TableRow>
+                      ) : (
+                      tableRows.map((row) => {
                         const entry = maps.find((map) => map.id === row.id);
                         return (
                           <TableRow {...getRowProps({ row })} key={row.id}>
@@ -395,12 +473,21 @@ export default function ChartOfAccountsPage() {
                             })}
                           </TableRow>
                         );
-                      })}
+                      })
+                      )}
                     </TableBody>
                   </Table>
                 </TableContainer>
               )}
             </DataTable>
+              <Pagination
+                page={mapPage.page}
+                pageSize={mapPage.pageSize}
+                pageSizes={[...CLIENT_PAGE_SIZES]}
+                totalItems={mapPage.totalItems}
+                onChange={mapPage.onPaginationChange}
+              />
+            </div>
           )}
         </Stack>
       ) : null}

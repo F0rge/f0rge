@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud.customer import CustomerCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.crud.team_settings import TeamSettingsCRUD
@@ -30,7 +31,6 @@ from app.services.chart_of_accounts import (
     CODE_VAT,
     LedgerPostingService,
 )
-from app.services.contacts import ContactService
 from app.services.invoice_pdf import build_tax_invoice_pdf
 from app.services.payment_terms import compute_due_date
 from app.services.pricing import resolve_unit_ex_vat
@@ -45,7 +45,7 @@ class InvoiceService:
         self.db = db
         self.crud = TaxInvoiceCRUD(db)
         self.sku_crud = SkuCRUD(db)
-        self.contact_service = ContactService(db)
+        self.customer_crud = CustomerCRUD(db)
         self.posting = LedgerPostingService(db)
         self.category_posting = CategoryPostingService(db)
         self.events = BooksEventService(db)
@@ -71,7 +71,9 @@ class InvoiceService:
     async def create(
         self, data: InvoiceCreate, user_id: Optional[uuid.UUID] = None
     ) -> InvoiceResponse:
-        customer = await self.contact_service.get_customer(data.customer_id)
+        customer = await self.customer_crud.get_by_id(data.customer_id)
+        if customer is None:
+            raise NotFoundError("Customer not found")
         await assert_date_postable(self.db, data.issue_date)
 
         subtotal = Decimal(0)

@@ -61,7 +61,7 @@ async def _create_invoice(
     payload = {"name": "Invoice Mail Customer"}
     if email is not None:
         payload["email"] = email
-    customer = await owner_client.post("/api/v1/contacts", json=payload)
+    customer = await owner_client.post("/api/v1/customers", json=payload)
     assert customer.status_code == 201
     invoice = await owner_client.post(
         "/api/v1/invoices",

@@ -7,10 +7,12 @@ from io import BytesIO
 from httpx import AsyncClient
 from pypdf import PdfReader
 
+from tests.pdf_fixture import assert_pdf_openable
+
 
 async def _create_customer(owner_client: AsyncClient) -> str:
     resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Invoice Customer"},
     )
     assert resp.status_code == 201
@@ -63,6 +65,7 @@ async def test_create_invoice_posts_journal_and_pdf(
     pdf_resp = await owner_client.get(f"/api/v1/invoices/{body['id']}/pdf")
     assert pdf_resp.status_code == 200
     assert pdf_resp.headers["content-type"] == "application/pdf"
+    assert_pdf_openable(pdf_resp.content)
     text = _pdf_text(pdf_resp.content)
     assert "INV-0001" in text
     assert "150.00" in text

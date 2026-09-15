@@ -127,7 +127,7 @@ def _delivery_payload_invoice(invoice_id: str, location_id: str) -> dict:
 
 async def _create_customer(owner_client: AsyncClient) -> str:
     resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Delivery Layby Customer"},
     )
     assert resp.status_code == 201
@@ -173,7 +173,7 @@ async def test_unpaid_invoice_rejected(
     owner_client: AsyncClient,
 ) -> None:
     customer_resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Unpaid Delivery Customer"},
     )
     assert customer_resp.status_code == 201
