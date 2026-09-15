@@ -50,7 +50,7 @@ export default async function LegalPage({ params }: { params: Promise<{ doc: str
   const entry = docs[doc as Doc];
   if (!entry) notFound();
   return (
-    <article className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-8 sm:py-24">
+    <article className="mx-auto w-full max-w-2xl px-6 py-20 sm:px-10 sm:py-28 lg:px-16">
       <div className="inline-flex items-center gap-2 border border-line bg-paper-2 px-3 py-1 text-xs text-muted">
         Draft · version {site.privacyVersion} · legal review pending
       </div>

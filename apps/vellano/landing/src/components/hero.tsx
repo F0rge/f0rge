@@ -5,45 +5,40 @@ import { WorkspaceMock } from "@/components/workspace-mock";
 export function Hero() {
   return (
     <section className="border-b border-line bg-paper">
-      <div className="page-wrap grid gap-12 py-12 lg:grid-cols-16 lg:gap-8 lg:py-16">
+      <div className="page-wrap grid gap-12 py-20 lg:grid-cols-16 lg:items-center lg:gap-12 lg:py-28">
         <Reveal className="lg:col-span-6">
-          <p className="eyebrow">South Africa · ZAR · 15% VAT</p>
-          <h1 className="type-display mt-4 text-[2.25rem] sm:text-[3.375rem]">
-            Warehouse quantities and the VAT201 draft come from the same ledger.
-          </h1>
-          <p className="mt-5 max-w-xl text-base leading-relaxed text-muted">
+          <h1 className="type-display text-[2.5rem] sm:text-[3.75rem]">Company software, built for humans.</h1>
+          <p className="mt-6 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
             If the catalogue, the warehouse, and the books are three products, month-end is a reconstruction. Here an
             accepted quote holds stock at a location. Pick, pack, load, and deliver are named states — skip one and the next
-            is blocked. The tax invoice reads that ledger. So does the VAT201 draft. We do not file it with SARS.
+            is blocked. The tax invoice reads that ledger. So does the VAT201 draft.
           </p>
-          <div className="mt-8 flex flex-wrap">
+          <div className="mt-10 flex flex-wrap gap-0">
             <ButtonLink href="/signup">Create a company workspace</ButtonLink>
             <ButtonLink href="/#sale" variant="ghost">
               How a sale moves
             </ButtonLink>
           </div>
-          <p className="mt-4 text-sm text-muted">
-            No charge while the first companies onboard. At least 60 days&rsquo; notice before a price. Nothing is
-            provisioned until the owner verifies email.
-          </p>
         </Reveal>
-        <Reveal delay={0.06} className="lg:col-span-10">
+        <Reveal delay={0.12} className="lg:col-span-10">
           <WorkspaceMock />
         </Reveal>
       </div>
-      <dl className="grid border-t border-line sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-line">
-        {[
-          ["Isolation", "One Postgres database and hostname per company."],
-          ["Documents", "Quote → sales order → pick/pack/deliver → tax invoice."],
-          ["Books", "GL 2300 for deposits. 15% VAT on the line. VAT201 is a draft."],
-          ["In use", "Vellano is company one — own database, not a row in a shared table."],
-        ].map(([k, v]) => (
-          <div key={k} className="border-b border-line px-4 py-5 sm:px-8 lg:border-b-0">
-            <dt className="text-sm font-medium">{k}</dt>
-            <dd className="mt-1 text-sm text-muted">{v}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="border-t border-line">
+        <dl className="page-wrap grid sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-line">
+          {[
+            ["Isolation", "One Postgres database and hostname per company."],
+            ["Documents", "Quote → sales order → pick/pack/deliver → tax invoice."],
+            ["Books", "GL 2300 for deposits. 15% VAT on the line. VAT201 is a draft."],
+            ["In use", "Vellano is company one — own database, not a row in a shared table."],
+          ].map(([k, v], i) => (
+            <Reveal key={k} delay={0.04 * i} className="border-b border-line py-8 last:border-b-0 sm:px-2 lg:border-b-0 lg:px-8 lg:first:pl-0 lg:last:pr-0">
+              <dt className="text-sm font-medium">{k}</dt>
+              <dd className="mt-2 text-sm leading-relaxed text-muted">{v}</dd>
+            </Reveal>
+          ))}
+        </dl>
+      </div>
     </section>
   );
 }

@@ -23,7 +23,7 @@ const points = [
 export function Limits() {
   return (
     <section id="limits" className="scroll-mt-16 border-t border-line">
-      <div className="page-wrap py-16 sm:py-20">
+      <div className="page-wrap section-y">
         <Reveal>
           <SectionHeading
             number="07"

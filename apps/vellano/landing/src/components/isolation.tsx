@@ -5,7 +5,7 @@ import { site } from "@/lib/site";
 export function Isolation() {
   return (
     <section id="isolation" className="scroll-mt-16 border-b border-line bg-paper-2">
-      <div className="page-wrap py-16 sm:py-20 lg:grid lg:grid-cols-2 lg:gap-16">
+      <div className="page-wrap section-y lg:grid lg:grid-cols-2 lg:gap-16">
         <Reveal>
           <SectionHeading
             number="02"

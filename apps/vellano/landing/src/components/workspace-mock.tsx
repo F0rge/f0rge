@@ -61,7 +61,7 @@ export function WorkspaceMock() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r[0]} className="border-t border-line">
+                <tr key={r[0]} className="border-t border-line transition-colors duration-200 hover:bg-paper-2">
                   <td className="h-12 whitespace-nowrap px-4 font-medium mono-num">{r[0]}</td>
                   <td className="h-12 px-4">{r[1]}</td>
                   <td className="hidden h-12 px-4 text-muted sm:table-cell">{r[2]}</td>

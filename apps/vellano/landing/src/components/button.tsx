@@ -4,12 +4,12 @@ import type { ComponentProps, ReactNode } from "react";
 type Variant = "primary" | "secondary" | "ghost" | "header";
 
 const base =
-  "inline-flex h-12 items-center justify-center gap-2 px-4 text-sm font-normal transition-colors duration-100 disabled:cursor-not-allowed disabled:bg-[#c6c6c6] disabled:text-[#8d8d8d] disabled:hover:bg-[#c6c6c6]";
+  "inline-flex h-12 items-center justify-center gap-2 px-5 text-sm font-normal transition-[background-color,color,border-color,transform] duration-200 ease-out disabled:cursor-not-allowed disabled:bg-[#c6c6c6] disabled:text-[#8d8d8d] disabled:hover:bg-[#c6c6c6]";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-interactive text-white hover:bg-interactive-hover active:bg-interactive-active",
-  secondary: "bg-ink-2 text-white hover:bg-[#474747] active:bg-[#6f6f6f]",
-  ghost: "border border-line bg-transparent text-ink hover:bg-paper-2",
+  primary: "bg-interactive text-white hover:bg-interactive-hover active:bg-interactive-active motion-safe:hover:-translate-y-px",
+  secondary: "bg-ink-2 text-white hover:bg-[#474747] active:bg-[#6f6f6f] motion-safe:hover:-translate-y-px",
+  ghost: "border border-line bg-transparent text-ink hover:bg-paper-2 motion-safe:hover:-translate-y-px",
   header: "bg-interactive text-white hover:bg-interactive-hover",
 };
 

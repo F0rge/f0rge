@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Check your email" };
 export default async function CheckEmailPage({ searchParams }: { searchParams: Promise<{ email?: string; id?: string }> }) {
   const { email, id } = await searchParams;
   return (
-    <section className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-8 sm:py-24">
+    <section className="mx-auto w-full max-w-2xl px-6 py-20 sm:px-10 sm:py-28 lg:px-16">
       <p className="eyebrow">Step 2 of 3</p>
       <h1 className="type-display mt-4 text-[2.25rem] sm:text-[3.375rem]">Open the email we sent.</h1>
       <p className="mt-5 text-base leading-relaxed text-muted">

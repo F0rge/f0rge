@@ -46,7 +46,7 @@ export function SiteNav() {
             <li key={l.href} className="flex">
               <Link
                 href={l.href}
-                className="flex items-center px-4 text-sm text-[#c6c6c6] hover:bg-[#353535] hover:text-white"
+                className="flex items-center px-4 text-sm text-[#c6c6c6] transition-colors duration-200 hover:bg-[#353535] hover:text-white"
               >
                 {l.label}
               </Link>
@@ -56,7 +56,7 @@ export function SiteNav() {
         <div className="hidden items-center lg:flex">
           <Link
             href="/signin"
-            className="flex h-12 items-center px-4 text-sm text-[#c6c6c6] hover:bg-[#353535] hover:text-white"
+            className="flex h-12 items-center px-4 text-sm text-[#c6c6c6] transition-colors duration-200 hover:bg-[#353535] hover:text-white"
           >
             Sign in
           </Link>
@@ -76,11 +76,11 @@ export function SiteNav() {
         </button>
       </nav>
       {open ? (
-        <div id="mobile-menu" className="border-t border-[#393939] bg-ink px-4 pb-6 pt-2 lg:hidden">
+        <div id="mobile-menu" className="border-t border-[#393939] bg-ink px-6 pb-8 pt-2 lg:hidden">
           <ul>
             {links.map((l) => (
               <li key={l.href}>
-                <Link href={l.href} onClick={() => setOpen(false)} className="block py-3 text-base text-[#c6c6c6] hover:text-white">
+                <Link href={l.href} onClick={() => setOpen(false)} className="block py-3 text-base text-[#c6c6c6] transition-colors duration-200 hover:text-white">
                   {l.label}
                 </Link>
               </li>

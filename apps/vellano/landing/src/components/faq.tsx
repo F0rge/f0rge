@@ -33,7 +33,7 @@ const items = [
 export function Faq() {
   return (
     <section id="faq" className="scroll-mt-16 border-t border-line bg-paper-2">
-      <div className="page-wrap py-16 sm:py-20 lg:grid lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-16">
+      <div className="page-wrap section-y lg:grid lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-16">
         <Reveal>
           <SectionHeading
             number="08"
@@ -42,14 +42,14 @@ export function Faq() {
             lede="If a sentence would be true of any back-office product, it is not on this list."
           />
         </Reveal>
-        <div className="mt-10 divide-y divide-line border-y border-line bg-white px-4 lg:mt-0">
+        <div className="mt-10 divide-y divide-line border-y border-line bg-white px-6 lg:mt-0">
           {items.map((it) => (
-            <details key={it.q} className="group py-5 [&_summary::-webkit-details-marker]:hidden">
-              <summary className="flex cursor-pointer list-none items-start justify-between gap-6 text-left text-lg font-normal">
+            <details key={it.q} className="group py-6 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-6 text-left text-lg font-normal transition-colors duration-200 hover:text-interactive">
                 <span>{it.q}</span>
-                <Plus aria-hidden size={18} className="mt-1 shrink-0 text-interactive transition-transform duration-200 group-open:rotate-45" />
+                <Plus aria-hidden size={18} className="mt-1 shrink-0 text-interactive transition-transform duration-300 group-open:rotate-45" />
               </summary>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">{it.a}</p>
+              <p className="faq-answer mt-3 max-w-2xl text-sm leading-relaxed text-muted">{it.a}</p>
             </details>
           ))}
         </div>

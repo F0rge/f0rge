@@ -7,7 +7,7 @@ const examples = ["acme", "northridge", "harbour-co"];
 export function OnboardingSteps() {
   return (
     <section id="how" className="scroll-mt-16">
-      <div className="page-wrap py-16 sm:py-20">
+      <div className="page-wrap section-y">
         <Reveal>
           <SectionHeading
             number="05"

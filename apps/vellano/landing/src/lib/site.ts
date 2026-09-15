@@ -5,7 +5,7 @@
 export const site = {
   name: "Stockroom",
   domain: "stockroom.example",
-  tagline: "Stock, till, and books on one ledger — one database per company.",
+  tagline: "Company software, built for humans.",
   description:
     "Back office for companies that buy, hold, and sell physical stock in South Africa. Each company gets its own hostname and Postgres database. An accepted quote holds stock; a delivery can be invoiced; the VAT201 draft is a read of that ledger. ZAR and 15% VAT are defaults.",
   supportEmail: "hello@stockroom.example",

@@ -11,7 +11,7 @@ const facts = [
 export function SouthAfrica() {
   return (
     <section id="south-africa" className="scroll-mt-16 bg-ink text-white">
-      <div className="page-wrap py-16 sm:py-20">
+      <div className="page-wrap section-y">
         <Reveal>
           <div className="[&_.eyebrow]:text-[#c6c6c6] [&_.text-muted]:text-[#c6c6c6]">
             <SectionHeading

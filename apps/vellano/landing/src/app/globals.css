@@ -32,6 +32,7 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    scroll-padding-top: 4rem;
   }
   body {
     @apply bg-paper text-ink font-sans;
@@ -77,13 +78,32 @@
 }
 
 @utility page-wrap {
-  @apply mx-auto w-full max-w-[99rem] px-4 sm:px-8;
+  @apply mx-auto w-full max-w-[99rem] px-6 sm:px-10 lg:px-16;
+}
+
+@utility section-y {
+  @apply py-20 sm:py-24 lg:py-28;
 }
 
 @utility type-display {
   font-weight: 300;
   letter-spacing: 0;
   line-height: 1.2;
+}
+
+details[open] .faq-answer {
+  animation: faq-in 0.35s cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+
+@keyframes faq-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

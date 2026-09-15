@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Create a company" };
 
 export default function SignupPage() {
   return (
-    <section className="page-wrap py-12 sm:py-16">
+    <section className="page-wrap py-20 sm:py-24">
       <div className="max-w-2xl">
         <p className="eyebrow">Create a company</p>
         <h1 className="type-display mt-4 text-[2.25rem] sm:text-[3.375rem]">Register the company. Verify later.</h1>

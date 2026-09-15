@@ -4,7 +4,7 @@ import { SectionHeading } from "@/components/section-heading";
 export function Highlights() {
   return (
     <section id="more" className="scroll-mt-16 border-t border-line bg-paper-2">
-      <div className="page-wrap py-16 sm:py-20">
+      <div className="page-wrap section-y">
         <Reveal>
           <SectionHeading
             number="06"

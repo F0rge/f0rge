@@ -6,7 +6,7 @@ import { site } from "@/lib/site";
 export function SiteFooter() {
   return (
     <footer className="border-t border-[#393939] bg-ink text-white">
-      <div className="page-wrap grid gap-10 py-12 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
+      <div className="page-wrap grid gap-10 py-16 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
         <div>
           <Wordmark inverted />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-[#c6c6c6]">{site.tagline}</p>
@@ -58,7 +58,7 @@ function FooterCol({ title, links }: { title: string; links: { href: string; lab
       <ul className="mt-4 space-y-2">
         {links.map((l) => (
           <li key={l.label}>
-            <Link href={l.href} className="text-sm text-[#c6c6c6] hover:text-white hover:underline">
+            <Link href={l.href} className="text-sm text-[#c6c6c6] transition-colors duration-200 hover:text-white hover:underline">
               {l.label}
             </Link>
           </li>

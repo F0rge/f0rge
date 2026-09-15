@@ -42,7 +42,7 @@ const documents = [
 export function CompanySetup() {
   return (
     <section id="company" className="scroll-mt-16 border-t border-line bg-paper-2">
-      <div className="page-wrap py-16 sm:py-20">
+      <div className="page-wrap section-y">
         <Reveal>
           <SectionHeading
             number="03"
