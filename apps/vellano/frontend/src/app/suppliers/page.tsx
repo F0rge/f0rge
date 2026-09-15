@@ -5,6 +5,7 @@ import {
   DataTable,
   InlineNotification,
   Modal,
+  Pagination,
   Stack,
   Table,
   TableBody,
@@ -15,7 +16,7 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   canMutateCatalogue,
@@ -28,6 +29,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatObservedMedianLine, supplierLeadTimeById } from "@/lib/lead-times";
+import { CLIENT_PAGE_SIZES, useClientPagination } from "@/lib/use-client-pagination";
 
 const TABLE_HEADERS = [
   { key: "name", header: "Name" },
@@ -54,6 +56,7 @@ export default function SuppliersPage() {
   const [leadTimes, setLeadTimes] = useState<SupplierLeadTimeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchFilter, setSearchFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateSupplierPayload>(emptyCreateForm);
   const [saving, setSaving] = useState(false);
@@ -82,7 +85,24 @@ export default function SuppliersPage() {
   }, [user, loadSuppliers]);
 
   const leadBySupplier = supplierLeadTimeById(leadTimes);
-  const rows: SupplierRow[] = suppliers.map((entry) => ({
+  const filteredSuppliers = useMemo(() => {
+    const query = searchFilter.trim().toLowerCase();
+    if (!query) {
+      return suppliers;
+    }
+    return suppliers.filter(
+      (entry) =>
+        entry.name.toLowerCase().includes(query) ||
+        entry.default_currency.toLowerCase().includes(query),
+    );
+  }, [suppliers, searchFilter]);
+
+  const { page, pageSize, pagedItems, totalItems, onPaginationChange } = useClientPagination(
+    filteredSuppliers,
+    searchFilter,
+  );
+
+  const rows: SupplierRow[] = pagedItems.map((entry) => ({
     id: entry.id,
     name: entry.name,
     default_currency: entry.default_currency,
@@ -144,32 +164,59 @@ export default function SuppliersPage() {
           lowContrast
         />
       ) : (
-        <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Suppliers" description="All Vellano suppliers">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })} key={header.key}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tableRows.map((row) => (
-                    <TableRow {...getRowProps({ row })} key={row.id}>
-                      {row.cells.map((cell) => (
-                        <TableCell key={cell.id}>{cell.value}</TableCell>
+        <div className="vellano-catalogue-panel">
+          <div className="vellano-catalogue-toolbar">
+            <div className="vellano-catalogue-toolbar__left">
+              <TextInput
+                id="suppliers-search"
+                labelText="Filter suppliers"
+                hideLabel
+                placeholder="Filter by name or currency…"
+                value={searchFilter}
+                onChange={(event) => setSearchFilter(event.target.value)}
+              />
+            </div>
+          </div>
+          <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
+            {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+              <TableContainer title="Suppliers" description="All Vellano suppliers">
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })} key={header.key}>
+                          {header.header}
+                        </TableHeader>
                       ))}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
+                  </TableHead>
+                  <TableBody>
+                    {tableRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={headers.length}>No suppliers match the current filter.</TableCell>
+                      </TableRow>
+                    ) : (
+                      tableRows.map((row) => (
+                        <TableRow {...getRowProps({ row })} key={row.id}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            pageSizes={[...CLIENT_PAGE_SIZES]}
+            totalItems={totalItems}
+            onChange={onPaginationChange}
+          />
+        </div>
       )}
 
       <Modal

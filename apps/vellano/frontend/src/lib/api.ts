@@ -1,3 +1,4 @@
+import { downloadApiFile } from "./download";
 import {
   normalizePick,
   normalizePickList,
@@ -116,7 +117,7 @@ function buildListQuery(params?: ListParams): string {
   return search.toString();
 }
 
-async function parseErrorMessage(response: Response): Promise<string> {
+export async function parseErrorMessage(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as {
       detail?: string | { msg?: string }[] | { code?: string; message?: string };
@@ -551,24 +552,7 @@ export function createProforma(payload: CreateProformaPayload): Promise<Proforma
 }
 
 export async function downloadProformaPdf(id: string, invoiceNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/proformas/${id}/file`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${invoiceNumber}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/proformas/${id}/file`, `${invoiceNumber}.pdf`);
 }
 
 export type Sku = {
@@ -947,24 +931,7 @@ export function getPurchaseOrder(id: string): Promise<PurchaseOrder> {
 }
 
 export async function downloadPackingSheet(id: string, poNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/purchase-orders/${id}/packing-sheet`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${poNumber}-packing-sheet.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/purchase-orders/${id}/packing-sheet`, `${poNumber}-packing-sheet.pdf`);
 }
 
 export function markOnWater(id: string): Promise<PurchaseOrder> {
@@ -1134,24 +1101,7 @@ export function cancelTransfer(id: string): Promise<Transfer> {
 }
 
 export async function downloadTransferPdf(id: string, transferNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/transfers/${id}/pdf`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${transferNumber}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/transfers/${id}/pdf`, `${transferNumber}.pdf`);
 }
 
 export function listPicks(sourceType?: string): Promise<PickDocument[]> {
@@ -1217,26 +1167,7 @@ export function cancelPick(id: string): Promise<PickDocument> {
 }
 
 export async function downloadPickPdf(id: string, _pickNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/picks/${id}/pdf`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const opened = window.open(url, "_blank");
-  if (!opened) {
-    URL.revokeObjectURL(url);
-    window.alert("Allow pop-ups to print.");
-    return;
-  }
-  opened.addEventListener("load", () => {
-    URL.revokeObjectURL(url);
-  });
+  await downloadApiFile(`/api/v1/picks/${id}/pdf`, `${_pickNumber}.pdf`, "open");
 }
 
 export type StocktakeStatus = "in_progress" | "completed" | "cancelled";
@@ -1555,36 +1486,6 @@ export function upsertCategoryMap(payload: UpsertCategoryMapPayload): Promise<Ca
   });
 }
 
-export type ContactKind = "customer" | "supplier";
-
-export type Contact = {
-  id: string;
-  kind: ContactKind;
-  name: string;
-  currency: string | null;
-  email: string | null;
-  vat_number: string | null;
-  billing_address: string | null;
-};
-
-export type CreateContactPayload = {
-  name: string;
-  email?: string;
-  vat_number?: string;
-  billing_address?: string;
-};
-
-export function listContacts(): Promise<Contact[]> {
-  return apiFetch<Contact[]>("/contacts");
-}
-
-export function createContact(payload: CreateContactPayload): Promise<Contact> {
-  return apiFetch<Contact>("/contacts", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
 export type InvoiceLine = {
   id: string;
   description: string;
@@ -1699,24 +1600,7 @@ export function runRepeatingInvoice(id: string): Promise<RepeatingInvoiceRun> {
 }
 
 export async function downloadInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/invoices/${id}/pdf`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${invoiceNumber}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/invoices/${id}/pdf`, `${invoiceNumber}.pdf`);
 }
 
 export type CreditNote = {
@@ -1752,45 +1636,11 @@ export function createCreditNote(payload: CreateCreditNotePayload): Promise<Cred
 }
 
 export async function downloadCreditNotePdf(id: string, creditNoteNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/credit-notes/${id}/pdf`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${creditNoteNumber}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/credit-notes/${id}/pdf`, `${creditNoteNumber}.pdf`);
 }
 
 export async function downloadLaybyPdf(id: string, laybyNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/laybys/${id}/pdf`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${laybyNumber}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/laybys/${id}/pdf`, `${laybyNumber}.pdf`);
 }
 
 export type BillLine = {
@@ -1860,24 +1710,7 @@ export function uploadBillAttachment(id: string, file: File): Promise<Bill> {
 }
 
 export async function downloadBillAttachment(id: string, billNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/bills/${id}/attachment`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${billNumber}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/bills/${id}/attachment`, `${billNumber}.pdf`);
 }
 
 export type PaymentDirection = "in" | "out";
@@ -1957,24 +1790,7 @@ export function createPayment(payload: CreatePaymentPayload): Promise<Payment> {
 }
 
 export async function downloadPaymentPdf(id: string, paymentNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/payments/${id}/pdf`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${paymentNumber}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/payments/${id}/pdf`, `${paymentNumber}.pdf`);
 }
 
 export type JournalStatus = "draft" | "posted" | "voided";
@@ -2429,45 +2245,19 @@ export function getVat201Draft(fromDate: string, toDate: string): Promise<Vat201
 export async function downloadVat201Csv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
   const to = requireIsoDate(toDate, reportTodayIso());
-  const response = await fetch(
+  await downloadApiFile(
     `/api/v1/reports/vat201/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    { credentials: "include" },
+    `vat201-draft-${from}-to-${to}.csv`,
   );
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `vat201-draft-${from}-to-${to}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
 }
 
 export async function downloadVat201Pdf(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
   const to = requireIsoDate(toDate, reportTodayIso());
-  const response = await fetch(
+  await downloadApiFile(
     `/api/v1/reports/vat201/pdf?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    { credentials: "include" },
+    `vat201-draft-${from}-to-${to}.pdf`,
   );
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `vat201-draft-${from}-to-${to}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
 }
 
 export type Vat201PeriodStatus = "draft" | "due" | "locked";
@@ -2549,24 +2339,7 @@ export function reopenVat201Period(id: string, reason: string): Promise<Vat201Pe
 }
 
 async function downloadVat201PeriodFile(id: string, kind: "csv" | "pdf"): Promise<void> {
-  const response = await fetch(`/api/v1/vat201/periods/${id}/${kind}`, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const disposition = response.headers.get("Content-Disposition");
-  const named = disposition?.match(/filename="([^"]+)"/)?.[1];
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = named ?? `vat201-period-${id}.${kind}`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/vat201/periods/${id}/${kind}`, `vat201-period-${id}.${kind}`);
 }
 
 export function downloadVat201PeriodCsv(id: string): Promise<void> {
@@ -2822,145 +2595,46 @@ export async function getSkuLeadTimes(): Promise<SkuLeadTimesReport> {
 }
 
 export async function downloadStockValuationCsv(): Promise<void> {
-  const response = await fetch("/api/v1/reports/stock-valuation/csv", {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `stock-valuation-${reportTodayIso()}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile("/api/v1/reports/stock-valuation/csv", `stock-valuation-${reportTodayIso()}.csv`);
 }
 
 export async function downloadAgedStockCsv(): Promise<void> {
-  const response = await fetch("/api/v1/reports/aged-stock/csv", {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `aged-stock-${reportTodayIso()}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile("/api/v1/reports/aged-stock/csv", `aged-stock-${reportTodayIso()}.csv`);
 }
 
 export async function downloadSalesBySkuCsv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
   const to = requireIsoDate(toDate, reportTodayIso());
-  const response = await fetch(
+  await downloadApiFile(
     `/api/v1/reports/sales-by-sku/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    { credentials: "include" },
+    `sales-by-sku-${from}-to-${to}.csv`,
   );
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `sales-by-sku-${from}-to-${to}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
 }
 
 export async function downloadSkuCriticalityCsv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
   const to = requireIsoDate(toDate, reportTodayIso());
-  const response = await fetch(
+  await downloadApiFile(
     `/api/v1/reports/sku-criticality/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    { credentials: "include" },
+    `sku-criticality-${from}-to-${to}.csv`,
   );
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `sku-criticality-${from}-to-${to}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
 }
 
 export async function downloadSalesVatCsv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
   const to = requireIsoDate(toDate, reportTodayIso());
-  const response = await fetch(
+  await downloadApiFile(
     `/api/v1/reports/sales-vat/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    { credentials: "include" },
+    `sales-vat-${from}-to-${to}.csv`,
   );
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `sales-vat-${from}-to-${to}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
 }
 
 export async function downloadSupplierLeadTimesCsv(): Promise<void> {
-  const response = await fetch("/api/v1/reports/supplier-lead-times/csv", {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `supplier-lead-times-${reportTodayIso()}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile("/api/v1/reports/supplier-lead-times/csv", `supplier-lead-times-${reportTodayIso()}.csv`);
 }
 
 export async function downloadSkuLeadTimesCsv(): Promise<void> {
-  const response = await fetch("/api/v1/reports/sku-lead-times/csv", {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `sku-lead-times-${reportTodayIso()}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile("/api/v1/reports/sku-lead-times/csv", `sku-lead-times-${reportTodayIso()}.csv`);
 }
 
 function journalsReportQuery(fromDate: string, toDate: string, source?: string): string {
@@ -2999,23 +2673,10 @@ export function getCashSummary(fromDate: string, toDate: string): Promise<CashSu
 
 export async function downloadTrialBalanceCsv(asOf: string): Promise<void> {
   const date = requireIsoDate(asOf, reportTodayIso());
-  const response = await fetch(
+  await downloadApiFile(
     `/api/v1/reports/trial-balance/csv?as_of=${encodeURIComponent(date)}`,
-    { credentials: "include" },
+    `trial-balance-${date}.csv`,
   );
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `trial-balance-${date}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
 }
 
 export async function downloadJournalsCsv(
@@ -3025,44 +2686,19 @@ export async function downloadJournalsCsv(
 ): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
   const to = requireIsoDate(toDate, reportTodayIso());
-  const response = await fetch(`/api/v1/reports/journals/csv?${journalsReportQuery(fromDate, toDate, source)}`, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `journals-${from}-to-${to}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(
+    `/api/v1/reports/journals/csv?${journalsReportQuery(fromDate, toDate, source)}`,
+    `journals-${from}-to-${to}.csv`,
+  );
 }
 
 export async function downloadCashSummaryCsv(fromDate: string, toDate: string): Promise<void> {
   const from = requireIsoDate(fromDate, reportMonthStartIso());
   const to = requireIsoDate(toDate, reportTodayIso());
-  const response = await fetch(
+  await downloadApiFile(
     `/api/v1/reports/cash-summary/csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    { credentials: "include" },
+    `cash-summary-${from}-to-${to}.csv`,
   );
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `cash-summary-${from}-to-${to}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
 }
 
 export type HomeAttentionKind = "low_stock" | "stocktake" | "returns" | "layby" | "bank";
@@ -4058,20 +3694,7 @@ export function cancelQuote(id: string): Promise<Quote> {
 }
 
 export async function downloadQuotePdf(id: string, quoteNumber: string): Promise<void> {
-  const response = await fetch(`/api/v1/quotes/${id}/pdf`, { credentials: "include" });
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${quoteNumber}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  await downloadApiFile(`/api/v1/quotes/${id}/pdf`, `${quoteNumber}.pdf`);
 }
 
 export function listSalesOrders(params?: ListParams): Promise<Page<SalesOrderListItem>> {

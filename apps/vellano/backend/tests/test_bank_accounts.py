@@ -157,7 +157,7 @@ async def test_match_posted_manual_journal_marks_line(
 async def test_payment_match_still_works_on_default_bank(
     owner_client: AsyncClient,
 ) -> None:
-    customer = await owner_client.post("/api/v1/contacts", json={"name": "Bank Recon"})
+    customer = await owner_client.post("/api/v1/customers", json={"name": "Bank Recon"})
     assert customer.status_code == 201
     invoice = await owner_client.post(
         "/api/v1/invoices",

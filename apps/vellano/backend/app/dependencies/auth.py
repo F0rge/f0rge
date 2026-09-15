@@ -30,7 +30,6 @@ from app.services.auth import AuthService
 from app.services.permissions import PermissionService
 from app.services.bills import BillService
 from app.services.books_events import BooksEventService
-from app.services.contacts import ContactService
 from app.services.credit_notes import CreditNoteService
 from app.services.customers_crm import CustomersCrmService
 from app.services.accounts import AccountService
@@ -174,10 +173,6 @@ def get_account_service(db: AsyncSession = Depends(get_db)) -> AccountService:
 
 def get_category_map_service(db: AsyncSession = Depends(get_db)) -> CategoryMapService:
     return CategoryMapService(db)
-
-
-def get_contact_service(db: AsyncSession = Depends(get_db)) -> ContactService:
-    return ContactService(db)
 
 
 def get_customers_crm_service(db: AsyncSession = Depends(get_db)) -> CustomersCrmService:

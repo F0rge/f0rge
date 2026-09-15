@@ -33,7 +33,7 @@ import {
   canSendComms,
   completeLayby,
   computeInvoicePreview,
-  createContact,
+  createCustomer,
   createLayby,
   downloadLaybyPdf,
   formatPriceAmount,
@@ -42,14 +42,14 @@ import {
   getCustomer,
   getLayby,
   isActiveLocation,
-  listContacts,
+  listCustomers,
   listLaybys,
   listLocations,
   listSkus,
   openCommsSend,
   roundHalfUp,
   sendDocument,
-  type Contact,
+  type CustomerCrm,
   type Layby,
   type LaybyListItem,
   type LaybyTender,
@@ -249,7 +249,7 @@ function LaybysPageContent() {
   const canMutate = canMutateLaybys(user);
   const canSend = canSendComms(user);
   const [laybys, setLaybys] = useState<LaybyListItem[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [loading, setLoading] = useState(true);
@@ -303,11 +303,6 @@ function LaybysPageContent() {
   useEffect(() => {
     setPage(1);
   }, [searchQuery, statusFilter, customerFilter]);
-
-  const customers = useMemo(
-    () => contacts.filter((entry) => entry.kind === "customer"),
-    [contacts],
-  );
 
   const skusById = useMemo(() => new Map(skus.map((sku) => [sku.id, sku])), [skus]);
 
@@ -368,12 +363,12 @@ function LaybysPageContent() {
 
   const loadCreateData = useCallback(async () => {
     try {
-      const [contactData, locationData, skuData] = await Promise.all([
-        listContacts(),
+      const [customerData, locationData, skuData] = await Promise.all([
+        listCustomers(),
         listLocations(),
         listSkus(),
       ]);
-      setContacts(contactData);
+      setCustomers(customerData);
       setLocations(locationData);
       setSkus(skuData.filter((sku) => sku.retail_ex_vat));
       const active = locationData.filter(isActiveLocation);
@@ -446,9 +441,9 @@ function LaybysPageContent() {
     setCreatingCustomer(true);
     setError(null);
     try {
-      const contact = await createContact({ name });
-      setContacts((current) => [...current, contact]);
-      setCustomerId(contact.id);
+      const created = await createCustomer({ name });
+      setCustomers((current) => [...current, created]);
+      setCustomerId(created.id);
       setNewCustomerName("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create customer.");

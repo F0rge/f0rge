@@ -121,7 +121,6 @@ const ICONS = {
   "/customers": UserFollow,
   "/ledger": Finance,
   "/journals": Notebook,
-  "/contacts": UserMultiple,
   "/invoices": Receipt,
   "/repeating-invoices": Renew,
   "/credit-notes": DocumentSubtract,

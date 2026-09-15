@@ -26,12 +26,12 @@ import {
   computeInvoicePreview,
   createRepeatingInvoice,
   formatPriceAmount,
-  listContacts,
+  listCustomers,
   listRepeatingInvoices,
   runRepeatingInvoice,
   sumInvoiceLinesExVat,
-  type Contact,
   type CreateInvoiceLinePayload,
+  type CustomerCrm,
   type RepeatingInvoice,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -81,7 +81,7 @@ export default function RepeatingInvoicesPage() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const [schedules, setSchedules] = useState<RepeatingInvoice[]>([]);
-  const [customers, setCustomers] = useState<Contact[]>([]);
+  const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -106,12 +106,12 @@ export default function RepeatingInvoicesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [scheduleData, contactData] = await Promise.all([
+      const [scheduleData, customerData] = await Promise.all([
         listRepeatingInvoices(),
-        listContacts(),
+        listCustomers(),
       ]);
       setSchedules(scheduleData);
-      setCustomers(contactData.filter((entry) => entry.kind === "customer"));
+      setCustomers(customerData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load repeating invoices.");
     } finally {

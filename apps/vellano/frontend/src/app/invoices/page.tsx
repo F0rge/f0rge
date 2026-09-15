@@ -30,11 +30,11 @@ import {
   formatPriceAmount,
   formatZarAmount,
   getCustomer,
-  listContacts,
+  listCustomers,
   listInvoices,
   sumInvoiceLinesExVat,
-  type Contact,
   type CreateInvoiceLinePayload,
+  type CustomerCrm,
   type InvoiceListItem,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -93,7 +93,7 @@ function InvoicesPageContent() {
   const { user } = useAuth();
   const canMutate = canMutateBooks(user);
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([]);
-  const [customers, setCustomers] = useState<Contact[]>([]);
+  const [customers, setCustomers] = useState<CustomerCrm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -154,8 +154,8 @@ function InvoicesPageContent() {
 
   const loadCreateData = useCallback(async () => {
     try {
-      const contactData = await listContacts();
-      setCustomers(contactData.filter((entry) => entry.kind === "customer"));
+      const customerData = await listCustomers();
+      setCustomers(customerData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load customers.");
     }

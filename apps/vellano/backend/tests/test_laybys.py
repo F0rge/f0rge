@@ -14,7 +14,7 @@ from tests.test_transfers import _receive_qty_at_location
 
 async def _create_customer(owner_client: AsyncClient) -> str:
     resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Layby Customer"},
     )
     assert resp.status_code == 201

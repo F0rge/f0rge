@@ -54,7 +54,7 @@ async def test_concurrent_allocate_does_not_collide(
 async def test_prefix_change_uses_new_prefix_on_next_invoice(
     owner_client: AsyncClient,
 ) -> None:
-    customer = await owner_client.post("/api/v1/contacts", json={"name": "Prefix Customer"})
+    customer = await owner_client.post("/api/v1/customers", json={"name": "Prefix Customer"})
     assert customer.status_code == 201
     customer_id = customer.json()["id"]
 

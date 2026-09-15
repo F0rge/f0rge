@@ -74,7 +74,6 @@ WRITE_IDS = frozenset(
         "cancel_delivery",
         "create_account",
         "update_account",
-        "create_contact",
         "create_invoice",
         "create_bill",
         "create_credit_note",
@@ -122,7 +121,6 @@ READ_IDS = frozenset(
         "list_bins",
         "list_customers",
         "get_customer",
-        "list_contacts",
         "list_invoices",
         "get_invoice",
         "list_bills",
@@ -542,9 +540,9 @@ async def test_create_invoice_hitl_before_mutate(
     owner_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    contact = await owner_client.post("/api/v1/contacts", json={"name": "Nia Catalog Contact"})
-    assert contact.status_code == 201
-    customer_id = contact.json()["id"]
+    customer = await owner_client.post("/api/v1/customers", json={"name": "Nia Catalog Contact"})
+    assert customer.status_code == 201
+    customer_id = customer.json()["id"]
     invoice_args = {
         "customer_id": customer_id,
         "issue_date": "2026-09-01",

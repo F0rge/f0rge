@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 from httpx import AsyncClient
 
+from tests.pdf_fixture import assert_pdf_openable
+
 
 async def _create_invoice(owner_client: AsyncClient, ex_vat: str = "1000.00") -> dict:
     customer_resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Report Customer"},
     )
     assert customer_resp.status_code == 201
@@ -130,7 +132,7 @@ async def test_vat201_pdf_download(owner_client: AsyncClient) -> None:
     )
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
-    assert resp.content.startswith(b"%PDF")
+    assert_pdf_openable(resp.content)
 
 
 @pytest.mark.no_db

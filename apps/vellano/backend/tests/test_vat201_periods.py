@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from httpx import AsyncClient
 
+from tests.pdf_fixture import assert_pdf_openable
+
 from app.config import settings
 
 
 async def _create_customer(owner_client: AsyncClient, name: str) -> str:
-    resp = await owner_client.post("/api/v1/contacts", json={"name": name})
+    resp = await owner_client.post("/api/v1/customers", json={"name": name})
     assert resp.status_code == 201
     return resp.json()["id"]
 
@@ -90,7 +92,7 @@ async def test_lock_freezes_one_period_other_stays_live(owner_client: AsyncClien
     pdf_resp = await owner_client.get(f"/api/v1/vat201/periods/{jul_aug['id']}/pdf")
     assert pdf_resp.status_code == 200
     assert pdf_resp.headers["content-type"] == "application/pdf"
-    assert pdf_resp.content.startswith(b"%PDF")
+    assert_pdf_openable(pdf_resp.content)
 
     live_may = await owner_client.get(f"/api/v1/vat201/periods/{may_jun['id']}")
     assert live_may.status_code == 200

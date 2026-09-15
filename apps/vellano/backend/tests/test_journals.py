@@ -182,7 +182,7 @@ async def test_void_keeps_history_and_nets_to_zero(owner_client: AsyncClient) ->
 
 async def test_invoice_still_posts_after_journals(owner_client: AsyncClient) -> None:
     customer_resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Journal Smoke Customer"},
     )
     assert customer_resp.status_code == 201

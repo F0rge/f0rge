@@ -266,7 +266,7 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 - **Customers:** `GET/POST /customers`, `GET /customers/{id}`, `PATCH /customers/{id}`.
 
-Extends the existing `customers` table (no second customer entity). Do **not** merge with `/contacts`. `POST /contacts` still creates ledger customers with CRM defaults; `ContactResponse` omits CRM fields.
+Extends the existing `customers` table (no second customer entity). Books invoices, repeating invoices, and laybys use `GET/POST /customers`. There is no `/contacts` API or Books Contacts page.
 
 **Columns:** `customer_type` (`retail` | `trade`, default `retail`), `price_tier` (default `standard`), `phone` (nullable), `credit_limit` (nullable Numeric 14,2), `on_hold` (bool, default false), `on_hold_reason` (nullable, 512).
 
@@ -548,7 +548,7 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 - **Accounts:** `GET/POST /accounts`, `PATCH /accounts/{id}` — list includes `balance_zar` (debits − credits on posted journal lines), `tax_treatment` (`none` | `vat15`), and `is_bank`. Extra bank codes 1110–1140 are seeded by `ensure_bank_accounts()`.
 - **Category maps:** `GET/PUT /category-maps` — SKU category → sales/COGS/stock-adj/count-var codes. Mutate: `books.mutate`.
-- **Contacts:** `GET/POST /contacts` — unified customers (`kind: customer`) and suppliers (`kind: supplier`). `POST` creates customers only; suppliers via `POST /suppliers`.
+- **Customers (books):** invoice, repeating invoice, and layby customer pickers use `GET/POST /customers`. Suppliers stay on `GET/POST /suppliers`. There is no `/contacts` merge view.
 - **Invoices:** `GET/POST /invoices`, `GET /invoices/{id}`, `GET /invoices/{id}/pdf`, `POST /invoices/{id}/send` `{channel: email|whatsapp}` — `require_comms_send` (till.sell or books.mutate). Email attaches the tax-invoice PDF. Warehouse 403. Missing customer email 409. SMTP unconfigured 503. Do not write `books_events` on send.
 - **Repeating invoices:** `GET/POST /repeating-invoices`, `GET/PATCH /repeating-invoices/{id}`, `POST /repeating-invoices/{id}/run` — run-now only (no cron, no email). Posted invoices have no draft status.
 - **Credit notes:** `GET/POST /credit-notes`, `GET /credit-notes/{id}`, `GET /credit-notes/{id}/pdf`, `POST /credit-notes/{id}/send` — one CN per invoice; reverses AR/sales/VAT. PDF reuses the tax-invoice canvas with title Credit Note. Send attaches that PDF (`require_comms_send`).
@@ -562,8 +562,8 @@ Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
 | Action | Permission |
 |--------|------------|
-| List accounts, contacts, invoices, repeating invoices, bills, payments, journals | any authenticated |
-| Mutate CoA, contacts, invoices, repeating invoices, CN, bills, payments, journals | `books.mutate` |
+| List accounts, invoices, repeating invoices, bills, payments, journals | any authenticated |
+| Mutate CoA, invoices, repeating invoices, CN, bills, payments, journals | `books.mutate` |
 
 Example invoice create:
 
@@ -670,7 +670,6 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/price-lists` | `/price-lists` |
 | `/ledger` | `/accounts`, `/category-maps` |
 | `/journals` | `/journals`, `/journal-imports`, `/books-events` |
-| `/contacts` | `/contacts` |
 | `/invoices` | `/invoices`, `/books-events` |
 | `/repeating-invoices` | `/repeating-invoices` |
 | `/bills` | `/bills`, `/books-events` |

@@ -7,6 +7,8 @@ from io import BytesIO
 from httpx import AsyncClient
 from pypdf import PdfReader
 
+from tests.pdf_fixture import assert_pdf_openable
+
 
 async def _account_balances(owner_client: AsyncClient) -> dict[str, str]:
     resp = await owner_client.get("/api/v1/accounts")
@@ -16,7 +18,7 @@ async def _account_balances(owner_client: AsyncClient) -> dict[str, str]:
 
 async def _create_customer_invoice(owner_client: AsyncClient) -> dict:
     customer_resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Pay Customer"},
     )
     assert customer_resp.status_code == 201
@@ -98,6 +100,7 @@ async def test_payment_in_pdf(owner_client: AsyncClient) -> None:
     pdf_resp = await owner_client.get(f"/api/v1/payments/{body['id']}/pdf")
     assert pdf_resp.status_code == 200
     assert pdf_resp.headers["content-type"] == "application/pdf"
+    assert_pdf_openable(pdf_resp.content)
     text = _pdf_text(pdf_resp.content)
     assert "Payment Receipt" in text
     assert "PAY-0001" in text

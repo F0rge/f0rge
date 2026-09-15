@@ -1,7 +1,6 @@
 export const BOOKS_NAV_ITEMS = [
   { href: "/ledger", label: "Chart of accounts" },
   { href: "/journals", label: "Journals" },
-  { href: "/contacts", label: "Contacts" },
   { href: "/invoices", label: "Invoices" },
   { href: "/repeating-invoices", label: "Repeating invoices" },
   { href: "/credit-notes", label: "Credit notes" },

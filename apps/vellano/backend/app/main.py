@@ -37,7 +37,6 @@ from app.routers import (
     category_maps,
     comms,
     customer_portal,
-    contacts,
     cost_audit,
     credit_notes,
     customers,
@@ -244,7 +243,6 @@ app.include_router(customer_portal.portal_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
 app.include_router(category_maps.category_maps_router)
-app.include_router(contacts.contacts_router)
 app.include_router(customers.customers_router)
 app.include_router(invoices.invoices_router)
 app.include_router(repeating_invoices.repeating_invoices_router)

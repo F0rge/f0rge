@@ -7,7 +7,7 @@ from io import BytesIO
 
 from httpx import AsyncClient
 
-MINIMAL_PDF = b"%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
+from tests.pdf_fixture import MINIMAL_PDF
 
 
 async def _create_supplier(client: AsyncClient, name: str = "S10 Supplier") -> str:
@@ -95,7 +95,7 @@ async def test_search_finds_sku_barcode_po_and_invoice(owner_client: AsyncClient
     po = await _create_po_on_water(owner_client, supplier_id, sku["id"])
 
     customer_resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "S10 Customer"},
     )
     assert customer_resp.status_code == 201
@@ -253,7 +253,9 @@ async def test_invoice_pdf_contains_patched_legal_name(owner_client: AsyncClient
     )
     assert patch.status_code == 200
 
-    customer = await owner_client.post("/api/v1/contacts", json={"name": "PDF Legal Name Customer"})
+    customer = await owner_client.post(
+        "/api/v1/customers", json={"name": "PDF Legal Name Customer"}
+    )
     assert customer.status_code == 201
     invoice = await owner_client.post(
         "/api/v1/invoices",

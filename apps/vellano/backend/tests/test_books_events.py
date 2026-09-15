@@ -60,7 +60,7 @@ async def test_create_invoice_records_one_created_event(
     owner_client: AsyncClient,
 ) -> None:
     customer = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Books Event Customer"},
     )
     assert customer.status_code == 201

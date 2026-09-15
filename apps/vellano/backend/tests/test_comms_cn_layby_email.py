@@ -49,7 +49,7 @@ async def _create_credit_note(
     payload = {"name": "CN Mail Customer"}
     if email is not None:
         payload["email"] = email
-    customer = await owner_client.post("/api/v1/contacts", json=payload)
+    customer = await owner_client.post("/api/v1/customers", json=payload)
     assert customer.status_code == 201
     invoice = await owner_client.post(
         "/api/v1/invoices",
@@ -109,7 +109,7 @@ async def test_layby_pdf_and_send(
     await _configure_smtp(owner_client)
     sku_id, bedford_id = await _stocked_sku_at_bedford(async_client, owner_client, "LB-MAIL")
     customer = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Layby Mail Customer", "email": "layby@ex.test"},
     )
     assert customer.status_code == 201
@@ -139,7 +139,7 @@ async def test_cancelled_layby_send_409(
     await _configure_smtp(owner_client)
     sku_id, bedford_id = await _stocked_sku_at_bedford(async_client, owner_client, "LB-CAN")
     customer = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Layby Cancel Customer", "email": "cancel@ex.test"},
     )
     assert customer.status_code == 201
@@ -165,7 +165,7 @@ async def test_layby_warehouse_send_403(
     sku_id, bedford_id = await _stocked_sku_at_bedford(async_client, owner_client, "LB-WH")
     await _relogin_owner(owner_client)
     customer = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Layby WH Customer", "email": "wh@ex.test"},
     )
     assert customer.status_code == 201

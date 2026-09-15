@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from httpx import AsyncClient
 
-MINIMAL_PDF = b"%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
+from tests.pdf_fixture import MINIMAL_PDF
 
 
 async def _create_customer(owner_client: AsyncClient, name: str) -> str:
-    resp = await owner_client.post("/api/v1/contacts", json={"name": name})
+    resp = await owner_client.post("/api/v1/customers", json={"name": name})
     assert resp.status_code == 201
     return resp.json()["id"]
 

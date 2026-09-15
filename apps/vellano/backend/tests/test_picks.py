@@ -9,6 +9,8 @@ from typing import Optional
 from httpx import AsyncClient
 from pypdf import PdfReader
 
+from tests.pdf_fixture import assert_pdf_openable
+
 from app.services.pick_allocator import (
     ComponentNeed,
     LocationStockRow,
@@ -475,6 +477,7 @@ async def test_does_not_patch_invoice_description(
     assert line["description"] == kit["parent"]["name"]
     pdf = await owner_client.get(f"/api/v1/picks/{pick_id}/pdf")
     assert pdf.status_code == 200
+    assert_pdf_openable(pdf.content)
     text = _pdf_text(pdf.content)
     assert "Vellano" in text
     assert created.json()["number"] in text

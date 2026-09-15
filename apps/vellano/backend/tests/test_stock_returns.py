@@ -276,7 +276,7 @@ async def test_books_invoice_restock_rejected_write_off_allowed(
     owner_client: AsyncClient,
 ) -> None:
     customer_resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Books Return Customer"},
     )
     assert customer_resp.status_code == 201

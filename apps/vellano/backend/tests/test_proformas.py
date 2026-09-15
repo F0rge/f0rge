@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from httpx import AsyncClient
 
-MINIMAL_PDF = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
+from tests.pdf_fixture import MINIMAL_PDF, assert_pdf_openable
 
 
 async def _create_supplier(client: AsyncClient, name: str = "Proforma Supplier") -> str:
@@ -39,6 +39,7 @@ async def test_create_proforma_stores_pdf_and_metadata(owner_client: AsyncClient
     assert file_resp.status_code == 200
     assert file_resp.headers["content-type"].startswith("application/pdf")
     assert file_resp.content == MINIMAL_PDF
+    assert_pdf_openable(file_resp.content)
     assert "attachment" in file_resp.headers.get("content-disposition", "")
 
 

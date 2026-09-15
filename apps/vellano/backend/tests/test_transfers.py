@@ -9,6 +9,8 @@ from typing import Optional
 from httpx import AsyncClient
 from pypdf import PdfReader
 
+from tests.pdf_fixture import assert_pdf_openable
+
 from tests.test_purchase_orders import (
     MINIMAL_PDF,
     _create_buyer,
@@ -223,7 +225,7 @@ async def test_dispatch_decrements_source_only_and_pdf_ok(
     pdf = await warehouse.get(f"/api/v1/transfers/{transfer_id}/pdf")
     assert pdf.status_code == 200
     assert pdf.headers["content-type"].startswith("application/pdf")
-    assert pdf.content.startswith(b"%PDF")
+    assert_pdf_openable(pdf.content)
     text = _pdf_text(pdf.content)
     assert "Vellano" in text
     assert "TRF-" in text

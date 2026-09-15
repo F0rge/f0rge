@@ -204,7 +204,7 @@ async def test_sales_by_sku_till_sale_in_range(
 
 async def test_sales_vat_15_percent_on_thousand_ex(owner_client: AsyncClient) -> None:
     customer_resp = await owner_client.post(
-        "/api/v1/contacts",
+        "/api/v1/customers",
         json={"name": "Sales VAT Customer"},
     )
     assert customer_resp.status_code == 201
