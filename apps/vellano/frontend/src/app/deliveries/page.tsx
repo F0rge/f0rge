@@ -32,12 +32,15 @@ import {
   getDelivery,
   getInvoice,
   getLayby,
+  getSalesOrder,
   isActiveLocation,
   isInvoiceFullyPaid,
   listDeliveries,
   listInvoices,
   listLaybys,
   listLocations,
+  listSalesOrders,
+  loadDelivery,
   packDelivery,
   type Delivery,
   type DeliveryListItem,
@@ -46,6 +49,7 @@ import {
   type Invoice,
   type Layby,
   type Location,
+  type SalesOrder,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -84,18 +88,24 @@ function statusLabel(status: DeliveryStatus): string {
   if (status === "packed") {
     return "Packed";
   }
+  if (status === "loaded") {
+    return "Loaded";
+  }
   if (status === "delivered") {
     return "Delivered";
   }
   return "Cancelled";
 }
 
-function statusTagType(status: DeliveryStatus): "blue" | "teal" | "green" | "gray" {
+function statusTagType(status: DeliveryStatus): "blue" | "teal" | "purple" | "green" | "gray" {
   if (status === "draft") {
     return "blue";
   }
   if (status === "packed") {
     return "teal";
+  }
+  if (status === "loaded") {
+    return "purple";
   }
   if (status === "delivered") {
     return "green";
@@ -106,6 +116,9 @@ function statusTagType(status: DeliveryStatus): "blue" | "teal" | "green" | "gra
 function sourceLabel(entry: DeliveryListItem): string {
   if (entry.source_type === "invoice") {
     return entry.invoice_number ?? "Invoice";
+  }
+  if (entry.source_type === "sales_order") {
+    return entry.so_number ?? "Sales order";
   }
   return entry.layby_number ?? "Layby";
 }
@@ -123,6 +136,7 @@ function DeliveriesPageContent() {
   const [deliveries, setDeliveries] = useState<DeliveryListItem[]>([]);
   const [invoiceOptions, setInvoiceOptions] = useState<{ id: string; label: string }[]>([]);
   const [laybyOptions, setLaybyOptions] = useState<{ id: string; label: string }[]>([]);
+  const [salesOrderOptions, setSalesOrderOptions] = useState<{ id: string; label: string }[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,9 +148,10 @@ function DeliveriesPageContent() {
   const [sourceType, setSourceType] = useState<DeliverySourceType>("invoice");
   const [invoiceId, setInvoiceId] = useState("");
   const [laybyId, setLaybyId] = useState("");
+  const [salesOrderId, setSalesOrderId] = useState("");
   const [locationId, setLocationId] = useState("");
   const [notes, setNotes] = useState("");
-  const [sourcePreview, setSourcePreview] = useState<Invoice | Layby | null>(null);
+  const [sourcePreview, setSourcePreview] = useState<Invoice | Layby | SalesOrder | null>(null);
   const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceQuery, setSourceQuery] = useState("");
   const [debouncedSourceQuery, setDebouncedSourceQuery] = useState("");
@@ -195,6 +210,21 @@ function DeliveriesPageContent() {
               })),
             );
           }
+        } else if (sourceType === "sales_order") {
+          const data = await listSalesOrders({
+            limit: 25,
+            q: debouncedSourceQuery || undefined,
+          });
+          if (!cancelled) {
+            setSalesOrderOptions(
+              data.items
+                .filter((entry) => entry.status !== "cancelled")
+                .map((order) => ({
+                  id: order.id,
+                  label: `${order.so_number} — ${order.customer_name}`,
+                })),
+            );
+          }
         } else {
           const data = await listLaybys({
             limit: 25,
@@ -232,6 +262,11 @@ function DeliveriesPageContent() {
     [laybyOptions, laybyId],
   );
 
+  const selectedSalesOrderOption = useMemo(
+    () => salesOrderOptions.find((option) => option.id === salesOrderId) ?? null,
+    [salesOrderOptions, salesOrderId],
+  );
+
   useEffect(() => {
     if (user) {
       void loadDeliveries();
@@ -250,7 +285,8 @@ function DeliveriesPageContent() {
     }
     const invoicePrefill = searchParams.get("invoice");
     const laybyPrefill = searchParams.get("layby");
-    if (!invoicePrefill && !laybyPrefill) {
+    const orderPrefill = searchParams.get("order");
+    if (!invoicePrefill && !laybyPrefill && !orderPrefill) {
       return;
     }
     prefillConsumed.current = true;
@@ -260,11 +296,15 @@ function DeliveriesPageContent() {
     } else if (laybyPrefill) {
       setSourceType("layby");
       setLaybyId(laybyPrefill);
+    } else if (orderPrefill) {
+      setSourceType("sales_order");
+      setSalesOrderId(orderPrefill);
     }
     setCreateOpen(true);
     const next = new URLSearchParams(searchParams.toString());
     next.delete("invoice");
     next.delete("layby");
+    next.delete("order");
     const qs = next.toString();
     router.replace(qs ? `/deliveries?${qs}` : "/deliveries");
   }, [canMutate, searchParams, router]);
@@ -286,6 +326,34 @@ function DeliveriesPageContent() {
         .catch((err) => {
           if (!cancelled) {
             setError(err instanceof Error ? err.message : "Failed to load invoice.");
+            setSourcePreview(null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setSourceLoading(false);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (sourceType === "sales_order") {
+      if (!salesOrderId) {
+        setSourcePreview(null);
+        return;
+      }
+      let cancelled = false;
+      setSourceLoading(true);
+      getSalesOrder(salesOrderId)
+        .then((order) => {
+          if (!cancelled) {
+            setSourcePreview(order);
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : "Failed to load sales order.");
             setSourcePreview(null);
           }
         })
@@ -324,17 +392,20 @@ function DeliveriesPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [sourceType, invoiceId, laybyId]);
+  }, [sourceType, invoiceId, laybyId, salesOrderId]);
 
   const formValid = Boolean(
     locationId &&
-      ((sourceType === "invoice" && invoiceId) || (sourceType === "layby" && laybyId)),
+      ((sourceType === "invoice" && invoiceId) ||
+        (sourceType === "layby" && laybyId) ||
+        (sourceType === "sales_order" && salesOrderId)),
   );
 
   function resetCreateForm() {
     setSourceType("invoice");
     setInvoiceId("");
     setLaybyId("");
+    setSalesOrderId("");
     setSourceQuery("");
     setNotes("");
     setSourcePreview(null);
@@ -352,6 +423,7 @@ function DeliveriesPageContent() {
         source_type: sourceType,
         invoice_id: sourceType === "invoice" ? invoiceId : undefined,
         layby_id: sourceType === "layby" ? laybyId : undefined,
+        sales_order_id: sourceType === "sales_order" ? salesOrderId : undefined,
         location_id: locationId,
         notes: notes.trim() || undefined,
       });
@@ -373,6 +445,19 @@ function DeliveriesPageContent() {
       await loadDeliveries();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to pack delivery.");
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleLoad(deliveryId: string) {
+    setActionId(deliveryId);
+    setError(null);
+    try {
+      await loadDelivery(deliveryId);
+      await loadDeliveries();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load delivery.");
     } finally {
       setActionId(null);
     }
@@ -441,7 +526,7 @@ function DeliveriesPageContent() {
         <div>
           <h1 className="cds--type-productive-heading-04">Deliveries</h1>
           <p className="cds--type-body-01">
-            Pack and dispatch outbound deliveries from fully paid invoices or active laybys.
+            Pack and dispatch outbound deliveries from paid invoices, laybys, or sales orders.
           </p>
         </div>
         {canMutate ? (
@@ -541,6 +626,31 @@ function DeliveriesPageContent() {
                                     </Button>
                                   </Stack>
                                 ) : entry.status === "packed" && canMutate ? (
+                                  <Stack gap={3} orientation="horizontal">
+                                    <Button
+                                      kind="ghost"
+                                      size="sm"
+                                      disabled={busy}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        void handleLoad(entry.id);
+                                      }}
+                                    >
+                                      {busy ? "Loading…" : "Load"}
+                                    </Button>
+                                    <Button
+                                      kind="ghost"
+                                      size="sm"
+                                      disabled={busy}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        void handleComplete(entry.id);
+                                      }}
+                                    >
+                                      {busy ? "Saving…" : "Mark delivered"}
+                                    </Button>
+                                  </Stack>
+                                ) : entry.status === "loaded" && canMutate ? (
                                   <Button
                                     kind="ghost"
                                     size="sm"
@@ -600,12 +710,14 @@ function DeliveriesPageContent() {
               setSourceType(next);
               setInvoiceId("");
               setLaybyId("");
+              setSalesOrderId("");
               setSourceQuery("");
               setSourcePreview(null);
             }}
           >
             <SelectItem value="invoice" text="Invoice" />
             <SelectItem value="layby" text="Layby" />
+            <SelectItem value="sales_order" text="Sales order" />
           </Select>
           {sourceType === "invoice" ? (
             <ComboBox
@@ -619,6 +731,23 @@ function DeliveriesPageContent() {
               onInputChange={(value) => setSourceQuery(value)}
               onChange={({ selectedItem }) => {
                 setInvoiceId(selectedItem?.id ?? "");
+                if (selectedItem) {
+                  setSourceQuery(selectedItem.label);
+                }
+              }}
+            />
+          ) : sourceType === "sales_order" ? (
+            <ComboBox
+              id="delivery-sales-order"
+              titleText="Sales order"
+              placeholder="Search sales orders…"
+              items={salesOrderOptions}
+              itemToString={(item) => item?.label ?? ""}
+              selectedItem={selectedSalesOrderOption}
+              shouldFilterItem={() => true}
+              onInputChange={(value) => setSourceQuery(value)}
+              onChange={({ selectedItem }) => {
+                setSalesOrderId(selectedItem?.id ?? "");
                 if (selectedItem) {
                   setSourceQuery(selectedItem.label);
                 }

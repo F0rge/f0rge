@@ -21,6 +21,8 @@ DOCUMENT_TYPE_DEFAULTS: dict[str, tuple[str, int]] = {
     "layby": ("LB", DEFAULT_DOCUMENT_PADDING),
     "transfer": ("TRF", DEFAULT_DOCUMENT_PADDING),
     "pick": ("PCK", DEFAULT_DOCUMENT_PADDING),
+    "quote": ("QT", DEFAULT_DOCUMENT_PADDING),
+    "sales_order": ("SO", DEFAULT_DOCUMENT_PADDING),
 }
 
 

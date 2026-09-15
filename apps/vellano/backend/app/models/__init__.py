@@ -15,6 +15,7 @@ from app.models.comms_message import (
     CommsStatus,
 )
 from app.models.credit_note import CreditNote
+from app.models.customer_portal_user import CustomerPortalUser
 from app.models.delivery import (
     Delivery,
     DeliveryLine,
@@ -39,6 +40,13 @@ from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, Pick
 from app.models.price_list import PriceList, PriceListItem
 from app.models.payment import Payment, PaymentDirection
 from app.models.proforma import Proforma
+from app.models.quote import Quote, QuoteLine, QuoteStatus
+from app.models.sales_order import (
+    SalesOrder,
+    SalesOrderLine,
+    SalesOrderPayment,
+    SalesOrderStatus,
+)
 from app.models.purchase_order import (
     LandingBill,
     LandingBillKind,
@@ -99,6 +107,7 @@ __all__ = [
     "CommsStatus",
     "CreditNote",
     "Customer",
+    "CustomerPortalUser",
     "Delivery",
     "DeliveryLine",
     "DeliverySourceType",
@@ -137,6 +146,13 @@ __all__ = [
     "PriceListItem",
     "PoLine",
     "Proforma",
+    "Quote",
+    "QuoteLine",
+    "QuoteStatus",
+    "SalesOrder",
+    "SalesOrderLine",
+    "SalesOrderPayment",
+    "SalesOrderStatus",
     "PurchaseOrder",
     "PurchaseOrderStatus",
     "RepeatingInvoice",

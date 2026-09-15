@@ -18,6 +18,8 @@ SHOWROOM_TILL_KEYS = [
     "till.sell",
     "sales.returns",
     "sales.laybys",
+    "sales.quotes",
+    "sales.orders",
     "sales.deliveries",
     "sales.customers",
 ]

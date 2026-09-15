@@ -16,6 +16,8 @@ from app.permissions import (
     SALES_CUSTOMERS,
     SALES_DELIVERIES,
     SALES_LAYBYS,
+    SALES_ORDERS,
+    SALES_QUOTES,
     SALES_RETURNS,
     SETTINGS_MUTATE,
     STOCK_COST_VIEW,
@@ -60,6 +62,8 @@ from app.services.sku_bom import SkuBomService
 from app.services.skus import SkuService
 from app.services.stock_adjustments import StockAdjustmentService
 from app.services.laybys import LaybysService
+from app.services.quotes import QuotesService
+from app.services.sales_orders import SalesOrdersService
 from app.services.deliveries import DeliveriesService
 from app.services.stock_returns import StockReturnsService
 from app.services.stocktakes import StocktakeService
@@ -270,6 +274,14 @@ def get_layby_service(db: AsyncSession = Depends(get_db)) -> LaybysService:
     return LaybysService(db)
 
 
+def get_quote_service(db: AsyncSession = Depends(get_db)) -> QuotesService:
+    return QuotesService(db)
+
+
+def get_sales_order_service(db: AsyncSession = Depends(get_db)) -> SalesOrdersService:
+    return SalesOrdersService(db)
+
+
 def get_till_orchestrator(db: AsyncSession = Depends(get_db)) -> TillOrchestrator:
     return TillOrchestrator(db)
 
@@ -307,6 +319,20 @@ async def require_laybys(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (SALES_LAYBYS,))
+
+
+async def require_quotes(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_QUOTES,))
+
+
+async def require_orders(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_ORDERS,))
 
 
 async def require_owner(

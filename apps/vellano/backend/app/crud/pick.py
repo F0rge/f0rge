@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.pick import Pick, PickAllocation, PickLine
+from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
 from f0rge_db.crud import BaseCRUD
 
 
@@ -37,6 +37,25 @@ class PickCRUD(BaseCRUD):
             select(Pick).options(*self._options()).order_by(Pick.created_at.desc())
         )
         return list(result.scalars().all())
+
+    async def list_by_source_type(self, source_type: PickSourceType) -> list[Pick]:
+        result = await self.db.execute(
+            select(Pick)
+            .options(*self._options())
+            .where(Pick.source_type == source_type)
+            .order_by(Pick.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def get_active_by_sales_order_line_id(self, line_id: uuid.UUID) -> Optional[Pick]:
+        return (
+            await self.db.execute(
+                select(Pick).where(
+                    Pick.sales_order_line_id == line_id,
+                    Pick.status != PickStatus.CANCELLED,
+                )
+            )
+        ).scalar_one_or_none()
 
     async def get_next_pick_number(self) -> str:
         from app.services.document_numbering import DocumentNumberingService

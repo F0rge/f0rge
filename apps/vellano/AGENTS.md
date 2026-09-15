@@ -83,14 +83,14 @@ Settings tab **Communications** (after Operations, before Nia). Owner (`settings
 
 Authorisation is a **permission catalog**, not role-tuple checks. `users.role` is a string slug matching `roles.slug`. Five built-in roles are **presets**. Owner is immutable (`is_system`, `is_owner_preset`); `has_permission` short-circuits for owner. Custom roles are named bundles (`POST /api/v1/roles`). Cookie remains `vellano_session`.
 
-**Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.deliveries`, `sales.customers`, `books.mutate`, `books.journals`, `nia.use`, `nia.admin`.
+**Catalog** (`app/permissions.py`): `users.manage`, `settings.mutate`, `catalogue.mutate`, `po.raise`, `stock.receive`, `stock.transfer`, `stock.adjust`, `stock.cost.view`, `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers`, `books.mutate`, `books.journals`, `nia.use`, `nia.admin`.
 
 | Preset | Keys |
 |--------|------|
 | **owner** | all catalog keys; cannot strip; cannot demote last owner |
 | **buyer** | `catalogue.mutate`, `po.raise`, `stock.cost.view`, `nia.use` |
 | **warehouse** | `stock.receive`, `stock.transfer`, `stock.adjust`, `sales.returns`, `sales.deliveries`, `nia.use` (no `stock.cost.view`, no till) |
-| **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.deliveries`, `sales.customers`, `nia.use` (no `stock.cost.view`) |
+| **till** | `till.sell`, `till.discount`, `sales.returns`, `sales.laybys`, `sales.quotes`, `sales.orders`, `sales.deliveries`, `sales.customers`, `nia.use` (no `stock.cost.view`) |
 | **books** | `books.mutate`, `books.journals`, `sales.customers`, `stock.cost.view`, `nia.use` (no `till.sell`) |
 
 `GET /auth/me` returns `role` plus `permissions: list[str]`. Missing `stock.cost.view` nulls inventory `unit_cost_zar` and SKU `last_landed_cost_zar`; cost-audit is 403. Any till line `discount_percent > 0` requires `till.discount`.
@@ -306,9 +306,9 @@ Fulfillment tracking only — till/layby already moved stock. **No stock movemen
 
 Endpoints (all under `/api/v1`, cookie `vellano_session`):
 
-- **Deliveries:** `GET/POST /deliveries`, `GET /deliveries/{id}`, `POST /deliveries/{id}/pack`, `POST /deliveries/{id}/complete` (optional `{delivery_date}`, default today), `POST /deliveries/{id}/cancel`.
+- **Deliveries:** `GET/POST /deliveries`, `GET /deliveries/{id}`, `POST /deliveries/{id}/pack` (optional `{carton_count}`), `POST /deliveries/{id}/load`, `PATCH /deliveries/{id}/tracking`, `POST /deliveries/{id}/complete` (optional `{delivery_date, tracking_number, carrier}`), `POST /deliveries/{id}/cancel`.
 
-Numbering: `DLV-0001`. Status: `draft` | `packed` | `delivered` | `cancelled`. Source: paid **invoice** (`amount_paid == total_inc_vat`) or non-cancelled **layby**. One non-cancelled delivery per source. Create copies all source lines (no client-supplied lines). Pack: draft → packed. Complete: packed → delivered. Cancel: draft only.
+Numbering: `DLV-0001`. Status: `draft` | `packed` | `loaded` | `delivered` | `cancelled`. Source: paid **invoice** (`amount_paid == total_inc_vat`), non-cancelled **layby**, or non-cancelled **sales order** (unpaid OK — same gate as layby). One non-cancelled delivery per source. Create copies all source lines (no client-supplied lines). Pack: draft → packed. Load: packed → loaded. Complete: packed or loaded → delivered. Cancel: draft only. No stock and no GL on pack/load/complete.
 
 | Action | Permission |
 |--------|------------|
@@ -338,7 +338,7 @@ Migration: `020_v2_s12_reorder_min`.
 
 ## V2-S14 mobile WMS
 
-Frontend-only `/wms` warehouse console (no new API). Carbon ContentSwitcher: Receive | Count | Transfer. Wraps existing `POST /receive`, stocktake lookup/count/complete, and `POST /transfers`. Mutate: `stock.receive` / `stock.transfer`. Nav: Operations → WMS.
+Frontend `/wms` warehouse console. Carbon ContentSwitcher: Receive | Count | Transfer | Pick | Pack | Deliver. Receive/count/transfer wrap existing APIs. Pick lists `source_type=sales_order` picks and scans SKU to confirm/complete. Pack scans into a draft delivery (optional `carton_count`). Deliver loads packed jobs (`POST /deliveries/{id}/load`) then completes with optional tracking. Mutate: `stock.receive` / `stock.transfer` / pick-delivery keys. Nav: Operations → WMS. Landscape phones keep the console (`viewport.ts`).
 
 ## V2-S15 reports (stock and sales)
 
@@ -484,9 +484,9 @@ Location-scoped (not bin). No email. Reuse `stock.transfer` / `till.sell` / `sal
 
 **Allocator** (`app/services/pick_allocator.py`, pure, no DB): walk `pick_priority` if set (skip missing/archived); else warehouse then showroom, `name` ASC within type. `always_prefer_warehouse` drains **all warehouse-type** locations first (not the name “Kramerville”). Never allocate more than on-hand or need. In-transit is already off `on_hand` (F2 dispatch) — no second ATP. Non-warehouse qty while warehouse has leftover the user skipped, or any non-warehouse qty while warehouse is short → `needs_confirm`. Shortfall is `qty_short`.
 
-**Documents:** `picks` numbered `PCK-0001`; status `draft | confirmed | picking | staged | cancelled`; source `invoice | layby | till`. Lines + allocations. `transfers.pick_id` SET NULL.
+**Documents:** `picks` numbered `PCK-0001`; status `draft | confirmed | picking | staged | cancelled`; source `invoice | layby | till | sales_order`. `kit_sku_id` / `kit_qty` nullable (required for BOM parents). Optional `sales_order_line_id` (one active pick per SO line). Lines + allocations. `transfers.pick_id` SET NULL.
 
-**API** `/api/v1/picks`: GET list/get/pdf any authenticated. POST/PATCH/confirm/complete/cancel: any of `stock.transfer`, `till.sell`, `sales.deliveries`. Preview explodes F1 BOM, no persist, 400 if not a kit. Confirm requires full allocation; if `needs_confirm` and `confirm_split` is not true → 409 `"confirm_split required"`. Complete creates F2 transfers toward default staging (first warehouse in pick_priority / derived order — never a hardcoded UUID/name) and dispatches; dest on-hand rises only on receive. If every allocation is already at one showroom and `collect_from_showroom` (or all already at staging), skip transfers and set `staged`. One delivery (components, no stock move) when invoice/layby exists. Till-origin skips delivery until `invoice_id` is set. Receive of the last pick transfer sets `staged` and creates that delivery. Cancel draft/confirmed only.
+**API** `/api/v1/picks`: GET list/get/pdf any authenticated (`?source_type=`). POST/PATCH/confirm/complete/cancel: any of `stock.transfer`, `till.sell`, `sales.deliveries`. Preview explodes F1 BOM, no persist, 400 if not a kit. Sales-order origin: kit lines explode; non-kit is one PickLine for the sellable SKU (no “SKU is not a kit”). Confirm requires full allocation; if `needs_confirm` and `confirm_split` is not true → 409 `"confirm_split required"`. Complete creates F2 transfers toward default staging (first warehouse in pick_priority / derived order — never a hardcoded UUID/name) and dispatches; dest on-hand rises only on receive. Non-kit sales-order picks skip F2 when stock was already held. If every allocation is already at one showroom and `collect_from_showroom` (or all already at staging), skip transfers and set `staged`. One delivery (components, no stock move) when invoice/layby/sales order exists. Till-origin skips delivery until `invoice_id` is set. Receive of the last pick transfer sets `staged` and creates that delivery. Cancel draft/confirmed only.
 
 **Till:** kit not 100% at the posted showroom and no matching pick → 409 `"Kit requires pick"` (do not decrement only Bedfordview). Matching pick: no showroom component decrement; set `pick.invoice_id`; COGS from allocation locations or showroom cost; missing cost → 409, do not steal stock.
 
@@ -500,7 +500,11 @@ Endpoints: `PATCH /api/v1/skus/{id}` with optional `wholesale_ex_vat`, `wholesal
 - **Rounding:** store ex-VAT; display inc-VAT = `ex * 1.15` rounded half-up to the cent (`Decimal("0.01")`, `ROUND_HALF_UP`). Editing inc-VAT converts to ex-VAT with `inc / 1.15` rounded half-up to the cent.
 - **Worked examples:** 100.00 ex → 115.00 inc; 2300.00 inc → 2000.00 ex; 2500.00 inc → 2173.91 ex.
 - **Roles:** PATCH prices requires `catalogue.mutate`; GET is any authenticated role.
-- **Quotes:** out of V1 — no quote entity, table, or routes.
+- **Quotes:** staff documents `GET/POST /quotes`, `GET/PATCH /quotes/{id}`, `POST /quotes/{id}/mark-sent`, `POST /quotes/{id}/accept`, `POST /quotes/{id}/cancel`, `GET /quotes/{id}/pdf`. Number `QT-0001`. Customer required (seeded Walk-in for unnamed floor quotes). Status `draft | sent | accepted | expired | cancelled`. PDF title **Quote** / `Quote No`. Mutate: `sales.quotes` (till + owner presets). Quote does not hold stock.
+
+**Sales orders:** `GET /orders`, `GET /orders/{id}`, `POST /orders/{id}/confirm`, `POST /orders/{id}/payments`, `POST /orders/{id}/invoice`, `POST /orders/{id}/cancel`. Number `SO-0001`. Accept quote copies lines and optionally holds stock at a **warehouse or showroom** (not layby showroom-only) via `apply_outgoing_qty` (`UnitCostAuditSource.sales_order`). Insufficient on-hand → `awaiting_stock` (no 409 except stocktake lock). Deposits `cash|eft` only: Dr 1100 Cr 2300 on `sales_order_payments` — never till `tender=deposit`. Remainder invoice posts full SO totals, applies deposits Dr 2300 Cr 1200, leaves remaining AR open; no second stock-out if already held. Mutate: `sales.orders`.
+
+**Trade portal:** `customer_portal_users` + cookie `vellano_customer_session` (`typ=customer`). Never `users.role=customer`. Staff `POST /customers/{id}/portal-users` (trade customers only). Portal `POST /portal/login|logout`, `GET /portal/me`, `GET /portal/catalogue`, `POST/GET /portal/orders` → **draft SO**, no hold until staff confirm. UI `/trade/login` and `/trade/catalogue` (no back-office rail).
 
 **Settings caps (wave 2):** `GET/PATCH /api/v1/settings` exposes nullable `max_till_discount_percent` (0–100) and `po_approval_threshold_zar` (≥0). Null = no cap. Till line `discount_percent` above max without `users.manage` → **409** (not 403; `till.discount` still required for any discount > 0). PO create and land compare a **ZAR** total: ZAR suppliers use factory amounts as-is; foreign suppliers convert with the last landed `fx_to_zar` for that supplier (`convert_bill_to_zar`). No prior FX → treat as over-threshold (never under-block USD vs a rand cap). Over-cap **create** without `users.manage` → **201** `pending_approval` (still allocates `po_number`); owner/manage create stays `open`. Land re-checks with the posted FX; over-cap land without `users.manage` still **409**. Bypass is `users.manage` only (`po.raise` / `catalogue.mutate` do not). `POST /purchase-orders/{id}/approve|reject` (`users.manage`): pending → open/rejected.
 
@@ -512,7 +516,7 @@ Document-centric double-entry in ZAR. Every invoice, credit note, bill, and paym
 
 **Seller particulars (tax invoice face):** from `GET/PATCH /api/v1/settings` (`legal_name`, `trading_name`, `address`, `vat_number`, optional bank lines). Company logo: `GET/POST /api/v1/settings/logo` (`settings.mutate`; replace allowed; storage key not exposed on settings JSON — optional `has_logo`). `GET /settings/logo` any authenticated (presign redirect or JPEG bytes). PDFs draw logo top-right via ReportLab `ImageReader`; missing/corrupt bytes skip silently (never 500). PDFs and live VAT201 draft read seller fields from settings; locked VAT201 period snapshots are unchanged.
 
-**Numbering:** `document_sequences` table — `allocate()` under row lock inside the creating transaction. Defaults: `INV`, `CN`, `BILL`, `PAY`, `PO`, `DLV`, `RTN`, `JE`, `LB`, `TRF`, `PCK` (padding 4). Prefix editable via settings; `next_value` read-only on GET. Auto-posted GL journals keep `journal_number` null.
+**Numbering:** `document_sequences` table — `allocate()` under row lock inside the creating transaction. Defaults: `INV`, `CN`, `BILL`, `PAY`, `PO`, `DLV`, `RTN`, `JE`, `LB`, `TRF`, `PCK`, `QT`, `SO` (padding 4). Prefix editable via settings; `next_value` read-only on GET. Auto-posted GL journals keep `journal_number` null.
 
 
 | code | name | type |
@@ -678,7 +682,10 @@ Nav hrefs are not always the API prefix. When debugging network tabs:
 | `/transfers` | `/transfers` |
 | `/picks` | `/picks` |
 | `/receive` | `/receive` |
-| `/wms` | `/receive`, `/stocktakes`, `/transfers` |
+| `/quotes` | `/quotes` |
+| `/orders` | `/orders` |
+| `/trade/login`, `/trade/catalogue` | `/portal` |
+| `/wms` | `/receive`, `/stocktakes`, `/transfers`, `/picks`, `/deliveries` |
 | `/reports` | `/reports` |
 | `/vat201` | `/vat201/periods` (range preview still `GET /reports/vat201`) |
 | `/stocktakes` | `/stocktakes` |

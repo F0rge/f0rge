@@ -11,6 +11,8 @@ export const PERMISSION_CATALOG = [
   "till.discount",
   "sales.returns",
   "sales.laybys",
+  "sales.quotes",
+  "sales.orders",
   "sales.deliveries",
   "sales.customers",
   "books.mutate",
@@ -86,6 +88,14 @@ export function canMutateReturns(user: PermissionHolder): boolean {
 
 export function canMutateLaybys(user: PermissionHolder): boolean {
   return can(user, "sales.laybys");
+}
+
+export function canMutateQuotes(user: PermissionHolder): boolean {
+  return can(user, "sales.quotes");
+}
+
+export function canMutateOrders(user: PermissionHolder): boolean {
+  return can(user, "sales.orders");
 }
 
 export function canMutateCustomers(user: PermissionHolder): boolean {

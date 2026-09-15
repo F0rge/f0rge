@@ -13,6 +13,7 @@ from app.crud.layby import LaybyCRUD
 from app.crud.location import LocationCRUD
 from app.crud.pick import PickCRUD
 from app.crud.purchase_order import LocationStockCRUD
+from app.crud.sales_order import SalesOrderCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.sku_bom_line import SkuBomLineCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
@@ -23,6 +24,7 @@ from app.models.delivery import DeliveryLine, DeliverySourceType
 from app.models.layby import LaybyStatus
 from app.models.location import LocationType
 from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
+from app.models.sales_order import SalesOrderStatus
 from app.models.sku_bom_line import SkuBomLine
 from app.models.transfer import TransferStatus
 from app.schemas.delivery import DeliveryCreate
@@ -40,6 +42,7 @@ from app.services.deliveries import DeliveriesService
 from app.services.pick_allocator import (
     AllocationResult,
     ComponentNeed,
+    LineAllocation,
     LocationMeta,
     LocationStockRow,
     SuggestedAllocation,
@@ -67,6 +70,7 @@ class PickService:
         self.customer_crud = CustomerCRUD(db)
         self.invoice_crud = TaxInvoiceCRUD(db)
         self.layby_crud = LaybyCRUD(db)
+        self.sales_order_crud = SalesOrderCRUD(db)
         self.transfer_crud = TransferCRUD(db)
         self.delivery_crud = DeliveryCRUD(db)
         self.transfers = TransferService(db)
@@ -87,11 +91,14 @@ class PickService:
             origin = await self._origin_from_invoice(data.invoice_id)
         elif data.layby_id is not None:
             origin = await self._origin_from_layby(data.layby_id)
+        elif data.sales_order_line_id is not None:
+            origin = await self._origin_from_sales_order_line(data.sales_order_line_id)
         else:
             assert data.sku_id is not None and data.qty is not None
             origin = await self._origin_from_till(data.sku_id, data.qty, data.customer_id)
 
-        result = await self._allocate(origin.needs, user_id)
+        held = await self._held_sales_order_allocation(origin)
+        result = held if held is not None else await self._allocate(origin.needs, user_id)
         lines = [
             PickLine(
                 sku_id=line.sku_id,
@@ -109,6 +116,7 @@ class PickService:
             source_id=origin.source_id,
             kit_sku_id=origin.kit_sku_id,
             kit_qty=origin.kit_qty,
+            sales_order_line_id=origin.sales_order_line_id,
             status=PickStatus.DRAFT,
             customer_id=origin.customer_id,
             invoice_id=origin.invoice_id,
@@ -119,8 +127,11 @@ class PickService:
             await self.crud.add_and_flush(pick)
         return await self.get(pick.id)
 
-    async def list(self) -> list[PickResponse]:
-        rows = await self.crud.list_all()
+    async def list(self, source_type: Optional[PickSourceType] = None) -> list[PickResponse]:
+        if source_type is None:
+            rows = await self.crud.list_all()
+        else:
+            rows = await self.crud.list_by_source_type(source_type)
         return [await self._to_response(row) for row in rows]
 
     async def get(self, pick_id: uuid.UUID) -> PickResponse:
@@ -193,7 +204,7 @@ class PickService:
         user_id: uuid.UUID,
     ) -> PickResponse:
         pick = await self._get_or_404(pick_id)
-        if pick.status != PickStatus.CONFIRMED:
+        if pick.status not in (PickStatus.CONFIRMED, PickStatus.PICKING):
             raise ConflictError("Pick is not confirmed")
         existing = await self.transfer_crud.list_by_pick_id(pick.id)
         if existing:
@@ -219,6 +230,8 @@ class PickService:
         await self._active_location(staging_id)
 
         if alloc_locations == {staging_id}:
+            skip_transfers = True
+        if pick.source_type == PickSourceType.SALES_ORDER and pick.kit_sku_id is None:
             skip_transfers = True
 
         if skip_transfers:
@@ -274,7 +287,13 @@ class PickService:
                     (line.sku.our_ref, line.sku.name, item.qty)
                 )
         customer_name = pick.customer.name if pick.customer is not None else None
-        kit_label = f"{pick.kit_sku.our_ref} {pick.kit_sku.name} × {pick.kit_qty}"
+        if pick.kit_sku is not None and pick.kit_qty is not None:
+            kit_label = f"{pick.kit_sku.our_ref} {pick.kit_sku.name} × {pick.kit_qty}"
+        elif pick.lines:
+            first = pick.lines[0]
+            kit_label = f"{first.sku.our_ref} {first.sku.name} × {first.qty_needed}"
+        else:
+            kit_label = pick.number
         seller = await SettingsService(self.db).build_seller_details()
         pdf_bytes = build_pick_sheet_pdf(
             pick_number=pick.number,
@@ -321,6 +340,7 @@ class PickService:
             source_type = DeliverySourceType.INVOICE
             invoice_id = pick.invoice_id
             layby_id = None
+            sales_order_id = None
         elif pick.source_type == PickSourceType.LAYBY and pick.source_id is not None:
             existing = await self.delivery_crud.get_active_by_layby_id(pick.source_id)
             if existing is not None:
@@ -328,6 +348,15 @@ class PickService:
             source_type = DeliverySourceType.LAYBY
             invoice_id = None
             layby_id = pick.source_id
+            sales_order_id = None
+        elif pick.source_type == PickSourceType.SALES_ORDER and pick.source_id is not None:
+            existing = await self.delivery_crud.get_active_by_sales_order_id(pick.source_id)
+            if existing is not None:
+                return
+            source_type = DeliverySourceType.SALES_ORDER
+            invoice_id = None
+            layby_id = None
+            sales_order_id = pick.source_id
         else:
             return
         overrides = [
@@ -344,6 +373,7 @@ class PickService:
                 source_type=source_type,
                 invoice_id=invoice_id,
                 layby_id=layby_id,
+                sales_order_id=sales_order_id,
                 location_id=location_id,
             ),
             user_id,
@@ -407,6 +437,68 @@ class PickService:
             customer_id=layby.customer_id,
             invoice_id=None,
             needs=needs,
+        )
+
+    async def _held_sales_order_allocation(
+        self,
+        origin: "_PickOrigin",
+    ) -> Optional[AllocationResult]:
+        if origin.sales_order_line_id is None or origin.kit_sku_id is not None:
+            return None
+        line = await self.sales_order_crud.get_line_by_id(origin.sales_order_line_id)
+        if line is None or line.hold_location_id is None or line.held_qty < line.qty:
+            return None
+        return AllocationResult(
+            lines=[
+                LineAllocation(
+                    sku_id=need.sku_id,
+                    qty_needed=need.qty_needed,
+                    qty_allocated=need.qty_needed,
+                    qty_short=0,
+                    allocations=[
+                        SuggestedAllocation(
+                            sku_id=need.sku_id,
+                            location_id=line.hold_location_id,
+                            qty=need.qty_needed,
+                        )
+                    ],
+                )
+                for need in origin.needs
+            ],
+            needs_confirm=False,
+        )
+
+    async def _origin_from_sales_order_line(self, line_id: uuid.UUID) -> "_PickOrigin":
+        line = await self.sales_order_crud.get_line_by_id(line_id)
+        if line is None:
+            raise NotFoundError("Sales order line not found")
+        order = line.sales_order
+        if order.status == SalesOrderStatus.CANCELLED:
+            raise ConflictError("Sales order is cancelled")
+        existing = await self.crud.get_active_by_sales_order_line_id(line.id)
+        if existing is not None:
+            raise ConflictError("Pick already exists for this sales order line")
+        bom = await self.bom_crud.list_by_parent(line.sku_id)
+        if bom:
+            needs = [
+                ComponentNeed(sku_id=row.component_sku_id, qty_needed=row.qty * line.qty)
+                for row in bom
+            ]
+            kit_sku_id = line.sku_id
+            kit_qty = line.qty
+        else:
+            needs = [ComponentNeed(sku_id=line.sku_id, qty_needed=line.qty)]
+            kit_sku_id = None
+            kit_qty = None
+        return _PickOrigin(
+            source_type=PickSourceType.SALES_ORDER,
+            source_id=order.id,
+            kit_sku_id=kit_sku_id,
+            kit_qty=kit_qty,
+            customer_id=order.customer_id,
+            invoice_id=None,
+            needs=needs,
+            sales_order_line_id=line.id,
         )
 
     async def _explode_document_lines(
@@ -599,9 +691,10 @@ class PickService:
             source_type=pick.source_type,
             source_id=pick.source_id,
             kit_sku_id=pick.kit_sku_id,
-            kit_sku_our_ref=pick.kit_sku.our_ref,
-            kit_sku_name=pick.kit_sku.name,
+            kit_sku_our_ref=pick.kit_sku.our_ref if pick.kit_sku is not None else None,
+            kit_sku_name=pick.kit_sku.name if pick.kit_sku is not None else None,
             kit_qty=pick.kit_qty,
+            sales_order_line_id=pick.sales_order_line_id,
             status=pick.status,
             staging_location_id=pick.staging_location_id,
             customer_id=pick.customer_id,
@@ -619,11 +712,12 @@ class _PickOrigin:
         self,
         source_type: PickSourceType,
         source_id: Optional[uuid.UUID],
-        kit_sku_id: uuid.UUID,
-        kit_qty: int,
+        kit_sku_id: Optional[uuid.UUID],
+        kit_qty: Optional[int],
         customer_id: Optional[uuid.UUID],
         invoice_id: Optional[uuid.UUID],
         needs: list[ComponentNeed],
+        sales_order_line_id: Optional[uuid.UUID] = None,
     ) -> None:
         self.source_type = source_type
         self.source_id = source_id
@@ -632,3 +726,4 @@ class _PickOrigin:
         self.customer_id = customer_id
         self.invoice_id = invoice_id
         self.needs = needs
+        self.sales_order_line_id = sales_order_line_id

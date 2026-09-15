@@ -65,7 +65,8 @@ export type PickPreview = {
 export type CreatePickPayload =
   | { sku_id: string; qty: number; customer_id?: string }
   | { invoice_id: string }
-  | { layby_id: string };
+  | { layby_id: string }
+  | { sales_order_line_id: string };
 
 export type UpdatePickPayload = {
   lines: { sku_id: string; allocations: { location_id: string; qty: number }[] }[];
@@ -225,23 +226,30 @@ function normalizeLine(value: unknown): PickLine {
 
 export function normalizePick(value: unknown): PickDocument {
   const row = asRecord(value);
+  const lines = asList(row.lines ?? row.components).map(normalizeLine);
+  const first = lines[0];
+  const kitId = pickString(row, ["sku_id", "kit_sku_id", "skuId"]);
   const statusRaw = pickString(row, ["status"]);
   return {
     id: pickString(row, ["id"]),
     pick_number: pickString(row, ["pick_number", "number", "pickNumber"]),
     status: PICK_STATUSES.has(statusRaw) ? (statusRaw as PickStatus) : "draft",
-    sku_id: pickString(row, ["sku_id", "kit_sku_id", "skuId"]),
-    sku_our_ref: pickString(row, ["kit_sku_our_ref", "sku_our_ref", "our_ref", "skuOurRef"]),
-    sku_name: pickString(row, ["kit_sku_name", "sku_name", "name", "skuName"]),
-    qty: pickNumber(row, ["qty", "kit_qty"]),
+    sku_id: kitId || first?.sku_id || "",
+    sku_our_ref:
+      pickString(row, ["kit_sku_our_ref", "sku_our_ref", "our_ref", "skuOurRef"]) ||
+      first?.sku_our_ref ||
+      "",
+    sku_name:
+      pickString(row, ["kit_sku_name", "sku_name", "name", "skuName"]) || first?.sku_name || "",
+    qty: pickNumber(row, ["qty", "kit_qty"]) || first?.qty_needed || 0,
     customer_id: pickNullable(row, ["customer_id", "customerId"]),
     invoice_id: pickNullable(row, ["invoice_id", "invoiceId"]),
     layby_id: pickNullable(row, ["layby_id", "laybyId"]),
     needs_confirm: pickBool(row, ["needs_confirm", "needs_confirmation"], false),
     qty_short: pickBool(row, ["qty_short", "short"], false),
     staging_location_id: pickNullable(row, ["staging_location_id", "stagingLocationId"]),
-    collect_from_showroom: pickBool(row, ["collect_from_showroom", "collectFromShowroom"], false),
-    lines: asList(row.lines ?? row.components).map(normalizeLine),
+    collect_from_showroom: pickBool(row, ["collectFromShowroom", "collect_from_showroom"], false),
+    lines,
     created_at: pickString(row, ["created_at", "createdAt"]),
     updated_at: pickString(row, ["updated_at", "updatedAt"]),
   };

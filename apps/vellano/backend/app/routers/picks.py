@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import uuid
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import Response
 
@@ -10,6 +12,7 @@ from app.dependencies.auth import (
     get_pick_service,
     require_picks_mutate,
 )
+from app.models.pick import PickSourceType
 from app.schemas.pick import (
     PickComplete,
     PickConfirm,
@@ -44,10 +47,11 @@ async def create_pick(
 
 @picks_router.get("", response_model=list[PickResponse])
 async def list_picks(
+    source_type: Optional[PickSourceType] = None,
     _: uuid.UUID = Depends(get_current_user_id),
     service: PickService = Depends(get_pick_service),
 ):
-    return await service.list()
+    return await service.list(source_type=source_type)
 
 
 @picks_router.get("/{pick_id}", response_model=PickResponse)

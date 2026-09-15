@@ -4,7 +4,9 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.dependencies.auth import (
     get_current_user_id,
     get_customers_crm_service,
@@ -16,6 +18,8 @@ from app.schemas.customer_crm import (
     CustomerCrmResponse,
     CustomerCrmUpdate,
 )
+from app.schemas.customer_portal import PortalMeResponse, PortalUserCreate
+from app.services.customer_portal import CustomerPortalService
 from app.services.customers_crm import CustomersCrmService
 
 customers_router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
@@ -62,3 +66,17 @@ async def update_customer(
     service: CustomersCrmService = Depends(get_customers_crm_service),
 ):
     return await service.update(customer_id, body, user_id)
+
+
+@customers_router.post(
+    "/{customer_id}/portal-users",
+    response_model=PortalMeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_customer_portal_user(
+    customer_id: uuid.UUID,
+    body: PortalUserCreate,
+    _: uuid.UUID = Depends(require_customers_mutate),
+    db: AsyncSession = Depends(get_db),
+):
+    return await CustomerPortalService(db).create_user(customer_id, body)

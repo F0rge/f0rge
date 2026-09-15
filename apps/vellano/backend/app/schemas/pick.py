@@ -20,14 +20,16 @@ class PickCreate(BaseModel):
     customer_id: Optional[uuid.UUID] = None
     invoice_id: Optional[uuid.UUID] = None
     layby_id: Optional[uuid.UUID] = None
+    sales_order_line_id: Optional[uuid.UUID] = None
 
     @model_validator(mode="after")
     def validate_origin(self) -> "PickCreate":
         has_till = self.sku_id is not None
         has_invoice = self.invoice_id is not None
         has_layby = self.layby_id is not None
-        if has_till + has_invoice + has_layby != 1:
-            raise ValueError("Provide sku_id, invoice_id, or layby_id")
+        has_so = self.sales_order_line_id is not None
+        if has_till + has_invoice + has_layby + has_so != 1:
+            raise ValueError("Provide sku_id, invoice_id, layby_id, or sales_order_line_id")
         if has_till and self.qty is None:
             raise ValueError("qty is required for a till-origin pick")
         if not has_till and self.qty is not None:
@@ -91,10 +93,11 @@ class PickResponse(BaseModel):
     number: str
     source_type: PickSourceType
     source_id: Optional[uuid.UUID]
-    kit_sku_id: uuid.UUID
-    kit_sku_our_ref: str
-    kit_sku_name: str
-    kit_qty: int
+    kit_sku_id: Optional[uuid.UUID]
+    kit_sku_our_ref: Optional[str]
+    kit_sku_name: Optional[str]
+    kit_qty: Optional[int]
+    sales_order_line_id: Optional[uuid.UUID] = None
     status: PickStatus
     staging_location_id: Optional[uuid.UUID]
     customer_id: Optional[uuid.UUID]

@@ -23,6 +23,7 @@ class UnitCostAuditSource(str, enum.Enum):
     IMPORT = "import"
     RETURN = "return"
     LAYBY = "layby"
+    SALES_ORDER = "sales_order"
 
 
 class UnitCostAudit(UUIDPkMixin, TimestampMixin, Base):

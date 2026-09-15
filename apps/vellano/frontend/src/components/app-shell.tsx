@@ -115,6 +115,8 @@ const ICONS = {
   "/picks": Task,
   "/deliveries": DeliveryTruck,
   "/returns": Undo,
+  "/quotes": Document,
+  "/orders": Receipt,
   "/laybys": PiggyBank,
   "/customers": UserFollow,
   "/ledger": Finance,
@@ -157,13 +159,13 @@ export function AppShell({ children }: AppShellProps) {
     getSideNavExpandedSnapshot,
     getSideNavExpandedServerSnapshot,
   );
-  const isLogin = pathname === "/login";
+  const isPublic = pathname === "/login" || pathname.startsWith("/trade");
 
   useEffect(() => {
-    if (!loading && !user && !isLogin) {
+    if (!loading && !user && !isPublic) {
       router.replace("/login");
     }
-  }, [loading, user, isLogin, router]);
+  }, [loading, user, isPublic, router]);
 
   useEffect(() => {
     if (user) {
@@ -175,15 +177,15 @@ export function AppShell({ children }: AppShellProps) {
   // does not clip page titles / primary actions from a prior scrolled page.
   // rAF: run after Next scroll restoration / layout paint.
   useEffect(() => {
-    if (isLogin) {
+    if (isPublic) {
       return;
     }
     resetMainScroll();
     const id = requestAnimationFrame(() => resetMainScroll());
     return () => cancelAnimationFrame(id);
-  }, [pathname, isLogin]);
+  }, [pathname, isPublic]);
 
-  if (isLogin) {
+  if (isPublic) {
     return <>{children}</>;
   }
 

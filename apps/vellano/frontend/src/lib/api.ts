@@ -257,7 +257,9 @@ export {
   canMutateCustomers,
   canMutateDeliveries,
   canMutateLaybys,
+  canMutateOrders,
   canMutatePicks,
+  canMutateQuotes,
   canMutateReturns,
   canMutateSettings,
   canSendComms,
@@ -1152,8 +1154,9 @@ export async function downloadTransferPdf(id: string, transferNumber: string): P
   URL.revokeObjectURL(url);
 }
 
-export function listPicks(): Promise<PickDocument[]> {
-  return apiFetch<unknown>("/picks").then(normalizePickList);
+export function listPicks(sourceType?: string): Promise<PickDocument[]> {
+  const query = sourceType ? `?source_type=${encodeURIComponent(sourceType)}` : "";
+  return apiFetch<unknown>(`/picks${query}`).then(normalizePickList);
 }
 
 export function getPick(id: string): Promise<PickDocument> {
@@ -3933,6 +3936,233 @@ export function cancelLayby(id: string): Promise<Layby> {
   return apiFetch<Layby>(`/laybys/${id}/cancel`, { method: "POST" });
 }
 
+export type QuoteStatus = "draft" | "sent" | "accepted" | "expired" | "cancelled";
+
+export type QuoteLine = {
+  id: string;
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  qty: number;
+  unit_ex_vat: string;
+  description: string;
+  notes: string | null;
+};
+
+export type QuoteListItem = {
+  id: string;
+  quote_number: string;
+  customer_id: string;
+  customer_name: string;
+  status: QuoteStatus;
+  subtotal_ex_vat: string;
+  vat_amount: string;
+  total_inc_vat: string;
+  notes: string | null;
+  items_label: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Quote = QuoteListItem & {
+  lines: QuoteLine[];
+};
+
+export type CreateQuotePayload = {
+  customer_id: string;
+  lines: { sku_id: string; qty: number; notes?: string }[];
+  notes?: string;
+};
+
+export type AcceptQuotePayload = {
+  location_id?: string;
+  hold_stock?: boolean;
+  deposit?: { amount: string; tender: "cash" | "eft" };
+};
+
+export type SalesOrderStatus = "draft" | "open" | "awaiting_stock" | "invoiced" | "cancelled";
+
+export type SalesOrderLine = {
+  id: string;
+  sku_id: string;
+  our_ref: string;
+  name: string;
+  qty: number;
+  unit_ex_vat: string;
+  description: string;
+  notes: string | null;
+  held_qty: number;
+  hold_location_id: string | null;
+};
+
+export type SalesOrderPayment = {
+  id: string;
+  amount: string;
+  tender: "cash" | "eft";
+  paid_on: string;
+};
+
+export type SalesOrderListItem = {
+  id: string;
+  so_number: string;
+  customer_id: string;
+  customer_name: string;
+  quote_id: string | null;
+  location_id: string | null;
+  location_name: string | null;
+  invoice_id: string | null;
+  hold_stock: boolean;
+  awaiting_stock: boolean;
+  status: SalesOrderStatus;
+  subtotal_ex_vat: string;
+  vat_amount: string;
+  total_inc_vat: string;
+  amount_paid: string;
+  balance: string;
+  notes: string | null;
+  items_label: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SalesOrder = SalesOrderListItem & {
+  lines: SalesOrderLine[];
+  payments: SalesOrderPayment[];
+};
+
+export function listQuotes(params?: ListParams): Promise<Page<QuoteListItem>> {
+  return apiFetch<Page<QuoteListItem>>(`/quotes?${buildListQuery(params)}`);
+}
+
+export function getQuote(id: string): Promise<Quote> {
+  return apiFetch<Quote>(`/quotes/${id}`);
+}
+
+export function createQuote(payload: CreateQuotePayload): Promise<Quote> {
+  return apiFetch<Quote>("/quotes", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function markQuoteSent(id: string): Promise<Quote> {
+  return apiFetch<Quote>(`/quotes/${id}/mark-sent`, { method: "POST" });
+}
+
+export function acceptQuote(id: string, payload: AcceptQuotePayload): Promise<SalesOrder> {
+  return apiFetch<SalesOrder>(`/quotes/${id}/accept`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function cancelQuote(id: string): Promise<Quote> {
+  return apiFetch<Quote>(`/quotes/${id}/cancel`, { method: "POST" });
+}
+
+export async function downloadQuotePdf(id: string, quoteNumber: string): Promise<void> {
+  const response = await fetch(`/api/v1/quotes/${id}/pdf`, { credentials: "include" });
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${quoteNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+export function listSalesOrders(params?: ListParams): Promise<Page<SalesOrderListItem>> {
+  return apiFetch<Page<SalesOrderListItem>>(`/orders?${buildListQuery(params)}`);
+}
+
+export function getSalesOrder(id: string): Promise<SalesOrder> {
+  return apiFetch<SalesOrder>(`/orders/${id}`);
+}
+
+export function confirmSalesOrder(
+  id: string,
+  payload: AcceptQuotePayload,
+): Promise<SalesOrder> {
+  return apiFetch<SalesOrder>(`/orders/${id}/confirm`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addSalesOrderPayment(
+  id: string,
+  payload: { amount: string; tender: "cash" | "eft" },
+): Promise<SalesOrder> {
+  return apiFetch<SalesOrder>(`/orders/${id}/payments`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function remainderInvoiceSalesOrder(id: string): Promise<SalesOrder> {
+  return apiFetch<SalesOrder>(`/orders/${id}/invoice`, { method: "POST" });
+}
+
+export function cancelSalesOrder(id: string): Promise<SalesOrder> {
+  return apiFetch<SalesOrder>(`/orders/${id}/cancel`, { method: "POST" });
+}
+
+export type PortalMe = {
+  id: string;
+  email: string;
+  customer_id: string;
+  customer_name: string;
+  price_tier: string;
+};
+
+export type PortalCatalogueItem = {
+  id: string;
+  our_ref: string;
+  name: string;
+  unit_ex_vat: string;
+  unit_inc_vat: string;
+};
+
+export function portalLogin(email: string, password: string): Promise<{ email: string; customer_name: string }> {
+  return apiFetch("/portal/login", { method: "POST", body: JSON.stringify({ email, password }) });
+}
+
+export function portalLogout(): Promise<void> {
+  return apiFetch("/portal/logout", { method: "POST" });
+}
+
+export function getPortalMe(): Promise<PortalMe> {
+  return apiFetch("/portal/me");
+}
+
+export function listPortalCatalogue(): Promise<PortalCatalogueItem[]> {
+  return apiFetch("/portal/catalogue");
+}
+
+export function placePortalOrder(payload: {
+  lines: { sku_id: string; qty: number; notes?: string }[];
+  notes?: string;
+}): Promise<SalesOrder> {
+  return apiFetch("/portal/orders", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function listPortalOrders(): Promise<SalesOrder[]> {
+  return apiFetch("/portal/orders");
+}
+
+export function createPortalUser(
+  customerId: string,
+  payload: { email: string; password: string },
+): Promise<PortalMe> {
+  return apiFetch(`/customers/${customerId}/portal-users`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export type CustomerType = "retail" | "trade";
 
 export type CustomerCrm = {
@@ -4089,9 +4319,9 @@ export function updateCustomer(
   });
 }
 
-export type DeliveryStatus = "draft" | "packed" | "delivered" | "cancelled";
+export type DeliveryStatus = "draft" | "packed" | "loaded" | "delivered" | "cancelled";
 
-export type DeliverySourceType = "invoice" | "layby";
+export type DeliverySourceType = "invoice" | "layby" | "sales_order";
 
 export type DeliveryLine = {
   id: string;
@@ -4108,11 +4338,17 @@ export type DeliveryListItem = {
   invoice_number: string | null;
   layby_id: string | null;
   layby_number: string | null;
+  sales_order_id?: string | null;
+  so_number?: string | null;
   customer_name: string;
   location_id: string;
   location_name: string;
   status: DeliveryStatus;
   delivery_date: string | null;
+  carton_count?: number | null;
+  loaded_at?: string | null;
+  tracking_number?: string | null;
+  carrier?: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -4126,17 +4362,21 @@ export type CreateDeliveryPayload = {
   source_type: DeliverySourceType;
   invoice_id?: string;
   layby_id?: string;
+  sales_order_id?: string;
   location_id: string;
   notes?: string;
 };
 
 export type CompleteDeliveryPayload = {
   delivery_date?: string;
+  tracking_number?: string;
+  carrier?: string;
 };
 
 export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
   draft: "Draft",
   packed: "Packed",
+  loaded: "Loaded",
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
@@ -4161,6 +4401,9 @@ export function createDelivery(payload: CreateDeliveryPayload): Promise<Delivery
   if (payload.source_type === "layby" && payload.layby_id) {
     body.layby_id = payload.layby_id;
   }
+  if (payload.source_type === "sales_order" && payload.sales_order_id) {
+    body.sales_order_id = payload.sales_order_id;
+  }
   if (notes) {
     body.notes = notes;
   }
@@ -4170,8 +4413,25 @@ export function createDelivery(payload: CreateDeliveryPayload): Promise<Delivery
   });
 }
 
-export function packDelivery(id: string): Promise<Delivery> {
-  return apiFetch<Delivery>(`/deliveries/${id}/pack`, { method: "POST" });
+export function packDelivery(id: string, cartonCount?: number): Promise<Delivery> {
+  return apiFetch<Delivery>(`/deliveries/${id}/pack`, {
+    method: "POST",
+    body: JSON.stringify(cartonCount == null ? {} : { carton_count: cartonCount }),
+  });
+}
+
+export function loadDelivery(id: string): Promise<Delivery> {
+  return apiFetch<Delivery>(`/deliveries/${id}/load`, { method: "POST" });
+}
+
+export function updateDeliveryTracking(
+  id: string,
+  payload: { tracking_number?: string; carrier?: string },
+): Promise<Delivery> {
+  return apiFetch<Delivery>(`/deliveries/${id}/tracking`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function completeDelivery(
@@ -4182,6 +4442,12 @@ export function completeDelivery(
   const body: CompleteDeliveryPayload = {};
   if (deliveryDate) {
     body.delivery_date = deliveryDate;
+  }
+  if (payload?.tracking_number) {
+    body.tracking_number = payload.tracking_number;
+  }
+  if (payload?.carrier) {
+    body.carrier = payload.carrier;
   }
   return apiFetch<Delivery>(`/deliveries/${id}/complete`, {
     method: "POST",

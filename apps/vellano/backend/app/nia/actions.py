@@ -15,6 +15,8 @@ from app.permissions import (
     SALES_CUSTOMERS,
     SALES_DELIVERIES,
     SALES_LAYBYS,
+    SALES_ORDERS,
+    SALES_QUOTES,
     SALES_RETURNS,
     SETTINGS_MUTATE,
     STOCK_RECEIVE,
@@ -55,6 +57,8 @@ _PERM_PHRASE: dict[str, str] = {
     PO_RAISE: "change customer credit",
     SALES_RETURNS: "process returns",
     SALES_LAYBYS: "manage laybys",
+    SALES_QUOTES: "manage quotes",
+    SALES_ORDERS: "manage sales orders",
     BOOKS_MUTATE: "change the books",
     SETTINGS_MUTATE: "change settings",
 }

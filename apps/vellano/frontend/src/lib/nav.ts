@@ -45,6 +45,8 @@ export const WAREHOUSE_NAV_ITEMS = [
 ] as const;
 
 export const SALES_NAV_ITEMS = [
+  { href: "/quotes", label: "Quotes" },
+  { href: "/orders", label: "Orders" },
   { href: "/laybys", label: "Laybys" },
   { href: "/customers", label: "Customers" },
   { href: "/returns", label: "Returns" },
@@ -107,7 +109,12 @@ export function isWarehousePath(pathname: string): boolean {
 }
 
 export function isSalesPath(pathname: string): boolean {
-  return SALES_HREFS.has(pathname) || pathname.startsWith("/customers/");
+  return (
+    SALES_HREFS.has(pathname) ||
+    pathname.startsWith("/customers/") ||
+    pathname.startsWith("/quotes/") ||
+    pathname.startsWith("/orders/")
+  );
 }
 
 export function isAdminPath(pathname: string): boolean {
@@ -168,6 +175,12 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
     return true;
   }
   if (href === "/customers" && pathname.startsWith("/customers/")) {
+    return true;
+  }
+  if (href === "/quotes" && pathname.startsWith("/quotes/")) {
+    return true;
+  }
+  if (href === "/orders" && pathname.startsWith("/orders/")) {
     return true;
   }
   if (href === "/picks" && pathname.startsWith("/picks/")) {

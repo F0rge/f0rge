@@ -53,6 +53,8 @@ def decode_access_token(token: str) -> uuid.UUID:
     sub = payload.get("sub")
     if not sub:
         raise UnauthorizedError("Invalid session")
+    if payload.get("typ") == "customer":
+        raise UnauthorizedError("Invalid session")
 
     try:
         return uuid.UUID(str(sub))

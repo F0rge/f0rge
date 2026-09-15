@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from httpx import AsyncClient
 
 from tests.test_purchase_orders import _location_id_by_name, _relogin_owner
@@ -385,3 +387,61 @@ async def test_complete_from_draft_rejected(
     completed = await owner_client.post(f"/api/v1/deliveries/{delivery_id}/complete", json={})
     assert completed.status_code == 409
     assert completed.json()["detail"] == "Delivery is not packed"
+
+
+async def test_unpaid_sales_order_delivery_pack_load_tracking(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    from tests.test_sales_orders import _open_held_order
+
+    order = await _open_held_order(
+        async_client,
+        owner_client,
+        "DLV-SO",
+        qty=1,
+        hold_qty=1,
+        deposit="200.00",
+    )
+    location_id = order["_location_id"]
+    created = await owner_client.post(
+        "/api/v1/deliveries",
+        json={
+            "source_type": "sales_order",
+            "sales_order_id": order["id"],
+            "location_id": location_id,
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["source_type"] == "sales_order"
+    assert body["sales_order_id"] == order["id"]
+    assert Decimal(order["amount_paid"]) < Decimal(order["total_inc_vat"])
+    delivery_id = body["id"]
+
+    packed = await owner_client.post(
+        f"/api/v1/deliveries/{delivery_id}/pack",
+        json={"carton_count": 2},
+    )
+    assert packed.status_code == 200, packed.text
+    assert packed.json()["status"] == "packed"
+    assert packed.json()["carton_count"] == 2
+
+    loaded = await owner_client.post(f"/api/v1/deliveries/{delivery_id}/load")
+    assert loaded.status_code == 200, loaded.text
+    assert loaded.json()["status"] == "loaded"
+    assert loaded.json()["loaded_at"] is not None
+
+    tracked = await owner_client.patch(
+        f"/api/v1/deliveries/{delivery_id}/tracking",
+        json={"tracking_number": "TRK-1", "carrier": "The Courier Guy"},
+    )
+    assert tracked.status_code == 200, tracked.text
+    assert tracked.json()["tracking_number"] == "TRK-1"
+
+    completed = await owner_client.post(
+        f"/api/v1/deliveries/{delivery_id}/complete",
+        json={"carrier": "The Courier Guy"},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "delivered"

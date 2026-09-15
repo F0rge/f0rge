@@ -8,6 +8,7 @@ from typing import Optional
 from sqlalchemy import (
     CheckConstraint,
     Date,
+    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -26,11 +27,13 @@ from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 class DeliverySourceType(str, enum.Enum):
     INVOICE = "invoice"
     LAYBY = "layby"
+    SALES_ORDER = "sales_order"
 
 
 class DeliveryStatus(str, enum.Enum):
     DRAFT = "draft"
     PACKED = "packed"
+    LOADED = "loaded"
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
 
@@ -61,6 +64,12 @@ class Delivery(UUIDPkMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+    sales_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sales_orders.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     location_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("locations.id", ondelete="RESTRICT"),
@@ -79,6 +88,10 @@ class Delivery(UUIDPkMixin, TimestampMixin, Base):
     )
     delivery_date: Mapped[Optional[datetime.date]] = mapped_column(Date, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    carton_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    loaded_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    tracking_number: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    carrier: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
@@ -88,6 +101,7 @@ class Delivery(UUIDPkMixin, TimestampMixin, Base):
 
     invoice: Mapped[Optional["TaxInvoice"]] = relationship()
     layby: Mapped[Optional["Layby"]] = relationship()
+    sales_order: Mapped[Optional["SalesOrder"]] = relationship()
     location: Mapped["Location"] = relationship()
     created_by: Mapped["User"] = relationship()
     lines: Mapped[list["DeliveryLine"]] = relationship(
@@ -99,12 +113,16 @@ class Delivery(UUIDPkMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("delivery_number", name="uq_deliveries_delivery_number"),
         CheckConstraint(
-            "(source_type = 'invoice' AND invoice_id IS NOT NULL AND layby_id IS NULL) "
-            "OR (source_type = 'layby' AND layby_id IS NOT NULL AND invoice_id IS NULL)",
+            "(source_type = 'invoice' AND invoice_id IS NOT NULL "
+            "AND layby_id IS NULL AND sales_order_id IS NULL) "
+            "OR (source_type = 'layby' AND layby_id IS NOT NULL "
+            "AND invoice_id IS NULL AND sales_order_id IS NULL) "
+            "OR (source_type = 'sales_order' AND sales_order_id IS NOT NULL "
+            "AND invoice_id IS NULL AND layby_id IS NULL)",
             name="ck_deliveries_source",
         ),
         CheckConstraint(
-            "status IN ('draft', 'packed', 'delivered', 'cancelled')",
+            "status IN ('draft', 'packed', 'loaded', 'delivered', 'cancelled')",
             name="ck_deliveries_status",
         ),
         Index(
@@ -118,6 +136,12 @@ class Delivery(UUIDPkMixin, TimestampMixin, Base):
             "layby_id",
             unique=True,
             postgresql_where=text("layby_id IS NOT NULL AND status != 'cancelled'"),
+        ),
+        Index(
+            "uq_deliveries_sales_order_active",
+            "sales_order_id",
+            unique=True,
+            postgresql_where=text("sales_order_id IS NOT NULL AND status != 'cancelled'"),
         ),
     )
 
@@ -148,6 +172,7 @@ class DeliveryLine(UUIDPkMixin, TimestampMixin, Base):
 
 from app.models.layby import Layby  # noqa: E402
 from app.models.location import Location  # noqa: E402
+from app.models.sales_order import SalesOrder  # noqa: E402
 from app.models.sku import Sku  # noqa: E402
 from app.models.tax_invoice import TaxInvoice  # noqa: E402
 from app.models.user import User  # noqa: E402

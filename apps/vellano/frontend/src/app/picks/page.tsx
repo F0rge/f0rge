@@ -36,7 +36,7 @@ import { PICK_STATUS_LABELS, pickStatusTagType } from "@/lib/picks";
 
 const TABLE_HEADERS = [
   { key: "pick_number", header: "Pick" },
-  { key: "sku", header: "Kit" },
+  { key: "sku", header: "Item" },
   { key: "qty", header: "Qty" },
   { key: "status", header: "Status" },
   { key: "created_at", header: "Created" },
@@ -193,7 +193,7 @@ function PicksPageContent() {
         <div>
           <h1 className="cds--type-productive-heading-04">Picks</h1>
           <p className="cds--type-body-01">
-            Allocate kit components across locations. Leave-behind is allowed.
+            Allocate kit components or reserved sales-order lines across locations.
           </p>
         </div>
         {canMutate ? <Button onClick={() => setCreateOpen(true)}>New pick</Button> : null}

@@ -479,3 +479,84 @@ async def test_does_not_patch_invoice_description(
     assert "Vellano" in text
     assert created.json()["number"] in text
     assert "Set completeness" in text
+
+
+async def test_non_kit_sales_order_pick_confirms(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    from tests.test_sales_orders import _open_held_order
+
+    order = await _open_held_order(
+        async_client,
+        owner_client,
+        "PCK-SOFA",
+        qty=1,
+        hold_qty=1,
+        deposit=None,
+    )
+    line_id = (await owner_client.get(f"/api/v1/orders/{order['id']}")).json()["lines"][0]["id"]
+    created = await owner_client.post(
+        "/api/v1/picks",
+        json={"sales_order_line_id": line_id},
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["source_type"] == "sales_order"
+    assert body["kit_sku_id"] is None
+    assert len(body["lines"]) == 1
+    assert body["lines"][0]["sku_id"] == order["_sku_id"]
+    pick_id = body["id"]
+    confirmed = await owner_client.post(
+        f"/api/v1/picks/{pick_id}/confirm",
+        json={"confirm_split": True},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    completed = await owner_client.post(f"/api/v1/picks/{pick_id}/complete", json={})
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "staged"
+
+
+async def test_kit_sales_order_pick_explodes(
+    owner_client: AsyncClient,
+) -> None:
+    kramerville_id = await _location_id_by_name(owner_client, "Kramerville")
+    kit = await _kit(
+        owner_client,
+        "PCK-SOKIT",
+        table_location_id=kramerville_id,
+        table_qty=1,
+        chair_location_id=kramerville_id,
+        chair_qty=4,
+    )
+    from tests.test_quotes import _named_customer
+    from tests.test_till import _set_retail_price
+
+    await _set_retail_price(owner_client, kit["parent"]["id"], "5000.00")
+    customer_id = await _named_customer(owner_client, "Kit SO Pick")
+    quote = await owner_client.post(
+        "/api/v1/quotes",
+        json={"customer_id": customer_id, "lines": [{"sku_id": kit["parent"]["id"], "qty": 1}]},
+    )
+    assert quote.status_code == 201, quote.text
+    accepted = await owner_client.post(
+        f"/api/v1/quotes/{quote.json()['id']}/accept",
+        json={"location_id": kramerville_id, "hold_stock": False},
+    )
+    assert accepted.status_code == 200, accepted.text
+    line_id = accepted.json()["lines"][0]["id"]
+    created = await owner_client.post(
+        "/api/v1/picks",
+        json={"sales_order_line_id": line_id},
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["kit_sku_id"] == kit["parent"]["id"]
+    sku_ids = {line["sku_id"] for line in body["lines"]}
+    assert kit["table"]["id"] in sku_ids
+    assert kit["chairs"]["id"] in sku_ids
+    confirmed = await owner_client.post(
+        f"/api/v1/picks/{body['id']}/confirm",
+        json={"confirm_split": True},
+    )
+    assert confirmed.status_code == 200, confirmed.text

@@ -30,6 +30,8 @@ describe("nav path helpers", () => {
     expect(isWarehousePath("/purchase-orders")).toBe(true);
     expect(isWarehousePath("/purchase-orders/abc")).toBe(true);
     expect(isWarehousePath("/wms")).toBe(true);
+    expect(isSalesPath("/quotes")).toBe(true);
+    expect(isSalesPath("/orders")).toBe(true);
     expect(isSalesPath("/laybys")).toBe(true);
     expect(isSalesPath("/deliveries")).toBe(true);
     expect(isSalesPath("/customers/abc")).toBe(true);

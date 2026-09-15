@@ -21,10 +21,16 @@ import {
   ApiError,
   canReceive,
   canTransfer,
+  canMutateDeliveries,
+  canMutatePicks,
   completeStocktake,
+  completeDelivery,
+  completePick,
+  confirmPick,
   createTransfer,
   dispatchTransfer,
   downloadTransferPdf,
+  getDelivery,
   getSettings,
   getStocktake,
   getPurchaseOrder,
@@ -35,11 +41,16 @@ import {
   listSkus,
   listStocktakes,
   listTransfers,
+  loadDelivery,
   lookupStocktakeBarcode,
+  listDeliveries,
+  listPicks,
+  packDelivery,
   patchStocktakeLine,
   receivePurchaseOrder,
   receiveTransfer,
   startStocktake,
+  type Delivery,
   type InventorySku,
   type Location,
   type PurchaseOrder,
@@ -48,7 +59,9 @@ import {
   type Stocktake,
   type StocktakeLine,
   type Transfer,
+  updateDeliveryTracking,
 } from "@/lib/api";
+import type { PickDocument } from "@/lib/picks";
 import { optionalMovementBinId } from "@/lib/bin-helpers";
 import { formatExpectedCartons } from "@/lib/carton-helpers";
 import { useAuth } from "@/lib/auth";
@@ -59,15 +72,18 @@ import {
 } from "@/lib/viewport";
 import { useWmsFloorLocation } from "@/lib/wms-location";
 
-type WmsTab = "receive" | "count" | "transfer";
+type WmsTab = "receive" | "count" | "transfer" | "pick" | "pack" | "deliver";
 
 const TAB_INDEX: Record<WmsTab, number> = {
   receive: 0,
   count: 1,
   transfer: 2,
+  pick: 3,
+  pack: 4,
+  deliver: 5,
 };
 
-const INDEX_TAB: WmsTab[] = ["receive", "count", "transfer"];
+const INDEX_TAB: WmsTab[] = ["receive", "count", "transfer", "pick", "pack", "deliver"];
 
 function findSkuByBarcode(skus: Sku[], barcode: string): Sku | undefined {
   const trimmed = barcode.trim();
@@ -95,15 +111,16 @@ function WmsDesktopInterstitial() {
       <Stack gap={6}>
         <div>
           <h1 className="cds--type-productive-heading-04">Warehouse</h1>
-          <p className="cds--type-body-01">
+            <p className="cds--type-body-01">
             The warehouse console is built for your phone on the shop floor. Open this page on a
-            mobile device to receive, count, and transfer stock with the camera scanner.
+            mobile device to receive, count, transfer, pick, pack, and deliver with the camera
+            scanner.
           </p>
         </div>
         <InlineNotification
           kind="info"
           title="Use this on your phone"
-          subtitle="Receive, count, and transfer are easier with the floor scanner and bottom tabs on a narrow screen."
+          subtitle="Floor work is easier with the scanner and bottom tabs on a narrow screen."
           hideCloseButton
           lowContrast
         />
@@ -131,6 +148,8 @@ function WmsMobileConsole() {
   const { user } = useAuth();
   const canRecv = canReceive(user);
   const canXfer = canTransfer(user);
+  const canPick = canMutatePicks(user);
+  const canDlv = canMutateDeliveries(user);
 
   const [tab, setTab] = useState<WmsTab>("receive");
   const [loading, setLoading] = useState(true);
@@ -214,8 +233,8 @@ function WmsMobileConsole() {
           <div>
             <h1 className="cds--type-productive-heading-04">Warehouse</h1>
             <p className="cds--type-body-01">
-              Scan-first receive, stocktake count, and two-step transfers. Destination stock updates
-              only after receive.
+              Scan-first receive, count, transfer, pick, pack, and deliver. Destination stock
+              updates only after receive.
             </p>
           </div>
 
@@ -262,7 +281,7 @@ function WmsMobileConsole() {
               onStocktakeChange={setStocktake}
               onReload={loadData}
             />
-          ) : (
+          ) : tab === "transfer" ? (
             <TransferTab
               canMutate={canXfer}
               floorLocationId={locationId}
@@ -273,6 +292,12 @@ function WmsMobileConsole() {
               onSuccess={setSuccess}
               onTransferred={loadData}
             />
+          ) : tab === "pick" ? (
+            <PickTab canMutate={canPick} skus={skus} onError={setError} onSuccess={setSuccess} />
+          ) : tab === "pack" ? (
+            <PackTab canMutate={canDlv} skus={skus} onError={setError} onSuccess={setSuccess} />
+          ) : (
+            <DeliverTab canMutate={canDlv} onError={setError} onSuccess={setSuccess} />
           )}
         </Stack>
       </div>
@@ -290,6 +315,9 @@ function WmsMobileConsole() {
           <Switch name="receive" text="Receive" />
           <Switch name="count" text="Count" />
           <Switch name="transfer" text="Transfer" />
+          <Switch name="pick" text="Pick" />
+          <Switch name="pack" text="Pack" />
+          <Switch name="deliver" text="Deliver" />
         </ContentSwitcher>
       </div>
     </div>
@@ -1098,6 +1126,302 @@ function TransferTab({
         );
       })}
       <Link href="/transfers">Full transfers page</Link>
+    </Stack>
+  );
+}
+
+type FulfillmentTabProps = {
+  canMutate: boolean;
+  onError: (message: string) => void;
+  onSuccess: (message: string) => void;
+};
+
+function PickTab({
+  canMutate,
+  skus,
+  onError,
+  onSuccess,
+}: FulfillmentTabProps & { skus: Sku[] }) {
+  const [picks, setPicks] = useState<PickDocument[]>([]);
+  const [barcode, setBarcode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const reload = useCallback(async () => {
+    setPicks(await listPicks("sales_order"));
+  }, []);
+
+  useEffect(() => {
+    void reload().catch((err) =>
+      onError(err instanceof Error ? err.message : "Failed to load picks."),
+    );
+  }, [onError, reload]);
+
+  const openPicks = picks.filter(
+    (entry) => entry.status !== "cancelled" && entry.status !== "staged",
+  );
+
+  async function advancePick(code: string) {
+    if (!canMutate) {
+      onError("You cannot mutate picks.");
+      return;
+    }
+    const sku = findSkuByBarcode(skus, code);
+    if (!sku) {
+      onError("Unknown barcode.");
+      return;
+    }
+    const pick = openPicks.find(
+      (entry) =>
+        entry.sku_id === sku.id || entry.lines.some((line) => line.sku_id === sku.id),
+    );
+    if (!pick) {
+      onError("No open sales-order pick for that SKU.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      if (pick.status === "draft") {
+        const confirmed = await confirmPick(pick.id, pick.needs_confirm);
+        onSuccess(`Confirmed ${confirmed.pick_number}. Scan again to stage.`);
+      } else if (pick.status === "confirmed") {
+        const staged = await completePick(pick.id);
+        onSuccess(`${staged.pick_number} is ${staged.status}.`);
+      } else {
+        onSuccess(`${pick.pick_number} is ${pick.status}.`);
+      }
+      setBarcode("");
+      await reload();
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "Could not update pick.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Stack gap={5}>
+      <WmsScanField
+        id="wms-pick-scan"
+        labelText="Scan SKU"
+        value={barcode}
+        onChange={setBarcode}
+        onSubmit={(code) => void advancePick(code)}
+        disabled={!canMutate || submitting}
+      />
+      {openPicks.length === 0 ? (
+        <p className="cds--type-body-01">No open sales-order picks.</p>
+      ) : (
+        openPicks.map((pick) => (
+          <div key={pick.id} className="vellano-wms-line-card">
+            <strong>{pick.pick_number}</strong>
+            <p className="cds--type-body-01">
+              {pick.sku_our_ref || pick.lines[0]?.sku_our_ref || "Item"} · {pick.status}
+            </p>
+          </div>
+        ))
+      )}
+      <Link href="/picks">Full picks page</Link>
+    </Stack>
+  );
+}
+
+function PackTab({
+  canMutate,
+  skus,
+  onError,
+  onSuccess,
+}: FulfillmentTabProps & { skus: Sku[] }) {
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [barcode, setBarcode] = useState("");
+  const [cartonCount, setCartonCount] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const reload = useCallback(async () => {
+    const page = await listDeliveries({ status: "draft", limit: 50 });
+    const details = await Promise.all(page.items.map((item) => getDelivery(item.id)));
+    setDeliveries(details);
+  }, []);
+
+  useEffect(() => {
+    void reload().catch((err) =>
+      onError(err instanceof Error ? err.message : "Failed to load deliveries."),
+    );
+  }, [onError, reload]);
+
+  async function packFromScan(code: string) {
+    if (!canMutate) {
+      onError("You cannot pack deliveries.");
+      return;
+    }
+    const sku = findSkuByBarcode(skus, code);
+    const match = sku
+      ? deliveries.find((entry) => entry.lines.some((line) => line.sku_id === sku.id))
+      : deliveries.find((entry) =>
+          entry.lines.some((line) => line.description.toLowerCase().includes(code.trim().toLowerCase())),
+        );
+    if (!match) {
+      onError("No draft delivery line for that scan.");
+      return;
+    }
+    const cartons = parsePositiveInt(cartonCount);
+    setSubmitting(true);
+    try {
+      await packDelivery(match.id, cartons ?? undefined);
+      onSuccess(`Packed ${match.delivery_number}.`);
+      setBarcode("");
+      await reload();
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "Could not pack delivery.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Stack gap={5}>
+      <WmsScanField
+        id="wms-pack-scan"
+        labelText="Scan into delivery"
+        value={barcode}
+        onChange={setBarcode}
+        onSubmit={(code) => void packFromScan(code)}
+        disabled={!canMutate || submitting}
+      />
+      <TextInput
+        id="wms-carton-count"
+        labelText="Carton count (optional)"
+        value={cartonCount}
+        onChange={(event) => setCartonCount(event.target.value)}
+      />
+      {deliveries.length === 0 ? (
+        <p className="cds--type-body-01">No draft deliveries to pack.</p>
+      ) : (
+        deliveries.map((entry) => (
+          <div key={entry.id} className="vellano-wms-line-card">
+            <strong>{entry.delivery_number}</strong>
+            <p className="cds--type-body-01">
+              {entry.customer_name} · {entry.lines.length} lines
+            </p>
+          </div>
+        ))
+      )}
+      <Link href="/deliveries">Full deliveries page</Link>
+    </Stack>
+  );
+}
+
+function DeliverTab({ canMutate, onError, onSuccess }: FulfillmentTabProps) {
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [tracking, setTracking] = useState("");
+  const [carrier, setCarrier] = useState("");
+  const [submitting, setSubmitting] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    const [packed, loaded] = await Promise.all([
+      listDeliveries({ status: "packed", limit: 50 }),
+      listDeliveries({ status: "loaded", limit: 50 }),
+    ]);
+    const details = await Promise.all(
+      [...packed.items, ...loaded.items].map((item) => getDelivery(item.id)),
+    );
+    setDeliveries(details);
+  }, []);
+
+  useEffect(() => {
+    void reload().catch((err) =>
+      onError(err instanceof Error ? err.message : "Failed to load deliveries."),
+    );
+  }, [onError, reload]);
+
+  async function handleLoad(id: string) {
+    if (!canMutate) {
+      onError("You cannot load deliveries.");
+      return;
+    }
+    setSubmitting(id);
+    try {
+      const row = await loadDelivery(id);
+      onSuccess(`Loaded ${row.delivery_number}.`);
+      await reload();
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "Could not load delivery.");
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  async function handleComplete(id: string) {
+    if (!canMutate) {
+      onError("You cannot complete deliveries.");
+      return;
+    }
+    setSubmitting(id);
+    try {
+      if (tracking.trim() || carrier.trim()) {
+        await updateDeliveryTracking(id, {
+          tracking_number: tracking.trim() || undefined,
+          carrier: carrier.trim() || undefined,
+        });
+      }
+      const row = await completeDelivery(id, {
+        tracking_number: tracking.trim() || undefined,
+        carrier: carrier.trim() || undefined,
+      });
+      onSuccess(`Delivered ${row.delivery_number}.`);
+      setTracking("");
+      setCarrier("");
+      await reload();
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "Could not complete delivery.");
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <Stack gap={5}>
+      <TextInput
+        id="wms-tracking"
+        labelText="Tracking number"
+        value={tracking}
+        onChange={(event) => setTracking(event.target.value)}
+      />
+      <TextInput
+        id="wms-carrier"
+        labelText="Carrier"
+        value={carrier}
+        onChange={(event) => setCarrier(event.target.value)}
+      />
+      {deliveries.length === 0 ? (
+        <p className="cds--type-body-01">No packed or loaded deliveries.</p>
+      ) : (
+        deliveries.map((entry) => (
+          <div key={entry.id} className="vellano-wms-line-card">
+            <strong>{entry.delivery_number}</strong>
+            <p className="cds--type-body-01">
+              {entry.customer_name} · {entry.status}
+            </p>
+            {entry.status === "packed" ? (
+              <Button
+                size="sm"
+                disabled={submitting !== null}
+                onClick={() => void handleLoad(entry.id)}
+              >
+                {submitting === entry.id ? "Loading…" : "Load"}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                disabled={submitting !== null}
+                onClick={() => void handleComplete(entry.id)}
+              >
+                {submitting === entry.id ? "Saving…" : "Mark delivered"}
+              </Button>
+            )}
+          </div>
+        ))
+      )}
+      <Link href="/deliveries">Full deliveries page</Link>
     </Stack>
   );
 }

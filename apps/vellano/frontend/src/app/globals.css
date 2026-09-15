@@ -594,7 +594,9 @@ body {
 }
 
 .vellano-wms-switcher .cds--content-switcher-btn {
-  min-height: 3rem;
+  min-height: 2.75rem;
+  padding-inline: 0.25rem;
+  font-size: 0.75rem;
 }
 
 .vellano-wms-scan-row {

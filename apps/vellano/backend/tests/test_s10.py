@@ -191,7 +191,7 @@ async def test_settings_default_vat_is_15_percent(owner_client: AsyncClient) -> 
     assert body["defaults_locked"] is True
     assert body["legal_name"] == "Vellano"
     assert body["payment_terms_days"] == 30
-    assert len(body["document_sequences"]) == 11
+    assert len(body["document_sequences"]) == 13
     assert any(
         row["doc_type"] == "invoice" and row["prefix"] == "INV"
         for row in body["document_sequences"]

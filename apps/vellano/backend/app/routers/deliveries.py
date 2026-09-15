@@ -15,7 +15,9 @@ from app.schemas.delivery import (
     DeliveryComplete,
     DeliveryCreate,
     DeliveryListItem,
+    DeliveryPack,
     DeliveryResponse,
+    DeliveryTrackingUpdate,
 )
 from app.schemas.page import Page, PageParams, get_page_params
 from app.services.deliveries import DeliveriesService
@@ -58,10 +60,30 @@ async def get_delivery(
 @deliveries_router.post("/{delivery_id}/pack", response_model=DeliveryResponse)
 async def pack_delivery(
     delivery_id: uuid.UUID,
+    body: DeliveryPack = DeliveryPack(),
     _: uuid.UUID = Depends(require_deliveries_mutate),
     service: DeliveriesService = Depends(get_deliveries_service),
 ):
-    return await service.pack(delivery_id)
+    return await service.pack(delivery_id, body)
+
+
+@deliveries_router.post("/{delivery_id}/load", response_model=DeliveryResponse)
+async def load_delivery(
+    delivery_id: uuid.UUID,
+    _: uuid.UUID = Depends(require_deliveries_mutate),
+    service: DeliveriesService = Depends(get_deliveries_service),
+):
+    return await service.load(delivery_id)
+
+
+@deliveries_router.patch("/{delivery_id}/tracking", response_model=DeliveryResponse)
+async def patch_delivery_tracking(
+    delivery_id: uuid.UUID,
+    body: DeliveryTrackingUpdate,
+    _: uuid.UUID = Depends(require_deliveries_mutate),
+    service: DeliveriesService = Depends(get_deliveries_service),
+):
+    return await service.update_tracking(delivery_id, body)
 
 
 @deliveries_router.post("/{delivery_id}/complete", response_model=DeliveryResponse)

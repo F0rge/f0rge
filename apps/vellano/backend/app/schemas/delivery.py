@@ -13,22 +13,54 @@ class DeliveryCreate(BaseModel):
     source_type: DeliverySourceType
     invoice_id: Optional[uuid.UUID] = None
     layby_id: Optional[uuid.UUID] = None
+    sales_order_id: Optional[uuid.UUID] = None
     location_id: uuid.UUID
     notes: Optional[str] = None
+    carton_count: Optional[int] = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def validate_source_ids(self) -> "DeliveryCreate":
         if self.source_type == DeliverySourceType.INVOICE:
-            if self.invoice_id is None or self.layby_id is not None:
-                raise ValueError("invoice source requires invoice_id and no layby_id")
+            if (
+                self.invoice_id is None
+                or self.layby_id is not None
+                or self.sales_order_id is not None
+            ):
+                raise ValueError("invoice source requires invoice_id only")
         elif self.source_type == DeliverySourceType.LAYBY:
-            if self.layby_id is None or self.invoice_id is not None:
-                raise ValueError("layby source requires layby_id and no invoice_id")
+            if (
+                self.layby_id is None
+                or self.invoice_id is not None
+                or self.sales_order_id is not None
+            ):
+                raise ValueError("layby source requires layby_id only")
+        elif self.source_type == DeliverySourceType.SALES_ORDER:
+            if (
+                self.sales_order_id is None
+                or self.invoice_id is not None
+                or self.layby_id is not None
+            ):
+                raise ValueError("sales_order source requires sales_order_id only")
         return self
+
+
+class DeliveryPack(BaseModel):
+    carton_count: Optional[int] = Field(default=None, ge=0)
+
+
+class DeliveryLoad(BaseModel):
+    pass
+
+
+class DeliveryTrackingUpdate(BaseModel):
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
 
 
 class DeliveryComplete(BaseModel):
     delivery_date: Optional[datetime.date] = None
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
 
 
 class DeliveryLineResponse(BaseModel):
@@ -48,11 +80,17 @@ class DeliveryListItem(BaseModel):
     invoice_number: Optional[str]
     layby_id: Optional[uuid.UUID]
     layby_number: Optional[str]
+    sales_order_id: Optional[uuid.UUID] = None
+    so_number: Optional[str] = None
     customer_name: str
     location_id: uuid.UUID
     location_name: str
     status: DeliveryStatus
     delivery_date: Optional[datetime.date]
+    carton_count: Optional[int] = None
+    loaded_at: Optional[datetime.datetime] = None
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
     notes: Optional[str]
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -68,11 +106,17 @@ class DeliveryResponse(BaseModel):
     invoice_number: Optional[str]
     layby_id: Optional[uuid.UUID]
     layby_number: Optional[str]
+    sales_order_id: Optional[uuid.UUID] = None
+    so_number: Optional[str] = None
     customer_name: str
     location_id: uuid.UUID
     location_name: str
     status: DeliveryStatus
     delivery_date: Optional[datetime.date]
+    carton_count: Optional[int] = None
+    loaded_at: Optional[datetime.datetime] = None
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
     notes: Optional[str]
     lines: list[DeliveryLineResponse] = Field(default_factory=list)
     created_at: datetime.datetime

@@ -14,6 +14,8 @@ TILL_SELL = "till.sell"
 TILL_DISCOUNT = "till.discount"
 SALES_RETURNS = "sales.returns"
 SALES_LAYBYS = "sales.laybys"
+SALES_QUOTES = "sales.quotes"
+SALES_ORDERS = "sales.orders"
 SALES_DELIVERIES = "sales.deliveries"
 SALES_CUSTOMERS = "sales.customers"
 BOOKS_MUTATE = "books.mutate"
@@ -34,6 +36,8 @@ PERMISSION_CATALOG: tuple[str, ...] = (
     TILL_DISCOUNT,
     SALES_RETURNS,
     SALES_LAYBYS,
+    SALES_QUOTES,
+    SALES_ORDERS,
     SALES_DELIVERIES,
     SALES_CUSTOMERS,
     BOOKS_MUTATE,
@@ -70,6 +74,8 @@ ROLE_PRESETS: dict[str, frozenset[str]] = {
             TILL_DISCOUNT,
             SALES_RETURNS,
             SALES_LAYBYS,
+            SALES_QUOTES,
+            SALES_ORDERS,
             SALES_DELIVERIES,
             SALES_CUSTOMERS,
             NIA_USE,

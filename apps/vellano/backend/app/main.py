@@ -36,6 +36,7 @@ from app.routers import (
     catalogue_imports,
     category_maps,
     comms,
+    customer_portal,
     contacts,
     cost_audit,
     credit_notes,
@@ -56,6 +57,8 @@ from app.routers import (
     repeating_invoices,
     returns,
     laybys,
+    quotes,
+    sales_orders,
     nia,
     nia_run,
     nia_schedule,
@@ -235,6 +238,9 @@ app.include_router(adjustments.adjustments_router)
 app.include_router(returns.returns_router)
 app.include_router(deliveries.deliveries_router)
 app.include_router(laybys.laybys_router)
+app.include_router(quotes.quotes_router)
+app.include_router(sales_orders.sales_orders_router)
+app.include_router(customer_portal.portal_router)
 app.include_router(till.till_router)
 app.include_router(accounts.accounts_router)
 app.include_router(category_maps.category_maps_router)

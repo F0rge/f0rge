@@ -4,7 +4,16 @@ import enum
 import uuid
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +25,7 @@ class PickSourceType(str, enum.Enum):
     INVOICE = "invoice"
     LAYBY = "layby"
     TILL = "till"
+    SALES_ORDER = "sales_order"
 
 
 class PickStatus(str, enum.Enum):
@@ -41,13 +51,19 @@ class Pick(UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
     )
     source_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
-    kit_sku_id: Mapped[uuid.UUID] = mapped_column(
+    kit_sku_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("skus.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
-    kit_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    kit_qty: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sales_order_line_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sales_order_lines.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[PickStatus] = mapped_column(
         Enum(
             PickStatus,
@@ -75,7 +91,7 @@ class Pick(UUIDPkMixin, TimestampMixin, Base):
         index=True,
     )
 
-    kit_sku: Mapped["Sku"] = relationship(foreign_keys=[kit_sku_id])
+    kit_sku: Mapped[Optional["Sku"]] = relationship(foreign_keys=[kit_sku_id])
     staging_location: Mapped[Optional["Location"]] = relationship(
         foreign_keys=[staging_location_id]
     )
@@ -88,9 +104,19 @@ class Pick(UUIDPkMixin, TimestampMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("number", name="uq_picks_number"),
-        CheckConstraint("kit_qty > 0", name="ck_picks_kit_qty"),
+        Index(
+            "uq_picks_sales_order_line_active",
+            "sales_order_line_id",
+            unique=True,
+            postgresql_where=text("sales_order_line_id IS NOT NULL AND status != 'cancelled'"),
+        ),
         CheckConstraint(
-            "source_type IN ('invoice', 'layby', 'till')",
+            "(kit_sku_id IS NULL AND kit_qty IS NULL) OR "
+            "(kit_sku_id IS NOT NULL AND kit_qty IS NOT NULL AND kit_qty > 0)",
+            name="ck_picks_kit_header",
+        ),
+        CheckConstraint(
+            "source_type IN ('invoice', 'layby', 'till', 'sales_order')",
             name="ck_picks_source_type",
         ),
         CheckConstraint(
