@@ -4,13 +4,13 @@ import { checkSlug, passwordStrength, slugify } from "./slug";
 
 describe("slugify", () => {
   it("derives a workspace slug from a legal name", () => {
-    expect(slugify("Acme Furnishings (Pty) Ltd")).toBe("acme-furnishings");
+    expect(slugify("Acme Holdings (Pty) Ltd")).toBe("acme-holdings");
     expect(slugify("Kramer & Sons")).toBe("kramer-and-sons");
     expect(slugify("  Émile   Décor ")).toBe("emile-decor");
   });
 
   it("caps length at 32 without a trailing dash", () => {
-    const slug = slugify("a very long trading name for a furniture company in johannesburg");
+    const slug = slugify("a very long trading name for a distribution company in south africa");
     expect(slug.length).toBeLessThanOrEqual(32);
     expect(slug.endsWith("-")).toBe(false);
   });

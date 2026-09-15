@@ -1,13 +1,13 @@
 /**
- * Placeholder product brand. The product is not "Vellano" (Vellano is customer #1).
+ * Placeholder product brand. The product is not "Vellano" (Vellano is company one).
  * Rename here only — every page reads from this object.
  */
 export const site = {
   name: "Stockroom",
   domain: "stockroom.example",
-  tagline: "Stock, till, and books — one back office for furniture retailers.",
+  tagline: "Stock, till, and books in one company workspace.",
   description:
-    "Quotes to delivery to VAT201, with your own workspace on your own address and your data in your own database.",
+    "Each company gets its own hostname and its own database. A quote that is accepted holds stock; a delivery can be invoiced; the VAT201 draft is a read of that ledger. ZAR and 15% VAT are defaults.",
   supportEmail: "hello@stockroom.example",
   privacyVersion: "2026-09-draft",
   operatorName: "Stockroom (operator)",

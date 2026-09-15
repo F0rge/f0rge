@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Serif } from "next/font/google";
 
 import { SiteFooter } from "@/components/footer";
 import { SiteNav } from "@/components/nav";
@@ -8,17 +8,18 @@ import { site } from "@/lib/site";
 
 import "./globals.css";
 
-const fraunces = Fraunces({
+const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  variable: "--font-fraunces",
-  axes: ["opsz", "SOFT"],
-  style: ["normal", "italic"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-sans",
   display: "swap",
 });
 
-const inter = Inter({
+const plexSerif = IBM_Plex_Serif({
   subsets: ["latin"],
-  variable: "--font-inter",
+  weight: ["400", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-plex-serif",
   display: "swap",
 });
 
@@ -32,11 +33,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-ZA" className={`${fraunces.variable} ${inter.variable}`}>
-      <body className="min-h-dvh flex flex-col">
+    <html lang="en-ZA" className={`${plexSans.variable} ${plexSerif.variable}`}>
+      <body className="flex min-h-dvh flex-col">
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-ink focus:px-3 focus:py-2 focus:text-paper"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:bg-interactive focus:px-3 focus:py-2 focus:text-white"
         >
           Skip to content
         </a>

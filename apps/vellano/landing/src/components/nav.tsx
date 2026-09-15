@@ -9,32 +9,25 @@ import { site } from "@/lib/site";
 
 const links = [
   { href: "/#product", label: "Product" },
-  { href: "/#south-africa", label: "For SA retailers" },
-  { href: "/#how", label: "How it works" },
+  { href: "/#isolation", label: "Isolation" },
+  { href: "/#south-africa", label: "South Africa" },
+  { href: "/#how", label: "Onboarding" },
   { href: "/#faq", label: "Pricing" },
 ];
 
-export function Wordmark({ className = "" }: { className?: string }) {
+export function Wordmark({ className = "", inverted = false }: { className?: string; inverted?: boolean }) {
   return (
-    <Link href="/" className={`inline-flex items-center gap-2.5 ${className}`} aria-label={`${site.name} home`}>
-      <span aria-hidden className="grid h-7 w-7 place-items-center rounded-[7px] bg-ink">
-        <span className="block h-3.5 w-3.5 border-2 border-paper border-b-terracotta" />
+    <Link href="/" className={`inline-flex items-center gap-2 ${className}`} aria-label={`${site.name} home`}>
+      <span aria-hidden className={`grid h-6 w-6 place-items-center ${inverted ? "bg-white" : "bg-ink"}`}>
+        <span className={`block h-3 w-3 border-2 ${inverted ? "border-ink" : "border-white"}`} />
       </span>
-      <span className="font-display text-[1.35rem] leading-none tracking-tight">{site.name}</span>
+      <span className="text-[1.125rem] font-semibold leading-none tracking-tight">{site.name}</span>
     </Link>
   );
 }
 
 export function SiteNav() {
   const [open, setOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -44,31 +37,29 @@ export function SiteNav() {
   }, [open]);
 
   return (
-    <header
-      className={`sticky top-0 z-40 border-b transition-colors duration-300 ${
-        scrolled ? "border-line bg-paper/85 backdrop-blur-md" : "border-transparent bg-transparent"
-      }`}
-    >
-      <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8" aria-label="Main">
-        <Wordmark />
-        <ul className="hidden items-center gap-8 md:flex">
+    <header className="sticky top-0 z-40 bg-ink text-white">
+      <nav className="mx-auto flex h-12 max-w-[99rem] items-center justify-between px-4 sm:px-8" aria-label="Main">
+        <Wordmark inverted />
+        <ul className="hidden h-12 items-stretch md:flex">
           {links.map((l) => (
-            <li key={l.href}>
-              <Link href={l.href} className="text-sm text-ink-2 transition-colors hover:text-terracotta">
+            <li key={l.href} className="flex">
+              <Link href={l.href} className="flex items-center px-4 text-sm text-white/80 hover:bg-white/10 hover:text-white">
                 {l.label}
               </Link>
             </li>
           ))}
         </ul>
-        <div className="hidden items-center gap-2 md:flex">
-          <ButtonLink href="/signin" variant="ghost">
+        <div className="hidden items-center md:flex">
+          <Link href="/signin" className="flex h-12 items-center px-4 text-sm text-white/80 hover:bg-white/10 hover:text-white">
             Sign in
+          </Link>
+          <ButtonLink href="/signup" variant="header">
+            Create a company
           </ButtonLink>
-          <ButtonLink href="/signup">Create your company</ButtonLink>
         </div>
         <button
           type="button"
-          className="grid h-10 w-10 place-items-center rounded-full md:hidden"
+          className="grid h-12 w-12 place-items-center md:hidden"
           aria-expanded={open}
           aria-controls="mobile-menu"
           aria-label={open ? "Close menu" : "Open menu"}
@@ -78,23 +69,19 @@ export function SiteNav() {
         </button>
       </nav>
       {open ? (
-        <div id="mobile-menu" className="border-t border-line bg-paper px-5 pb-8 pt-4 md:hidden">
-          <ul className="flex flex-col gap-1">
+        <div id="mobile-menu" className="border-t border-white/10 bg-ink px-4 pb-6 pt-2 md:hidden">
+          <ul>
             {links.map((l) => (
               <li key={l.href}>
-                <Link
-                  href={l.href}
-                  onClick={() => setOpen(false)}
-                  className="block rounded-lg px-3 py-3 font-display text-2xl hover:bg-paper-2"
-                >
+                <Link href={l.href} onClick={() => setOpen(false)} className="block py-3 text-base hover:text-white/70">
                   {l.label}
                 </Link>
               </li>
             ))}
           </ul>
-          <div className="mt-6 flex flex-col gap-2">
-            <ButtonLink href="/signup" onClick={() => setOpen(false)}>
-              Create your company
+          <div className="mt-4 flex flex-col gap-2">
+            <ButtonLink href="/signup" variant="header" onClick={() => setOpen(false)}>
+              Create a company
             </ButtonLink>
             <ButtonLink href="/signin" variant="secondary" onClick={() => setOpen(false)}>
               Sign in

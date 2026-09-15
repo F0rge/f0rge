@@ -3,58 +3,60 @@ import { SectionHeading } from "@/components/section-heading";
 
 export function Pillars() {
   return (
-    <section id="product" className="mx-auto max-w-7xl scroll-mt-20 px-5 py-24 sm:px-8 sm:py-32">
-      <Reveal>
-        <SectionHeading
-          number="01"
-          eyebrow="What you run on it"
-          title={
-            <>
-              Three jobs, <span className="display-italic">one set of numbers.</span>
-            </>
-          }
-          lede="Stock, sales, and books stop living in three systems and a spreadsheet. Every quote, pick, and invoice posts to the same ledger."
-        />
-      </Reveal>
-      <div className="mt-14 grid gap-5 md:grid-cols-3">
-        <Reveal delay={0}>
-          <Card
-            title="Stock & warehouse"
-            bullets={["Locations, bins, transfers, stocktakes", "Phone-first pick, pack, load, deliver", "Landed cost from purchase order to shelf"]}
-          >
-            <StockMock />
-          </Card>
+    <section id="product" className="scroll-mt-16">
+      <div className="mx-auto max-w-[99rem] px-4 py-16 sm:px-8 sm:py-20">
+        <Reveal>
+          <SectionHeading
+            number="02"
+            eyebrow="What posts"
+            title="Three jobs that already share a chart of accounts."
+            lede="Stock movements, till takes, and invoices are not integrations stitched at month-end. They are rows in the same ledger. If you only need a catalogue website, this will feel heavy. That is honest."
+          />
         </Reveal>
-        <Reveal delay={0.08}>
-          <Card
-            title="Sell"
-            bullets={["Till with layby and cash-up", "Quotes → sales orders with stock holds", "Trade portal for your B2B customers"]}
-          >
-            <TillMock />
-          </Card>
-        </Reveal>
-        <Reveal delay={0.16}>
-          <Card
-            title="Books"
-            bullets={["Invoices, bills, credit notes, deposits", "Bank import and reconciliation", "Aged AR/AP and a VAT201 draft"]}
-          >
-            <LedgerMock />
-          </Card>
-        </Reveal>
+        <div className="mt-12 grid gap-px bg-line lg:grid-cols-3">
+          <Reveal>
+            <Card
+              title="Stock & warehouse"
+              body="Locations, transfers, stocktakes, landed cost from the purchase order. Pick, pack, load, deliver on a phone — the warehouse console is the same data as the desk, not a parallel app with its own quantities."
+              facts={["Bin-level if you set bins. Location-level if you do not.", "A hold from a sales order is visible to the next picker.", "Short-picks are recorded. They do not silently become ‘delivered’."]}
+            >
+              <StockMock />
+            </Card>
+          </Reveal>
+          <Reveal delay={0.05}>
+            <Card
+              title="Sell"
+              body="Till with cash-up. Layby. Quotes that become sales orders with stock held. Trade customers get a login on your hostname and place orders that land as drafts — not a forwarded WhatsApp screenshot."
+              facts={["Walk-in and account customers on the same till.", "Deposit on GL 2300, not a note in the comment field."]}
+            >
+              <TillMock />
+            </Card>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <Card
+              title="Books"
+              body="Invoices, bills, credit notes, bank import, aged AR/AP. The VAT201 is a draft you copy into eFiling. We do not file it, and we do not pretend to."
+              facts={["15% on the line. Credit notes reverse the tax, not just the total.", "Opening balances and Cin7/Xero-shaped CSVs after you are in."]}
+            >
+              <LedgerMock />
+            </Card>
+          </Reveal>
+        </div>
       </div>
     </section>
   );
 }
 
-function Card({ title, bullets, children }: { title: string; bullets: string[]; children: React.ReactNode }) {
+function Card({ title, body, facts, children }: { title: string; body: string; facts: string[]; children: React.ReactNode }) {
   return (
-    <article className="group flex h-full flex-col rounded-2xl border border-line bg-white/60 p-6 transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_-40px_rgba(22,22,22,.5)]">
-      <div className="rounded-xl border border-line bg-paper p-4">{children}</div>
-      <h3 className="mt-6 text-2xl">{title}</h3>
-      <ul className="mt-4 space-y-2 text-sm text-muted">
-        {bullets.map((b) => (
+    <article className="flex h-full flex-col bg-white p-6 sm:p-8">
+      <div className="border border-line bg-paper-2 p-4">{children}</div>
+      <h3 className="mt-6 text-xl font-medium">{title}</h3>
+      <p className="mt-3 text-sm leading-relaxed text-muted">{body}</p>
+      <ul className="mt-4 space-y-2 text-sm text-ink-2">
+        {facts.map((b) => (
           <li key={b} className="flex gap-3">
-            <span aria-hidden className="mt-2 h-1 w-3 shrink-0 bg-terracotta" />
+            <span aria-hidden className="mt-2 h-px w-4 shrink-0 bg-interactive" />
             {b}
           </li>
         ))}
@@ -65,21 +67,21 @@ function Card({ title, bullets, children }: { title: string; bullets: string[]; 
 
 function StockMock() {
   const locs = [
-    ["Warehouse A", 82],
-    ["Showroom", 46],
+    ["WH-A", 82],
+    ["WH-B", 46],
     ["Returns", 12],
-    ["In transit", 28],
+    ["Transit", 28],
   ] as const;
   return (
-    <div className="space-y-2.5 text-[12px]">
+    <div className="space-y-2 text-[12px]">
       {locs.map(([name, pct]) => (
         <div key={name}>
           <div className="flex justify-between text-muted">
             <span>{name}</span>
             <span className="mono-num">{pct}%</span>
           </div>
-          <div className="mt-1 h-2 overflow-hidden rounded-full bg-paper-3">
-            <div className="h-full rounded-full bg-ink transition-[width] duration-700 group-hover:bg-terracotta" style={{ width: `${pct}%` }} />
+          <div className="mt-1 h-1 bg-paper-3">
+            <div className="h-full bg-ink" style={{ width: `${pct}%` }} />
           </div>
         </div>
       ))}
@@ -89,11 +91,11 @@ function StockMock() {
 
 function TillMock() {
   return (
-    <div className="mx-auto max-w-[220px] rounded-md border border-line bg-white p-3 text-[12px] shadow-sm">
-      <div className="text-center font-display text-sm">Acme Interiors</div>
+    <div className="border border-line bg-white p-3 font-mono text-[12px]">
+      <div className="text-center text-sm">Acme (Pty) Ltd — till 1</div>
       <div className="mt-2 border-t border-dashed border-line pt-2">
-        <Line l="Oak dining table" r="R 14 500" />
-        <Line l="Dining chair ×6" r="R 8 400" />
+        <Line l="SKU-4412" r="R 14 500" />
+        <Line l="SKU-1088 ×6" r="R 8 400" />
         <Line l="Layby deposit" r="− R 5 000" />
       </div>
       <div className="mt-2 border-t border-line pt-2">
@@ -117,7 +119,7 @@ function LedgerMock() {
     <table className="w-full text-[11px]">
       <tbody>
         {lines.map((l) => (
-          <tr key={l[0] + l[1]} className="border-b border-line/70 last:border-0">
+          <tr key={l[0] + l[1]} className="border-b border-line last:border-0">
             <td className="py-1 pr-2 text-muted mono-num">{l[0]}</td>
             <td className="py-1">{l[1]}</td>
             <td className="py-1 text-right mono-num">{l[2]}</td>

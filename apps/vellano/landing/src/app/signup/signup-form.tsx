@@ -101,12 +101,12 @@ export function SignupForm() {
 
   return (
     <div className="mt-12 grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14">
-      <form onSubmit={onSubmit} noValidate className="rounded-3xl border border-line bg-white/70 p-6 sm:p-9">
+      <form onSubmit={onSubmit} noValidate className="border border-line bg-white p-6 sm:p-8">
         <fieldset className="space-y-6">
           <legend className="font-display text-2xl">The company</legend>
           <TextField
             label="Legal company name"
-            hint="As registered with CIPC, e.g. Acme Furnishings (Pty) Ltd"
+            hint="As registered with CIPC, e.g. Acme (Pty) Ltd"
             value={values.legalName}
             onChange={(v) => update("legalName", v)}
             onBlur={() => setTouched((t) => ({ ...t, legalName: true }))}
@@ -171,7 +171,7 @@ export function SignupForm() {
           </CheckField>
           <CheckField checked={privacy} onChange={setPrivacy}>
             I have read the{" "}
-            <Link href="/legal/privacy" className="underline decoration-terracotta underline-offset-2">
+            <Link href="/legal/privacy" className="text-interactive underline-offset-2 hover:underline">
               privacy notice
             </Link>
             . I understand the software is operated for my company by {site.operatorName} and hosted outside South Africa.
@@ -179,7 +179,7 @@ export function SignupForm() {
         </fieldset>
 
         {serverError ? (
-          <p role="alert" className="mt-6 rounded-lg border border-terracotta/40 bg-terracotta/5 px-4 py-3 text-sm text-terracotta-2">
+          <p role="alert" className="mt-6 border border-danger bg-[#fff1f1] px-4 py-3 text-sm text-danger">
             {serverError}
           </p>
         ) : null}
@@ -203,15 +203,12 @@ function Preview({ slug, company, owner, legal }: { slug: string; company: strin
   const perks = ["Own database, own address", "Owner login for " + (owner || "you"), "Catalogue, till, quotes, sales orders", "Warehouse on the phone", "Books with a VAT201 draft", "Trade portal and Nia"];
   return (
     <aside className="lg:sticky lg:top-24 lg:self-start">
-      <div className="rounded-3xl border border-line bg-paper-2/70 p-6 sm:p-8">
-        <p className="eyebrow">Your workspace</p>
-        <div className="mt-4 overflow-hidden rounded-xl border border-line bg-white">
-          <div className="flex items-center gap-2 border-b border-line bg-paper px-3 py-2">
-            <span className="h-2 w-2 rounded-full bg-paper-3" />
-            <span className="h-2 w-2 rounded-full bg-paper-3" />
-            <span className="h-2 w-2 rounded-full bg-paper-3" />
-            <span className="ml-2 truncate rounded-md bg-white px-2 py-1 font-mono text-[11px] text-ink-2">
-              https://<span className="text-terracotta">{workspaceUrl(slug)}</span>
+      <div className="border border-line bg-paper-2 p-6 sm:p-8">
+        <p className="eyebrow">Workspace preview</p>
+        <div className="mt-4 overflow-hidden border border-line bg-white">
+          <div className="flex items-center border-b border-line bg-ink px-3 py-2">
+            <span className="truncate font-mono text-[11px] text-white/80">
+              https://{workspaceUrl(slug)}
             </span>
           </div>
           <div className="p-5">
@@ -219,7 +216,7 @@ function Preview({ slug, company, owner, legal }: { slug: string; company: strin
             <div className="mt-1 text-xs text-muted">{legal || "Legal name appears on invoices"}</div>
             <div className="mt-5 grid grid-cols-3 gap-2">
               {["Open orders", "Stock", "Cash"].map((k) => (
-                <div key={k} className="rounded-lg border border-line bg-paper p-2.5">
+                <div key={k} className="border border-line bg-paper-2 p-2.5">
                   <div className="text-[10px] text-muted">{k}</div>
                   <div className="mt-1 h-4 w-10 rounded bg-paper-3" />
                 </div>
@@ -244,7 +241,7 @@ function Preview({ slug, company, owner, legal }: { slug: string; company: strin
 }
 
 const inputClass =
-  "mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-base text-ink outline-none transition-[border-color,box-shadow] placeholder:text-muted/60 focus:border-ink focus:shadow-[0_0_0_3px_rgba(22,22,22,.08)] aria-[invalid=true]:border-terracotta";
+  "mt-2 w-full border border-line bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted/60 focus:border-interactive aria-[invalid=true]:border-danger";
 
 function TextField({
   label,
@@ -271,7 +268,7 @@ function TextField({
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-medium">
-        {label} {required ? <span className="text-terracotta">*</span> : <span className="text-muted">(optional)</span>}
+        {label} {required ? <span className="text-danger">*</span> : <span className="text-muted">(optional)</span>}
       </label>
       <input
         id={id}
@@ -290,7 +287,7 @@ function TextField({
         </p>
       ) : null}
       {error ? (
-        <p id={`${id}-err`} className="mt-1.5 text-xs text-terracotta-2">
+        <p id={`${id}-err`} className="mt-1.5 text-xs text-danger">
           {error}
         </p>
       ) : null}
@@ -303,10 +300,10 @@ function SlugField({ value, onChange, error, ok }: { value: string; onChange: (v
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-medium">
-        Workspace address <span className="text-terracotta">*</span>
+        Workspace address <span className="text-danger">*</span>
       </label>
       <div
-        className={`mt-2 flex items-stretch overflow-hidden rounded-xl border bg-white transition-[border-color,box-shadow] focus-within:border-ink focus-within:shadow-[0_0_0_3px_rgba(22,22,22,.08)] ${error ? "border-terracotta" : "border-line"}`}
+        className={`mt-2 flex items-stretch overflow-hidden border bg-white focus-within:border-interactive ${error ? "border-danger" : "border-line"}`}
       >
         <span className="hidden items-center border-r border-line bg-paper px-3 font-mono text-sm text-muted sm:flex">https://</span>
         <input
@@ -327,7 +324,7 @@ function SlugField({ value, onChange, error, ok }: { value: string; onChange: (v
         Lowercase letters, numbers, dashes. 3–32 characters. You can add your own domain later.
       </p>
       {error ? (
-        <p id={`${id}-err`} className="mt-1.5 text-xs text-terracotta-2">
+        <p id={`${id}-err`} className="mt-1.5 text-xs text-danger">
           {error}
         </p>
       ) : null}
@@ -357,7 +354,7 @@ function PasswordField({
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-medium">
-        Password <span className="text-terracotta">*</span>
+        Password <span className="text-danger">*</span>
       </label>
       <div className="relative">
         <input
@@ -382,14 +379,14 @@ function PasswordField({
       </div>
       <div className="mt-2 grid grid-cols-4 gap-1" aria-hidden>
         {[1, 2, 3, 4].map((n) => (
-          <span key={n} className={`h-1 rounded-full ${n <= strength ? (strength >= 3 ? "bg-moss" : "bg-oak") : "bg-paper-3"}`} />
+          <span key={n} className={`h-1 ${n <= strength ? (strength >= 3 ? "bg-moss" : "bg-interactive") : "bg-paper-3"}`} />
         ))}
       </div>
       <p id={`${id}-hint`} className="mt-1.5 text-xs text-muted">
         At least 12 characters. A sentence works well. {labels[strength] ? `Strength: ${labels[strength]}.` : ""}
       </p>
       {error ? (
-        <p id={`${id}-err`} className="mt-1.5 text-xs text-terracotta-2">
+        <p id={`${id}-err`} className="mt-1.5 text-xs text-danger">
           {error}
         </p>
       ) : null}
@@ -400,7 +397,7 @@ function PasswordField({
 function CheckField({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
   const id = useId();
   return (
-    <label htmlFor={id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-white p-4 text-sm leading-relaxed text-ink-2 has-[:checked]:border-ink">
+    <label htmlFor={id} className="flex cursor-pointer items-start gap-3 border border-line bg-white p-4 text-sm leading-relaxed text-ink-2 has-[:checked]:border-ink">
       <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-ink" />
       <span>{children}</span>
     </label>

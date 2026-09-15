@@ -6,12 +6,13 @@ export const metadata: Metadata = { title: "Sign in" };
 
 export default function SigninPage() {
   return (
-    <section className="mx-auto max-w-2xl px-5 py-20 sm:px-8 sm:py-28">
+    <section className="mx-auto max-w-2xl px-4 py-16 sm:px-8 sm:py-24">
       <p className="eyebrow">Sign in</p>
-      <h1 className="mt-4 text-4xl leading-[1.02] sm:text-5xl">
-        Where does your company <span className="display-italic">live?</span>
-      </h1>
-      <p className="mt-5 text-lg text-muted">Every company has its own address. Enter yours and we will take you to its login.</p>
+      <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">Which hostname?</h1>
+      <p className="mt-5 text-base text-muted sm:text-lg">
+        Each company is a separate address. We send you to its login. We do not look up your email across companies from this
+        page.
+      </p>
       <SigninPicker />
     </section>
   );

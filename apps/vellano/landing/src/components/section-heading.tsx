@@ -5,7 +5,6 @@ export function SectionHeading({
   eyebrow,
   title,
   lede,
-  align = "left",
 }: {
   number: string;
   eyebrow: string;
@@ -13,16 +12,15 @@ export function SectionHeading({
   lede?: ReactNode;
   align?: "left" | "center";
 }) {
-  const center = align === "center";
   return (
-    <div className={`max-w-3xl ${center ? "mx-auto text-center" : ""}`}>
-      <div className={`flex items-center gap-3 ${center ? "justify-center" : ""}`}>
-        <span className="font-display text-sm text-terracotta mono-num">{number}</span>
-        <span className="h-px w-8 bg-line" aria-hidden />
-        <span className="eyebrow">{eyebrow}</span>
-      </div>
-      <h2 className="mt-5 text-4xl leading-[1.05] sm:text-5xl">{title}</h2>
-      {lede ? <p className="mt-5 text-lg leading-relaxed text-muted">{lede}</p> : null}
+    <div className="max-w-3xl">
+      <p className="eyebrow">
+        <span className="mono-num text-interactive">{number}</span>
+        <span className="mx-3 text-line">/</span>
+        {eyebrow}
+      </p>
+      <h2 className="mt-4 font-serif text-3xl leading-tight sm:text-4xl">{title}</h2>
+      {lede ? <p className="mt-4 text-base leading-relaxed text-muted sm:text-lg">{lede}</p> : null}
     </div>
   );
 }
