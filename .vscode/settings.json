@@ -1,11 +1,10 @@
 {
   "python.defaultInterpreterPath": "${workspaceFolder}/apps/marrow/backend/.venv/bin/python",
+  "python.analysis.diagnosticMode": "openFilesOnly",
   "python.analysis.extraPaths": [
     "libs/backend/core/src",
     "libs/backend/db/src",
     "libs/backend/storage/src",
     "libs/backend/testing/src"
-  ],
-  "python.analysis.diagnosticMode": "workspace",
-  "python.analysis.useImportHeuristics": false
+  ]
 }

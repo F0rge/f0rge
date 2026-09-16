@@ -1,6 +1,15 @@
 {
   "pythonVersion": "3.10",
-  "exclude": ["**/node_modules", "**/__pycache__", "**/.venv", "**/dist", "**/.next"],
+  "typeCheckingMode": "basic",
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.venv",
+    "**/dist",
+    "**/.next",
+    "apps/airflow",
+    "apps/marrow/dags"
+  ],
   "extraPaths": [
     "libs/backend/core/src",
     "libs/backend/db/src",
