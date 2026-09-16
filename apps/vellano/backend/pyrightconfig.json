@@ -1,0 +1,23 @@
+{
+  "include": ["."],
+  "pythonVersion": "3.10",
+  "extraPaths": [
+    ".",
+    "../../../libs/backend/core/src",
+    "../../../libs/backend/db/src",
+    "../../../libs/backend/storage/src",
+    "../../../libs/backend/testing/src"
+  ],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        ".",
+        "../../../libs/backend/core/src",
+        "../../../libs/backend/db/src",
+        "../../../libs/backend/storage/src",
+        "../../../libs/backend/testing/src"
+      ]
+    }
+  ]
+}
