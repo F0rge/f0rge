@@ -19,6 +19,8 @@ export const PERMISSION_CATALOG = [
   "books.journals",
   "nia.use",
   "nia.admin",
+  "channels.manage",
+  "channels.ingest",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_CATALOG)[number];
@@ -120,4 +122,8 @@ export function canUseNia(user: PermissionHolder): boolean {
 
 export function canAdminNia(user: PermissionHolder): boolean {
   return can(user, "nia.admin");
+}
+
+export function canManageChannels(user: PermissionHolder): boolean {
+  return can(user, "channels.manage");
 }

@@ -20,3 +20,7 @@ healthcheckPath = "/api/v1/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
+
+# Shopify (develop / Partner dev store only). Set on vellano-api, never frontend:
+# SHOPIFY_SHOP_DOMAIN, SHOPIFY_ADMIN_TOKEN, SHOPIFY_WEBHOOK_SECRET, SHOPIFY_API_VERSION.
+# Public webhook: https://vellano-dev-api.leo-figueiredo.com/api/v1/channels/shopify/webhooks

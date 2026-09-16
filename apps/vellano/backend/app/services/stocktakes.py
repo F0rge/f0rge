@@ -128,6 +128,7 @@ class StocktakeService:
             stocktake.status = StocktakeStatus.COMPLETED
             stocktake.completed_at = datetime.datetime.utcnow()
 
+        await self._refresh_channel_atp()
         return self._to_response(await self._get_or_404(stocktake.id))
 
     async def cancel(self, stocktake_id: uuid.UUID) -> StocktakeResponse:
@@ -135,7 +136,13 @@ class StocktakeService:
         async with unit_of_work(self.db):
             stocktake.status = StocktakeStatus.CANCELLED
             stocktake.completed_at = datetime.datetime.utcnow()
+        await self._refresh_channel_atp()
         return self._to_response(await self._get_or_404(stocktake.id))
+
+    async def _refresh_channel_atp(self) -> None:
+        from app.services.channel_outbox import ChannelOutboxService
+
+        await ChannelOutboxService(self.db).enqueue_listed_inventory()
 
     async def _get_or_404(self, stocktake_id: uuid.UUID) -> Stocktake:
         stocktake = await self.crud.get_by_id(stocktake_id)

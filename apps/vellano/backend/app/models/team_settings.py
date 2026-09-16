@@ -146,6 +146,17 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         default="en",
         server_default=text("'en'"),
     )
+    channel_atp_mode: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="warehouse_only",
+        server_default=text("'warehouse_only'"),
+    )
+    channel_atp_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     team: Mapped["Team"] = relationship()
     default_receive_location: Mapped[Optional["Location"]] = relationship(
@@ -168,6 +179,10 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         CheckConstraint(
             "smtp_security IN ('starttls', 'ssl', 'plain')",
             name="ck_team_settings_smtp_security",
+        ),
+        CheckConstraint(
+            "channel_atp_mode IN ('warehouse_only', 'pooled', 'mapped')",
+            name="ck_team_settings_channel_atp_mode",
         ),
     )
 

@@ -61,6 +61,7 @@ ALLOWED_NAV_PATHS: frozenset[str] = frozenset(
         "/picks",
         "/quotes",
         "/orders",
+        "/channel-orders",
         "/deliveries",
         "/till",
         "/laybys",

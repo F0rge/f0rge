@@ -30,6 +30,7 @@ from app.config import settings  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.auth import JWT_COOKIE_NAME  # noqa: E402
+from app.services.channel_seed import ChannelSeedService
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
 from app.services.locations import LocationSeedService  # noqa: E402
 from app.services.role_user_seed import RoleUserSeedService  # noqa: E402
@@ -46,6 +47,7 @@ postgres_container = postgres_container_fixture("postgres:16")
 @pytest.fixture(autouse=True)
 def disable_nia_schedule_ticker(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "nia_schedule_ticker", False)
+    monkeypatch.setattr(settings, "channel_outbox_ticker", False)
 
 
 @pytest.fixture(autouse=True)
@@ -86,6 +88,7 @@ async def async_engine(
         await coa.ensure_opening_equity()
         await coa.ensure_category_chart()
         await coa.ensure_bank_accounts()
+        await ChannelSeedService(session).ensure()
         await TillSeedService(session).seed_if_empty()
     try:
         yield engine

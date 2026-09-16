@@ -36,6 +36,7 @@ describe("nav path helpers", () => {
     expect(isSalesPath("/orders")).toBe(true);
     expect(isSalesPath("/laybys")).toBe(true);
     expect(isSalesPath("/deliveries")).toBe(true);
+    expect(isSalesPath("/channel-orders")).toBe(true);
     expect(isSalesPath("/customers/abc")).toBe(true);
   });
 

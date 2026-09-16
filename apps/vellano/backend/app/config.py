@@ -26,8 +26,13 @@ class Settings(BaseSettings):
     # When true, set reasoning.exclude (clear_thinking) so thinking is not in content.
     openrouter_reasoning_exclude: bool = True
     nia_schedule_ticker: bool = True
+    channel_outbox_ticker: bool = True
     settings_encryption_key: str = ""
     wa_verify_token: str = ""
+    shopify_shop_domain: str = ""
+    shopify_admin_token: str = ""
+    shopify_webhook_secret: str = ""
+    shopify_api_version: str = "2026-01"
 
     storage_dir: str = "storage"
     bucket_name: str = ""

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -10,6 +11,8 @@ from app.middleware.auth import get_current_user_id
 from app.permissions import (
     BOOKS_MUTATE,
     CATALOGUE_MUTATE,
+    CHANNELS_INGEST,
+    CHANNELS_MANAGE,
     NIA_ADMIN,
     NIA_USE,
     PO_RAISE,
@@ -32,6 +35,10 @@ from app.services.bills import BillService
 from app.services.books_events import BooksEventService
 from app.services.credit_notes import CreditNoteService
 from app.services.customers_crm import CustomersCrmService
+from app.services.channel_api_keys import ChannelApiKeyService
+from app.services.channel_config import ChannelConfigService
+from app.services.channel_orders import ChannelOrderService
+from app.services.channel_outbox import ChannelOutboxService
 from app.services.accounts import AccountService
 from app.services.cost_audit import CostAuditService
 from app.services.home import HomeService
@@ -476,3 +483,54 @@ def get_nia_caps_service(db: AsyncSession = Depends(get_db)) -> NiaCapsService:
 
 def get_nia_schedule_service(db: AsyncSession = Depends(get_db)) -> NiaScheduleService:
     return NiaScheduleService(db)
+
+
+def get_channel_config_service(
+    db: AsyncSession = Depends(get_db),
+) -> ChannelConfigService:
+    return ChannelConfigService(db)
+
+
+def get_channel_order_service(
+    db: AsyncSession = Depends(get_db),
+) -> ChannelOrderService:
+    return ChannelOrderService(db)
+
+
+def get_channel_outbox_service(
+    db: AsyncSession = Depends(get_db),
+) -> ChannelOutboxService:
+    return ChannelOutboxService(db)
+
+
+async def require_channels_manage(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (CHANNELS_MANAGE,))
+
+
+async def get_channel_ingest_actor(
+    db: AsyncSession = Depends(get_db),
+    x_channel_key: Optional[str] = Header(default=None, alias="X-Channel-Key"),
+    vellano_session: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None, include_in_schema=False),
+) -> Optional[uuid.UUID]:
+    if x_channel_key:
+        actor_id = await ChannelApiKeyService(db).authenticate(x_channel_key)
+        if actor_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid channel key",
+            )
+        return actor_id
+    if not vellano_session and not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    user_id = await get_current_user_id(
+        vellano_session=vellano_session,
+        authorization=authorization,
+    )
+    return await _require_keys(user_id, db, (CHANNELS_INGEST, CHANNELS_MANAGE))

@@ -24,6 +24,7 @@ class UnitCostAuditSource(str, enum.Enum):
     RETURN = "return"
     LAYBY = "layby"
     SALES_ORDER = "sales_order"
+    CHANNEL = "channel"
 
 
 class UnitCostAudit(UUIDPkMixin, TimestampMixin, Base):

@@ -7,6 +7,14 @@ from app.models.bank_rule import BankRule
 from app.models.bill import Bill, BillLine
 from app.models.books_event import BooksDocumentType, BooksEvent, BooksEventAction
 from app.models.category_account_map import CategoryAccountMap
+from app.models.channel import (
+    ChannelApiKey,
+    ChannelListing,
+    ChannelLocationMap,
+    ChannelOrder,
+    ChannelOutbox,
+    SalesChannel,
+)
 from app.models.comms_message import (
     CommsChannel,
     CommsDocumentType,
@@ -108,6 +116,11 @@ __all__ = [
     "BooksEvent",
     "BooksEventAction",
     "CategoryAccountMap",
+    "ChannelApiKey",
+    "ChannelListing",
+    "ChannelLocationMap",
+    "ChannelOrder",
+    "ChannelOutbox",
     "CommsChannel",
     "CommsDocumentType",
     "CommsMessage",
@@ -175,6 +188,7 @@ __all__ = [
     "RolePermission",
     "Sku",
     "SkuBomLine",
+    "SalesChannel",
     "SkuStock",
     "StockAdjustment",
     "StockAdjustmentLine",

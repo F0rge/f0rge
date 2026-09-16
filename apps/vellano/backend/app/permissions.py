@@ -22,6 +22,8 @@ BOOKS_MUTATE = "books.mutate"
 BOOKS_JOURNALS = "books.journals"
 NIA_USE = "nia.use"
 NIA_ADMIN = "nia.admin"
+CHANNELS_MANAGE = "channels.manage"
+CHANNELS_INGEST = "channels.ingest"
 
 PERMISSION_CATALOG: tuple[str, ...] = (
     USERS_MANAGE,
@@ -44,6 +46,8 @@ PERMISSION_CATALOG: tuple[str, ...] = (
     BOOKS_JOURNALS,
     NIA_USE,
     NIA_ADMIN,
+    CHANNELS_MANAGE,
+    CHANNELS_INGEST,
 )
 
 PERMISSION_CATALOG_SET: frozenset[str] = frozenset(PERMISSION_CATALOG)

@@ -73,6 +73,8 @@ class InvoiceResponse(BaseModel):
     total_inc_vat: Decimal
     amount_paid: Decimal
     balance: Decimal
+    source: str = "books"
+    location_id: Optional[uuid.UUID] = None
     lines: list[InvoiceLineResponse]
     created_at: datetime.datetime
     updated_at: datetime.datetime
