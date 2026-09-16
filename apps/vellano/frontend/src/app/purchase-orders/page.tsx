@@ -304,7 +304,7 @@ export default function PurchaseOrdersPage() {
         <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Purchase orders" description="All Vellano purchase orders">
+            <TableContainer title="Purchase orders" description="All purchase orders">
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>

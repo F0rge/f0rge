@@ -23,7 +23,16 @@ class Settings(BaseSettings):
     platform_smtp_from_name: str = "Stockroom"
     platform_smtp_use_tls: bool = True
     landing_base_url: str = "http://localhost:3004"
-    cors_origins: list[str] = ["http://localhost:3003"]
+    cors_origins: list[str] = [
+        "http://localhost:3003",
+        "http://localhost:3004",
+        "http://127.0.0.1:3003",
+        "http://127.0.0.1:3004",
+    ]
+    cors_origin_regex: str = (
+        r"https://([a-z0-9-]+\.)*stockroom-dev\.leo-figueiredo\.com"
+        r"|http://([a-z0-9-]+\.)*localhost:3003"
+    )
     jwt_secret: str = ""
     cookie_secure: bool = False
     seed_owner_email: str = "owner@example.com"

@@ -8,6 +8,9 @@ WORKDIR /app
 # workspace's package.json path-preserving so npm can resolve the tree.
 COPY package.json package-lock.json ./
 COPY apps/marrow/frontend/package.json ./apps/marrow/frontend/
+COPY apps/dk/tag-printer/frontend/package.json ./apps/dk/tag-printer/frontend/
+COPY apps/vellano/frontend/package.json ./apps/vellano/frontend/
+COPY apps/vellano/landing/package.json ./apps/vellano/landing/
 COPY libs/ui/package.json ./libs/ui/
 RUN npm ci
 

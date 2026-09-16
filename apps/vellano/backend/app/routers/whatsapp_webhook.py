@@ -29,3 +29,25 @@ async def receive_whatsapp_webhook(
 ) -> dict:
     await service.handle_post(await request.body(), x_hub_signature_256)
     return {"ok": True}
+
+
+@whatsapp_webhook_router.get("/whatsapp/{slug}")
+async def verify_whatsapp_webhook_for_tenant(
+    slug: str,
+    hub_mode: Optional[str] = Query(default=None, alias="hub.mode"),
+    hub_verify_token: Optional[str] = Query(default=None, alias="hub.verify_token"),
+    hub_challenge: Optional[str] = Query(default=None, alias="hub.challenge"),
+    service: WhatsAppWebhookService = Depends(get_whatsapp_webhook_service),
+) -> PlainTextResponse:
+    return PlainTextResponse(service.verify_challenge(hub_mode, hub_verify_token, hub_challenge))
+
+
+@whatsapp_webhook_router.post("/whatsapp/{slug}")
+async def receive_whatsapp_webhook_for_tenant(
+    slug: str,
+    request: Request,
+    service: WhatsAppWebhookService = Depends(get_whatsapp_webhook_service),
+    x_hub_signature_256: Optional[str] = Header(default=None),
+) -> dict:
+    await service.handle_post(await request.body(), x_hub_signature_256)
+    return {"ok": True}

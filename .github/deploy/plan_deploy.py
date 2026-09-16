@@ -100,6 +100,11 @@ def main() -> None:
                             "(Vellano is its own Railway project; "
                             "do not smoke Marrow develop)"
                         )
+                elif role == "landing":
+                    print(
+                        f"skip railway smoke for {spec['nx']}: "
+                        "landing role is human-provisioned (#701)"
+                    )
             elif spec["target"] == "coolify":
                 coolify.append(
                     {

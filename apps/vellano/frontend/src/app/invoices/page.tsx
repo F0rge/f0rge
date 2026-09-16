@@ -325,7 +325,7 @@ function InvoicesPageContent() {
         <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Invoices" description="All Vellano tax invoices">
+            <TableContainer title="Invoices" description="All tax invoices">
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>

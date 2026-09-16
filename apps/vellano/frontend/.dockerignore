@@ -18,6 +18,9 @@ apps/dk/tag-printer/*
 !apps/vellano
 apps/vellano/*
 !apps/vellano/frontend
+!apps/vellano/landing
+apps/vellano/landing/*
+!apps/vellano/landing/package.json
 !libs
 libs/*
 !libs/ui

@@ -341,7 +341,7 @@ export default function ChartOfAccountsPage() {
           </div>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Accounts" description="Vellano chart of accounts">
+            <TableContainer title="Accounts" description="Chart of accounts">
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>

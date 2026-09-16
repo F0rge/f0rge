@@ -20,13 +20,20 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _database_url() -> str:
+    override = config.get_main_option("sqlalchemy.url")
+    if override and not override.startswith("driver://"):
+        return resolve_database_url(override, direct_url="")
+    return resolve_database_url(
+        settings.database_url,
+        direct_url=settings.direct_database_url,
+    )
+
+
 def run_migrations_offline() -> None:
     """Run migrations in offline mode — emits SQL to stdout, no live DB."""
     context.configure(
-        url=resolve_database_url(
-            settings.database_url,
-            direct_url=settings.direct_database_url,
-        ),
+        url=_database_url(),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -42,14 +49,8 @@ def do_run_migrations(connection) -> None:  # type: ignore[no-untyped-def]
 
 
 async def run_migrations_online() -> None:
-    """Run migrations in online mode using the async engine from settings."""
-    engine = create_async_engine(
-        resolve_database_url(
-            settings.database_url,
-            direct_url=settings.direct_database_url,
-        ),
-        echo=False,
-    )
+    """Run migrations in online mode using the async engine from settings or override."""
+    engine = create_async_engine(_database_url(), echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(do_run_migrations)
     await engine.dispose()

@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import logging
 import uuid
+from typing import AsyncIterator, Optional
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.config import settings
+from app.tenancy.context import tenant_ctx
+from app.tenancy.errors import TenantContext
+from app.tenancy.resolver import ready_context_for_slug
 from app.middleware.auth import get_current_user_id
 from app.permissions import (
     BOOKS_MUTATE,
@@ -160,7 +166,36 @@ def get_comms_send_service(db: AsyncSession = Depends(get_db)) -> CommsSendServi
     return CommsSendService(db)
 
 
-def get_whatsapp_webhook_service(db: AsyncSession = Depends(get_db)) -> WhatsAppWebhookService:
+logger = logging.getLogger(__name__)
+
+
+async def resolve_whatsapp_tenant(slug: Optional[str] = None) -> AsyncIterator[TenantContext]:
+    target = slug or settings.default_tenant_slug
+    if slug is None:
+        logger.warning("deprecated WhatsApp webhook path; use /api/v1/webhooks/whatsapp/{slug}")
+    ctx = await ready_context_for_slug(target)
+    if ctx is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="tenant_not_found",
+        )
+    token = tenant_ctx.set(ctx)
+    try:
+        yield ctx
+    finally:
+        tenant_ctx.reset(token)
+
+
+async def get_whatsapp_db(
+    _ctx: TenantContext = Depends(resolve_whatsapp_tenant),
+) -> AsyncIterator[AsyncSession]:
+    async for session in get_db():
+        yield session
+
+
+def get_whatsapp_webhook_service(
+    db: AsyncSession = Depends(get_whatsapp_db),
+) -> WhatsAppWebhookService:
     return WhatsAppWebhookService(db)
 
 

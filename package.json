@@ -5,6 +5,7 @@
     "apps/marrow/frontend",
     "apps/dk/tag-printer/frontend",
     "apps/vellano/frontend",
+    "apps/vellano/landing",
     "libs/ui"
   ],
   "overrides": {

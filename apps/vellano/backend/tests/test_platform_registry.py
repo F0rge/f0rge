@@ -180,6 +180,7 @@ async def test_bootstrap_refuses_platform_url_equal_to_tenant(
         await bootstrap_default_tenant()
 
 
+@pytest.mark.no_db
 def test_tenant_alembic_head_unchanged() -> None:
     result = subprocess.run(
         ["uv", "run", "alembic", "heads"],

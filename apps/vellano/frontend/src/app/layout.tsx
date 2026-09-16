@@ -6,8 +6,8 @@ import { AppShell } from "@/components/app-shell";
 import { AuthProvider } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "Vellano",
-  description: "Vellano back office — stock, books, and till",
+  title: "Stockroom",
+  description: "Stockroom workspace — stock, books, and till",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

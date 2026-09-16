@@ -32,7 +32,8 @@ Read `~/.cursor/agent-memory/<agent>/MEMORY.md` first. Write gotchas back when d
 | Service | Port |
 |---------|------|
 | API | `:8003` |
-| Frontend | `:3003` |
+| Frontend (Workspace) | `:3003` |
+| Landing | `:3004` |
 | Postgres | `:5433` |
 
 Do not use Marrow `:8000/:3000` or dk `:8002/:3002`.
@@ -53,6 +54,7 @@ cd apps/vellano && docker compose up -d postgres
 cd apps/vellano && docker compose up -d postgres
 cd apps/vellano/backend && uv run uvicorn app.main:app --port 8003 --reload
 cd apps/vellano/frontend && npm run dev   # :3003, rewrites /api/* → :8003
+cd apps/vellano/landing && npm run dev    # :3004, rewrites /api/* → :8003
 ```
 
 ### S1 auth bootstrap
@@ -619,6 +621,23 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 | List imports, reports, VAT201 draft | any authenticated |
 | Upload CSV, match lines | `books.mutate` |
 
+## Tenancy (Option C)
+
+Shared API + Workspace frontend; **one Postgres database per Company**. Control plane is a separate platform database (`PLATFORM_DATABASE_URL`).
+
+- Workspace requests send header **`X-Tenant-Host`** (browser hostname, lowercase, no port). In Swagger, set it when calling `/auth/login` or `/auth/me`.
+- Authenticated JWT must include `tid` (Tenant UUID). Header and `tid` must name the same Tenant or the API returns **401**.
+- Unknown / missing Tenant → **404** `{"detail":"tenant_not_found"}`. There is **no default Tenant** on the request path.
+- Exempt: `/api/v1/health`, `/api/v1/platform/*`, `/api/v1/webhooks/*`, `/docs`, `/redoc`, `/openapi.json`.
+- Cookie `vellano_session` stays host-only (no `Domain=`).
+- Unauthenticated chrome: `GET /api/v1/branding` → `{display_name, slug}` (still needs `X-Tenant-Host`).
+- Public signup (no Tenant): `GET /api/v1/platform/slugs/{slug}/availability`, `POST /api/v1/platform/signups` (202, never sets `vellano_session`), `POST /signups/verify`, `GET /signups/{id}/status`. Local mail: `PLATFORM_MAIL_MODE=log` prints the verify link.
+- Provision a Company: `uv run python -m app.platform.provision --slug acme --email owner@acme.example --legal-name "Acme (Pty) Ltd" --password 'correct horse battery staple'`. Deploy migrator: `uv run python -m app.platform.migrate_all` (platform chain, then every ready Tenant). Admin DDL: `PLATFORM_ADMIN_DATABASE_URL` (CREATEDB + CREATEROLE).
+- New Company seed is baseline only (roles, chart, till, one Team, Owner). `SEED_DEV_EXTRAS=true` keeps Vellano locations / `till@` users / playground on Tenant `vellano` only.
+- WhatsApp webhook: `GET/POST /api/v1/webhooks/whatsapp/{slug}`. Legacy `/whatsapp` maps to `DEFAULT_TENANT_SLUG` and logs a deprecation.
+- Local: `python -m app.platform.bootstrap_default_tenant` then `curl -H 'X-Tenant-Host: localhost'`. Workspace hosts: `http://{slug}.localhost:3003` (Chrome). Landing is `:3004`.
+- Tenant Alembic head: `052_lookbook_events`. Platform: `uv run alembic -c alembic_platform.ini upgrade head`.
+
 ## Railway
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `vellano-*` services to the Marrow project. Production has no Vellano services; the Marrow project has no Vellano config.
@@ -633,16 +652,20 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 | Bucket `vellano-dev` (Tigris, develop only) | `49435225-4849-4132-bb87-66a23c67cdf1` |
 | API | https://vellano-dev-api.leo-figueiredo.com (`/api/v1/health`, Swagger `/docs`) |
 | Frontend | https://vellano-dev.leo-figueiredo.com |
+| Landing (planned, #701) | https://stockroom-dev.leo-figueiredo.com |
+| Stockroom API alias (planned, #701) | https://api.stockroom-dev.leo-figueiredo.com |
+| Workspaces (planned, #701) | https://*.stockroom-dev.leo-figueiredo.com |
 
 - **Replicas:** 1 each (hobby tier, `sfo` region).
 - **Config files:** `apps/vellano/{backend,frontend}/railway.toml` — no Root Directory; Config File path points here.
 - **`watchPatterns`:** `apps/vellano/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `vellano-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
 - **Manifest:** `.github/deploy/manifest.yml` — `branches: [develop]` only. No `health_url.main`, no production.
-- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Every startup also seeds missing role users `till@` / `books@` / `warehouse@` / `buyer@example.com` (`SEED_*_PASSWORD`, defaults `change-me-<role>`). Cookie `vellano_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Every startup also seeds missing role users `till@` / `books@` / `warehouse@` / `buyer@example.com` (`SEED_*_PASSWORD`, defaults `change-me-<role>`). Cookie `vellano_session` (HttpOnly, SameSite=Lax, Secure on HTTPS, host-only). JWT includes `tid`.
 - **Comms encryption:** `SETTINGS_ENCRYPTION_KEY` (Fernet) on `vellano-api` develop — required to save SMTP/WhatsApp secrets. Same value locally in `.env`.
 - **WhatsApp click-to-chat:** `POST .../send {channel:whatsapp}` with Cloud API off writes outbox `whatsapp_click` / `opened` and returns a `https://wa.me/{e164}?text=...` URL. Click-to-chat cannot attach a PDF.
 - **WhatsApp Cloud API:** paste phone-number id + access token in Settings → Communications (`whatsapp_mode=cloud` when both present). Token and app secret are Fernet-encrypted; GET never returns them. Keep the existing WhatsApp Business app on the number — paste-token coexistence, no Embedded Signup. Unofficial WhatsApp libraries are banned.
-- **WhatsApp webhook:** public `GET/POST https://vellano-dev-api.leo-figueiredo.com/api/v1/webhooks/whatsapp` (no cookie). Meta verify token is env `WA_VERIFY_TOKEN`, not the access token. Local challenge: `curl -G 'http://localhost:8003/api/v1/webhooks/whatsapp' --data-urlencode 'hub.mode=subscribe' --data-urlencode "hub.verify_token=$WA_VERIFY_TOKEN" --data-urlencode 'hub.challenge=ok'`. HMAC `X-Hub-Signature-256` is required when an app secret is saved. Delivery statuses update `comms_messages`; inbound chat is not ingested into Nia.
+- **WhatsApp webhook:** public `GET/POST /api/v1/webhooks/whatsapp/{slug}` (no cookie). Legacy `/whatsapp` still verifies the default Tenant. Meta verify token is env `WA_VERIFY_TOKEN`. Local: `curl -G 'http://localhost:8003/api/v1/webhooks/whatsapp/vellano' --data-urlencode 'hub.mode=subscribe' --data-urlencode "hub.verify_token=$WA_VERIFY_TOKEN" --data-urlencode 'hub.challenge=ok'`. HMAC `X-Hub-Signature-256` is required when an app secret is saved.
+- **preDeploy:** `uv run python -m app.platform.migrate_all` (not a single-URL `alembic upgrade`). One-time `python -m app.platform.bootstrap_default_tenant` before the first Tenant-aware deploy. Live Railway/DNS/SMTP for Stockroom hosts is human-only (#701).
 - **WhatsApp Cloud send:** when `whatsapp_mode=cloud`, `POST .../send {channel:whatsapp}` sends a pre-approved utility template then uploads the PDF (`type=document`). Template body parameters are (1) document number (2) amount inc VAT — laybys use remaining balance as the amount. First contact must use the template named in Settings (`wa_invoice_template_name`, default language `en`). 24h window / template failures return 409 with Meta's message and outbox `failed`. If Cloud is off, the same button stays click-to-chat. Graph timeout 20s; never log the Bearer token.
 - **Playground dataset:** set `SEED_PLAYGROUND=true` on `vellano-api` and redeploy to fill catalogue / PO / till / books for demos. Default off. See [Playground seed](#playground-seed-develop--local-demos).
 - **Object storage:** dedicated Railway Tigris bucket `vellano-dev` in this project only — never Marrow `photos` / `photos-dev`, never Marrow project buckets. On `vellano-api` develop: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{vellano-dev.*}}`; `AWS_ENDPOINT_URL_S3=https://fly.storage.tigris.dev`; `AWS_REGION=auto`. Keep `COOKIE_SECURE`, `JWT_SECRET`, `DATABASE_URL`. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Production is not wired.

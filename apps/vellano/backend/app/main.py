@@ -21,8 +21,15 @@ from app.exceptions import (
 )
 
 from app.config import settings
-from app.database import async_session_maker
+from app.database import default_tenant_sessionmaker
 from app.middleware.auth import AuthContextMiddleware
+from app.middleware.tenant import TenantContextMiddleware
+from app.platform.crud import TenantCRUD
+from app.platform.database import PlatformDatabaseUnconfiguredError, platform_sessionmaker
+from app.platform.service import decrypt_database_url
+from app.tenancy.context import tenant_ctx
+from app.tenancy.engines import engine_cache
+from app.tenancy.errors import TenantContext
 from app.routers import (
     accounts,
     adjustments,
@@ -33,6 +40,7 @@ from app.routers import (
     bills,
     books_events,
     books_periods,
+    branding,
     catalogue_imports,
     category_maps,
     comms,
@@ -49,6 +57,7 @@ from app.routers import (
     locations,
     payments,
     picks,
+    platform_signup,
     price_lists,
     proformas,
     purchase_orders,
@@ -78,27 +87,85 @@ from app.routers import (
     vat201_periods,
     whatsapp_webhook,
 )
-from app.services.chart_of_accounts import ChartOfAccountsSeedService
-from app.services.locations import LocationSeedService
-from app.services.playground_seed import PlaygroundSeedService
-from app.services.role_user_seed import RoleUserSeedService
-from app.services.roles import RoleSeedService
-from app.services.till_seed import TillSeedService
 from app.services.nia_schedule import NiaScheduleService
-from app.services.users import BootstrapService
+from app.services.tenant_seed import seed_default_dev_extras, seed_tenant_baseline
 
 logger = logging.getLogger(__name__)
 
 TICK_INTERVAL_SECONDS = 60
 
 
-async def _nia_schedule_loop(stop: asyncio.Event) -> None:
-    while not stop.is_set():
+async def _tenant_context(tenant) -> Optional[TenantContext]:
+    if not tenant.database_url_encrypted:
+        return None
+    return TenantContext(
+        id=tenant.id,
+        slug=tenant.slug,
+        database_url=decrypt_database_url(tenant.database_url_encrypted),
+        storage_prefix=tenant.storage_prefix,
+    )
+
+
+async def seed_startup() -> None:
+    try:
+        maker = platform_sessionmaker()
+    except PlatformDatabaseUnconfiguredError:
+        logger.warning("single-tenant dev mode")
+        async with default_tenant_sessionmaker()() as session:
+            await seed_tenant_baseline(session)
+            if settings.seed_dev_extras:
+                await seed_default_dev_extras(session)
+        return
+    async with maker() as pdb:
+        tenant = await TenantCRUD(pdb).get_by_slug(settings.default_tenant_slug)
+    if tenant is None or tenant.status != "ready":
+        logger.warning("default tenant not ready; skipping startup seed")
+        return
+    ctx = await _tenant_context(tenant)
+    if ctx is None:
+        logger.warning("default tenant has no database url; skipping startup seed")
+        return
+    token = tenant_ctx.set(ctx)
+    try:
+        session_maker = await engine_cache.get_sessionmaker(ctx)
+        async with session_maker() as session:
+            await seed_tenant_baseline(session)
+            if settings.seed_dev_extras and tenant.slug == settings.default_tenant_slug:
+                await seed_default_dev_extras(session)
+    finally:
+        tenant_ctx.reset(token)
+
+
+async def tick_ready_tenants() -> None:
+    try:
+        maker = platform_sessionmaker()
+    except PlatformDatabaseUnconfiguredError:
         try:
-            async with async_session_maker() as session:
+            async with default_tenant_sessionmaker()() as session:
                 await NiaScheduleService(session).tick_due_tasks()
         except Exception:
             logger.exception("nia schedule tick failed")
+        return
+    async with maker() as pdb:
+        tenants = await TenantCRUD(pdb).list_ready()
+    for tenant in tenants:
+        ctx = await _tenant_context(tenant)
+        if ctx is None:
+            continue
+        token = tenant_ctx.set(ctx)
+        try:
+            session_maker = await engine_cache.get_sessionmaker(ctx)
+            async with session_maker() as session:
+                await NiaScheduleService(session).tick_due_tasks()
+        except Exception:
+            logger.exception("nia schedule tick failed slug=%s", tenant.slug)
+        finally:
+            tenant_ctx.reset(token)
+
+
+async def _nia_schedule_loop(stop: asyncio.Event) -> None:
+    while not stop.is_set():
+        await tick_ready_tenants()
         try:
             await asyncio.wait_for(stop.wait(), timeout=TICK_INTERVAL_SECONDS)
         except asyncio.TimeoutError:
@@ -107,19 +174,7 @@ async def _nia_schedule_loop(stop: asyncio.Event) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    async with async_session_maker() as session:
-        await RoleSeedService(session).seed()
-        await BootstrapService(session).seed_if_empty()
-        await LocationSeedService(session).seed_if_empty()
-        await RoleUserSeedService(session).seed()
-        coa = ChartOfAccountsSeedService(session)
-        await coa.seed_if_empty()
-        await coa.ensure_opening_equity()
-        await coa.ensure_customer_deposits()
-        await coa.ensure_category_chart()
-        await coa.ensure_bank_accounts()
-        await TillSeedService(session).seed_if_empty()
-        await PlaygroundSeedService(session).seed_if_enabled()
+    await seed_startup()
     stop = asyncio.Event()
     ticker: Optional[asyncio.Task] = None
     if settings.nia_schedule_ticker:
@@ -132,6 +187,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             ticker.cancel()
             with suppress(asyncio.CancelledError):
                 await ticker
+        await engine_cache.dispose_all()
 
 
 app = FastAPI(
@@ -208,16 +264,20 @@ app.add_exception_handler(
     cast(ExceptionHandler, _comms_smtp_failed_handler),
 )
 
+app.add_middleware(AuthContextMiddleware)
+app.add_middleware(TenantContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=settings.cors_origin_regex or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(AuthContextMiddleware)
 
 app.include_router(health.router, prefix="/api/v1")
+app.include_router(branding.branding_router)
+app.include_router(platform_signup.platform_signup_router)
 app.include_router(auth.router)
 app.include_router(users.users_router)
 app.include_router(users.profile_router)

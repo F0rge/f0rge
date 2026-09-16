@@ -3,11 +3,20 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.platform.models import Signup, Tenant, TenantHostname, TENANT_STATUS_READY
+from app.platform.models import (
+    SIGNUP_STATUS_PENDING_VERIFY,
+    SIGNUP_STATUS_PROVISIONING,
+    SIGNUP_STATUS_READY,
+    SIGNUP_STATUS_VERIFIED,
+    Signup,
+    Tenant,
+    TenantHostname,
+    TENANT_STATUS_READY,
+)
 from f0rge_db.crud import BaseCRUD
 
 
@@ -72,4 +81,48 @@ class SignupCRUD(BaseCRUD):
     async def get_by_verify_token_hash(self, token_hash: str) -> Optional[Signup]:
         return (
             await self.db.execute(select(Signup).where(Signup.verify_token_hash == token_hash))
+        ).scalar_one_or_none()
+
+    async def count_active_by_email(self, email: str) -> int:
+        result = await self.db.execute(
+            select(func.count())
+            .select_from(Signup)
+            .where(
+                Signup.email == email,
+                Signup.status.in_(
+                    (
+                        SIGNUP_STATUS_PENDING_VERIFY,
+                        SIGNUP_STATUS_VERIFIED,
+                        SIGNUP_STATUS_PROVISIONING,
+                        SIGNUP_STATUS_READY,
+                    )
+                ),
+            )
+        )
+        return int(result.scalar_one())
+
+    async def count_created_by_ip_since(self, ip: str, since) -> int:
+        result = await self.db.execute(
+            select(func.count())
+            .select_from(Signup)
+            .where(Signup.created_ip == ip, Signup.created_at >= since)
+        )
+        return int(result.scalar_one())
+
+    async def get_inflight_by_slug(self, slug: str) -> Optional[Signup]:
+        return (
+            await self.db.execute(
+                select(Signup)
+                .where(
+                    Signup.slug == slug,
+                    Signup.status.in_(
+                        (
+                            SIGNUP_STATUS_PENDING_VERIFY,
+                            SIGNUP_STATUS_VERIFIED,
+                            SIGNUP_STATUS_PROVISIONING,
+                        )
+                    ),
+                )
+                .limit(1)
+            )
         ).scalar_one_or_none()
