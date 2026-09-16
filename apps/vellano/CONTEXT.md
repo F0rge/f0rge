@@ -26,6 +26,10 @@ _Avoid_: Company, tenant
 The Company’s running back office at `{slug}.{base-domain}` (login, catalogue, books).
 _Avoid_: App, portal (portal is the trade customer surface)
 
+**Landing**:
+The public Stockroom site (its own Next app) where a stranger creates a Company and is sent to a Workspace login. Not the back office.
+_Avoid_: Marketing homepage of Vellano, `/` on the Workspace app
+
 **Owner**:
 The first staff user created for a Company; they verified the signup email.
 _Avoid_: Admin (roles are a permission catalog), seed user
