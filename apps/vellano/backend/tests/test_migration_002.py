@@ -18,7 +18,7 @@ from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.services.users import BootstrapService
-from tests.conftest import OWNER_EMAIL, OWNER_PASSWORD
+from tests.conftest import OWNER_EMAIL, OWNER_PASSWORD, TENANT_HOST_HEADER
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -52,7 +52,6 @@ async def test_migration_002_seed_stores_lowercase_role(
     engine = create_async_engine(mig_url, echo=False)
     maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     monkeypatch.setattr("app.database.async_session_maker", maker)
-    monkeypatch.setattr("app.main.async_session_maker", maker)
 
     async with maker() as session:
         await BootstrapService(session).seed_if_empty()
@@ -68,7 +67,11 @@ async def test_migration_002_seed_stores_lowercase_role(
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        headers=TENANT_HOST_HEADER,
+    ) as client:
         login = await client.post(
             "/api/v1/auth/login",
             json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD},

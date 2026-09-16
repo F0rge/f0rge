@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 
 
+@pytest.mark.no_db
 @pytest.mark.asyncio
 async def test_health_returns_ok() -> None:
     transport = ASGITransport(app=app)

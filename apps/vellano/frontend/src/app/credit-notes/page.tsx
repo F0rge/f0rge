@@ -290,7 +290,7 @@ export default function CreditNotesPage() {
         <>
           <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
             {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-              <TableContainer title="Credit notes" description="All Vellano credit notes">
+              <TableContainer title="Credit notes" description="All credit notes">
                 <Table {...getTableProps()}>
                   <TableHead>
                     <TableRow>

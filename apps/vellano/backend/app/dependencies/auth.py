@@ -160,7 +160,9 @@ def get_comms_send_service(db: AsyncSession = Depends(get_db)) -> CommsSendServi
     return CommsSendService(db)
 
 
-def get_whatsapp_webhook_service(db: AsyncSession = Depends(get_db)) -> WhatsAppWebhookService:
+def get_whatsapp_webhook_service(
+    db: AsyncSession = Depends(get_db),
+) -> WhatsAppWebhookService:
     return WhatsAppWebhookService(db)
 
 

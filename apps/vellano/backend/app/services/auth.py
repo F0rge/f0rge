@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from typing import Optional
 
 import bcrypt
 import jwt
@@ -13,6 +14,7 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import UserCRUD
 from app.permissions import role_slug
 from app.services.permissions import PermissionService
+from app.tenancy.context import tenant_ctx
 from f0rge_core.exceptions import UnauthorizedError, ValidationError
 
 JWT_ALGORITHM = "HS256"
@@ -34,14 +36,37 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
-def create_access_token(user_id: uuid.UUID, ttl_hours: int) -> str:
+def create_access_token(user_id: uuid.UUID, ttl_hours: int, tenant_id: uuid.UUID) -> str:
     now = datetime.datetime.utcnow()
     payload = {
         "sub": str(user_id),
+        "tid": str(tenant_id),
         "iat": now,
         "exp": now + datetime.timedelta(hours=ttl_hours),
     }
     return jwt.encode(payload, _require_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+
+def peek_token_tid(token: str) -> Optional[uuid.UUID]:
+    """Best-effort tid from a JWT. Missing or malformed claims return None."""
+    try:
+        payload = jwt.decode(token, _require_jwt_secret(), algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        return None
+    raw = payload.get("tid")
+    if not raw:
+        return None
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError:
+        return None
+
+
+def token_tenant_id(token: str) -> uuid.UUID:
+    tid = peek_token_tid(token)
+    if tid is None:
+        raise UnauthorizedError("Invalid session")
+    return tid
 
 
 def decode_access_token(token: str) -> uuid.UUID:
@@ -54,6 +79,8 @@ def decode_access_token(token: str) -> uuid.UUID:
     if not sub:
         raise UnauthorizedError("Invalid session")
     if payload.get("typ") == "customer":
+        raise UnauthorizedError("Invalid session")
+    if not payload.get("tid"):
         raise UnauthorizedError("Invalid session")
 
     try:
@@ -101,7 +128,10 @@ class AuthService:
 
         team_settings = await TeamSettingsCRUD(self.db).get_or_create_for_team(user.team_id)
         ttl_hours = int(team_settings.session_ttl_hours)
-        token = create_access_token(user.id, ttl_hours)
+        ctx = tenant_ctx.get()
+        if ctx is None:
+            raise UnauthorizedError("Invalid session")
+        token = create_access_token(user.id, ttl_hours, ctx.id)
         set_session_cookie(response, token, max_age=ttl_hours * 3600)
         return {"email": user.email}
 

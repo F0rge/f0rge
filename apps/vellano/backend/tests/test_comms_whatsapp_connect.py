@@ -7,15 +7,16 @@ import hmac
 import json
 
 import pytest
-from cryptography.fernet import Fernet
 from httpx import AsyncClient
 
 from app.config import settings
 
 
 @pytest.fixture(autouse=True)
-def _comms_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "settings_encryption_key", Fernet.generate_key().decode())
+def _comms_encryption_key() -> None:
+    from tests.conftest import ensure_settings_encryption_key
+
+    ensure_settings_encryption_key()
 
 
 @pytest.fixture(autouse=True)

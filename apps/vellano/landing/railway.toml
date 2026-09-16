@@ -1,0 +1,20 @@
+# Config-as-code for vellano-landing in the *Vellano* Railway project
+# (not Marrow zoological-fulfillment / not Marrow develop).
+# Point that service's Config File path here. Do NOT set Root Directory.
+# Live Railway service create is human-only (#701). This file is repo config.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/vellano/landing/Dockerfile"
+watchPatterns = [
+  "apps/vellano/landing/**",
+  "package.json",
+  "package-lock.json",
+]
+
+[deploy]
+startCommand = "node apps/vellano/landing/server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

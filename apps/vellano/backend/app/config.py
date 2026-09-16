@@ -6,7 +6,33 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://vellano:vellano@localhost:5433/vellano"
     direct_database_url: str = ""
-    cors_origins: list[str] = ["http://localhost:3003"]
+    platform_database_url: str = ""
+    platform_direct_database_url: str = ""
+    platform_admin_database_url: str = ""
+    tenant_base_domain: str = "localhost"
+    default_tenant_slug: str = "vellano"
+    default_tenant_hostnames: list[str] = ["localhost"]
+    seed_dev_extras: bool = True
+    platform_signup_mode: str = "instant"
+    platform_mail_mode: str = "log"
+    platform_smtp_host: str = ""
+    platform_smtp_port: int = 587
+    platform_smtp_username: str = ""
+    platform_smtp_password: str = ""
+    platform_smtp_from_email: str = ""
+    platform_smtp_from_name: str = "Stockroom"
+    platform_smtp_use_tls: bool = True
+    landing_base_url: str = "http://localhost:3004"
+    cors_origins: list[str] = [
+        "http://localhost:3003",
+        "http://localhost:3004",
+        "http://127.0.0.1:3003",
+        "http://127.0.0.1:3004",
+    ]
+    cors_origin_regex: str = (
+        r"https://([a-z0-9-]+\.)*stockroom-dev\.leo-figueiredo\.com"
+        r"|http://([a-z0-9-]+\.)*localhost:3003"
+    )
     jwt_secret: str = ""
     cookie_secure: bool = False
     seed_owner_email: str = "owner@example.com"

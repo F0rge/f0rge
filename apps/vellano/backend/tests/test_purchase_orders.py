@@ -924,6 +924,8 @@ async def test_backend_app_has_no_smtp_or_mailer_outside_comms() -> None:
         "/exceptions.py",
         "/config.py",
         "/main.py",
+        "/platform/mailer.py",
+        "/platform/signup_service.py",
     )
     hits = []
     for path in app_root.rglob("*.py"):

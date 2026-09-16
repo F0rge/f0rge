@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   canMutateSettings,
+  getBranding,
   getCommsSettings,
   testCommsEmail,
   updateCommsSettings,
@@ -54,6 +55,7 @@ export function CommunicationsSettings() {
   const [hasWaToken, setHasWaToken] = useState(false);
   const [hasWaAppSecret, setHasWaAppSecret] = useState(false);
   const [whatsappMode, setWhatsappMode] = useState<"off" | "click" | "cloud">("click");
+  const [webhookUrl, setWebhookUrl] = useState("");
 
   const apply = useCallback((data: CommsSettings) => {
     setHost(data.smtp_host ?? "");
@@ -82,9 +84,11 @@ export function CommunicationsSettings() {
       setLoading(true);
       setError(null);
       try {
-        const data = await getCommsSettings();
+        const [data, branding] = await Promise.all([getCommsSettings(), getBranding()]);
         if (!cancelled) {
           apply(data);
+          const origin = typeof window !== "undefined" ? window.location.origin : "";
+          setWebhookUrl(`${origin}/api/v1/webhooks/whatsapp/${branding.slug}`);
         }
       } catch (err) {
         if (!cancelled) {
@@ -308,7 +312,7 @@ export function CommunicationsSettings() {
         </p>
         <p className="cds--type-helper-text-01 vellano-muted-text">
           Mode: {whatsappMode === "cloud" ? "Cloud API" : "click-to-chat (wa.me)"}. Webhook:{" "}
-          https://vellano-dev-api.leo-figueiredo.com/api/v1/webhooks/whatsapp
+          {webhookUrl || `${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/webhooks/whatsapp/{slug}`}
         </p>
       </div>
       <TextInput

@@ -8,7 +8,8 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from f0rge_db.auth_context import user_id_ctx
-from app.services.auth import JWT_COOKIE_NAME, decode_access_token
+from app.services.auth import JWT_COOKIE_NAME, decode_access_token, token_tenant_id
+from app.tenancy.context import tenant_ctx
 
 
 def _bearer_token(authorization: Optional[str]) -> Optional[str]:
@@ -68,6 +69,18 @@ async def get_current_user_id(
 
     user_id = _resolve_user_id(vellano_session, authorization)
     if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid session",
+        )
+    ctx = tenant_ctx.get()
+    if ctx is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="tenant_not_found",
+        )
+    token = vellano_session or _bearer_token(authorization)
+    if token is None or token_tenant_id(token) != ctx.id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid session",

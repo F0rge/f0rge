@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Optional
 
 import pytest
-from cryptography.fernet import Fernet
 from httpx import AsyncClient
 from pypdf import PdfReader
 from io import BytesIO
@@ -17,8 +16,10 @@ from tests.test_purchase_orders import _relogin_owner
 
 
 @pytest.fixture(autouse=True)
-def _comms_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "settings_encryption_key", Fernet.generate_key().decode())
+def _comms_encryption_key() -> None:
+    from tests.conftest import ensure_settings_encryption_key
+
+    ensure_settings_encryption_key()
 
 
 @pytest.fixture
