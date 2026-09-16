@@ -3697,6 +3697,89 @@ export async function downloadQuotePdf(id: string, quoteNumber: string): Promise
   await downloadApiFile(`/api/v1/quotes/${id}/pdf`, `${quoteNumber}.pdf`);
 }
 
+export type LookbookPriceMode = "retail" | "price_list" | "hidden";
+
+export type LookbookItemStaff = {
+  id: string;
+  sku_id: string;
+  position: number;
+  name: string;
+  our_ref: string;
+  unit_inc_vat: string | null;
+};
+
+export type LookbookListItem = {
+  id: string;
+  name: string;
+  customer_id: string | null;
+  customer_name: string | null;
+  price_mode: LookbookPriceMode;
+  sku_count: number;
+  token: string;
+  expires_at: string;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+export type Lookbook = LookbookListItem & {
+  price_list_id: string | null;
+  items: LookbookItemStaff[];
+};
+
+export type CreateLookbookPayload = {
+  name: string;
+  customer_id?: string;
+  price_mode: LookbookPriceMode;
+  price_list_id?: string;
+  sku_ids: string[];
+  expires_in_days?: number;
+};
+
+export type PublicLookbookItem = {
+  id: string;
+  sku_id: string;
+  position: number;
+  name: string;
+  our_ref: string;
+  unit_inc_vat: string | null;
+  photo_path: string | null;
+};
+
+export type PublicLookbook = {
+  company_name: string;
+  name: string;
+  price_mode: LookbookPriceMode;
+  expires_at: string;
+  items: PublicLookbookItem[];
+};
+
+export function listLookbooks(params?: ListParams): Promise<Page<LookbookListItem>> {
+  return apiFetch<Page<LookbookListItem>>(`/lookbooks?${buildListQuery(params)}`);
+}
+
+export function getLookbook(id: string): Promise<Lookbook> {
+  return apiFetch<Lookbook>(`/lookbooks/${id}`);
+}
+
+export function createLookbook(payload: CreateLookbookPayload): Promise<Lookbook> {
+  return apiFetch<Lookbook>("/lookbooks", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function revokeLookbook(id: string): Promise<Lookbook> {
+  return apiFetch<Lookbook>(`/lookbooks/${id}/revoke`, { method: "POST" });
+}
+
+export function lookbookPublicUrl(token: string): string {
+  if (typeof window === "undefined") {
+    return `/c/${token}`;
+  }
+  return `${window.location.origin}/c/${token}`;
+}
+
+export function getPublicLookbook(token: string): Promise<PublicLookbook> {
+  return apiFetch<PublicLookbook>(`/public/lookbooks/${token}`);
+}
+
 export function listSalesOrders(params?: ListParams): Promise<Page<SalesOrderListItem>> {
   return apiFetch<Page<SalesOrderListItem>>(`/orders?${buildListQuery(params)}`);
 }
