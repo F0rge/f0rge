@@ -53,6 +53,31 @@ async def test_open_and_dwell_show_in_activity(owner_client: AsyncClient) -> Non
     assert body["skus"][0]["hearts"] == 1
 
 
+async def test_unheart_nets_activity_hearts(owner_client: AsyncClient) -> None:
+    lookbook = await _lookbook(owner_client, "LB-EV-HEART", "LB-EV-UNHEART")
+    kept = lookbook["items"][0]["sku_id"]
+    dropped = lookbook["items"][1]["sku_id"]
+    posted = await owner_client.post(
+        f"/api/v1/public/lookbooks/{lookbook['token']}/events",
+        json={
+            "visitor_id": "visitor-dddd",
+            "events": [
+                {"event_type": "heart", "sku_id": kept},
+                {"event_type": "heart", "sku_id": dropped},
+                {"event_type": "unheart", "sku_id": dropped},
+            ],
+        },
+    )
+    assert posted.status_code == 204, posted.text
+    activity = await owner_client.get(f"/api/v1/lookbooks/{lookbook['id']}/activity")
+    assert activity.status_code == 200, activity.text
+    body = activity.json()
+    assert body["hearts"] == 1
+    by_sku = {row["sku_id"]: row for row in body["skus"]}
+    assert by_sku[kept]["hearts"] == 1
+    assert by_sku[dropped]["hearts"] == 0
+
+
 async def test_foreign_sku_event_400_and_revoked_404(
     owner_client: AsyncClient,
     async_client: AsyncClient,

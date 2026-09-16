@@ -76,6 +76,7 @@ export default function PublicLookbookPage() {
   const [sent, setSent] = useState(false);
   const pending = useRef<PublicLookbookEvent[]>([]);
   const opened = useRef(false);
+  const visibleSince = useRef(new Map<string, number>());
   const hearts = useMemo(() => {
     void heartsVersion;
     return token ? readHearts(token) : new Set<string>();
@@ -108,6 +109,17 @@ export default function PublicLookbookPage() {
     },
     [flush],
   );
+
+  const snapshotDwell = useCallback(() => {
+    const now = Date.now();
+    visibleSince.current.forEach((started, skuId) => {
+      const duration = now - started;
+      if (duration >= 1000) {
+        enqueue({ event_type: "sku_visible", sku_id: skuId, duration_ms: duration });
+      }
+      visibleSince.current.set(skuId, now);
+    });
+  }, [enqueue]);
 
   useEffect(() => {
     if (!token) {
@@ -150,21 +162,30 @@ export default function PublicLookbookPage() {
   }, [enqueue, flush, items, token]);
 
   useEffect(() => {
-    const onHide = () => flush(true);
-    window.addEventListener("pagehide", onHide);
-    document.addEventListener("visibilitychange", onHide);
-    return () => {
-      window.removeEventListener("pagehide", onHide);
-      document.removeEventListener("visibilitychange", onHide);
+    const onPageHide = () => {
+      snapshotDwell();
       flush(true);
     };
-  }, [flush]);
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        snapshotDwell();
+        flush(true);
+      }
+    };
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+      snapshotDwell();
+      flush(true);
+    };
+  }, [flush, snapshotDwell]);
 
   useEffect(() => {
     if (!items || skipContinuousDwell()) {
       return;
     }
-    const visibleSince = new Map<string, number>();
     const observer = new IntersectionObserver(
       (entries) => {
         const now = Date.now();
@@ -174,16 +195,16 @@ export default function PublicLookbookPage() {
             continue;
           }
           if (entry.isIntersecting) {
-            if (!visibleSince.has(skuId)) {
-              visibleSince.set(skuId, now);
+            if (!visibleSince.current.has(skuId)) {
+              visibleSince.current.set(skuId, now);
             }
             continue;
           }
-          const started = visibleSince.get(skuId);
+          const started = visibleSince.current.get(skuId);
           if (started == null) {
             continue;
           }
-          visibleSince.delete(skuId);
+          visibleSince.current.delete(skuId);
           const duration = now - started;
           if (duration >= 1000) {
             enqueue({ event_type: "sku_visible", sku_id: skuId, duration_ms: duration });
@@ -194,16 +215,10 @@ export default function PublicLookbookPage() {
     );
     document.querySelectorAll("[data-sku-id]").forEach((node) => observer.observe(node));
     return () => {
-      const now = Date.now();
-      visibleSince.forEach((started, skuId) => {
-        const duration = now - started;
-        if (duration >= 1000) {
-          enqueue({ event_type: "sku_visible", sku_id: skuId, duration_ms: duration });
-        }
-      });
+      snapshotDwell();
       observer.disconnect();
     };
-  }, [enqueue, items]);
+  }, [enqueue, items, snapshotDwell]);
 
   const toggleHeart = useCallback(
     (skuId: string) => {
