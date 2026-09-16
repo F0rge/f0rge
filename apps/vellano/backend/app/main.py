@@ -78,7 +78,10 @@ from app.routers import (
     vat201_periods,
     whatsapp_webhook,
 )
+from app.routers import channels as channels_router
 from app.services.chart_of_accounts import ChartOfAccountsSeedService
+from app.services.channel_outbox import ChannelOutboxService
+from app.services.channel_seed import ChannelSeedService
 from app.services.locations import LocationSeedService
 from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
@@ -105,6 +108,19 @@ async def _nia_schedule_loop(stop: asyncio.Event) -> None:
             continue
 
 
+async def _channel_outbox_loop(stop: asyncio.Event) -> None:
+    while not stop.is_set():
+        try:
+            async with async_session_maker() as session:
+                await ChannelOutboxService(session).drain()
+        except Exception:
+            logger.exception("channel outbox tick failed")
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=TICK_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            continue
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with async_session_maker() as session:
@@ -118,20 +134,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.ensure_customer_deposits()
         await coa.ensure_category_chart()
         await coa.ensure_bank_accounts()
+        await ChannelSeedService(session).ensure()
         await TillSeedService(session).seed_if_empty()
         await PlaygroundSeedService(session).seed_if_enabled()
     stop = asyncio.Event()
     ticker: Optional[asyncio.Task] = None
+    outbox_ticker: Optional[asyncio.Task] = None
     if settings.nia_schedule_ticker:
         ticker = asyncio.create_task(_nia_schedule_loop(stop))
+    if settings.channel_outbox_ticker:
+        outbox_ticker = asyncio.create_task(_channel_outbox_loop(stop))
     try:
         yield
     finally:
         stop.set()
-        if ticker is not None:
-            ticker.cancel()
-            with suppress(asyncio.CancelledError):
-                await ticker
+        for task in (ticker, outbox_ticker):
+            if task is not None:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
 
 
 app = FastAPI(
@@ -267,6 +288,7 @@ app.include_router(home.home_router)
 app.include_router(settings_router.settings_router)
 app.include_router(comms.comms_router)
 app.include_router(whatsapp_webhook.whatsapp_webhook_router)
+app.include_router(channels_router.channels_router)
 app.include_router(cost_audit.cost_audit_router)
 app.include_router(nia.nia_router)
 app.include_router(nia_threads.nia_threads_router)

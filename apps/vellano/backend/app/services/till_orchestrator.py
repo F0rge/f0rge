@@ -220,6 +220,8 @@ class TillOrchestrator:
                 vat_amount=vat_total,
                 total_inc_vat=total_inc,
                 amount_paid=Decimal(0),
+                source="till",
+                location_id=data.location_id,
                 lines=invoice_line_models,
             )
 

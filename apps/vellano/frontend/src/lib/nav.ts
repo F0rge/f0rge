@@ -51,6 +51,7 @@ export const SALES_NAV_ITEMS = [
   { href: "/customers", label: "Customers" },
   { href: "/returns", label: "Returns" },
   { href: "/deliveries", label: "Deliveries" },
+  { href: "/channel-orders", label: "Channel orders" },
 ] as const;
 
 export const NIA_NAV_ITEMS = [{ href: "/canvas", label: "Canvas" }] as const;
@@ -114,7 +115,8 @@ export function isSalesPath(pathname: string): boolean {
     pathname.startsWith("/customers/") ||
     pathname.startsWith("/quotes/") ||
     pathname.startsWith("/lookbooks/") ||
-    pathname.startsWith("/orders/")
+    pathname.startsWith("/orders/") ||
+    pathname.startsWith("/channel-orders")
   );
 }
 
@@ -182,6 +184,9 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
     return true;
   }
   if (href === "/orders" && pathname.startsWith("/orders/")) {
+    return true;
+  }
+  if (href === "/channel-orders" && pathname.startsWith("/channel-orders")) {
     return true;
   }
   if (href === "/picks" && pathname.startsWith("/picks/")) {

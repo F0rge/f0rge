@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,17 @@ class TaxInvoice(UUIDPkMixin, TimestampMixin, Base):
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    source: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="books",
+        server_default="books",
+    )
+    location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     customer: Mapped["Customer"] = relationship()
     lines: Mapped[list["InvoiceLine"]] = relationship(
@@ -42,7 +53,13 @@ class TaxInvoice(UUIDPkMixin, TimestampMixin, Base):
         uselist=False,
     )
 
-    __table_args__ = (UniqueConstraint("invoice_number", name="uq_tax_invoices_invoice_number"),)
+    __table_args__ = (
+        UniqueConstraint("invoice_number", name="uq_tax_invoices_invoice_number"),
+        CheckConstraint(
+            "source IN ('books', 'till', 'layby', 'shopify', 'email', 'manual')",
+            name="ck_tax_invoices_source",
+        ),
+    )
 
 
 class InvoiceLine(UUIDPkMixin, Base):

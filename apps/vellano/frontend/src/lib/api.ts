@@ -252,6 +252,7 @@ export const USER_ROLES: { value: PresetRole; label: string }[] = [
 export {
   can,
   canManageCustomerCredit,
+  canManageChannels,
   canManageLocations,
   canMutateBooks,
   canMutateCatalogue,
@@ -4278,3 +4279,195 @@ export function createReorderDraftPo(skuIds: string[]): Promise<CreateReorderDra
     body: JSON.stringify({ sku_ids: skuIds }),
   });
 }
+
+export type ChannelAtpMode = "warehouse_only" | "pooled" | "mapped";
+export type ChannelOrderStatus =
+  | "received"
+  | "posted"
+  | "needs_mapping"
+  | "failed"
+  | "cancelled"
+  | "refunded";
+
+export type ChannelLocationMap = {
+  id: string;
+  location_id: string;
+  location_name: string;
+  location_type: string;
+  shopify_location_gid: string | null;
+  include_in_atp: boolean;
+};
+
+export type SalesChannel = {
+  id: string;
+  slug: string;
+  name: string;
+  enabled: boolean;
+  shopify_shop_domain: string | null;
+  has_shopify_token: boolean;
+  has_webhook_secret: boolean;
+};
+
+export type ChannelConfig = {
+  atp_mode: ChannelAtpMode;
+  atp_location_id: string | null;
+  channels: SalesChannel[];
+  maps: ChannelLocationMap[];
+  listing_count: number;
+  sku_count: number;
+  outbox_failed: number;
+};
+
+export type ChannelListing = {
+  id: string;
+  channel: string;
+  sku_id: string;
+  our_ref: string;
+  sku_name: string;
+  external_variant_id: string | null;
+  external_inventory_item_id: string | null;
+  external_sku: string | null;
+};
+
+export type ChannelApiKey = {
+  id: string;
+  name: string;
+  key_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+};
+
+export type ChannelApiKeyCreated = ChannelApiKey & { token: string };
+
+export type ChannelOrder = {
+  id: string;
+  channel: string;
+  external_order_id: string;
+  status: ChannelOrderStatus;
+  email: string | null;
+  customer_id: string | null;
+  invoice_id: string | null;
+  invoice_number: string | null;
+  pick_id: string | null;
+  delivery_id: string | null;
+  error_message: string | null;
+  allocations: Record<string, unknown>[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChannelOutboxItem = {
+  id: string;
+  kind: string;
+  status: string;
+  attempts: number;
+  last_error: string | null;
+  sku_id: string | null;
+  channel_order_id: string | null;
+  available_at: string;
+  created_at: string;
+};
+
+export const CHANNEL_ORDER_STATUS_LABELS: Record<ChannelOrderStatus, string> = {
+  received: "Received",
+  posted: "Posted",
+  needs_mapping: "Needs mapping",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+};
+
+export function getChannelConfig(): Promise<ChannelConfig> {
+  return apiFetch<ChannelConfig>("/channels");
+}
+
+export function updateChannelSettings(payload: {
+  atp_mode?: ChannelAtpMode;
+  atp_location_id?: string | null;
+  maps?: {
+    location_id: string;
+    shopify_location_gid?: string | null;
+    include_in_atp: boolean;
+  }[];
+}): Promise<ChannelConfig> {
+  return apiFetch<ChannelConfig>("/channels/settings", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function connectShopify(payload: {
+  shop_domain?: string;
+  admin_token?: string;
+  webhook_secret?: string;
+  enabled?: boolean;
+}): Promise<SalesChannel> {
+  return apiFetch<SalesChannel>("/channels/shopify", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listChannelListings(): Promise<ChannelListing[]> {
+  return apiFetch<ChannelListing[]>("/channels/listings");
+}
+
+export function upsertChannelListing(payload: {
+  sku_id: string;
+  channel?: string;
+  external_variant_id?: string;
+  external_inventory_item_id?: string;
+  external_sku?: string;
+}): Promise<ChannelListing> {
+  return apiFetch<ChannelListing>("/channels/listings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listChannelApiKeys(): Promise<ChannelApiKey[]> {
+  return apiFetch<ChannelApiKey[]>("/channels/api-keys");
+}
+
+export function createChannelApiKey(name: string): Promise<ChannelApiKeyCreated> {
+  return apiFetch<ChannelApiKeyCreated>("/channels/api-keys", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function revokeChannelApiKey(id: string): Promise<ChannelApiKey> {
+  return apiFetch<ChannelApiKey>(`/channels/api-keys/${id}`, { method: "DELETE" });
+}
+
+export function listChannelOrders(
+  params?: ListParams & { channel?: string },
+): Promise<Page<ChannelOrder>> {
+  const search = new URLSearchParams(buildListQuery(params));
+  if (params?.channel) {
+    search.set("channel", params.channel);
+  }
+  return apiFetch<Page<ChannelOrder>>(`/channels/orders?${search.toString()}`);
+}
+
+export function processChannelOrder(id: string): Promise<ChannelOrder> {
+  return apiFetch<ChannelOrder>(`/channels/orders/${id}/process`, { method: "POST" });
+}
+
+export function fulfillChannelOrder(id: string): Promise<ChannelOrder> {
+  return apiFetch<ChannelOrder>(`/channels/orders/${id}/fulfill`, { method: "POST" });
+}
+
+export function cancelChannelOrder(id: string): Promise<ChannelOrder> {
+  return apiFetch<ChannelOrder>(`/channels/orders/${id}/cancel`, { method: "POST" });
+}
+
+export function listChannelOutbox(): Promise<ChannelOutboxItem[]> {
+  return apiFetch<ChannelOutboxItem[]>("/channels/outbox");
+}
+
+export function drainChannelOutbox(): Promise<{ processed: number }> {
+  return apiFetch<{ processed: number }>("/channels/outbox/drain", { method: "POST" });
+}
+

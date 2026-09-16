@@ -114,6 +114,7 @@ class StockMovementService:
                 po_id=po_id,
                 po_line_id=po_line_id,
             )
+        await self._enqueue_channel_inventory(sku_id)
         return updated
 
     async def apply_outgoing_qty(
@@ -148,6 +149,7 @@ class StockMovementService:
                 source=source,
                 note=note,
             )
+        await self._enqueue_channel_inventory(sku_id)
         return updated
 
     async def apply_qty_delta(
@@ -231,3 +233,8 @@ class StockMovementService:
             note,
             bin_id=bin_id,
         )
+
+    async def _enqueue_channel_inventory(self, sku_id: uuid.UUID) -> None:
+        from app.services.channel_outbox import ChannelOutboxService
+
+        await ChannelOutboxService(self.db).enqueue_inventory_push(sku_id)

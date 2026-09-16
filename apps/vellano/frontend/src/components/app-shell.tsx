@@ -114,6 +114,7 @@ const ICONS = {
   "/transfers": Movement,
   "/picks": Task,
   "/deliveries": DeliveryTruck,
+  "/channel-orders": ShoppingCart,
   "/returns": Undo,
   "/quotes": Document,
   "/orders": Receipt,

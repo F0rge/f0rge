@@ -251,6 +251,8 @@ class InvoiceService:
             total_inc_vat=invoice.total_inc_vat,
             amount_paid=invoice.amount_paid,
             balance=balance,
+            source=getattr(invoice, "source", "books"),
+            location_id=getattr(invoice, "location_id", None),
             lines=[
                 InvoiceLineResponse(
                     id=line.id,

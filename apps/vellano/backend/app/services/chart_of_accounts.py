@@ -21,6 +21,7 @@ CODE_CREDIT_CARD = "1110"
 CODE_PETTY_CASH = "1120"
 CODE_INVENTORY_CLEARING = "1130"
 CODE_SUPPLIER_CLEARING = "1140"
+CODE_SHOPIFY_CLEARING = "1150"
 CODE_AR = "1200"
 CODE_INVENTORY = "1300"
 CODE_AP = "2100"
@@ -92,6 +93,7 @@ BANK_ACCOUNT_SEEDS: tuple[tuple[str, str], ...] = (
     (CODE_PETTY_CASH, "Petty cash"),
     (CODE_INVENTORY_CLEARING, "Inventory clearing"),
     (CODE_SUPPLIER_CLEARING, "Supplier clearing"),
+    (CODE_SHOPIFY_CLEARING, "Shopify clearing"),
 )
 
 
@@ -155,6 +157,9 @@ class ChartOfAccountsSeedService:
                     )
                 else:
                     existing.is_bank = True
+
+    async def ensure_shopify_clearing(self) -> None:
+        await self.ensure_bank_accounts()
 
     @staticmethod
     def _system_account(
