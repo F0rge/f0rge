@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("home renders the Stockroom hero", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Company software, built for humans." })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Create a company workspace" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Create a company workspace" })).toHaveCount(2);
 });
 
 test("signup submit stays disabled until the form is valid", async ({ page }) => {

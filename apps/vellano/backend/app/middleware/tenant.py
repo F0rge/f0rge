@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Optional
 
@@ -9,15 +10,29 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from f0rge_core.exceptions import UnauthorizedError
 
+from app.config import settings
 from app.services.auth import JWT_COOKIE_NAME, peek_token_tid
 from app.tenancy.context import tenant_ctx
-from app.tenancy.errors import TenantMismatchError, TenantNotFoundError
-from app.tenancy.resolver import resolve_tenant
+from app.tenancy.errors import TenantContext, TenantMismatchError, TenantNotFoundError
+from app.tenancy.resolver import ready_context_for_slug, resolve_tenant
 
 CUSTOMER_COOKIE_NAME = "vellano_customer_session"
+logger = logging.getLogger(__name__)
 
 EXEMPT_EXACT = frozenset({"/api/v1/health", "/docs", "/redoc", "/openapi.json"})
-EXEMPT_PREFIXES = ("/api/v1/platform", "/api/v1/webhooks")
+EXEMPT_PREFIXES = ("/api/v1/platform",)
+
+WHATSAPP_WEBHOOK_PREFIX = "/api/v1/webhooks/whatsapp"
+
+
+def whatsapp_webhook_slug(path: str) -> Optional[str]:
+    """Path slug for a WhatsApp webhook, empty string for the legacy route, else None."""
+    if path == WHATSAPP_WEBHOOK_PREFIX:
+        return ""
+    prefix = WHATSAPP_WEBHOOK_PREFIX + "/"
+    if path.startswith(prefix):
+        return path[len(prefix) :].split("/", 1)[0]
+    return None
 
 
 def _is_exempt(path: str) -> bool:
@@ -42,8 +57,21 @@ def _tid_from_request(request: Request) -> Optional[uuid.UUID]:
     return None
 
 
+async def _context_for_request(request: Request, path: str) -> TenantContext:
+    slug = whatsapp_webhook_slug(path)
+    if slug is not None:
+        target = slug or settings.default_tenant_slug
+        if not slug:
+            logger.warning("deprecated WhatsApp webhook path; use /api/v1/webhooks/whatsapp/{slug}")
+        ctx = await ready_context_for_slug(target)
+        if ctx is None:
+            raise TenantNotFoundError()
+        return ctx
+    return await resolve_tenant(request, token_tid=_tid_from_request(request))
+
+
 class TenantContextMiddleware:
-    """Resolve Tenant from X-Tenant-Host / JWT tid. Fail closed with 404/401."""
+    """Resolve Tenant from X-Tenant-Host / JWT tid / WhatsApp slug. Fail closed with 404/401."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -59,7 +87,7 @@ class TenantContextMiddleware:
         request = Request(scope)
         token = tenant_ctx.set(None)
         try:
-            ctx = await resolve_tenant(request, token_tid=_tid_from_request(request))
+            ctx = await _context_for_request(request, path)
             tenant_ctx.set(ctx)
             await self.app(scope, receive, send)
         except TenantNotFoundError:

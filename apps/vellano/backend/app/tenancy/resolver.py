@@ -15,6 +15,7 @@ from app.platform.service import (
     resolve_tenant_by_hostname,
 )
 from app.tenancy.errors import TenantContext, TenantMismatchError, TenantNotFoundError
+from f0rge_core.exceptions import ValidationError
 
 _CACHE_TTL_SECONDS = 60.0
 _hostname_cache: dict[str, tuple[float, TenantContext]] = {}
@@ -33,10 +34,14 @@ def hostname_from_request(request: Request) -> Optional[str]:
 def _to_context(tenant) -> TenantContext:
     if not tenant.database_url_encrypted:
         raise TenantNotFoundError()
+    try:
+        database_url = decrypt_database_url(tenant.database_url_encrypted)
+    except (ValidationError, ValueError):
+        raise TenantNotFoundError() from None
     return TenantContext(
         id=tenant.id,
         slug=tenant.slug,
-        database_url=decrypt_database_url(tenant.database_url_encrypted),
+        database_url=database_url,
         storage_prefix=tenant.storage_prefix,
     )
 

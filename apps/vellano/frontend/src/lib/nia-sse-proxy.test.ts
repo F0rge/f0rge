@@ -43,8 +43,8 @@ describe("proxyNiaSse streaming", () => {
         finish = () => controller.close();
       },
     });
-    const fetchMock = vi.fn(
-      async (_url: string | URL | Request, _init?: RequestInit) =>
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () =>
         new Response(upstreamBody, {
           status: 200,
           headers: { "content-type": "text/event-stream" },

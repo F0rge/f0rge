@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Optional
 
 import pytest
-from cryptography.fernet import Fernet
 from httpx import AsyncClient
 
 from app.config import settings
@@ -13,8 +12,10 @@ from tests.test_comms_smtp import _FakeSMTP
 
 
 @pytest.fixture(autouse=True)
-def _comms_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "settings_encryption_key", Fernet.generate_key().decode())
+def _comms_encryption_key() -> None:
+    from tests.conftest import ensure_settings_encryption_key
+
+    ensure_settings_encryption_key()
 
 
 @pytest.fixture
@@ -24,11 +25,6 @@ def fake_smtp(monkeypatch: pytest.MonkeyPatch) -> type[_FakeSMTP]:
     monkeypatch.setattr("smtplib.SMTP", _FakeSMTP)
     monkeypatch.setattr("smtplib.SMTP_SSL", _FakeSMTP)
     return _FakeSMTP
-
-
-@pytest.fixture(autouse=True)
-def _comms_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "settings_encryption_key", Fernet.generate_key().decode())
 
 
 async def _login(client: AsyncClient, email: str, password: str) -> AsyncClient:

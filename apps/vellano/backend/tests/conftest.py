@@ -47,6 +47,16 @@ TEST_TENANT_HOST = "testserver"
 TENANT_HOST_HEADER = {"X-Tenant-Host": TEST_TENANT_HOST}
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
+
+def ensure_settings_encryption_key() -> str:
+    """Tenant URLs and SMTP secrets share this Fernet key. Do not rotate per-test."""
+    if not settings.settings_encryption_key:
+        settings.settings_encryption_key = Fernet.generate_key().decode()
+    return settings.settings_encryption_key
+
+
+ensure_settings_encryption_key()
+
 postgres_container = postgres_container_fixture("postgres:16")
 
 
@@ -118,8 +128,7 @@ async def platform_registry(
     from app.platform.database import dispose_platform_engines
     from app.tenancy.resolver import invalidate_hostname_cache
 
-    if not settings.settings_encryption_key:
-        settings.settings_encryption_key = Fernet.generate_key().decode()
+    ensure_settings_encryption_key()
     base_url = async_url(postgres_container)
     admin_url = f"{base_url.rsplit('/', 1)[0]}/postgres"
     db_name = "vellano_platform_suite"

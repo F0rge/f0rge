@@ -628,7 +628,7 @@ Shared API + Workspace frontend; **one Postgres database per Company**. Control 
 - Workspace requests send header **`X-Tenant-Host`** (browser hostname, lowercase, no port). In Swagger, set it when calling `/auth/login` or `/auth/me`.
 - Authenticated JWT must include `tid` (Tenant UUID). Header and `tid` must name the same Tenant or the API returns **401**.
 - Unknown / missing Tenant → **404** `{"detail":"tenant_not_found"}`. There is **no default Tenant** on the request path.
-- Exempt: `/api/v1/health`, `/api/v1/platform/*`, `/api/v1/webhooks/*`, `/docs`, `/redoc`, `/openapi.json`.
+- Exempt: `/api/v1/health`, `/api/v1/platform/*`, `/docs`, `/redoc`, `/openapi.json`. WhatsApp webhooks are public (no cookie) but resolve Tenant from the path slug, not `X-Tenant-Host`.
 - Cookie `vellano_session` stays host-only (no `Domain=`).
 - Unauthenticated chrome: `GET /api/v1/branding` → `{display_name, slug}` (still needs `X-Tenant-Host`).
 - Public signup (no Tenant): `GET /api/v1/platform/slugs/{slug}/availability`, `POST /api/v1/platform/signups` (202, never sets `vellano_session`), `POST /signups/verify`, `GET /signups/{id}/status`. Local mail: `PLATFORM_MAIL_MODE=log` prints the verify link.

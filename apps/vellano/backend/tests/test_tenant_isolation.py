@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
+from app.dependencies.auth import get_whatsapp_webhook_service
+from app.middleware.tenant import whatsapp_webhook_slug
 from tests.test_tenancy_routing import _raw_client
 
 LEAK_PATHS = (
@@ -30,7 +34,6 @@ async def test_unresolved_tenant_404s_on_leak_surfaces(platform_registry: str) -
 @pytest.mark.no_db
 def test_no_request_path_default_tenant() -> None:
     from pathlib import Path
-    import inspect
 
     import app.tenancy.resolver as resolver
 
@@ -38,6 +41,21 @@ def test_no_request_path_default_tenant() -> None:
     assert "default_tenant" not in source
     db_source = Path(__file__).resolve().parents[1].joinpath("app/database.py").read_text()
     assert "async_session_maker()" not in db_source.split("def get_db")[1]
+
+
+@pytest.mark.no_db
+def test_whatsapp_webhook_slug_from_path() -> None:
+    assert whatsapp_webhook_slug("/api/v1/webhooks/whatsapp") == ""
+    assert whatsapp_webhook_slug("/api/v1/webhooks/whatsapp/acme") == "acme"
+    assert whatsapp_webhook_slug("/api/v1/skus") is None
+    assert whatsapp_webhook_slug("/api/v1/platform/signups") is None
+
+
+@pytest.mark.no_db
+def test_whatsapp_webhook_service_uses_get_db() -> None:
+    source = inspect.getsource(get_whatsapp_webhook_service)
+    assert "Depends(get_db)" in source
+    assert "get_whatsapp_db" not in source
 
 
 @pytest.mark.no_db
