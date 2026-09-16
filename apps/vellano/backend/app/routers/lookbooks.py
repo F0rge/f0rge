@@ -9,7 +9,12 @@ from app.dependencies.auth import (
     get_lookbook_service,
     require_quotes,
 )
-from app.schemas.lookbook import LookbookCreate, LookbookListItem, LookbookResponse
+from app.schemas.lookbook import (
+    LookbookActivity,
+    LookbookCreate,
+    LookbookListItem,
+    LookbookResponse,
+)
 from app.schemas.page import Page, PageParams, get_page_params
 from app.services.lookbooks import LookbooksService
 
@@ -32,6 +37,15 @@ async def create_lookbook(
     service: LookbooksService = Depends(get_lookbook_service),
 ):
     return await service.create(body, user_id)
+
+
+@lookbooks_router.get("/{lookbook_id}/activity", response_model=LookbookActivity)
+async def get_lookbook_activity(
+    lookbook_id: uuid.UUID,
+    _: uuid.UUID = Depends(get_current_user_id),
+    service: LookbooksService = Depends(get_lookbook_service),
+):
+    return await service.activity(lookbook_id)
 
 
 @lookbooks_router.get("/{lookbook_id}", response_model=LookbookResponse)

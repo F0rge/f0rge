@@ -66,3 +66,42 @@ class PublicLookbookResponse(BaseModel):
     price_mode: LookbookPriceMode
     expires_at: datetime.datetime
     items: list[PublicLookbookItem]
+
+
+class PublicLookbookEventIn(BaseModel):
+    event_type: str
+    sku_id: Optional[uuid.UUID] = None
+    duration_ms: Optional[int] = Field(default=None, ge=0, le=3_600_000)
+
+
+class PublicLookbookEventsIn(BaseModel):
+    visitor_id: str = Field(min_length=8, max_length=80)
+    events: list[PublicLookbookEventIn] = Field(min_length=1, max_length=40)
+
+
+class PublicLookbookRequestIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    contact: str = Field(min_length=3, max_length=120)
+    sku_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
+class LookbookActivitySku(BaseModel):
+    sku_id: uuid.UUID
+    name: str
+    our_ref: str
+    dwell_ms: int
+    opens: int
+    hearts: int
+
+
+class LookbookQuoteLink(BaseModel):
+    id: uuid.UUID
+    quote_number: str
+
+
+class LookbookActivity(BaseModel):
+    opens: int
+    hearts: int
+    submits: int
+    skus: list[LookbookActivitySku]
+    quotes: list[LookbookQuoteLink]

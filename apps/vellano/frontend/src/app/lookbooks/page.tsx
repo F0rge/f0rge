@@ -22,15 +22,19 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 
+import Link from "next/link";
+
 import {
   ApiError,
   canMutateQuotes,
   formatZarAmount,
   getLookbook,
+  getLookbookActivity,
   listLookbooks,
   lookbookPublicUrl,
   revokeLookbook,
   type Lookbook,
+  type LookbookActivity,
   type LookbookListItem,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -75,6 +79,7 @@ function LookbooksPageInner() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [detail, setDetail] = useState<Lookbook | null>(null);
+  const [activity, setActivity] = useState<LookbookActivity | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,7 +131,9 @@ function LookbooksPageInner() {
       await revokeLookbook(id);
       await load();
       if (detail?.id === id) {
-        setDetail(await getLookbook(id));
+        const [next, summary] = await Promise.all([getLookbook(id), getLookbookActivity(id)]);
+        setDetail(next);
+        setActivity(summary);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not revoke lookbook");
@@ -136,7 +143,9 @@ function LookbooksPageInner() {
   async function onOpen(id: string) {
     setError(null);
     try {
-      setDetail(await getLookbook(id));
+      const [next, summary] = await Promise.all([getLookbook(id), getLookbookActivity(id)]);
+      setDetail(next);
+      setActivity(summary);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not open lookbook");
     }
@@ -236,7 +245,10 @@ function LookbooksPageInner() {
         open={Boolean(detail)}
         modalHeading={detail?.name ?? "Lookbook"}
         passiveModal
-        onRequestClose={() => setDetail(null)}
+        onRequestClose={() => {
+          setDetail(null);
+          setActivity(null);
+        }}
       >
         {detail ? (
           <Tabs>
@@ -259,7 +271,52 @@ function LookbooksPageInner() {
                 </ul>
               </TabPanel>
               <TabPanel>
-                <p className="cds--type-body-01">Activity lands in a later slice. Opens, dwell, and hearts will show here.</p>
+                {activity ? (
+                  <Stack gap={4}>
+                    <p className="cds--type-body-01">
+                      {activity.opens} open{activity.opens === 1 ? "" : "s"} · {activity.hearts}{" "}
+                      heart{activity.hearts === 1 ? "" : "s"} · {activity.submits} request
+                      {activity.submits === 1 ? "" : "s"}
+                    </p>
+                    {activity.quotes.length > 0 ? (
+                      <p className="cds--type-body-01">
+                        Quotes:{" "}
+                        {activity.quotes.map((quote, index) => (
+                          <span key={quote.id}>
+                            {index > 0 ? ", " : ""}
+                            <Link href="/quotes">{quote.quote_number}</Link>
+                          </span>
+                        ))}
+                      </p>
+                    ) : (
+                      <p className="cds--type-body-01">No quotes from this lookbook yet.</p>
+                    )}
+                    <Table size="sm">
+                      <TableHead>
+                        <TableRow>
+                          <TableHeader>SKU</TableHeader>
+                          <TableHeader>Dwell</TableHeader>
+                          <TableHeader>Opens</TableHeader>
+                          <TableHeader>Hearts</TableHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {activity.skus.map((sku) => (
+                          <TableRow key={sku.sku_id}>
+                            <TableCell>
+                              {sku.our_ref} — {sku.name}
+                            </TableCell>
+                            <TableCell>{(sku.dwell_ms / 1000).toFixed(1)}s</TableCell>
+                            <TableCell>{sku.opens}</TableCell>
+                            <TableCell>{sku.hearts}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Stack>
+                ) : (
+                  <p className="cds--type-body-01">Loading activity…</p>
+                )}
               </TabPanel>
             </TabPanels>
           </Tabs>

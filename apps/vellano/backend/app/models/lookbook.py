@@ -29,6 +29,15 @@ class LookbookPriceMode(str, enum.Enum):
     HIDDEN = "hidden"
 
 
+class LookbookEventType(str, enum.Enum):
+    OPEN = "open"
+    SKU_VISIBLE = "sku_visible"
+    SKU_OPEN = "sku_open"
+    HEART = "heart"
+    UNHEART = "unheart"
+    SUBMIT = "submit"
+
+
 class Lookbook(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "lookbooks"
 
@@ -120,3 +129,61 @@ class LookbookItem(UUIDPkMixin, TimestampMixin, Base):
 from app.models.customer import Customer  # noqa: E402
 from app.models.sku import Sku  # noqa: E402
 from app.models.user import User  # noqa: E402
+
+
+class LookbookEvent(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "lookbook_events"
+
+    lookbook_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("lookbooks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sku_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("skus.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    event_type: Mapped[LookbookEventType] = mapped_column(
+        Enum(
+            LookbookEventType,
+            name="lookbook_event_type",
+            native_enum=False,
+            length=32,
+            values_callable=lambda members: [member.value for member in members],
+        ),
+        nullable=False,
+    )
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    visitor_id: Mapped[str] = mapped_column(Text, nullable=False)
+    occurred_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('open', 'sku_visible', 'sku_open', 'heart', 'unheart', 'submit')",
+            name="ck_lookbook_events_type",
+        ),
+        CheckConstraint(
+            "duration_ms IS NULL OR duration_ms >= 0",
+            name="ck_lookbook_events_duration",
+        ),
+    )
+
+
+class LookbookQuote(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "lookbook_quotes"
+
+    lookbook_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("lookbooks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    quote_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quotes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    __table_args__ = (UniqueConstraint("quote_id", name="uq_lookbook_quotes_quote_id"),)

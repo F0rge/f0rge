@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import secrets
+import time
 import uuid
 from decimal import Decimal
 from typing import Optional
@@ -14,20 +15,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.customer import CustomerCRUD
 from app.crud.lookbook import LookbookCRUD
 from app.crud.price_list import PriceListCRUD
+from app.crud.quote import QuoteCRUD
 from app.crud.sku import SkuCRUD
-from app.models.lookbook import Lookbook, LookbookItem, LookbookPriceMode
+from app.models.customer import Customer
+from app.models.lookbook import (
+    Lookbook,
+    LookbookEvent,
+    LookbookEventType,
+    LookbookItem,
+    LookbookPriceMode,
+    LookbookQuote,
+)
 from app.models.sku import Sku
 from app.models.team import Team
 from app.schemas.lookbook import (
+    LookbookActivity,
+    LookbookActivitySku,
     LookbookCreate,
     LookbookItemStaff,
     LookbookListItem,
+    LookbookQuoteLink,
     LookbookResponse,
+    PublicLookbookEventsIn,
     PublicLookbookItem,
+    PublicLookbookRequestIn,
     PublicLookbookResponse,
 )
 from app.schemas.page import Page, PageParams
 from app.services.object_storage import is_remote_storage_ref, presigned_get_url, read_bytes
+from app.services.quotes import QuotesService
+from app.services.till_seed import WALK_IN_CUSTOMER_NAME
 from app.services.vat import ex_to_inc
 from f0rge_core.exceptions import NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
@@ -35,6 +52,18 @@ from f0rge_db.crud import unit_of_work
 
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.utcnow()
+
+
+_EVENT_HITS: dict[str, list[float]] = {}
+
+
+def _rate_limit_events(token: str) -> None:
+    now = time.monotonic()
+    hits = [stamp for stamp in _EVENT_HITS.get(token, []) if now - stamp < 60]
+    if len(hits) >= 40:
+        raise ValidationError("Too many lookbook events")
+    hits.append(now)
+    _EVENT_HITS[token] = hits
 
 
 class LookbooksService:
@@ -132,6 +161,132 @@ class LookbooksService:
         except FileNotFoundError as exc:
             raise NotFoundError("Lookbook photo not found") from exc
         return Response(content=data, media_type="image/jpeg")
+
+    async def record_events(self, token: str, payload: PublicLookbookEventsIn) -> None:
+        _rate_limit_events(token)
+        lookbook = await self._live_by_token(token)
+        allowed = {item.sku_id for item in lookbook.items}
+        rows: list[LookbookEvent] = []
+        now = _utcnow()
+        for event in payload.events:
+            try:
+                event_type = LookbookEventType(event.event_type)
+            except ValueError as exc:
+                raise ValidationError("Unknown lookbook event") from exc
+            sku_id = event.sku_id
+            if event_type is LookbookEventType.OPEN or event_type is LookbookEventType.SUBMIT:
+                sku_id = None
+            elif sku_id is None or sku_id not in allowed:
+                raise ValidationError("SKU is not on this lookbook")
+            if event_type is LookbookEventType.SKU_VISIBLE and event.duration_ms is None:
+                raise ValidationError("duration_ms is required for sku_visible")
+            rows.append(
+                LookbookEvent(
+                    lookbook_id=lookbook.id,
+                    sku_id=sku_id,
+                    event_type=event_type,
+                    duration_ms=event.duration_ms,
+                    visitor_id=payload.visitor_id,
+                    occurred_at=now,
+                )
+            )
+        async with unit_of_work(self.db):
+            self.db.add_all(rows)
+
+    async def activity(self, lookbook_id: uuid.UUID) -> LookbookActivity:
+        lookbook = await self._get_or_404(lookbook_id)
+        events = list(
+            (
+                await self.db.execute(
+                    select(LookbookEvent).where(LookbookEvent.lookbook_id == lookbook.id)
+                )
+            ).scalars()
+        )
+        opens = sum(1 for event in events if event.event_type is LookbookEventType.OPEN)
+        hearts = sum(1 for event in events if event.event_type is LookbookEventType.HEART)
+        submits = sum(1 for event in events if event.event_type is LookbookEventType.SUBMIT)
+        by_sku: dict[uuid.UUID, LookbookActivitySku] = {}
+        for item in lookbook.items:
+            by_sku[item.sku_id] = LookbookActivitySku(
+                sku_id=item.sku_id,
+                name=item.snapshot_name,
+                our_ref=item.snapshot_our_ref,
+                dwell_ms=0,
+                opens=0,
+                hearts=0,
+            )
+        for event in events:
+            if event.sku_id is None or event.sku_id not in by_sku:
+                continue
+            row = by_sku[event.sku_id]
+            if event.event_type is LookbookEventType.SKU_VISIBLE:
+                row.dwell_ms += event.duration_ms or 0
+            elif event.event_type is LookbookEventType.SKU_OPEN:
+                row.opens += 1
+            elif event.event_type is LookbookEventType.HEART:
+                row.hearts += 1
+        quotes = list(
+            (
+                await self.db.execute(
+                    select(LookbookQuote).where(LookbookQuote.lookbook_id == lookbook.id)
+                )
+            ).scalars()
+        )
+        quote_links: list[LookbookQuoteLink] = []
+        numbered = QuoteCRUD(self.db)
+        for link in quotes:
+            quote = await numbered.get_by_id(link.quote_id)
+            if quote is not None:
+                quote_links.append(LookbookQuoteLink(id=quote.id, quote_number=quote.quote_number))
+        skus = sorted(by_sku.values(), key=lambda row: row.dwell_ms, reverse=True)
+        return LookbookActivity(
+            opens=opens,
+            hearts=hearts,
+            submits=submits,
+            skus=skus,
+            quotes=quote_links,
+        )
+
+    async def request_quote(self, token: str, payload: PublicLookbookRequestIn) -> None:
+        lookbook = await self._live_by_token(token)
+        by_sku = {item.sku_id: item for item in lookbook.items}
+        lines: list[tuple[uuid.UUID, int, Decimal, str]] = []
+        for sku_id in list(dict.fromkeys(payload.sku_ids)):
+            item = by_sku.get(sku_id)
+            if item is None:
+                raise ValidationError("SKU is not on this lookbook")
+            if item.snapshot_unit_inc_vat is None:
+                raise ValidationError("This lookbook has no prices to quote")
+            lines.append((item.sku_id, 1, item.snapshot_unit_inc_vat, item.snapshot_name))
+        customer_id = lookbook.customer_id
+        if customer_id is None:
+            walk_in = (
+                await self.db.execute(
+                    select(Customer).where(Customer.name == WALK_IN_CUSTOMER_NAME).limit(1)
+                )
+            ).scalar_one_or_none()
+            if walk_in is None:
+                raise NotFoundError("Walk-in customer not found")
+            customer_id = walk_in.id
+        notes = f"Lookbook {lookbook.name}: {payload.name} / {payload.contact}"
+        quote = await QuotesService(self.db).create_from_snapshots(
+            customer_id=customer_id,
+            user_id=lookbook.created_by_user_id,
+            notes=notes,
+            lines=lines,
+        )
+        async with unit_of_work(self.db):
+            self.db.add(LookbookQuote(lookbook_id=lookbook.id, quote_id=quote.id))
+            self.db.add(
+                LookbookEvent(
+                    lookbook_id=lookbook.id,
+                    sku_id=None,
+                    event_type=LookbookEventType.SUBMIT,
+                    duration_ms=None,
+                    visitor_id="submit",
+                    occurred_at=_utcnow(),
+                )
+            )
 
     async def _live_by_token(self, token: str) -> Lookbook:
         lookbook = await self.crud.get_by_token(token)

@@ -3776,8 +3776,85 @@ export function lookbookPublicUrl(token: string): string {
   return `${window.location.origin}/c/${token}`;
 }
 
+export type LookbookActivitySku = {
+  sku_id: string;
+  name: string;
+  our_ref: string;
+  dwell_ms: number;
+  opens: number;
+  hearts: number;
+};
+
+export type LookbookQuoteLink = {
+  id: string;
+  quote_number: string;
+};
+
+export type LookbookActivity = {
+  opens: number;
+  hearts: number;
+  submits: number;
+  skus: LookbookActivitySku[];
+  quotes: LookbookQuoteLink[];
+};
+
+export type PublicLookbookEvent = {
+  event_type: "open" | "sku_visible" | "sku_open" | "heart" | "unheart" | "submit";
+  sku_id?: string;
+  duration_ms?: number;
+};
+
+export function getLookbookActivity(id: string): Promise<LookbookActivity> {
+  return apiFetch<LookbookActivity>(`/lookbooks/${id}/activity`);
+}
+
 export function getPublicLookbook(token: string): Promise<PublicLookbook> {
   return apiFetch<PublicLookbook>(`/public/lookbooks/${token}`);
+}
+
+export function postPublicLookbookEvents(
+  token: string,
+  visitorId: string,
+  events: PublicLookbookEvent[],
+  keepalive = false,
+): Promise<void> {
+  return apiFetch<void>(`/public/lookbooks/${token}/events`, {
+    method: "POST",
+    body: JSON.stringify({ visitor_id: visitorId, events }),
+    keepalive,
+  });
+}
+
+export function requestPublicLookbookQuote(
+  token: string,
+  payload: { name: string; contact: string; sku_ids: string[] },
+): Promise<void> {
+  return apiFetch<void>(`/public/lookbooks/${token}/request`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function beaconPublicLookbookEvents(
+  token: string,
+  visitorId: string,
+  events: PublicLookbookEvent[],
+): boolean {
+  if (events.length === 0) {
+    return true;
+  }
+  const body = JSON.stringify({ visitor_id: visitorId, events });
+  const blob = new Blob([body], { type: "application/json" });
+  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+    return navigator.sendBeacon(`/api/v1/public/lookbooks/${token}/events`, blob);
+  }
+  void fetch(`/api/v1/public/lookbooks/${token}/events`, {
+    method: "POST",
+    body,
+    headers: { "Content-Type": "application/json" },
+    keepalive: true,
+  });
+  return true;
 }
 
 export function listSalesOrders(params?: ListParams): Promise<Page<SalesOrderListItem>> {
