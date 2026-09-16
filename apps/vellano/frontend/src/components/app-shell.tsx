@@ -158,7 +158,8 @@ export function AppShell({ children }: AppShellProps) {
     getSideNavExpandedSnapshot,
     getSideNavExpandedServerSnapshot,
   );
-  const isPublic = pathname === "/login" || pathname.startsWith("/trade");
+  const isPublic =
+    pathname === "/login" || pathname.startsWith("/trade") || pathname.startsWith("/c/");
 
   useEffect(() => {
     if (!loading && !user && !isPublic) {

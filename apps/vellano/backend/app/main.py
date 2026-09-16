@@ -56,6 +56,8 @@ from app.routers import (
     repeating_invoices,
     returns,
     laybys,
+    lookbooks,
+    public_lookbooks,
     quotes,
     sales_orders,
     nia,
@@ -238,6 +240,8 @@ app.include_router(returns.returns_router)
 app.include_router(deliveries.deliveries_router)
 app.include_router(laybys.laybys_router)
 app.include_router(quotes.quotes_router)
+app.include_router(lookbooks.lookbooks_router)
+app.include_router(public_lookbooks.public_lookbooks_router)
 app.include_router(sales_orders.sales_orders_router)
 app.include_router(customer_portal.portal_router)
 app.include_router(till.till_router)

@@ -45,6 +45,7 @@ export const WAREHOUSE_NAV_ITEMS = [
 
 export const SALES_NAV_ITEMS = [
   { href: "/quotes", label: "Quotes" },
+  { href: "/lookbooks", label: "Lookbooks" },
   { href: "/orders", label: "Orders" },
   { href: "/laybys", label: "Laybys" },
   { href: "/customers", label: "Customers" },
@@ -112,6 +113,7 @@ export function isSalesPath(pathname: string): boolean {
     SALES_HREFS.has(pathname) ||
     pathname.startsWith("/customers/") ||
     pathname.startsWith("/quotes/") ||
+    pathname.startsWith("/lookbooks/") ||
     pathname.startsWith("/orders/")
   );
 }

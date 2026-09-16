@@ -1310,3 +1310,197 @@ body {
   max-inline-size: none;
   min-inline-size: 5.5rem;
 }
+
+.lookbook-public {
+  min-height: 100vh;
+  margin: 0 auto;
+  max-width: 72rem;
+  padding: 1.5rem 1.25rem 16rem;
+  color: #161616;
+  font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+}
+
+.lookbook-public--empty {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.lookbook-public__company {
+  margin: 0;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #525252;
+}
+
+.lookbook-public__header h1 {
+  margin: 0.35rem 0 1.5rem;
+  font-size: 1.75rem;
+  font-weight: 400;
+}
+
+.lookbook-public__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+@media (min-width: 42rem) {
+  .lookbook-public__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 72rem) {
+  .lookbook-public__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.lookbook-public__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lookbook-public__photo-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: #f4f4f4;
+  cursor: pointer;
+}
+
+.lookbook-public__photo-btn img,
+.lookbook-public__placeholder {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: #e0e0e0;
+}
+
+.lookbook-public__meta h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.lookbook-public__meta p {
+  margin: 0.25rem 0 0;
+  color: #525252;
+}
+
+.lookbook-public__heart {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #161616;
+  background: #fff;
+  cursor: pointer;
+}
+
+.lookbook-public__heart--on {
+  background: #161616;
+  color: #fff;
+}
+
+.lookbook-public__bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  padding: 0.85rem 1.25rem;
+  background: #161616;
+  color: #fff;
+  text-align: center;
+}
+
+.lookbook-public__form {
+  display: grid;
+  gap: 0.65rem;
+  max-width: 32rem;
+  margin: 0 auto;
+  text-align: start;
+}
+
+.lookbook-public__form p {
+  margin: 0;
+  text-align: center;
+}
+
+.lookbook-public__form label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.lookbook-public__form input {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #c6c6c6;
+  background: #fff;
+  color: #161616;
+}
+
+.lookbook-public__form button {
+  padding: 0.6rem 0.85rem;
+  border: 0;
+  background: #0f62fe;
+  color: #fff;
+  cursor: pointer;
+}
+
+.lookbook-public__form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lookbook-public__form-error {
+  margin: 0;
+  color: #ffd7d9;
+}
+
+.lookbook-public__detail {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.lookbook-public__detail-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(22 22 22 / 55%);
+}
+
+.lookbook-public__detail-card {
+  position: relative;
+  z-index: 1;
+  max-width: 32rem;
+  margin: 8vh auto 0;
+  padding: 1.25rem;
+  background: #fff;
+}
+
+.lookbook-public__detail-card img {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  background: #f4f4f4;
+}
+
+.lookbook-public__detail-card h2 {
+  margin: 0.75rem 0 0.25rem;
+  font-weight: 400;
+}
+
+.lookbook-public__detail-card button {
+  margin-top: 1rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid #161616;
+  background: #fff;
+  cursor: pointer;
+}

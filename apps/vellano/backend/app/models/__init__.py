@@ -25,6 +25,14 @@ from app.models.delivery import (
 from app.models.document_sequence import DocumentSequence
 from app.models.customer import Customer
 from app.models.inventory import LocationStock, SkuStock
+from app.models.lookbook import (
+    Lookbook,
+    LookbookEvent,
+    LookbookEventType,
+    LookbookItem,
+    LookbookPriceMode,
+    LookbookQuote,
+)
 from app.models.location_bin import BinStock, LocationBin
 from app.models.journal import JournalDocumentType, JournalEntry, JournalLine, JournalStatus
 from app.models.layby import Layby, LaybyLine, LaybyPayment, LaybyStatus
@@ -129,6 +137,12 @@ __all__ = [
     "LocationBin",
     "LocationStock",
     "LocationType",
+    "Lookbook",
+    "LookbookEvent",
+    "LookbookEventType",
+    "LookbookItem",
+    "LookbookPriceMode",
+    "LookbookQuote",
     "NiaAuditEvent",
     "NiaMessage",
     "NiaScheduledRun",

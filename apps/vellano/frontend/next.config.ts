@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   turbopack: { root: repoRoot },
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   transpilePackages: ["@carbon/react", "@carbon/icons-react", "jspreadsheet-ce", "jsuites"],
   async rewrites() {
     // App Router routes under src/app/api/v1/nia/threads/[threadId]/{run,resume}
