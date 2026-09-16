@@ -157,7 +157,7 @@ class ChannelOrderService:
     async def process(
         self, order_id: uuid.UUID, user_id: Optional[uuid.UUID]
     ) -> ChannelOrderResponse:
-        order = await self.orders.get_by_id(order_id)
+        order = await self.orders.lock_by_id(order_id)
         if order is None:
             raise NotFoundError("Channel order not found")
         if order.status == ChannelOrderStatus.POSTED:
@@ -190,6 +190,16 @@ class ChannelOrderService:
             raise NotFoundError("Channel order not found")
         if order.status != ChannelOrderStatus.POSTED:
             raise ConflictError("Only posted channel orders can be fulfilled")
+        if order.delivery_id is None:
+            if order.invoice_id is None:
+                raise ConflictError("Channel order has no delivery")
+            location_id = order.invoice.location_id if order.invoice is not None else None
+            if location_id is None and order.allocations:
+                location_id = uuid.UUID(str(order.allocations[0]["location_id"]))
+            if location_id is None:
+                raise ConflictError("Channel order has no delivery")
+            await self._ensure_delivery(order, order.invoice_id, location_id, user_id)
+            order = await self._reload(order.id)
         if order.delivery_id is None:
             raise ConflictError("Channel order has no delivery")
         deliveries = DeliveriesService(self.db)
@@ -232,17 +242,44 @@ class ChannelOrderService:
             existing_cn = await CreditNoteCRUD(self.db).get_by_invoice_id(invoice.id)
             if existing_cn is None:
                 await self._credit_write_off(invoice, order, user_id)
+        total_cogs = Decimal(0)
+        cogs_parts: list[tuple[str, Decimal, Decimal]] = []
         for alloc in allocations:
+            sku_id = uuid.UUID(str(alloc["sku_id"]))
+            qty = int(alloc["qty"])
+            unit_cost = Decimal(str(alloc["unit_cost_zar"]))
             await self.stock_movements.apply_incoming_qty(
-                sku_id=uuid.UUID(str(alloc["sku_id"])),
+                sku_id=sku_id,
                 location_id=uuid.UUID(str(alloc["location_id"])),
-                qty=int(alloc["qty"]),
-                unit_cost_zar=Decimal(str(alloc["unit_cost_zar"])),
+                qty=qty,
+                unit_cost_zar=unit_cost,
                 user_id=user_id,
                 source=UnitCostAuditSource.CHANNEL,
                 note=f"Channel refund {order.external_order_id}",
             )
+            line_cogs = (unit_cost * qty).quantize(CENT, rounding=ROUND_HALF_UP)
+            total_cogs += line_cogs
+            sku = await self.skus.get_by_id(sku_id)
+            if sku is not None:
+                cogs_code = await self.category_posting.cogs_code_for_sku(sku)
+                cogs_parts.append((cogs_code, Decimal(0), line_cogs))
+        credit_note = None
+        if invoice is not None:
+            credit_note = await CreditNoteCRUD(self.db).get_by_invoice_id(invoice.id)
         async with unit_of_work(self.db):
+            if credit_note is not None and total_cogs > 0 and cogs_parts:
+                await self.posting.post(
+                    JournalDocumentType.CREDIT_NOTE,
+                    credit_note.id,
+                    f"COGS reverse for channel refund {order.external_order_id}",
+                    self.category_posting.collapse(
+                        [
+                            (CODE_INVENTORY, total_cogs, Decimal(0)),
+                            *cogs_parts,
+                        ]
+                    ),
+                    entry_date=credit_note.issue_date,
+                )
             order.status = ChannelOrderStatus.REFUNDED
         return self._to_response(await self._reload(order.id))
 
@@ -442,20 +479,37 @@ class ChannelOrderService:
                 actor_user_id=user_id,
             )
 
+        await self._ensure_delivery(order, invoice.id, primary_location.id, user_id)
+
+    async def _ensure_delivery(
+        self,
+        order: ChannelOrder,
+        invoice_id: uuid.UUID,
+        location_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> None:
+        if order.delivery_id is not None:
+            return
         deliveries = DeliveriesService(self.db)
+        delivery_id = None
         try:
             delivery = await deliveries.create(
                 DeliveryCreate(
                     source_type=DeliverySourceType.INVOICE,
-                    invoice_id=invoice.id,
-                    location_id=primary_location.id,
+                    invoice_id=invoice_id,
+                    location_id=location_id,
                 ),
                 user_id,
             )
-            async with unit_of_work(self.db):
-                order.delivery_id = delivery.id
+            delivery_id = delivery.id
         except (ConflictError, ValidationError):
-            pass
+            existing = await deliveries.crud.get_active_by_invoice_id(invoice_id)
+            if existing is not None:
+                delivery_id = existing.id
+        if delivery_id is None:
+            return
+        async with unit_of_work(self.db):
+            order.delivery_id = delivery_id
 
     async def _allocate_needs(
         self,

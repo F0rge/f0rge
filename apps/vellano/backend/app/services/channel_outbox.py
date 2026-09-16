@@ -19,6 +19,7 @@ from app.crud.channel import (
 from app.models.channel import (
     CHANNEL_SLUG_SHOPIFY,
     ChannelAtpMode,
+    ChannelOrderStatus,
     ChannelOutbox,
     ChannelOutboxKind,
     ChannelOutboxStatus,
@@ -26,7 +27,10 @@ from app.models.channel import (
 from app.schemas.channel import ChannelOutboxResponse
 from app.services.channel_atp import ChannelAtpService
 from app.services.shopify_admin import ShopifyAdminClient
+from f0rge_core.exceptions import ConflictError
 from f0rge_db.crud import unit_of_work
+
+_PROCESSING_LEASE = datetime.timedelta(minutes=5)
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +74,10 @@ class ChannelOutboxService:
         shopify = await self.channels.get_by_slug(CHANNEL_SLUG_SHOPIFY)
         if shopify is None or not shopify.enabled:
             return
-        for listing in await self.listings.list_for_channel(shopify.id):
-            await self.enqueue_inventory_push(listing.sku_id)
+        listings = await self.listings.list_for_channel(shopify.id)
+        async with unit_of_work(self.db):
+            for listing in listings:
+                await self.enqueue_inventory_push(listing.sku_id)
 
     async def enqueue_fulfillment(self, channel_order_id: uuid.UUID) -> None:
         self.db.add(
@@ -86,16 +92,20 @@ class ChannelOutboxService:
         await self.db.flush()
 
     async def enqueue_process_order(self, channel_order_id: uuid.UUID) -> None:
-        self.db.add(
-            ChannelOutbox(
-                kind=ChannelOutboxKind.PROCESS_ORDER,
-                status=ChannelOutboxStatus.PENDING,
-                payload={},
-                channel_order_id=channel_order_id,
-                available_at=datetime.datetime.utcnow(),
+        existing = await self.crud.get_open_process_order(channel_order_id)
+        if existing is not None:
+            return
+        async with unit_of_work(self.db):
+            self.db.add(
+                ChannelOutbox(
+                    kind=ChannelOutboxKind.PROCESS_ORDER,
+                    status=ChannelOutboxStatus.PENDING,
+                    payload={},
+                    channel_order_id=channel_order_id,
+                    available_at=datetime.datetime.utcnow(),
+                )
             )
-        )
-        await self.db.flush()
+            await self.db.flush()
 
     async def list_recent(self) -> list[ChannelOutboxResponse]:
         return [
@@ -119,8 +129,10 @@ class ChannelOutboxService:
         stmt = (
             select(ChannelOutbox)
             .where(
-                ChannelOutbox.status == ChannelOutboxStatus.PENDING,
                 ChannelOutbox.available_at <= now,
+                ChannelOutbox.status.in_(
+                    (ChannelOutboxStatus.PENDING, ChannelOutboxStatus.PROCESSING)
+                ),
             )
             .order_by(ChannelOutbox.created_at)
             .limit(limit)
@@ -128,8 +140,10 @@ class ChannelOutboxService:
         )
         async with unit_of_work(self.db):
             rows = list((await self.db.execute(stmt)).scalars().all())
+            lease_until = datetime.datetime.utcnow() + _PROCESSING_LEASE
             for row in rows:
                 row.status = ChannelOutboxStatus.PROCESSING
+                row.available_at = lease_until
             await self.db.flush()
         for row in rows:
             try:
@@ -165,7 +179,15 @@ class ChannelOutboxService:
 
             service = ChannelOrderService(self.db)
             actor = await service.actor_user_id()
-            await service.process(row.channel_order_id, actor)
+            result = await service.process(row.channel_order_id, actor)
+            if result.status not in (
+                ChannelOrderStatus.POSTED,
+                ChannelOrderStatus.CANCELLED,
+                ChannelOrderStatus.REFUNDED,
+            ):
+                raise ConflictError(
+                    result.error_message or f"Channel order not posted ({result.status.value})"
+                )
             return
         if row.kind == ChannelOutboxKind.FULFILLMENT_PUSH and row.channel_order_id is not None:
             await self._push_fulfillment(row.channel_order_id)

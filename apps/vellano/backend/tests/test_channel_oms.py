@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+from decimal import Decimal
 
 import pytest
 from httpx import AsyncClient
@@ -325,10 +326,6 @@ async def test_hmac_webhook_ingests_paid_order_via_outbox(
     order = await owner_client.get("/api/v1/channels/orders?q=88001")
     assert order.json()["total"] >= 1
     item = order.json()["items"][0]
-    if item["status"] != "posted":
-        processed = await owner_client.post(f"/api/v1/channels/orders/{item['id']}/process")
-        assert processed.status_code == 200
-        item = processed.json()
     assert item["status"] == "posted"
     assert await _on_hand(owner_client, data["sku"]["id"], "Kramerville") == 1
     del fake_shopify
@@ -378,6 +375,8 @@ async def test_cancel_restocks_and_credits(
     )
     sku_id = data["sku"]["id"]
     our_ref = data["sku"]["our_ref"]
+    before_inv = await _account_balance(owner_client, "1300")
+    before_cogs = await _account_balance(owner_client, "5000")
     sale = await owner_client.post(
         "/api/v1/channels/orders",
         json={
@@ -394,6 +393,93 @@ async def test_cancel_restocks_and_credits(
     assert cancelled.status_code == 200, cancelled.text
     assert cancelled.json()["status"] == "refunded"
     assert await _on_hand_or_zero(owner_client, sku_id, "Kramerville") == 1
+    after_inv = await _account_balance(owner_client, "1300")
+    after_cogs = await _account_balance(owner_client, "5000")
+    assert Decimal(after_inv) == Decimal(before_inv)
+    assert Decimal(after_cogs) == Decimal(before_cogs)
+
+
+async def test_refund_webhook_matches_order_id_not_refund_id(
+    owner_client: AsyncClient,
+    async_client: AsyncClient,
+    fake_shopify: FakeShopify,
+) -> None:
+    del fake_shopify
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=1,
+        location_name="Kramerville",
+        our_ref="CH-REFUND-HOOK",
+    )
+    our_ref = data["sku"]["our_ref"]
+    sale = await owner_client.post(
+        "/api/v1/channels/orders",
+        json={
+            "channel": "shopify",
+            "external_id": "99001",
+            "email": "refund-hook@example.com",
+            "paid": True,
+            "lines": [{"sku": our_ref, "qty": 1, "unit_inc_vat": "230.00"}],
+        },
+    )
+    assert sale.status_code == 201, sale.text
+    payload = {"id": 555, "order_id": 99001}
+    body = json.dumps(payload).encode()
+    resp = await owner_client.post(
+        "/api/v1/channels/shopify/webhooks",
+        content=body,
+        headers={
+            "X-Shopify-Topic": "refunds/create",
+            "X-Shopify-Hmac-Sha256": _shopify_hmac("hook-secret", body),
+            "Content-Type": "application/json",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "cancelled"
+    order = await owner_client.get(f"/api/v1/channels/orders/{sale.json()['id']}")
+    assert order.json()["status"] == "refunded"
+
+
+async def test_partially_paid_webhook_does_not_post(
+    owner_client: AsyncClient,
+    async_client: AsyncClient,
+    fake_shopify: FakeShopify,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=1,
+        location_name="Kramerville",
+        our_ref="CH-PARTIAL",
+    )
+    our_ref = data["sku"]["our_ref"]
+    payload = {
+        "id": 77001,
+        "email": "partial@example.com",
+        "financial_status": "partially_paid",
+        "line_items": [
+            {"sku": our_ref, "quantity": 1, "price": "230.00", "title": "Sofa", "variant_id": 11}
+        ],
+    }
+    body = json.dumps(payload).encode()
+    resp = await owner_client.post(
+        "/api/v1/channels/shopify/webhooks",
+        content=body,
+        headers={
+            "X-Shopify-Topic": "orders/create",
+            "X-Shopify-Hmac-Sha256": _shopify_hmac("hook-secret", body),
+            "Content-Type": "application/json",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    drained = await owner_client.post("/api/v1/channels/outbox/drain")
+    assert drained.status_code == 200
+    order = await owner_client.get("/api/v1/channels/orders?q=77001")
+    assert order.json()["total"] >= 1
+    assert order.json()["items"][0]["status"] == "received"
+    assert await _on_hand(owner_client, data["sku"]["id"], "Kramerville") == 1
+    del fake_shopify
 
 
 async def test_manual_channel_hits_bank_not_shopify_clearing(

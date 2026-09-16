@@ -179,6 +179,16 @@ class ChannelOrderCRUD(BaseCRUD):
             )
         ).scalar_one_or_none()
 
+    async def lock_by_id(self, order_id: uuid.UUID) -> Optional[ChannelOrder]:
+        locked = (
+            await self.db.execute(
+                select(ChannelOrder.id).where(ChannelOrder.id == order_id).with_for_update()
+            )
+        ).scalar_one_or_none()
+        if locked is None:
+            return None
+        return await self.get_by_id(order_id)
+
     async def get_by_external(
         self, channel_id: uuid.UUID, external_order_id: str
     ) -> Optional[ChannelOrder]:
@@ -244,6 +254,21 @@ class ChannelOutboxCRUD(BaseCRUD):
                     ChannelOutbox.kind == ChannelOutboxKind.INVENTORY_PUSH,
                     ChannelOutbox.status == ChannelOutboxStatus.PENDING,
                 )
+            )
+        ).scalar_one_or_none()
+
+    async def get_open_process_order(self, channel_order_id: uuid.UUID) -> Optional[ChannelOutbox]:
+        return (
+            await self.db.execute(
+                select(ChannelOutbox)
+                .where(
+                    ChannelOutbox.channel_order_id == channel_order_id,
+                    ChannelOutbox.kind == ChannelOutboxKind.PROCESS_ORDER,
+                    ChannelOutbox.status.in_(
+                        (ChannelOutboxStatus.PENDING, ChannelOutboxStatus.PROCESSING)
+                    ),
+                )
+                .limit(1)
             )
         ).scalar_one_or_none()
 

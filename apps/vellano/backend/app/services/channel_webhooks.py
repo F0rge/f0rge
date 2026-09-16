@@ -20,7 +20,7 @@ from f0rge_core.exceptions import UnauthorizedError, ValidationError
 
 logger = logging.getLogger(__name__)
 
-_PAID_STATUSES = frozenset({"paid", "partially_paid"})
+_PAID_STATUSES = frozenset({"paid"})
 _CANCEL_TOPICS = frozenset({"orders/cancelled", "refunds/create"})
 _ORDER_TOPICS = frozenset({"orders/create", "orders/updated", "orders/paid"})
 
@@ -113,7 +113,8 @@ class ChannelWebhookService:
         return {"status": "accepted", "order_id": str(order.id)}
 
     async def _cancel(self, payload: dict[str, Any], actor: uuid.UUID) -> dict[str, str]:
-        external_id = str(payload.get("id") or payload.get("order_id") or "")
+        # refunds/create uses id=refund_id and order_id=order_id; cancelled orders use id.
+        external_id = str(payload.get("order_id") or payload.get("id") or "")
         if not external_id:
             return {"status": "ignored"}
         channel = await self.channels.get_by_slug(CHANNEL_SLUG_SHOPIFY)
