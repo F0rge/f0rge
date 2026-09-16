@@ -8,6 +8,7 @@ import uuid
 from typing import Optional
 
 from fastapi import BackgroundTasks, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -111,8 +112,11 @@ class SignupService:
             created_ip=ip,
             user_agent=user_agent,
         )
-        async with unit_of_work(self.db):
-            await self.crud.add_and_flush(signup)
+        try:
+            async with unit_of_work(self.db):
+                await self.crud.add_and_flush(signup)
+        except IntegrityError:
+            raise ConflictError("taken") from None
         background.add_task(send_verify_email, to=email, token=token)
         return SignupCreateResponse(signup_id=signup.id, status=signup.status)
 

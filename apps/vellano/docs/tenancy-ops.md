@@ -35,7 +35,7 @@ Railway project **Vellano** `c76d8df1-d839-454c-a94a-79b930deaf38`, env **develo
    ```
 
    Railway equivalent: `railway run --service vellano-api -e develop -- uv run python -m app.platform.bootstrap_default_tenant`
-4. Flip `preDeployCommand` (already in `apps/vellano/backend/railway.toml`): `uv run python -m app.platform.migrate_all`.
+4. Flip `preDeployCommand` (already in `apps/vellano/backend/railway.toml`): `uv run python -m app.platform.migrate_all`. If `PLATFORM_DATABASE_URL` is unset, that command upgrades `DATABASE_URL` only so a merge before this checklist does not fail preDeploy.
 5. Create the Landing service from `apps/vellano/landing/railway.toml`. Build-arg `API_URL` is the **internal** API URL. `NEXT_PUBLIC_TENANT_BASE_DOMAIN=stockroom-dev.leo-figueiredo.com`.
 
 ## migrate-all

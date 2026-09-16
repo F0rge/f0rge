@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.exc import IntegrityError
 
 from app.main import app
 from app.platform.crud import SignupCRUD
 from app.platform.database import platform_sessionmaker
-from app.platform.models import SIGNUP_STATUS_READY
+from app.platform.models import SIGNUP_STATUS_PENDING_VERIFY, SIGNUP_STATUS_READY, Signup
 from app.platform.provisioning import ProvisioningService
+from app.services.auth import hash_password
+from f0rge_db.crud import unit_of_work
 from tests.conftest import TENANT_HOST_HEADER
 
 
@@ -142,3 +146,30 @@ async def test_taken_slug_returns_409(
         )
     assert second.status_code == 409
     assert second.json()["detail"] == "taken"
+
+
+@pytest.mark.asyncio
+async def test_inflight_slug_is_unique(
+    platform_registry: str,
+) -> None:
+    maker = platform_sessionmaker()
+
+    def _row(email: str) -> Signup:
+        return Signup(
+            email=email,
+            legal_name="Dup (Pty) Ltd",
+            slug="dupslug",
+            owner_name="Ada",
+            password_hash=hash_password("correct horse battery staple"),
+            status=SIGNUP_STATUS_PENDING_VERIFY,
+            privacy_version="2026-09-draft",
+            authorised_confirmed_at=datetime.datetime.utcnow(),
+        )
+
+    async with maker() as db:
+        async with unit_of_work(db):
+            db.add(_row("one@dup.example"))
+            await db.flush()
+        db.add(_row("two@dup.example"))
+        with pytest.raises(IntegrityError):
+            await db.commit()

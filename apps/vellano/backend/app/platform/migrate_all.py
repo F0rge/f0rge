@@ -33,6 +33,16 @@ def _upgrade_tenant(database_url: str) -> None:
 
 async def migrate_all(*, only: Optional[str] = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    if not settings.platform_database_url:
+        logger.info("PLATFORM_DATABASE_URL unset; migrating DATABASE_URL only")
+        try:
+            await asyncio.to_thread(_upgrade_tenant, settings.database_url)
+        except Exception:
+            logger.exception("tenant default migrate failed")
+            return 1
+        logger.info("tenant default ok")
+        return 0
+
     failed = 0
     try:
         await asyncio.to_thread(_upgrade_platform)

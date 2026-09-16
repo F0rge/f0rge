@@ -140,6 +140,30 @@ async def test_token_without_tid_is_401(
 
 
 @pytest.mark.asyncio
+async def test_legacy_jwt_without_tid_still_allows_login(
+    async_client: AsyncClient,
+    platform_registry: str,
+) -> None:
+    stale = jwt.encode(
+        {"sub": str(uuid.uuid4())},
+        _require_jwt_secret(),
+        algorithm=JWT_ALGORITHM,
+    )
+    async_client.cookies.set(JWT_COOKIE_NAME, stale)
+    branding = await async_client.get("/api/v1/branding")
+    assert branding.status_code == 200
+    login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD},
+    )
+    assert login.status_code == 200
+    token = login.cookies.get(JWT_COOKIE_NAME)
+    assert token
+    payload = jwt.decode(token, _require_jwt_secret(), algorithms=[JWT_ALGORITHM])
+    assert payload.get("tid")
+
+
+@pytest.mark.asyncio
 async def test_cookie_replay_across_tenants_is_401(
     postgres_container: PostgresContainer,
     platform_registry: str,

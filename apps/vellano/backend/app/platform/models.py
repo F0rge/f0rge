@@ -4,7 +4,17 @@ import datetime
 import uuid
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -63,6 +73,14 @@ class TenantHostname(UUIDPkMixin, TimestampMixin, PlatformBase):
 
 class Signup(UUIDPkMixin, TimestampMixin, PlatformBase):
     __tablename__ = "signups"
+    __table_args__ = (
+        Index(
+            "uq_signups_slug_inflight",
+            "slug",
+            unique=True,
+            postgresql_where=text("status IN ('pending_verify', 'verified', 'provisioning')"),
+        ),
+    )
 
     email: Mapped[str] = mapped_column(CITEXT, nullable=False, index=True)
     legal_name: Mapped[str] = mapped_column(String(200), nullable=False)

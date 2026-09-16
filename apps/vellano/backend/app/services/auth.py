@@ -48,17 +48,18 @@ def create_access_token(user_id: uuid.UUID, ttl_hours: int, tenant_id: uuid.UUID
 
 
 def peek_token_tid(token: str) -> Optional[uuid.UUID]:
+    """Best-effort tid from a JWT. Missing or malformed claims return None."""
     try:
         payload = jwt.decode(token, _require_jwt_secret(), algorithms=[JWT_ALGORITHM])
     except jwt.PyJWTError:
         return None
     raw = payload.get("tid")
     if not raw:
-        raise UnauthorizedError("Invalid session")
+        return None
     try:
         return uuid.UUID(str(raw))
-    except ValueError as exc:
-        raise UnauthorizedError("Invalid session") from exc
+    except ValueError:
+        return None
 
 
 def token_tenant_id(token: str) -> uuid.UUID:

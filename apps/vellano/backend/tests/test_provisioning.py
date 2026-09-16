@@ -76,4 +76,24 @@ async def test_provision_is_idempotent_and_home_is_empty(
         assert skus.status_code == 200
         assert skus.json() == []
 
-    assert await migrate_all() == 0
+    assert await migrate_all(only=slug) == 0
+
+
+@pytest.mark.no_db
+@pytest.mark.asyncio
+async def test_migrate_all_without_platform_url_uses_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.config import settings
+    from app.platform import migrate_all as mod
+
+    seen: list[str] = []
+
+    def fake_upgrade_tenant(database_url: str) -> None:
+        seen.append(database_url)
+
+    monkeypatch.setattr(settings, "platform_database_url", "")
+    monkeypatch.setattr(mod, "_upgrade_tenant", fake_upgrade_tenant)
+    monkeypatch.setattr(mod, "_upgrade_platform", lambda: seen.append("platform"))
+    assert await mod.migrate_all() == 0
+    assert seen == [settings.database_url]
