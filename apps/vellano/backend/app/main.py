@@ -117,7 +117,11 @@ async def seed_startup() -> None:
                 await seed_default_dev_extras(session)
         return
     async with maker() as pdb:
-        tenant = await TenantCRUD(pdb).get_by_slug(settings.default_tenant_slug)
+        try:
+            tenant = await TenantCRUD(pdb).get_by_slug(settings.default_tenant_slug)
+        except Exception:
+            logger.warning("platform registry unavailable; skipping startup seed")
+            return
     if tenant is None or tenant.status != "ready":
         logger.warning("default tenant not ready; skipping startup seed")
         return

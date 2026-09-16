@@ -25,7 +25,7 @@ Railway project **Vellano** `c76d8df1-d839-454c-a94a-79b930deaf38`, env **develo
    - `DEFAULT_TENANT_HOSTNAMES=["vellano-dev.leo-figueiredo.com"]`
    - `LANDING_BASE_URL=https://stockroom-dev.leo-figueiredo.com`
    - `PLATFORM_SIGNUP_MODE=instant`
-   - `PLATFORM_MAIL_MODE=smtp` and `PLATFORM_SMTP_*`
+   - `PLATFORM_MAIL_MODE=log` until SMTP exists (instant signup auto-verifies and provisions). Then `smtp` + `PLATFORM_SMTP_*`.
    - `SEED_DEV_EXTRAS=false` after bootstrap
 3. One-time bootstrap (from a machine that can reach the platform DB):
 
@@ -37,6 +37,16 @@ Railway project **Vellano** `c76d8df1-d839-454c-a94a-79b930deaf38`, env **develo
    Railway equivalent: `railway run --service vellano-api -e develop -- uv run python -m app.platform.bootstrap_default_tenant`
 4. Flip `preDeployCommand` (already in `apps/vellano/backend/railway.toml`): `uv run python -m app.platform.migrate_all`. If `PLATFORM_DATABASE_URL` is unset, that command upgrades `DATABASE_URL` only so a merge before this checklist does not fail preDeploy.
 5. Create the Landing service from `apps/vellano/landing/railway.toml`. Build-arg `API_URL` is the **internal** API URL. `NEXT_PUBLIC_TENANT_BASE_DOMAIN=stockroom-dev.leo-figueiredo.com`.
+
+## Postgres 16+ (Railway 18)
+
+`tenant_admin` is `CREATEDB CREATEROLE` but **not** superuser. After `CREATE ROLE tenant_<slug>`, provisioning must:
+
+```sql
+GRANT tenant_<slug> TO tenant_admin WITH INHERIT TRUE, SET TRUE;
+```
+
+Plain `GRANT` on PG 16+ defaults `SET`/`INHERIT` to false, and `CREATE DATABASE ... OWNER` then fails with `must be able to SET ROLE`. Install `citext` once on `template1` as the instance superuser so new tenant databases inherit it (`tenant_admin` cannot `CREATE EXTENSION`).
 
 ## migrate-all
 

@@ -30,10 +30,15 @@ const copy: Record<ProvisionStep, string> = {
 export function VerifyFlow() {
   const params = useSearchParams();
   const token = params.get("token");
-  const [ui, setUi] = useState<ProvisionUi>(token ? { kind: "progress", stage: "verifying" } : { kind: "invalid" });
+  const signupIdParam = params.get("id");
+  const [ui, setUi] = useState<ProvisionUi>(
+    token || signupIdParam
+      ? { kind: "progress", stage: token ? "verifying" : "database" }
+      : { kind: "invalid" },
+  );
 
   useEffect(() => {
-    if (!token) {
+    if (!token && !signupIdParam) {
       return;
     }
     let cancelled = false;
@@ -82,6 +87,17 @@ export function VerifyFlow() {
 
     async function start() {
       try {
+        if (signupIdParam && !token) {
+          const next = await readStatus(signupIdParam);
+          if (cancelled || next === null) {
+            return;
+          }
+          setUi(next);
+          if (next.kind === "progress") {
+            await tick(signupIdParam);
+          }
+          return;
+        }
         const res = await verifySignup(token as string);
         if (cancelled) {
           return;
@@ -114,7 +130,7 @@ export function VerifyFlow() {
         window.clearTimeout(pollTimer);
       }
     };
-  }, [token]);
+  }, [token, signupIdParam]);
 
   if (ui.kind === "invalid") {
     return (
