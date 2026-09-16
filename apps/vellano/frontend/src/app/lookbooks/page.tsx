@@ -243,6 +243,7 @@ function LookbooksPageInner() {
       />
       <Modal
         open={Boolean(detail)}
+        size="lg"
         modalHeading={detail?.name ?? "Lookbook"}
         passiveModal
         onRequestClose={() => {

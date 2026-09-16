@@ -156,6 +156,7 @@ export function ShareLookbookModal({
   return (
     <Modal
       open={open}
+      size="md"
       modalHeading="Share lookbook"
       primaryButtonText={copied ? "Done" : "Create and copy link"}
       secondaryButtonText="Cancel"
