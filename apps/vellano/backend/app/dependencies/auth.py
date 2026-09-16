@@ -61,6 +61,7 @@ from app.services.sku_bom import SkuBomService
 from app.services.skus import SkuService
 from app.services.stock_adjustments import StockAdjustmentService
 from app.services.laybys import LaybysService
+from app.services.lookbooks import LookbooksService
 from app.services.quotes import QuotesService
 from app.services.sales_orders import SalesOrdersService
 from app.services.deliveries import DeliveriesService
@@ -271,6 +272,10 @@ def get_layby_service(db: AsyncSession = Depends(get_db)) -> LaybysService:
 
 def get_quote_service(db: AsyncSession = Depends(get_db)) -> QuotesService:
     return QuotesService(db)
+
+
+def get_lookbook_service(db: AsyncSession = Depends(get_db)) -> LookbooksService:
+    return LookbooksService(db)
 
 
 def get_sales_order_service(db: AsyncSession = Depends(get_db)) -> SalesOrdersService:
