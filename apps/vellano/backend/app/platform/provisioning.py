@@ -173,6 +173,15 @@ class ProvisioningService:
                     await conn.execute(
                         sa.text(f"ALTER ROLE {ident} WITH LOGIN PASSWORD {_pg_str(password)}")
                     )
+                admin_name = parsed.username
+                if not admin_name:
+                    raise ValidationError("PLATFORM_ADMIN_DATABASE_URL has no username")
+                admin_ident = _pg_ident(admin_name)
+                # PG 16+ GRANT defaults SET/INHERIT false. CREATE DATABASE ... OWNER
+                # requires SET ROLE onto the new owner.
+                await conn.execute(
+                    sa.text(f"GRANT {ident} TO {admin_ident} WITH INHERIT TRUE, SET TRUE")
+                )
                 db_exists = (
                     await conn.execute(
                         sa.text("SELECT 1 FROM pg_database WHERE datname = :name"),

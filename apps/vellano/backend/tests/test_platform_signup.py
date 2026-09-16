@@ -8,6 +8,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import IntegrityError
 
+from app.config import settings
 from app.main import app
 from app.platform.crud import SignupCRUD
 from app.platform.database import platform_sessionmaker
@@ -50,8 +51,38 @@ async def test_reserved_slug_unavailable(platform_registry: str) -> None:
     assert resp.json()["reason"] == "reserved"
 
 
+async def _fake_ready_provision(_self: ProvisioningService, signup_id: uuid.UUID):
+    maker = platform_sessionmaker()
+    async with maker() as db:
+        signup = await SignupCRUD(db).get_by_id(signup_id)
+        assert signup is not None
+        signup.status = SIGNUP_STATUS_READY
+        await db.commit()
+    return signup
+
+
 @pytest.mark.asyncio
-async def test_create_verify_status_no_auto_login(
+async def test_create_log_mode_auto_provisions_without_session(
+    platform_registry: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.platform.signup_service.send_verify_email", AsyncMock())
+    monkeypatch.setattr(ProvisioningService, "provision", _fake_ready_provision)
+
+    async with _platform_client() as client:
+        created = await client.post("/api/v1/platform/signups", json=_signup_body())
+        assert created.status_code == 202
+        assert created.json()["status"] == "provisioning"
+        assert "set-cookie" not in {k.lower() for k in created.headers}
+        signup_id = created.json()["signup_id"]
+        status_resp = await client.get(f"/api/v1/platform/signups/{signup_id}/status")
+        assert status_resp.status_code == 200
+        assert status_resp.json()["status"] == "ready"
+        assert status_resp.json()["workspace_url"] == "http://acmeqa.localhost:3003"
+
+
+@pytest.mark.asyncio
+async def test_create_smtp_verify_status_no_auto_login(
     platform_registry: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -60,21 +91,15 @@ async def test_create_verify_status_no_auto_login(
     async def capture_mail(*, to: str, token: str) -> None:
         tokens.append(token)
 
-    async def fake_provision(self, signup_id: uuid.UUID):
-        maker = platform_sessionmaker()
-        async with maker() as db:
-            signup = await SignupCRUD(db).get_by_id(signup_id)
-            assert signup is not None
-            signup.status = SIGNUP_STATUS_READY
-            await db.commit()
-        return signup
-
+    monkeypatch.setattr(settings, "platform_mail_mode", "smtp")
+    monkeypatch.setattr(settings, "platform_smtp_host", "smtp.example.com")
     monkeypatch.setattr("app.platform.signup_service.send_verify_email", capture_mail)
-    monkeypatch.setattr(ProvisioningService, "provision", fake_provision)
+    monkeypatch.setattr(ProvisioningService, "provision", _fake_ready_provision)
 
     async with _platform_client() as client:
         created = await client.post("/api/v1/platform/signups", json=_signup_body())
         assert created.status_code == 202
+        assert created.json()["status"] == "pending_verify"
         assert "set-cookie" not in {k.lower() for k in created.headers}
         signup_id = created.json()["signup_id"]
         assert tokens
@@ -105,6 +130,7 @@ async def test_ip_rate_limit_returns_429(
         "app.platform.signup_service.send_verify_email",
         AsyncMock(),
     )
+    monkeypatch.setattr(ProvisioningService, "provision", _fake_ready_provision)
     async with _platform_client() as client:
         for index in range(10):
             resp = await client.post(
@@ -136,6 +162,8 @@ async def test_taken_slug_returns_409(
     platform_registry: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(settings, "platform_mail_mode", "smtp")
+    monkeypatch.setattr(settings, "platform_smtp_host", "smtp.example.com")
     monkeypatch.setattr("app.platform.signup_service.send_verify_email", AsyncMock())
     async with _platform_client() as client:
         first = await client.post("/api/v1/platform/signups", json=_signup_body())

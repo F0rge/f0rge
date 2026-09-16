@@ -99,7 +99,11 @@ export function SignupForm() {
           privacy_accepted: privacy,
           privacy_version: site.privacyVersion,
         });
-      const data = (await res.json().catch(() => null)) as { signup_id?: string; detail?: unknown } | null;
+      const data = (await res.json().catch(() => null)) as {
+        signup_id?: string;
+        status?: string;
+        detail?: unknown;
+      } | null;
       const detail = typeof data?.detail === "string" ? data.detail.toLowerCase() : JSON.stringify(data?.detail ?? "");
       if (res.status === 409 || detail.includes("taken")) {
         setServerError("That workspace address was just taken. Pick another.");
@@ -108,6 +112,10 @@ export function SignupForm() {
       }
       if (!res.ok || !data?.signup_id) {
         setServerError("We could not start your signup. Check the form and try again.");
+        return;
+      }
+      if (data.status === "provisioning" || data.status === "ready") {
+        router.push(`/verify?id=${encodeURIComponent(data.signup_id)}`);
         return;
       }
       router.push(`/signup/check-email?email=${encodeURIComponent(values.email)}&id=${data.signup_id}`);

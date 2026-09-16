@@ -41,6 +41,13 @@ from f0rge_db.crud import unit_of_work
 
 logger = logging.getLogger(__name__)
 
+
+def _skip_email_verify() -> bool:
+    if settings.platform_signup_mode != "instant":
+        return False
+    return settings.platform_mail_mode == "log" or not settings.platform_smtp_host
+
+
 VERIFY_TTL = datetime.timedelta(hours=24)
 RESEND_COOLDOWN = datetime.timedelta(seconds=60)
 MAX_RESENDS = 3
@@ -118,6 +125,16 @@ class SignupService:
         except IntegrityError:
             raise ConflictError("taken") from None
         background.add_task(send_verify_email, to=email, token=token)
+        if _skip_email_verify():
+            signup.status = SIGNUP_STATUS_VERIFIED
+            signup.verified_at = datetime.datetime.utcnow()
+            signup.verify_token_hash = None
+            await self.db.commit()
+            background.add_task(self._provision_later, signup.id)
+            return SignupCreateResponse(
+                signup_id=signup.id,
+                status=SIGNUP_STATUS_PROVISIONING,
+            )
         return SignupCreateResponse(signup_id=signup.id, status=signup.status)
 
     async def resend(self, signup_id: uuid.UUID, background: BackgroundTasks) -> None:
