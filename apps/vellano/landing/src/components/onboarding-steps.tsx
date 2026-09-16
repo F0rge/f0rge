@@ -13,7 +13,7 @@ export function OnboardingSteps() {
             number="05"
             eyebrow="Onboarding"
             title="Email first. Database second."
-            lede="A signup that immediately provisions compute is how you get empty spam tenants. We wait for the verify click. Then: a role, a database, migrations, one owner. No default till passwords, no sample locations."
+            lede="A signup that immediately provisions compute is how you get empty spam companies. We wait for the verify click. Then: a role, a database, migrations, one owner. No default till passwords, no sample locations."
           />
         </Reveal>
         <ol className="mt-12 grid gap-px bg-line md:grid-cols-3">

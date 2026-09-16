@@ -6,7 +6,7 @@ import { SectionHeading } from "@/components/section-heading";
 const items = [
   {
     q: "Is our operational data in the same database as another company?",
-    a: "No. Each company is a Postgres database and a hostname. Requests that cannot be resolved to a tenant return 404. A cookie from another hostname does not open yours.",
+    a: "No. Each company is a Postgres database and a hostname. Requests that cannot be resolved to a company return 404. A cookie from another hostname does not open yours.",
   },
   {
     q: "Can warehouse staff sign in without seeing cost or the VAT201?",

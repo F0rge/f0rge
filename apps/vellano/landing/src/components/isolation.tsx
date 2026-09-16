@@ -26,12 +26,12 @@ export function Isolation() {
             />
             <Row
               term="Cookie"
-              def="Host-only. A session from one hostname is not sent to another. A replayed cookie with the wrong tenant claim is 401."
+              def="Host-only. A session from one hostname is not sent to another. A replayed cookie with the wrong company claim is 401."
             />
             <Row term="Files" def="Object keys are prefixed per company. Existing Vellano keys stay as they are." />
             <Row
               term="Fail closed"
-              def="No default tenant. If the host cannot be resolved, the request does not fall through to company one."
+              def="No default company. If the host cannot be resolved, the request does not fall through to company one."
             />
           </dl>
         </Reveal>

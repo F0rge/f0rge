@@ -8,9 +8,9 @@ const docs = {
     title: "Privacy notice",
     body: [
       `${site.name} provides back-office software to companies. When a company creates a workspace, that company is the responsible party for the personal information it processes (its customers, suppliers, and staff). ${site.operatorName} processes that information only on the company's instructions, as an operator.`,
-      "We collect, for the platform itself: the owner's name and work email, the company's legal and trading names, the workspace address chosen, IP address and browser details at signup, and the acknowledgements ticked on the signup form.",
+      `We collect, for ${site.name} itself: the owner's name and work email, the company's legal and trading names, the workspace address chosen, IP address and browser details at signup, and the acknowledgements ticked on the signup form.`,
       "Hosting is outside South Africa on managed infrastructure in the United States. Data is encrypted in transit and at rest. Each company's operational data is kept in its own database.",
-      "You may ask for access, correction, or deletion of your platform account details at the support address below. Deleting a company workspace removes its database after a 30-day hold.",
+      `You may ask for access, correction, or deletion of your ${site.name} account details at the support address below. Deleting a company workspace removes its database after a 30-day hold.`,
     ],
   },
   popia: {

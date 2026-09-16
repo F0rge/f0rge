@@ -16,7 +16,7 @@ const points = [
   },
   {
     title: "You need billing, SSO, or cross-company memberships today",
-    body: "No card on the form. No Google login. One email can exist in two tenant databases because users are per database; public signup does not manage that for you.",
+    body: "No card on the form. No Google login. One email can exist in two company databases because users are per database; public signup does not manage that for you.",
   },
 ];
 
