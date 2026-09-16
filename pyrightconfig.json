@@ -1,0 +1,36 @@
+{
+  "pythonVersion": "3.10",
+  "exclude": ["**/node_modules", "**/__pycache__", "**/.venv", "**/dist", "**/.next"],
+  "extraPaths": [
+    "libs/backend/core/src",
+    "libs/backend/db/src",
+    "libs/backend/storage/src",
+    "libs/backend/testing/src"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "apps/marrow/backend",
+      "extraPaths": [
+        "apps/marrow/backend",
+        "libs/backend/core/src",
+        "libs/backend/db/src",
+        "libs/backend/storage/src",
+        "libs/backend/testing/src"
+      ]
+    },
+    {
+      "root": "apps/vellano/backend",
+      "extraPaths": [
+        "apps/vellano/backend",
+        "libs/backend/core/src",
+        "libs/backend/db/src",
+        "libs/backend/storage/src",
+        "libs/backend/testing/src"
+      ]
+    },
+    {
+      "root": "apps/dk/tag-printer/backend",
+      "extraPaths": ["apps/dk/tag-printer/backend"]
+    }
+  ]
+}

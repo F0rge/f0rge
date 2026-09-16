@@ -58,3 +58,15 @@ ignore = [
     "E501",
     "F821",
 ]
+
+[tool.pyright]
+pythonVersion = "3.10"
+venvPath = "."
+venv = ".venv"
+extraPaths = [
+    ".",
+    "../../../libs/backend/core/src",
+    "../../../libs/backend/db/src",
+    "../../../libs/backend/storage/src",
+    "../../../libs/backend/testing/src",
+]
