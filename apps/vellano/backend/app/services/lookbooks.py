@@ -198,12 +198,14 @@ class LookbooksService:
         events = list(
             (
                 await self.db.execute(
-                    select(LookbookEvent).where(LookbookEvent.lookbook_id == lookbook.id)
+                    select(LookbookEvent)
+                    .where(LookbookEvent.lookbook_id == lookbook.id)
+                    .order_by(LookbookEvent.occurred_at, LookbookEvent.created_at)
                 )
             ).scalars()
         )
         opens = sum(1 for event in events if event.event_type is LookbookEventType.OPEN)
-        hearts = sum(1 for event in events if event.event_type is LookbookEventType.HEART)
+        hearts = 0
         submits = sum(1 for event in events if event.event_type is LookbookEventType.SUBMIT)
         by_sku: dict[uuid.UUID, LookbookActivitySku] = {}
         for item in lookbook.items:
@@ -225,6 +227,10 @@ class LookbooksService:
                 row.opens += 1
             elif event.event_type is LookbookEventType.HEART:
                 row.hearts += 1
+                hearts += 1
+            elif event.event_type is LookbookEventType.UNHEART:
+                row.hearts = max(row.hearts - 1, 0)
+                hearts = max(hearts - 1, 0)
         quotes = list(
             (
                 await self.db.execute(
