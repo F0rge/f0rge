@@ -32,7 +32,8 @@ apps/vellano/frontend/.superdesign/tmp/
 Thumbs.db
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo

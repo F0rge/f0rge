@@ -61,6 +61,8 @@ ignore = [
 
 [tool.pyright]
 pythonVersion = "3.10"
+venvPath = "."
+venv = ".venv"
 extraPaths = [
     ".",
     "../../../libs/backend/core/src",
