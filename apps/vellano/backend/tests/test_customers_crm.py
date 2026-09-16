@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import UUID
 
 from httpx import AsyncClient
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.tax_invoice import TaxInvoice
 from tests.test_laybys import _layby_payload, _stocked_sku_at_bedford
 from tests.test_purchase_orders import _relogin_owner
 
@@ -151,6 +155,71 @@ async def test_overdue_invoice_increments_overdue_count(owner_client: AsyncClien
     assert body["overdue_invoices_count"] == 1
     assert Decimal(body["overdue_invoices_zar"]) == Decimal("575.00")
     assert body["last_purchase_date"] == overdue_date
+
+
+async def _null_due_date(async_db: AsyncSession, invoice_id: str) -> None:
+    await async_db.execute(
+        update(TaxInvoice).where(TaxInvoice.id == UUID(invoice_id)).values(due_date=None)
+    )
+    await async_db.flush()
+
+
+async def test_legacy_null_due_date_due_today_is_not_overdue(
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    customer = await owner_client.post(
+        "/api/v1/customers",
+        json={"name": "CRM Legacy Due Today"},
+    )
+    assert customer.status_code == 201
+    customer_id = customer.json()["id"]
+    issue_date = (date.today() - timedelta(days=30)).isoformat()
+    invoice = await owner_client.post(
+        "/api/v1/invoices",
+        json={
+            "customer_id": customer_id,
+            "issue_date": issue_date,
+            "lines": [{"description": "Chair", "qty": 1, "unit_ex_vat": "500.00"}],
+        },
+    )
+    assert invoice.status_code == 201
+    await _null_due_date(async_db, invoice.json()["id"])
+
+    detail = await owner_client.get(f"/api/v1/customers/{customer_id}")
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["open_invoices_count"] == 1
+    assert body["overdue_invoices_count"] == 0
+
+
+async def test_legacy_null_due_date_past_30_is_overdue(
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    customer = await owner_client.post(
+        "/api/v1/customers",
+        json={"name": "CRM Legacy Past Due"},
+    )
+    assert customer.status_code == 201
+    customer_id = customer.json()["id"]
+    issue_date = (date.today() - timedelta(days=31)).isoformat()
+    invoice = await owner_client.post(
+        "/api/v1/invoices",
+        json={
+            "customer_id": customer_id,
+            "issue_date": issue_date,
+            "lines": [{"description": "Chair", "qty": 1, "unit_ex_vat": "500.00"}],
+        },
+    )
+    assert invoice.status_code == 201
+    await _null_due_date(async_db, invoice.json()["id"])
+
+    detail = await owner_client.get(f"/api/v1/customers/{customer_id}")
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["overdue_invoices_count"] == 1
+    assert Decimal(body["overdue_invoices_zar"]) == Decimal("575.00")
 
 
 async def test_new_customer_has_zero_active_laybys(owner_client: AsyncClient) -> None:
