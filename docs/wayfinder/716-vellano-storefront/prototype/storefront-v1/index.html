@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en-ZA">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE · Vellano storefront V1 (#720)</title>
+  <link rel="stylesheet" href="css/prototype.css" />
+</head>
+<body>
+  <!--
+    Throwaway UI prototype for wayfinder #720.
+    Question: What should the greenfield furniture Storefront look and feel like
+    across catalogue/search, PDP+SKU variants, cart, guest checkout, optional
+    passwordless account, order history, and saved addresses?
+    Three variants via ?v=editorial|scandi|industrial — informed by Medusa DTC
+    flow patterns, brand-customisable, NOT production architecture.
+  -->
+  <div id="banner-throwaway">THROWAWAY PROTOTYPE · branch prototype/vellano-storefront-ui · do not ship</div>
+  <div id="app" aria-live="polite"></div>
+
+  <div id="state-panel-wrap" aria-label="Prototype state">
+    <h4>STATE (in-memory)</h4>
+    <pre id="state-panel"></pre>
+  </div>
+
+  <div id="toast" hidden></div>
+
+  <div id="proto-switcher" role="toolbar" aria-label="Prototype variant switcher">
+    <button type="button" data-prev aria-label="Previous variant">←</button>
+    <span data-label>A</span>
+    <button type="button" data-next aria-label="Next variant">→</button>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/helpers.js"></script>
+  <script src="js/wire.js"></script>
+  <script src="js/variant-editorial.js"></script>
+  <script src="js/variant-scandi.js"></script>
+  <script src="js/variant-industrial.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
