@@ -1,0 +1,28 @@
+{
+  "name": "storefront-prototype",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 3015",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@f0rge/ui": "file:../../libs/ui",
+    "lucide-react": "^1.25.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/three": "0.186.0",
+    "prettier": "3.6.2",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vite": "^6.3.5"
+  }
+}

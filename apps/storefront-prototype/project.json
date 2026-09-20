@@ -1,0 +1,25 @@
+{
+  "name": "storefront-prototype",
+  "projectType": "application",
+  "sourceRoot": "apps/storefront-prototype/src",
+  "tags": ["platform:ts", "scope:storefront", "type:prototype"],
+  "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": { "command": "npm run dev --prefix apps/storefront-prototype" }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "command": "npm run build --prefix apps/storefront-prototype"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run typecheck --prefix apps/storefront-prototype"
+      }
+    }
+  }
+}
