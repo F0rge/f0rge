@@ -10,7 +10,6 @@ import {
   type UpdatePickPayload,
 } from "./picks";
 import { consumeNiaSse, type NiaSseHandlers } from "./nia-sse";
-import { withTenantHeaders } from "./tenant";
 
 export type PresetRole = "owner" | "buyer" | "warehouse" | "till" | "books";
 /** Role slug — five presets plus custom slugs from GET /roles. */
@@ -165,7 +164,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   const response = await fetch(`/api/v1${path}`, {
     ...options,
     credentials: "include",
-    headers: withTenantHeaders(headers),
+    headers,
   });
 
   if (!response.ok) {
@@ -193,15 +192,6 @@ export function logout(): Promise<void> {
 
 export function getMe(): Promise<AuthUser> {
   return apiFetch<AuthUser>("/auth/me");
-}
-
-export type WorkspaceBranding = {
-  display_name: string;
-  slug: string;
-};
-
-export function getBranding(): Promise<WorkspaceBranding> {
-  return apiFetch<WorkspaceBranding>("/branding");
 }
 
 export function listUsers(): Promise<User[]> {
@@ -419,7 +409,6 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     method: "POST",
     credentials: "include",
-    headers: withTenantHeaders(),
     body: formData,
   });
 
@@ -3297,10 +3286,7 @@ export function patchNiaThread(id: string, title: string): Promise<NiaThreadSumm
 
 /** Feature-detect: returns null when usage endpoint is unavailable (404). */
 export async function getNiaUsageMeOptional(): Promise<NiaUsageMe | null> {
-  const response = await fetch("/api/v1/nia/usage/me", {
-    credentials: "include",
-    headers: withTenantHeaders(),
-  });
+  const response = await fetch("/api/v1/nia/usage/me", { credentials: "include" });
   if (response.status === 404) {
     return null;
   }
@@ -3320,7 +3306,7 @@ export async function runNiaThread(
   const response = await fetch(`/api/v1/nia/threads/${threadId}/run`, {
     method: "POST",
     credentials: "include",
-    headers: withTenantHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, page: { path: pagePath } }),
   });
   await consumeNiaSse(response, handlers);
@@ -3347,7 +3333,7 @@ export async function resumeNiaThread(
   const response = await fetch(`/api/v1/nia/threads/${threadId}/resume`, {
     method: "POST",
     credentials: "include",
-    headers: withTenantHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   await consumeNiaSse(response, handlers);
@@ -3858,10 +3844,14 @@ export function beaconPublicLookbookEvents(
     return true;
   }
   const body = JSON.stringify({ visitor_id: visitorId, events });
+  const blob = new Blob([body], { type: "application/json" });
+  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+    return navigator.sendBeacon(`/api/v1/public/lookbooks/${token}/events`, blob);
+  }
   void fetch(`/api/v1/public/lookbooks/${token}/events`, {
     method: "POST",
     body,
-    headers: withTenantHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     keepalive: true,
   });
   return true;

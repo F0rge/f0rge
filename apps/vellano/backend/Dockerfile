@@ -24,9 +24,7 @@ RUN uv sync --frozen --no-dev
 COPY apps/vellano/backend/app ./app
 COPY apps/vellano/backend/data/playground_photos ./data/playground_photos
 COPY apps/vellano/backend/alembic.ini ./alembic.ini
-COPY apps/vellano/backend/alembic_platform.ini ./alembic_platform.ini
 COPY apps/vellano/backend/migrations ./migrations
-COPY apps/vellano/backend/migrations_platform ./migrations_platform
 
 RUN chown -R app:app /app
 

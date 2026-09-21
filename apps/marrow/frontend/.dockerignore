@@ -4,26 +4,11 @@
 # per-level `apps/*` / `apps/marrow/*` excludes are what make nested whitelisting
 # work under BuildKit.
 *
-!package.json
-!package-lock.json
 !apps
 apps/*
 !apps/marrow
 apps/marrow/*
 !apps/marrow/frontend
-!apps/dk
-apps/dk/*
-!apps/dk/tag-printer
-apps/dk/tag-printer/*
-!apps/dk/tag-printer/frontend
-!apps/dk/tag-printer/frontend/package.json
-!apps/vellano
-apps/vellano/*
-!apps/vellano/frontend
-!apps/vellano/frontend/package.json
-!apps/vellano/landing
-apps/vellano/landing/*
-!apps/vellano/landing/package.json
 !libs
 libs/*
 !libs/**

@@ -25,7 +25,6 @@ node_modules/
 apps/marrow/frontend/.env.local
 apps/vellano/backend/.env
 apps/vellano/frontend/.env.local
-apps/vellano/landing/.env.local
 apps/vellano/frontend/.superdesign/tmp/
 
 # OS

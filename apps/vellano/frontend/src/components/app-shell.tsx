@@ -170,7 +170,6 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     if (user) {
       bindCanvasUser(user.id);
-      document.title = user.team.name;
     }
   }, [user]);
 
@@ -270,7 +269,7 @@ export function AppShell({ children }: AppShellProps) {
     <NiaDockProvider enabled={canUseNia(user)}>
       <div className="vellano-shell" data-nav-expanded={expanded ? "true" : "false"}>
         <Theme theme="g100">
-          <Header aria-label={user.team.name}>
+          <Header aria-label="Vellano">
             <SkipToContent />
             {/* isCollapsible keeps the hamburger visible at lg+ (Carbon otherwise hides it). */}
             <HeaderMenuButton
@@ -287,7 +286,7 @@ export function AppShell({ children }: AppShellProps) {
                 router.push("/");
               }}
             >
-              {user.team.name}
+              Vellano
             </HeaderName>
             <HeaderGlobalBar>
               <HeaderSearch />
@@ -305,7 +304,7 @@ export function AppShell({ children }: AppShellProps) {
             </HeaderGlobalBar>
           </Header>
         <SideNav
-          aria-label="Workspace sections"
+          aria-label="Vellano sections"
           expanded={expanded}
           isRail
           isPersistent

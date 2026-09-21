@@ -396,7 +396,7 @@ function CataloguePageContent() {
 
           <DataTable rows={rows} headers={[...tableHeaders]}>
             {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-              <TableContainer title="Catalogue" description="All SKUs">
+              <TableContainer title="Catalogue" description="All Vellano SKUs">
                 <Table {...getTableProps()}>
                   <TableHead>
                     <TableRow>

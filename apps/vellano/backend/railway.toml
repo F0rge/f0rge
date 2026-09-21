@@ -15,7 +15,7 @@ watchPatterns = [
 
 [deploy]
 startCommand = "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
-preDeployCommand = "uv run python -m app.platform.migrate_all"
+preDeployCommand = "/bin/sh -c 'DATABASE_URL=\"${MIGRATION_DATABASE_URL:-$DATABASE_URL}\" uv run alembic upgrade head'"
 healthcheckPath = "/api/v1/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

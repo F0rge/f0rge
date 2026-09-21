@@ -43,29 +43,24 @@ describe("proxyNiaSse streaming", () => {
         finish = () => controller.close();
       },
     });
-    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
-      async () =>
-        new Response(upstreamBody, {
-          status: 200,
-          headers: { "content-type": "text/event-stream" },
-        }),
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(upstreamBody, {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          }),
+      ),
     );
-    vi.stubGlobal("fetch", fetchMock);
 
     const request = new Request("http://localhost:3003/api/v1/nia/threads/t1/run", {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        cookie: "vellano_session=abc",
-        host: "localhost:3003",
-      },
+      headers: { "content-type": "application/json", cookie: "vellano_session=abc" },
       body: JSON.stringify({ message: "hi" }),
     });
     const response = await proxyNiaSse(request, "t1", "run");
     expect(response.headers.get("X-Accel-Buffering")).toBe("no");
-    const sent = fetchMock.mock.calls[0][1]?.headers;
-    expect(sent).toBeInstanceOf(Headers);
-    expect((sent as Headers).get("X-Tenant-Host")).toBe("localhost");
 
     const reader = response.body?.getReader();
     expect(reader).toBeDefined();

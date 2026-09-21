@@ -1,5 +1,3 @@
-import { tenantHostFromRequest } from "./tenant";
-
 export type NiaSseProxyAction = "run" | "resume";
 
 export function niaApiBaseUrl(): string {
@@ -35,10 +33,6 @@ export async function proxyNiaSse(
   }
   headers.set("content-type", request.headers.get("content-type") ?? "application/json");
   headers.set("accept", request.headers.get("accept") ?? "text/event-stream");
-  const tenantHost = tenantHostFromRequest(request);
-  if (tenantHost) {
-    headers.set("X-Tenant-Host", tenantHost);
-  }
 
   const upstream = await fetch(niaSseUpstreamUrl(threadId, action), {
     method: "POST",

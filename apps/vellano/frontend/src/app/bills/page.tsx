@@ -264,7 +264,7 @@ export default function BillsPage() {
         <>
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Bills" description="All supplier bills">
+            <TableContainer title="Bills" description="All Vellano supplier bills">
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>
