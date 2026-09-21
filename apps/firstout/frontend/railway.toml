@@ -1,0 +1,21 @@
+# Config-as-code for firstout-frontend in the *Firstout* Railway project
+# (not Marrow zoological-fulfillment / not Marrow develop).
+# Point that service's Config File path here. Do NOT set Root Directory.
+# CoS provisions the Firstout project + services separately; this file is repo config only.
+# Set Docker build-arg API_URL after the Firstout API service exists.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/firstout/frontend/Dockerfile"
+watchPatterns = [
+  "apps/firstout/**",
+  "package.json",
+  "package-lock.json",
+]
+
+[deploy]
+startCommand = "node apps/firstout/frontend/server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

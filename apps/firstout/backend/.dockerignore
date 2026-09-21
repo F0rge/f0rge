@@ -1,0 +1,27 @@
+# Repo-root build context. Whitelist this app + the libs it actually imports.
+*
+!apps
+apps/*
+!apps/firstout
+apps/firstout/*
+!apps/firstout/backend
+!libs
+libs/*
+!libs/backend
+libs/backend/*
+!libs/backend/core
+!libs/backend/db
+!libs/backend/storage
+!libs/backend/testing
+
+**/.venv
+apps/firstout/backend/tests
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.env
+**/.env.local

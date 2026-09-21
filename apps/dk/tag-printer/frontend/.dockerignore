@@ -14,10 +14,10 @@ apps/dk/*
 !apps/dk/tag-printer
 apps/dk/tag-printer/*
 !apps/dk/tag-printer/frontend
-!apps/vellano
-apps/vellano/*
-!apps/vellano/frontend
-!apps/vellano/frontend/package.json
+!apps/firstout
+apps/firstout/*
+!apps/firstout/frontend
+!apps/firstout/frontend/package.json
 !libs
 libs/*
 !libs/ui

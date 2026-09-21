@@ -28,9 +28,9 @@
       ]
     },
     {
-      "root": "apps/vellano/backend",
+      "root": "apps/firstout/backend",
       "extraPaths": [
-        "apps/vellano/backend",
+        "apps/firstout/backend",
         "libs/backend/core/src",
         "libs/backend/db/src",
         "libs/backend/storage/src",

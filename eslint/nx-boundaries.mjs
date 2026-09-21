@@ -24,8 +24,8 @@ const boundaryRule = {
           onlyDependOnLibsWithTags: ["scope:shared", "scope:dk"],
         },
         {
-          sourceTag: "scope:vellano",
-          onlyDependOnLibsWithTags: ["scope:shared", "scope:vellano"],
+          sourceTag: "scope:firstout",
+          onlyDependOnLibsWithTags: ["scope:shared", "scope:firstout"],
         },
       ],
     },
