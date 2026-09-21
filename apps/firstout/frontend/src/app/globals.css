@@ -39,6 +39,33 @@ body {
   margin-left: 3rem;
 }
 
+/* Phone: one nav (header hamburger + overlay). Never keep the 3rem icon rail. */
+.firstout-shell[data-compact="true"] .firstout-main,
+.firstout-shell[data-compact="true"][data-nav-expanded="false"] .firstout-main,
+.firstout-shell[data-compact="true"][data-nav-expanded="true"] .firstout-main {
+  margin-left: 0;
+}
+
+.firstout-shell[data-compact="true"] .cds--side-nav:not(.cds--side-nav--expanded),
+.firstout-shell[data-compact="true"] .cds--side-nav--rail:not(.cds--side-nav--expanded),
+.firstout-shell[data-compact="true"] .firstout-side-nav:not(.cds--side-nav--expanded) {
+  display: none !important;
+}
+
+.firstout-shell[data-compact="true"] .firstout-header-user,
+.firstout-shell[data-compact="true"] .cds--header__name--prefix,
+.firstout-shell[data-compact="true"] .cds--header__name-prefix {
+  display: none;
+}
+
+.firstout-shell[data-compact="true"] .firstout-header-search {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 8.5rem;
+  margin-inline-end: 0.25rem;
+}
+
 /* Search sm is 2rem; header ribbon is 3rem — flex-center in the global bar. */
 .firstout-header-search {
   position: relative;
@@ -585,7 +612,7 @@ body {
   padding-bottom: 5rem;
 }
 
-.firstout-shell[data-nia-dock-open="true"] .firstout-wms-switcher {
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-wms-switcher {
   right: var(--firstout-nia-dock-width, 24rem);
 }
 
@@ -680,58 +707,58 @@ body {
   transition: width 0.2s ease;
 }
 
-.firstout-shell[data-nia-dock-open="true"] .firstout-main {
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-main {
   margin-right: var(--firstout-nia-dock-width, 24rem);
   transition: margin-right 0.15s ease;
 }
 
-.firstout-shell[data-nia-dock-open="true"] .firstout-catalogue-toolbar,
-.firstout-shell[data-nia-dock-open="true"] .firstout-catalogue-actions,
-.firstout-shell[data-nia-dock-open="true"] .firstout-home-actions,
-.firstout-shell[data-nia-dock-open="true"] .cds--table-toolbar,
-.firstout-shell[data-nia-dock-open="true"] .cds--data-table-container,
-.firstout-shell[data-nia-dock-open="true"] .firstout-till-layout__summary {
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-catalogue-toolbar,
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-catalogue-actions,
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-actions,
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .cds--table-toolbar,
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .cds--data-table-container,
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-till-layout__summary {
   max-width: 100%;
   min-width: 0;
 }
 
 /* Home primary actions: coherent reflow when Nia dock narrows the main column. */
-.firstout-shell[data-nia-dock-open="true"] .firstout-home-actions {
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
   gap: 0.5rem;
 }
 
-.firstout-shell[data-nia-dock-open="true"] .firstout-home-actions .cds--btn {
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-actions .cds--btn {
   inline-size: 100%;
   max-inline-size: none;
   justify-content: center;
 }
 
 /* Home KPIs: viewport lg assumes full main width; Nia dock narrows the column. */
-.firstout-shell[data-nia-dock-open="true"] .firstout-home-kpis {
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-kpis {
   container-type: inline-size;
   container-name: firstout-home-kpis;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.firstout-shell[data-nia-dock-open="true"] .firstout-home-tile {
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-tile {
   min-width: 0;
 }
 
-.firstout-shell[data-nia-dock-open="true"] .firstout-home-metric {
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-metric {
   font-size: clamp(1.125rem, 4.5cqi, 1.75rem);
   line-height: 1.25;
 }
 
 @container firstout-home-kpis (max-width: 42rem) {
-  .firstout-shell[data-nia-dock-open="true"] .firstout-home-kpis {
+  .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-kpis {
     grid-template-columns: 1fr;
   }
 }
 
 @container firstout-home-kpis (min-width: 56rem) {
-  .firstout-shell[data-nia-dock-open="true"] .firstout-home-kpis {
+  .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -763,12 +790,14 @@ body {
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
   pointer-events: none;
   opacity: 0;
-  transition: width 0.15s ease, opacity 0.15s ease;
+  visibility: hidden;
+  transition: width 0.15s ease, opacity 0.15s ease, visibility 0.15s ease;
 }
 
 .firstout-nia-dock--open {
   pointer-events: auto;
   opacity: 1;
+  visibility: visible;
   /* IconButton/Popover tooltips render in-tree; overflow:hidden would clip them. */
   overflow: visible;
 }
@@ -1100,6 +1129,69 @@ body {
 
 .firstout-nia-mark {
   flex-shrink: 0;
+  display: block;
+}
+
+.firstout-nia-sheet-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 6990;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: rgba(22, 22, 22, 0.45);
+  cursor: pointer;
+}
+
+/* Class-driven phone sheet — does not depend on rem media matching. */
+.firstout-nia-dock--sheet {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100% !important;
+  height: 0;
+  border-left: none;
+  border-top: 2px solid transparent;
+  border-image: linear-gradient(90deg, #4589ff, #8a3ffc) 1;
+  border-radius: 0.75rem 0.75rem 0 0;
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.2);
+}
+
+.firstout-nia-dock--sheet.firstout-nia-dock--open {
+  height: min(82dvh, 40rem);
+  max-height: calc(100dvh - 3rem);
+}
+
+.firstout-nia-dock--sheet .firstout-nia-dock__resize {
+  display: none;
+}
+
+.firstout-nia-dock--sheet .firstout-nia-dock__inner::before {
+  content: "";
+  display: block;
+  width: 2.5rem;
+  height: 0.25rem;
+  margin: 0.5rem auto 0;
+  border-radius: 999px;
+  background: var(--cds-border-strong-01, #8d8d8d);
+}
+
+.firstout-nia-dock--sheet .firstout-nia-dock__composer {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+.firstout-shell[data-nia-layout="sheet"] .firstout-main {
+  margin-right: 0;
+}
+
+.firstout-shell[data-nia-layout="sheet"][data-nia-dock-open="true"] .firstout-main {
+  margin-left: 0;
+}
+
+.firstout-shell[data-nia-layout="sheet"][data-nia-dock-open="true"] .firstout-nia-sheet-scrim {
+  display: block;
 }
 
 /* Carbon DataTable cells are nowrap; tags and long emails need to wrap. */
@@ -1503,4 +1595,210 @@ body {
   border: 1px solid #161616;
   background: #fff;
   cursor: pointer;
+}
+
+/* Compact back office (phones). Pixel query so 390px always matches, even if 1rem ≠ 16px. */
+@media (max-width: 672px) {
+  .firstout-main,
+  .firstout-shell[data-nav-expanded="true"] .firstout-main,
+  .firstout-shell[data-nav-expanded="false"] .firstout-main,
+  .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-main {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 1rem;
+    height: calc(100dvh - 3rem);
+  }
+
+  /* Hide the collapsed icon rail; hamburger is the only closed-nav control. */
+  .firstout-shell .cds--side-nav:not(.cds--side-nav--expanded),
+  .firstout-shell .cds--side-nav--rail:not(.cds--side-nav--expanded) {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    transform: none;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .firstout-shell .cds--side-nav--expanded {
+    display: flex !important;
+    width: min(16rem, 86vw) !important;
+    max-width: 16rem !important;
+    min-width: 0 !important;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .firstout-shell .cds--side-nav__overlay-active,
+  .firstout-shell .cds--side-nav__overlay {
+    z-index: 6000;
+  }
+
+  .firstout-header-user {
+    display: none;
+  }
+
+  .firstout-shell .cds--header__name--prefix,
+  .firstout-shell .cds--header__name-prefix {
+    display: none;
+  }
+
+  .firstout-header-search {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: 8.5rem;
+    margin-inline-end: 0.25rem;
+  }
+
+  .firstout-header-search__panel {
+    position: fixed;
+    top: 3.25rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    width: auto;
+    max-height: min(70dvh, 24rem);
+  }
+
+  .firstout-page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .firstout-page-header .cds--btn,
+  .firstout-catalogue-actions .cds--btn,
+  .firstout-home-actions .cds--btn {
+    max-inline-size: 100%;
+  }
+
+  .firstout-home-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .firstout-home-tile {
+    min-height: 7.5rem;
+  }
+
+  .firstout-home-metric {
+    font-size: 1.375rem;
+  }
+
+  .firstout-tax-invoice__parties {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .firstout-settings-sequences__header,
+  .firstout-settings-sequences__row {
+    grid-template-columns: 1fr;
+  }
+
+  .firstout-settings-sequences__header {
+    display: none;
+  }
+
+  .firstout-login-page {
+    padding: 1rem;
+    align-items: flex-start;
+  }
+
+  .firstout-login-card {
+    padding: 1.25rem;
+  }
+
+  .firstout-main .cds--data-table-container,
+  .firstout-catalogue-panel {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .firstout-main .cds--data-table {
+    min-width: 36rem;
+  }
+
+  .firstout-main .cds--inline-notification,
+  .firstout-forbidden {
+    max-width: 100%;
+  }
+
+  .firstout-main .cds--pagination {
+    height: auto;
+    min-height: 3rem;
+    flex-wrap: wrap;
+  }
+
+  .firstout-sku-form,
+  .firstout-wms,
+  .firstout-till {
+    max-width: 100%;
+  }
+
+  .firstout-tender-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .firstout-shell[data-nia-dock-open="true"] .firstout-wms-switcher {
+    display: none;
+  }
+
+  .firstout-nia-sheet-scrim {
+    display: block;
+  }
+
+  .firstout-nia-dock,
+  .firstout-nia-dock--sheet {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100% !important;
+    height: 0;
+    border-left: none;
+    border-top: 2px solid transparent;
+    border-image: linear-gradient(90deg, #4589ff, #8a3ffc) 1;
+    border-radius: 0.75rem 0.75rem 0 0;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.2);
+    z-index: 7000;
+  }
+
+  .firstout-nia-dock--open,
+  .firstout-nia-dock--sheet.firstout-nia-dock--open {
+    height: min(82dvh, 40rem);
+    max-height: calc(100dvh - 3rem);
+  }
+
+  .firstout-nia-dock__resize,
+  .firstout-nia-dock--sheet .firstout-nia-dock__resize {
+    display: none;
+  }
+
+  .firstout-nia-dock--open .firstout-nia-dock__inner::before,
+  .firstout-nia-dock--sheet .firstout-nia-dock__inner::before {
+    content: "";
+    display: block;
+    width: 2.5rem;
+    height: 0.25rem;
+    margin: 0.5rem auto 0;
+    border-radius: 999px;
+    background: var(--cds-border-strong-01, #8d8d8d);
+  }
+
+  .firstout-nia-dock--sheet .firstout-nia-dock__composer {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .firstout-nia-dock--sheet .firstout-nia-card__actions {
+    flex-wrap: wrap;
+  }
+
+  .firstout-nia-dock--sheet .firstout-nia-card__actions .cds--btn {
+    flex: 1 1 auto;
+  }
+
+  .lookbook-public {
+    padding: 1rem 1rem 12rem;
+  }
 }

@@ -69,6 +69,13 @@ import {
   writeDockThreadId,
 } from "@/lib/nia-dock-session";
 import {
+  NIA_DESKTOP_LAYOUT,
+  NIA_PHONE_LAYOUT,
+  niaPanelClassName,
+  niaPanelLayout,
+  shouldInsetMainForNia,
+} from "@/lib/nia-panel-layout";
+import {
   NIA_NEAR_BOTTOM_PX,
   isNearBottom,
   readScrollMetrics,
@@ -83,6 +90,11 @@ import {
   messageShowsDockProse,
   syncCanvasSpecFromThread,
 } from "@/lib/nia-thread-utils";
+import {
+  getNarrowViewportServerSnapshot,
+  getNarrowViewportSnapshot,
+  subscribeNarrowViewport,
+} from "@/lib/viewport";
 
 const WIDTH_STORAGE_KEY = "firstout-nia-dock-width";
 const MIN_WIDTH_PX = 320;
@@ -424,6 +436,12 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { open, toggle } = useNiaDock();
+  const narrow = useSyncExternalStore(
+    subscribeNarrowViewport,
+    getNarrowViewportSnapshot,
+    getNarrowViewportServerSnapshot,
+  );
+  const layout = niaPanelLayout(narrow);
 
   const [width, setWidth] = useState(DEFAULT_WIDTH_PX);
   const [modalOpen, setModalOpen] = useState(false);
@@ -524,18 +542,29 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     if (!shell) {
       return;
     }
+    shell.setAttribute("data-nia-layout", layout);
     if (enabled && open) {
       shell.setAttribute("data-nia-dock-open", "true");
-      shell.style.setProperty("--firstout-nia-dock-width", `${width}px`);
     } else {
       shell.removeAttribute("data-nia-dock-open");
+    }
+    if (shouldInsetMainForNia(Boolean(enabled && open), layout)) {
+      shell.style.setProperty("--firstout-nia-dock-width", `${width}px`);
+    } else {
       shell.style.removeProperty("--firstout-nia-dock-width");
     }
     return () => {
       shell.removeAttribute("data-nia-dock-open");
+      shell.removeAttribute("data-nia-layout");
       shell.style.removeProperty("--firstout-nia-dock-width");
     };
-  }, [enabled, open, width]);
+  }, [enabled, open, width, layout]);
+
+  useEffect(() => {
+    if (layout === NIA_PHONE_LAYOUT) {
+      setModalOpen(false);
+    }
+  }, [layout]);
 
   useEffect(() => {
     sessionStorage.setItem(WIDTH_STORAGE_KEY, String(width));
@@ -785,20 +814,30 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
 
   return (
     <>
+      {open ? (
+        <button
+          type="button"
+          className="firstout-nia-sheet-scrim"
+          aria-label="Close Nia"
+          onClick={toggle}
+        />
+      ) : null}
       <aside
-        className={`firstout-nia-dock${open ? " firstout-nia-dock--open" : ""}`}
-        style={{ width: open ? width : 0 }}
+        className={niaPanelClassName(open, layout)}
+        style={layout === NIA_DESKTOP_LAYOUT ? { width: open ? width : 0 } : undefined}
         aria-hidden={!open}
       >
-        <div
-          className="firstout-nia-dock__resize"
-          onPointerDown={handleResizePointerDown}
-          onPointerMove={handleResizePointerMove}
-          onPointerUp={handleResizePointerUp}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize Nia panel"
-        />
+        {layout === NIA_DESKTOP_LAYOUT ? (
+          <div
+            className="firstout-nia-dock__resize"
+            onPointerDown={handleResizePointerDown}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerUp}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize Nia panel"
+          />
+        ) : null}
         <div className="firstout-nia-dock__inner">
           <header className="firstout-nia-dock__header">
             <div className="firstout-nia-dock__title">
@@ -829,16 +868,18 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
               >
                 <RecentlyViewed />
               </IconButton>
-              <IconButton
-                kind="ghost"
-                size="sm"
-                label="Expand"
-                align="bottom-end"
-                autoAlign
-                onClick={() => setModalOpen(true)}
-              >
-                <FitToScreen />
-              </IconButton>
+              {layout === NIA_DESKTOP_LAYOUT ? (
+                <IconButton
+                  kind="ghost"
+                  size="sm"
+                  label="Expand"
+                  align="bottom-end"
+                  autoAlign
+                  onClick={() => setModalOpen(true)}
+                >
+                  <FitToScreen />
+                </IconButton>
+              ) : null}
               <IconButton
                 kind="ghost"
                 size="sm"
