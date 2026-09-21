@@ -39,6 +39,33 @@ body {
   margin-left: 3rem;
 }
 
+/* Phone: one nav (header hamburger + overlay). Never keep the 3rem icon rail. */
+.firstout-shell[data-compact="true"] .firstout-main,
+.firstout-shell[data-compact="true"][data-nav-expanded="false"] .firstout-main,
+.firstout-shell[data-compact="true"][data-nav-expanded="true"] .firstout-main {
+  margin-left: 0;
+}
+
+.firstout-shell[data-compact="true"] .cds--side-nav:not(.cds--side-nav--expanded),
+.firstout-shell[data-compact="true"] .cds--side-nav--rail:not(.cds--side-nav--expanded),
+.firstout-shell[data-compact="true"] .firstout-side-nav:not(.cds--side-nav--expanded) {
+  display: none !important;
+}
+
+.firstout-shell[data-compact="true"] .firstout-header-user,
+.firstout-shell[data-compact="true"] .cds--header__name--prefix,
+.firstout-shell[data-compact="true"] .cds--header__name-prefix {
+  display: none;
+}
+
+.firstout-shell[data-compact="true"] .firstout-header-search {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 8.5rem;
+  margin-inline-end: 0.25rem;
+}
+
 /* Search sm is 2rem; header ribbon is 3rem — flex-center in the global bar. */
 .firstout-header-search {
   position: relative;
@@ -763,12 +790,14 @@ body {
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.12);
   pointer-events: none;
   opacity: 0;
-  transition: width 0.15s ease, opacity 0.15s ease;
+  visibility: hidden;
+  transition: width 0.15s ease, opacity 0.15s ease, visibility 0.15s ease;
 }
 
 .firstout-nia-dock--open {
   pointer-events: auto;
   opacity: 1;
+  visibility: visible;
   /* IconButton/Popover tooltips render in-tree; overflow:hidden would clip them. */
   overflow: visible;
 }
@@ -1568,23 +1597,37 @@ body {
   cursor: pointer;
 }
 
-/* Compact back office (phones). Keep the page usable; Nia becomes a sheet. */
-@media (max-width: 42rem) {
+/* Compact back office (phones). Pixel query so 390px always matches, even if 1rem ≠ 16px. */
+@media (max-width: 672px) {
   .firstout-main,
   .firstout-shell[data-nav-expanded="true"] .firstout-main,
   .firstout-shell[data-nav-expanded="false"] .firstout-main,
   .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-main {
-    margin-left: 0;
-    margin-right: 0;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
     padding: 1rem;
     height: calc(100dvh - 3rem);
   }
 
-  .firstout-shell .cds--side-nav:not(.cds--side-nav--expanded) {
-    transform: translateX(-100%);
-    width: 0;
-    min-width: 0;
+  /* Hide the collapsed icon rail; hamburger is the only closed-nav control. */
+  .firstout-shell .cds--side-nav:not(.cds--side-nav--expanded),
+  .firstout-shell .cds--side-nav--rail:not(.cds--side-nav--expanded) {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    transform: none;
     visibility: hidden;
+    pointer-events: none;
+  }
+
+  .firstout-shell .cds--side-nav--expanded {
+    display: flex !important;
+    width: min(16rem, 86vw) !important;
+    max-width: 16rem !important;
+    min-width: 0 !important;
+    visibility: visible;
+    pointer-events: auto;
   }
 
   .firstout-shell .cds--side-nav__overlay-active,
@@ -1596,12 +1639,16 @@ body {
     display: none;
   }
 
-  .firstout-shell .cds--header__name--prefix {
+  .firstout-shell .cds--header__name--prefix,
+  .firstout-shell .cds--header__name-prefix {
     display: none;
   }
 
   .firstout-header-search {
-    width: min(10.5rem, 42vw);
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: 8.5rem;
     margin-inline-end: 0.25rem;
   }
 

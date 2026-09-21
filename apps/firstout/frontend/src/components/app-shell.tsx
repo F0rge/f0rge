@@ -331,6 +331,7 @@ export function AppShell({ children }: AppShellProps) {
           </Header>
         <SideNav
           aria-label="Firstout sections"
+          className="firstout-side-nav"
           expanded={expanded}
           isRail={!narrow}
           isPersistent={!narrow}
