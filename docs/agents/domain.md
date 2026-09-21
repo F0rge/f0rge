@@ -19,7 +19,7 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 ├── CONTEXT-MAP.md
 ├── docs/adr/                              ← system-wide decisions
 ├── apps/marrow/CONTEXT.md
-├── apps/vellano/CONTEXT.md
+├── apps/firstout/CONTEXT.md
 └── apps/dk/tag-printer/CONTEXT.md
 ```
 

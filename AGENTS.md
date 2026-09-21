@@ -54,9 +54,9 @@ cd apps/dk/tag-printer && docker compose up --build   # :3002 / :8002
 
 Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested — auto-loaded when working in that subtree). Coolify repoint after first `main` merge: `apps/dk/tag-printer/scripts/repoint-coolify.sh`.
 
-## apps/vellano
+## apps/firstout
 
-Furniture retailer back office. Nested [`apps/vellano/AGENTS.md`](apps/vellano/AGENTS.md). **Own Railway project** — do **not** add Vellano services, Postgres, or buckets to Marrow `zoological-fulfillment` or the Marrow develop environment. Develop hosts: https://vellano-dev.leo-figueiredo.com and https://vellano-dev-api.leo-figueiredo.com (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
+Furniture retailer back office. Nested [`apps/firstout/AGENTS.md`](apps/firstout/AGENTS.md). **Own Railway project** — do **not** add Firstout services, Postgres, or buckets to Marrow `zoological-fulfillment` or the Marrow develop environment. Develop hosts: https://firstout.co.za and https://api.firstout.co.za (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
 
 ## Branch workflow
 
@@ -218,4 +218,4 @@ Canonical five: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-huma
 
 ### Domain docs
 
-Multi-context: root `CONTEXT-MAP.md` plus per-app `CONTEXT.md` (marrow, vellano, dk). See `docs/agents/domain.md`.
+Multi-context: root `CONTEXT-MAP.md` plus per-app `CONTEXT.md` (marrow, firstout, dk). See `docs/agents/domain.md`.

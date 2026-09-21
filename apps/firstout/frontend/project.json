@@ -1,0 +1,23 @@
+{
+  "name": "firstout-frontend",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/firstout/frontend",
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/firstout/frontend",
+        "command": "npm run typecheck"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/firstout/frontend",
+        "command": "npm run test"
+      }
+    }
+  },
+  "tags": ["platform:ts", "scope:firstout"]
+}

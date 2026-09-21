@@ -1,0 +1,18 @@
+# Local Postgres only. Do not reuse ht-postgres or Marrow DATABASE_URL.
+# API :8003 and frontend :3003 run on the host (see apps/firstout/AGENTS.md).
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: firstout-postgres
+    environment:
+      POSTGRES_USER: firstout
+      POSTGRES_PASSWORD: firstout
+      POSTGRES_DB: firstout
+    ports:
+      - "5433:5432"
+    volumes:
+      - firstout-pg:/var/lib/postgresql/data
+
+volumes:
+  firstout-pg:
