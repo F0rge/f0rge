@@ -20,15 +20,15 @@
     "nanoid": "3.3.18"
   },
   "devDependencies": {
-    "@nx/eslint": "~22.7.0",
-    "@nx/eslint-plugin": "~22.7.0",
-    "@nx/next": "~22.7.0",
-    "@nx/playwright": "~22.7.0",
-    "@nx/vitest": "~22.7.0",
+    "@nx/eslint": "~23.2.1",
+    "@nx/eslint-plugin": "~23.2.1",
+    "@nx/next": "~23.2.1",
+    "@nx/playwright": "~23.2.1",
+    "@nx/vitest": "~23.2.1",
     "@nxlv/python": "~22.2.1",
-    "@playwright/test": "^1.52.0",
+    "@playwright/test": "^1.62.1",
     "@types/react": "^19",
-    "nx": "~22.7.0",
+    "nx": "~23.2.1",
     "typescript": "^5"
   }
 }
