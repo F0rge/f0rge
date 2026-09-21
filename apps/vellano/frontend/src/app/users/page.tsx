@@ -253,7 +253,7 @@ export default function UsersPage() {
       ) : (
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Team members" description="All users">
+            <TableContainer title="Team members" description="All Vellano users">
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>

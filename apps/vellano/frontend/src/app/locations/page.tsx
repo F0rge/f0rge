@@ -188,7 +188,7 @@ export default function LocationsPage() {
       ) : (
         <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
           {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title="Locations" description="All stock locations">
+            <TableContainer title="Locations" description="All Vellano stock locations">
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>

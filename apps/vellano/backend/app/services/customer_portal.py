@@ -25,7 +25,6 @@ from app.services.auth import (
     validate_password,
     verify_password,
 )
-from app.tenancy.context import tenant_ctx
 from app.services.pricing import resolve_unit_ex_vat
 from app.services.sales_orders import SalesOrdersService
 from app.services.vat import ex_to_inc
@@ -38,15 +37,12 @@ CUSTOMER_COOKIE_NAME = "vellano_customer_session"
 CUSTOMER_TOKEN_TYP = "customer"
 
 
-def create_customer_access_token(
-    portal_user_id: uuid.UUID, ttl_hours: int, tenant_id: uuid.UUID
-) -> str:
+def create_customer_access_token(portal_user_id: uuid.UUID, ttl_hours: int) -> str:
     from app.services.auth import _require_jwt_secret
 
     now = datetime.datetime.utcnow()
     payload = {
         "sub": str(portal_user_id),
-        "tid": str(tenant_id),
         "typ": CUSTOMER_TOKEN_TYP,
         "iat": now,
         "exp": now + datetime.timedelta(hours=ttl_hours),
@@ -63,8 +59,6 @@ def decode_customer_access_token(token: str) -> uuid.UUID:
     except jwt.PyJWTError as exc:
         raise AuthError("Invalid session") from exc
     if payload.get("typ") != CUSTOMER_TOKEN_TYP:
-        raise AuthError("Invalid session")
-    if not payload.get("tid"):
         raise AuthError("Invalid session")
     sub = payload.get("sub")
     if not sub:
@@ -142,10 +136,7 @@ class CustomerPortalService:
             await self._team_id()
         )
         ttl_hours = int(team_settings.session_ttl_hours)
-        ctx = tenant_ctx.get()
-        if ctx is None:
-            raise UnauthorizedError("Invalid session")
-        token = create_customer_access_token(user.id, ttl_hours, ctx.id)
+        token = create_customer_access_token(user.id, ttl_hours)
         set_customer_session_cookie(response, token, max_age=ttl_hours * 3600)
         return PortalLoginResponse(email=user.email, customer_name=user.customer.name)
 

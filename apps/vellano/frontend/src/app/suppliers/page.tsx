@@ -179,7 +179,7 @@ export default function SuppliersPage() {
           </div>
           <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
             {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-              <TableContainer title="Suppliers" description="All suppliers">
+              <TableContainer title="Suppliers" description="All Vellano suppliers">
                 <Table {...getTableProps()}>
                   <TableHead>
                     <TableRow>

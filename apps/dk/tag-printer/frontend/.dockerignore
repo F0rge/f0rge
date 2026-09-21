@@ -1,4 +1,5 @@
-# Repo-root build context. Whitelist only this app.
+# Repo-root build context. Whitelist this app + sibling workspace manifests
+# so root `npm ci` can resolve workspaces.
 *
 !package.json
 !package-lock.json
@@ -17,9 +18,6 @@ apps/dk/tag-printer/*
 apps/vellano/*
 !apps/vellano/frontend
 !apps/vellano/frontend/package.json
-!apps/vellano/landing
-apps/vellano/landing/*
-!apps/vellano/landing/package.json
 !libs
 libs/*
 !libs/ui

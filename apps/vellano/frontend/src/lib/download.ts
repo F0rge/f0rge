@@ -20,8 +20,7 @@ export async function downloadApiFile(
   mode: "save" | "open" = "save",
 ): Promise<void> {
   const { ApiError, parseErrorMessage } = await import("./api");
-  const { withTenantHeaders } = await import("./tenant");
-  const response = await fetch(path, { credentials: "include", headers: withTenantHeaders() });
+  const response = await fetch(path, { credentials: "include" });
   if (!response.ok) {
     throw new ApiError(response.status, await parseErrorMessage(response));
   }

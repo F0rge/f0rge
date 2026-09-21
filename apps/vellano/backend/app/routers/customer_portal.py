@@ -15,13 +15,11 @@ from app.schemas.customer_portal import (
     PortalOrderCreate,
 )
 from app.schemas.sales_order import SalesOrderResponse
-from app.services.auth import token_tenant_id
 from app.services.customer_portal import (
     CUSTOMER_COOKIE_NAME,
     CustomerPortalService,
     decode_customer_access_token,
 )
-from app.tenancy.context import tenant_ctx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 portal_router = APIRouter(prefix="/api/v1/portal", tags=["customer-portal"])
@@ -37,15 +35,9 @@ async def get_current_portal_user_id(
     if not vellano_customer_session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
-        user_id = decode_customer_access_token(vellano_customer_session)
+        return decode_customer_access_token(vellano_customer_session)
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
-    ctx = tenant_ctx.get()
-    if ctx is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="tenant_not_found")
-    if token_tenant_id(vellano_customer_session) != ctx.id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
-    return user_id
 
 
 @portal_router.post("/login", response_model=PortalLoginResponse)
