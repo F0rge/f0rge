@@ -1115,6 +1115,56 @@ body {
   cursor: pointer;
 }
 
+/* Class-driven phone sheet — does not depend on rem media matching. */
+.firstout-nia-dock--sheet {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100% !important;
+  height: 0;
+  border-left: none;
+  border-top: 2px solid transparent;
+  border-image: linear-gradient(90deg, #4589ff, #8a3ffc) 1;
+  border-radius: 0.75rem 0.75rem 0 0;
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.2);
+}
+
+.firstout-nia-dock--sheet.firstout-nia-dock--open {
+  height: min(82dvh, 40rem);
+  max-height: calc(100dvh - 3rem);
+}
+
+.firstout-nia-dock--sheet .firstout-nia-dock__resize {
+  display: none;
+}
+
+.firstout-nia-dock--sheet .firstout-nia-dock__inner::before {
+  content: "";
+  display: block;
+  width: 2.5rem;
+  height: 0.25rem;
+  margin: 0.5rem auto 0;
+  border-radius: 999px;
+  background: var(--cds-border-strong-01, #8d8d8d);
+}
+
+.firstout-nia-dock--sheet .firstout-nia-dock__composer {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+.firstout-shell[data-nia-layout="sheet"] .firstout-main {
+  margin-right: 0;
+}
+
+.firstout-shell[data-nia-layout="sheet"][data-nia-dock-open="true"] .firstout-main {
+  margin-left: 0;
+}
+
+.firstout-shell[data-nia-layout="sheet"][data-nia-dock-open="true"] .firstout-nia-sheet-scrim {
+  display: block;
+}
+
 /* Carbon DataTable cells are nowrap; tags and long emails need to wrap. */
 .cds--data-table tbody td.firstout-cell-wrap {
   white-space: normal;
