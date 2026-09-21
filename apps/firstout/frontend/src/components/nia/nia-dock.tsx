@@ -814,7 +814,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
 
   return (
     <>
-      {layout === NIA_PHONE_LAYOUT && open ? (
+      {open ? (
         <button
           type="button"
           className="firstout-nia-sheet-scrim"

@@ -1,5 +1,6 @@
-/** Compact layout breakpoint (portrait phones). */
+/** Compact layout breakpoint (portrait phones). 42rem = 672px at 16px root. */
 export const NARROW_VIEWPORT_MQ = "(max-width: 42rem)";
+export const NARROW_VIEWPORT_PX = 672;
 
 /**
  * WMS floor console + Warehouse nav: phones including landscape.
@@ -10,20 +11,44 @@ export const WMS_MOBILE_VIEWPORT_MQ =
 
 type ViewportListener = () => void;
 
+function currentCssWidth(): number {
+  if (typeof window === "undefined") {
+    return NARROW_VIEWPORT_PX + 1;
+  }
+  const visual = window.visualViewport?.width;
+  if (typeof visual === "number" && visual > 0) {
+    return visual;
+  }
+  return window.innerWidth;
+}
+
+function matchesMedia(mq: string): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.matchMedia(mq).matches;
+}
+
 function subscribeViewport(mq: string, listener: ViewportListener): () => void {
   if (typeof window === "undefined") {
     return () => {};
   }
   const media = window.matchMedia(mq);
   media.addEventListener("change", listener);
-  return () => media.removeEventListener("change", listener);
+  window.addEventListener("resize", listener);
+  window.visualViewport?.addEventListener("resize", listener);
+  return () => {
+    media.removeEventListener("change", listener);
+    window.removeEventListener("resize", listener);
+    window.visualViewport?.removeEventListener("resize", listener);
+  };
 }
 
 function getViewportSnapshot(mq: string): boolean {
   if (typeof window === "undefined") {
     return false;
   }
-  return window.matchMedia(mq).matches;
+  return matchesMedia(mq);
 }
 
 export function subscribeNarrowViewport(listener: ViewportListener): () => void {
@@ -31,7 +56,10 @@ export function subscribeNarrowViewport(listener: ViewportListener): () => void 
 }
 
 export function getNarrowViewportSnapshot(): boolean {
-  return getViewportSnapshot(NARROW_VIEWPORT_MQ);
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return matchesMedia(NARROW_VIEWPORT_MQ) || currentCssWidth() <= NARROW_VIEWPORT_PX;
 }
 
 export function subscribeWmsMobileViewport(listener: ViewportListener): () => void {

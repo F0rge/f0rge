@@ -1667,15 +1667,18 @@ body {
     z-index: 7000;
   }
 
+  .firstout-nia-dock--open,
   .firstout-nia-dock--sheet.firstout-nia-dock--open {
     height: min(82dvh, 40rem);
     max-height: calc(100dvh - 3rem);
   }
 
+  .firstout-nia-dock__resize,
   .firstout-nia-dock--sheet .firstout-nia-dock__resize {
     display: none;
   }
 
+  .firstout-nia-dock--open .firstout-nia-dock__inner::before,
   .firstout-nia-dock--sheet .firstout-nia-dock__inner::before {
     content: "";
     display: block;
