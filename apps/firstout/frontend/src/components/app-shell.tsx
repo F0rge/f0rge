@@ -89,6 +89,11 @@ import {
 } from "@/components/nia/nia-dock";
 import { canUseNia } from "@/lib/permissions";
 import {
+  getNarrowViewportServerSnapshot,
+  getNarrowViewportSnapshot,
+  subscribeNarrowViewport,
+} from "@/lib/viewport";
+import {
   getSideNavExpandedServerSnapshot,
   getSideNavExpandedSnapshot,
   setSideNavExpanded,
@@ -158,6 +163,11 @@ export function AppShell({ children }: AppShellProps) {
     getSideNavExpandedSnapshot,
     getSideNavExpandedServerSnapshot,
   );
+  const narrow = useSyncExternalStore(
+    subscribeNarrowViewport,
+    getNarrowViewportSnapshot,
+    getNarrowViewportServerSnapshot,
+  );
   const isPublic =
     pathname === "/login" || pathname.startsWith("/trade") || pathname.startsWith("/c/");
 
@@ -172,6 +182,12 @@ export function AppShell({ children }: AppShellProps) {
       bindCanvasUser(user.id);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (narrow) {
+      setSideNavExpanded(false);
+    }
+  }, [narrow]);
 
   // Pathname tab changes must reset document/main scroll so the fixed header
   // does not clip page titles / primary actions from a prior scrolled page.
@@ -231,6 +247,9 @@ export function AppShell({ children }: AppShellProps) {
             onClick={(event: MouseEvent<HTMLAnchorElement>) => {
               event.preventDefault();
               router.push(item.href);
+              if (narrow) {
+                setSideNavExpanded(false);
+              }
             }}
           >
             {item.label}
@@ -252,6 +271,9 @@ export function AppShell({ children }: AppShellProps) {
         onClick={(event) => {
           event.preventDefault();
           router.push(href);
+          if (narrow) {
+            setSideNavExpanded(false);
+          }
         }}
       >
         {label}
@@ -267,7 +289,11 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <NiaDockProvider enabled={canUseNia(user)}>
-      <div className="firstout-shell" data-nav-expanded={expanded ? "true" : "false"}>
+      <div
+        className="firstout-shell"
+        data-nav-expanded={expanded ? "true" : "false"}
+        data-compact={narrow ? "true" : "false"}
+      >
         <Theme theme="g100">
           <Header aria-label="Firstout">
             <SkipToContent />
@@ -306,8 +332,8 @@ export function AppShell({ children }: AppShellProps) {
         <SideNav
           aria-label="Firstout sections"
           expanded={expanded}
-          isRail
-          isPersistent
+          isRail={!narrow}
+          isPersistent={!narrow}
           onOverlayClick={() => setSideNavExpanded(false)}
         >
           <SideNavItems>
