@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { CatalogSection } from '@/components/customize/catalog-section'
 import { PageShell } from '@/components/layout/page-shell'
+import { FetchError } from '@f0rge/ui'
 import { PageHeader } from '@/components/layout/page-header'
 import {
   useSupplementCatalog,
@@ -20,21 +21,18 @@ import {
 } from '@/lib/api/hooks'
 
 export default function CatalogsClient() {
-  const {
-    data: supplements = [],
-    isLoading: supplementsLoading,
-    isError: supplementsError,
-  } = useSupplementCatalog(true)
-  const {
-    data: medications = [],
-    isLoading: medicationsLoading,
-    isError: medicationsError,
-  } = useMedicationCatalog(true)
-  const {
-    data: dietTags = [],
-    isLoading: dietTagsLoading,
-    isError: dietTagsError,
-  } = useDietTagCatalog(true)
+  const supplementsQuery = useSupplementCatalog(true)
+  const medicationsQuery = useMedicationCatalog(true)
+  const dietTagsQuery = useDietTagCatalog(true)
+  const supplements = supplementsQuery.data ?? []
+  const medications = medicationsQuery.data ?? []
+  const dietTags = dietTagsQuery.data ?? []
+  const supplementsLoading = supplementsQuery.isLoading
+  const medicationsLoading = medicationsQuery.isLoading
+  const dietTagsLoading = dietTagsQuery.isLoading
+  const supplementsError = supplementsQuery.isError
+  const medicationsError = medicationsQuery.isError
+  const dietTagsError = dietTagsQuery.isError
   const { data: suggestions } = useCatalogSuggestions()
 
   const updateSupplement = useUpdateSupplementCatalogItem()
@@ -122,9 +120,14 @@ export default function CatalogsClient() {
       </TierBanner>
 
       {hasError ? (
-        <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          Couldn&apos;t load catalogs. Refresh the page to try again.
-        </div>
+        <FetchError
+          message="Couldn't load catalogs."
+          onRetry={() => {
+            void supplementsQuery.refetch()
+            void medicationsQuery.refetch()
+            void dietTagsQuery.refetch()
+          }}
+        />
       ) : isLoading ? (
         <div className="mt-4 space-y-3">
           <div className="h-5 w-28 animate-pulse rounded bg-muted" />

@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  FetchError,
 } from '@f0rge/ui'
 import type { LabMarkerCatalog } from '@/lib/api/types'
 
@@ -22,7 +23,7 @@ export function MarkerList() {
     return () => clearTimeout(t)
   }, [search])
 
-  const { data: catalog = [], isLoading, isError } = useMarkerCatalog(debounced || undefined)
+  const { data: catalog = [], isLoading, isError, refetch } = useMarkerCatalog(debounced || undefined)
 
   return (
     <div className="space-y-3">
@@ -41,7 +42,7 @@ export function MarkerList() {
       )}
 
       {isError && (
-        <p className="py-4 text-sm text-destructive">Failed to load marker catalog.</p>
+        <FetchError message="Failed to load marker catalog." onRetry={() => refetch()} />
       )}
 
       {!isLoading && !isError && catalog.length === 0 && (
