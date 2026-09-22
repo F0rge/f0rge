@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { AuthCredentialsForm } from '@/components/auth/auth-credentials-form'
 import { MarrowWordmark } from '@/components/brand/marrow-wordmark'
 import { useLogin } from '@/lib/api/hooks'
+import { safePostLoginRedirect } from '@/lib/auth/safe-post-login-redirect'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { useState } from 'react'
 
@@ -18,8 +19,7 @@ function LoginForm() {
     setError(null)
     try {
       await login.mutateAsync(values)
-      const redirect = searchParams.get('redirect') || '/checkin'
-      router.replace(redirect)
+      router.replace(safePostLoginRedirect(searchParams.get('redirect')))
     } catch (err) {
       setError(getErrorDetail(err, 'Invalid email or password'))
     }
