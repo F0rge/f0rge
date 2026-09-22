@@ -97,24 +97,27 @@ export function SymptomPicker({
 
                 {selected && (
                   <div className="mt-1.5 space-y-1.5">
-                    <div className="overflow-x-auto scrollbar-thin px-0.5 pb-1">
-                      <div className="flex gap-1">
-                        {SEVERITY_VALUES.map((v) => (
-                          <button
-                            key={v}
-                            type="button"
-                            aria-label={`Severity ${v}`}
-                            onClick={() => setSeverity(symptom.key, v)}
-                            className={`min-h-[36px] min-w-[34px] flex-shrink-0 rounded-lg border text-xs font-semibold transition-all ${
-                              severity === v
-                                ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-border bg-background text-muted-foreground'
-                            }`}
-                          >
-                            {v}
-                          </button>
-                        ))}
-                      </div>
+                    <div
+                      className="grid grid-cols-6 gap-1 px-0.5"
+                      role="group"
+                      aria-label={`Severity for ${symptom.label}`}
+                    >
+                      {SEVERITY_VALUES.map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          aria-label={`Severity ${v}`}
+                          aria-pressed={severity === v}
+                          onClick={() => setSeverity(symptom.key, v)}
+                          className={`min-h-[36px] rounded-lg border text-xs font-semibold tabular-nums transition-all ${
+                            severity === v
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background text-muted-foreground'
+                          }`}
+                        >
+                          {v}
+                        </button>
+                      ))}
                     </div>
                     <button
                       type="button"
