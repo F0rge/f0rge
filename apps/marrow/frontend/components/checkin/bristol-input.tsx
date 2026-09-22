@@ -23,7 +23,7 @@ export function BristolInput({ value, onChange }: BristolInputProps) {
       <label className="text-xs font-medium text-muted-foreground">
         Bristol stool type
       </label>
-      <div className="grid grid-cols-7 gap-1.5">
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7 sm:gap-1.5">
         {BRISTOL_TYPES.map((b) => {
           const isActive = value === b.value
           return (
