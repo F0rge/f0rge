@@ -10,6 +10,7 @@ import { PhotoAnalysisDisclosure } from '@/components/history/photo-analysis-dis
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
 import type { Entry, Photo } from '@/lib/api/types'
+import { entryLocalDate } from '@/lib/checkin/meal-time'
 import { getOverallBadgeClass, getScaleLabel } from '@/lib/checkin/scale-labels'
 import { cn } from '@f0rge/ui'
 import { statusPill } from '@/lib/ui/status'
@@ -60,7 +61,7 @@ function formatHHMM(isoStr: string): string {
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-function PhotoWithMealTime({ photo }: { photo: Photo }) {
+function PhotoWithMealTime({ photo, date }: { photo: Photo; date: string }) {
   const updateMealTime = useUpdatePhotoMealTime()
   const [optimisticMealTime, setOptimisticMealTime] = useState<string | null>(photo.meal_time)
 
@@ -100,7 +101,11 @@ function PhotoWithMealTime({ photo }: { photo: Photo }) {
               Meal time: {formatHHMM(optimisticMealTime)}
             </p>
           )}
-          <MealTimeChips value={chipValue} onChange={handleChange} />
+          <MealTimeChips
+            value={chipValue}
+            referenceDate={entryLocalDate(date)}
+            onChange={handleChange}
+          />
         </div>
       </div>
       <PhotoAnalysisDisclosure photoId={photo.id} photoLabel={photo.label} photo={photo} />
@@ -186,7 +191,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function EntryDetail({ entry }: { entry: Entry }) {
+function EntryDetail({ entry, date }: { entry: Entry; date: string }) {
   return (
     <div className="rounded-xl border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
@@ -246,7 +251,7 @@ function EntryDetail({ entry }: { entry: Entry }) {
           <p className="mb-2 text-xs font-medium text-muted-foreground">Photos</p>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
             {entry.photos.map((photo) => (
-              <PhotoWithMealTime key={photo.id} photo={photo} />
+              <PhotoWithMealTime key={photo.id} photo={photo} date={date} />
             ))}
           </div>
         </div>
@@ -300,7 +305,7 @@ export default function HistoryDatePage({ params }: { params: Promise<{ date: st
           </Link>
         </div>
       ) : (
-        <EntryDetail entry={entry} />
+        <EntryDetail entry={entry} date={date} />
       )}
     </PageShell>
   )
