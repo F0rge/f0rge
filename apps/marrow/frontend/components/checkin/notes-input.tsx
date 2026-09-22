@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { Textarea } from '@f0rge/ui/forms'
 import { useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
+import { shouldHydrateNotesDraft } from '@/components/checkin/notes-input-sync'
 
 interface NotesInputProps {
   value: string
@@ -25,6 +26,7 @@ export function NotesInput({
   const draftRef = useRef(value)
   const onChangeRef = useRef(onChange)
   const hasStartedRef = useRef(false)
+  const prevParentValueRef = useRef(value)
 
   useEffect(() => {
     onChangeRef.current = onChange
@@ -48,9 +50,19 @@ export function NotesInput({
 
   // Sync draft when parent value changes externally (entry hydration / date change).
   useEffect(() => {
-    if (hasStartedRef.current) return
-    if (draftRef.current === value) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration from server entry only when not mid-typing
+    const prevParent = prevParentValueRef.current
+    prevParentValueRef.current = value
+    if (
+      !shouldHydrateNotesDraft(
+        hasStartedRef.current,
+        draftRef.current,
+        value,
+        prevParent,
+      )
+    ) {
+      return
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration from server entry or external notes update
     setDraft(value)
     draftRef.current = value
     adjustHeight()
