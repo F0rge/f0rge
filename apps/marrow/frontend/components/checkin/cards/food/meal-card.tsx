@@ -20,7 +20,9 @@ export interface MealCardProps {
 
 export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const { data: analysis } = usePhotoAnalysis(photo.id)
+  const isSharedMeal =
+    photo.source_photo_id != null || photo.tagged_by_handle != null
+  const { data: analysis } = usePhotoAnalysis(photo.id, { sharedMeal: isSharedMeal })
 
   const hasImage = photoHasImage(photo)
   const { src: thumbSrc, onError: onThumbError } = useMealThumbSrc(photo.id)
