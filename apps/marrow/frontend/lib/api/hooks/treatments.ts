@@ -139,12 +139,14 @@ export function useLogDose(date: string) {
       })
     },
     onError: (err, _vars, context) => {
+      if (context?.seq !== latestMutationSeq.current) return
       if (context?.prev !== undefined) {
         queryClient.setQueryData(['protocol', date], context.prev)
       }
       handleMutationError(err, 'Failed to log dose. Please try again.')
     },
-    onSettled: () => {
+    onSettled: (_data, _error, _vars, context) => {
+      if (context?.seq !== latestMutationSeq.current) return
       queryClient.invalidateQueries({ queryKey: ['protocol', date] })
     },
   })
