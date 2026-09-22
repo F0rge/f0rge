@@ -124,7 +124,11 @@ function IngredientRow({
       {canEdit && (
         <button
           type="button"
-          onClick={() => deleteIngredient.mutate(ingredient.id)}
+          onClick={() =>
+            deleteIngredient.mutate(ingredient.id, {
+              onError: (err) => handleMutationError(err, 'Failed to remove ingredient'),
+            })
+          }
           className="ml-auto flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
           aria-label={`Remove ingredient ${ingredient.name}`}
         >
@@ -260,10 +264,16 @@ export function PhotoAnalysis({
           <button
             type="button"
             onClick={() =>
-              updateDietaryConfirm.mutate({
-                photoId,
-                gluten_free_confirmed: !analysis.gluten_free_confirmed,
-              })
+              updateDietaryConfirm.mutate(
+                {
+                  photoId,
+                  gluten_free_confirmed: !analysis.gluten_free_confirmed,
+                },
+                {
+                  onError: (err) =>
+                    handleMutationError(err, 'Failed to update dietary confirmation'),
+                },
+              )
             }
             disabled={updateDietaryConfirm.isPending}
             aria-pressed={analysis.gluten_free_confirmed}
@@ -279,10 +289,16 @@ export function PhotoAnalysis({
           <button
             type="button"
             onClick={() =>
-              updateDietaryConfirm.mutate({
-                photoId,
-                lactose_free_confirmed: !analysis.lactose_free_confirmed,
-              })
+              updateDietaryConfirm.mutate(
+                {
+                  photoId,
+                  lactose_free_confirmed: !analysis.lactose_free_confirmed,
+                },
+                {
+                  onError: (err) =>
+                    handleMutationError(err, 'Failed to update dietary confirmation'),
+                },
+              )
             }
             disabled={updateDietaryConfirm.isPending}
             aria-pressed={analysis.lactose_free_confirmed}
