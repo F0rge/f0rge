@@ -60,6 +60,7 @@ function HistoryContent() {
         <button
           type="button"
           onClick={() => setMonth(shiftMonth(month, -1))}
+          aria-label="Previous month"
           className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted"
         >
           <ChevronLeft className="size-5" />
@@ -68,6 +69,7 @@ function HistoryContent() {
         <button
           type="button"
           onClick={() => setMonth(shiftMonth(month, 1))}
+          aria-label="Next month"
           className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted"
         >
           <ChevronRight className="size-5" />
