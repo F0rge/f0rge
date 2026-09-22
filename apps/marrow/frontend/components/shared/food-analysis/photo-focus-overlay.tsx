@@ -348,7 +348,10 @@ export function PhotoFocusOverlay({
   onSelectPhoto,
 }: PhotoFocusOverlayProps) {
   const open = photoId !== null
-  const { data: analysis } = usePhotoAnalysis(photoId)
+  const currentPhoto = photoId !== null ? photos.find((p) => p.id === photoId) ?? null : null
+  const isSharedMeal =
+    currentPhoto?.source_photo_id != null || currentPhoto?.tagged_by_handle != null
+  const { data: analysis } = usePhotoAnalysis(photoId, { sharedMeal: isSharedMeal })
   const updateVisibility = useUpdatePhotoVisibility()
   const reducedMotion = useReducedMotion()
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -363,10 +366,6 @@ export function PhotoFocusOverlay({
     analysis?.dish_confidence != null
       ? Math.round(analysis.dish_confidence * 100)
       : null
-
-  const currentPhoto = photoId !== null ? photos.find((p) => p.id === photoId) ?? null : null
-  const isSharedMeal =
-    currentPhoto?.source_photo_id != null || currentPhoto?.tagged_by_handle != null
   const isHidden = currentPhoto?.hidden_at != null
   const { src: fileSrc, onError: onFileError } = useMealFileSrc(photoId)
 
