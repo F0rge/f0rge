@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowLeft, Tag } from 'lucide-react'
-import { Button, Card } from '@f0rge/ui'
+import { Button, Card, FetchError } from '@f0rge/ui'
 import { formatDisplayDate } from '@f0rge/ui'
 import { cn } from '@f0rge/ui'
 import { PeerAvatar } from '@/components/people/peer-avatar'
@@ -183,6 +183,9 @@ export default function TagsClient() {
         subtitle="Approve incoming tags and track meals you shared."
       />
 
+      {mealTags.isError ? (
+        <FetchError message="Failed to load tagged meals." onRetry={() => mealTags.refetch()} />
+      ) : (
       <div className="space-y-6">
         <section className="space-y-3">
           <h2 className="text-sm font-semibold">Waiting for your approval</h2>
@@ -212,6 +215,7 @@ export default function TagsClient() {
           </Card>
         </section>
       </div>
+      )}
     </PageShell>
   )
 }

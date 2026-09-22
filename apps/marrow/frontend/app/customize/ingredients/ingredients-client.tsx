@@ -3,9 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Search } from 'lucide-react'
-import { Button } from '@f0rge/ui'
-import { Input } from '@f0rge/ui'
-import { Badge } from '@f0rge/ui'
+import { Badge, Button, FetchError, Input } from '@f0rge/ui'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { IngredientFormDialog } from '@/components/customize/ingredient-form-dialog'
 import { PageShell } from '@/components/layout/page-shell'
@@ -91,7 +89,12 @@ export default function IngredientsClient() {
   const [addOpen, setAddOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
 
-  const { data: ingredients = [], isLoading, isError } = useIngredientCatalog(search, includeArchived)
+  const {
+    data: ingredients = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useIngredientCatalog(search, includeArchived)
   const archive = useArchiveDietaryIngredient()
 
   const editing = editingId != null ? (ingredients.find((i) => i.id === editingId) ?? null) : null
@@ -162,9 +165,7 @@ export default function IngredientsClient() {
       </label>
 
       {isError ? (
-        <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          Couldn&apos;t load ingredients. Refresh the page to try again.
-        </div>
+        <FetchError message="Couldn't load ingredients." onRetry={() => refetch()} />
       ) : isLoading ? (
         <div className="mt-4 flex flex-col gap-2">
           {Array.from({ length: 5 }).map((_, i) => (
