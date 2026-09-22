@@ -193,6 +193,9 @@ export default function ReorderClient() {
     setHiddenCards([])
   }, [])
 
+  const allSectionsHidden =
+    cardOrder.length > 0 && cardOrder.every((id) => hiddenCards.includes(id))
+
   return (
     <PageShell>
       <PageHeader
@@ -224,6 +227,19 @@ export default function ReorderClient() {
         Changes take effect immediately — no save button needed. Order and visibility are saved on
         this device only; they do not sync between your phone and computer.
       </TierBanner>
+
+      {allSectionsHidden ? (
+        <div
+          role="status"
+          className="mb-4 rounded-xl border border-dashed border-border bg-muted/30 px-4 py-6 text-center"
+        >
+          <p className="text-sm font-medium text-foreground">All sections are hidden</p>
+          <p className="mt-1 text-xs leading-snug text-muted-foreground">
+            Your daily check-in has no data-entry cards until you show at least one section. Tap
+            the eye icon on a row below to turn a section back on.
+          </p>
+        </div>
+      ) : null}
 
       {/* Sortable list */}
       <DndContext
