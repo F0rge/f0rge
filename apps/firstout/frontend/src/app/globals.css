@@ -198,9 +198,10 @@ body {
 }
 
 .firstout-home-actions .cds--btn {
-  flex: 0 1 auto;
-  min-inline-size: 0;
+  flex: 0 0 auto;
+  min-inline-size: max-content;
   max-inline-size: 100%;
+  white-space: nowrap;
 }
 
 .firstout-cost-audit {
@@ -712,6 +713,12 @@ body {
   transition: margin-right 0.15s ease;
 }
 
+.firstout-shell[data-nia-resizing="true"] .firstout-main,
+.firstout-shell[data-nia-resizing="true"] .firstout-wms-switcher,
+.firstout-shell[data-nia-resizing="true"] .firstout-nia-dock {
+  transition: none;
+}
+
 .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-catalogue-toolbar,
 .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-catalogue-actions,
 .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-actions,
@@ -722,17 +729,21 @@ body {
   min-width: 0;
 }
 
-/* Home primary actions: coherent reflow when Nia dock narrows the main column. */
+/* Home actions: wrap whole buttons when Nia narrows the column; never clip labels. */
 .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   gap: 0.5rem;
 }
 
 .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-actions .cds--btn {
-  inline-size: 100%;
-  max-inline-size: none;
-  justify-content: center;
+  flex: 0 0 auto;
+  inline-size: auto;
+  min-inline-size: max-content;
+  max-inline-size: 100%;
+  white-space: nowrap;
+  overflow: visible;
 }
 
 /* Home KPIs: viewport lg assumes full main width; Nia dock narrows the column. */

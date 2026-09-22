@@ -70,10 +70,15 @@ import {
 } from "@/lib/nia-dock-session";
 import {
   NIA_DESKTOP_LAYOUT,
+  NIA_DOCK_DEFAULT_WIDTH_PX,
   NIA_PHONE_LAYOUT,
+  applyNiaDockWidthVar,
+  applyNiaShellOpenState,
+  applyNiaShellResizing,
+  clampNiaDockWidth,
+  clearNiaShellChrome,
   niaPanelClassName,
   niaPanelLayout,
-  shouldInsetMainForNia,
 } from "@/lib/nia-panel-layout";
 import {
   NIA_NEAR_BOTTOM_PX,
@@ -97,9 +102,6 @@ import {
 } from "@/lib/viewport";
 
 const WIDTH_STORAGE_KEY = "firstout-nia-dock-width";
-const MIN_WIDTH_PX = 320;
-const DEFAULT_WIDTH_PX = 384;
-const MAX_WIDTH_RATIO = 0.8;
 
 const SUGGESTIONS = [
   "Create a SKU",
@@ -125,14 +127,14 @@ export function useNiaDock(): NiaDockContextValue {
 
 function readStoredWidth(): number {
   if (typeof window === "undefined") {
-    return DEFAULT_WIDTH_PX;
+    return NIA_DOCK_DEFAULT_WIDTH_PX;
   }
   const raw = sessionStorage.getItem(WIDTH_STORAGE_KEY);
   const parsed = raw ? Number(raw) : NaN;
   if (!Number.isFinite(parsed)) {
-    return DEFAULT_WIDTH_PX;
+    return NIA_DOCK_DEFAULT_WIDTH_PX;
   }
-  return Math.max(MIN_WIDTH_PX, parsed);
+  return clampNiaDockWidth(parsed, window.innerWidth);
 }
 
 function applyPostRunNavigation(thread: NiaThread, router: ReturnType<typeof useRouter>): void {
@@ -443,7 +445,7 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   );
   const layout = niaPanelLayout(narrow);
 
-  const [width, setWidth] = useState(DEFAULT_WIDTH_PX);
+  const [width, setWidth] = useState(NIA_DOCK_DEFAULT_WIDTH_PX);
   const [modalOpen, setModalOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -466,6 +468,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
   const [dictating, setDictating] = useState(false);
 
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const widthRef = useRef(width);
+  widthRef.current = width;
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const persistThread = useRef(false);
   const hydratedThread = useRef(false);
@@ -542,23 +546,21 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     if (!shell) {
       return;
     }
-    shell.setAttribute("data-nia-layout", layout);
-    if (enabled && open) {
-      shell.setAttribute("data-nia-dock-open", "true");
-    } else {
-      shell.removeAttribute("data-nia-dock-open");
-    }
-    if (shouldInsetMainForNia(Boolean(enabled && open), layout)) {
-      shell.style.setProperty("--firstout-nia-dock-width", `${width}px`);
-    } else {
-      shell.style.removeProperty("--firstout-nia-dock-width");
-    }
+    const dockOpen = Boolean(enabled && open);
+    applyNiaShellOpenState(shell, layout, dockOpen);
+    applyNiaDockWidthVar(shell, layout, dockOpen, widthRef.current);
     return () => {
-      shell.removeAttribute("data-nia-dock-open");
-      shell.removeAttribute("data-nia-layout");
-      shell.style.removeProperty("--firstout-nia-dock-width");
+      clearNiaShellChrome(shell);
     };
-  }, [enabled, open, width, layout]);
+  }, [enabled, open, layout]);
+
+  useEffect(() => {
+    const shell = document.querySelector(".firstout-shell") as HTMLElement | null;
+    if (!shell) {
+      return;
+    }
+    applyNiaDockWidthVar(shell, layout, Boolean(enabled && open), width);
+  }, [enabled, open, layout, width]);
 
   useEffect(() => {
     if (layout === NIA_PHONE_LAYOUT) {
@@ -724,10 +726,22 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     }
   }
 
+  function commitDockWidth(next: number) {
+    setWidth(next);
+    const shell = document.querySelector(".firstout-shell") as HTMLElement | null;
+    if (shell) {
+      applyNiaDockWidthVar(shell, layout, true, next);
+    }
+  }
+
   function handleResizePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault();
     resizeRef.current = { startX: event.clientX, startWidth: width };
     event.currentTarget.setPointerCapture(event.pointerId);
+    const shell = document.querySelector(".firstout-shell") as HTMLElement | null;
+    if (shell) {
+      applyNiaShellResizing(shell, true);
+    }
   }
 
   function handleResizePointerMove(event: React.PointerEvent<HTMLDivElement>) {
@@ -735,18 +749,21 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
     if (!state) {
       return;
     }
-    const maxWidth = Math.floor(window.innerWidth * MAX_WIDTH_RATIO);
-    const next = Math.min(
-      maxWidth,
-      Math.max(MIN_WIDTH_PX, state.startWidth - (event.clientX - state.startX)),
+    const next = clampNiaDockWidth(
+      state.startWidth - (event.clientX - state.startX),
+      window.innerWidth,
     );
-    setWidth(next);
+    commitDockWidth(next);
   }
 
-  function handleResizePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+  function endDockResize(event: React.PointerEvent<HTMLDivElement>) {
     if (resizeRef.current) {
       resizeRef.current = null;
       event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const shell = document.querySelector(".firstout-shell") as HTMLElement | null;
+    if (shell) {
+      applyNiaShellResizing(shell, false);
     }
   }
 
@@ -832,7 +849,8 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
             className="firstout-nia-dock__resize"
             onPointerDown={handleResizePointerDown}
             onPointerMove={handleResizePointerMove}
-            onPointerUp={handleResizePointerUp}
+            onPointerUp={endDockResize}
+            onPointerCancel={endDockResize}
             role="separator"
             aria-orientation="vertical"
             aria-label="Resize Nia panel"
