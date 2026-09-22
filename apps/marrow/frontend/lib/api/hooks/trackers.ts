@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiPut, apiPatch } from '@f0rge/ui/api'
+import { apiGet, apiPost, apiPut, apiPatch, handleMutationError } from '@f0rge/ui/api'
 import type { Tracker, TrackerValue, TrackerCreate, TrackerUpdate } from '../types'
 
 export function useTrackers(includeArchived = false) {
@@ -94,10 +94,11 @@ export function useUpsertTrackerValue(date: string) {
       })
       return { prev }
     },
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
       if (context?.prev !== undefined) {
         queryClient.setQueryData(['tracker-values', date], context.prev)
       }
+      handleMutationError(err, 'Failed to save tracker. Please try again.')
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['tracker-values', date] })
