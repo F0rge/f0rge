@@ -1,7 +1,9 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { cn } from '@f0rge/ui'
+import { ConfirmActionDialog } from '@/components/people/confirm-action-dialog'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
 import { MealIconThumb, photoHasImage, useMealThumbSrc } from '@/components/checkin/meal-icon-thumb'
 import { buildAggregateBadges } from '@/components/shared/food-analysis/dietary-badges'
@@ -17,7 +19,20 @@ export interface MealCardProps {
 }
 
 export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const deleteRequestedRef = useRef(false)
   const { data: analysis } = usePhotoAnalysis(photo.id)
+
+  useEffect(() => {
+    if (!deleteConfirmOpen) {
+      deleteRequestedRef.current = false
+      return
+    }
+    if (deleteRequestedRef.current && !deleting) {
+      deleteRequestedRef.current = false
+      setDeleteConfirmOpen(false)
+    }
+  }, [deleting, deleteConfirmOpen])
   const hasImage = photoHasImage(photo)
   const { src: thumbSrc, onError: onThumbError } = useMealThumbSrc(photo.id)
 
@@ -113,13 +128,26 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
         disabled={deleting}
         onClick={(e) => {
           e.stopPropagation()
-          onDelete(photo.id)
+          setDeleteConfirmOpen(true)
         }}
         className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
         aria-label="Delete photo"
       >
         <X className="size-4" />
       </button>
+      <ConfirmActionDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete meal photo?"
+        description="This removes the photo and its food analysis from today's entry. This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        pending={deleting}
+        onConfirm={() => {
+          deleteRequestedRef.current = true
+          onDelete(photo.id)
+        }}
+      />
     </div>
   )
 }
