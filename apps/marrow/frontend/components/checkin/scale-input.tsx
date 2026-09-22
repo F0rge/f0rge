@@ -54,7 +54,6 @@ function assertValidScaleOptions(options: ScaleOption[]): void {
 export function ScaleInput({ label, options, value, onChange, description }: ScaleInputProps) {
   assertValidScaleOptions(options)
 
-  const isProduction = process.env.NODE_ENV === 'production'
   const unset = value === null || value === ''
 
   return (
@@ -89,12 +88,13 @@ export function ScaleInput({ label, options, value, onChange, description }: Sca
               onClick={() => onChange(option.value)}
               className={cn(
                 'relative z-20 inline-flex items-center justify-center',
-                'min-h-[44px] rounded-full px-2.5',
-                'text-sm font-medium',
+                'min-h-[44px] rounded-full px-1.5 sm:px-2.5',
+                'text-center text-xs leading-tight sm:text-sm sm:leading-normal',
+                'whitespace-normal text-pretty sm:whitespace-nowrap',
+                'font-medium',
                 'transition-all duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]',
                 'active:scale-[0.97]',
                 'focus-visible:outline-2 focus-visible:outline-foreground focus-visible:outline-offset-2',
-                isProduction ? 'overflow-hidden text-ellipsis' : 'whitespace-nowrap',
                 isActive
                   ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
                   : 'bg-transparent text-muted-foreground hover:text-foreground',
