@@ -156,7 +156,6 @@ export function BottomNav() {
     <nav
       ref={barRef}
       aria-label="Primary"
-      aria-hidden={keyboardOpen}
       data-tour="bottom-nav"
       className={cn(
         'fixed bottom-[calc(20px+env(safe-area-inset-bottom))] left-1/2 z-50 flex',
