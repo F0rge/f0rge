@@ -221,7 +221,8 @@ export default function ReorderClient() {
 
       <TierBanner tier="core">
         Drag to reorder. Toggle the eye icon to show or hide a section on your daily check-in.
-        Changes take effect immediately — no save button needed.
+        Changes take effect immediately — no save button needed. Order and visibility are saved on
+        this device only; they do not sync between your phone and computer.
       </TierBanner>
 
       {/* Sortable list */}
