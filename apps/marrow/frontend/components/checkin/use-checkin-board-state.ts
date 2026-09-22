@@ -251,7 +251,28 @@ export function useCheckinBoardState({
       setCaffeineServings(existingEntry.caffeine_servings ?? 0)
       setExistingPhotos(existingEntry.photos || [])
     } else {
-      // Entry gone (or never existed) — drop stale thumbnails from a prior load.
+      // Entry gone (or never existed) — reset board so a save cannot resurrect stale values.
+      dirtyRef.current = false
+      setIsDirty(false)
+      setOverall(null)
+      setBloating(null)
+      setStoolStatus(null)
+      setBristolType(null)
+      setStoolCompleteness(null)
+      setSleepQuality(null)
+      setStress(null)
+      setDietRisk('')
+      setSupplements('')
+      setSupplementsTouched(false)
+      setMedications([])
+      setSymptomsJson({})
+      setSymptomEvents([])
+      setSymptomsTouched(false)
+      setSick(false)
+      setHotShower(false)
+      setNotes('')
+      setAlcoholUnits(0)
+      setCaffeineServings(0)
       setExistingPhotos([])
     }
   }, [existingEntry, isDirty])
