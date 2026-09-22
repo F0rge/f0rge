@@ -13,13 +13,13 @@ import { MarkerList } from '@/components/labs/marker-list'
 import { EmptyMark } from '@/components/shared/color-artifact'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
-import { cn } from '@f0rge/ui'
+import { cn, FetchError } from '@f0rge/ui'
 import type { Lab } from '@/lib/api/types'
 
 type View = 'by-lab' | 'by-marker'
 
 export default function LabsPage() {
-  const { data: labs, isLoading, isError } = useLabs()
+  const { data: labs, isLoading, isError, refetch } = useLabs()
   const isDesktop = useMediaQuery(LG_DESKTOP_QUERY)
   const [view, setView] = useState<View>('by-lab')
   const [addOpen, setAddOpen] = useState(false)
@@ -92,7 +92,7 @@ export default function LabsPage() {
           )}
 
           {isError && (
-            <p className="py-4 text-sm text-destructive">Failed to load labs.</p>
+            <FetchError message="Failed to load labs." onRetry={() => refetch()} />
           )}
 
           {!isLoading && !isError && (!labs || labs.length === 0) && (

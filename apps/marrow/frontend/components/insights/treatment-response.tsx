@@ -1,7 +1,7 @@
 'use client'
 
+import { cn, FetchError } from '@f0rge/ui'
 import { Loader2 } from 'lucide-react'
-import { cn } from '@f0rge/ui'
 import {
   BarChart,
   Bar,
@@ -89,7 +89,7 @@ function TreatmentBar({ row }: { row: TreatmentResponseRow }) {
 }
 
 export function TreatmentResponse({ outcome }: Props) {
-  const { data, isLoading, isError } = useInsightsTreatmentResponse(outcome)
+  const { data, isLoading, isError, refetch } = useInsightsTreatmentResponse(outcome)
 
   if (isLoading) {
     return (
@@ -101,7 +101,7 @@ export function TreatmentResponse({ outcome }: Props) {
 
   if (isError) {
     return (
-      <p className="text-sm text-destructive">Failed to load treatment data.</p>
+      <FetchError message="Failed to load treatment data." onRetry={() => refetch()} />
     )
   }
 

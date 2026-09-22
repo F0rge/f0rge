@@ -6,6 +6,7 @@ import { handleMutationError } from '@f0rge/ui/api'
 import { PageHeader } from '@/components/layout/page-header'
 import { PageShell } from '@/components/layout/page-shell'
 import { HypothesisCard } from '@/components/hypotheses/hypothesis-card'
+import { HypothesisQuickAdd } from '@/components/hypotheses/hypothesis-quick-add'
 import { NOf1Card } from '@/components/hypotheses/n-of-1-card'
 import { EmptyMark } from '@/components/shared/color-artifact'
 import { useHypotheses, useUpdateHypothesis } from '@/lib/api/hooks'
@@ -48,12 +49,15 @@ export default function HypothesesPage() {
           <div className="flex flex-col items-center py-12 text-center">
             <EmptyMark className="mb-3" />
             <h2 className="mb-1 text-lg font-semibold">No hypotheses yet</h2>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Add rows through the API or MCP. Killed questions stay on the board.
+            <p className="mb-6 max-w-sm text-sm text-muted-foreground">
+              Add your first tracked question below. Killed questions stay on the board.
             </p>
+            <HypothesisQuickAdd />
           </div>
         ) : (
-          SECTIONS.map((section) => {
+          <>
+            <HypothesisQuickAdd />
+            {SECTIONS.map((section) => {
             const items = rows.filter((row) => row.status === section.status)
             if (items.length === 0) return null
             return (
@@ -70,7 +74,8 @@ export default function HypothesesPage() {
                 ))}
               </section>
             )
-          })
+          })}
+          </>
         )}
       </div>
     </PageShell>

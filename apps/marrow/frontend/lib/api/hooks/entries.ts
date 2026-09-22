@@ -7,7 +7,6 @@ import {
   apiPut,
   apiPatch,
   apiDelete,
-  handleMutationError,
   ApiError,
 } from '@f0rge/ui/api'
 import type { Entry, EntryCreate, EntryStats } from '../types'
@@ -171,6 +170,5 @@ export function useUpdateDietaryConfirm() {
       // a stale Gluten/lactose flag next to the freshly confirmed-free meal.
       queryClient.invalidateQueries({ queryKey: ['meals', 'recent'] })
     },
-    onError: (err) => handleMutationError(err, 'Failed to update dietary confirmation'),
   })
 }

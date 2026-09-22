@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
   Dot,
 } from 'recharts'
+import { FetchError } from '@f0rge/ui'
 import { Loader2, Pin, PinOff } from 'lucide-react'
 import { useMarkerHistory, useTreatments } from '@/lib/api/hooks'
 import type { MarkerFlag } from '@/lib/api/types'
@@ -85,7 +86,7 @@ function FlagDot({ cx, cy, payload }: FlagDotProps) {
 }
 
 export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistoryChartProps) {
-  const { data: points, isLoading, isError } = useMarkerHistory(canonicalName)
+  const { data: points, isLoading, isError, refetch } = useMarkerHistory(canonicalName)
   const { data: treatments = [] } = useTreatments()
 
   const [pinned, setPinnedState] = useState<boolean>(() => getPinned().includes(canonicalName))
@@ -111,7 +112,9 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
   }
 
   if (isError) {
-    return <p className="py-4 text-sm text-destructive">Failed to load marker history.</p>
+    return (
+      <FetchError message="Failed to load marker history." onRetry={() => refetch()} />
+    )
   }
 
   const numericPoints = (points ?? []).filter((p) => p.value !== null)
