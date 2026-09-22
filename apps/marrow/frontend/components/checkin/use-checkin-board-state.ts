@@ -282,7 +282,13 @@ export function useCheckinBoardState({
   useEffect(() => {
     if (stoolStatus === null) return
     if (stoolStatus !== 'abnormal') {
-      setBristolType(null)
+      setBristolType((prev) => {
+        if (prev !== null) {
+          dirtyRef.current = true
+          setIsDirty(true)
+        }
+        return null
+      })
     }
   }, [stoolStatus])
 

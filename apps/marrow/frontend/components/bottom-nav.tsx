@@ -136,15 +136,15 @@ export function BottomNav() {
       className={cn(
         'fixed bottom-[calc(20px+env(safe-area-inset-bottom))] left-1/2 z-50 flex',
         'w-3/4 max-w-[400px] -translate-x-1/2 items-stretch rounded-full',
-        'border border-border bg-card/90 px-1 pt-1.5 pb-2',
-        'shadow-[0_18px_40px_-18px_rgba(0,0,0,0.28)] backdrop-blur-[18px] backdrop-saturate-[1.5]',
+        'border border-border bg-card/95 px-1 pt-1.5 pb-2',
+        'shadow-none backdrop-blur-md',
         'transition-[opacity,transform] duration-[450ms] ease-[cubic-bezier(0.19,1,0.22,1)]',
         keyboardOpen && 'pointer-events-none translate-y-4 opacity-0',
       )}
     >
       <div
         ref={inkRef}
-        className="absolute bottom-[5px] left-0 right-full h-[3px] rounded-full bg-chart-1"
+        className="absolute bottom-[5px] left-0 right-full h-[3px] rounded-full bg-primary"
       />
       {NAV_ITEMS.map((item, index) => {
         const active = index === activeIndex
@@ -175,7 +175,7 @@ export function BottomNav() {
                 className={cn(
                   'relative flex size-8 flex-none items-center justify-center rounded-full',
                   'transition-all duration-300 ease-out',
-                  active && 'ring-[2px] ring-chart-1',
+                  active && 'ring-2 ring-primary',
                 )}
               >
                 <UserAvatar size="xs" />

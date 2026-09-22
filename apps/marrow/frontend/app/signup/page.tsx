@@ -27,20 +27,22 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-8 p-6">
-      <div className="text-center">
-        <h1 className="flex justify-center">
-          <MarrowWordmark className="h-8" />
-        </h1>
-        <p className="mt-3 text-lg font-semibold tracking-tight">Create account</p>
-        <p className="mt-2 text-sm text-muted-foreground">Sign up to start tracking</p>
+    <div className="auth-shell">
+      <div className="auth-panel space-y-8">
+        <div className="text-center">
+          <h1 className="flex justify-center">
+            <MarrowWordmark className="h-8" />
+          </h1>
+          <p className="mt-3 text-lg font-semibold tracking-tight text-foreground">Create account</p>
+          <p className="mt-2 text-sm text-muted-foreground">Sign up to start your health journal</p>
+        </div>
+        <AuthCredentialsForm
+          mode="signup"
+          onSubmit={handleSubmit}
+          loading={signup.isPending}
+          error={error}
+        />
       </div>
-      <AuthCredentialsForm
-        mode="signup"
-        onSubmit={handleSubmit}
-        loading={signup.isPending}
-        error={error}
-      />
     </div>
   )
 }

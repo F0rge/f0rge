@@ -21,10 +21,10 @@ export function SettingsCard({
   className,
 }: SettingsCardProps) {
   return (
-    <div className={cn('h-full rounded-xl border border-border p-4 space-y-3', className)}>
+    <div className={cn('h-full space-y-4 rounded-[var(--radius)] border border-border bg-card p-5', className)}>
       <div className="flex items-center gap-2">
-        {Icon && <Icon className={`size-5 ${iconClassName ?? ''}`} />}
-        <h2 className="font-semibold">{title}</h2>
+        {Icon && <Icon className={`size-5 text-muted-foreground ${iconClassName ?? ''}`} />}
+        <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
       </div>
       {children}
     </div>

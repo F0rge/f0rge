@@ -41,7 +41,20 @@ export function SymptomPicker({
 
   const setSeverity = (key: string, severity: number) => {
     onChange({ ...value, [key]: severity })
-    onEventsChange([...events, stamp(key, severity)])
+    const stampIndexes = events
+      .map((event, index) => ({ event, index }))
+      .filter(({ event }) => event.key === key)
+      .map(({ index }) => index)
+    if (stampIndexes.length === 0) {
+      onEventsChange([...events, stamp(key, severity)])
+      return
+    }
+    const latestIndex = stampIndexes[stampIndexes.length - 1]
+    onEventsChange(
+      events.map((event, index) =>
+        index === latestIndex ? { ...event, severity, time: nowHHMM() } : event,
+      ),
+    )
   }
 
   const logNow = (key: string) => {

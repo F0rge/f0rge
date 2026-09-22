@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { CalendarView } from '@/components/history/calendar-view'
@@ -83,6 +84,19 @@ function HistoryContent() {
       ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (entries ?? []).length === 0 ? (
+        <div
+          className="rounded-[var(--radius)] border border-border bg-card px-5 py-6 text-center"
+          role="status"
+        >
+          <p className="text-sm text-muted-foreground">No entries this month yet.</p>
+          <Link
+            href="/checkin"
+            className="mt-3 inline-flex min-h-[44px] items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Start today&apos;s check-in
+          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-12 gap-6">

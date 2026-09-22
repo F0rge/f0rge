@@ -5,25 +5,15 @@ import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { CheckinBoardSkeleton } from '@/components/checkin/checkin-board-skeleton'
 import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
-import { PageHeader } from '@/components/layout/page-header'
+import { CheckinPageHeader } from '@/components/checkin/checkin-page-header'
+import { PageShell } from '@/components/layout/page-shell'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
-import { FetchError } from '@f0rge/ui'
+import { FetchError, formatLocalDate } from '@f0rge/ui'
 import { useEntry } from '@/lib/api/hooks'
-import { formatLocalDate } from '@f0rge/ui'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 
-function formatDisplayDate(dateStr: string) {
-  const date = new Date(dateStr + 'T00:00:00')
-  return date.toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
 export default function CheckinPage() {
-  const today = formatLocalDate(new Date())
+  const [today, setToday] = useState(() => formatLocalDate(new Date()))
   const { data: entry, isLoading, isError, refetch } = useEntry(today)
   const headerRef = useRef<HTMLDivElement | null>(null)
 
@@ -33,19 +23,16 @@ export default function CheckinPage() {
     errorMessage: null,
   })
 
-  // Stable refs to autosave functions — registered once by the form via onAutosaveFnsReady.
   const flushRef = useRef<(() => void) | null>(null)
   const flushBeaconRef = useRef<(() => void) | null>(null)
   const retryRef = useRef<(() => void) | null>(null)
 
-  // Focus-mode overlay state. `null` = closed; a photo id = open and editing that photo.
   const [focusedPhotoId, setFocusedPhotoId] = useState<number | null>(null)
   const handleClosePhotoFocus = useCallback(() => {
     setFocusedPhotoId(null)
     flushRef.current?.()
   }, [])
 
-  // MealGrids-style guard: drop overlay if the focused photo left the feed.
   const entryPhotos = entry?.photos ?? []
   const focusedPhoto =
     focusedPhotoId !== null && entryPhotos.some((p) => p.id === focusedPhotoId)
@@ -65,7 +52,23 @@ export default function CheckinPage() {
     [],
   )
 
-  // pagehide: use keepalive fetch / sendBeacon so the request survives tab close.
+  useEffect(() => {
+    const syncToday = () => {
+      const next = formatLocalDate(new Date())
+      setToday((prev) => (prev === next ? prev : next))
+    }
+    syncToday()
+    const interval = window.setInterval(syncToday, 60_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') syncToday()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
+
   useEffect(() => {
     const handlePageHide = () => {
       flushBeaconRef.current?.()
@@ -85,48 +88,45 @@ export default function CheckinPage() {
         sentinelRef={headerRef}
         hidden={isLoading}
       />
-      <div className="mx-auto w-full max-w-7xl px-4 pb-4 pt-[calc(16px+env(safe-area-inset-top))] lg:px-8">
-      <PageHeader
-        headerRef={headerRef}
-        data-tour="checkin-header"
-        data-testid="checkin-header"
-        title="Check-in"
-        subtitle={formatDisplayDate(today)}
-        actions={
-          <AutosaveStatusPill
-            status={autosaveState.status}
-            lastSavedAt={autosaveState.lastSavedAt}
-            errorMessage={autosaveState.errorMessage}
-            onRetry={() => retryRef.current?.()}
-          />
-        }
-      />
-
-      {isError ? (
-        <FetchError
-          message="Failed to load today's check-in."
-          onRetry={() => refetch()}
-        />
-      ) : isLoading ? (
-        <CheckinBoardSkeleton />
-      ) : (
-        <CheckinBoard
-          key={today}
+      <PageShell>
+        <CheckinPageHeader
           date={today}
-          existingEntry={entry ?? null}
-          onAutosaveStateChange={handleAutosaveStateChange}
-          onAutosaveFnsReady={handleAutosaveFnsReady}
-          onOpenPhotoFocus={setFocusedPhotoId}
+          headerRef={headerRef}
+          actions={
+            <AutosaveStatusPill
+              status={autosaveState.status}
+              lastSavedAt={autosaveState.lastSavedAt}
+              errorMessage={autosaveState.errorMessage}
+              onRetry={() => retryRef.current?.()}
+            />
+          }
         />
-      )}
 
-      <PhotoFocusOverlay
-        photoId={focusedPhoto}
-        photos={entryPhotos}
-        onClose={handleClosePhotoFocus}
-        onSelectPhoto={setFocusedPhotoId}
-      />
-    </div>
+        {isError ? (
+          <FetchError
+            message="Failed to load today's check-in."
+            onRetry={() => refetch()}
+          />
+        ) : isLoading ? (
+          <CheckinBoardSkeleton />
+        ) : (
+          <CheckinBoard
+            key={today}
+            date={today}
+            existingEntry={entry ?? null}
+            onAutosaveStateChange={handleAutosaveStateChange}
+            onAutosaveFnsReady={handleAutosaveFnsReady}
+            onOpenPhotoFocus={setFocusedPhotoId}
+          />
+        )}
+
+        <PhotoFocusOverlay
+          photoId={focusedPhoto}
+          photos={entryPhotos}
+          onClose={handleClosePhotoFocus}
+          onSelectPhoto={setFocusedPhotoId}
+        />
+      </PageShell>
     </>
   )
 }

@@ -95,3 +95,28 @@
     transform: none;
   }
 }
+
+/* Check-in board — inactive cards sit quieter; focused card reads clearly. */
+.checkin-board [data-slot='card']:not(:focus-within) {
+  opacity: 0.92;
+  --tw-ring-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.checkin-board [data-slot='card']:focus-within {
+  opacity: 1;
+  --tw-ring-color: color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+.checkin-board [data-slot='card-header'],
+.checkin-board [data-slot='card-content'] {
+  @apply px-5;
+}
+
+/* Auth — centered journal sheet on paper ground. */
+.auth-shell {
+  @apply flex flex-1 flex-col items-center justify-center px-6 py-10;
+}
+
+.auth-panel {
+  @apply w-full max-w-sm rounded-[var(--radius)] border border-border bg-card p-8 shadow-none;
+}
