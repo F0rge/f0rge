@@ -11,7 +11,7 @@ export function PageShell({ children, className, ...props }: PageShellProps) {
   return (
     <div
       className={cn(
-        'mx-auto w-full max-w-7xl px-4 pb-4 pt-[calc(16px+env(safe-area-inset-top))] lg:px-8',
+        'mx-auto w-full max-w-7xl px-5 pb-6 pt-[calc(20px+env(safe-area-inset-top))] lg:px-10 lg:pb-8',
         className,
       )}
       {...props}

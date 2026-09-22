@@ -37,16 +37,18 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-8 p-6">
-      <div className="text-center">
-        <h1 className="flex justify-center">
-          <MarrowWordmark className="h-8" />
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">Log in to continue</p>
+    <div className="auth-shell">
+      <div className="auth-panel space-y-8">
+        <div className="text-center">
+          <h1 className="flex justify-center">
+            <MarrowWordmark className="h-8" />
+          </h1>
+          <p className="mt-3 text-sm text-muted-foreground">Log in to your health journal</p>
+        </div>
+        <Suspense>
+          <LoginForm />
+        </Suspense>
       </div>
-      <Suspense>
-        <LoginForm />
-      </Suspense>
     </div>
   )
 }

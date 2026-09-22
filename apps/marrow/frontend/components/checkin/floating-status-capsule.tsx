@@ -128,9 +128,8 @@ export function FloatingStatusCapsule({
       }}
       className={cn(
         'flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-xs',
-        'border border-foreground/10',
-        'shadow-[var(--shadow-float)]',
-        'backdrop-blur-md',
+        'border border-border',
+        'shadow-none backdrop-blur-md',
         'bg-card/80',
       )}
     >

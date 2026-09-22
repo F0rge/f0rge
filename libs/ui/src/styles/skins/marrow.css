@@ -1,14 +1,12 @@
 :root {
-  /* Chrome is ink. Nucleus + chart-* are Eliott & Markus illustration colour
-     (mustard / terracotta / forest / rose / cobalt) — never --primary. */
-  --marrow-ground: #f2f1ef;
-  --marrow-ink: #111111;
-  --marrow-nucleus: #e3b84a;
+  /* Editorial health journal — warm paper, near-black ink, one calm accent. */
+  --marrow-ground: #f6f4f0;
+  --marrow-ink: #141414;
+  --marrow-accent: #3a5c48;
+  /* Brand mark nucleus only — not primary chrome. */
+  --marrow-nucleus: #c4a035;
 
-  /* Kinetic language from eliott-markus.com (GSAP/Lenis feel → CSS) */
   --ease-em: cubic-bezier(0.19, 1, 0.22, 1);
-  --shadow-float: 0 18px 40px -18px rgba(0, 0, 0, 0.2);
-  --shadow-float-hover: 0 24px 48px -16px rgba(0, 0, 0, 0.28);
 
   --background: var(--marrow-ground);
   --foreground: var(--marrow-ink);
@@ -16,93 +14,92 @@
   --card-foreground: var(--marrow-ink);
   --popover: #ffffff;
   --popover-foreground: var(--marrow-ink);
-  --primary: var(--marrow-ink);
-  --primary-foreground: #f2f1ef;
-  --secondary: #e8e6e1;
+  --primary: var(--marrow-accent);
+  --primary-foreground: #faf9f7;
+  --secondary: #ebe8e2;
   --secondary-foreground: var(--marrow-ink);
-  --muted: #e8e6e1;
-  --muted-foreground: #6b6a67;
-  --accent: #e8e6e1;
+  --muted: #ebe8e2;
+  --muted-foreground: #6f6d68;
+  --accent: #ebe8e2;
   --accent-foreground: var(--marrow-ink);
-  --destructive: #c44b32;
-  --border: #dddcd8;
-  --input: #dddcd8;
-  --ring: #111111;
-  --ok: #3d6b52;
-  --ok-foreground: #f2f1ef;
-  --warn: #e3b84a;
-  --warn-foreground: #111111;
+  --destructive: #b8432f;
+  --border: #e0ddd6;
+  --input: #e0ddd6;
+  --ring: var(--marrow-accent);
+  --ok: var(--marrow-accent);
+  --ok-foreground: #faf9f7;
+  --warn: #b8860b;
+  --warn-foreground: #141414;
   --info: #3d6aa8;
-  --info-foreground: #f2f1ef;
-  --chart-1: #e3b84a;
-  --chart-2: #e0643a;
-  --chart-3: #3d6b52;
-  --chart-4: #e08a7a;
-  --chart-5: #3d6aa8;
-  --radius: 1.25rem;
+  --info-foreground: #faf9f7;
+  --chart-1: #c4a035;
+  --chart-2: #c45a3a;
+  --chart-3: #3a5c48;
+  --chart-4: #c98a7a;
+  --chart-5: #4a6fa8;
+  --radius: 0.625rem;
   --sidebar: #ffffff;
   --sidebar-foreground: var(--marrow-ink);
-  --sidebar-primary: var(--marrow-ink);
-  --sidebar-primary-foreground: #f2f1ef;
-  --sidebar-accent: #e8e6e1;
+  --sidebar-primary: var(--marrow-accent);
+  --sidebar-primary-foreground: #faf9f7;
+  --sidebar-accent: #ebe8e2;
   --sidebar-accent-foreground: var(--marrow-ink);
-  --sidebar-border: #dddcd8;
-  --sidebar-ring: #111111;
+  --sidebar-border: #e0ddd6;
+  --sidebar-ring: var(--marrow-accent);
 }
 
 .dark {
-  --marrow-ground: #000000;
-  --marrow-ink: #f2f1ef;
-  --marrow-nucleus: #e3b84a;
-  --shadow-float: 0 18px 40px -14px rgba(0, 0, 0, 0.55);
-  --shadow-float-hover: 0 26px 52px -12px rgba(0, 0, 0, 0.72);
+  --marrow-ground: #121110;
+  --marrow-ink: #f6f4f0;
+  --marrow-accent: #6b9a7a;
+  --marrow-nucleus: #d4b84a;
 
   --background: var(--marrow-ground);
   --foreground: var(--marrow-ink);
-  --card: #222222;
+  --card: #1c1b19;
   --card-foreground: var(--marrow-ink);
-  --popover: #222222;
+  --popover: #1c1b19;
   --popover-foreground: var(--marrow-ink);
-  --primary: var(--marrow-ink);
-  --primary-foreground: #111111;
-  --secondary: #454545;
+  --primary: var(--marrow-accent);
+  --primary-foreground: #121110;
+  --secondary: #2a2826;
   --secondary-foreground: var(--marrow-ink);
-  --muted: #2a2a2a;
-  --muted-foreground: #a8a7a4;
-  --accent: #2a2a2a;
+  --muted: #2a2826;
+  --muted-foreground: #a8a5a0;
+  --accent: #2a2826;
   --accent-foreground: var(--marrow-ink);
   --destructive: #e07048;
-  --border: color-mix(in srgb, #f2f1ef 10%, transparent);
-  --input: color-mix(in srgb, #f2f1ef 14%, transparent);
-  --ring: #f2f1ef;
-  --ok: #8fbf9a;
-  --ok-foreground: #111111;
-  --warn: #e8c45c;
-  --warn-foreground: #111111;
+  --border: color-mix(in srgb, #f6f4f0 12%, transparent);
+  --input: color-mix(in srgb, #f6f4f0 16%, transparent);
+  --ring: var(--marrow-accent);
+  --ok: var(--marrow-accent);
+  --ok-foreground: #121110;
+  --warn: #d4b84a;
+  --warn-foreground: #121110;
   --info: #7a9cc8;
-  --info-foreground: #111111;
-  --chart-1: #e8c45c;
+  --info-foreground: #121110;
+  --chart-1: #d4b84a;
   --chart-2: #e07048;
-  --chart-3: #7daa8c;
+  --chart-3: #6b9a7a;
   --chart-4: #e8a090;
   --chart-5: #6b8ec8;
-  --sidebar: #222222;
+  --sidebar: #1c1b19;
   --sidebar-foreground: var(--marrow-ink);
-  --sidebar-primary: var(--marrow-ink);
-  --sidebar-primary-foreground: #111111;
-  --sidebar-accent: #2a2a2a;
+  --sidebar-primary: var(--marrow-accent);
+  --sidebar-primary-foreground: #121110;
+  --sidebar-accent: #2a2826;
   --sidebar-accent-foreground: var(--marrow-ink);
-  --sidebar-border: color-mix(in srgb, #f2f1ef 10%, transparent);
-  --sidebar-ring: #f2f1ef;
+  --sidebar-border: color-mix(in srgb, #f6f4f0 12%, transparent);
+  --sidebar-ring: var(--marrow-accent);
 }
 
-/* Marrow-only form geometry: stadium fields for labeled Mantine inputs */
+/* Marrow form geometry — comfortable touch targets, soft corners (not stadium). */
 .mantine-Input-input,
 .mantine-Textarea-input,
 .mantine-PasswordInput-input,
 .mantine-NumberInput-input {
   min-height: 44px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   transition:
     border-color 0.35s var(--ease-em),
     box-shadow 0.35s var(--ease-em),
@@ -110,54 +107,40 @@
 }
 
 .mantine-Textarea-input {
-  border-radius: calc(var(--radius) * 1.15);
   min-height: 88px;
 }
 
-/*
-  Floating surfaces — E&M cards sit above the canvas with soft depth,
-  not flat rings alone. Hover lift only on fine pointers.
-*/
+/* Cards — white surface, hairline edge, no heavy shadow. */
 [data-slot='card'] {
-  box-shadow: var(--shadow-float);
+  box-shadow: none;
   transition:
-    transform 0.45s var(--ease-em),
-    box-shadow 0.45s var(--ease-em);
+    border-color 0.35s var(--ease-em),
+    opacity 0.35s var(--ease-em);
 }
 
-@media (hover: hover) and (pointer: fine) {
-  [data-slot='card']:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-float-hover);
-  }
-}
-
-/* Stadium / circular chrome — E&M pills + 54px wells */
 [data-slot='button'] {
-  border-radius: 999px;
+  border-radius: var(--radius);
   transition:
     transform 0.35s var(--ease-em),
     background-color 0.35s var(--ease-em),
     color 0.35s var(--ease-em),
-    border-color 0.35s var(--ease-em),
-    box-shadow 0.35s var(--ease-em);
+    border-color 0.35s var(--ease-em);
 }
 
 [data-slot='button']:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
-/* Popovers / dialogs — gl-zoomIn (0.95 → 1) */
 [data-slot='dialog-content'],
 [data-slot='sheet-content'],
 [data-slot='popover-content'] {
-  animation: em-zoom-in 0.4s var(--ease-em) both;
+  animation: em-zoom-in 0.35s var(--ease-em) both;
 }
 
 @keyframes em-zoom-in {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.98);
   }
   to {
     opacity: 1;
@@ -173,10 +156,6 @@
   .mantine-PasswordInput-input,
   .mantine-NumberInput-input {
     transition: none;
-  }
-
-  [data-slot='card']:hover {
-    transform: none;
   }
 
   [data-slot='button']:active:not(:disabled) {

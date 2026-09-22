@@ -1,6 +1,7 @@
 'use client'
 
 import type { Entry } from '@/lib/api/types'
+import { useSymptomCatalog } from '@/lib/api/hooks'
 import { getOverallBadgeClass, getScaleLabel } from '@/lib/checkin/scale-labels'
 
 interface EntryCardProps {
@@ -17,7 +18,7 @@ function formatDate(dateStr: string): string {
   })
 }
 
-function getSummary(entry: Entry): string {
+function getSummary(entry: Entry, symptomLabels: Map<string, string>): string {
   const parts: string[] = []
   if ((entry.bloating ?? 0) > 0) {
     const level = entry.bloating === 1 ? 'mild' : entry.bloating === 2 ? 'moderate' : 'severe'
@@ -32,7 +33,8 @@ function getSummary(entry: Entry): string {
 
   for (const [key, severity] of Object.entries(entry.symptoms_json ?? {})) {
     if (severity > 0) {
-      parts.push(`${key.replace(/_/g, ' ')} ${severity}/10`)
+      const label = symptomLabels.get(key) ?? key.replace(/_/g, ' ')
+      parts.push(`${label} ${severity}/10`)
     }
   }
 
@@ -43,19 +45,22 @@ function getSummary(entry: Entry): string {
 }
 
 export function EntryCard({ entry, onClick }: EntryCardProps) {
+  const { data: catalog = [] } = useSymptomCatalog(false)
+  const symptomLabels = new Map(catalog.map((item) => [item.key, item.label]))
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
+      className="w-full rounded-[var(--radius)] border border-border bg-card p-5 text-left transition-colors hover:bg-muted/40"
     >
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{formatDate(entry.date)}</span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-foreground">{formatDate(entry.date)}</span>
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getOverallBadgeClass(entry.overall, entry.schema_version)}`}>
           {getScaleLabel('overall', entry.overall, entry.schema_version)}
         </span>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">{getSummary(entry)}</p>
+      <p className="mt-1.5 text-sm text-muted-foreground">{getSummary(entry, symptomLabels)}</p>
     </button>
   )
 }
