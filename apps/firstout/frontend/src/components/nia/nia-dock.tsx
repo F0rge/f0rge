@@ -507,6 +507,11 @@ export function NiaDockPanel({ enabled }: NiaDockPanelProps) {
 
   useEffect(() => {
     setWidth(readStoredWidth());
+    function onResize() {
+      setWidth((current) => clampNiaDockWidth(current, window.innerWidth));
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
