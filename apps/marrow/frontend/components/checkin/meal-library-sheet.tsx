@@ -20,6 +20,7 @@ import { MealIconThumb } from './meal-icon-thumb'
 import { MealTimeChips } from './meal-time-chips'
 import { useClampedHeightBelow, useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
 import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
+import { defaultMealTimeForEntry, entryLocalDate } from '@/lib/checkin/meal-time'
 
 interface MealLibrarySheetProps {
   open: boolean
@@ -46,7 +47,7 @@ export function MealLibrarySheet({
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selected, setSelected] = useState<PlatformMeal | null>(null)
-  const [mealTime, setMealTime] = useState<Date | null>(new Date())
+  const [mealTime, setMealTime] = useState<Date | null>(() => defaultMealTimeForEntry(date))
   const searchAnchorRef = useRef<HTMLDivElement>(null)
   const onFocusScroll = useFocusScrollIntoView()
   const keyboardOpen = useKeyboardOpen()
@@ -72,7 +73,7 @@ export function MealLibrarySheet({
       setSelected(null)
       setQuery('')
       setDebouncedQuery('')
-      setMealTime(new Date())
+      setMealTime(defaultMealTimeForEntry(date))
     }
     onOpenChange(next)
   }
@@ -123,7 +124,11 @@ export function MealLibrarySheet({
 
             <div>
               <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
-              <MealTimeChips value={mealTime} onChange={setMealTime} />
+              <MealTimeChips
+                value={mealTime}
+                referenceDate={entryLocalDate(date)}
+                onChange={setMealTime}
+              />
             </div>
 
             <div className="flex gap-2">
@@ -208,7 +213,7 @@ export function MealLibrarySheet({
                       type="button"
                       onClick={() => {
                         setSelected(meal)
-                        setMealTime(new Date())
+                        setMealTime(defaultMealTimeForEntry(date))
                       }}
                       className="flex min-h-[44px] flex-col gap-2 rounded-xl border border-border bg-background p-2.5 text-left transition-colors hover:border-primary"
                       aria-label={`Log ${meal.name}`}

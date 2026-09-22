@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+import datetime
+import uuid
+from decimal import Decimal
+from typing import Literal, Optional
+
+from pydantic import BaseModel, Field
+
+CustomerType = Literal["retail", "trade"]
+
+
+class CustomerCrmCreate(BaseModel):
+    name: str = Field(min_length=1)
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    vat_number: Optional[str] = None
+    billing_address: Optional[str] = None
+    customer_type: CustomerType = "retail"
+    price_tier: str = "standard"
+    payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)
+    price_list_id: Optional[uuid.UUID] = None
+
+
+class CustomerCrmUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1)
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    vat_number: Optional[str] = None
+    billing_address: Optional[str] = None
+    customer_type: Optional[CustomerType] = None
+    price_tier: Optional[str] = None
+    credit_limit: Optional[Decimal] = None
+    on_hold: Optional[bool] = None
+    on_hold_reason: Optional[str] = None
+    payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)
+    price_list_id: Optional[uuid.UUID] = None
+
+
+class CustomerCrmResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    vat_number: Optional[str] = None
+    billing_address: Optional[str] = None
+    customer_type: CustomerType
+    price_tier: str
+    credit_limit: Optional[Decimal] = None
+    on_hold: bool
+    on_hold_reason: Optional[str] = None
+    payment_terms_days: Optional[int] = None
+    price_list_id: Optional[uuid.UUID] = None
+    open_invoices_count: int
+    open_invoices_zar: Decimal
+    overdue_invoices_count: int
+    overdue_invoices_zar: Decimal
+    last_purchase_date: Optional[datetime.date] = None
+    active_laybys_count: int
+    active_laybys_zar: Decimal
+    whatsapp_e164: Optional[str] = None
+    created_at: datetime.datetime
+    updated_at: datetime.datetime

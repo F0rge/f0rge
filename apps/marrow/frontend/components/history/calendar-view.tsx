@@ -1,6 +1,6 @@
 'use client'
 
-import { formatLocalDate } from '@f0rge/ui'
+import { formatDisplayDate, formatLocalDate } from '@f0rge/ui'
 import { getOverallDotClass } from '@/lib/checkin/scale-labels'
 import type { Entry } from '@/lib/api/types'
 
@@ -60,10 +60,15 @@ export function CalendarView({ month, entries, onDayClick }: CalendarViewProps) 
           const entry = entryMap.get(dateStr)
           const isToday = dateStr === today
 
+          const dayLabel = `${formatDisplayDate(dateStr)}, ${
+            entry ? 'check-in logged' : 'no check-in'
+          }`
+
           return (
             <button
               key={dateStr}
               type="button"
+              aria-label={dayLabel}
               onClick={() => onDayClick(dateStr)}
               className={`flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg transition-colors hover:bg-muted ${
                 isToday ? 'ring-2 ring-primary' : ''

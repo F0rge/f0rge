@@ -35,6 +35,16 @@ const DEBOUNCE_MS = 500
 const MAX_RETRY_ATTEMPTS = 5
 const BACKOFF_BASE_MS = 1000
 
+/** Optimistic local state after sendBeacon POST create (same session must not POST again). */
+export function recordBeaconCreateLocalState(
+  entryCreatedRef: { current: boolean },
+  lastSerializedRef: { current: string | null },
+  serialized: string,
+): void {
+  entryCreatedRef.current = true
+  lastSerializedRef.current = serialized
+}
+
 // Silent create — sets query data instead of invalidating, preventing hydration re-run.
 // networkMode:'always' ensures mutateAsync rejects immediately when offline instead of
 // suspending in React Query's pause queue (which would block our retry chain).
@@ -292,12 +302,14 @@ export function useAutosaveEntry({
         keepalive: true,
         body: serialized,
       })
+      lastSerializedRef.current = serialized
     } else {
       // Entry doesn't exist yet — sendBeacon is POST-only, which matches our create endpoint.
       navigator.sendBeacon(
         '/api/v1/entries',
         new Blob([serialized], { type: 'application/json' }),
       )
+      recordBeaconCreateLocalState(entryCreatedRef, lastSerializedRef, serialized)
     }
   }, [applyPayloadPatch, date])
 

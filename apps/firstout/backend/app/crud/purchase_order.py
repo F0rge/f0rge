@@ -1,0 +1,216 @@
+from __future__ import annotations
+
+import uuid
+from decimal import Decimal
+from typing import Optional
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.inventory import LocationStock, SkuStock
+from app.models.purchase_order import PoLine, PurchaseOrder, PurchaseOrderStatus
+from app.models.supplier import Supplier
+from f0rge_db.crud import BaseCRUD
+
+
+class PurchaseOrderCRUD(BaseCRUD):
+    def __init__(self, db: AsyncSession) -> None:
+        super().__init__(db)
+
+    async def get_by_id(self, po_id: uuid.UUID) -> Optional[PurchaseOrder]:
+        return (
+            await self.db.execute(
+                select(PurchaseOrder)
+                .options(
+                    selectinload(PurchaseOrder.supplier),
+                    selectinload(PurchaseOrder.lines).selectinload(PoLine.sku),
+                    selectinload(PurchaseOrder.bills),
+                )
+                .where(PurchaseOrder.id == po_id)
+            )
+        ).scalar_one_or_none()
+
+    async def list_all(self) -> list[PurchaseOrder]:
+        result = await self.db.execute(
+            select(PurchaseOrder)
+            .options(
+                selectinload(PurchaseOrder.supplier),
+                selectinload(PurchaseOrder.lines).selectinload(PoLine.sku),
+                selectinload(PurchaseOrder.bills),
+            )
+            .order_by(PurchaseOrder.po_number)
+        )
+        return list(result.scalars().all())
+
+    async def list_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        q: Optional[str] = None,
+        status: Optional[PurchaseOrderStatus] = None,
+    ) -> tuple[list[PurchaseOrder], int]:
+        filters = []
+        if q:
+            pattern = f"%{q}%"
+            filters.append(
+                or_(
+                    PurchaseOrder.po_number.ilike(pattern),
+                    Supplier.name.ilike(pattern),
+                )
+            )
+        if status is not None:
+            filters.append(PurchaseOrder.status == status)
+
+        count_stmt = select(func.count(PurchaseOrder.id)).join(
+            Supplier, PurchaseOrder.supplier_id == Supplier.id
+        )
+        if filters:
+            count_stmt = count_stmt.where(*filters)
+        total = await self.db.scalar(count_stmt) or 0
+
+        stmt = (
+            select(PurchaseOrder)
+            .options(
+                selectinload(PurchaseOrder.supplier),
+                selectinload(PurchaseOrder.lines),
+            )
+            .join(Supplier, PurchaseOrder.supplier_id == Supplier.id)
+        )
+        if filters:
+            stmt = stmt.where(*filters)
+        stmt = (
+            stmt.order_by(
+                PurchaseOrder.created_at.desc(),
+                PurchaseOrder.po_number.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().unique().all()), total
+
+    async def list_received_dated(self) -> list[PurchaseOrder]:
+        result = await self.db.execute(
+            select(PurchaseOrder)
+            .options(
+                selectinload(PurchaseOrder.supplier),
+                selectinload(PurchaseOrder.lines).selectinload(PoLine.sku),
+            )
+            .where(
+                PurchaseOrder.status == PurchaseOrderStatus.RECEIVED,
+                PurchaseOrder.ordered_at.isnot(None),
+                PurchaseOrder.received_at.isnot(None),
+            )
+            .order_by(PurchaseOrder.received_at, PurchaseOrder.po_number)
+        )
+        return list(result.scalars().unique().all())
+
+    async def get_next_po_number(self) -> str:
+        from app.services.document_numbering import DocumentNumberingService
+
+        return await DocumentNumberingService(self.db).allocate("purchase_order")
+
+    async def latest_fx_to_zar_for_supplier(self, supplier_id: uuid.UUID) -> Optional[Decimal]:
+        result = await self.db.execute(
+            select(PurchaseOrder.fx_to_zar)
+            .where(
+                PurchaseOrder.supplier_id == supplier_id,
+                PurchaseOrder.fx_to_zar.isnot(None),
+                PurchaseOrder.fx_to_zar > 0,
+            )
+            .order_by(
+                PurchaseOrder.landed_at.desc().nulls_last(),
+                PurchaseOrder.updated_at.desc(),
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def latest_factory_unit_amounts_by_sku_ids(
+        self,
+        sku_ids: list[uuid.UUID],
+    ) -> dict[uuid.UUID, Decimal]:
+        if not sku_ids:
+            return {}
+        result = await self.db.execute(
+            select(PoLine.sku_id, PoLine.factory_unit_amount)
+            .join(PurchaseOrder, PoLine.po_id == PurchaseOrder.id)
+            .where(PoLine.sku_id.in_(sku_ids))
+            .distinct(PoLine.sku_id)
+            .order_by(PoLine.sku_id, PurchaseOrder.created_at.desc())
+        )
+        return {row[0]: row[1] for row in result.all()}
+
+
+class SkuStockCRUD(BaseCRUD):
+    def __init__(self, db: AsyncSession) -> None:
+        super().__init__(db)
+
+    async def get_by_sku_id(self, sku_id: uuid.UUID) -> Optional[SkuStock]:
+        return (
+            await self.db.execute(select(SkuStock).where(SkuStock.sku_id == sku_id))
+        ).scalar_one_or_none()
+
+    async def list_with_movement(self) -> list[SkuStock]:
+        result = await self.db.execute(
+            select(SkuStock).options(selectinload(SkuStock.sku)).where(SkuStock.on_order > 0)
+        )
+        return list(result.scalars().all())
+
+
+class LocationStockCRUD(BaseCRUD):
+    def __init__(self, db: AsyncSession) -> None:
+        super().__init__(db)
+
+    async def get_by_sku_and_location(
+        self,
+        sku_id: uuid.UUID,
+        location_id: uuid.UUID,
+    ) -> Optional[LocationStock]:
+        return (
+            await self.db.execute(
+                select(LocationStock)
+                .options(selectinload(LocationStock.location))
+                .where(
+                    LocationStock.sku_id == sku_id,
+                    LocationStock.location_id == location_id,
+                )
+            )
+        ).scalar_one_or_none()
+
+    async def list_by_location_id(self, location_id: uuid.UUID) -> list[LocationStock]:
+        result = await self.db.execute(
+            select(LocationStock).where(LocationStock.location_id == location_id)
+        )
+        return list(result.scalars().all())
+
+    async def list_by_sku_id(self, sku_id: uuid.UUID) -> list[LocationStock]:
+        result = await self.db.execute(
+            select(LocationStock)
+            .options(selectinload(LocationStock.location))
+            .where(LocationStock.sku_id == sku_id, LocationStock.on_hand > 0)
+        )
+        return list(result.scalars().all())
+
+    async def list_with_on_hand(self) -> list[LocationStock]:
+        result = await self.db.execute(
+            select(LocationStock)
+            .options(
+                selectinload(LocationStock.sku),
+                selectinload(LocationStock.location),
+            )
+            .where(LocationStock.on_hand > 0)
+        )
+        return list(result.scalars().all())
+
+    async def list_for_sku_ids(self, sku_ids: list[uuid.UUID]) -> list[LocationStock]:
+        if not sku_ids:
+            return []
+        result = await self.db.execute(
+            select(LocationStock)
+            .options(selectinload(LocationStock.location))
+            .where(LocationStock.sku_id.in_(sku_ids))
+        )
+        return list(result.scalars().all())

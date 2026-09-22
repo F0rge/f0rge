@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Loader2 } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
+import { CheckinBoardSkeleton } from '@/components/checkin/checkin-board-skeleton'
+import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { PageHeader } from '@/components/layout/page-header'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
@@ -91,6 +92,14 @@ export default function CheckinPage() {
         data-testid="checkin-header"
         title="Check-in"
         subtitle={formatDisplayDate(today)}
+        actions={
+          <AutosaveStatusPill
+            status={autosaveState.status}
+            lastSavedAt={autosaveState.lastSavedAt}
+            errorMessage={autosaveState.errorMessage}
+            onRetry={() => retryRef.current?.()}
+          />
+        }
       />
 
       {isError ? (
@@ -99,9 +108,7 @@ export default function CheckinPage() {
           onRetry={() => refetch()}
         />
       ) : isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        </div>
+        <CheckinBoardSkeleton />
       ) : (
         <CheckinBoard
           key={today}

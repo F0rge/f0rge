@@ -11,7 +11,6 @@ function mergePhotoIntoEntry(queryClient: ReturnType<typeof useQueryClient>, dat
     if (old.photos.some((p) => p.id === photo.id)) return old
     return { ...old, photos: [...old.photos, photo] }
   })
-  queryClient.invalidateQueries({ queryKey: ['entry', date] })
   queryClient.invalidateQueries({ queryKey: ['entries'] })
   queryClient.invalidateQueries({ queryKey: ['meals', 'recent'] })
   queryClient.invalidateQueries({ queryKey: ['weather'] })

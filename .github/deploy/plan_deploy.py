@@ -87,7 +87,7 @@ def main() -> None:
                         print(
                             f"skip railway smoke for {spec['nx']}: "
                             f"empty health_url.{environment} "
-                            "(Vellano is its own Railway project; "
+                            "(Firstout is its own Railway project; "
                             "do not smoke Marrow develop)"
                         )
                 elif role == "frontend":
@@ -97,7 +97,7 @@ def main() -> None:
                         print(
                             f"skip railway smoke for {spec['nx']}: "
                             f"empty health_url.{environment} "
-                            "(Vellano is its own Railway project; "
+                            "(Firstout is its own Railway project; "
                             "do not smoke Marrow develop)"
                         )
             elif spec["target"] == "coolify":
@@ -143,7 +143,7 @@ def _health_urls(manifest: dict, environment: str) -> dict[str, str]:
     """Role -> health URL for this environment, from the manifest.
 
     Empty / missing per-env URLs are skipped so an unprovisioned sibling
-    (Vellano S0) cannot overwrite Marrow smoke targets. Marrow wins on
+    (Firstout S0) cannot overwrite Marrow smoke targets. Marrow wins on
     shared roles when both are present.
     """
     other_urls: dict[str, str] = {}

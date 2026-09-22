@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { cn } from '@f0rge/ui'
+import { ConfirmActionDialog } from '@/components/people/confirm-action-dialog'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
 import { MealIconThumb, photoHasImage, useMealThumbSrc } from '@/components/checkin/meal-icon-thumb'
 import { buildAggregateBadges } from '@/components/shared/food-analysis/dietary-badges'
@@ -17,7 +19,11 @@ export interface MealCardProps {
 }
 
 export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
-  const { data: analysis } = usePhotoAnalysis(photo.id)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const isSharedMeal =
+    photo.source_photo_id != null || photo.tagged_by_handle != null
+  const { data: analysis } = usePhotoAnalysis(photo.id, { sharedMeal: isSharedMeal })
+
   const hasImage = photoHasImage(photo)
   const { src: thumbSrc, onError: onThumbError } = useMealThumbSrc(photo.id)
 
@@ -113,13 +119,27 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
         disabled={deleting}
         onClick={(e) => {
           e.stopPropagation()
-          onDelete(photo.id)
+          setDeleteConfirmOpen(true)
         }}
         className="absolute right-1.5 top-1.5 flex size-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
         aria-label="Delete photo"
       >
         <X className="size-4" />
       </button>
+      <ConfirmActionDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete meal photo?"
+        description="This removes the photo and its food analysis from today's entry. This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        pending={deleting}
+        onConfirm={() => {
+          void Promise.resolve(onDelete(photo.id)).finally(() => {
+            setDeleteConfirmOpen(false)
+          })
+        }}
+      />
     </div>
   )
 }

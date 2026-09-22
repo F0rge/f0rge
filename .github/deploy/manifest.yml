@@ -48,22 +48,22 @@ components:
       webhook_secret_env: COOLIFY_WEBHOOK_DK_FRONTEND
     health_url: https://tags.leo-figueiredo.com/
 
-  # Vellano: own Railway project (not zoological-fulfillment / not Marrow develop).
-  # Develop only. Custom hosts on leo-figueiredo.com (one-level SSL).
-  vellano-backend:
-    nx: vellano-backend
+  # Firstout: own Railway project (not zoological-fulfillment / not Marrow develop).
+  # Develop only. Public hosts are firstout.co.za and api.firstout.co.za.
+  firstout-backend:
+    nx: firstout-backend
     target: railway
     branches: [develop]
     railway:
       role: api
       health_url:
-        develop: https://vellano-dev-api.leo-figueiredo.com/api/v1/health
+        develop: https://api.firstout.co.za/api/v1/health
 
-  vellano-frontend:
-    nx: vellano-frontend
+  firstout-frontend:
+    nx: firstout-frontend
     target: railway
     branches: [develop]
     railway:
       role: frontend
       health_url:
-        develop: https://vellano-dev.leo-figueiredo.com/
+        develop: https://firstout.co.za/

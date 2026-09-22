@@ -1,7 +1,9 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY apps/marrow/frontend/package.json ./apps/marrow/frontend/
 COPY apps/dk/tag-printer/frontend/package.json ./apps/dk/tag-printer/frontend/
+COPY apps/firstout/frontend/package.json ./apps/firstout/frontend/
 COPY libs/ui/package.json ./libs/ui/
 RUN npm ci
 

@@ -8,7 +8,8 @@ import { TagPeoplePicker } from './tag-people-picker'
 import { useUploadPhoto } from '@/lib/api/hooks'
 import { useConnections, useGroups } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
-import { cn } from '@f0rge/ui'
+import { Button, cn } from '@f0rge/ui'
+import { defaultMealTimeForEntry, entryLocalDate } from '@/lib/checkin/meal-time'
 import { statusText } from '@/lib/ui/status'
 
 interface StagedPhoto {
@@ -69,26 +70,6 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     return next
   }, [])
 
-  const handleFileSelect = useCallback(async (files: FileList | null) => {
-    if (!files || files.length === 0) return
-    const incoming = Array.from(files)
-    const now = new Date()
-
-    // Stage all files so the UI shows them immediately. Upload is triggered
-    // manually after the user sets the label and meal time.
-    const staged: StagedPhoto[] = incoming.map((file) => ({
-      id: generateId(),
-      file,
-      previewUrl: URL.createObjectURL(file),
-      label: '',
-      mealTime: new Date(now),
-      taggedHandles: [],
-      taggedGroupIds: [],
-      status: 'staged',
-    }))
-    setPhotos((prev) => [...prev, ...staged])
-  }, [])
-
   const removePhoto = useCallback((id: string) => {
     setPhotos((prev) => {
       const target = prev.find((p) => p.id === id)
@@ -99,7 +80,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
 
   const runUpload = useCallback(async (id: string) => {
     const photo = photosRef.current.find((p) => p.id === id)
-    if (!photo) return
+    if (!photo || photo.status === 'uploading') return
 
     setPhotos((prev) =>
       prev.map((p) => p.id === id ? { ...p, status: 'uploading', errorMessage: undefined } : p),
@@ -139,11 +120,36 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     void enqueueUpload(() => runUpload(id))
   }, [enqueueUpload, runUpload])
 
-  const triggerUpload = useCallback((id: string) => {
-    const photo = photosRef.current.find((p) => p.id === id)
-    if (!photo || photo.status !== 'staged') return
-    void enqueueUpload(() => runUpload(id))
+  const uploadAllStaged = useCallback(() => {
+    const ids = photosRef.current.filter((p) => p.status === 'staged').map((p) => p.id)
+    for (const id of ids) {
+      void enqueueUpload(() => runUpload(id))
+    }
   }, [enqueueUpload, runUpload])
+
+  const handleFileSelect = useCallback((files: FileList | null) => {
+    if (!files || files.length === 0) return
+    const incoming = Array.from(files)
+    const mealTime = defaultMealTimeForEntry(date)
+
+    const staged: StagedPhoto[] = incoming.map((file) => ({
+      id: generateId(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      label: '',
+      mealTime: new Date(mealTime),
+      taggedHandles: [],
+      taggedGroupIds: [],
+      status: 'staged',
+    }))
+    setPhotos((prev) => [...prev, ...staged])
+
+    if (staged.length === 1) {
+      void enqueueUpload(() => runUpload(staged[0].id))
+    }
+  }, [date, enqueueUpload, runUpload])
+
+  const stagedCount = photos.filter((p) => p.status === 'staged').length
 
   return (
     <div className="space-y-3">
@@ -194,6 +200,11 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
 
       {photos.length > 0 && (
         <div className="space-y-3">
+          {stagedCount >= 2 && (
+            <Button type="button" className="w-full" onClick={uploadAllStaged}>
+              Upload all ({stagedCount})
+            </Button>
+          )}
           {photos.map((photo) => (
             <div key={photo.id} className="rounded-lg border border-border p-3 space-y-2">
               <div className="flex items-start gap-3">
@@ -257,19 +268,11 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                   <X className="size-4" />
                 </button>
               </div>
-              {photo.status === 'staged' && (
-                <button
-                  type="button"
-                  onClick={() => triggerUpload(photo.id)}
-                  className="mt-2 flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                >
-                  Upload
-                </button>
-              )}
               <div>
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
                 <MealTimeChips
                   value={photo.mealTime}
+                  referenceDate={entryLocalDate(date)}
                   onChange={(d) => {
                     setPhotos((prev) =>
                       prev.map((p) => p.id === photo.id ? { ...p, mealTime: d } : p),

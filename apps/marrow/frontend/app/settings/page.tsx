@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Cloud, Database, Eye, EyeOff, GraduationCap, Heart, Lock, LogOut, Search,
+  ArrowLeft, Cloud, Database, Eye, EyeOff, GraduationCap, Heart, ListChecks, Lock, LogOut, Search,
   SlidersHorizontal, Sparkles, SunMoon, Tag, UserPlus, UserRound, UsersRound,
   UtensilsCrossed, type LucideIcon,
 } from 'lucide-react'
@@ -90,6 +90,7 @@ export default function SettingsPage() {
       rows: [
         link('Account', 'Profile, password, data export', '/account', UserRound),
         link('Customize', 'Check-in cards, symptoms, diet tags', '/customize', SlidersHorizontal),
+        link('Hypothesis scoreboard', 'Tracked questions and kill-tests', '/hypotheses', ListChecks),
       ],
     },
     {

@@ -54,9 +54,9 @@ cd apps/dk/tag-printer && docker compose up --build   # :3002 / :8002
 
 Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested — auto-loaded when working in that subtree). Coolify repoint after first `main` merge: `apps/dk/tag-printer/scripts/repoint-coolify.sh`.
 
-## apps/vellano
+## apps/firstout
 
-Furniture retailer back office. Nested [`apps/vellano/AGENTS.md`](apps/vellano/AGENTS.md). **Own Railway project** — do **not** add Vellano services, Postgres, or buckets to Marrow `zoological-fulfillment` or the Marrow develop environment. Develop hosts: https://vellano-dev.leo-figueiredo.com and https://vellano-dev-api.leo-figueiredo.com (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
+Furniture retailer back office. Nested [`apps/firstout/AGENTS.md`](apps/firstout/AGENTS.md). **Own Railway project** — do **not** add Firstout services, Postgres, or buckets to Marrow `zoological-fulfillment` or the Marrow develop environment. Develop hosts: https://firstout.co.za and https://api.firstout.co.za (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
 
 ## Branch workflow
 
@@ -205,3 +205,17 @@ The VM snapshot already has `uv`, Node 22, Docker, backend `.venv`, `ruff`, and 
 - Backend `:8000` + frontend `:3000` (frontend proxies `/api/*` → `:8000`): run `uv run uvicorn app.main:app --port 8000 --reload` in `apps/marrow/backend` and `npm run dev` in `apps/marrow/frontend` (from repo root: `npx nx run marrow-frontend:dev`). Install deps with `npm ci` at repo root (workspaces).
 - Signup rejects non-routable email TLDs (e.g. `.local`); use a normal domain like `demo@example.com` when testing auth.
 - Optional services (not needed for the core check-in app): embedding worker (`uv run python -m app.embedding_pipeline`, needs `OPENROUTER_API_KEY`) and MCP server (`uv run python -m app.mcp ...`).
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `F0rge/f0rge` via `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical five: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: root `CONTEXT-MAP.md` plus per-app `CONTEXT.md` (marrow, firstout, dk). See `docs/agents/domain.md`.

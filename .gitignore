@@ -11,7 +11,7 @@ venv/
 
 # Backend data
 apps/marrow/backend/photos/
-apps/vellano/backend/storage/
+apps/firstout/backend/storage/
 apps/marrow/backend/lab_attachments/
 apps/marrow/backend/.env
 
@@ -23,16 +23,17 @@ apps/marrow/backend/scripts/import_labs.log
 node_modules/
 .next/
 apps/marrow/frontend/.env.local
-apps/vellano/backend/.env
-apps/vellano/frontend/.env.local
-apps/vellano/frontend/.superdesign/tmp/
+apps/firstout/backend/.env
+apps/firstout/frontend/.env.local
+apps/firstout/frontend/.superdesign/tmp/
 
 # OS
 .DS_Store
 Thumbs.db
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo

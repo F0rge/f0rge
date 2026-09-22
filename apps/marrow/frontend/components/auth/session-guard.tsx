@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { AppWarmup } from '@/components/auth/app-warmup'
+import { resolvePostLoginRedirect } from '@/lib/auth/safe-redirect'
 import { useAuth } from '@/lib/api/hooks'
 
 const PUBLIC_ROUTES = ['/login', '/signup']
@@ -29,12 +30,16 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, isError, isLoading, isPublic, pathname, router])
 
   useEffect(() => {
-    if (!isPublic || isLoading) return
+    if (!isPublic || isLoading || !isAuthenticated) return
 
-    if (isAuthenticated) {
-      router.replace('/checkin')
+    if (pathname.startsWith('/login')) {
+      const redirectParam = new URLSearchParams(window.location.search).get('redirect')
+      router.replace(resolvePostLoginRedirect(redirectParam))
+      return
     }
-  }, [isAuthenticated, isLoading, isPublic, router])
+
+    router.replace('/checkin')
+  }, [isAuthenticated, isLoading, isPublic, pathname, router])
 
   if (isPublic) {
     if (isLoading || isAuthenticated) {

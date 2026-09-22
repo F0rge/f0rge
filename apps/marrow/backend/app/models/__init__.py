@@ -33,6 +33,8 @@ from app.models.connection import Connection
 from app.models.group import Group, GroupMember
 from app.models.meal_tag import MealTag
 from app.models.device_token import DeviceToken
+from app.models.hypothesis import Hypothesis
+from app.models.n_of_1_slot import NOf1Slot
 import app.models.events  # noqa: F401 — register ORM insert hooks
 
 __all__ = [
@@ -71,4 +73,6 @@ __all__ = [
     "GroupMember",
     "MealTag",
     "DeviceToken",
+    "Hypothesis",
+    "NOf1Slot",
 ]
