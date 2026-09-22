@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { cn } from '@f0rge/ui'
 import { ConfirmActionDialog } from '@/components/people/confirm-action-dialog'
@@ -20,19 +20,8 @@ export interface MealCardProps {
 
 export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const deleteRequestedRef = useRef(false)
   const { data: analysis } = usePhotoAnalysis(photo.id)
 
-  useEffect(() => {
-    if (!deleteConfirmOpen) {
-      deleteRequestedRef.current = false
-      return
-    }
-    if (deleteRequestedRef.current && !deleting) {
-      deleteRequestedRef.current = false
-      setDeleteConfirmOpen(false)
-    }
-  }, [deleting, deleteConfirmOpen])
   const hasImage = photoHasImage(photo)
   const { src: thumbSrc, onError: onThumbError } = useMealThumbSrc(photo.id)
 
@@ -144,8 +133,9 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
         destructive
         pending={deleting}
         onConfirm={() => {
-          deleteRequestedRef.current = true
-          onDelete(photo.id)
+          void Promise.resolve(onDelete(photo.id)).finally(() => {
+            setDeleteConfirmOpen(false)
+          })
         }}
       />
     </div>
