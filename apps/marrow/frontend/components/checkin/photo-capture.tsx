@@ -9,6 +9,7 @@ import { useUploadPhoto } from '@/lib/api/hooks'
 import { useConnections, useGroups } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { cn } from '@f0rge/ui'
+import { defaultMealTimeForEntry, entryLocalDate } from '@/lib/checkin/meal-time'
 import { statusText } from '@/lib/ui/status'
 
 interface StagedPhoto {
@@ -72,7 +73,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return
     const incoming = Array.from(files)
-    const now = new Date()
+    const mealTime = defaultMealTimeForEntry(date)
 
     // Stage all files so the UI shows them immediately. Upload is triggered
     // manually after the user sets the label and meal time.
@@ -81,13 +82,13 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
       file,
       previewUrl: URL.createObjectURL(file),
       label: '',
-      mealTime: new Date(now),
+      mealTime: new Date(mealTime),
       taggedHandles: [],
       taggedGroupIds: [],
       status: 'staged',
     }))
     setPhotos((prev) => [...prev, ...staged])
-  }, [])
+  }, [date])
 
   const removePhoto = useCallback((id: string) => {
     setPhotos((prev) => {
@@ -270,6 +271,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">Meal time</p>
                 <MealTimeChips
                   value={photo.mealTime}
+                  referenceDate={entryLocalDate(date)}
                   onChange={(d) => {
                     setPhotos((prev) =>
                       prev.map((p) => p.id === photo.id ? { ...p, mealTime: d } : p),
