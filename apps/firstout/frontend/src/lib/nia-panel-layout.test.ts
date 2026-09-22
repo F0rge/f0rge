@@ -30,13 +30,17 @@ function fakeShell(): HTMLElement {
 
 import {
   NIA_DESKTOP_LAYOUT,
+  NIA_DOCK_DEFAULT_WIDTH_PX,
+  NIA_DOCK_MAX_WIDTH_PX,
   NIA_DOCK_MIN_WIDTH_PX,
+  NIA_DOCK_WIDTH_STOPS_PX,
   NIA_PHONE_LAYOUT,
   applyNiaDockWidthVar,
   applyNiaShellOpenState,
   applyNiaShellResizing,
   clampNiaDockWidth,
   clearNiaShellChrome,
+  niaDockWidthStopsForViewport,
   niaPanelClassName,
   niaPanelLayout,
   shouldInsetMainForNia,
@@ -61,10 +65,18 @@ describe("nia panel layout", () => {
     expect(shouldInsetMainForNia(false, NIA_DESKTOP_LAYOUT)).toBe(false);
   });
 
-  it("clamps dock width to the min and 80% of the viewport", () => {
-    expect(clampNiaDockWidth(100, 1200)).toBe(NIA_DOCK_MIN_WIDTH_PX);
-    expect(clampNiaDockWidth(2000, 1000)).toBe(800);
-    expect(clampNiaDockWidth(400, 1200)).toBe(400);
+  it("snaps dock width to the allowed stops", () => {
+    expect(niaDockWidthStopsForViewport(1400)).toEqual([...NIA_DOCK_WIDTH_STOPS_PX]);
+    expect(clampNiaDockWidth(100, 1400)).toBe(NIA_DOCK_MIN_WIDTH_PX);
+    expect(clampNiaDockWidth(350, 1400)).toBe(NIA_DOCK_MIN_WIDTH_PX);
+    expect(clampNiaDockWidth(370, 1400)).toBe(NIA_DOCK_DEFAULT_WIDTH_PX);
+    expect(clampNiaDockWidth(430, 1400)).toBe(NIA_DOCK_MAX_WIDTH_PX);
+    expect(clampNiaDockWidth(2000, 1400)).toBe(NIA_DOCK_MAX_WIDTH_PX);
+  });
+
+  it("drops stops that would consume most of a short viewport", () => {
+    expect(niaDockWidthStopsForViewport(800)).toEqual([NIA_DOCK_MIN_WIDTH_PX]);
+    expect(clampNiaDockWidth(448, 800)).toBe(NIA_DOCK_MIN_WIDTH_PX);
   });
 
   it("updates the dock width var without dropping the open inset", () => {
@@ -74,10 +86,12 @@ describe("nia panel layout", () => {
     expect(shell.getAttribute("data-nia-dock-open")).toBe("true");
     expect(shell.style.getPropertyValue("--firstout-nia-dock-width")).toBe("420px");
 
-    applyNiaDockWidthVar(shell, NIA_DESKTOP_LAYOUT, true, 640);
+    applyNiaDockWidthVar(shell, NIA_DESKTOP_LAYOUT, true, NIA_DOCK_MAX_WIDTH_PX);
     expect(shell.getAttribute("data-nia-dock-open")).toBe("true");
     expect(shell.getAttribute("data-nia-layout")).toBe("dock");
-    expect(shell.style.getPropertyValue("--firstout-nia-dock-width")).toBe("640px");
+    expect(shell.style.getPropertyValue("--firstout-nia-dock-width")).toBe(
+      `${NIA_DOCK_MAX_WIDTH_PX}px`,
+    );
   });
 
   it("clears chrome only from the explicit unmount helper", () => {

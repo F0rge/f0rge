@@ -2,9 +2,13 @@
 export const NIA_PHONE_LAYOUT = "sheet" as const;
 export const NIA_DESKTOP_LAYOUT = "dock" as const;
 
-export const NIA_DOCK_MIN_WIDTH_PX = 320;
-export const NIA_DOCK_DEFAULT_WIDTH_PX = 384;
-export const NIA_DOCK_MAX_WIDTH_RATIO = 0.8;
+/** Discrete desktop widths. Continuous 80%-of-viewport made Home actions wrap inside buttons. */
+export const NIA_DOCK_WIDTH_STOPS_PX = [320, 384, 448] as const;
+export const NIA_DOCK_MIN_WIDTH_PX: number = NIA_DOCK_WIDTH_STOPS_PX[0];
+export const NIA_DOCK_DEFAULT_WIDTH_PX: number = NIA_DOCK_WIDTH_STOPS_PX[1];
+export const NIA_DOCK_MAX_WIDTH_PX: number = NIA_DOCK_WIDTH_STOPS_PX[NIA_DOCK_WIDTH_STOPS_PX.length - 1];
+/** Extra cap so the dock never takes most of a short desktop window. */
+export const NIA_DOCK_MAX_WIDTH_RATIO = 0.45;
 
 export type NiaPanelLayout = typeof NIA_PHONE_LAYOUT | typeof NIA_DESKTOP_LAYOUT;
 
@@ -28,9 +32,28 @@ export function shouldInsetMainForNia(open: boolean, layout: NiaPanelLayout): bo
   return open && layout === NIA_DESKTOP_LAYOUT;
 }
 
+export function niaDockWidthStopsForViewport(viewportWidth: number): number[] {
+  const viewportCap = Math.max(
+    NIA_DOCK_MIN_WIDTH_PX,
+    Math.floor(viewportWidth * NIA_DOCK_MAX_WIDTH_RATIO),
+  );
+  const maxWidth = Math.min(NIA_DOCK_MAX_WIDTH_PX, viewportCap);
+  const stops = NIA_DOCK_WIDTH_STOPS_PX.filter((stop) => stop <= maxWidth);
+  return stops.length > 0 ? [...stops] : [NIA_DOCK_MIN_WIDTH_PX];
+}
+
 export function clampNiaDockWidth(width: number, viewportWidth: number): number {
-  const maxWidth = Math.floor(viewportWidth * NIA_DOCK_MAX_WIDTH_RATIO);
-  return Math.min(maxWidth, Math.max(NIA_DOCK_MIN_WIDTH_PX, width));
+  const stops = niaDockWidthStopsForViewport(viewportWidth);
+  let nearest = stops[0];
+  let best = Math.abs(width - nearest);
+  for (const stop of stops) {
+    const delta = Math.abs(width - stop);
+    if (delta < best) {
+      nearest = stop;
+      best = delta;
+    }
+  }
+  return nearest;
 }
 
 /** Open/layout attributes. Do not call on every width tick — cleanup would drop the main inset. */

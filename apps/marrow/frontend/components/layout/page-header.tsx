@@ -15,7 +15,7 @@ interface PageHeaderProps {
   'data-testid'?: string
 }
 
-const TITLE_CLASS = 'text-xl font-semibold tracking-tight'
+const TITLE_CLASS = 'text-2xl font-semibold tracking-tight text-foreground'
 
 export function PageHeader({
   title,
@@ -33,7 +33,7 @@ export function PageHeader({
   return (
     <div
       ref={headerRef}
-      className={cn('mb-6', className)}
+      className={cn('mb-8', className)}
       data-tour={dataTour}
       data-testid={dataTestId}
     >

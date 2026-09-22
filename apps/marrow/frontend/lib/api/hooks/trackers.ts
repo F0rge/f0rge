@@ -52,7 +52,7 @@ export function useReorderTrackers() {
           .map((id) => byId.get(id))
           .filter((t): t is Tracker => t !== undefined)
         const remaining = data.filter((t) => !order.includes(t.id))
-        queryClient.setQueryData<Tracker[]>(key, [...remaining, ...reordered])
+        queryClient.setQueryData<Tracker[]>(key, [...reordered, ...remaining])
       }
       return { snapshots }
     },

@@ -13,6 +13,15 @@ function isPublicRoute(pathname: string) {
   return PUBLIC_ROUTES.some((route) => pathname.startsWith(route))
 }
 
+function SessionLoading() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+      <Loader2 className="size-8 animate-spin text-muted-foreground" aria-hidden />
+      <p className="text-sm text-muted-foreground">Checking session&hellip;</p>
+    </div>
+  )
+}
+
 export function SessionGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -43,21 +52,13 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
 
   if (isPublic) {
     if (isLoading || isAuthenticated) {
-      return (
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
-        </div>
-      )
+      return <SessionLoading />
     }
     return children
   }
 
   if (isLoading || isError || !isAuthenticated) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    return <SessionLoading />
   }
 
   return (

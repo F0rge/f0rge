@@ -199,8 +199,12 @@ body {
 
 .firstout-home-actions .cds--btn {
   flex: 0 0 auto;
-  min-inline-size: max-content;
-  max-inline-size: 100%;
+  width: max-content;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.firstout-home-actions .cds--btn .cds--btn__text {
   white-space: nowrap;
 }
 
@@ -739,11 +743,14 @@ body {
 
 .firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-actions .cds--btn {
   flex: 0 0 auto;
-  inline-size: auto;
-  min-inline-size: max-content;
-  max-inline-size: 100%;
+  width: max-content;
+  max-width: none;
   white-space: nowrap;
   overflow: visible;
+}
+
+.firstout-shell[data-nia-layout="dock"][data-nia-dock-open="true"] .firstout-home-actions .cds--btn .cds--btn__text {
+  white-space: nowrap;
 }
 
 /* Home KPIs: viewport lg assumes full main width; Nia dock narrows the column. */
@@ -1678,9 +1685,14 @@ body {
   }
 
   .firstout-page-header .cds--btn,
-  .firstout-catalogue-actions .cds--btn,
-  .firstout-home-actions .cds--btn {
+  .firstout-catalogue-actions .cds--btn {
     max-inline-size: 100%;
+  }
+
+  .firstout-home-actions .cds--btn {
+    width: auto;
+    max-width: 100%;
+    justify-self: start;
   }
 
   .firstout-home-actions {
