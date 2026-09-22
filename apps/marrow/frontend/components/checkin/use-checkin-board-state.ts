@@ -6,6 +6,7 @@ import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, MedicationIntake, StoolStatus, SymptomEvent } from '@/lib/api/types'
 import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, loadCollapsedCards, saveCollapsedCards, toggleCollapsedCard, type CardId, type CollapseId } from '@/lib/checkin/card-order'
+import { shouldApplyEntryHydration } from './checkin-board-entry-sync'
 import { LG_DESKTOP_QUERY, useMediaQuery } from '@f0rge/ui'
 
 interface AutosaveFns {
@@ -215,6 +216,7 @@ export function useCheckinBoardState({
   ])
 
   useEffect(() => {
+    if (!shouldApplyEntryHydration(isDirty)) return
     if (existingEntry) {
       setOverall(existingEntry.overall)
       setBloating(existingEntry.bloating)
@@ -252,7 +254,7 @@ export function useCheckinBoardState({
       // Entry gone (or never existed) — drop stale thumbnails from a prior load.
       setExistingPhotos([])
     }
-  }, [existingEntry])
+  }, [existingEntry, isDirty])
 
   const fivePoint = (existingEntry?.schema_version ?? 4) >= 4
 
