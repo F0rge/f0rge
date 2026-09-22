@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ClipboardCheck, Menu, Share, Users, UsersRound, type LucideIcon } from 'lucide-react'
+import { cn } from '@f0rge/ui'
 import { toast } from 'sonner'
 import { StreakRing } from '@/components/profile/streak-ring'
 import {
@@ -33,6 +34,10 @@ function StatChip({
     </Link>
   )
 }
+
+const profileActionLinkClass = cn(
+  'flex-1 rounded-lg bg-muted py-2 text-center text-[13px] font-semibold transition-colors hover:bg-muted/80',
+)
 
 export function ProfileHeader() {
   const account = useAccount()
@@ -115,12 +120,14 @@ export function ProfileHeader() {
         </div>
       </div>
 
-      <Link
-        href="/account"
-        className="mt-4 block rounded-lg bg-muted py-2 text-center text-[13px] font-semibold transition-colors hover:bg-muted/80"
-      >
-        Edit profile
-      </Link>
+      <div className="mt-4 flex gap-2">
+        <Link href="/account" className={profileActionLinkClass}>
+          Edit profile
+        </Link>
+        <Link href="/customize" className={profileActionLinkClass}>
+          Customize
+        </Link>
+      </div>
     </header>
   )
 }
