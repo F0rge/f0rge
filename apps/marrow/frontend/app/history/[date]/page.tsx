@@ -12,7 +12,7 @@ import { PageHeader } from '@/components/layout/page-header'
 import type { Entry, Photo } from '@/lib/api/types'
 import { entryLocalDate } from '@/lib/checkin/meal-time'
 import { getOverallBadgeClass, getScaleLabel } from '@/lib/checkin/scale-labels'
-import { cn } from '@f0rge/ui'
+import { cn, FetchError } from '@f0rge/ui'
 import { statusPill } from '@/lib/ui/status'
 
 function formatDisplayDate(dateStr: string): string {
@@ -262,7 +262,7 @@ function EntryDetail({ entry, date }: { entry: Entry; date: string }) {
 
 export default function HistoryDatePage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = use(params)
-  const { data: entry, isLoading, isError } = useEntry(date)
+  const { data: entry, isLoading, isError, refetch } = useEntry(date)
 
   return (
     <PageShell>
@@ -290,11 +290,13 @@ export default function HistoryDatePage({ params }: { params: Promise<{ date: st
         }
       />
 
-      {isLoading ? (
+      {isError ? (
+        <FetchError message="Failed to load this entry." onRetry={() => refetch()} />
+      ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
-      ) : isError || !entry ? (
+      ) : !entry ? (
         <div className="rounded-xl border border-border bg-card px-4 py-8 text-center">
           <p className="text-sm text-muted-foreground">No entry for this date.</p>
           <Link
