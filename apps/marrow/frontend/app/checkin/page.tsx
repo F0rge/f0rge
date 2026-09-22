@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Loader2 } from 'lucide-react'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
+import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { PageHeader } from '@/components/layout/page-header'
 import { PhotoFocusOverlay } from '@/components/shared/food-analysis/photo-focus-overlay'
@@ -91,6 +92,14 @@ export default function CheckinPage() {
         data-testid="checkin-header"
         title="Check-in"
         subtitle={formatDisplayDate(today)}
+        actions={
+          <AutosaveStatusPill
+            status={autosaveState.status}
+            lastSavedAt={autosaveState.lastSavedAt}
+            errorMessage={autosaveState.errorMessage}
+            onRetry={() => retryRef.current?.()}
+          />
+        }
       />
 
       {isError ? (
