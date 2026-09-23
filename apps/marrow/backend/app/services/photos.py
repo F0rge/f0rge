@@ -69,6 +69,23 @@ if TYPE_CHECKING:
     from app.services.meal_tags import MealTagService
 
 
+def _photo_sequence_number(name: str, prefix: str, ext: str) -> int | None:
+    """Parse ``N`` from ``{prefix}N{ext}`` or the lazy-generated thumb ``{prefix}N_thumb{ext}``."""
+    if not name.startswith(prefix):
+        return None
+    thumb_suffix = f"_thumb{ext}"
+    if name.endswith(thumb_suffix):
+        stem = name[len(prefix) : -len(thumb_suffix)]
+    elif name.endswith(ext):
+        stem = name[len(prefix) : -len(ext)]
+    else:
+        return None
+    try:
+        return int(stem)
+    except ValueError:
+        return None
+
+
 async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg") -> str:
     """Pick the next collision-free ``{date}_photo-N{ext}`` filename for ``entry``.
 
@@ -77,27 +94,22 @@ async def next_photo_filename(db: AsyncSession, entry: Entry, ext: str = ".jpg")
     file (written to disk but never committed) never collides with the next pick.
     """
     prefix = f"{entry.date.isoformat()}_photo-"
-    suffix = ext
     used_numbers: set[int] = set()
 
     # Source 1: DB rows for this entry.
     for existing_filename in await PhotoCRUD(db).list_filenames_for_entry(entry.id):
-        if existing_filename.startswith(prefix) and existing_filename.endswith(suffix):
-            try:
-                used_numbers.add(int(existing_filename[len(prefix) : -len(suffix)]))
-            except ValueError:
-                pass
+        seq = _photo_sequence_number(existing_filename, prefix, ext)
+        if seq is not None:
+            used_numbers.add(seq)
 
     # Source 2: files on disk or in object storage (catches orphans).
     for name in object_storage.list_photo_filenames(prefix, user_id=str(entry.user_id)):
-        if name.startswith(prefix) and name.endswith(suffix):
-            try:
-                used_numbers.add(int(name[len(prefix) : -len(suffix)]))
-            except ValueError:
-                pass
+        seq = _photo_sequence_number(name, prefix, ext)
+        if seq is not None:
+            used_numbers.add(seq)
 
     photo_number = max(used_numbers, default=0) + 1
-    return f"{prefix}{photo_number}{suffix}"
+    return f"{prefix}{photo_number}{ext}"
 
 
 class PhotoService:
