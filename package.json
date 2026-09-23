@@ -5,6 +5,8 @@
     "apps/marrow/frontend",
     "apps/dk/tag-printer/frontend",
     "apps/firstout/frontend",
+    "apps/storefront/commerce",
+    "apps/storefront/web",
     "libs/ui"
   ],
   "overrides": {
@@ -15,7 +17,12 @@
     "react-dom": "19.2.8",
     "eslint-plugin-react-hooks": "7.0.1",
     "sharp": "0.35.4",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.6",
+    "browserslist": "4.29.0",
+    "lodash": "4.18.1",
+    "@graphql-codegen/plugin-helpers": {
+      "lodash": "4.18.1"
+    },
     "nanoid": "3.3.18"
   },
   "devDependencies": {

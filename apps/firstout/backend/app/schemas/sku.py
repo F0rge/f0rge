@@ -47,6 +47,7 @@ class SkuCreate(BaseModel):
 
 
 class SkuUpdate(BaseModel):
+    storefront_published: Optional[bool] = None
     our_ref: Optional[str] = Field(default=None, min_length=1, max_length=64)
     our_barcode: Optional[str] = Field(default=None, min_length=1, max_length=64)
     name: Optional[str] = Field(default=None, min_length=1)
@@ -65,6 +66,7 @@ class SkuUpdate(BaseModel):
 
 
 class SkuResponse(BaseModel):
+    storefront_published: bool
     id: uuid.UUID
     our_ref: str
     our_barcode: str
