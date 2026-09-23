@@ -175,6 +175,28 @@ async def test_orphan_file_on_disk_does_not_collide_with_next_upload(
     assert photo2.filename == f"{day.isoformat()}_photo-4.jpg"
 
 
+async def test_orphan_thumb_on_disk_does_not_collide_with_next_upload(
+    async_db: AsyncSession, real_storage: None
+) -> None:
+    """Lazy thumb generation can leave ``_photo-N_thumb.jpg`` without a full file.
+
+    ``next_photo_filename`` must treat those as occupied numbers so upload does
+    not 500 with FileExistsError on the thumb write.
+    """
+    day = datetime.date(2026, 5, 17)
+    await _make_entry(async_db, day)
+
+    orphan_thumb = f"{day.isoformat()}_photo-2_thumb.jpg"
+    orphan_path = os.path.join(settings.photo_dir, orphan_thumb)
+    with open(orphan_path, "wb") as f:
+        f.write(b"orphan-thumb-bytes")
+
+    service = PhotoService(async_db, FoodAnalysisOrchestrator(), MealTagService(async_db))
+    photo = await _upload(service, day)
+    assert photo.filename == f"{day.isoformat()}_photo-3.jpg"
+    assert os.path.exists(orphan_path)
+
+
 # ---------------------------------------------------------------------------
 # Test C — commit failure cleans up the just-written file
 # ---------------------------------------------------------------------------
