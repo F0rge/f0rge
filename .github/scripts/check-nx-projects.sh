@@ -28,7 +28,7 @@ while IFS= read -r -d '' manifest; do
   dir="$(dirname "$manifest")"
   # Skip nested package.json under node_modules / .venv / dist / .next
   case "$dir" in
-    */node_modules|*/node_modules/*|*/.venv|*/.venv/*|*/dist|*/dist/*|*/.next|*/.next/*)
+    */node_modules|*/node_modules/*|*/.venv|*/.venv/*|*/dist|*/dist/*|*/.next|*/.next/*|*/.medusa|*/.medusa/*)
       continue
       ;;
   esac

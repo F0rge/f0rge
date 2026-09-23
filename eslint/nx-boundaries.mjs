@@ -27,6 +27,10 @@ const boundaryRule = {
           sourceTag: "scope:firstout",
           onlyDependOnLibsWithTags: ["scope:shared", "scope:firstout"],
         },
+        {
+          sourceTag: "scope:storefront",
+          onlyDependOnLibsWithTags: ["scope:shared", "scope:storefront"],
+        },
       ],
     },
   ],

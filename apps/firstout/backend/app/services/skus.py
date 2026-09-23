@@ -65,6 +65,11 @@ class SkuService:
 
         fields_set = data.model_fields_set
 
+        if "storefront_published" in fields_set:
+            if data.storefront_published is None:
+                raise ValidationError("storefront_published must be true or false")
+            sku.storefront_published = data.storefront_published
+
         if "our_ref" in fields_set:
             assert data.our_ref is not None
             if await self.crud.get_by_our_ref(data.our_ref, exclude_id=sku.id) is not None:
@@ -313,6 +318,7 @@ class SkuService:
             wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat),
             retail_ex_vat=sku.retail_ex_vat,
             retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat),
+            storefront_published=sku.storefront_published,
             carton_count=sku.carton_count,
             is_kit=is_kit,
             created_at=sku.created_at,
