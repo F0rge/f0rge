@@ -13,7 +13,7 @@
     "@f0rge/ui": "file:../../../libs/ui",
     "@medusajs/js-sdk": "2.21.1",
     "next": "16.3.5",
-    "react": "19.2.8",
+    "react": "19.3.0",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1"
   },
