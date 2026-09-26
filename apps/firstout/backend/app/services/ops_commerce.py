@@ -58,6 +58,9 @@ class OpsCommerceService:
                     available_quantity=sku.available_quantity,
                     revision=sku.revision.isoformat(timespec="microseconds"),
                     observed_at=sku.observed_at,
+                    product_group_id=sku.product_group_id,
+                    product_title=sku.product_title,
+                    options=sku.options,
                 )
                 for sku in snapshots
             ],

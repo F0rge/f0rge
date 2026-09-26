@@ -576,11 +576,13 @@ export type Sku = {
   retail_inc_vat: string | null;
   carton_count: number;
   is_kit: boolean;
+  storefront_published?: boolean;
   created_at: string;
   updated_at: string;
 };
 
 export type UpdateSkuPricePayload = {
+  storefront_published?: boolean;
   our_ref?: string;
   our_barcode?: string;
   name?: string;
@@ -706,6 +708,61 @@ export function deleteSku(id: string): Promise<void> {
 
 export function skuPhotoUrl(id: string): string {
   return `/api/v1/skus/${id}/photo`;
+}
+
+export type ProductGroupVariant = {
+  source_sku_id: string;
+  sku: string;
+  name: string;
+  options: Record<string, string>;
+};
+
+export type ProductGroup = {
+  id: string;
+  title: string;
+  options: Record<string, string[]>;
+  storefront_published: boolean;
+  variants: ProductGroupVariant[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductGroupVariantWrite = Pick<ProductGroupVariant, "source_sku_id" | "options">;
+
+export function listProductGroups(): Promise<ProductGroup[]> {
+  return apiFetch<ProductGroup[]>("/product-groups");
+}
+
+export function createProductGroup(payload: {
+  title: string;
+  options: Record<string, string[]>;
+  variants: ProductGroupVariantWrite[];
+}): Promise<ProductGroup> {
+  return apiFetch<ProductGroup>("/product-groups", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProductGroup(id: string, payload: {
+  title?: string;
+  options?: Record<string, string[]>;
+  storefront_published?: boolean;
+}): Promise<ProductGroup> {
+  return apiFetch<ProductGroup>(`/product-groups/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function replaceProductGroupVariants(
+  id: string,
+  variants: ProductGroupVariantWrite[],
+): Promise<ProductGroup> {
+  return apiFetch<ProductGroup>(`/product-groups/${id}/variants`, {
+    method: "PUT",
+    body: JSON.stringify({ variants }),
+  });
 }
 
 export type SkuBomLine = {

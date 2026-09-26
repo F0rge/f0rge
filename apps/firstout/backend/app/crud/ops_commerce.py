@@ -4,11 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 import uuid
+from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.inventory import LocationStock
+from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.sku import Sku
 from app.models.team import Team
 
@@ -22,6 +25,9 @@ class PublishedSkuSnapshot:
     available_quantity: int
     revision: datetime
     observed_at: datetime
+    product_group_id: Optional[uuid.UUID]
+    product_title: Optional[str]
+    options: dict[str, str]
 
 
 class OpsCommerceCRUD:
@@ -34,6 +40,20 @@ class OpsCommerceCRUD:
         ).scalar_one_or_none() is not None
 
     async def published_products(self) -> list[PublishedSkuSnapshot]:
+        member = aliased(Sku)
+        mapped = aliased(ProductGroupVariant)
+        incomplete_group = exists(
+            select(mapped.id)
+            .join(member, member.id == mapped.source_sku_id)
+            .where(
+                mapped.product_group_id == ProductGroup.id,
+                (
+                    member.storefront_published.is_(False)
+                    | (member.retail_ex_vat <= 0)
+                    | member.retail_ex_vat.is_(None)
+                ),
+            )
+        )
         result = await self.db.execute(
             select(
                 Sku.id,
@@ -44,12 +64,26 @@ class OpsCommerceCRUD:
                 func.greatest(
                     Sku.updated_at,
                     func.coalesce(func.max(LocationStock.updated_at), Sku.updated_at),
+                    func.coalesce(ProductGroup.updated_at, Sku.updated_at),
+                    func.coalesce(ProductGroupVariant.updated_at, Sku.updated_at),
                 ),
                 func.clock_timestamp(),
+                ProductGroup.id,
+                ProductGroup.title,
+                ProductGroupVariant.options,
             )
             .outerjoin(LocationStock, LocationStock.sku_id == Sku.id)
-            .where(Sku.storefront_published.is_(True), Sku.retail_ex_vat > 0)
-            .group_by(Sku.id)
+            .outerjoin(ProductGroupVariant, ProductGroupVariant.source_sku_id == Sku.id)
+            .outerjoin(ProductGroup, ProductGroup.id == ProductGroupVariant.product_group_id)
+            .where(
+                Sku.storefront_published.is_(True),
+                Sku.retail_ex_vat > 0,
+                (
+                    ProductGroupVariant.id.is_(None)
+                    | (ProductGroup.storefront_published.is_(True) & ~incomplete_group)
+                ),
+            )
+            .group_by(Sku.id, ProductGroup.id, ProductGroupVariant.id)
             .order_by(Sku.our_ref)
         )
         return [
@@ -61,6 +95,9 @@ class OpsCommerceCRUD:
                 available_quantity=max(0, row[4]),
                 revision=row[5],
                 observed_at=row[6],
+                product_group_id=row[7],
+                product_title=row[8],
+                options=row[9] or {},
             )
             for row in result.all()
         ]

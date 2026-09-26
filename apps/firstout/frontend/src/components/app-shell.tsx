@@ -108,6 +108,7 @@ const ICONS = {
   "/price-lists": Currency,
   "/proformas": Document,
   "/catalogue": Catalog,
+  "/product-groups": Product,
   "/stocktakes": InventoryManagement,
   "/adjustments": Report,
   "/import": DocumentImport,

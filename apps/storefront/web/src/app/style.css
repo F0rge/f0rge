@@ -23,3 +23,23 @@ h1 { max-width: 13ch; font-size: clamp(2.7rem, 7vw, 6rem); line-height: 1.02; le
 .preview-note { font: .8rem Arial, sans-serif; color: #6e736b; margin-top: 4rem; }
 @media (max-width: 720px) { .site-header span { display: none; } .product-page { grid-template-columns: 1fr; } .hero-study { min-height: 70vw; } }
 @media (prefers-reduced-motion: reduce) { .product-image { transition: none; } }
+.product-image { overflow: hidden; }
+.product-image img { display: block; width: 100%; height: 100%; min-height: inherit; object-fit: cover; }
+.gallery { min-width: 0; }
+.gallery-thumbnails { display: flex; gap: .75rem; overflow-x: auto; padding: .8rem .25rem; }
+.gallery-thumbnails button { width: 90px; height: 90px; flex: 0 0 auto; padding: 0; border: 2px solid transparent; background: none; cursor: pointer; }
+.gallery-thumbnails button.active { border-color: var(--accent); }
+.gallery-thumbnails button:focus-visible, .variant-options select:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.gallery-thumbnails img { width: 100%; height: 100%; object-fit: cover; }
+.product-copy { min-width: 0; }
+.product-copy > p:not(.eyebrow):not(.price):not(.availability):not(.preview-note):not(.sku-identity) { line-height: 1.65; }
+.variant-options { display: grid; gap: 1rem; margin-top: 2rem; font-family: Arial, sans-serif; }
+.variant-options label { display: block; font-size: .78rem; font-weight: 700; margin-bottom: .5rem; }
+.variant-options select { width: 100%; min-height: 44px; padding: .7rem; color: var(--ink); border: 1px solid #a9a296; background: #fffdf8; font: inherit; }
+.price { margin-bottom: .35rem; }
+.price span { font: .75rem Arial, sans-serif; color: #626b63; }
+.sku-identity { color: #626b63; font: .8rem Arial, sans-serif; }
+.product-details { display: grid; grid-template-columns: minmax(6rem, .3fr) 1fr; gap: .8rem 1rem; border-top: 1px solid #d8d1c5; padding-top: 1.2rem; margin-top: 2rem; font: .85rem/1.5 Arial, sans-serif; }
+.product-details dt { color: #626b63; }
+.product-details dd { margin: 0; }
+@media (max-width: 720px) { .gallery { order: 0; } .product-copy { order: 1; } .product-details { grid-template-columns: 1fr; gap: .25rem; } .product-details dd { margin-bottom: .7rem; } }
