@@ -122,7 +122,10 @@ async def test_group_rejects_ambiguous_or_missing_selections_and_republication(
     second = await _sku(owner_client, "BAD-TWO")
     case_duplicate = await owner_client.post(
         "/api/v1/product-groups",
-        json={"title": "Duplicate option names", "options": {"Colour": ["Sand"], "colour": ["Charcoal"]}},
+        json={
+            "title": "Duplicate option names",
+            "options": {"Colour": ["Sand"], "colour": ["Charcoal"]},
+        },
     )
     assert case_duplicate.status_code == 409
     base = {
