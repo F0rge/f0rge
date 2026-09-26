@@ -1,5 +1,5 @@
 import type { ExecArgs } from "@medusajs/framework/types";
-import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
+import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/framework/utils";
 import {
   createApiKeysWorkflow,
   createRegionsWorkflow,
@@ -9,6 +9,8 @@ import {
   createTaxRegionsWorkflow,
   linkSalesChannelsToApiKeyWorkflow,
   linkSalesChannelsToStockLocationWorkflow,
+  updateRegionsWorkflow,
+  updateStoresWorkflow,
 } from "@medusajs/medusa/core-flows";
 
 // Adapted from Medusa DTC starter e3a237c initial-data-seed.ts; no demo apparel.
@@ -27,15 +29,28 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
     channelId = result[0].id;
   }
 
-  const { data: stores } = await query.graph({ entity: "store", fields: ["id"] });
+  const { data: stores } = await query.graph({ entity: "store", fields: ["id", "supported_currencies.*"] });
   if (!stores.length) {
     await createStoresWorkflow(container).run({
       input: { stores: [{
         name: "Storefront",
-        supported_currencies: [{ currency_code: "zar", is_default: true }],
+        supported_currencies: [{ currency_code: "zar", is_default: true, is_tax_inclusive: true }],
         default_sales_channel_id: channelId,
       }] },
     });
+  }
+  for (const store of stores) {
+    const currencies = (store.supported_currencies || []).filter((currency) => currency !== null);
+    if (currencies.length > 1) {
+      throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE,
+        "Store has multiple currencies; set ZAR tax-inclusive in Medusa Admin before syncing Firstout");
+    }
+    // Medusa creates a new store with EUR as its only currency. This dedicated
+    // Storefront uses ZAR exclusively, so normalize that default on first boot.
+    await updateStoresWorkflow(container).run({ input: {
+      selector: { id: store.id },
+      update: { supported_currencies: [{ currency_code: "zar", is_default: true, is_tax_inclusive: true }] },
+    } });
   }
 
   const { data: keys } = await query.graph({
@@ -56,13 +71,20 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   if (!regions.some((region) => region.currency_code === "zar")) {
     await createRegionsWorkflow(container).run({
       input: { regions: [{
-        name: "South Africa", currency_code: "zar", countries: ["za"],
+        name: "South Africa", currency_code: "zar", countries: ["za"], is_tax_inclusive: true,
         payment_providers: ["pp_system_default"],
       }] },
     });
     await createTaxRegionsWorkflow(container).run({
       input: [{ country_code: "za", provider_id: "tp_system" }],
     });
+  }
+  for (const region of regions) {
+    if (region.currency_code === "zar") {
+      await updateRegionsWorkflow(container).run({ input: {
+        selector: { id: region.id }, update: { is_tax_inclusive: true },
+      } });
+    }
   }
 
   const { data: locations } = await query.graph({

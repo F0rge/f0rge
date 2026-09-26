@@ -91,7 +91,13 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
         "available_quantity",
         "revision",
         "observed_at",
+        "product_group_id",
+        "product_title",
+        "options",
     }
+    assert product["product_group_id"] is None
+    assert product["product_title"] is None
+    assert product["options"] == {}
 
     no_machine_auth = await owner_client.get(route)
     assert no_machine_auth.status_code == 401

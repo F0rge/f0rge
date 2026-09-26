@@ -50,6 +50,7 @@ from app.routers import (
     payments,
     picks,
     price_lists,
+    product_groups,
     proformas,
     purchase_orders,
     reorder,
@@ -228,6 +229,7 @@ app.include_router(suppliers.suppliers_router)
 app.include_router(price_lists.price_lists_router)
 app.include_router(proformas.proformas_router)
 app.include_router(skus.skus_router)
+app.include_router(product_groups.router)
 app.include_router(ops_commerce.router)
 app.include_router(catalogue_imports.catalogue_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)

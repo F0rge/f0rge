@@ -3,6 +3,9 @@ import { MedusaError } from "@medusajs/framework/utils";
 
 const productSchema = z.object({
   source_sku_id: z.string().uuid(),
+  product_group_id: z.string().uuid().nullable(),
+  product_title: z.string().min(1).nullable(),
+  options: z.record(z.string(), z.string().min(1)),
   sku: z.string().min(1),
   name: z.string().min(1),
   price_minor_zar: z.number().int().positive(),
@@ -26,6 +29,40 @@ export function parseOpsProducts(value: unknown, expectedCompanyId: string): Ops
   }
   if (new Set(parsed.products.map((product) => product.source_sku_id)).size !== parsed.products.length) {
     throw new MedusaError(MedusaError.Types.INVALID_DATA, "Ops Commerce returned duplicate source SKUs");
+  }
+  if (new Set(parsed.products.map((product) => product.sku)).size !== parsed.products.length) {
+    throw new MedusaError(MedusaError.Types.INVALID_DATA, "Ops Commerce returned duplicate SKU codes");
+  }
+  const combinations = new Set<string>();
+  const groupTitles = new Map<string, string>();
+  const groupOptionKeys = new Map<string, string>();
+  for (const product of parsed.products) {
+    if (!product.product_group_id) {
+      if (product.product_title || Object.keys(product.options).length) {
+        throw new MedusaError(MedusaError.Types.INVALID_DATA, "Ungrouped SKU has group merchandising fields");
+      }
+      continue;
+    }
+    if (!product.product_title || !Object.keys(product.options).length ||
+      Object.entries(product.options).some(([key, value]) => !key.trim() || !value.trim())) {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Grouped SKU needs a title and complete options");
+    }
+    const keys = Object.keys(product.options).sort().join("\u0000");
+    const previousKeys = groupOptionKeys.get(product.product_group_id);
+    if (previousKeys && previousKeys !== keys) {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Group variants have inconsistent option keys");
+    }
+    groupOptionKeys.set(product.product_group_id, keys);
+    const previousTitle = groupTitles.get(product.product_group_id);
+    if (previousTitle && previousTitle !== product.product_title) {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Group variants have inconsistent titles");
+    }
+    groupTitles.set(product.product_group_id, product.product_title);
+    const combination = `${product.product_group_id}:${JSON.stringify(Object.entries(product.options).sort())}`;
+    if (combinations.has(combination)) {
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Group variants have duplicate option combinations");
+    }
+    combinations.add(combination);
   }
   return parsed;
 }

@@ -46,6 +46,7 @@ from app.models.nia import (
 )
 from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
 from app.models.price_list import PriceList, PriceListItem
+from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.payment import Payment, PaymentDirection
 from app.models.proforma import Proforma
 from app.models.quote import Quote, QuoteLine, QuoteStatus
@@ -158,6 +159,8 @@ __all__ = [
     "PickStatus",
     "PriceList",
     "PriceListItem",
+    "ProductGroup",
+    "ProductGroupVariant",
     "PoLine",
     "Proforma",
     "Quote",
