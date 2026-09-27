@@ -5,6 +5,7 @@ const repoRoot = path.join(import.meta.dirname, "../../..");
 
 const nextConfig: NextConfig = {
   agentRules: false,
+  allowedDevOrigins: ["127.0.0.1"],
   output: "standalone",
   outputFileTracingRoot: repoRoot,
   turbopack: { root: repoRoot },

@@ -46,3 +46,20 @@ and Medusa APIs, including price/stock parity, field allowlisting, and denial
 of a bad service token. The browser target checks navigation and direct 404s.
 The Firstout database-backed isolation test is in
 `tests/test_ops_commerce_catalogue.py`.
+
+The Collector discovery slice uses published Medusa Store API products. Home and
+collections lead to `/shop`, where search, category, collection, availability,
+price and sort state live in the URL. Product pages show the selected variant's
+price, stock or order lead time, gallery, dimensions, material and care. Medusa
+Admin owns the merchandising details described in `commerce/MERCHANDISING.md`.
+Set `NEXT_PUBLIC_BASE_URL` in the web environment to the site's public origin
+before launch; canonical links use it. Only a production Railway environment
+with an HTTPS origin permits indexing. Account and checkout SEO policy will be
+applied when those routes are built.
+
+For discovery browser coverage, publish two representative SKUs, a draft SKU,
+and a two-variant group in a disposable local environment. Set
+`STOREFRONT_TEST_SKU_ID`, `STOREFRONT_TEST_OTHER_SKU_ID`,
+`STOREFRONT_TEST_DRAFT_SKU_ID`, and `STOREFRONT_TEST_GROUP_HANDLE`, then run
+`npx nx run storefront-web:e2e`. The tests skip fixture-dependent cases when
+their corresponding IDs are absent.

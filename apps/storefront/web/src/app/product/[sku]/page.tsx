@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getStoreProduct } from "@/lib/medusa";
+import { getStoreProduct, productPath } from "@/lib/medusa";
 import { ProductDetail } from "./product-detail";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   return {
     title: product.metadata?.seo_title || product.title,
     description: product.metadata?.seo_description || product.description || undefined,
+    alternates: { canonical: productPath(product) },
   };
 }
 
