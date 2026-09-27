@@ -27,7 +27,8 @@ if (source.company_id !== companyId) throw new Error("Ops API company mismatch")
 const snapshot = source.products.find((item) => item.source_sku_id === skuId)
 if (!snapshot) throw new Error(`SKU ${skuId} is not published in the Ops API`)
 const allowedFields = [
-  "source_sku_id", "sku", "name", "price_minor_zar", "available_quantity", "revision", "observed_at",
+  "source_sku_id", "product_group_id", "product_title", "options", "sku", "name",
+  "price_minor_zar", "available_quantity", "revision", "observed_at",
 ]
 if (Object.keys(snapshot).sort().join() !== allowedFields.sort().join()) {
   throw new Error("Ops API exposed an unexpected field")

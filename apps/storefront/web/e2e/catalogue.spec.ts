@@ -7,7 +7,7 @@ test('a published operational SKU appears in the catalogue and on its product pa
   test.skip(!sourceSkuId, 'Set STOREFRONT_TEST_SKU_ID to a published Firstout SKU ID')
 
   await page.goto('/')
-  const productLink = page.locator(`a[href="/product/${sourceSkuId}"]`)
+  const productLink = page.locator(`a[href="/product/${sourceSkuId}"]`).first()
   await expect(productLink).toBeVisible()
   await productLink.click()
   await expect(page).toHaveURL(new RegExp(`/product/${sourceSkuId}$`))
@@ -19,6 +19,33 @@ test('a published operational SKU appears in the catalogue and on its product pa
 test('an unknown operational SKU cannot be opened directly', async ({ page }) => {
   const response = await page.goto('/product/00000000-0000-4000-8000-000000000000')
   expect(response?.status()).toBe(404)
+})
+
+test('catalogue search and filters stay in the URL across refresh and back navigation', async ({ page }) => {
+  test.skip(!sourceSkuId, 'Set STOREFRONT_TEST_SKU_ID to a published Firstout SKU ID')
+
+  await page.goto('/shop')
+  const title = await page.locator('.product-card strong').first().textContent()
+  expect(title).toBeTruthy()
+  await page.getByLabel('Search furniture').fill(title!)
+  await page.getByLabel('Availability').selectOption('in-stock')
+  await page.getByRole('button', { name: 'Show pieces' }).click()
+  await expect(page).toHaveURL(/q=.*availability=in-stock/)
+  await expect(page.getByLabel('Search furniture')).toHaveValue(title!)
+  await expect(page.getByLabel('Availability')).toHaveValue('in-stock')
+  await page.reload()
+  await expect(page.getByLabel('Search furniture')).toHaveValue(title!)
+  await page.getByRole('link', { name: 'Clear filters' }).click()
+  await expect(page).toHaveURL(/\/shop$/)
+  await page.goBack()
+  await expect(page.getByLabel('Availability')).toHaveValue('in-stock')
+})
+
+test('an unmatched search has a clear recovery path', async ({ page }) => {
+  await page.goto('/shop?q=unlikely-product-name-999999')
+  await expect(page.getByRole('heading', { name: 'No pieces found.' })).toBeVisible()
+  await page.getByRole('link', { name: 'See all pieces' }).click()
+  await expect(page).toHaveURL(/\/shop$/)
 })
 
 test('two real group variants change shopper SKU, price and availability', async ({ page }) => {
