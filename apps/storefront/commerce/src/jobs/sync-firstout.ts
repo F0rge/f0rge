@@ -7,5 +7,5 @@ export default async function syncFirstoutJob(container: MedusaContainer) {
 
 export const config = {
   name: "sync-firstout-products",
-  schedule: "* * * * *",
+  schedule: process.env.STOREFRONT_SYNC_CRON || "* * * * *",
 };

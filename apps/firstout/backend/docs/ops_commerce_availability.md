@@ -1,0 +1,11 @@
+# Ops Commerce availability contract (v1)
+
+`GET /api/v1/ops-commerce/v1/products` reports each published SKU's `available_quantity` as nonnegative physical on-hand stock across Ops locations. A staff sales-order hold already posts an outgoing stock movement, so the feed does not subtract `held_qty` again.
+
+Each product has a fixed-width UTC `revision` (`YYYY-MM-DDTHH:MM:SS.ffffffZ`) and UTC `observed_at`. `revision` advances with SKU, stock, merchandising, or acknowledgement changes. The commerce adapter retains the greatest applied revision for each source SKU and applies stock changes only for newer snapshots. An equal revision can refresh `observed_at` without changing stock. `observed_at` is the time of the read, not a stock version.
+
+`acknowledged_commitment_ids` is a sorted list of opaque, globally unique channel **line** IDs whose quantities have already been deducted from operational stock. The IDs are durable in `ops_commerce_acknowledgements`, with source SKU and positive quantity. There is no public acknowledgement mutation in this phase. A later paid-order importer must write the outgoing stock movement and acknowledgement in one transaction, idempotently by `commitment_id`. It must never write an acknowledgement without the stock movement.
+
+Commerce computes effective available stock by subtracting only paid channel commitments whose IDs are absent from `acknowledged_commitment_ids` from the Ops `available_quantity`. It must retain those pending commitments across polls and restarts, including when an older Ops snapshot arrives. Once a newer snapshot includes an ID, its stock movement is already reflected in `available_quantity`, so commerce stops subtracting that commitment. A failed or unknown availability feed must be treated as stale at checkout; the storefront's freshness threshold and hold TTL are separate channel settings.
+
+The commerce adapter reads pending commitments from each Medusa variant's `pending_paid_commitments` metadata on every sync, including when the source revision is unchanged. The paid-order importer in a later phase owns writing this durable list and immediately projecting its own commitment under the inventory lock. Missing metadata means no paid commitments yet; malformed or duplicate entries fail the sync instead of silently raising sellable stock.

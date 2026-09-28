@@ -12,6 +12,7 @@ const productSchema = z.object({
   available_quantity: z.number().int().nonnegative(),
   revision: z.string().min(1),
   observed_at: z.string().min(1),
+  acknowledged_commitment_ids: z.array(z.string().min(1)),
 }).strict();
 
 const responseSchema = z.object({
@@ -77,4 +78,46 @@ export function medusaPrice(priceMinorZar: number): number {
 
 export function shouldApplyRevision(incoming: string, applied: unknown): boolean {
   return typeof applied !== "string" || incoming > applied;
+}
+
+export type PendingCommitment = {
+  commitment_id: string;
+  source_sku_id: string;
+  quantity: number;
+  acknowledged_revision?: string;
+};
+
+const pendingCommitmentSchema = z.array(z.object({
+  commitment_id: z.string().min(1),
+  source_sku_id: z.string().uuid(),
+  quantity: z.number().int().positive(),
+  acknowledged_revision: z.string().min(1).optional(),
+}).strict());
+
+/** Kept on the Medusa variant until the later paid-order importer reconciles it. */
+export function pendingCommitments(metadata: Record<string, unknown> | null): PendingCommitment[] {
+  const value = metadata?.pending_paid_commitments;
+  if (value === undefined) return [];
+  const parsed = pendingCommitmentSchema.parse(value);
+  if (new Set(parsed.map((item) => item.commitment_id)).size !== parsed.length) {
+    throw new MedusaError(MedusaError.Types.INVALID_DATA, "Duplicate pending paid commitment");
+  }
+  return parsed;
+}
+
+/** The latest acknowledged revision prevents an older snapshot resurrecting stock. */
+export function projectAvailableQuantity(
+  row: OpsProduct,
+  pending: PendingCommitment[],
+): number {
+  const relevant = pending.filter((item) => item.source_sku_id === row.source_sku_id);
+  if (relevant.some((item) => item.acknowledged_revision && row.revision < item.acknowledged_revision)) {
+    throw new MedusaError(MedusaError.Types.INVALID_DATA, "Operational stock snapshot predates a paid commitment acknowledgement");
+  }
+  const acknowledged = new Set(row.acknowledged_commitment_ids);
+  const unacknowledged = relevant.filter((item) => !acknowledged.has(item.commitment_id));
+  if (unacknowledged.some((item) => !Number.isSafeInteger(item.quantity) || item.quantity < 1)) {
+    throw new MedusaError(MedusaError.Types.INVALID_DATA, "Invalid pending commitment quantity");
+  }
+  return Math.max(0, row.available_quantity - unacknowledged.reduce((sum, item) => sum + item.quantity, 0));
 }

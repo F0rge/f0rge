@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException
@@ -56,12 +57,25 @@ class OpsCommerceService:
                     name=sku.name,
                     price_minor_zar=int(ex_to_inc(sku.retail_ex_vat) * 100),
                     available_quantity=sku.available_quantity,
-                    revision=sku.revision.isoformat(timespec="microseconds"),
-                    observed_at=sku.observed_at,
+                    revision=self._utc_revision(sku.revision),
+                    observed_at=self._as_utc(sku.observed_at),
                     product_group_id=sku.product_group_id,
                     product_title=sku.product_title,
                     options=sku.options,
+                    acknowledged_commitment_ids=sku.acknowledged_commitment_ids,
                 )
                 for sku in snapshots
             ],
         )
+
+    @staticmethod
+    def _as_utc(value: datetime) -> datetime:
+        return (
+            value.replace(tzinfo=timezone.utc)
+            if value.tzinfo is None
+            else value.astimezone(timezone.utc)
+        )
+
+    @classmethod
+    def _utc_revision(cls, value: datetime) -> str:
+        return cls._as_utc(value).isoformat(timespec="microseconds").replace("+00:00", "Z")

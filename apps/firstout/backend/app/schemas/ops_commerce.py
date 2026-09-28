@@ -18,6 +18,7 @@ class OpsProductResponse(BaseModel):
     product_group_id: Optional[uuid.UUID] = None
     product_title: Optional[str] = None
     options: dict[str, str] = Field(default_factory=dict)
+    acknowledged_commitment_ids: list[str]
 
 
 class OpsProductsResponse(BaseModel):

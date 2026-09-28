@@ -6,7 +6,7 @@ import {
   updateProductsWorkflow,
 } from "@medusajs/medusa/core-flows";
 
-import { medusaPrice, parseOpsProducts, shouldApplyRevision, type OpsProduct } from "./ops-contract";
+import { medusaPrice, parseOpsProducts, pendingCommitments, projectAvailableQuantity, shouldApplyRevision, type OpsProduct } from "./ops-contract";
 
 type CommerceVariant = {
   id: string; sku: string | null; metadata: Record<string, unknown> | null;
@@ -84,7 +84,7 @@ async function writeStock(container: MedusaContainer, variantId: string, locatio
 
 export async function syncFirstout(container: MedusaContainer): Promise<void> {
   const locking = container.resolve(Modules.LOCKING);
-  await locking.execute("storefront:firstout:catalogue-sync", async () => syncFirstoutLocked(container));
+  await locking.execute("storefront:inventory", async () => syncFirstoutLocked(container));
 }
 
 async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
@@ -145,7 +145,7 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
         variants: group.rows.map((row) => ({
           title: variantTitle(row), sku: row.sku, manage_inventory: true,
           options: variantOptions(row), prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
-          metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_available_quantity: row.available_quantity, source_price_includes_tax: true },
+          metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true },
         })),
         metadata: group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {},
       }] } });
@@ -153,7 +153,7 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
       for (const row of group.rows) {
         const variant = createdVariants.find((item) => item.sku === row.sku);
         if (!variant) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, `Medusa did not create variant ${row.sku}`);
-        await writeStock(container, variant.id, locations[0].id, row.available_quantity);
+        await writeStock(container, variant.id, locations[0].id, projectAvailableQuantity(row, []));
       }
       logger.info(`Projected Firstout product ${group.externalId}`);
       continue;
@@ -187,12 +187,12 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
       const { result } = await createProductVariantsWorkflow(container).run({ input: { product_variants: added.map((row) => ({
         product_id: product.id, title: variantTitle(row), sku: row.sku, manage_inventory: true,
         options: variantOptions(row), prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
-        metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_available_quantity: row.available_quantity, source_price_includes_tax: true },
+        metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true },
       })) } });
       for (const row of added) {
         const variant = result.find((item) => item.sku === row.sku);
         if (!variant) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, `Medusa did not create variant ${row.sku}`);
-        await writeStock(container, variant.id, locations[0].id, row.available_quantity);
+        await writeStock(container, variant.id, locations[0].id, projectAvailableQuantity(row, []));
       }
     }
     for (const row of group.rows) {
@@ -201,13 +201,18 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
       const currentOptions = Object.fromEntries((variant.options || []).map((item) => [item.option?.title, item.value]));
       const nextOptions = variantOptions(row);
       const optionsChanged = JSON.stringify(Object.entries(currentOptions).sort()) !== JSON.stringify(Object.entries(nextOptions).sort());
-      if (!optionsChanged && !shouldApplyRevision(row.revision, variant.metadata?.source_revision)) continue;
+      const revisionChanged = shouldApplyRevision(row.revision, variant.metadata?.source_revision);
+      if (typeof variant.metadata?.source_revision === "string" && row.revision < variant.metadata.source_revision) continue;
+      const observationChanged = typeof variant.metadata?.source_observed_at !== "string" || row.observed_at > variant.metadata.source_observed_at;
+      const projected = projectAvailableQuantity(row, pendingCommitments(variant.metadata));
+      const projectionChanged = variant.metadata?.source_projected_quantity !== projected;
+      if (!optionsChanged && !revisionChanged && !observationChanged && !projectionChanged) continue;
       await updateProductVariantsWorkflow(container).run({ input: { product_variants: [{
-        id: variant.id, sku: row.sku, ...(optionsChanged ? { options: nextOptions, title: variantTitle(row) } : {}),
-        prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
-        metadata: { ...variant.metadata, source_sku_id: row.source_sku_id, source_revision: row.revision, source_available_quantity: row.available_quantity, source_price_includes_tax: true },
+        id: variant.id, ...(revisionChanged ? { sku: row.sku, prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }] } : {}),
+        ...(optionsChanged ? { options: nextOptions, title: variantTitle(row) } : {}),
+        metadata: { ...variant.metadata, source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: projected, source_price_includes_tax: true },
       }] } });
-      await writeStock(container, variant.id, locations[0].id, row.available_quantity);
+      if (revisionChanged || projectionChanged) await writeStock(container, variant.id, locations[0].id, projected);
     }
   }
 

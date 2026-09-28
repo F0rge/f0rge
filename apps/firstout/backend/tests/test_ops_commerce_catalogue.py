@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 from httpx import ASGITransport
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
@@ -16,6 +17,8 @@ from app.config import settings
 from app.database import Base, get_db
 from app.main import app
 from app.models.team import Team
+from app.models.inventory import LocationStock
+from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
 from f0rge_testing import async_url
 
 
@@ -81,6 +84,7 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
     assert product["price_minor_zar"] == 1150000
     assert product["available_quantity"] == 2
     assert product["revision"]
+    assert product["revision"].endswith("Z")
     assert product["observed_at"]
     assert UUID(product["source_sku_id"])
     assert set(product) == {
@@ -94,7 +98,9 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
         "product_group_id",
         "product_title",
         "options",
+        "acknowledged_commitment_ids",
     }
+    assert product["acknowledged_commitment_ids"] == []
     assert product["product_group_id"] is None
     assert product["product_title"] is None
     assert product["options"] == {}
@@ -126,6 +132,30 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
     assert newer.status_code == 200
     assert newer.json()["products"][0]["price_minor_zar"] == 1200000
     assert newer.json()["products"][0]["revision"] > product["revision"]
+
+    # A future importer writes the stock movement and acknowledgement atomically.
+    # The snapshot reports the resulting physical stock without subtracting it again.
+    acknowledged_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=1)
+    await async_db.execute(
+        update(LocationStock)
+        .where(LocationStock.sku_id == UUID(sku_id))
+        .values(on_hand=1, updated_at=acknowledged_at)
+    )
+    async_db.add(
+        OpsCommerceAcknowledgement(
+            commitment_id="channel:order-1:line-1",
+            source_sku_id=UUID(sku_id),
+            quantity=1,
+            updated_at=acknowledged_at,
+        )
+    )
+    await async_db.flush()
+    after_ack = await owner_client.get(route, headers=headers)
+    assert after_ack.status_code == 200
+    acknowledged = after_ack.json()["products"][0]
+    assert acknowledged["available_quantity"] == 1
+    assert acknowledged["acknowledged_commitment_ids"] == ["channel:order-1:line-1"]
+    assert acknowledged["revision"] > newer.json()["products"][0]["revision"]
 
 
 @pytest.mark.asyncio

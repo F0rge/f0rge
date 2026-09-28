@@ -13,6 +13,7 @@ const contract = {
     available_quantity: 2,
     revision: "2026-09-22T09:14:32.000001",
     observed_at: "2026-09-22T09:14:32.000001",
+    acknowledged_commitment_ids: [],
   }],
 };
 
