@@ -1,6 +1,39 @@
 import { loadEnv, defineConfig } from '@medusajs/framework/utils'
+import { testPaymentEnabled } from './src/test-payment-config'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
+
+const modules: Record<string, unknown>[] = process.env.REDIS_URL ? [
+  {
+    resolve: "@medusajs/medusa/event-bus-redis",
+    options: { redisUrl: process.env.REDIS_URL },
+  },
+  {
+    resolve: "@medusajs/medusa/workflow-engine-redis",
+    options: { redis: { redisUrl: process.env.REDIS_URL } },
+  },
+  {
+    resolve: "@medusajs/medusa/locking",
+    options: { providers: [{
+      resolve: "@medusajs/medusa/locking-redis",
+      id: "locking-redis",
+      is_default: true,
+      options: { redisUrl: process.env.REDIS_URL },
+    }] },
+  },
+] : []
+
+modules.push({
+  resolve: "@medusajs/medusa/fulfillment",
+  options: { providers: [{ resolve: "./src/modules/storefront-fulfillment", id: "storefront" }] },
+})
+
+if (testPaymentEnabled()) {
+  modules.push({
+    resolve: "@medusajs/medusa/payment",
+    options: { providers: [{ resolve: "./src/modules/storefront-test-payment", id: "local" }] },
+  })
+}
 
 module.exports = defineConfig({
   projectConfig: {
@@ -15,23 +48,5 @@ module.exports = defineConfig({
       cookieSecret: process.env.COOKIE_SECRET,
     }
   },
-  modules: process.env.REDIS_URL ? [
-    {
-      resolve: "@medusajs/medusa/event-bus-redis",
-      options: { redisUrl: process.env.REDIS_URL },
-    },
-    {
-      resolve: "@medusajs/medusa/workflow-engine-redis",
-      options: { redis: { redisUrl: process.env.REDIS_URL } },
-    },
-    {
-      resolve: "@medusajs/medusa/locking",
-      options: { providers: [{
-        resolve: "@medusajs/medusa/locking-redis",
-        id: "locking-redis",
-        is_default: true,
-        options: { redisUrl: process.env.REDIS_URL },
-      }] },
-    },
-  ] : [],
+  modules,
 })

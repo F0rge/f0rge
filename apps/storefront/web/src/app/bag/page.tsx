@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Bag } from "@/lib/bag-server";
 
 const money = (value: number) => new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(value);
@@ -17,6 +18,7 @@ async function bagRequest(method: string, path = "/api/bag", body?: unknown): Pr
 }
 
 export default function BagPage() {
+  const router = useRouter();
   const [bag, setBag] = useState<Bag | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -31,6 +33,16 @@ export default function BagPage() {
     setBusy(true); setError("");
     try { setBag(await bagRequest(method, path, body)); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Please try again"); }
+    finally { setBusy(false); }
+  }
+
+  async function beginCheckout() {
+    setBusy(true); setError("");
+    try {
+      const nextBag = await bagRequest("POST", "/api/bag/checkout");
+      setBag(nextBag);
+      if (nextBag.hold?.status === "active") router.push("/checkout");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Please try again"); }
     finally { setBusy(false); }
   }
 
@@ -56,8 +68,8 @@ export default function BagPage() {
       </div>)}</div>
       <aside className="bag-summary"><p className="eyebrow">Order summary</p><dl><dt>Subtotal</dt><dd>{money(bag.subtotal)}</dd><dt>Total incl. VAT</dt><dd data-testid="bag-total">{money(bag.total)}</dd></dl>
         {bag.hold?.status === "review" && <div className="bag-review" role="status"><h2>Review changes</h2><p>Price or availability changed. Review your bag before continuing.</p>{bag.hold.changes?.map((change) => <p key={change}>{change}</p>)}</div>}
-        {held ? <><p role="status">Reserved until {new Date(bag.hold!.expires_at).toLocaleTimeString("en-ZA")}</p><button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Change bag</button><button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Cancel reservation</button></>
-          : <button type="button" className="bag-checkout" disabled={busy} onClick={() => void update("POST", "/api/bag/checkout")}>{bag.hold?.status === "review" ? "Accept changes and continue" : "Continue to checkout"}</button>}
+        {held ? <><p role="status">Reserved until {new Date(bag.hold!.expires_at).toLocaleTimeString("en-ZA")}</p><Link className="bag-checkout" href="/checkout">Continue checkout</Link><button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Change bag</button><button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Cancel reservation</button></>
+          : <button type="button" className="bag-checkout" disabled={busy} onClick={() => void beginCheckout()}>{bag.hold?.status === "review" ? "Accept changes and continue" : "Continue to checkout"}</button>}
         <p className="bag-note">Availability is confirmed when you continue to checkout. No payment is taken here.</p>
       </aside>
     </div>}

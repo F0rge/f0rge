@@ -96,6 +96,46 @@ async function releaseReservations(container: MedusaContainer, cartId: string): 
   return reservations.length;
 }
 
+/** Run checkout state changes under the same inventory lock used by temporary holds. */
+export async function withCheckoutInventoryLock<T>(container: MedusaContainer, operation: () => Promise<T>): Promise<T> {
+  const locking = container.resolve(Modules.LOCKING);
+  return await locking.execute(inventoryLock, operation);
+}
+
+/** Caller must hold `withCheckoutInventoryLock`; this rechecks the exact server-side hold and price/stock snapshot. */
+export async function checkoutHoldForCart(container: MedusaContainer, cartId: string, nowMs = Date.now()): Promise<{
+  ready: boolean;
+  expires_at?: string;
+  changes: string[];
+}> {
+  const cart = await retrieveCart(container, cartId);
+  const existing = await cartReservations(container, cartId);
+  const active = existing.find((item) => typeof item.metadata?.expires_at === "string" && Date.parse(item.metadata.expires_at) > nowMs);
+  const changes = checkoutChanges(cart, await retrieveVariants(container, cart), nowMs, availabilityMaxAgeMs());
+  const storedHold = cart.metadata?.storefront_hold as HoldMetadata | undefined;
+  if (!active || storedHold?.status !== "active") {
+    if (existing.length) await releaseReservations(container, cartId);
+    const hold: HoldMetadata = { status: "expired", changes: ["Your reservation expired. Review availability and reserve again before paying."] };
+    await setHoldMetadata(container, cart, hold);
+    return { ready: false, changes: hold.changes || [] };
+  }
+  if (changes.length) {
+    await releaseReservations(container, cartId);
+    if (changes.some((change) => change.includes("price changed"))) {
+      await refreshCartItemsWorkflow(container).run({ input: { cart_id: cartId, force_refresh: true } });
+    }
+    const hold: HoldMetadata = { status: "review", changes };
+    await setHoldMetadata(container, cart, hold);
+    return { ready: false, changes };
+  }
+  return { ready: true, expires_at: String(active.metadata?.expires_at), changes: [] };
+}
+
+/** Caller must hold `withCheckoutInventoryLock`; removes temporary holds before Medusa creates order reservations. */
+export async function releaseCheckoutHoldWithinLock(container: MedusaContainer, cartId: string): Promise<void> {
+  await releaseReservations(container, cartId);
+}
+
 export async function startCheckoutHold(container: MedusaContainer, cartId: string, nowMs = Date.now()): Promise<HoldMetadata> {
   const locking = container.resolve(Modules.LOCKING);
   return await locking.execute(inventoryLock, async () => {
