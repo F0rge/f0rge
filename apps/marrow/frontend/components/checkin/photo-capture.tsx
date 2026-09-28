@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { BookOpen, Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
+import { BookOpen, Camera, ChevronDown, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
 import { MealLibrarySheet } from './meal-library-sheet'
 import { MealTimeChips } from './meal-time-chips'
 import { TagPeoplePicker } from './tag-people-picker'
@@ -56,6 +56,7 @@ export function PhotoCapture({
 
   const [photos, setPhotos] = useState<StagedPhoto[]>([])
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [mealActionsOpen, setMealActionsOpen] = useState(false)
   // Serialize uploads so concurrent picks cannot race on backend filename allocation.
   const uploadChainRef = useRef(Promise.resolve())
   const photosRef = useRef(photos)
@@ -136,6 +137,9 @@ export function PhotoCapture({
         taggedGroupIds: photo.taggedGroupIds,
       })
 
+      const latest = photosRef.current.find((p) => p.id === id)
+      const labelNow = latest?.label ?? photo.label
+
       setPhotos((prev) =>
         prev.map((p) =>
           p.id === id
@@ -143,14 +147,14 @@ export function PhotoCapture({
                 ...p,
                 status: 'staged',
                 serverPhotoId: created.id,
-                labelSynced: photo.label,
+                labelSynced: photo.label || undefined,
               }
             : p,
         ),
       )
 
-      if (photo.label && photo.label !== photo.labelSynced) {
-        syncLabelToServer(id, created.id, photo.label)
+      if (labelNow !== (photo.label || '')) {
+        syncLabelToServer(id, created.id, labelNow)
       }
     } catch (err) {
       const msg = getErrorDetail(err, 'Upload failed')
@@ -218,31 +222,47 @@ export function PhotoCapture({
     <div className="space-y-3">
       <label className="text-sm font-medium leading-none">Add meal</label>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="space-y-2">
         <button
           type="button"
-          onClick={() => cameraRef.current?.click()}
-          className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+          aria-expanded={mealActionsOpen}
+          aria-controls="meal-log-actions"
+          onClick={() => setMealActionsOpen((open) => !open)}
+          className="em-press flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
         >
-          <Camera className="size-4 shrink-0" />
-          Take Photo
+          Log meal
+          <ChevronDown
+            className={cn('size-4 shrink-0 transition-transform', mealActionsOpen && 'rotate-180')}
+          />
         </button>
-        <button
-          type="button"
-          onClick={() => galleryRef.current?.click()}
-          className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
-        >
-          <ImageIcon className="size-4 shrink-0" />
-          Choose Photo
-        </button>
-        <button
-          type="button"
-          onClick={() => setLibraryOpen(true)}
-          className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
-        >
-          <BookOpen className="size-4 shrink-0" />
-          From library
-        </button>
+        {mealActionsOpen && (
+          <div id="meal-log-actions" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+            >
+              <Camera className="size-4 shrink-0" />
+              Open camera
+            </button>
+            <button
+              type="button"
+              onClick={() => galleryRef.current?.click()}
+              className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+            >
+              <ImageIcon className="size-4 shrink-0" />
+              From files
+            </button>
+            <button
+              type="button"
+              onClick={() => setLibraryOpen(true)}
+              className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+            >
+              <BookOpen className="size-4 shrink-0" />
+              From library
+            </button>
+          </div>
+        )}
       </div>
 
       <input
