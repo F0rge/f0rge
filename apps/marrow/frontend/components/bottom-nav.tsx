@@ -7,6 +7,14 @@ import { ClipboardCheck, Pill, CalendarDays, TrendingUp, Microscope } from 'luci
 import { cn } from '@f0rge/ui'
 import { UserAvatar } from '@/components/account/user-avatar'
 import { useKeyboardOpen } from '@/hooks/use-keyboard-open'
+import {
+  PILL_UNDERLINE_STROKE,
+  collapsedUnderlineDash,
+  fullCornerSpan,
+  pillBottomPath,
+  underlineDash,
+  type UnderlineDash,
+} from '@/lib/nav/pill-underline'
 import { CHROME_TONE, iconWellClass } from '@/lib/ui/status'
 
 const NAV_ITEMS = [
@@ -20,78 +28,101 @@ const NAV_ITEMS = [
 
 const EDGE = '0.5s cubic-bezier(0.19, 1, 0.22, 1)'
 
+function toPx(dasharray: string): string {
+  return dasharray
+    .split(' ')
+    .map((part) => `${part}px`)
+    .join(' ')
+}
+
 export function BottomNav() {
   const pathname = usePathname()
   const keyboardOpen = useKeyboardOpen()
   const navHidden = pathname.startsWith('/login') || pathname.startsWith('/signup')
   const barRef = useRef<HTMLElement>(null)
-  const inkRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
+  const pathRef = useRef<SVGPathElement>(null)
+  const spanRef = useRef<{ x0: number; x1: number; width: number; height: number } | null>(null)
   const prevIndexRef = useRef<number | null>(null)
   const lastActiveIndexRef = useRef<number | null>(null)
 
   const activeIndex = NAV_ITEMS.findIndex((item) => pathname.startsWith(item.href))
 
+  const syncBorder = useCallback(() => {
+    const bar = barRef.current
+    const svg = svgRef.current
+    const path = pathRef.current
+    if (!bar || !svg || !path) return null
+
+    const cs = getComputedStyle(bar)
+    const borderLeft = parseFloat(cs.borderLeftWidth) || 0
+    const borderTop = parseFloat(cs.borderTopWidth) || 0
+    const borderRight = parseFloat(cs.borderRightWidth) || 0
+    const width = bar.offsetWidth
+    const height = bar.offsetHeight
+    if (width <= 0 || height <= 0) return null
+
+    svg.style.left = `${-borderLeft}px`
+    svg.style.top = `${-borderTop}px`
+    svg.style.width = `${width}px`
+    svg.style.height = `${height}px`
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
+    path.setAttribute('d', pillBottomPath(width, height, PILL_UNDERLINE_STROKE / 2))
+
+    return {
+      width,
+      height,
+      padLeft: borderLeft + (parseFloat(cs.paddingLeft) || 0),
+      padRight: borderRight + (parseFloat(cs.paddingRight) || 0),
+      path,
+    }
+  }, [])
+
+  const paint = useCallback((dash: UnderlineDash, path: SVGPathElement, animate: boolean) => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const motion = `stroke-dasharray ${EDGE}, stroke-dashoffset ${EDGE}`
+    if (!animate || reduced) {
+      path.style.transition = 'none'
+      path.style.strokeDasharray = toPx(dash.dasharray)
+      path.style.strokeDashoffset = `${dash.dashoffset}px`
+      void path.getBoundingClientRect()
+      path.style.transition = motion
+      return
+    }
+    path.style.transition = motion
+    void path.getBoundingClientRect()
+    path.style.strokeDasharray = toPx(dash.dasharray)
+    path.style.strokeDashoffset = `${dash.dashoffset}px`
+  }, [])
+
   const place = useCallback(
     (index: number, direction: number) => {
-      const bar = barRef.current
-      const ink = inkRef.current
-      if (!bar || !ink || index < 0) return
+      const box = syncBorder()
+      if (!box || index < 0) return
 
-      const cs = getComputedStyle(bar)
-      const inner = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-      const n = NAV_ITEMS.length
-      const tabW = inner / n
-      const startX = parseFloat(cs.paddingLeft) + tabW * index
-      const endX = startX + tabW
-      const left = startX
-      const right = bar.clientWidth - endX
-
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-      if (reduced || direction === 0) {
-        if (
-          Math.abs(parseFloat(ink.style.left || '0') - left) < 0.5 &&
-          Math.abs(parseFloat(ink.style.right || '0') - right) < 0.5
-        ) {
-          return
-        }
-        ink.style.transition = 'none'
-        ink.style.left = `${left}px`
-        ink.style.right = `${right}px`
-        void ink.offsetWidth
-        ink.style.transition = `left ${EDGE}, right ${EDGE}`
-        return
-      }
-
-      ink.style.transition = `left ${EDGE}, right ${EDGE}`
-      void ink.offsetWidth
-      ink.style.left = `${left}px`
-      ink.style.right = `${right}px`
+      const span = fullCornerSpan(index, box.width, box.padLeft, box.padRight, NAV_ITEMS.length)
+      spanRef.current = { ...span, width: box.width, height: box.height }
+      paint(
+        underlineDash(span.x0, span.x1, box.width, box.height),
+        box.path,
+        direction !== 0,
+      )
     },
-    [],
+    [paint, syncBorder],
   )
 
   const collapseInk = useCallback((direction: number) => {
-    const bar = barRef.current
-    const ink = inkRef.current
-    if (!bar || !ink) return
+    const box = syncBorder()
+    const span = spanRef.current
+    if (!box || !span) return
 
-    const left = parseFloat(ink.style.left || '0')
-    const right = parseFloat(ink.style.right || '0')
-    const lineW = bar.clientWidth - left - right
-    const center = left + lineW / 2
-    const collapsedLeft = center
-    const collapsedRight = bar.clientWidth - center
-
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ink.style.transition =
-      reduced || direction === 0
-        ? 'none'
-        : `left ${EDGE}, right ${EDGE}`
-    void ink.offsetWidth
-    ink.style.left = `${collapsedLeft}px`
-    ink.style.right = `${collapsedRight}px`
-  }, [])
+    const center = (span.x0 + span.x1) / 2
+    paint(
+      collapsedUnderlineDash(center, box.width, box.height),
+      box.path,
+      direction !== 0,
+    )
+  }, [paint, syncBorder])
 
   const activeIndexRef = useRef(activeIndex)
 
@@ -134,17 +165,26 @@ export function BottomNav() {
       data-tour="bottom-nav"
       className={cn(
         'fixed bottom-[calc(20px+env(safe-area-inset-bottom))] left-1/2 z-50 flex',
-        'w-3/4 max-w-[400px] -translate-x-1/2 items-stretch overflow-hidden rounded-full',
+        'w-3/4 max-w-[400px] -translate-x-1/2 items-stretch rounded-full',
         'border border-border bg-card/95 px-1 pt-1.5 pb-2',
         'shadow-none backdrop-blur-md',
         'transition-[opacity,transform] duration-[450ms] ease-[cubic-bezier(0.19,1,0.22,1)]',
         keyboardOpen && 'pointer-events-none translate-y-4 opacity-0',
       )}
     >
-      <div
-        ref={inkRef}
-        className="absolute bottom-0 left-0 right-full h-[3px] bg-primary"
-      />
+      <svg
+        ref={svgRef}
+        aria-hidden
+        className="pointer-events-none absolute overflow-visible text-primary"
+      >
+        <path
+          ref={pathRef}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={PILL_UNDERLINE_STROKE}
+          strokeLinecap="round"
+        />
+      </svg>
       {NAV_ITEMS.map((item, index) => {
         const active = index === activeIndex
         return (
