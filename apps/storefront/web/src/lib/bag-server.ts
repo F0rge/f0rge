@@ -1,9 +1,10 @@
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
 export const cartCookie = "collector_cart";
+export const orderAccessCookie = "collector_order_access";
 const baseUrl = process.env.MEDUSA_BACKEND_URL || "http://localhost:9000";
 
 function secret(): string {
@@ -30,6 +31,28 @@ export function verifyCart(value?: string): string | null {
 
 export async function currentCartId(): Promise<string | null> {
   return verifyCart((await cookies()).get(cartCookie)?.value);
+}
+
+function orderAccessSignature(cartId: string, token: string): string {
+  return createHmac("sha256", secret()).update(`order-confirmation:v1:${cartId}:${token}`).digest("base64url");
+}
+
+export function newOrderAccessToken(): string { return randomBytes(32).toString("base64url"); }
+
+export function signedOrderAccess(cartId: string, token: string): string {
+  return `v1.${cartId}.${token}.${orderAccessSignature(cartId, token)}`;
+}
+
+export function verifyOrderAccess(value: string | undefined, cartId: string): string | null {
+  const match = /^v1\.(cart_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{40,100})\.([A-Za-z0-9_-]+)$/.exec(value || "");
+  if (!match || match[1] !== cartId) return null;
+  const expected = Buffer.from(orderAccessSignature(cartId, match[2]));
+  const actual = Buffer.from(match[3]);
+  return expected.length === actual.length && timingSafeEqual(expected, actual) ? match[2] : null;
+}
+
+export async function currentOrderAccessToken(cartId: string): Promise<string | null> {
+  return verifyOrderAccess((await cookies()).get(orderAccessCookie)?.value, cartId);
 }
 
 export type BagItem = { id: string; variant_id: string; title: string; thumbnail?: string | null; quantity: number; unit_price: number; total: number };
@@ -63,12 +86,25 @@ export async function medusaRequest<T>(path: string, method = "GET", body?: unkn
   return payload;
 }
 
+export async function orderConfirmationResponse(cartId: string, token: string): Promise<{ status: number; payload: Record<string, unknown> }> {
+  const response = await fetch(`${baseUrl}/store/carts/${encodeURIComponent(cartId)}/storefront-confirmation`, {
+    headers: {
+      "x-publishable-api-key": process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY || "",
+      "x-storefront-bff-secret": secret(),
+      "x-storefront-confirmation-token": token,
+    },
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  return { status: response.status, payload };
+}
+
 export function publicBag(cart?: MedusaCart | null): Bag {
   if (!cart) return { id: null, items: [], subtotal: 0, total: 0, currency_code: "zar" };
   return {
     id: cart.id,
     items: (cart.items || []).map(({ id, variant_id, title, thumbnail, quantity, unit_price, total }) => ({
-      id, variant_id, title, thumbnail, quantity, unit_price, total,
+      id, variant_id, title, thumbnail, quantity, unit_price, total: total ?? unit_price * quantity,
     })),
     subtotal: cart.subtotal || 0, total: cart.total || 0, currency_code: cart.currency_code || "zar",
     hold: cart.metadata?.storefront_hold || null,
