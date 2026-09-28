@@ -30,10 +30,13 @@ import {
   getSalesOrder,
   isActiveLocation,
   listLocations,
+  listStorefrontHandoffs,
   listSalesOrders,
+  retryStorefrontHandoff,
   remainderInvoiceSalesOrder,
   type Location,
   type SalesOrderListItem,
+  type StorefrontHandoff,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -62,6 +65,8 @@ export default function OrdersPage() {
   const [locationId, setLocationId] = useState("");
   const [holdStock, setHoldStock] = useState(true);
   const [depositAmount, setDepositAmount] = useState("");
+  const [handoffs, setHandoffs] = useState<StorefrontHandoff[]>([]);
+  const [retryingHandoffId, setRetryingHandoffId] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -70,12 +75,16 @@ export default function OrdersPage() {
       const pageData = await listSalesOrders({ limit: pageSize, offset: (page - 1) * pageSize });
       setOrders(pageData.items);
       setTotal(pageData.total);
+      if (canMutate) {
+        const handoffData = await listStorefrontHandoffs();
+        setHandoffs(handoffData.items);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load orders");
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [canMutate, page, pageSize]);
 
   const loadOrderForm = useCallback(async () => {
     try {
@@ -118,6 +127,48 @@ export default function OrdersPage() {
     <Stack gap={5}>
       {error ? <InlineNotification kind="error" title={error} hideCloseButton /> : null}
       <h1>Sales orders</h1>
+      {canMutate ? (
+        <section aria-labelledby="storefront-handoffs-heading">
+          <Stack gap={3}>
+            <h2 id="storefront-handoffs-heading">Storefront handoffs</h2>
+            {handoffs.length === 0 ? <p>No Storefront handoffs recorded.</p> : null}
+            {handoffs.map((handoff) => (
+              <Stack
+                key={handoff.id}
+                gap={2}
+                orientation="horizontal"
+                className="storefront-handoff-row"
+              >
+                <span>
+                  {handoff.external_order_id} · {handoff.status} · received {new Date(handoff.created_at).toLocaleString()}
+                  {handoff.failure_code ? ` · ${handoff.failure_code}` : ""}
+                  {` · attempts ${handoff.attempt_count} · ${handoff.correlation_id}`}
+                </span>
+                {handoff.status !== "imported" && handoff.status !== "processing" ? (
+                  <Button
+                    size="sm"
+                    kind="secondary"
+                    disabled={retryingHandoffId === handoff.id}
+                    onClick={() => {
+                      setRetryingHandoffId(handoff.id);
+                      void retryStorefrontHandoff(handoff.id)
+                        .then(async () => {
+                          await loadOrders();
+                        })
+                        .catch((err) =>
+                          setError(err instanceof ApiError ? err.message : "Storefront retry failed"),
+                        )
+                        .finally(() => setRetryingHandoffId(null));
+                    }}
+                  >
+                    Retry
+                  </Button>
+                ) : null}
+              </Stack>
+            ))}
+          </Stack>
+        </section>
+      ) : null}
       {loading ? <p className="cds--type-body-01">Loading orders…</p> : null}
       <DataTable rows={rows} headers={[...TABLE_HEADERS]}>
         {({ rows: tableRows, headers, getHeaderProps, getRowProps, getTableProps }) => (

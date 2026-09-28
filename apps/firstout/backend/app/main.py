@@ -67,6 +67,7 @@ from app.routers import (
     nia_threads,
     nia_usage as nia_usage_router,
     ops_commerce,
+    storefront_orders,
     reports,
     roles,
     search,
@@ -86,6 +87,7 @@ from app.services.playground_seed import PlaygroundSeedService
 from app.services.role_user_seed import RoleUserSeedService
 from app.services.roles import RoleSeedService
 from app.services.till_seed import TillSeedService
+from app.services.storefront_system_actor import StorefrontSystemActorService
 from app.services.nia_schedule import NiaScheduleService
 from app.services.users import BootstrapService
 
@@ -114,10 +116,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await BootstrapService(session).seed_if_empty()
         await LocationSeedService(session).seed_if_empty()
         await RoleUserSeedService(session).seed()
+        await StorefrontSystemActorService(session).ensure()
         coa = ChartOfAccountsSeedService(session)
         await coa.seed_if_empty()
         await coa.ensure_opening_equity()
         await coa.ensure_customer_deposits()
+        await coa.ensure_storefront_gateway_clearing()
         await coa.ensure_category_chart()
         await coa.ensure_bank_accounts()
         await TillSeedService(session).seed_if_empty()
@@ -231,6 +235,7 @@ app.include_router(proformas.proformas_router)
 app.include_router(skus.skus_router)
 app.include_router(product_groups.router)
 app.include_router(ops_commerce.router)
+app.include_router(storefront_orders.router)
 app.include_router(catalogue_imports.catalogue_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)

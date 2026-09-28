@@ -1,5 +1,6 @@
 import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, MedusaError, Modules, ProductStatus } from "@medusajs/framework/utils";
+import { reconcileStorefrontHandoffs } from "./storefront-order-handoff";
 import {
   createInventoryLevelsWorkflow, createProductsWorkflow, createProductVariantsWorkflow,
   deleteProductVariantsWorkflow, updateInventoryLevelsWorkflow, updateProductVariantsWorkflow,
@@ -88,7 +89,12 @@ export async function syncFirstout(container: MedusaContainer): Promise<void> {
 }
 
 async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
-  const groups = groupOpsProducts(await fetchOpsProducts());
+  const sourceProducts = await fetchOpsProducts();
+  await reconcileStorefrontHandoffs(
+    container,
+    sourceProducts.flatMap((product) => product.acknowledged_commitment_ids),
+  );
+  const groups = groupOpsProducts(sourceProducts);
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
   const { data: existingData } = await query.graph({
@@ -204,13 +210,17 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
       const revisionChanged = shouldApplyRevision(row.revision, variant.metadata?.source_revision);
       if (typeof variant.metadata?.source_revision === "string" && row.revision < variant.metadata.source_revision) continue;
       const observationChanged = typeof variant.metadata?.source_observed_at !== "string" || row.observed_at > variant.metadata.source_observed_at;
-      const projected = projectAvailableQuantity(row, pendingCommitments(variant.metadata));
-      const projectionChanged = variant.metadata?.source_projected_quantity !== projected;
+      const pending = pendingCommitments(variant.metadata);
+      const projected = projectAvailableQuantity(row, pending);
+      const acknowledged = new Set(row.acknowledged_commitment_ids);
+      const remainingPending = pending.filter((item) => !acknowledged.has(item.commitment_id));
+      const commitmentsChanged = remainingPending.length !== pending.length;
+      const projectionChanged = variant.metadata?.source_projected_quantity !== projected || commitmentsChanged;
       if (!optionsChanged && !revisionChanged && !observationChanged && !projectionChanged) continue;
       await updateProductVariantsWorkflow(container).run({ input: { product_variants: [{
         id: variant.id, ...(revisionChanged ? { sku: row.sku, prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }] } : {}),
         ...(optionsChanged ? { options: nextOptions, title: variantTitle(row) } : {}),
-        metadata: { ...variant.metadata, source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: projected, source_price_includes_tax: true },
+        metadata: { ...variant.metadata, source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: projected, pending_paid_commitments: remainingPending, source_price_includes_tax: true },
       }] } });
       if (revisionChanged || projectionChanged) await writeStock(container, variant.id, locations[0].id, projected);
     }

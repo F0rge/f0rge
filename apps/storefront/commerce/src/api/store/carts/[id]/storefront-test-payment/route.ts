@@ -3,6 +3,7 @@ import { processPaymentWorkflow, updateCartWorkflow } from "@medusajs/medusa/cor
 import { ContainerRegistrationKeys, MedusaError, Modules, PaymentActions, PaymentSessionStatus } from "@medusajs/framework/utils";
 import { releaseCheckoutHoldWithinLock, withCheckoutInventoryLock } from "../../../../../checkout-holds";
 import { testPaymentEnabled } from "../../../../../test-payment-config";
+import { prepareStorefrontOrderHandoff } from "../../../../../storefront-order-handoff";
 
 const providerRegistrationId = "storefront-test_local";
 const providerId = `pp_${providerRegistrationId}`;
@@ -64,6 +65,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       });
       const session = sessions[0] as PaymentSession | undefined;
       if (!session) throw new MedusaError(MedusaError.Types.NOT_FOUND, "Test payment session not found");
+      const eventOutcome = outcome as Outcome;
+      const eventData = { ...(session.data || {}), outcome: eventOutcome };
       const { data: cartLinks } = await query.graph({
         entity: "cart_payment_collection", fields: ["cart_id"], filters: { payment_collection_id: session.payment_collection_id },
       });
@@ -77,7 +80,13 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       }
       if (prior) {
         const existingOrderId = await orderForCart(req, cartId);
-        if (existingOrderId) return { status: "captured", order_id: existingOrderId, duplicate: true };
+        if (existingOrderId) {
+          const outbox = await prepareStorefrontOrderHandoff(req.scope, existingOrderId);
+          if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
+          await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "captured" },
+            eventData, PaymentSessionStatus.CAPTURED);
+          return { status: "captured", order_id: existingOrderId, duplicate: true };
+        }
         if (prior.status !== "processing" || prior.outcome !== "success") {
           return { status: prior.status, order_id: null, duplicate: true };
         }
@@ -87,11 +96,13 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       // payment session back into a declined, cancelled, or pending state.
       const committedOrderId = await orderForCart(req, cartId);
       if (committedOrderId) {
+        const outbox = await prepareStorefrontOrderHandoff(req.scope, committedOrderId);
+        if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
+        await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "captured" },
+          eventData, PaymentSessionStatus.CAPTURED);
         return { status: "captured", order_id: committedOrderId, duplicate: true };
       }
 
-      const eventOutcome = outcome as Outcome;
-      const eventData = { ...(session.data || {}), outcome: eventOutcome };
       if (eventOutcome === "unknown") {
         await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "unknown" }, eventData, PaymentSessionStatus.PENDING);
         return { status: "unknown", order_id: null, duplicate: false };
@@ -105,6 +116,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
 
       const existingOrderId = await orderForCart(req, cartId);
       if (existingOrderId) {
+        const outbox = await prepareStorefrontOrderHandoff(req.scope, existingOrderId);
+        if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
         await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "captured" }, eventData, PaymentSessionStatus.CAPTURED);
         return { status: "captured", order_id: existingOrderId, duplicate: true };
       }
@@ -129,6 +142,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       catch (error) { completionError = error; }
       const orderId = await orderForCart(req, cartId);
       if (orderId) {
+        // Do not report the captured callback until a durable outbox snapshot
+        // and its paid-stock commitments are written to Medusa.
+        const outbox = await prepareStorefrontOrderHandoff(req.scope, orderId);
+        if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
         await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "captured" }, eventData, PaymentSessionStatus.CAPTURED);
         return { status: "captured", order_id: orderId, duplicate: false };
       }
