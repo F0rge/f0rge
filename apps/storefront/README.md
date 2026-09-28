@@ -106,9 +106,12 @@ price and sort state live in the URL. Product pages show the selected variant's
 price, stock or order lead time, gallery, dimensions, material and care. Medusa
 Admin owns the merchandising details described in `commerce/MERCHANDISING.md`.
 Set `NEXT_PUBLIC_BASE_URL` in the web environment to the site's public origin
-before launch; canonical links use it. Only a production Railway environment
-with an HTTPS origin permits indexing. Account and checkout pages remain
-private and are excluded from indexing.
+before launch; canonical links use it. Page metadata permits indexing only
+when `STOREFRONT_INDEXING_ENABLED=true` on a production Railway environment
+with an HTTPS origin. The private preview keeps that flag false, requires
+Basic Auth, and adds a no-index response header to every route. A public launch
+needs a reviewed change to the preview gate and response header. Account and
+checkout pages remain excluded from indexing.
 
 For discovery browser coverage, publish two representative SKUs, a draft SKU,
 and a two-variant group in a disposable local environment. Set
@@ -116,3 +119,12 @@ and a two-variant group in a disposable local environment. Set
 `STOREFRONT_TEST_DRAFT_SKU_ID`, and `STOREFRONT_TEST_GROUP_HANDLE`, then run
 `npx nx run storefront-web:e2e`. The tests skip fixture-dependent cases when
 their corresponding IDs are absent.
+
+## Private Railway preview
+
+The isolated private-preview build, server-only access credentials, cost
+estimate, verification steps, and rollback procedure are documented in
+[`docs/759-private-hosting.md`](docs/759-private-hosting.md). The checked-in
+Dockerfiles and Railway config files are scaffolding only: this change creates
+no Railway services, database, Redis instance, DNS, or hosted credentials. Do
+not connect these configs to the Firstout or Marrow Railway projects.

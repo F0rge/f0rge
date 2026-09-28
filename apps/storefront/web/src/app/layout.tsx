@@ -3,7 +3,9 @@ import Link from "next/link";
 import "./style.css";
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3004";
-const indexable = process.env.RAILWAY_ENVIRONMENT_NAME === "production" && new URL(baseUrl).protocol === "https:";
+const indexable = process.env.STOREFRONT_INDEXING_ENABLED === "true" &&
+  process.env.RAILWAY_ENVIRONMENT_NAME === "production" &&
+  new URL(baseUrl).protocol === "https:";
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
