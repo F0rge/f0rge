@@ -1,16 +1,17 @@
 'use client'
 
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { BookOpen, Camera, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
+import { BookOpen, Camera, ChevronDown, ImageIcon, X, Loader2, AlertTriangle } from 'lucide-react'
 import { MealLibrarySheet } from './meal-library-sheet'
 import { MealTimeChips } from './meal-time-chips'
 import { TagPeoplePicker } from './tag-people-picker'
-import { useUploadPhoto } from '@/lib/api/hooks'
+import { useUploadPhoto, useUpdatePhotoLabel } from '@/lib/api/hooks'
 import { useConnections, useGroups } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
 import { Button, cn } from '@f0rge/ui'
 import { defaultMealTimeForEntry, entryLocalDate } from '@/lib/checkin/meal-time'
 import { statusText } from '@/lib/ui/status'
+import type { Photo } from '@/lib/api/types'
 
 interface StagedPhoto {
   id: string
@@ -23,10 +24,13 @@ interface StagedPhoto {
   taggedGroupIds: string[]
   status: 'staged' | 'uploading' | 'error'
   errorMessage?: string
+  serverPhotoId?: number
+  labelSynced?: string
 }
 
 interface PhotoCaptureProps {
   date: string
+  existingPhotos: Photo[]
   ensureEntryExists: () => Promise<void>
   onEntryEnsured?: () => void
 }
@@ -35,10 +39,16 @@ function generateId(): string {
   return Math.random().toString(36).slice(2)
 }
 
-export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoCaptureProps) {
+export function PhotoCapture({
+  date,
+  existingPhotos,
+  ensureEntryExists,
+  onEntryEnsured,
+}: PhotoCaptureProps) {
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const uploadPhoto = useUploadPhoto()
+  const updatePhotoLabel = useUpdatePhotoLabel()
   const connections = useConnections()
   const groups = useGroups()
   const acceptedConnections = connections.data?.accepted ?? []
@@ -46,12 +56,28 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
 
   const [photos, setPhotos] = useState<StagedPhoto[]>([])
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [mealActionsOpen, setMealActionsOpen] = useState(false)
   // Serialize uploads so concurrent picks cannot race on backend filename allocation.
   const uploadChainRef = useRef(Promise.resolve())
   const photosRef = useRef(photos)
   useEffect(() => {
     photosRef.current = photos
   }, [photos])
+
+  const existingPhotoIds = useRef(new Set<number>())
+  useEffect(() => {
+    existingPhotoIds.current = new Set(existingPhotos.map((p) => p.id))
+    setPhotos((prev) => {
+      const next = prev.filter((p) => {
+        if (p.serverPhotoId != null && existingPhotoIds.current.has(p.serverPhotoId)) {
+          URL.revokeObjectURL(p.previewUrl)
+          return false
+        }
+        return true
+      })
+      return next.length === prev.length ? prev : next
+    })
+  }, [existingPhotos])
 
   useEffect(() => {
     return () => {
@@ -78,6 +104,18 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     })
   }, [])
 
+  const syncLabelToServer = useCallback(
+    (stagedId: string, serverPhotoId: number, label: string) => {
+      void updatePhotoLabel.mutateAsync({ photoId: serverPhotoId, label })
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.id === stagedId ? { ...p, labelSynced: label } : p,
+        ),
+      )
+    },
+    [updatePhotoLabel],
+  )
+
   const runUpload = useCallback(async (id: string) => {
     const photo = photosRef.current.find((p) => p.id === id)
     if (!photo || photo.status === 'uploading') return
@@ -90,7 +128,7 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     onEntryEnsured?.()
 
     try {
-      await uploadPhoto.mutateAsync({
+      const created = await uploadPhoto.mutateAsync({
         date,
         file: photo.file,
         label: photo.label || undefined,
@@ -99,11 +137,25 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         taggedGroupIds: photo.taggedGroupIds,
       })
 
-      setPhotos((prev) => {
-        const target = prev.find((p) => p.id === id)
-        if (target) URL.revokeObjectURL(target.previewUrl)
-        return prev.filter((p) => p.id !== id)
-      })
+      const latest = photosRef.current.find((p) => p.id === id)
+      const labelNow = latest?.label ?? photo.label
+
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: 'staged',
+                serverPhotoId: created.id,
+                labelSynced: photo.label || undefined,
+              }
+            : p,
+        ),
+      )
+
+      if (labelNow !== (photo.label || '')) {
+        syncLabelToServer(id, created.id, labelNow)
+      }
     } catch (err) {
       const msg = getErrorDetail(err, 'Upload failed')
       setPhotos((prev) =>
@@ -114,14 +166,16 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
         ),
       )
     }
-  }, [date, ensureEntryExists, onEntryEnsured, uploadPhoto])
+  }, [date, ensureEntryExists, onEntryEnsured, uploadPhoto, syncLabelToServer])
 
   const retryUpload = useCallback((id: string) => {
     void enqueueUpload(() => runUpload(id))
   }, [enqueueUpload, runUpload])
 
   const uploadAllStaged = useCallback(() => {
-    const ids = photosRef.current.filter((p) => p.status === 'staged').map((p) => p.id)
+    const ids = photosRef.current
+      .filter((p) => p.status === 'staged' && p.serverPhotoId == null)
+      .map((p) => p.id)
     for (const id of ids) {
       void enqueueUpload(() => runUpload(id))
     }
@@ -149,37 +203,66 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
     }
   }, [date, enqueueUpload, runUpload])
 
-  const stagedCount = photos.filter((p) => p.status === 'staged').length
+  const handleLabelChange = useCallback(
+    (stagedId: string, label: string) => {
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === stagedId ? { ...p, label } : p)),
+      )
+      const photo = photosRef.current.find((p) => p.id === stagedId)
+      if (photo?.serverPhotoId != null && label !== photo.labelSynced) {
+        syncLabelToServer(stagedId, photo.serverPhotoId, label)
+      }
+    },
+    [syncLabelToServer],
+  )
+
+  const stagedCount = photos.filter((p) => p.status === 'staged' && p.serverPhotoId == null).length
 
   return (
     <div className="space-y-3">
       <label className="text-sm font-medium leading-none">Add meal</label>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="space-y-2">
         <button
           type="button"
-          onClick={() => cameraRef.current?.click()}
-          className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+          aria-expanded={mealActionsOpen}
+          aria-controls="meal-log-actions"
+          onClick={() => setMealActionsOpen((open) => !open)}
+          className="em-press flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
         >
-          <Camera className="size-4 shrink-0" />
-          Take Photo
+          Log meal
+          <ChevronDown
+            className={cn('size-4 shrink-0 transition-transform', mealActionsOpen && 'rotate-180')}
+          />
         </button>
-        <button
-          type="button"
-          onClick={() => galleryRef.current?.click()}
-          className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
-        >
-          <ImageIcon className="size-4 shrink-0" />
-          Choose Photo
-        </button>
-        <button
-          type="button"
-          onClick={() => setLibraryOpen(true)}
-          className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
-        >
-          <BookOpen className="size-4 shrink-0" />
-          From library
-        </button>
+        {mealActionsOpen && (
+          <div id="meal-log-actions" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+            >
+              <Camera className="size-4 shrink-0" />
+              Open camera
+            </button>
+            <button
+              type="button"
+              onClick={() => galleryRef.current?.click()}
+              className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+            >
+              <ImageIcon className="size-4 shrink-0" />
+              From files
+            </button>
+            <button
+              type="button"
+              onClick={() => setLibraryOpen(true)}
+              className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+            >
+              <BookOpen className="size-4 shrink-0" />
+              From library
+            </button>
+          </div>
+        )}
       </div>
 
       <input
@@ -231,16 +314,10 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                   <input
                     type="text"
                     value={photo.label}
-                    onChange={(e) => {
-                      const label = e.target.value
-                      setPhotos((prev) =>
-                        prev.map((p) => p.id === photo.id ? { ...p, label } : p),
-                      )
-                    }}
-                    disabled={photo.status === 'uploading'}
-                    ref={(el) => { if (photo.status === 'staged' && el) el.focus() }}
+                    onChange={(e) => handleLabelChange(photo.id, e.target.value)}
+                    ref={(el) => { if (photo.status === 'staged' && !photo.serverPhotoId && el) el.focus() }}
                     placeholder="Label (optional)"
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <p className="mt-1 text-xs text-muted-foreground truncate">{photo.file.name}</p>
                   {photo.status === 'error' && (
@@ -297,7 +374,6 @@ export function PhotoCapture({ date, ensureEntryExists, onEntryEnsured }: PhotoC
                       prev.map((p) => p.id === photo.id ? { ...p, taggedGroupIds } : p),
                     )
                   }}
-                  disabled={photo.status === 'uploading'}
                 />
               )}
             </div>

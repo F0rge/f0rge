@@ -1,5 +1,7 @@
 # Railway environment variables (marrow)
 
+Marrow deploys to **production** from git branch `main` only (`.github/deploy/manifest.yml` + Railway autodeploy). GitHub Actions smoke uses the production URLs below. The `develop` git branch is still used for CI integration; it does not deploy Marrow.
+
 Shared monorepo services. Do **not** set Root Directory. Point each service's
 Config File at the matching `railway*.toml`.
 
@@ -53,27 +55,13 @@ APNS keys, `DEFAULT_STORAGE_USER_ID`, optional `SENTRY_DSN`.
 | `AIRFLOW_URL` | `https://airflow.leo-figueiredo.com` (same UI for both envs) |
 | `AIRFLOW_USERNAME` / `AIRFLOW_PASSWORD` | FAB user used to mint `/auth/token` |
 | `AIRFLOW_SERVICE_TOKEN` | Bearer for Airflow worker → this env's `/api/v1/internal/airflow/*` (generate a distinct token per Railway env) |
-| `AIRFLOW_CLASSIFY_DAG_ID` | develop: `marrow_classify_meal_dev`; production: `marrow_classify_meal_prod` |
+| `AIRFLOW_CLASSIFY_DAG_ID` | `marrow_classify_meal_prod` on production |
 
-## Domains (cutover)
+## Domains
 
-| Env | Frontend | API | MCP |
-|-----|----------|-----|-----|
+| Surface | Frontend | API | MCP |
+|---------|----------|-----|-----|
 | Interim Railway | `marrow-frontend-production.up.railway.app` | `marrow-api-production.up.railway.app` | `marrow-mcp-production.up.railway.app` |
 | Production DNS | `marrow-health.com` | `api.marrow-health.com` | `mcp.marrow-health.com` |
-| Develop DNS | `app-dev.marrow-health.com` | `api-dev.marrow-health.com` | `mcp-dev.marrow-health.com` |
 
-## Blockers on Free plan
-
-Postgres (pgvector), Bucket, and `develop` environment duplication require a
-paid Railway plan (Hobby+). Upgrade, then:
-
-```bash
-railway deploy --template 3jJFCA          # or pgvector-pg18
-railway bucket create photos --region ams
-railway environment new develop --duplicate production
-# Point develop services at branch develop
-```
-
-Then run [`scripts/railway_bootstrap_roles.sql`](../scripts/railway_bootstrap_roles.sql)
-and the dump/restore + bucket sync runbooks under `scripts/`.
+Bootstrap: [`scripts/railway_bootstrap_roles.sql`](../scripts/railway_bootstrap_roles.sql) and bucket sync runbooks under `scripts/`.

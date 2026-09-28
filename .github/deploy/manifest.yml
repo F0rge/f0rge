@@ -8,26 +8,23 @@ components:
   marrow-backend:
     nx: marrow-backend
     target: railway
-    branches: [develop, main]
+    branches: [main]
     railway:
       role: api
       health_url:
-        develop: https://api-dev.marrow-health.com/api/v1/health
         main: https://api.marrow-health.com/api/v1/health
     also_deploys:
       - role: mcp
         health_url:
-          develop: https://mcp-dev.marrow-health.com/mcp
           main: https://mcp.marrow-health.com/mcp
 
   marrow-frontend:
     nx: marrow-frontend
     target: railway
-    branches: [develop, main]
+    branches: [main]
     railway:
       role: frontend
       health_url:
-        develop: https://app-dev.marrow-health.com/
         main: https://marrow-health.com/
 
   dk-tag-printer-backend:
