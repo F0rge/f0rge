@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { MedusaVariant, StoreProduct } from "@/lib/medusa";
+import { useProductAttention } from "@/components/analytics/use-product-attention";
+import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 
 function formatPrice(variant?: MedusaVariant): string {
   const amount = variant?.calculated_price?.calculated_amount;
@@ -25,6 +27,8 @@ function selectedImages(product: StoreProduct, variant?: MedusaVariant): string[
 }
 
 export function ProductDetail({ product }: { product: StoreProduct }) {
+  const attentionRef = useProductAttention(product.id);
+  const { choice, capture } = useStorefrontAnalytics();
   const first = product.variants[0];
   const [choices, setChoices] = useState<Record<string, string>>(() => Object.fromEntries((first?.options || []).map((option) => [option.option_id || option.option?.id, option.value]).filter((entry): entry is [string, string] => !!entry[0])));
   const options = (product.options || []).filter((option) => (option.values?.length || 0) > 1);
@@ -41,11 +45,18 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const dimensions = [variant?.length ?? product.length, variant?.width ?? product.width, variant?.height ?? product.height];
   const hasDimensions = dimensions.every((value) => value != null && value > 0);
   const care = variant?.metadata?.care_instructions || product.metadata?.care_instructions;
+  useEffect(() => {
+    if (choice === "accepted") capture({ name: "storefront_product_viewed", properties: { product_id: product.id } });
+  }, [capture, choice, product.id]);
+
   return <article className="content product-page">
     <div className="gallery">
-      <div className="product-image hero-study">{image ? <img src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} /> : <span aria-hidden="true">Object study</span>}</div>
+      <div ref={attentionRef} className="product-image hero-study">{image ? <img src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} /> : <span aria-hidden="true">Object study</span>}</div>
       <p className="sr-only" aria-live="polite">{imagePosition ? `Image ${imagePosition} of ${gallery.length} for ${product.title}` : `No image for ${product.title}`}</p>
-      {gallery.length > 1 && <div className="gallery-thumbnails" aria-label="Product images">{gallery.map((url, index) => <button key={url} type="button" className={url === image ? "active" : ""} onClick={() => setActiveImage(url)} aria-label={`Show image ${index + 1} of ${gallery.length}`} aria-pressed={url === image}><img src={url} alt="" /></button>)}</div>}
+      {gallery.length > 1 && <div className="gallery-thumbnails" aria-label="Product images">{gallery.map((url, index) => <button key={url} type="button" className={url === image ? "active" : ""} onClick={() => {
+        setActiveImage(url);
+        capture({ name: "storefront_product_media_selected", properties: { product_id: product.id, media_index: index } });
+      }} aria-label={`Show image ${index + 1} of ${gallery.length}`} aria-pressed={url === image}><img src={url} alt="" /></button>)}</div>}
     </div>
     <div className="product-copy">
       <Link href="/shop" className="back-link">← All pieces</Link>
@@ -54,7 +65,19 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
       <p>{product.description || "A considered addition to your living space."}</p>
       {options.length > 0 && <div className="variant-options">{options.map((option) => {
         const values = option.values?.map(({ value }) => value) || Array.from(new Set(product.variants.flatMap((candidate) => candidate.options?.filter((item) => (item.option_id || item.option?.id) === option.id).map((item) => item.value) || [])));
-        return <div key={option.id}><label htmlFor={`option-${option.id}`}>{option.title}</label><select id={`option-${option.id}`} value={choices[option.id] || ""} onChange={(event) => { setChoices((current) => ({ ...current, [option.id]: event.target.value })); setActiveImage(null); }}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>;
+        return <div key={option.id}><label htmlFor={`option-${option.id}`}>{option.title}</label><select id={`option-${option.id}`} value={choices[option.id] || ""} onChange={(event) => {
+          const nextValue = event.target.value;
+          const nextChoices = { ...choices, [option.id]: nextValue };
+          const selected = product.variants.find((candidate) => options.every((item) => candidate.options?.some((value) => (value.option_id || value.option?.id) === item.id && value.value === nextChoices[item.id])));
+          setChoices(nextChoices);
+          setActiveImage(null);
+          capture({ name: "storefront_product_variant_selected", properties: {
+            product_id: product.id,
+            option_id: option.id,
+            value_index: values.indexOf(nextValue),
+            ...(selected ? { variant_id: selected.id } : {}),
+          } });
+        }}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>;
       })}</div>}
       {!variant && <button type="button" className="reset-variant" onClick={() => { setChoices(Object.fromEntries((first?.options || []).map((option) => [option.option_id || option.option?.id, option.value]).filter((entry): entry is [string, string] => !!entry[0]))); setActiveImage(null); }}>Choose an available combination</button>}
       <p className="price" aria-live="polite">{formatPrice(variant)} {variant?.calculated_price && <span>incl. VAT</span>}</p>

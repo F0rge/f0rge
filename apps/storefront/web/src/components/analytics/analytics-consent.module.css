@@ -1,0 +1,37 @@
+.panel {
+  position: fixed;
+  z-index: 40;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(27rem, calc(100vw - 2rem));
+  padding: 1.15rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 12px 38px rgb(44 24 28 / 18%);
+}
+
+.headingRow { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.headingRow h2 { margin: 0; font: 500 1.35rem var(--serif); }
+.panel p { margin: .65rem 0 0; color: var(--muted); font-size: .78rem; line-height: 1.6; }
+.panel .status { font-family: var(--mono); font-size: .65rem; }
+.actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
+.primaryButton,.secondaryButton,.settingsButton,.closeButton {
+  min-height: 42px;
+  padding: .65rem .8rem;
+  border: 1px solid var(--oxblood);
+  cursor: pointer;
+  font: 10px var(--mono);
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+.primaryButton { background: var(--oxblood); color: var(--paper); }
+.secondaryButton,.settingsButton { background: var(--paper); color: var(--oxblood); }
+.settingsButton { position: fixed; z-index: 40; right: 1rem; bottom: 1rem; box-shadow: 0 5px 18px rgb(44 24 28 / 14%); }
+.closeButton { width: 42px; padding: 0; border-color: transparent; background: transparent; color: var(--ink); font: 1.5rem var(--sans); }
+
+@media (max-width: 600px) {
+  .panel { right: .5rem; bottom: .5rem; width: calc(100vw - 1rem); }
+  .settingsButton { right: .5rem; bottom: .5rem; }
+  .actions > button { flex: 1 1 100%; }
+}

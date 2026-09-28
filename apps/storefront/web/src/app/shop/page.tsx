@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { listStoreProducts, publicCollections, type MedusaVariant, type StoreProduct } from "@/lib/medusa";
 import { ProductCard } from "../product-card";
+import { SearchResultsTracker } from "@/components/analytics/search-results-tracker";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Shop furniture", description: "Discover The Collector's considered furniture collection.", alternates: { canonical: "/shop" } };
@@ -50,6 +51,10 @@ export default async function ShopPage({ searchParams }: Props) {
   const categories = [...new Map(products.flatMap((product) => product.categories?.map((category) => [category.handle, category] as const) || [])).values()].sort((a, b) => a.name.localeCompare(b.name));
   const collections = publicCollections(products).sort((a, b) => a.title.localeCompare(b.title));
   const results = filteredProducts(products, params);
+  const categoryId = categories.find((category) => category.handle === params.category)?.id;
+  const collectionId = collections.find((collection) => collection.handle === params.collection)?.id;
+  const priceFilterActive = [params.min, params.max].some((value) => value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0);
+  const sortOrder = params.sort === "price-asc" ? "price_asc" : params.sort === "price-desc" ? "price_desc" : "default";
   return <div className="content shop-page">
     <p className="eyebrow">The Collector / shop</p><h1>Explore the collection.</h1>
     <p className="intro">Thoughtfully chosen pieces for rooms made to be lived in.</p>
@@ -63,6 +68,7 @@ export default async function ShopPage({ searchParams }: Props) {
       <div><label htmlFor="sort">Sort by</label><select id="sort" name="sort" defaultValue={params.sort || "title"}><option value="title">Name A–Z</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option></select></div>
       <div className="filter-actions"><button type="submit">Show pieces</button><Link href="/shop">Clear filters</Link></div>
     </form>
+    <SearchResultsTracker queryPresent={Boolean(params.q?.trim())} categoryId={categoryId} collectionId={collectionId} availability={params.availability === "in-stock" ? "in_stock" : "all"} priceFilterActive={priceFilterActive} sortOrder={sortOrder} resultCount={results.length} />
     <div className="results-heading" role="status" aria-live="polite">{results.length} {results.length === 1 ? "piece" : "pieces"}</div>
     {results.length ? <div className="product-grid">{results.map((product) => <ProductCard key={product.id} product={product} variants={qualifyingVariants(product, params)} />)}</div> : <div className="empty-state"><h2>No pieces found.</h2><p>Try a different search or clear your filters.</p><Link href="/shop" className="text-link">See all pieces →</Link></div>}
   </div>;

@@ -128,3 +128,31 @@ estimate, verification steps, and rollback procedure are documented in
 Dockerfiles and Railway config files are scaffolding only: this change creates
 no Railway services, database, Redis instance, DNS, or hosted credentials. Do
 not connect these configs to the Firstout or Marrow Railway projects.
+
+## Optional analytics
+
+Optional storefront analytics stays off until a visitor accepts it. The browser
+adapter sends only typed page, product, filter, and active-attention events to
+PostHog Cloud EU; it does not use cookies, persistent identity, autocapture, or
+session replay. Before enabling it, create the dedicated EU project, disable
+project-level IP data capture in PostHog, then set its public project token as
+`NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` in the web environment. The token is a
+public ingestion key, not an API secret. Without it, the consent controls work
+but the adapter sends no requests.
+
+The analytics browser test uses the named `STOREFRONT_ANALYTICS_E2E=true` opt-in,
+the synthetic Medusa catalogue at `web/e2e/analytics-medusa-fixture.mjs`, and a
+test-only public token while intercepting all EU ingestion requests in Playwright.
+Start the fixture from `apps/storefront/web` with
+`node e2e/analytics-medusa-fixture.mjs`. In a second terminal, start the app with
+`MEDUSA_BACKEND_URL=http://127.0.0.1:9011 NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_test_fixture NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_test_fixture NEXT_PUBLIC_BASE_URL=http://localhost:3004 npm run dev -- --webpack`.
+Then run `STOREFRONT_ANALYTICS_E2E=true npx playwright test --config playwright.config.ts e2e/analytics.spec.ts`.
+The test-only token is safe only because the browser test intercepts ingestion;
+do not use it for live browsing. The tests verify reject/withdraw behavior,
+event allowlists, and active-time summaries without contacting PostHog. Once the
+EU project exists, create these initial
+saved reports in its UI: accepted page views by `page_key` and campaign; product
+impressions and selections by `surface` and `product_id`; search-result count
+by `availability` and `sort_order`; and product attention by
+`active_seconds` and `product_id`. Search text and full URLs are intentionally
+not captured, so reports cannot break them down by query string.
