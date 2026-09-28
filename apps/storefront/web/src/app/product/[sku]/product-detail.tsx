@@ -31,6 +31,8 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const variant = options.length === 0 ? first : product.variants.find((candidate) => options.every((option) => candidate.options?.some((value) => (value.option_id || value.option?.id) === option.id && value.value === choices[option.id])));
   const gallery = selectedImages(product, variant);
   const [activeImage, setActiveImage] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [bagMessage, setBagMessage] = useState("");
   const image = activeImage && gallery.includes(activeImage) ? activeImage : gallery[0];
   const imagePosition = image ? gallery.indexOf(image) + 1 : 0;
   const quantity = variant?.inventory_quantity ?? 0;
@@ -63,7 +65,18 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
         {hasDimensions && <><dt>Dimensions (L × W × H)</dt><dd>{dimensions.join(" × ")} {product.metadata?.dimension_unit || ""}</dd></>}
         {care && <><dt>Care</dt><dd>{care}</dd></>}
       </dl>}
-      <p className="preview-note">Online purchasing is not yet available.</p>
+      <button className="add-to-bag" type="button" disabled={!variant || !variant.calculated_price || quantity < 1 || adding} onClick={async () => {
+        if (!variant) return;
+        setAdding(true); setBagMessage("");
+        try {
+          const response = await fetch("/api/bag", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ variant_id: variant.id, quantity: 1 }) });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.message || "Could not add this piece");
+          setBagMessage("Added to bag. Review your bag when ready.");
+        } catch (error) { setBagMessage(error instanceof Error ? error.message : "Could not add this piece"); }
+        finally { setAdding(false); }
+      }}>{adding ? "Adding…" : "Add to bag"}</button>
+      {bagMessage && <p role="status" className="bag-feedback">{bagMessage} <Link href="/bag">View bag</Link></p>}
     </div>
   </article>;
 }

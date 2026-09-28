@@ -6,7 +6,7 @@ const base: OpsProduct = {
   product_group_id: "f6c64903-48ad-4202-a918-7903a40020ce",
   product_title: "Arc sofa", options: { Colour: "Sand" },
   sku: "ARC-SAND", name: "Arc sofa Sand", price_minor_zar: 1150000,
-  available_quantity: 2, revision: "2026-09-22T09:14:32.000001", observed_at: "2026-09-22T09:14:32.000001",
+  available_quantity: 2, revision: "2026-09-22T09:14:32.000001Z", observed_at: "2026-09-22T09:14:32.000001Z", acknowledged_commitment_ids: [],
 };
 
 test("projects two SKUs into one stable group identity, retaining standalone identities", () => {

@@ -18,7 +18,8 @@ Medusa environment; secrets must stay server-side. The source starts unpublished
 staff opt in a priced SKU by setting `storefront_published` on the staff API.
 
 Run Medusa migrations and the first-time bootstrap script before the source sync.
-The private Storefront has no checkout or payment in this first slice.
+The private Storefront has a persistent bag and temporary checkout stock holds.
+Payment and paid-order import are later slices.
 
 For local development, use independent Firstout and Medusa PostgreSQL databases
 and a Redis instance. Copy each `.env.example` to a local `.env`, then set a
@@ -46,6 +47,23 @@ and Medusa APIs, including price/stock parity, field allowlisting, and denial
 of a bad service token. The browser target checks navigation and direct 404s.
 The Firstout database-backed isolation test is in
 `tests/test_ops_commerce_catalogue.py`.
+
+For bag and hold development, set the same server-only `STOREFRONT_BFF_SECRET`
+(at least 32 characters) in commerce and web. Browser cart identity is a signed,
+httpOnly cookie; Medusa's cart API requires the BFF secret even when a cart ID
+is known. `STOREFRONT_SYNC_CRON` defaults to every minute,
+`STOREFRONT_AVAILABILITY_MAX_AGE_SECONDS` to 300, and
+`STOREFRONT_HOLD_TTL_SECONDS` to 1200. Add-to-bag does not reserve stock;
+continuing from the bag reserves it until expiry or cancellation. The expired
+hold job checks every minute. Stale source data preserves the bag but blocks a
+new hold. The operational acknowledgement and pending paid-commitment contract
+is described in `../firstout/backend/docs/ops_commerce_availability.md`.
+
+For the bag browser test, set `STOREFRONT_TEST_BAG_MULTI_SKU_ID` to a published
+SKU with at least two units and `STOREFRONT_TEST_LAST_UNIT_SKU_ID` to one with
+exactly one free unit. Set `STOREFRONT_TEST_MEDUSA_PUBLISHABLE_KEY` to the local
+public key to test direct cart denial. Run `npx nx run storefront-web:e2e`
+against the disposable live stack. See `docs/746-live-walkthrough.md`.
 
 The Collector discovery slice uses published Medusa Store API products. Home and
 collections lead to `/shop`, where search, category, collection, availability,

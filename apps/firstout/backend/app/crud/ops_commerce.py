@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from app.models.inventory import LocationStock
+from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
 from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.sku import Sku
 from app.models.team import Team
@@ -28,6 +29,7 @@ class PublishedSkuSnapshot:
     product_group_id: Optional[uuid.UUID]
     product_title: Optional[str]
     options: dict[str, str]
+    acknowledged_commitment_ids: list[str]
 
 
 class OpsCommerceCRUD:
@@ -86,6 +88,24 @@ class OpsCommerceCRUD:
             .group_by(Sku.id, ProductGroup.id, ProductGroupVariant.id)
             .order_by(Sku.our_ref)
         )
+        rows = result.all()
+        acknowledgements: dict[uuid.UUID, list[str]] = {}
+        acknowledgement_revisions: dict[uuid.UUID, datetime] = {}
+        if rows:
+            acknowledgement_result = await self.db.execute(
+                select(
+                    OpsCommerceAcknowledgement.source_sku_id,
+                    OpsCommerceAcknowledgement.commitment_id,
+                    OpsCommerceAcknowledgement.updated_at,
+                )
+                .where(OpsCommerceAcknowledgement.source_sku_id.in_([row[0] for row in rows]))
+                .order_by(OpsCommerceAcknowledgement.commitment_id)
+            )
+            for sku_id, commitment_id, updated_at in acknowledgement_result.all():
+                acknowledgements.setdefault(sku_id, []).append(commitment_id)
+                previous = acknowledgement_revisions.get(sku_id)
+                if previous is None or updated_at > previous:
+                    acknowledgement_revisions[sku_id] = updated_at
         return [
             PublishedSkuSnapshot(
                 id=row[0],
@@ -93,11 +113,12 @@ class OpsCommerceCRUD:
                 name=row[2],
                 retail_ex_vat=row[3],
                 available_quantity=max(0, row[4]),
-                revision=row[5],
+                revision=max(row[5], acknowledgement_revisions.get(row[0], row[5])),
                 observed_at=row[6],
                 product_group_id=row[7],
                 product_title=row[8],
                 options=row[9] or {},
+                acknowledged_commitment_ids=acknowledgements.get(row[0], []),
             )
-            for row in result.all()
+            for row in rows
         ]
