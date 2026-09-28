@@ -196,7 +196,7 @@ test("declined, cancelled, pending, and unknown results remain recoverable witho
   }
 });
 
-test("a configured Gauteng delivery rate is calculated by the server before payment", async ({ page }) => {
+test("a configured Gauteng delivery rate is paid and saved in the order", async ({ page }) => {
   test.skip(!skuId || !process.env.STOREFRONT_TEST_DELIVERY_CITY || !process.env.STOREFRONT_TEST_DELIVERY_SUBURB ||
     !process.env.STOREFRONT_TEST_DELIVERY_POSTAL_CODE, "Set a disposable test Gauteng zone and published SKU for delivery QA");
   await openHeldCheckout(page);
@@ -217,5 +217,16 @@ test("a configured Gauteng delivery rate is calculated by the server before paym
   const after = await page.getByTestId("checkout-total").textContent();
   expect(prepared.checkout.amount - bagBefore.total).toBe(175);
   expect(after).toContain(new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2 }).format(prepared.checkout.amount));
-  await page.request.delete("/api/bag/checkout");
+  await page.getByRole("button", { name: "Simulate success" }).click();
+  await expect(page.getByRole("heading", { name: "Thank you. Your order is confirmed." })).toBeVisible();
+  const confirmation = await (await page.request.get("/api/order/confirmation")).json() as {
+    status: string;
+    order: { total: number; shipping_total: number; fulfillment_type: string; address: { address_1: string; postal_code: string } };
+  };
+  expect(confirmation.status).toBe("captured");
+  expect(confirmation.order.fulfillment_type).toBe("delivery");
+  expect(confirmation.order.total).toBe(prepared.checkout.amount);
+  expect(confirmation.order.shipping_total).toBe(175);
+  expect(confirmation.order.address.address_1).toBe("1 Test Street");
+  expect(confirmation.order.address.postal_code).toBe(process.env.STOREFRONT_TEST_DELIVERY_POSTAL_CODE);
 });

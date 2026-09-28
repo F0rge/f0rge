@@ -29,8 +29,10 @@ R175; that is test data, not a launch rate.
 - Decline, cancellation, pending, and unknown outcomes remained visible in the
   recovery UI and did not create a paid order.
 - The configured disposable Gauteng delivery test address produced a server
-  total exactly R175 above the bag total before payment. With delivery zones
-  unset, checkout exposes collection only.
+  total exactly R175 above the bag total before payment. The test payment
+  completed and the saved delivery order retained that rate, total, and
+  address. With delivery zones unset, the server rejects delivery and
+  collection remains available.
 
 The Playwright checkout suite ran against the live local stack. Nx affected
 lint, typecheck, and test targets, plus production builds, are recorded in the

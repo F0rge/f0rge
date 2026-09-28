@@ -79,7 +79,10 @@ Railway. Checkout preparation persists an order-confirmation capability before
 returning the payment session; only its hash is stored with the cart and paid
 order, and the browser receives the capability in an httpOnly cookie. A paid
 callback can create the order after the browser closes, and duplicate events
-are idempotent.
+are idempotent. The server checks the source price, availability, and delivery
+rate before creating a payment session; that displayed quote is then locked
+for the test payment attempt. Final order creation independently reserves the
+stock or records a paid exception if it can no longer do so.
 
 For live checkout QA, use a disposable local Medusa database and a published
 test SKU. Set `STOREFRONT_TEST_CHECKOUT_SKU_ID` in the Playwright process,
