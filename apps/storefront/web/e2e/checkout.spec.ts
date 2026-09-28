@@ -86,6 +86,13 @@ test("a guest collection checkout resolves after the browser closes and duplicat
     const distinctEventReplay = await callback("browser-closed-success-002");
     expect(distinctEventReplay.status()).toBe(200);
     expect((await distinctEventReplay.json()).payment).toMatchObject({ status: "captured", duplicate: true });
+    const lateDecline = await callback("browser-closed-late-decline", "declined");
+    expect(lateDecline.status()).toBe(200);
+    expect((await lateDecline.json()).payment).toMatchObject({ status: "captured", duplicate: true });
+    const committedPayment = await database.query(
+      "SELECT status FROM payment_session WHERE id = $1 AND deleted_at IS NULL", [prepared.checkout.session_id],
+    );
+    expect(committedPayment.rows[0]?.status).toBe("captured");
 
     const persistedOrders = await database.query(
       "SELECT COUNT(*)::int AS count FROM order_cart WHERE cart_id = $1 AND deleted_at IS NULL", [bag.id],

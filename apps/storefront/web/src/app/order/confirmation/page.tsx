@@ -47,7 +47,7 @@ export default function OrderConfirmationPage() {
     {unavailable && <div role="alert"><h1>Confirmation temporarily unavailable</h1><p>Refresh this page to check again. Order details are available only through the private checkout capability saved in this browser.</p><button type="button" onClick={() => void load()}>Check again</button></div>}
     {result?.status === "captured" && result.order && <>
       <h1>Thank you. Your order is confirmed.</h1>
-      <p role="status">Private order reference {result.order.reference} · confirmation sent to {result.order.email}</p>
+      <p role="status">Private order reference {result.order.reference} · contact email {result.order.email}</p>
       <div className="confirmation-card">
         <h2>Order summary</h2>
         {result.order.items.map((item, index) => <div className="checkout-summary-line" key={item.title + "-" + index}><span>{item.title} × {item.quantity}</span><strong>{money(item.total, result.order!.currency_code.toUpperCase())}</strong></div>)}

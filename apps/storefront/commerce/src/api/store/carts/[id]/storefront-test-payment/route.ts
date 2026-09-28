@@ -83,6 +83,13 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
         }
       }
 
+      // Once an order is committed, a late provider event cannot turn its
+      // payment session back into a declined, cancelled, or pending state.
+      const committedOrderId = await orderForCart(req, cartId);
+      if (committedOrderId) {
+        return { status: "captured", order_id: committedOrderId, duplicate: true };
+      }
+
       const eventOutcome = outcome as Outcome;
       const eventData = { ...(session.data || {}), outcome: eventOutcome };
       if (eventOutcome === "unknown") {
