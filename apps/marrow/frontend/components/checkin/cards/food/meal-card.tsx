@@ -80,9 +80,14 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
         </div>
         <div className="p-2.5">
           {isAnalyzing ? (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" />
-              Analyzing...
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+                <span className="truncate">{title}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                Analyzing...
+              </div>
             </div>
           ) : (
             <>

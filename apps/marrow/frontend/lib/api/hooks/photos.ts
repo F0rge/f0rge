@@ -120,7 +120,7 @@ export function useUploadPhoto() {
       if (taggedGroupIds && taggedGroupIds.length > 0) {
         formData.append('tagged_group_ids', JSON.stringify(taggedGroupIds))
       }
-      return apiPostForm(`/entries/${date}/photos`, formData)
+      return apiPostForm(`/entries/${date}/photos`, formData) as Promise<Photo>
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entry'] })
