@@ -1,7 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { processPaymentWorkflow, updateCartWorkflow } from "@medusajs/medusa/core-flows";
 import { ContainerRegistrationKeys, MedusaError, Modules, PaymentActions, PaymentSessionStatus } from "@medusajs/framework/utils";
-import { releaseCheckoutHoldWithinLock, withCheckoutInventoryLock } from "../../../../../checkout-holds";
+import { checkoutHoldForCart, releaseCheckoutHoldWithinLock, withCheckoutInventoryLock } from "../../../../../checkout-holds";
 import { testPaymentEnabled } from "../../../../../test-payment-config";
 import { prepareStorefrontOrderHandoff } from "../../../../../storefront-order-handoff";
 
@@ -40,6 +40,81 @@ async function markEvent(req: MedusaRequest, session: PaymentSession, record: Re
     status,
     metadata: { ...(session.metadata || {}), storefront_test_events: events },
   });
+}
+
+async function recordPaidException(
+  req: MedusaRequest,
+  cartId: string,
+  orderId: string,
+  sessionId: string,
+  eventId: string,
+  reason: string,
+): Promise<void> {
+  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
+  const { data: carts } = await query.graph({ entity: "cart", fields: ["id", "metadata"], filters: { id: cartId } });
+  const cart = carts[0] as { id: string; metadata?: Record<string, unknown> | null } | undefined;
+  const recordedAt = new Date().toISOString();
+  if (cart) {
+    await updateCartWorkflow(req.scope).run({ input: {
+      id: cartId,
+      metadata: {
+        ...(cart.metadata || {}),
+        storefront_payment_exception: {
+          session_id: sessionId,
+          event_id: eventId,
+          order_id: orderId,
+          status: "paid_exception",
+          recorded_at: recordedAt,
+          reason: "Payment succeeded but finite made-to-order capacity needs staff recovery",
+        },
+      },
+    } });
+  }
+  const { data: orders } = await query.graph({ entity: "order", fields: ["id", "metadata"], filters: { id: orderId } });
+  const order = orders[0] as { id: string; metadata?: Record<string, unknown> | null } | undefined;
+  if (order) {
+    const metadata = order.metadata || {};
+    const priorOutbox = metadata.storefront_handoff_outbox;
+    const outbox = priorOutbox && typeof priorOutbox === "object"
+      ? { ...(priorOutbox as Record<string, unknown>), status: "failed", failure_code: "made_to_order_capacity_unavailable", updated_at: recordedAt }
+      : priorOutbox;
+    const orderModule = req.scope.resolve(Modules.ORDER);
+    await orderModule.updateOrders([{
+      id: orderId,
+      metadata: {
+        ...metadata,
+        ...(outbox ? { storefront_handoff_outbox: outbox } : {}),
+        storefront_capacity_exception: {
+          status: "paid_exception",
+          event_id: eventId,
+          recorded_at: recordedAt,
+          reason,
+        },
+      },
+    }]);
+  }
+}
+
+async function preparePaidHandoff(
+  req: MedusaRequest,
+  cartId: string,
+  orderId: string,
+  session: PaymentSession,
+  eventId: string,
+  outcome: Outcome,
+  eventData: Record<string, unknown>,
+  duplicate: boolean,
+): Promise<{ status: "captured" | "paid_exception"; order_id: string; duplicate: boolean }> {
+  try {
+    const outbox = await prepareStorefrontOrderHandoff(req.scope, orderId);
+    if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
+    await markEvent(req, session, { event_id: eventId, outcome, status: "captured" }, eventData, PaymentSessionStatus.CAPTURED);
+    return { status: "captured", order_id: orderId, duplicate };
+  } catch (error) {
+    await recordPaidException(req, cartId, orderId, session.id, eventId, error instanceof Error ? error.message : "handoff_recovery_required");
+    await markEvent(req, session, { event_id: eventId, outcome, status: "paid_exception" }, eventData, PaymentSessionStatus.CAPTURED);
+    return { status: "paid_exception", order_id: orderId, duplicate };
+  }
 }
 
 export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<void> {
@@ -81,11 +156,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       if (prior) {
         const existingOrderId = await orderForCart(req, cartId);
         if (existingOrderId) {
-          const outbox = await prepareStorefrontOrderHandoff(req.scope, existingOrderId);
-          if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
-          await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "captured" },
-            eventData, PaymentSessionStatus.CAPTURED);
-          return { status: "captured", order_id: existingOrderId, duplicate: true };
+          return await preparePaidHandoff(req, cartId, existingOrderId, session, eventId, eventOutcome, eventData, true);
         }
         if (prior.status !== "processing" || prior.outcome !== "success") {
           return { status: prior.status, order_id: null, duplicate: true };
@@ -96,11 +167,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       // payment session back into a declined, cancelled, or pending state.
       const committedOrderId = await orderForCart(req, cartId);
       if (committedOrderId) {
-        const outbox = await prepareStorefrontOrderHandoff(req.scope, committedOrderId);
-        if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
-        await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "captured" },
-          eventData, PaymentSessionStatus.CAPTURED);
-        return { status: "captured", order_id: committedOrderId, duplicate: true };
+        return await preparePaidHandoff(req, cartId, committedOrderId, session, eventId, eventOutcome, eventData, true);
       }
 
       if (eventOutcome === "unknown") {
@@ -116,10 +183,16 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
 
       const existingOrderId = await orderForCart(req, cartId);
       if (existingOrderId) {
-        const outbox = await prepareStorefrontOrderHandoff(req.scope, existingOrderId);
-        if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
-        await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "captured" }, eventData, PaymentSessionStatus.CAPTURED);
-        return { status: "captured", order_id: existingOrderId, duplicate: true };
+        return await preparePaidHandoff(req, cartId, existingOrderId, session, eventId, eventOutcome, eventData, true);
+      }
+
+      const recoveringCapturedPayment = session.status === PaymentSessionStatus.CAPTURED ||
+        session.data?.outcome === "success" || (prior?.outcome === "success" && prior.status === "processing");
+      if (!recoveringCapturedPayment) {
+        const hold = await checkoutHoldForCart(req.scope, cartId);
+        if (!hold.ready) {
+          throw new MedusaError(MedusaError.Types.CONFLICT, "Your reservation or made-to-order allowance expired. Return to your bag and review availability before paying.");
+        }
       }
 
       await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "processing" }, eventData, PaymentSessionStatus.PENDING);
@@ -144,10 +217,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       if (orderId) {
         // Do not report the captured callback until a durable outbox snapshot
         // and its paid-stock commitments are written to Medusa.
-        const outbox = await prepareStorefrontOrderHandoff(req.scope, orderId);
-        if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
-        await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "captured" }, eventData, PaymentSessionStatus.CAPTURED);
-        return { status: "captured", order_id: orderId, duplicate: false };
+        return await preparePaidHandoff(req, cartId, orderId, session, eventId, eventOutcome, eventData, false);
       }
 
       const { data: carts } = await query.graph({ entity: "cart", fields: ["id", "metadata"], filters: { id: cartId } });

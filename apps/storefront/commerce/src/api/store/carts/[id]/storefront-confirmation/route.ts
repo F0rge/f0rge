@@ -36,6 +36,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
         fields: [
           "id", "display_id", "email", "currency_code", "subtotal", "shipping_total", "tax_total", "total",
           "items.id", "items.title", "items.quantity", "items.unit_price", "items.total",
+          "items.metadata",
           "shipping_methods.name", "shipping_methods.amount",
           "shipping_address.first_name", "shipping_address.last_name", "shipping_address.address_1",
           "shipping_address.address_2", "shipping_address.city", "shipping_address.province",
@@ -48,6 +49,11 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
         throw new MedusaError(MedusaError.Types.NOT_FOUND, "Order confirmation not found");
       }
       const checkout = order.metadata?.storefront_checkout;
+      const fulfillmentStatus = order.metadata?.storefront_fulfillment_status || {
+        fulfillment_type: checkout?.fulfillment_type || "delivery",
+        status: "confirmed",
+        revision: 0,
+      };
       res.status(200).json({
         status: "captured",
         order: {
@@ -59,8 +65,12 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
           tax_total: order.tax_total,
           total: order.total,
           fulfillment_type: checkout?.fulfillment_type,
+          fulfillment_status: fulfillmentStatus.status,
+          fulfillment_revision: fulfillmentStatus.revision,
+          fulfillment_promise: order.metadata?.storefront_fulfillment_promise || null,
           items: (order.items || []).map((item: Record<string, unknown>) => ({
             title: item.title, quantity: item.quantity, unit_price: item.unit_price, total: item.total,
+            fulfillment_promise: (item.metadata as Record<string, unknown> | undefined)?.fulfillment_promise || null,
           })),
           shipping: (order.shipping_methods || []).map((method: Record<string, unknown>) => ({
             name: method.name, total: method.amount,

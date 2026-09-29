@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import type { Bag } from "@/lib/bag-server";
 
 const money = (value: number) => new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(value);
+const promiseDates = (from: string, by: string) => {
+  const format = (value: string) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
+  return from === by ? format(from) : `${format(from)} – ${format(by)}`;
+};
 
 async function bagRequest(method: string, path = "/api/bag", body?: unknown): Promise<Bag> {
   const response = await fetch(path, {
@@ -58,6 +62,8 @@ export default function BagPage() {
       <div className="bag-lines">{bag.items.map((item) => <div className="bag-line" key={item.id}>
         <div className="bag-line-image">{item.thumbnail && <img src={item.thumbnail} alt="" />}</div>
         <div><h2>{item.title}</h2><p>{money(item.unit_price)} each</p>
+          {item.fulfillment_promise?.kind === "made_to_order" && <p className="line-fulfillment-promise" data-testid="line-fulfillment-promise">Made to order · estimated ready {promiseDates(item.fulfillment_promise.estimated_from, item.fulfillment_promise.estimated_by)}</p>}
+          {item.fulfillment_promise?.kind === "stocked" && <p className="line-fulfillment-promise">In stock and reserved</p>}
           <label htmlFor={`quantity-${item.id}`}>Quantity for {item.title}</label>
           <input id={`quantity-${item.id}`} type="number" min="1" max="99" step="1" defaultValue={item.quantity} key={`${item.id}-${item.quantity}`} disabled={busy || held} onBlur={(event) => {
             const quantity = Number(event.target.value);
@@ -68,6 +74,11 @@ export default function BagPage() {
       </div>)}</div>
       <aside className="bag-summary"><p className="eyebrow">Order summary</p><dl><dt>Subtotal</dt><dd>{money(bag.subtotal)}</dd><dt>Total incl. VAT</dt><dd data-testid="bag-total">{money(bag.total)}</dd></dl>
         {bag.hold?.status === "review" && <div className="bag-review" role="status"><h2>Review changes</h2><p>Price or availability changed. Review your bag before continuing.</p>{bag.hold.changes?.map((change) => <p key={change}>{change}</p>)}</div>}
+        {bag.hold?.fulfillment_promise && <div className="bag-fulfillment-promise" role="status" data-testid="fulfillment-promise-summary">
+          <h2>One fulfillment promise for the whole order</h2>
+          <p>{bag.hold.fulfillment_promise.kind === "mixed" ? "Your stocked and made-to-order pieces will be fulfilled together." : bag.hold.fulfillment_promise.kind === "made_to_order" ? "Your order is made to order." : "Your pieces are in stock."}</p>
+          <p>Estimated ready {promiseDates(bag.hold.fulfillment_promise.estimated_from, bag.hold.fulfillment_promise.estimated_by)}.</p>
+        </div>}
         {held ? <><p role="status">Reserved until {new Date(bag.hold!.expires_at).toLocaleTimeString("en-ZA")}</p><Link className="bag-checkout" href="/checkout">Continue checkout</Link><button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Change bag</button><button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Cancel reservation</button></>
           : <button type="button" className="bag-checkout" disabled={busy} onClick={() => void beginCheckout()}>{bag.hold?.status === "review" ? "Accept changes and continue" : "Continue to checkout"}</button>}
         <p className="bag-note">Availability is confirmed when you continue to checkout. No payment is taken here.</p>

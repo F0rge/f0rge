@@ -3,6 +3,24 @@ import "server-only";
 type MedusaRegion = { id: string; currency_code: string };
 export type MedusaImage = { id: string; url: string };
 export type MedusaOption = { id: string; title: string; values?: { id: string; value: string }[] };
+export type MadeToOrderOffer = {
+  id: string;
+  capacity: number;
+  min_lead_time_days: number;
+  max_lead_time_days: number;
+  expires_at: string;
+  remaining_capacity: number;
+  observed_at?: string | null;
+};
+export type FulfillmentPromise = {
+  kind: "stocked" | "made_to_order";
+  offer_id?: string;
+  min_lead_time_days?: number;
+  max_lead_time_days?: number;
+  estimated_from: string;
+  estimated_by: string;
+  expires_at?: string;
+};
 export type MedusaVariant = {
   id: string;
   sku: string | null;
@@ -10,7 +28,13 @@ export type MedusaVariant = {
   thumbnail?: string | null;
   images?: MedusaImage[] | null;
   options?: { id: string; value: string; option_id?: string | null; option?: { id: string; title: string } | null }[];
-  metadata?: { suitable_image_urls?: string[] | string; lead_time_days?: number | string; care_instructions?: string } | null;
+  metadata?: {
+    suitable_image_urls?: string[] | string;
+    lead_time_days?: number | string;
+    care_instructions?: string;
+    made_to_order_offer?: MadeToOrderOffer | null;
+    storefront_made_to_order_offer?: MadeToOrderOffer | null;
+  } | null;
   material?: string | null;
   length?: number | null;
   width?: number | null;
@@ -93,6 +117,7 @@ function publicProduct(product: StoreProduct): StoreProduct {
         suitable_image_urls: variant.metadata?.suitable_image_urls,
         lead_time_days: variant.metadata?.lead_time_days,
         care_instructions: variant.metadata?.care_instructions,
+        made_to_order_offer: variant.metadata?.storefront_made_to_order_offer as MadeToOrderOffer | null | undefined,
       },
     })),
   };

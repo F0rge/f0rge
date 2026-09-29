@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 
 export const cartCookie = "collector_cart";
 export const orderAccessCookie = "collector_order_access";
+export const emailOrderAccessCookie = "collector_email_order_access";
 const baseUrl = process.env.MEDUSA_BACKEND_URL || "http://localhost:9000";
 
 function secret(): string {
@@ -37,6 +38,10 @@ function orderAccessSignature(cartId: string, token: string): string {
   return createHmac("sha256", secret()).update(`order-confirmation:v1:${cartId}:${token}`).digest("base64url");
 }
 
+function emailOrderAccessSignature(orderId: string, token: string): string {
+  return createHmac("sha256", secret()).update(`email-order-cookie:v1:${orderId}:${token}`).digest("base64url");
+}
+
 export function newOrderAccessToken(): string { return randomBytes(32).toString("base64url"); }
 
 export function signedOrderAccess(cartId: string, token: string): string {
@@ -55,9 +60,44 @@ export async function currentOrderAccessToken(cartId: string): Promise<string | 
   return verifyOrderAccess((await cookies()).get(orderAccessCookie)?.value, cartId);
 }
 
-export type BagItem = { id: string; variant_id: string; title: string; thumbnail?: string | null; quantity: number; unit_price: number; total: number };
-export type Bag = { id: string | null; items: BagItem[]; subtotal: number; total: number; currency_code: string; hold?: { expires_at: string; status: string; changes?: string[] } | null };
-type MedusaCart = Omit<Bag, "id"> & { id: string; metadata?: { storefront_hold?: Bag["hold"] } };
+export function signedEmailOrderAccess(orderId: string, token: string): string {
+  return `e1.${orderId}.${token}.${emailOrderAccessSignature(orderId, token)}`;
+}
+
+export async function currentEmailOrderAccess(): Promise<{ orderId: string; token: string } | null> {
+  const value = (await cookies()).get(emailOrderAccessCookie)?.value || "";
+  const match = /^e1\.(order_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{43})$/.exec(value);
+  if (!match) return null;
+  const expected = Buffer.from(emailOrderAccessSignature(match[1], match[2]));
+  const actual = Buffer.from(match[3]);
+  return expected.length === actual.length && timingSafeEqual(expected, actual)
+    ? { orderId: match[1], token: match[2] }
+    : null;
+}
+
+export type BagFulfillmentPromise = {
+  kind: "stocked" | "made_to_order";
+  offer_id?: string;
+  min_lead_time_days?: number;
+  max_lead_time_days?: number;
+  estimated_from: string;
+  estimated_by: string;
+  expires_at?: string;
+};
+export type BagFulfillmentSummary = {
+  version: 1;
+  kind: "stocked" | "made_to_order" | "mixed";
+  accepted_at: string;
+  estimated_from: string;
+  estimated_by: string;
+};
+export type BagItem = { id: string; variant_id: string; title: string; thumbnail?: string | null; quantity: number; unit_price: number; total: number; fulfillment_promise?: BagFulfillmentPromise | null };
+export type Bag = { id: string | null; items: BagItem[]; subtotal: number; total: number; currency_code: string; hold?: { expires_at: string; status: string; changes?: string[]; fulfillment_promise?: BagFulfillmentSummary } | null };
+type MedusaCart = Omit<Bag, "id" | "items"> & {
+  id: string;
+  items?: (Omit<BagItem, "fulfillment_promise"> & { metadata?: { fulfillment_promise?: BagFulfillmentPromise } | null })[] | null;
+  metadata?: { storefront_hold?: Bag["hold"] };
+};
 
 export class BagError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -99,12 +139,26 @@ export async function orderConfirmationResponse(cartId: string, token: string): 
   return { status: response.status, payload };
 }
 
+export async function storefrontOrderStatusResponse(orderId: string, token: string): Promise<{ status: number; payload: Record<string, unknown> }> {
+  const response = await fetch(`${baseUrl}/store/orders/${encodeURIComponent(orderId)}/storefront-status`, {
+    headers: {
+      "x-publishable-api-key": process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY || "",
+      "x-storefront-bff-secret": secret(),
+      "x-storefront-order-status-token": token,
+    },
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  return { status: response.status, payload };
+}
+
 export function publicBag(cart?: MedusaCart | null): Bag {
   if (!cart) return { id: null, items: [], subtotal: 0, total: 0, currency_code: "zar" };
   return {
     id: cart.id,
-    items: (cart.items || []).map(({ id, variant_id, title, thumbnail, quantity, unit_price, total }) => ({
+    items: (cart.items || []).map(({ id, variant_id, title, thumbnail, quantity, unit_price, total, metadata }) => ({
       id, variant_id, title, thumbnail, quantity, unit_price, total: total ?? unit_price * quantity,
+      fulfillment_promise: metadata?.fulfillment_promise || null,
     })),
     subtotal: cart.subtotal || 0, total: cart.total || 0, currency_code: cart.currency_code || "zar",
     hold: cart.metadata?.storefront_hold || null,

@@ -1,6 +1,16 @@
 import { z } from "@medusajs/framework/zod";
 import { MedusaError } from "@medusajs/framework/utils";
 
+const madeToOrderOfferSchema = z.object({
+  id: z.string().uuid(),
+  capacity: z.number().int().nonnegative(),
+  min_lead_time_days: z.number().int().positive(),
+  max_lead_time_days: z.number().int().positive(),
+  expires_at: z.string().datetime({ offset: true }),
+}).strict().refine((offer) => offer.max_lead_time_days >= offer.min_lead_time_days, {
+  message: "Made-to-order maximum lead time must not be shorter than its minimum",
+});
+
 const productSchema = z.object({
   source_sku_id: z.string().uuid(),
   product_group_id: z.string().uuid().nullable(),
@@ -13,6 +23,7 @@ const productSchema = z.object({
   revision: z.string().min(1),
   observed_at: z.string().min(1),
   acknowledged_commitment_ids: z.array(z.string().min(1)),
+  made_to_order_offer: madeToOrderOfferSchema.nullable(),
 }).strict();
 
 const responseSchema = z.object({

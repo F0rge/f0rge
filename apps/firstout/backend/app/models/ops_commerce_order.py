@@ -12,6 +12,7 @@ from sqlalchemy import (
     JSON,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -43,6 +44,12 @@ class OpsCommerceOrder(UUIDPkMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     failure_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fulfillment_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="confirmed", server_default=text("'confirmed'")
+    )
+    fulfillment_revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
     last_attempt_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     imported_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     sales_order_id: Mapped[uuid.UUID] = mapped_column(
@@ -64,5 +71,13 @@ class OpsCommerceOrder(UUIDPkMixin, TimestampMixin, Base):
             name="ck_ops_commerce_orders_status",
         ),
         CheckConstraint("attempt_count >= 0", name="ck_ops_commerce_orders_attempt_count"),
+        CheckConstraint(
+            "fulfillment_status IN ('confirmed', 'ready_for_delivery', 'out_for_delivery', "
+            "'delivered', 'ready_for_collection', 'collected')",
+            name="ck_ops_commerce_orders_fulfillment_status",
+        ),
+        CheckConstraint(
+            "fulfillment_revision >= 0", name="ck_ops_commerce_orders_fulfillment_revision"
+        ),
         CheckConstraint("captured_amount_minor > 0", name="ck_ops_commerce_orders_captured_amount"),
     )

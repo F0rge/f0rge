@@ -46,6 +46,51 @@ class StorefrontFulfillment(BaseModel):
         return self
 
 
+class StorefrontLinePromise(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["stocked", "made_to_order"]
+    offer_id: Optional[uuid.UUID] = None
+    min_lead_time_days: Optional[int] = Field(default=None, ge=0)
+    max_lead_time_days: Optional[int] = Field(default=None, ge=0)
+    estimated_from: datetime.date
+    estimated_by: datetime.date
+    expires_at: Optional[datetime.datetime] = None
+
+    @model_validator(mode="after")
+    def validate_promise(self) -> StorefrontLinePromise:
+        if self.estimated_by < self.estimated_from:
+            raise ValueError("promise end date precedes its start date")
+        if self.kind == "made_to_order":
+            if (
+                self.offer_id is None
+                or self.min_lead_time_days is None
+                or self.max_lead_time_days is None
+            ):
+                raise ValueError("made-to-order promise requires its offer and lead-time range")
+            if self.max_lead_time_days < self.min_lead_time_days:
+                raise ValueError("maximum lead time precedes minimum lead time")
+            if self.expires_at is None:
+                raise ValueError("made-to-order promise requires its offer expiry")
+        return self
+
+
+class StorefrontOrderPromise(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal[1]
+    kind: Literal["stocked", "made_to_order", "mixed"]
+    accepted_at: datetime.datetime
+    estimated_from: datetime.date
+    estimated_by: datetime.date
+
+    @model_validator(mode="after")
+    def validate_window(self) -> StorefrontOrderPromise:
+        if self.estimated_by < self.estimated_from:
+            raise ValueError("promise end date precedes its start date")
+        return self
+
+
 class StorefrontOrderLine(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -58,6 +103,7 @@ class StorefrontOrderLine(BaseModel):
     ex_minor_zar: int = Field(ge=0)
     vat_minor_zar: int = Field(ge=0)
     total_minor_zar: int = Field(ge=0)
+    fulfillment_promise: Optional[StorefrontLinePromise] = None
 
     @model_validator(mode="after")
     def line_balances(self) -> StorefrontOrderLine:
@@ -103,6 +149,7 @@ class StorefrontPaidOrder(BaseModel):
     lines: list[StorefrontOrderLine] = Field(min_length=1, max_length=100)
     totals: StorefrontOrderTotals
     payment: StorefrontPayment
+    fulfillment_promise: Optional[StorefrontOrderPromise] = None
 
     @model_validator(mode="after")
     def order_balances(self) -> StorefrontPaidOrder:
@@ -129,7 +176,73 @@ class StorefrontPaidOrder(BaseModel):
             raise ValueError("payment currency does not match the order currency")
         if len({line.external_line_id for line in self.lines}) != len(self.lines):
             raise ValueError("external order line identities must be unique")
+        line_promises = [line.fulfillment_promise for line in self.lines]
+        if self.fulfillment_promise is None and any(
+            promise is not None and promise.kind == "made_to_order" for promise in line_promises
+        ):
+            raise ValueError("made-to-order lines require an order fulfillment promise")
+        if self.fulfillment_promise is not None:
+            if any(promise is None for promise in line_promises):
+                raise ValueError("order promise requires a promise snapshot for every line")
+            typed_promises = [promise for promise in line_promises if promise is not None]
+            kinds = {promise.kind for promise in typed_promises}
+            expected_kind = next(iter(kinds)) if len(kinds) == 1 else "mixed"
+            if self.fulfillment_promise.kind != expected_kind:
+                raise ValueError("order promise kind does not match its line promises")
+            expected_from = max(promise.estimated_from for promise in typed_promises)
+            expected_by = max(promise.estimated_by for promise in typed_promises)
+            if (
+                self.fulfillment_promise.estimated_from != expected_from
+                or self.fulfillment_promise.estimated_by != expected_by
+            ):
+                raise ValueError(
+                    "order promise window does not match the accepted no-split promise"
+                )
         return self
+
+
+FulfillmentType = Literal["delivery", "collection"]
+FulfillmentStatus = Literal[
+    "confirmed",
+    "ready_for_delivery",
+    "out_for_delivery",
+    "delivered",
+    "ready_for_collection",
+    "collected",
+]
+
+
+class StorefrontFulfillmentEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: uuid.UUID
+    company_id: uuid.UUID
+    external_order_id: str = Field(min_length=1, max_length=255)
+    revision: int = Field(gt=0)
+    fulfillment_type: FulfillmentType
+    status: FulfillmentStatus
+    fulfillment_promise: Optional[StorefrontOrderPromise] = None
+    occurred_at: datetime.datetime
+
+
+class StorefrontFulfillmentEventList(BaseModel):
+    items: list[StorefrontFulfillmentEvent]
+
+
+class StorefrontFulfillmentEventAck(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+
+
+class StorefrontFulfillmentEventAckResponse(BaseModel):
+    acknowledged: int
+
+
+class StorefrontCollectionStatusUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ready_for_collection", "collected"]
 
 
 class StorefrontHandoffResponse(BaseModel):
@@ -143,6 +256,10 @@ class StorefrontHandoffResponse(BaseModel):
     imported_at: Optional[datetime.datetime]
     sales_order_id: uuid.UUID
     payment_journal_id: uuid.UUID
+    fulfillment_type: FulfillmentType
+    fulfillment_status: FulfillmentStatus
+    fulfillment_revision: int
+    fulfillment_promise: Optional[StorefrontOrderPromise] = None
     created_at: datetime.datetime
     updated_at: datetime.datetime
 

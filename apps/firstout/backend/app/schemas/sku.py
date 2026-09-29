@@ -56,6 +56,10 @@ class SkuUpdate(BaseModel):
     category: Optional[str] = Field(default=None, max_length=64)
     preferred_supplier_id: Optional[uuid.UUID] = None
     lead_time_days: Optional[int] = Field(default=None, ge=0)
+    made_to_order_capacity: Optional[int] = Field(default=None, ge=0)
+    made_to_order_lead_time_min_days: Optional[int] = Field(default=None, ge=1)
+    made_to_order_lead_time_max_days: Optional[int] = Field(default=None, ge=1)
+    made_to_order_expires_at: Optional[datetime.datetime] = None
     reorder_min: Optional[int] = Field(default=None, ge=1)
     supplier_ref: Optional[str] = Field(default=None, max_length=64)
     wholesale_ex_vat: Optional[Decimal] = None
@@ -77,6 +81,11 @@ class SkuResponse(BaseModel):
     preferred_supplier_id: Optional[uuid.UUID] = None
     preferred_supplier_name: Optional[str] = None
     lead_time_days: Optional[int] = None
+    made_to_order_capacity: Optional[int] = None
+    made_to_order_lead_time_min_days: Optional[int] = None
+    made_to_order_lead_time_max_days: Optional[int] = None
+    made_to_order_expires_at: Optional[datetime.datetime] = None
+    made_to_order_offer_id: Optional[uuid.UUID] = None
     reorder_min: Optional[int] = None
     last_landed_cost_zar: Optional[Decimal] = None
     category: Optional[str] = None

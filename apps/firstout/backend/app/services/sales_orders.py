@@ -444,6 +444,8 @@ class SalesOrdersService:
         order: SalesOrder,
         location_id: Optional[uuid.UUID],
         user_id: uuid.UUID,
+        *,
+        eligible_line_ids: Optional[set[uuid.UUID]] = None,
     ) -> None:
         if location_id is None:
             raise ValidationError("location_id is required to hold stock")
@@ -461,6 +463,11 @@ class SalesOrdersService:
         any_unheld = False
         any_held = False
         for line in order.lines:
+            # A paid made-to-order line is an operational promise, not stock to
+            # reserve from a warehouse. Callers may hold only the stocked lines.
+            if eligible_line_ids is not None and line.id not in eligible_line_ids:
+                any_unheld = True
+                continue
             loc_stock = await self.location_stock_crud.get_by_sku_and_location(
                 line.sku_id,
                 location_id,

@@ -48,6 +48,10 @@ type EditorFormState = {
   preferredSupplierId: string;
   supplierRef: string;
   leadTimeDays: string;
+  madeToOrderCapacity: string;
+  madeToOrderMinDays: string;
+  madeToOrderMaxDays: string;
+  madeToOrderExpiresAt: string;
   reorderMin: string;
 };
 
@@ -84,8 +88,19 @@ const emptyForm: EditorFormState = {
   preferredSupplierId: "",
   supplierRef: "",
   leadTimeDays: "",
+  madeToOrderCapacity: "",
+  madeToOrderMinDays: "",
+  madeToOrderMaxDays: "",
+  madeToOrderExpiresAt: "",
   reorderMin: "",
 };
+
+function localDateTimeInput(value: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
 
 function formFromSku(sku: Sku): EditorFormState {
   return {
@@ -98,6 +113,10 @@ function formFromSku(sku: Sku): EditorFormState {
     preferredSupplierId: sku.preferred_supplier_id ?? "",
     supplierRef: sku.supplier_ref ?? "",
     leadTimeDays: sku.lead_time_days !== null ? String(sku.lead_time_days) : "",
+    madeToOrderCapacity: sku.made_to_order_capacity !== null ? String(sku.made_to_order_capacity) : "",
+    madeToOrderMinDays: sku.made_to_order_lead_time_min_days !== null ? String(sku.made_to_order_lead_time_min_days) : "",
+    madeToOrderMaxDays: sku.made_to_order_lead_time_max_days !== null ? String(sku.made_to_order_lead_time_max_days) : "",
+    madeToOrderExpiresAt: localDateTimeInput(sku.made_to_order_expires_at),
     reorderMin: sku.reorder_min !== null ? String(sku.reorder_min) : "",
   };
 }
@@ -124,6 +143,34 @@ function parseReorderMin(value: string): number | null {
     return null;
   }
   return parsed;
+}
+
+function parseWholeNumber(value: string, minimum: number): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) && parsed >= minimum ? parsed : null;
+}
+
+function madeToOrderFormError(form: EditorFormState): string | null {
+  const values = [form.madeToOrderCapacity, form.madeToOrderMinDays, form.madeToOrderMaxDays, form.madeToOrderExpiresAt];
+  if (values.every((value) => !value.trim())) return null;
+  if (values.some((value) => !value.trim())) return "Set the allowance, both lead-time bounds, and expiry together.";
+  const capacity = parseWholeNumber(form.madeToOrderCapacity, 0);
+  const minDays = parseWholeNumber(form.madeToOrderMinDays, 1);
+  const maxDays = parseWholeNumber(form.madeToOrderMaxDays, 1);
+  const expiry = new Date(form.madeToOrderExpiresAt);
+  if (capacity === null || minDays === null || maxDays === null) return "Use whole numbers for the allowance and lead-time bounds.";
+  if (maxDays < minDays) return "Maximum lead time must be at least the minimum.";
+  if (!Number.isFinite(expiry.getTime()) || expiry.getTime() <= Date.now()) return "Choose a future expiry time.";
+  return null;
+}
+
+function madeToOrderFormChanged(sku: Sku, form: EditorFormState): boolean {
+  return form.madeToOrderCapacity.trim() !== (sku.made_to_order_capacity === null ? "" : String(sku.made_to_order_capacity)) ||
+    form.madeToOrderMinDays.trim() !== (sku.made_to_order_lead_time_min_days === null ? "" : String(sku.made_to_order_lead_time_min_days)) ||
+    form.madeToOrderMaxDays.trim() !== (sku.made_to_order_lead_time_max_days === null ? "" : String(sku.made_to_order_lead_time_max_days)) ||
+    form.madeToOrderExpiresAt !== localDateTimeInput(sku.made_to_order_expires_at);
 }
 
 function buildPayload(sku: Sku, form: EditorFormState): UpdateSkuPricePayload {
@@ -161,6 +208,15 @@ function buildPayload(sku: Sku, form: EditorFormState): UpdateSkuPricePayload {
     payload.reorder_min = reorderMin;
   }
 
+  if (madeToOrderFormChanged(sku, form)) {
+    const disabled = !form.madeToOrderCapacity.trim() && !form.madeToOrderMinDays.trim() &&
+      !form.madeToOrderMaxDays.trim() && !form.madeToOrderExpiresAt.trim();
+    payload.made_to_order_capacity = disabled ? null : parseWholeNumber(form.madeToOrderCapacity, 0);
+    payload.made_to_order_lead_time_min_days = disabled ? null : parseWholeNumber(form.madeToOrderMinDays, 1);
+    payload.made_to_order_lead_time_max_days = disabled ? null : parseWholeNumber(form.madeToOrderMaxDays, 1);
+    payload.made_to_order_expires_at = disabled ? null : new Date(form.madeToOrderExpiresAt).toISOString();
+  }
+
   return payload;
 }
 
@@ -177,7 +233,10 @@ function hasFormEdits(sku: Sku, form: EditorFormState): boolean {
   if (parseLeadTimeDays(form.leadTimeDays) !== sku.lead_time_days) {
     return true;
   }
-  return parseReorderMin(form.reorderMin) !== sku.reorder_min;
+  if (parseReorderMin(form.reorderMin) !== sku.reorder_min) {
+    return true;
+  }
+  return madeToOrderFormChanged(sku, form);
 }
 
 export function SkuPriceEditor({
@@ -308,6 +367,8 @@ export function SkuPriceEditor({
   }
 
   const hasEdits = sku ? hasFormEdits(sku, form) : false;
+  const madeToOrderError = readOnly ? null : madeToOrderFormError(form);
+  const invalidMadeToOrderEdit = !!sku && madeToOrderFormChanged(sku, form) && madeToOrderError !== null;
 
   async function handleSave() {
     if (!sku || readOnly) {
@@ -434,6 +495,25 @@ export function SkuPriceEditor({
               value={form.reorderMin || "—"}
               readOnly
             />
+            <TextInput
+              id="sku-made-to-order-readonly"
+              labelText="Made-to-order allowance"
+              value={sku.made_to_order_capacity === null ? "—" : `${sku.made_to_order_capacity} units`}
+              readOnly
+            />
+            <TextInput
+              id="sku-made-to-order-lead-time-readonly"
+              labelText="Confirmed made-to-order lead time"
+              value={sku.made_to_order_lead_time_min_days === null || sku.made_to_order_lead_time_max_days === null
+                ? "—" : `${sku.made_to_order_lead_time_min_days}–${sku.made_to_order_lead_time_max_days} days`}
+              readOnly
+            />
+            <TextInput
+              id="sku-made-to-order-expiry-readonly"
+              labelText="Made-to-order offer expiry"
+              value={sku.made_to_order_expires_at ? new Date(sku.made_to_order_expires_at).toLocaleString("en-ZA") : "—"}
+              readOnly
+            />
           </>
         ) : (
           <>
@@ -487,6 +567,44 @@ export function SkuPriceEditor({
                 setForm((current) => ({ ...current, reorderMin: event.target.value }))
               }
             />
+            <TextInput
+              id="sku-made-to-order-capacity"
+              type="number"
+              min={0}
+              step={1}
+              labelText="Made-to-order allowance (units)"
+              helperText="Finite quantity available after physical stock is gone. Changing the allowance starts a new allocation."
+              value={form.madeToOrderCapacity}
+              onChange={(event) => setForm((current) => ({ ...current, madeToOrderCapacity: event.target.value }))}
+            />
+            <TextInput
+              id="sku-made-to-order-min-days"
+              type="number"
+              min={1}
+              step={1}
+              labelText="Minimum lead time (days)"
+              value={form.madeToOrderMinDays}
+              onChange={(event) => setForm((current) => ({ ...current, madeToOrderMinDays: event.target.value }))}
+            />
+            <TextInput
+              id="sku-made-to-order-max-days"
+              type="number"
+              min={1}
+              step={1}
+              labelText="Maximum lead time (days)"
+              value={form.madeToOrderMaxDays}
+              onChange={(event) => setForm((current) => ({ ...current, madeToOrderMaxDays: event.target.value }))}
+            />
+            <TextInput
+              id="sku-made-to-order-expires-at"
+              type="datetime-local"
+              labelText="Made-to-order offer expires"
+              helperText="The offer must expire in the future. Clear all four fields to disable it."
+              value={form.madeToOrderExpiresAt}
+              onChange={(event) => setForm((current) => ({ ...current, madeToOrderExpiresAt: event.target.value }))}
+            />
+            {madeToOrderError && (madeToOrderFormChanged(sku, form) || madeToOrderError !== "Set the allowance, both lead-time bounds, and expiry together.") &&
+              <InlineNotification kind="error" title="Made-to-order offer needs attention" subtitle={madeToOrderError} hideCloseButton lowContrast />}
           </>
         )}
         <TextInput
@@ -566,7 +684,7 @@ export function SkuPriceEditor({
               <>
                 <Button
                   type="button"
-                  disabled={saving || !hasEdits}
+                  disabled={saving || !hasEdits || invalidMadeToOrderEdit}
                   onClick={() => void handleSave()}
                 >
                   {saving ? "Saving…" : "Save"}

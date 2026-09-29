@@ -99,11 +99,79 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
         "product_title",
         "options",
         "acknowledged_commitment_ids",
+        "made_to_order_offer",
     }
     assert product["acknowledged_commitment_ids"] == []
     assert product["product_group_id"] is None
     assert product["product_title"] is None
     assert product["options"] == {}
+    assert product["made_to_order_offer"] is None
+
+    # A finite lead-time offer is operator-controlled and does not change physical stock.
+    offer_expiry = (datetime.now(timezone.utc) + timedelta(days=45)).isoformat()
+    configured_offer = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={
+            "made_to_order_capacity": 3,
+            "made_to_order_lead_time_min_days": 28,
+            "made_to_order_lead_time_max_days": 42,
+            "made_to_order_expires_at": offer_expiry,
+        },
+    )
+    assert configured_offer.status_code == 200
+    first_offer_id = configured_offer.json()["made_to_order_offer_id"]
+    assert first_offer_id
+    configured_feed = await owner_client.get(route, headers=headers)
+    assert configured_feed.status_code == 200
+    made_to_order = configured_feed.json()["products"][0]["made_to_order_offer"]
+    assert made_to_order == {
+        "id": first_offer_id,
+        "capacity": 3,
+        "min_lead_time_days": 28,
+        "max_lead_time_days": 42,
+        "expires_at": configured_offer.json()["made_to_order_expires_at"],
+    }
+    assert configured_feed.json()["products"][0]["available_quantity"] == 2
+    range_edit = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={
+            "made_to_order_lead_time_min_days": 30,
+            "made_to_order_lead_time_max_days": 45,
+        },
+    )
+    assert range_edit.status_code == 200
+    assert range_edit.json()["made_to_order_offer_id"] == first_offer_id
+    new_allocation = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}", json={"made_to_order_capacity": 4}
+    )
+    assert new_allocation.status_code == 200
+    assert new_allocation.json()["made_to_order_offer_id"] != first_offer_id
+    invalid_range = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={"made_to_order_lead_time_min_days": 50, "made_to_order_lead_time_max_days": 40},
+    )
+    assert invalid_range.status_code == 400
+    expired_offer = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={
+            "made_to_order_expires_at": (
+                datetime.now(timezone.utc) - timedelta(seconds=1)
+            ).isoformat()
+        },
+    )
+    assert expired_offer.status_code == 400
+    disabled_offer = await owner_client.patch(
+        f"/api/v1/skus/{sku_id}",
+        json={
+            "made_to_order_capacity": None,
+            "made_to_order_lead_time_min_days": None,
+            "made_to_order_lead_time_max_days": None,
+            "made_to_order_expires_at": None,
+        },
+    )
+    assert disabled_offer.status_code == 200
+    disabled_feed = await owner_client.get(route, headers=headers)
+    assert disabled_feed.json()["products"][0]["made_to_order_offer"] is None
 
     no_machine_auth = await owner_client.get(route)
     assert no_machine_auth.status_code == 401

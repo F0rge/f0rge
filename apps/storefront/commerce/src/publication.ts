@@ -37,6 +37,16 @@ function positive(value: unknown): boolean {
   return (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) &&
     Number.isFinite(Number(value)) && Number(value) > 0;
 }
+function hasFiniteMadeToOrderOffer(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const offer = value as Record<string, unknown>;
+  return typeof offer.id === "string" && Number.isSafeInteger(offer.remaining_capacity) &&
+    Number(offer.remaining_capacity) > 0 && Number.isSafeInteger(offer.min_lead_time_days) &&
+    Number(offer.min_lead_time_days) > 0 && Number.isSafeInteger(offer.max_lead_time_days) &&
+    Number(offer.max_lead_time_days) >= Number(offer.min_lead_time_days) &&
+    typeof offer.expires_at === "string" && Number.isFinite(Date.parse(offer.expires_at)) &&
+    Date.parse(offer.expires_at) > Date.now();
+}
 function suitableImageUrls(value: unknown): unknown[] | null {
   if (Array.isArray(value)) return value;
   if (typeof value !== "string") return null;
@@ -85,7 +95,8 @@ export function publicationProblems(product: PublicationProduct, variant: Public
       !attested.every((url) => publicImage(url) && gallery.has(url))) {
     problems.push("three public gallery photos attested for this variant are required");
   }
-  if (!positive(variant.metadata?.source_available_quantity) && !positive(variant.metadata?.lead_time_days)) {
+  if (!positive(variant.metadata?.source_available_quantity) &&
+      !hasFiniteMadeToOrderOffer(variant.metadata?.storefront_made_to_order_offer)) {
     problems.push("stock or a positive lead time is required");
   }
   return problems;

@@ -29,6 +29,7 @@ if (!snapshot) throw new Error(`SKU ${skuId} is not published in the Ops API`)
 const allowedFields = [
   "source_sku_id", "product_group_id", "product_title", "options", "sku", "name",
   "price_minor_zar", "available_quantity", "revision", "observed_at",
+  "acknowledged_commitment_ids", "made_to_order_offer",
 ]
 if (Object.keys(snapshot).sort().join() !== allowedFields.sort().join()) {
   throw new Error("Ops API exposed an unexpected field")

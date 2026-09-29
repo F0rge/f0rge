@@ -8,6 +8,10 @@ import type { Bag } from "@/lib/bag-server";
 type Fulfillment = "delivery" | "collection";
 type PreparedCheckout = { session_id: string; status: string; amount: number; currency_code: string; fulfillment_type: Fulfillment };
 const money = (value: number, currency = "ZAR") => new Intl.NumberFormat("en-ZA", { style: "currency", currency }).format(value);
+const promiseDates = (from: string, by: string) => {
+  const format = (value: string) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
+  return from === by ? format(from) : `${format(from)} – ${format(by)}`;
+};
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -127,7 +131,12 @@ export default function CheckoutPage() {
       </section>
       <aside className="checkout-summary">
         <p className="eyebrow">Order summary</p>
-        {bag?.items.map((item) => <div className="checkout-summary-line" key={item.id}><span>{item.title} × {item.quantity}</span><strong>{money(item.total)}</strong></div>)}
+        {bag?.items.map((item) => <div className="checkout-summary-line" key={item.id}><span>{item.title} × {item.quantity}{item.fulfillment_promise?.kind === "made_to_order" && <small>Made to order · {promiseDates(item.fulfillment_promise.estimated_from, item.fulfillment_promise.estimated_by)}</small>}</span><strong>{money(item.total)}</strong></div>)}
+        {bag?.hold?.fulfillment_promise && <div className="checkout-fulfillment-promise" role="status" data-testid="checkout-fulfillment-promise">
+          <strong>One fulfillment promise for your full order</strong>
+          <p>{bag.hold.fulfillment_promise.kind === "mixed" ? "All pieces will be fulfilled together when the made-to-order pieces are ready." : bag.hold.fulfillment_promise.kind === "made_to_order" ? "This order is made to order." : "All pieces are in stock."}</p>
+          <p>Estimated ready {promiseDates(bag.hold.fulfillment_promise.estimated_from, bag.hold.fulfillment_promise.estimated_by)}.</p>
+        </div>}
         <dl><dt>Bag total incl. VAT</dt><dd>{money(bag?.total || 0)}</dd><dt>Final total incl. VAT</dt><dd data-testid="checkout-total">{money(total)}</dd></dl>
         <p>Prices and delivery are checked by the server. Any change returns you to review before payment.</p>
         <p>Availability is reserved until {bag?.hold?.expires_at ? new Date(bag.hold.expires_at).toLocaleTimeString("en-ZA") : "your hold expires"}.</p>

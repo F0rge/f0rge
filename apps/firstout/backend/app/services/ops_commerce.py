@@ -19,6 +19,7 @@ from app.config import settings
 from app.crud.location import LocationCRUD
 from app.crud.ops_commerce import OpsCommerceCRUD
 from app.crud.ops_commerce_orders import OpsCommerceOrdersCRUD
+from app.crud.ops_commerce_fulfillment_events import OpsCommerceFulfillmentEventsCRUD
 from app.crud.sales_order import SalesOrderCRUD
 from app.crud.team_settings import TeamSettingsCRUD
 from app.models.customer import Customer
@@ -33,10 +34,15 @@ from app.models.team import Team
 from app.models.user import User
 from app.schemas.ops_commerce import OpsProductResponse, OpsProductsResponse
 from app.schemas.ops_commerce_order import (
+    StorefrontCollectionStatusUpdate,
+    StorefrontFulfillmentEvent,
+    StorefrontFulfillmentEventAckResponse,
+    StorefrontFulfillmentEventList,
     StorefrontHandoffListResponse,
     StorefrontHandoffResponse,
     StorefrontPaidOrder,
 )
+from app.services.storefront_fulfillment import StorefrontFulfillmentService
 from app.services.chart_of_accounts import (
     CODE_DEPOSITS,
     CODE_STOREFRONT_CLEARING,
@@ -88,6 +94,7 @@ class OpsCommerceService:
                     product_title=sku.product_title,
                     options=sku.options,
                     acknowledged_commitment_ids=sku.acknowledged_commitment_ids,
+                    made_to_order_offer=sku.made_to_order_offer,
                 )
                 for sku in snapshots
             ],
@@ -166,6 +173,73 @@ class OpsCommerceService:
             raise NotFoundError("Storefront handoff not found")
         return await self._attempt_import(handoff_id, requested_by_user_id=staff_user_id)
 
+    async def update_collection_status(
+        self,
+        handoff_id: uuid.UUID,
+        update: StorefrontCollectionStatusUpdate,
+        staff_user_id: uuid.UUID,
+    ) -> StorefrontHandoffResponse:
+        company_id = self._configured_company_id()
+        await self._require_company_staff(staff_user_id, company_id)
+        handoff = await self.orders.get_by_id(handoff_id)
+        if handoff is None or handoff.company_id != company_id:
+            raise NotFoundError("Storefront order not found")
+        updated = await StorefrontFulfillmentService(self.db).update_collection_status(
+            handoff_id, update.status
+        )
+        return self._response(updated)
+
+    async def list_fulfillment_events(
+        self,
+        *,
+        authorization: Optional[str],
+        requested_company: Optional[str],
+        request_host: str,
+        limit: int = 100,
+    ) -> StorefrontFulfillmentEventList:
+        company_id = await self._authorize(
+            authorization=authorization,
+            requested_company=requested_company,
+            request_host=request_host,
+        )
+        rows = await OpsCommerceFulfillmentEventsCRUD(self.db).pending_for_company(
+            company_id, limit=limit
+        )
+        return StorefrontFulfillmentEventList(
+            items=[
+                StorefrontFulfillmentEvent(
+                    event_id=row.id,
+                    company_id=row.company_id,
+                    external_order_id=row.external_order_id,
+                    revision=row.revision,
+                    fulfillment_type=row.fulfillment_type,
+                    status=row.status,
+                    fulfillment_promise=row.fulfillment_promise,
+                    occurred_at=row.occurred_at,
+                )
+                for row in rows
+            ]
+        )
+
+    async def acknowledge_fulfillment_events(
+        self,
+        event_ids: list[uuid.UUID],
+        *,
+        authorization: Optional[str],
+        requested_company: Optional[str],
+        request_host: str,
+    ) -> StorefrontFulfillmentEventAckResponse:
+        company_id = await self._authorize(
+            authorization=authorization,
+            requested_company=requested_company,
+            request_host=request_host,
+        )
+        async with unit_of_work(self.db):
+            acknowledged = await OpsCommerceFulfillmentEventsCRUD(self.db).acknowledge(
+                company_id, event_ids
+            )
+        return StorefrontFulfillmentEventAckResponse(acknowledged=acknowledged)
+
     async def _require_company_staff(
         self,
         staff_user_id: uuid.UUID,
@@ -236,6 +310,11 @@ class OpsCommerceService:
             vat_amount=money(data.totals.tax_minor_zar),
             total_inc_vat=order_total,
             amount_paid=order_total,
+            fulfillment_promise=(
+                data.fulfillment_promise.model_dump(mode="json")
+                if data.fulfillment_promise is not None
+                else None
+            ),
             notes=f"Storefront order {data.external_order_id}; delivery {data.fulfillment.reference}",
             lines=[
                 SalesOrderLine(
@@ -244,6 +323,11 @@ class OpsCommerceService:
                     unit_ex_vat=money(line.unit_ex_minor_zar),
                     description=line.title,
                     notes=f"Storefront line {line.external_line_id}",
+                    fulfillment_promise=(
+                        line.fulfillment_promise.model_dump(mode="json")
+                        if line.fulfillment_promise is not None
+                        else None
+                    ),
                     held_qty=0,
                 )
                 for line in data.lines
@@ -359,13 +443,57 @@ class OpsCommerceService:
             current.imported_at = datetime.utcnow()
 
         try:
-            await SalesOrdersService(self.db).create_remainder_invoice(
-                sales_order.id,
-                actor_id,
-                tax_snapshot=invoice_tax_snapshot,
-                stock_source=UnitCostAuditSource.STOREFRONT,
-                before_commit=record_acknowledgements,
-            )
+            if any(
+                line.fulfillment_promise is not None
+                and line.fulfillment_promise.kind == "made_to_order"
+                for line in payload.lines
+            ):
+                # The payment is already recorded as a deposit. Preserve the
+                # full paid promise and wait to invoice until all lines can be
+                # fulfilled. Hold only the physically stocked lines now.
+                paid_line_notes = {
+                    f"Storefront line {line.external_line_id}" for line in payload.lines
+                }
+                if (
+                    len(sales_order.lines) != len(paid_line_notes)
+                    or {line.notes for line in sales_order.lines} != paid_line_notes
+                ):
+                    raise ConflictError("Storefront order lines no longer match the paid snapshot")
+                stocked_line_notes = {
+                    f"Storefront line {line.external_line_id}"
+                    for line in payload.lines
+                    if line.fulfillment_promise is None
+                    or line.fulfillment_promise.kind == "stocked"
+                }
+                stocked_line_ids = {
+                    order_line.id
+                    for order_line in sales_order.lines
+                    if order_line.notes in stocked_line_notes
+                }
+                async with unit_of_work(self.db):
+                    if stocked_line_ids:
+                        await SalesOrdersService(self.db)._apply_hold(
+                            sales_order,
+                            location_id,
+                            actor_id,
+                            eligible_line_ids=stocked_line_ids,
+                        )
+                    if any(
+                        line.id in stocked_line_ids and line.held_qty != line.qty
+                        for line in sales_order.lines
+                    ):
+                        raise ConflictError("Insufficient on-hand quantity")
+                    sales_order.awaiting_stock = True
+                    sales_order.status = SalesOrderStatus.AWAITING_STOCK
+                    await record_acknowledgements()
+            else:
+                await SalesOrdersService(self.db).create_remainder_invoice(
+                    sales_order.id,
+                    actor_id,
+                    tax_snapshot=invoice_tax_snapshot,
+                    stock_source=UnitCostAuditSource.STOREFRONT,
+                    before_commit=record_acknowledgements,
+                )
         except ConflictError as exc:
             if str(exc) == "Insufficient on-hand quantity":
                 await self._finish_failed(
@@ -400,6 +528,11 @@ class OpsCommerceService:
         locations.sort(key=lambda loc: (loc.id != preferred_id, loc.name.casefold()))
         required: dict[uuid.UUID, int] = defaultdict(int)
         for line in data.lines:
+            if (
+                line.fulfillment_promise is not None
+                and line.fulfillment_promise.kind == "made_to_order"
+            ):
+                continue
             required[line.source_sku_id] += line.quantity
         for location in locations:
             result = await self.db.execute(
@@ -479,6 +612,7 @@ class OpsCommerceService:
 
     @staticmethod
     def _response(row: OpsCommerceOrder) -> StorefrontHandoffResponse:
+        fulfillment = row.payload.get("fulfillment", {})
         return StorefrontHandoffResponse(
             id=row.id,
             external_order_id=row.external_order_id,
@@ -490,6 +624,10 @@ class OpsCommerceService:
             imported_at=row.imported_at,
             sales_order_id=row.sales_order_id,
             payment_journal_id=row.payment_journal_id,
+            fulfillment_type=fulfillment.get("type", "delivery"),
+            fulfillment_status=row.fulfillment_status,
+            fulfillment_revision=row.fulfillment_revision,
+            fulfillment_promise=row.payload.get("fulfillment_promise"),
             created_at=row.created_at,
             updated_at=row.updated_at,
         )

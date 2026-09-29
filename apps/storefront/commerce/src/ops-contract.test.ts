@@ -14,6 +14,7 @@ const contract = {
     revision: "2026-09-22T09:14:32.000001",
     observed_at: "2026-09-22T09:14:32.000001",
     acknowledged_commitment_ids: [],
+    made_to_order_offer: null,
   }],
 };
 
@@ -22,6 +23,20 @@ test("validates a provider-neutral private product snapshot", () => {
   expect(() => parseOpsProducts(contract, "912f8c83-777f-4485-9ddd-f1d709db18f6")).toThrow();
   expect(() => parseOpsProducts({ ...contract, products: [...contract.products, contract.products[0]] }, contract.company_id)).toThrow();
   expect(() => parseOpsProducts({ ...contract, products: [{ ...contract.products[0], supplier_ref: "private" }] }, contract.company_id)).toThrow();
+});
+
+test("validates finite made-to-order offers and rejects an inverted promise range", () => {
+  const offer = {
+    id: "bcd2f5d4-237b-43fb-a152-bef10a6a3eaa",
+    capacity: 4,
+    min_lead_time_days: 28,
+    max_lead_time_days: 42,
+    expires_at: "2026-10-15T12:00:00Z",
+  };
+  expect(parseOpsProducts({ ...contract, products: [{ ...contract.products[0], made_to_order_offer: offer }] }, contract.company_id)
+    .products[0].made_to_order_offer?.capacity).toBe(4);
+  expect(() => parseOpsProducts({ ...contract, products: [{ ...contract.products[0], made_to_order_offer: { ...offer, max_lead_time_days: 27 } }] }, contract.company_id)).toThrow();
+  expect(() => parseOpsProducts({ ...contract, products: [{ ...contract.products[0], made_to_order_offer: { ...offer, secret: "supplier" } }] }, contract.company_id)).toThrow();
 });
 
 test("rejects duplicate option combinations and inconsistent group definitions", () => {

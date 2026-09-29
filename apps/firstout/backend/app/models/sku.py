@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, Integer, Numeric, String, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +38,15 @@ class Sku(UUIDPkMixin, TimestampMixin, Base):
         nullable=True,
     )
     lead_time_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    made_to_order_capacity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    made_to_order_lead_time_min_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    made_to_order_lead_time_max_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    made_to_order_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    made_to_order_offer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True, unique=True
+    )
     reorder_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     photo_storage_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -47,4 +67,13 @@ class Sku(UUIDPkMixin, TimestampMixin, Base):
             unique=True,
         ),
         CheckConstraint("carton_count >= 1", name="ck_skus_carton_count"),
+        CheckConstraint(
+            "(made_to_order_capacity IS NULL AND made_to_order_lead_time_min_days IS NULL "
+            "AND made_to_order_lead_time_max_days IS NULL AND made_to_order_expires_at IS NULL "
+            "AND made_to_order_offer_id IS NULL) OR "
+            "(made_to_order_capacity >= 0 AND made_to_order_lead_time_min_days >= 1 "
+            "AND made_to_order_lead_time_max_days >= made_to_order_lead_time_min_days "
+            "AND made_to_order_expires_at IS NOT NULL AND made_to_order_offer_id IS NOT NULL)",
+            name="ck_skus_made_to_order_offer_complete",
+        ),
     )
