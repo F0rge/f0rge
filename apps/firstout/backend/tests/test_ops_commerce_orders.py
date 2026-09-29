@@ -14,16 +14,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.inventory import LocationStock
 from app.models.location_bin import BinStock
+from app.models.delivery import DeliveryStatus
 from app.models.journal import JournalEntry, JournalLine
 from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
+from app.models.ops_commerce_fulfillment_event import OpsCommerceFulfillmentEvent
 from app.models.ops_commerce_order import OpsCommerceOrder
-from app.models.sales_order import SalesOrder, SalesOrderPayment
+from app.models.sales_order import SalesOrder, SalesOrderLine, SalesOrderPayment
 from app.models.tax_invoice import TaxInvoice
 from app.models.unit_cost_audit import UnitCostAudit
 from app.models.account import Account
 from app.models.customer import Customer
 from app.models.team import Team
 from app.models.user import User
+from app.services.storefront_fulfillment import StorefrontFulfillmentService
 
 
 @pytest_asyncio.fixture
@@ -349,3 +352,133 @@ async def test_paid_handoff_machine_and_staff_routes_enforce_their_own_permissio
     assert books_login.status_code == 200
     forbidden_staff = await async_client.get("/api/v1/storefront/orders")
     assert forbidden_staff.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_collection_status_is_staff_mutable_idempotent_and_acknowledged_per_company(
+    owner_client: AsyncClient,
+    async_client: AsyncClient,
+    async_db: AsyncSession,
+    ops_headers: dict[str, str],
+) -> None:
+    payload, _ = await _paid_order_payload(owner_client)
+    payload["company_id"] = ops_headers["X-Ops-Company-ID"]
+    payload["fulfillment"]["type"] = "collection"
+    payload["fulfillment_promise"] = {
+        "version": 1,
+        "kind": "made_to_order",
+        "accepted_at": "2026-09-29T10:00:00Z",
+        "estimated_from": "2026-10-13",
+        "estimated_by": "2026-10-27",
+    }
+    payload["lines"][0]["fulfillment_promise"] = {
+        "kind": "made_to_order",
+        "offer_id": "b45f57d9-e635-4686-8efb-29088c544c3e",
+        "min_lead_time_days": 14,
+        "max_lead_time_days": 28,
+        "estimated_from": "2026-10-13",
+        "estimated_by": "2026-10-27",
+        "expires_at": "2026-10-01T00:00:00Z",
+    }
+    created = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    assert created.status_code == 201
+    handoff = created.json()
+    assert handoff["fulfillment_status"] == "confirmed"
+    assert handoff["fulfillment_promise"] == payload["fulfillment_promise"]
+    order = await async_db.scalar(
+        select(SalesOrder).where(SalesOrder.fulfillment_promise.is_not(None))
+    )
+    assert order is not None and order.fulfillment_promise == payload["fulfillment_promise"]
+    line = await async_db.scalar(select(SalesOrderLine).where(SalesOrderLine.sales_order_id == order.id))
+    assert line is not None and line.fulfillment_promise == payload["lines"][0]["fulfillment_promise"]
+
+    status_url = f"/api/v1/storefront/orders/{handoff['id']}/collection-status"
+    await async_client.post("/api/v1/auth/logout")
+    books_login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": "books@example.com", "password": settings.seed_books_password},
+    )
+    assert books_login.status_code == 200
+    forbidden_books = await async_client.patch(status_url, json={"status": "ready_for_collection"})
+    assert forbidden_books.status_code == 403
+
+    await owner_client.post("/api/v1/auth/logout")
+    owner_login = await owner_client.post(
+        "/api/v1/auth/login",
+        json={"email": "owner@example.com", "password": settings.seed_owner_password},
+    )
+    assert owner_login.status_code == 200
+
+    ready = await owner_client.patch(status_url, json={"status": "ready_for_collection"})
+    assert ready.status_code == 200
+    assert ready.json()["fulfillment_status"] == "ready_for_collection"
+    revision = ready.json()["fulfillment_revision"]
+    repeated_ready = await owner_client.patch(status_url, json={"status": "ready_for_collection"})
+    assert repeated_ready.status_code == 200
+    assert repeated_ready.json()["fulfillment_revision"] == revision
+    collected = await owner_client.patch(status_url, json={"status": "collected"})
+    assert collected.status_code == 200
+    assert collected.json()["fulfillment_status"] == "collected"
+    regressed = await owner_client.patch(status_url, json={"status": "ready_for_collection"})
+    assert regressed.status_code == 409
+    assert await async_db.scalar(select(func.count()).select_from(OpsCommerceFulfillmentEvent)) == 2
+
+    feed_url = "/api/v1/ops-commerce/v1/fulfillment-events"
+    feed = await owner_client.get(feed_url, headers=ops_headers)
+    assert feed.status_code == 200
+    items = feed.json()["items"]
+    assert [item["status"] for item in items] == ["ready_for_collection", "collected"]
+    assert all(item["fulfillment_promise"] == payload["fulfillment_promise"] for item in items)
+    wrong_host = await owner_client.get(
+        feed_url, headers={**ops_headers, "Host": "another-instance.test"}
+    )
+    assert wrong_host.status_code == 403
+    wrong_company = await owner_client.get(
+        feed_url, headers={**ops_headers, "X-Ops-Company-ID": str(UUID(int=2))}
+    )
+    assert wrong_company.status_code == 403
+    bad_ack = await owner_client.post(
+        f"{feed_url}/ack",
+        json={"event_ids": [items[0]["event_id"]]},
+        headers={**ops_headers, "Authorization": "Bearer wrong-instance-token"},
+    )
+    assert bad_ack.status_code == 401
+    ack = await owner_client.post(
+        f"{feed_url}/ack",
+        json={"event_ids": [item["event_id"] for item in items]},
+        headers=ops_headers,
+    )
+    assert ack.status_code == 200 and ack.json()["acknowledged"] == 2
+    assert (await owner_client.get(feed_url, headers=ops_headers)).json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_existing_paid_delivery_can_catch_up_directly_to_completed(
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+    ops_headers: dict[str, str],
+) -> None:
+    payload, _ = await _paid_order_payload(owner_client)
+    payload["company_id"] = ops_headers["X-Ops-Company-ID"]
+    payload["external_order_id"] = "order-753-existing-delivery"
+    payload["external_payment_id"] = "payment-753-existing-delivery"
+    payload["correlation_id"] = "storefront:order-753-existing-delivery"
+    created = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    assert created.status_code == 201
+    handoff = await async_db.get(OpsCommerceOrder, UUID(created.json()["id"]))
+    assert handoff is not None and handoff.fulfillment_status == "confirmed"
+
+    # A delivery packed or loaded before the integration was enabled only emits
+    # its next status (for example DELIVERED); catching up must not block staff.
+    await StorefrontFulfillmentService(async_db).record_delivery_transition(
+        handoff.sales_order_id, DeliveryStatus.DELIVERED
+    )
+    await async_db.refresh(handoff)
+    assert handoff.fulfillment_status == "delivered"
+    assert handoff.fulfillment_revision == 1
+    event = await async_db.scalar(select(OpsCommerceFulfillmentEvent))
+    assert event is not None and event.status == "delivered"

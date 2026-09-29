@@ -13,11 +13,12 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Integer,
+    JSON,
     Numeric,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -77,6 +78,9 @@ class SalesOrder(UUIDPkMixin, TimestampMixin, Base):
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    fulfillment_promise: Mapped[Optional[dict]] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"), nullable=True
+    )
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
@@ -126,6 +130,9 @@ class SalesOrderLine(UUIDPkMixin, TimestampMixin, Base):
     unit_ex_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    fulfillment_promise: Mapped[Optional[dict]] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"), nullable=True
+    )
     held_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     hold_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Confirmation = {
@@ -14,28 +14,65 @@ type Confirmation = {
     tax_total: number;
     total: number;
     fulfillment_type?: string;
-    items: { title: string; quantity: number; unit_price: number; total: number }[];
+    fulfillment_status?: string;
+    fulfillment_revision?: number;
+    fulfillment_promise?: {
+      kind?: string;
+      accepted_at?: string;
+      estimated_from?: string;
+      estimated_by?: string;
+    } | null;
+    items: {
+      title: string;
+      quantity: number;
+      unit_price: number;
+      total: number;
+      fulfillment_promise?: { estimated_from?: string; estimated_by?: string } | null;
+    }[];
     shipping: { name: string; total: number }[];
     address: { first_name: string; last_name: string; address_1: string; address_2?: string; city: string; province: string; postal_code: string } | null;
   };
 };
 const money = (value: number, currency = "ZAR") => new Intl.NumberFormat("en-ZA", { style: "currency", currency }).format(value);
+const fulfillmentLabels: Record<string, string> = {
+  confirmed: "Order confirmed",
+  ready_for_delivery: "Preparing for delivery",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+  ready_for_collection: "Ready for collection",
+  collected: "Collected",
+};
 
 export default function OrderConfirmationPage() {
   const [result, setResult] = useState<Confirmation | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const emailAccess = useRef<{ order_id: string; access_token: string } | null>(null);
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/order/confirmation", { cache: "no-store" });
+      const capability = emailAccess.current;
+      const response = await fetch("/api/order/confirmation", {
+        method: capability ? "POST" : "GET",
+        headers: capability ? { "content-type": "application/json" } : undefined,
+        body: capability ? JSON.stringify(capability) : undefined,
+        cache: "no-store",
+      });
       if (!response.ok) throw new Error("not available");
       const payload = await response.json() as Confirmation;
       setResult(payload);
       setUnavailable(false);
+      if (capability) emailAccess.current = null;
     } catch {
       setUnavailable(true);
     }
   }, []);
   useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const orderId = fragment.get("order_id");
+    const accessToken = fragment.get("access");
+    if (orderId && accessToken && /^order_[A-Za-z0-9_-]+$/.test(orderId) && /^[A-Za-z0-9_-]{43}$/.test(accessToken)) {
+      emailAccess.current = { order_id: orderId, access_token: accessToken };
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
     void load();
     const timer = window.setInterval(() => void load(), 2500);
     return () => window.clearInterval(timer);
@@ -49,8 +86,24 @@ export default function OrderConfirmationPage() {
       <h1>Thank you. Your order is confirmed.</h1>
       <p role="status">Private order reference {result.order.reference} · contact email {result.order.email}</p>
       <div className="confirmation-card">
+        <section aria-live="polite">
+          <h2>Fulfilment status</h2>
+          <p role="status">{fulfillmentLabels[result.order.fulfillment_status || "confirmed"] || "Order confirmed"}</p>
+          {result.order.fulfillment_promise?.estimated_from && result.order.fulfillment_promise.estimated_by && <p>
+            {result.order.fulfillment_promise.estimated_from === result.order.fulfillment_promise.estimated_by
+              ? `Estimated ready ${result.order.fulfillment_promise.estimated_by}`
+              : `Estimated ready ${result.order.fulfillment_promise.estimated_from} – ${result.order.fulfillment_promise.estimated_by}`}
+          </p>}
+        </section>
         <h2>Order summary</h2>
-        {result.order.items.map((item, index) => <div className="checkout-summary-line" key={item.title + "-" + index}><span>{item.title} × {item.quantity}</span><strong>{money(item.total, result.order!.currency_code.toUpperCase())}</strong></div>)}
+        {result.order.items.map((item, index) => <div className="checkout-summary-line" key={item.title + "-" + index}>
+          <span>{item.title} × {item.quantity}{item.fulfillment_promise?.estimated_from && item.fulfillment_promise.estimated_by && <small className="block">
+            {item.fulfillment_promise.estimated_from === item.fulfillment_promise.estimated_by
+              ? `Ready ${item.fulfillment_promise.estimated_by}`
+              : `Ready ${item.fulfillment_promise.estimated_from} – ${item.fulfillment_promise.estimated_by}`}
+          </small>}</span>
+          <strong>{money(item.total, result.order!.currency_code.toUpperCase())}</strong>
+        </div>)}
         {result.order.shipping.map((method, index) => <div className="checkout-summary-line" key={method.name + "-" + index}><span>{method.name}</span><strong>{money(method.total, result.order!.currency_code.toUpperCase())}</strong></div>)}
         <dl><dt>Subtotal</dt><dd>{money(result.order.subtotal, result.order.currency_code.toUpperCase())}</dd><dt>VAT included</dt><dd>{money(result.order.tax_total, result.order.currency_code.toUpperCase())}</dd><dt>Total paid</dt><dd>{money(result.order.total, result.order.currency_code.toUpperCase())}</dd></dl>
         {result.order.address && <section><h3>{result.order.fulfillment_type === "collection" ? "Collection" : "Delivery"}</h3><p>{result.order.address.first_name} {result.order.address.last_name}<br />{result.order.address.address_1}{result.order.address.address_2 ? ", " + result.order.address.address_2 : ""}<br />{result.order.address.city}, {result.order.address.province} {result.order.address.postal_code}</p></section>}

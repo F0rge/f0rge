@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 
 export const cartCookie = "collector_cart";
 export const orderAccessCookie = "collector_order_access";
+export const emailOrderAccessCookie = "collector_email_order_access";
 const baseUrl = process.env.MEDUSA_BACKEND_URL || "http://localhost:9000";
 
 function secret(): string {
@@ -37,6 +38,10 @@ function orderAccessSignature(cartId: string, token: string): string {
   return createHmac("sha256", secret()).update(`order-confirmation:v1:${cartId}:${token}`).digest("base64url");
 }
 
+function emailOrderAccessSignature(orderId: string, token: string): string {
+  return createHmac("sha256", secret()).update(`email-order-cookie:v1:${orderId}:${token}`).digest("base64url");
+}
+
 export function newOrderAccessToken(): string { return randomBytes(32).toString("base64url"); }
 
 export function signedOrderAccess(cartId: string, token: string): string {
@@ -53,6 +58,21 @@ export function verifyOrderAccess(value: string | undefined, cartId: string): st
 
 export async function currentOrderAccessToken(cartId: string): Promise<string | null> {
   return verifyOrderAccess((await cookies()).get(orderAccessCookie)?.value, cartId);
+}
+
+export function signedEmailOrderAccess(orderId: string, token: string): string {
+  return `e1.${orderId}.${token}.${emailOrderAccessSignature(orderId, token)}`;
+}
+
+export async function currentEmailOrderAccess(): Promise<{ orderId: string; token: string } | null> {
+  const value = (await cookies()).get(emailOrderAccessCookie)?.value || "";
+  const match = /^e1\.(order_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{43})$/.exec(value);
+  if (!match) return null;
+  const expected = Buffer.from(emailOrderAccessSignature(match[1], match[2]));
+  const actual = Buffer.from(match[3]);
+  return expected.length === actual.length && timingSafeEqual(expected, actual)
+    ? { orderId: match[1], token: match[2] }
+    : null;
 }
 
 export type BagItem = { id: string; variant_id: string; title: string; thumbnail?: string | null; quantity: number; unit_price: number; total: number };
@@ -92,6 +112,19 @@ export async function orderConfirmationResponse(cartId: string, token: string): 
       "x-publishable-api-key": process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY || "",
       "x-storefront-bff-secret": secret(),
       "x-storefront-confirmation-token": token,
+    },
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  return { status: response.status, payload };
+}
+
+export async function storefrontOrderStatusResponse(orderId: string, token: string): Promise<{ status: number; payload: Record<string, unknown> }> {
+  const response = await fetch(`${baseUrl}/store/orders/${encodeURIComponent(orderId)}/storefront-status`, {
+    headers: {
+      "x-publishable-api-key": process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY || "",
+      "x-storefront-bff-secret": secret(),
+      "x-storefront-order-status-token": token,
     },
     cache: "no-store",
   });

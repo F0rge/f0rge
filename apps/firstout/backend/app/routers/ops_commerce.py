@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.ops_commerce import OpsProductsResponse
-from app.schemas.ops_commerce_order import StorefrontHandoffResponse, StorefrontPaidOrder
+from app.schemas.ops_commerce_order import (
+    StorefrontFulfillmentEventAck,
+    StorefrontFulfillmentEventAckResponse,
+    StorefrontFulfillmentEventList,
+    StorefrontHandoffResponse,
+    StorefrontPaidOrder,
+)
 from app.services.ops_commerce import OpsCommerceService
 
 router = APIRouter(prefix="/api/v1/ops-commerce/v1", tags=["ops-commerce"])
@@ -47,3 +53,38 @@ async def accept_paid_order(
         request_host=request.url.hostname or "",
     )
     return JSONResponse(status_code=status_code, content=result.model_dump(mode="json"))
+
+
+@router.get("/fulfillment-events", response_model=StorefrontFulfillmentEventList)
+async def list_fulfillment_events(
+    request: Request,
+    limit: int = 100,
+    authorization: Optional[str] = Header(default=None),
+    x_ops_company_id: Optional[str] = Header(default=None),
+    service: OpsCommerceService = Depends(get_ops_commerce_service),
+) -> StorefrontFulfillmentEventList:
+    return await service.list_fulfillment_events(
+        authorization=authorization,
+        requested_company=x_ops_company_id,
+        request_host=request.url.hostname or "",
+        limit=max(1, min(limit, 500)),
+    )
+
+
+@router.post(
+    "/fulfillment-events/ack",
+    response_model=StorefrontFulfillmentEventAckResponse,
+)
+async def acknowledge_fulfillment_events(
+    body: StorefrontFulfillmentEventAck,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_ops_company_id: Optional[str] = Header(default=None),
+    service: OpsCommerceService = Depends(get_ops_commerce_service),
+) -> StorefrontFulfillmentEventAckResponse:
+    return await service.acknowledge_fulfillment_events(
+        body.event_ids,
+        authorization=authorization,
+        requested_company=x_ops_company_id,
+        request_host=request.url.hostname or "",
+    )

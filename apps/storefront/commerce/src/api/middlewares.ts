@@ -20,4 +20,7 @@ export function requireStorefrontBff(req: MedusaRequest, res: MedusaResponse, ne
 export default defineMiddlewares({ routes: [{
   matcher: "/store/carts*",
   middlewares: [requireStorefrontBff],
+}, {
+  matcher: "/store/orders/:id/storefront-status",
+  middlewares: [requireStorefrontBff],
 }] });

@@ -23,6 +23,30 @@ const modules: Record<string, unknown>[] = process.env.REDIS_URL ? [
   },
 ] : []
 
+const notificationProviders: Record<string, unknown>[] = []
+if (process.env.STOREFRONT_SENDGRID_API_KEY && process.env.STOREFRONT_SENDGRID_FROM) {
+  notificationProviders.push({
+    resolve: "@medusajs/medusa/notification-sendgrid",
+    id: "storefront-sendgrid",
+    options: {
+      channels: ["email"],
+      api_key: process.env.STOREFRONT_SENDGRID_API_KEY,
+      from: process.env.STOREFRONT_SENDGRID_FROM,
+    },
+  })
+} else if (process.env.NODE_ENV !== "production") {
+  notificationProviders.push({
+    resolve: "@medusajs/medusa/notification-local",
+    id: "storefront-local-email",
+    options: { channels: ["email"] },
+  })
+}
+
+modules.push({
+  resolve: "@medusajs/medusa/notification",
+  options: { providers: notificationProviders },
+})
+
 modules.push({
   resolve: "@medusajs/medusa/fulfillment",
   options: { providers: [{ resolve: "./src/modules/storefront-fulfillment", id: "storefront" }] },

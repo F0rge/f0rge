@@ -46,6 +46,7 @@ from app.models.nia import (
 )
 from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
 from app.models.ops_commerce_order import OpsCommerceOrder
+from app.models.ops_commerce_fulfillment_event import OpsCommerceFulfillmentEvent
 from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
 from app.models.price_list import PriceList, PriceListItem
 from app.models.product_group import ProductGroup, ProductGroupVariant
@@ -153,6 +154,7 @@ __all__ = [
     "NiaThread",
     "NiaUsageEvent",
     "OpsCommerceAcknowledgement",
+    "OpsCommerceFulfillmentEvent",
     "OpsCommerceOrder",
     "Payment",
     "PaymentDirection",
