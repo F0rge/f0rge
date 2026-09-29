@@ -338,7 +338,7 @@ async def test_mcp_get_meal_scoped_to_authenticated_user(async_db: AsyncSession)
             server = FastMCP("test")
             t_mod.register_tools(server)
             tool_fn = next(
-                t for t in server._tool_manager.list_tools() if t.name == "get_photo_analysis"
+                t for t in server._tool_manager.list_tools() if t.name == "get_meal"
             ).fn
             result = await tool_fn(photo_id=photo_id, ctx=_Ctx())
     finally:
