@@ -3,12 +3,11 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.crud.labs import LabCRUD
 from app.mcp.observability import instrument_tool
-from app.mcp.tools._common import _MAX_LAB_HISTORY, _MAX_LABS, _mcp_user_id, _validate_date
-from app.models.lab import Lab
+from app.mcp.tools._common import _MAX_LAB_HISTORY, _mcp_user_id
 from app.models.lab_marker import LabMarker
 from f0rge_db.tenant import owned_by_user
 
@@ -72,51 +71,11 @@ def register_labs_tools(server: FastMCP) -> None:
         }
 
     @server.tool()
-    @instrument_tool("list_labs")
-    async def list_labs(start_date: str, end_date: str, ctx: Context = None) -> dict[str, Any]:
-        """List lab uploads with marker counts in an inclusive date range.
-
-        Capped at 200 rows.
-        """
-        start = _validate_date(start_date, "start_date")
-        end = _validate_date(end_date, "end_date")
-        user_id = _mcp_user_id(ctx)
-        import app.mcp.tools as mcp_tools
-
-        async with mcp_tools.scoped_ro_session(user_id) as db:
-            stmt = (
-                select(Lab, func.count(LabMarker.id).label("marker_count"))
-                .outerjoin(LabMarker, LabMarker.lab_id == Lab.id)
-                .where(
-                    owned_by_user(Lab.user_id),
-                    Lab.lab_date >= start,
-                    Lab.lab_date <= end,
-                )
-                .group_by(Lab.id)
-                .order_by(Lab.lab_date.desc())
-                .limit(_MAX_LABS)
-            )
-            rows = (await db.execute(stmt)).all()
-        return {
-            "labs": [
-                {
-                    "id": r.Lab.id,
-                    "date": str(r.Lab.lab_date),
-                    "name": r.Lab.name,
-                    "type": r.Lab.type,
-                    "marker_count": r.marker_count,
-                }
-                for r in rows
-            ]
-        }
-
-    @server.tool()
-    @instrument_tool("get_lab_markers")
-    async def get_lab_markers(lab_id: int, ctx: Context = None) -> Optional[dict[str, Any]]:
+    @instrument_tool("get_lab")
+    async def get_lab(lab_id: int, ctx: Context = None) -> Optional[dict[str, Any]]:
         """Fetch all markers for one lab upload by lab id.
 
-        Returns null when the lab does not exist. Prefer list_labs to discover
-        lab ids in a date range; get_lab_history for one marker across time.
+        Returns null when the lab does not exist. Use get_lab_history for one marker over time.
         """
         user_id = _mcp_user_id(ctx)
         import app.mcp.tools as mcp_tools

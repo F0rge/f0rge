@@ -141,7 +141,7 @@ async def test_user_b_cannot_read_user_a_entry(async_db: AsyncSession) -> None:
     assert row.user_id == user_a
 
 
-async def test_mcp_get_entry_scoped_to_authenticated_user(async_db: AsyncSession) -> None:
+async def test_mcp_get_day_scoped_to_authenticated_user(async_db: AsyncSession) -> None:
     user_a = uuid.uuid4()
     user_b = uuid.uuid4()
     async_db.add_all(
@@ -183,7 +183,7 @@ async def test_mcp_get_entry_scoped_to_authenticated_user(async_db: AsyncSession
         with patch("app.mcp.tools.scoped_ro_session", return_value=scoped_session):
             server = FastMCP("test")
             t_mod.register_tools(server)
-            tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "get_entry").fn
+            tool_fn = next(t for t in server._tool_manager.list_tools() if t.name == "get_day").fn
             result = await tool_fn(date="2026-05-01", ctx=_Ctx())
     finally:
         user_id_ctx.reset(token)
