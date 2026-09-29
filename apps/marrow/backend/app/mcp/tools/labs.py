@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.crud.labs import LabCRUD
 from app.mcp.observability import instrument_tool
 from app.mcp.tools._common import _MAX_LAB_HISTORY, _mcp_user_id
+from app.models.lab import Lab
 from app.models.lab_marker import LabMarker
 from f0rge_db.tenant import owned_by_user
 

@@ -261,7 +261,7 @@ async def test_user_b_cannot_read_user_a_enriched_day(async_db: AsyncSession) ->
         app.dependency_overrides.pop(get_db, None)
 
 
-async def test_mcp_get_photo_analysis_scoped_to_authenticated_user(async_db: AsyncSession) -> None:
+async def test_mcp_get_meal_scoped_to_authenticated_user(async_db: AsyncSession) -> None:
     from f0rge_db.auth_context import user_id_ctx
     from f0rge_db.tenant import apply_session_user_id
     from app.models.user import LEO_PLACEHOLDER_PASSWORD_HASH, User
