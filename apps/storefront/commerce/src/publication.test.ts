@@ -76,7 +76,13 @@ test("accepts local generated demo photos only with the explicit non-production 
 test("requires tax-inclusive price, dimensions, care, and availability or lead time", () => {
   const noStock = { ...variant, metadata: { ...variant.metadata, source_available_quantity: 0 } };
   expect(publicationProblems(product, noStock)).toContain("stock or a positive lead time is required");
-  expect(publicationProblems(product, { ...noStock, metadata: { ...noStock.metadata, lead_time_days: "21" } })).toEqual([]);
+  expect(publicationProblems(product, { ...noStock, metadata: { ...noStock.metadata, lead_time_days: "21" } })).toContain("stock or a positive lead time is required");
+  expect(publicationProblems(product, { ...noStock, metadata: { ...noStock.metadata,
+    storefront_made_to_order_offer: {
+      id: "offer-1", remaining_capacity: 2, min_lead_time_days: 21, max_lead_time_days: 28,
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+    },
+  } })).toEqual([]);
   expect(publicationProblems(product, { ...variant, metadata: { ...variant.metadata, source_price_includes_tax: false } })).toContain("tax-inclusive ZAR price is missing");
   expect(publicationProblems(product, { ...variant, width: null })).toContain("dimensions or dimension unit are missing");
   expect(publicationProblems({ ...product, metadata: {} }, variant)).toContain("material or care instructions are missing");

@@ -1,7 +1,7 @@
 """Persist immutable fulfilment promises and durable Storefront status messages.
 
 Revision ID: 058_storefront_fulfillment
-Revises: 056_storefront_order_handoffs
+Revises: 057_made_to_order_offers
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "058_storefront_fulfillment"
-down_revision: Union[str, Sequence[str], None] = "056_storefront_order_handoffs"
+down_revision: Union[str, Sequence[str], None] = "057_made_to_order_offers"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -38,7 +38,9 @@ def upgrade() -> None:
     )
     op.add_column(
         "ops_commerce_orders",
-        sa.Column("fulfillment_revision", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "fulfillment_revision", sa.Integer(), nullable=False, server_default=sa.text("0")
+        ),
     )
     op.create_check_constraint(
         "ck_ops_commerce_orders_fulfillment_status",
@@ -76,9 +78,7 @@ def upgrade() -> None:
             name="ck_ops_commerce_fulfillment_events_status",
         ),
         sa.ForeignKeyConstraint(["company_id"], ["teams.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(
-            ["handoff_id"], ["ops_commerce_orders.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["handoff_id"], ["ops_commerce_orders.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "handoff_id", "revision", name="uq_ops_commerce_fulfillment_event_revision"

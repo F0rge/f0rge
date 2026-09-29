@@ -53,6 +53,35 @@ test("snapshots Medusa money values in minor units without relabeling non-ZAR or
       lines: [{ ex_minor_zar: 100000, vat_minor_zar: 15000, total_minor_zar: 115000 }],
       payment: { amount_minor_zar: 115000, currency_code: "ZAR" },
     });
+    const linePromise = {
+      kind: "made_to_order",
+      offer_id: "offer-test",
+      min_lead_time_days: 28,
+      max_lead_time_days: 42,
+      estimated_from: "2026-10-26",
+      estimated_by: "2026-11-09",
+      expires_at: "2026-10-15T12:00:00.000Z",
+    };
+    const summary = {
+      version: 1,
+      kind: "made_to_order",
+      accepted_at: "2026-09-28T12:00:00.000Z",
+      estimated_from: linePromise.estimated_from,
+      estimated_by: linePromise.estimated_by,
+    };
+    const promisedOrder = {
+      ...order,
+      metadata: { ...order.metadata, storefront_fulfillment_promise: summary },
+      items: [{ ...order.items[0], metadata: { fulfillment_promise: linePromise } }],
+    };
+    expect(buildPayload(promisedOrder)).toMatchObject({
+      fulfillment_promise: summary,
+      lines: [{ fulfillment_promise: linePromise }],
+    });
+    expect(() => buildPayload({
+      ...promisedOrder,
+      items: [{ ...order.items[0], metadata: null }],
+    })).toThrow("missing_made_to_order_line_promise");
     expect(() => buildPayload({ ...order, currency_code: "usd" })).toThrow("invalid_currency_code");
   } finally {
     if (priorCompany === undefined) delete process.env.FIRSTOUT_OPS_COMPANY_ID;

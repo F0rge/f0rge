@@ -37,7 +37,9 @@ class StorefrontFulfillmentService:
             if self._fulfillment_type(handoff) != "collection":
                 raise ConflictError("This Storefront order is not for collection")
             if handoff.status != "imported":
-                raise ConflictError("The paid order must be imported before collection can progress")
+                raise ConflictError(
+                    "The paid order must be imported before collection can progress"
+                )
             await self._transition(handoff, status, expected_type="collection")
         return await self.orders.get_by_id(handoff_id)  # type: ignore[return-value]
 

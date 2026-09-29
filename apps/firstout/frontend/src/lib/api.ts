@@ -567,6 +567,11 @@ export type Sku = {
   preferred_supplier_id: string | null;
   preferred_supplier_name: string | null;
   lead_time_days: number | null;
+  made_to_order_capacity: number | null;
+  made_to_order_lead_time_min_days: number | null;
+  made_to_order_lead_time_max_days: number | null;
+  made_to_order_expires_at: string | null;
+  made_to_order_offer_id: string | null;
   reorder_min: number | null;
   last_landed_cost_zar: string | null;
   photo_storage_key: string | null;
@@ -595,6 +600,10 @@ export type UpdateSkuPricePayload = {
   retail_inc_vat?: string | number | null;
   preferred_supplier_id?: string | null;
   lead_time_days?: number | null;
+  made_to_order_capacity?: number | null;
+  made_to_order_lead_time_min_days?: number | null;
+  made_to_order_lead_time_max_days?: number | null;
+  made_to_order_expires_at?: string | null;
   reorder_min?: number | null;
   supplier_ref?: string | null;
   carton_count?: number;

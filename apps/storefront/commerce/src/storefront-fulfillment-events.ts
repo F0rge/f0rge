@@ -48,6 +48,14 @@ function stable(value: unknown): string {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable((value as JsonRecord)[key])}`).join(",")}}`;
 }
 
+function samePromise(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  const leftAcceptedAt = Date.parse(String(left.accepted_at));
+  const rightAcceptedAt = Date.parse(String(right.accepted_at));
+  return Number.isFinite(leftAcceptedAt) && leftAcceptedAt === rightAcceptedAt &&
+    stable({ ...left, accepted_at: leftAcceptedAt }) ===
+    stable({ ...right, accepted_at: rightAcceptedAt });
+}
+
 function rank(type: FulfillmentType, status: string): number {
   const values = type === "delivery"
     ? ["confirmed", "ready_for_delivery", "out_for_delivery", "delivered"]
@@ -70,7 +78,7 @@ export function mergeFulfillmentEvent(
   expectedPromise: Record<string, unknown> | null,
 ): { state: AppliedState; processed: EventDigest[]; changed: boolean; duplicate: boolean } {
   validateEvent(event);
-  if (event.fulfillment_promise && expectedPromise && stable(event.fulfillment_promise) !== stable(expectedPromise)) {
+  if (event.fulfillment_promise && expectedPromise && !samePromise(event.fulfillment_promise, expectedPromise)) {
     throw new Error("fulfillment_promise_mismatch");
   }
 

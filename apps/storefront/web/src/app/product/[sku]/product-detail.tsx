@@ -40,8 +40,19 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const image = activeImage && gallery.includes(activeImage) ? activeImage : gallery[0];
   const imagePosition = image ? gallery.indexOf(image) + 1 : 0;
   const quantity = variant?.inventory_quantity ?? 0;
-  const leadDays = Number(variant?.metadata?.lead_time_days || 0);
-  const availability = !variant ? "This combination is unavailable" : quantity > 0 ? `${quantity} available` : leadDays && leadDays > 0 ? `Available to order · approx. ${leadDays} days` : "Currently unavailable";
+  const offer = variant?.metadata?.made_to_order_offer;
+  const offerObservedAt = offer?.observed_at ? Date.parse(offer.observed_at) : NaN;
+  const offerFresh = Number.isFinite(offerObservedAt) && Date.now() - offerObservedAt <= 5 * 60_000 && offerObservedAt <= Date.now() + 60_000;
+  const offerAvailable = !!offer && offerFresh && offer.remaining_capacity > 0 && Date.parse(offer.expires_at) > Date.now();
+  const promisedWindow = offerAvailable ? (() => {
+    const start = new Date();
+    const end = new Date();
+    start.setUTCDate(start.getUTCDate() + offer.min_lead_time_days);
+    end.setUTCDate(end.getUTCDate() + offer.max_lead_time_days);
+    const date = (value: Date) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(value);
+    return `${date(start)} – ${date(end)}`;
+  })() : null;
+  const availability = !variant ? "This combination is unavailable" : quantity > 0 ? `${quantity} in stock` : offerAvailable ? `Made to order · ${offer!.min_lead_time_days}–${offer!.max_lead_time_days} days` : offer && !offerFresh ? "Made-to-order availability needs refreshing" : offer ? "Made-to-order allowance exhausted or expired" : "Currently unavailable";
   const dimensions = [variant?.length ?? product.length, variant?.width ?? product.width, variant?.height ?? product.height];
   const hasDimensions = dimensions.every((value) => value != null && value > 0);
   const care = variant?.metadata?.care_instructions || product.metadata?.care_instructions;
@@ -83,12 +94,13 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
       <p className="price" aria-live="polite">{formatPrice(variant)} {variant?.calculated_price && <span>incl. VAT</span>}</p>
       <p className="sku-identity">{variant?.sku ? `SKU ${variant.sku}` : "Select an available combination"}</p>
       <p className="availability" role="status">{availability}</p>
+      {quantity < 1 && offerAvailable && promisedWindow && <p className="availability-promise">Estimated ready between {promisedWindow}. {offer!.remaining_capacity} made-to-order {offer!.remaining_capacity === 1 ? "place" : "places"} remain in this finite allowance.</p>}
       {(variant?.material || product.material || hasDimensions || care) && <dl className="product-details">
         {(variant?.material || product.material) && <><dt>Material</dt><dd>{variant?.material || product.material}</dd></>}
         {hasDimensions && <><dt>Dimensions (L × W × H)</dt><dd>{dimensions.join(" × ")} {product.metadata?.dimension_unit || ""}</dd></>}
         {care && <><dt>Care</dt><dd>{care}</dd></>}
       </dl>}
-      <button className="add-to-bag" type="button" disabled={!variant || !variant.calculated_price || quantity < 1 || adding} onClick={async () => {
+      <button className="add-to-bag" type="button" disabled={!variant || !variant.calculated_price || (quantity < 1 && !offerAvailable) || adding} onClick={async () => {
         if (!variant) return;
         setAdding(true); setBagMessage("");
         try {

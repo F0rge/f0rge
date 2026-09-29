@@ -24,7 +24,7 @@ type NotificationEntry = {
 const OUTBOX_KEY = "storefront_notification_outbox";
 const ORDER_FIELDS = [
   "id", "display_id", "email", "currency_code", "created_at", "metadata",
-  "items.id", "items.title", "items.quantity", "items.unit_price", "items.total", "items.metadata",
+  "items.id", "items.title", "items.quantity", "items.detail.quantity", "items.unit_price", "items.total", "items.metadata",
 ];
 
 function record(value: unknown): JsonRecord {

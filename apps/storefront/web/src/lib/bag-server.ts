@@ -75,9 +75,29 @@ export async function currentEmailOrderAccess(): Promise<{ orderId: string; toke
     : null;
 }
 
-export type BagItem = { id: string; variant_id: string; title: string; thumbnail?: string | null; quantity: number; unit_price: number; total: number };
-export type Bag = { id: string | null; items: BagItem[]; subtotal: number; total: number; currency_code: string; hold?: { expires_at: string; status: string; changes?: string[] } | null };
-type MedusaCart = Omit<Bag, "id"> & { id: string; metadata?: { storefront_hold?: Bag["hold"] } };
+export type BagFulfillmentPromise = {
+  kind: "stocked" | "made_to_order";
+  offer_id?: string;
+  min_lead_time_days?: number;
+  max_lead_time_days?: number;
+  estimated_from: string;
+  estimated_by: string;
+  expires_at?: string;
+};
+export type BagFulfillmentSummary = {
+  version: 1;
+  kind: "stocked" | "made_to_order" | "mixed";
+  accepted_at: string;
+  estimated_from: string;
+  estimated_by: string;
+};
+export type BagItem = { id: string; variant_id: string; title: string; thumbnail?: string | null; quantity: number; unit_price: number; total: number; fulfillment_promise?: BagFulfillmentPromise | null };
+export type Bag = { id: string | null; items: BagItem[]; subtotal: number; total: number; currency_code: string; hold?: { expires_at: string; status: string; changes?: string[]; fulfillment_promise?: BagFulfillmentSummary } | null };
+type MedusaCart = Omit<Bag, "id" | "items"> & {
+  id: string;
+  items?: (Omit<BagItem, "fulfillment_promise"> & { metadata?: { fulfillment_promise?: BagFulfillmentPromise } | null })[] | null;
+  metadata?: { storefront_hold?: Bag["hold"] };
+};
 
 export class BagError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -136,8 +156,9 @@ export function publicBag(cart?: MedusaCart | null): Bag {
   if (!cart) return { id: null, items: [], subtotal: 0, total: 0, currency_code: "zar" };
   return {
     id: cart.id,
-    items: (cart.items || []).map(({ id, variant_id, title, thumbnail, quantity, unit_price, total }) => ({
+    items: (cart.items || []).map(({ id, variant_id, title, thumbnail, quantity, unit_price, total, metadata }) => ({
       id, variant_id, title, thumbnail, quantity, unit_price, total: total ?? unit_price * quantity,
+      fulfillment_promise: metadata?.fulfillment_promise || null,
     })),
     subtotal: cart.subtotal || 0, total: cart.total || 0, currency_code: cart.currency_code || "zar",
     hold: cart.metadata?.storefront_hold || null,

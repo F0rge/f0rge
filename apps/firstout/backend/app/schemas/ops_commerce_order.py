@@ -177,6 +177,10 @@ class StorefrontPaidOrder(BaseModel):
         if len({line.external_line_id for line in self.lines}) != len(self.lines):
             raise ValueError("external order line identities must be unique")
         line_promises = [line.fulfillment_promise for line in self.lines]
+        if self.fulfillment_promise is None and any(
+            promise is not None and promise.kind == "made_to_order" for promise in line_promises
+        ):
+            raise ValueError("made-to-order lines require an order fulfillment promise")
         if self.fulfillment_promise is not None:
             if any(promise is None for promise in line_promises):
                 raise ValueError("order promise requires a promise snapshot for every line")
@@ -191,7 +195,9 @@ class StorefrontPaidOrder(BaseModel):
                 self.fulfillment_promise.estimated_from != expected_from
                 or self.fulfillment_promise.estimated_by != expected_by
             ):
-                raise ValueError("order promise window does not match the accepted no-split promise")
+                raise ValueError(
+                    "order promise window does not match the accepted no-split promise"
+                )
         return self
 
 

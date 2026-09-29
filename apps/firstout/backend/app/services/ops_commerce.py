@@ -94,6 +94,7 @@ class OpsCommerceService:
                     product_title=sku.product_title,
                     options=sku.options,
                     acknowledged_commitment_ids=sku.acknowledged_commitment_ids,
+                    made_to_order_offer=sku.made_to_order_offer,
                 )
                 for sku in snapshots
             ],
@@ -442,13 +443,57 @@ class OpsCommerceService:
             current.imported_at = datetime.utcnow()
 
         try:
-            await SalesOrdersService(self.db).create_remainder_invoice(
-                sales_order.id,
-                actor_id,
-                tax_snapshot=invoice_tax_snapshot,
-                stock_source=UnitCostAuditSource.STOREFRONT,
-                before_commit=record_acknowledgements,
-            )
+            if any(
+                line.fulfillment_promise is not None
+                and line.fulfillment_promise.kind == "made_to_order"
+                for line in payload.lines
+            ):
+                # The payment is already recorded as a deposit. Preserve the
+                # full paid promise and wait to invoice until all lines can be
+                # fulfilled. Hold only the physically stocked lines now.
+                paid_line_notes = {
+                    f"Storefront line {line.external_line_id}" for line in payload.lines
+                }
+                if (
+                    len(sales_order.lines) != len(paid_line_notes)
+                    or {line.notes for line in sales_order.lines} != paid_line_notes
+                ):
+                    raise ConflictError("Storefront order lines no longer match the paid snapshot")
+                stocked_line_notes = {
+                    f"Storefront line {line.external_line_id}"
+                    for line in payload.lines
+                    if line.fulfillment_promise is None
+                    or line.fulfillment_promise.kind == "stocked"
+                }
+                stocked_line_ids = {
+                    order_line.id
+                    for order_line in sales_order.lines
+                    if order_line.notes in stocked_line_notes
+                }
+                async with unit_of_work(self.db):
+                    if stocked_line_ids:
+                        await SalesOrdersService(self.db)._apply_hold(
+                            sales_order,
+                            location_id,
+                            actor_id,
+                            eligible_line_ids=stocked_line_ids,
+                        )
+                    if any(
+                        line.id in stocked_line_ids and line.held_qty != line.qty
+                        for line in sales_order.lines
+                    ):
+                        raise ConflictError("Insufficient on-hand quantity")
+                    sales_order.awaiting_stock = True
+                    sales_order.status = SalesOrderStatus.AWAITING_STOCK
+                    await record_acknowledgements()
+            else:
+                await SalesOrdersService(self.db).create_remainder_invoice(
+                    sales_order.id,
+                    actor_id,
+                    tax_snapshot=invoice_tax_snapshot,
+                    stock_source=UnitCostAuditSource.STOREFRONT,
+                    before_commit=record_acknowledgements,
+                )
         except ConflictError as exc:
             if str(exc) == "Insufficient on-hand quantity":
                 await self._finish_failed(
@@ -483,6 +528,11 @@ class OpsCommerceService:
         locations.sort(key=lambda loc: (loc.id != preferred_id, loc.name.casefold()))
         required: dict[uuid.UUID, int] = defaultdict(int)
         for line in data.lines:
+            if (
+                line.fulfillment_promise is not None
+                and line.fulfillment_promise.kind == "made_to_order"
+            ):
+                continue
             required[line.source_sku_id] += line.quantity
         for location in locations:
             result = await self.db.execute(

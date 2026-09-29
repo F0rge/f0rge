@@ -56,6 +56,14 @@ test("merges duplicate and out-of-order fulfillment events without regression", 
   expect(stale.state).toEqual(applied.state);
 });
 
+test("accepts the same immutable promise with Firstout's UTC offset formatting", () => {
+  const offsetPromise = { ...orderPromise, accepted_at: "2026-09-29T10:00:00+00:00" };
+  expect(mergeFulfillmentEvent(null, [], event({ fulfillment_promise: offsetPromise }), orderPromise).changed).toBe(true);
+  expect(() => mergeFulfillmentEvent(null, [], event({
+    fulfillment_promise: { ...offsetPromise, accepted_at: "2026-09-30T10:00:00+00:00" },
+  }), orderPromise)).toThrow("fulfillment_promise_mismatch");
+});
+
 test("applies an authenticated fulfillment event and queues exactly one status notice", async () => {
   const priorCompany = process.env.FIRSTOUT_OPS_COMPANY_ID;
   process.env.FIRSTOUT_OPS_COMPANY_ID = "company-test";

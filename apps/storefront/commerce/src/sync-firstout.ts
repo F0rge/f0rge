@@ -1,6 +1,7 @@
 import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, MedusaError, Modules, ProductStatus } from "@medusajs/framework/utils";
 import { reconcileStorefrontHandoffs } from "./storefront-order-handoff";
+import { CAPACITY_STATE_METADATA_KEY, mergeCapacityState, offerPresentation } from "./made-to-order-capacity";
 import {
   createInventoryLevelsWorkflow, createProductsWorkflow, createProductVariantsWorkflow,
   deleteProductVariantsWorkflow, updateInventoryLevelsWorkflow, updateProductVariantsWorkflow,
@@ -10,7 +11,7 @@ import {
 import { medusaPrice, parseOpsProducts, pendingCommitments, projectAvailableQuantity, shouldApplyRevision, type OpsProduct } from "./ops-contract";
 
 type CommerceVariant = {
-  id: string; sku: string | null; metadata: Record<string, unknown> | null;
+  id: string; sku: string | null; allow_backorder?: boolean; metadata: Record<string, unknown> | null;
   options?: { value: string; option?: { title: string } }[];
 };
 type CommerceProduct = {
@@ -20,6 +21,22 @@ type CommerceProduct = {
 type VariantInventory = { inventory_items?: { inventory_item_id: string }[] };
 type SourceGroup = { externalId: string; title: string; rows: OpsProduct[]; grouped: boolean };
 const SOURCE_PREFIX = "firstout-";
+
+function syncedCapacityMetadata(row: OpsProduct, metadata: Record<string, unknown> | null) {
+  const state = mergeCapacityState(metadata, row.made_to_order_offer, row.revision);
+  const presentation = offerPresentation(state, Date.now());
+  return {
+    [CAPACITY_STATE_METADATA_KEY]: state,
+    storefront_made_to_order_offer: presentation ? { ...presentation, observed_at: row.observed_at } : null,
+  };
+}
+
+// Medusa must be able to complete a zero-on-hand order after our finite
+// capacity hold has passed. All public cart writes remain behind the BFF and
+// payment still validates the exact hold under the shared inventory lock.
+export function allowsFiniteBackorder(row: OpsProduct): boolean {
+  return !!row.made_to_order_offer && Date.parse(row.made_to_order_offer.expires_at) > Date.now();
+}
 
 export function groupOpsProducts(source: OpsProduct[]): SourceGroup[] {
   const groups = new Map<string, SourceGroup>();
@@ -99,7 +116,7 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
   const { data: existingData } = await query.graph({
     entity: "product",
-    fields: ["id", "external_id", "status", "metadata", "options.title", "variants.id", "variants.sku", "variants.metadata", "variants.options.value", "variants.options.option.title"],
+    fields: ["id", "external_id", "status", "metadata", "options.title", "variants.id", "variants.sku", "variants.allow_backorder", "variants.metadata", "variants.options.value", "variants.options.option.title"],
   });
   const existing = (existingData as CommerceProduct[]).filter((product) => product.external_id?.startsWith(SOURCE_PREFIX));
   const bySourceId = new Map<string, CommerceProduct>();
@@ -149,9 +166,9 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
         status: ProductStatus.DRAFT, shipping_profile_id: profiles[0].id,
         sales_channels: [{ id: channels[0].id }], options,
         variants: group.rows.map((row) => ({
-          title: variantTitle(row), sku: row.sku, manage_inventory: true,
+          title: variantTitle(row), sku: row.sku, manage_inventory: true, allow_backorder: allowsFiniteBackorder(row),
           options: variantOptions(row), prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
-          metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true },
+          metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true, ...syncedCapacityMetadata(row, null) },
         })),
         metadata: group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {},
       }] } });
@@ -191,9 +208,9 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
     if (removed.length) await deleteProductVariantsWorkflow(container).run({ input: { ids: removed } });
     if (added.length) {
       const { result } = await createProductVariantsWorkflow(container).run({ input: { product_variants: added.map((row) => ({
-        product_id: product.id, title: variantTitle(row), sku: row.sku, manage_inventory: true,
+        product_id: product.id, title: variantTitle(row), sku: row.sku, manage_inventory: true, allow_backorder: allowsFiniteBackorder(row),
         options: variantOptions(row), prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
-        metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true },
+        metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true, ...syncedCapacityMetadata(row, null) },
       })) } });
       for (const row of added) {
         const variant = result.find((item) => item.sku === row.sku);
@@ -212,15 +229,22 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
       const observationChanged = typeof variant.metadata?.source_observed_at !== "string" || row.observed_at > variant.metadata.source_observed_at;
       const pending = pendingCommitments(variant.metadata);
       const projected = projectAvailableQuantity(row, pending);
+      const nextCapacityMetadata = syncedCapacityMetadata(row, variant.metadata);
+      const allowBackorder = allowsFiniteBackorder(row);
+      const backorderChanged = variant.allow_backorder !== allowBackorder;
+      const capacityChanged = JSON.stringify(variant.metadata?.[CAPACITY_STATE_METADATA_KEY]) !==
+        JSON.stringify(nextCapacityMetadata[CAPACITY_STATE_METADATA_KEY]) ||
+        JSON.stringify(variant.metadata?.storefront_made_to_order_offer) !==
+        JSON.stringify(nextCapacityMetadata.storefront_made_to_order_offer);
       const acknowledged = new Set(row.acknowledged_commitment_ids);
       const remainingPending = pending.filter((item) => !acknowledged.has(item.commitment_id));
       const commitmentsChanged = remainingPending.length !== pending.length;
       const projectionChanged = variant.metadata?.source_projected_quantity !== projected || commitmentsChanged;
-      if (!optionsChanged && !revisionChanged && !observationChanged && !projectionChanged) continue;
+      if (!optionsChanged && !revisionChanged && !observationChanged && !projectionChanged && !capacityChanged && !backorderChanged) continue;
       await updateProductVariantsWorkflow(container).run({ input: { product_variants: [{
-        id: variant.id, ...(revisionChanged ? { sku: row.sku, prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }] } : {}),
+        id: variant.id, allow_backorder: allowBackorder, ...(revisionChanged ? { sku: row.sku, prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }] } : {}),
         ...(optionsChanged ? { options: nextOptions, title: variantTitle(row) } : {}),
-        metadata: { ...variant.metadata, source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: projected, pending_paid_commitments: remainingPending, source_price_includes_tax: true },
+        metadata: { ...variant.metadata, source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: projected, pending_paid_commitments: remainingPending, source_price_includes_tax: true, ...nextCapacityMetadata },
       }] } });
       if (revisionChanged || projectionChanged) await writeStock(container, variant.id, locations[0].id, projected);
     }

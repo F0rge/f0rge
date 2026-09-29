@@ -2,6 +2,7 @@ import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { updateProductVariantsWorkflow } from "@medusajs/medusa/core-flows";
 import { withCheckoutInventoryLock } from "./checkout-holds";
+import { commitMadeToOrderCapacity } from "./made-to-order-capacity-store";
 import { pendingCommitments } from "./ops-contract";
 
 type JsonRecord = Record<string, any>;
@@ -47,7 +48,9 @@ type PaidOrderPayload = {
     ex_minor_zar: number;
     vat_minor_zar: number;
     total_minor_zar: number;
+    fulfillment_promise?: JsonRecord;
   }[];
+  fulfillment_promise?: JsonRecord;
   totals: {
     subtotal_ex_minor_zar: number;
     tax_minor_zar: number;
@@ -81,8 +84,8 @@ type StorefrontHandoffOutbox = {
 const ORDER_FIELDS = [
   "id", "display_id", "created_at", "email", "currency_code", "subtotal", "shipping_total", "tax_total", "total",
   "customer_id", "metadata",
-  "items.id", "items.title", "items.quantity", "items.unit_price", "items.subtotal", "items.tax_total", "items.total",
-  "items.variant.sku", "items.variant.metadata",
+  "items.id", "items.title", "items.quantity", "items.detail.quantity", "items.unit_price", "items.subtotal", "items.tax_total", "items.total",
+  "items.metadata", "items.variant.sku", "items.variant.metadata",
   "shipping_methods.id", "shipping_methods.name", "shipping_methods.amount", "shipping_methods.subtotal", "shipping_methods.tax_total",
   "shipping_address.first_name", "shipping_address.last_name", "shipping_address.address_1", "shipping_address.address_2",
   "shipping_address.city", "shipping_address.province", "shipping_address.postal_code", "shipping_address.country_code", "shipping_address.phone",
@@ -167,6 +170,7 @@ export function buildPayload(order: JsonRecord): PaidOrderPayload {
   const shippingAddress = record(order.shipping_address);
   const billingAddress = record(order.billing_address);
   const checkout = record(record(order.metadata).storefront_checkout);
+  const fulfillmentPromise = record(record(order.metadata).storefront_fulfillment_promise);
   const fulfillmentType = checkout.fulfillment_type === "collection" ? "collection" : "delivery";
   const items = Array.isArray(order.items) ? order.items as JsonRecord[] : [];
   if (!items.length) throw new Error("missing_items");
@@ -192,6 +196,8 @@ export function buildPayload(order: JsonRecord): PaidOrderPayload {
     if (tax > gross) throw new Error("invalid_line_tax");
     const ex = gross - tax;
     if (ex % quantity !== 0) throw new Error("line_discount_requires_unit_allocation");
+    const itemPromise = record(item.metadata).fulfillment_promise;
+    const linePromise = itemPromise && Object.keys(itemPromise).length ? itemPromise : undefined;
     return {
       external_line_id: string(item.id, "line_id"),
       source_sku_id: sourceSkuId,
@@ -202,8 +208,14 @@ export function buildPayload(order: JsonRecord): PaidOrderPayload {
       ex_minor_zar: ex,
       vat_minor_zar: tax,
       total_minor_zar: gross,
+      ...(linePromise ? { fulfillment_promise: linePromise } : {}),
     };
   });
+  const promiseKind = fulfillmentPromise.kind;
+  if ((promiseKind === "made_to_order" || promiseKind === "mixed") &&
+    !lines.some((line) => line.fulfillment_promise?.kind === "made_to_order")) {
+    throw new Error("missing_made_to_order_line_promise");
+  }
   const shippingMethods = Array.isArray(order.shipping_methods) ? order.shipping_methods as JsonRecord[] : [];
   const shippingTotal = minor(order.shipping_total ?? 0, "shipping_total");
   const lineTaxTotal = lines.reduce((total, line) => total + line.vat_minor_zar, 0);
@@ -248,6 +260,7 @@ export function buildPayload(order: JsonRecord): PaidOrderPayload {
       fee_total_minor_zar: deliveryTotal,
     },
     lines,
+    ...(Object.keys(fulfillmentPromise).length ? { fulfillment_promise: fulfillmentPromise } : {}),
     totals: {
       subtotal_ex_minor_zar: subtotalEx,
       tax_minor_zar: orderTaxTotal,
@@ -400,7 +413,10 @@ export async function prepareStorefrontOrderHandoff(
 ): Promise<StorefrontHandoffOutbox | null> {
   return withStorefrontOrderHandoffLock(container, orderId, async () => {
     const outbox = await ensureStorefrontOrderOutbox(container, orderId);
-    if (outbox?.payload && outbox.status !== "imported") await reservePaidCommitments(container, outbox.payload);
+    if (outbox?.payload && outbox.status !== "imported") {
+      await reservePaidCommitments(container, outbox.payload);
+      await commitMadeToOrderCapacity(container, orderId);
+    }
     return outbox;
   });
 }

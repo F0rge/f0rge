@@ -6,7 +6,7 @@ const cart = {
   items: [{ id: "cali_1", variant_id: "variant_1", quantity: 1, unit_price: 1200 }],
 };
 const variant = {
-  id: "variant_1", metadata: { source_observed_at: "2026-09-28T09:59:00.000Z" },
+  id: "variant_1", metadata: { source_observed_at: "2026-09-28T09:59:00.000Z", source_available_quantity: 1 },
   inventory_items: [{ inventory_item_id: "iitem_1" }],
   prices: [{ amount: 1200, currency_code: "zar" }],
 };

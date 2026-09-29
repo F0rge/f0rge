@@ -7,6 +7,14 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class OpsMadeToOrderOfferResponse(BaseModel):
+    id: uuid.UUID
+    capacity: int = Field(ge=0)
+    min_lead_time_days: int = Field(ge=1)
+    max_lead_time_days: int = Field(ge=1)
+    expires_at: datetime
+
+
 class OpsProductResponse(BaseModel):
     source_sku_id: uuid.UUID
     sku: str
@@ -19,6 +27,7 @@ class OpsProductResponse(BaseModel):
     product_title: Optional[str] = None
     options: dict[str, str] = Field(default_factory=dict)
     acknowledged_commitment_ids: list[str]
+    made_to_order_offer: Optional[OpsMadeToOrderOfferResponse] = None
 
 
 class OpsProductsResponse(BaseModel):

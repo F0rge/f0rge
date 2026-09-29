@@ -30,6 +30,7 @@ class PublishedSkuSnapshot:
     product_title: Optional[str]
     options: dict[str, str]
     acknowledged_commitment_ids: list[str]
+    made_to_order_offer: Optional[dict[str, object]]
 
 
 class OpsCommerceCRUD:
@@ -73,6 +74,11 @@ class OpsCommerceCRUD:
                 ProductGroup.id,
                 ProductGroup.title,
                 ProductGroupVariant.options,
+                Sku.made_to_order_capacity,
+                Sku.made_to_order_lead_time_min_days,
+                Sku.made_to_order_lead_time_max_days,
+                Sku.made_to_order_expires_at,
+                Sku.made_to_order_offer_id,
             )
             .outerjoin(LocationStock, LocationStock.sku_id == Sku.id)
             .outerjoin(ProductGroupVariant, ProductGroupVariant.source_sku_id == Sku.id)
@@ -119,6 +125,17 @@ class OpsCommerceCRUD:
                 product_title=row[8],
                 options=row[9] or {},
                 acknowledged_commitment_ids=acknowledgements.get(row[0], []),
+                made_to_order_offer=(
+                    {
+                        "id": row[14],
+                        "capacity": row[10],
+                        "min_lead_time_days": row[11],
+                        "max_lead_time_days": row[12],
+                        "expires_at": row[13],
+                    }
+                    if row[14] is not None
+                    else None
+                ),
             )
             for row in rows
         ]
