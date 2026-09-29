@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import uuid
-from contextlib import asynccontextmanager
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from mcp.server.fastmcp import FastMCP
@@ -29,23 +27,33 @@ async def _seed_day_with_meal(async_db: AsyncSession, date_str: str) -> None:
     await async_db.flush()
 
 
+def _mock_ro_session_expire_on_exit(async_db: AsyncSession):
+    async def _aexit(*_args: object) -> bool:
+        async_db.expire_all()
+        return False
+
+    return patch(
+        "app.mcp.tools.scoped_ro_session",
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=async_db),
+            __aexit__=AsyncMock(side_effect=_aexit),
+        ),
+    )
+
+
 @pytest.mark.asyncio
 async def test_mcp_read_tools_json_dump_after_session_closes(async_db: AsyncSession) -> None:
     """Regression: tool handlers must not return lazy ORM state (DetachedInstanceError)."""
     await _seed_day_with_meal(async_db, "2026-09-29")
     await _seed_treatment(async_db, active=True)
 
-    @asynccontextmanager
-    async def _scoped_ro_expire_on_exit(_user_id: uuid.UUID):
-        yield async_db
-        await async_db.expire_all()
-
-    server = FastMCP("test")
-    t_mod.register_tools(server)
-
-    with patch("app.mcp.tools.scoped_ro_session", _scoped_ro_expire_on_exit):
+    with _mock_ro_session_expire_on_exit(async_db):
+        server = FastMCP("test")
+        t_mod.register_tools(server)
         get_day = await _tool(server, "get_day")(date="2026-09-29")
-        listed = await _tool(server, "list_days")(start_date="2026-09-01", end_date="2026-09-29")
+        listed = await _tool(server, "list_days")(
+            start_date="2026-09-01", end_date="2026-09-29"
+        )
         protocol = await _tool(server, "treatments")(on_date="2026-09-29")
 
     json.dumps(get_day)
