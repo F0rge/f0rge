@@ -30,19 +30,18 @@ def register_treatments_tools(server: FastMCP) -> None:
             start = target - datetime.timedelta(days=max(1, recent_days) - 1)
             active_ids = [item.id for item in protocol.items]
             logs = await service.crud.list_logs_in_range(active_ids, start, target)
-
-        return {
-            "on_date": str(target),
-            "protocol": protocol.model_dump(),
-            "recent_doses": [
-                {
-                    "treatment_id": row.treatment_id,
-                    "date": str(row.date),
-                    "doses_taken": row.doses_taken,
-                }
-                for row in logs
-            ],
-        }
+            return {
+                "on_date": str(target),
+                "protocol": protocol.model_dump(),
+                "recent_doses": [
+                    {
+                        "treatment_id": row.treatment_id,
+                        "date": str(row.date),
+                        "doses_taken": row.doses_taken,
+                    }
+                    for row in logs
+                ],
+            }
 
     @server.tool()
     @instrument_tool("log_dose")
@@ -59,10 +58,9 @@ def register_treatments_tools(server: FastMCP) -> None:
 
         async with mcp_tools.scoped_main_session(user_id) as db:
             result = await TreatmentLogService(db).upsert(treatment_id, parsed, doses_taken)
-
-        return {
-            "treatment_id": treatment_id,
-            "date": str(parsed),
-            "doses_taken": result.log.doses_taken,
-            "today": result.today.model_dump(),
-        }
+            return {
+                "treatment_id": treatment_id,
+                "date": str(parsed),
+                "doses_taken": result.log.doses_taken,
+                "today": result.today.model_dump(),
+            }

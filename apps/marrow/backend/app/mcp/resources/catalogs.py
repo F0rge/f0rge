@@ -39,13 +39,12 @@ def register_catalog_resources(server: FastMCP) -> None:
                 .scalars()
                 .all()
             )
-
-        markers = [
-            {
-                "canonical_name": row.canonical_name,
-                "display_name": row.display_name,
-                "common_units": row.common_units,
-            }
-            for row in rows
-        ]
-        return {"markers": markers, "count": len(markers)}
+            markers = [
+                {
+                    "canonical_name": row.canonical_name,
+                    "display_name": row.display_name,
+                    "common_units": row.common_units,
+                }
+                for row in rows
+            ]
+            return {"markers": markers, "count": len(markers)}

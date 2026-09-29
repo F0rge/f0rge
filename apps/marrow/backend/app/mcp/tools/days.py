@@ -40,9 +40,9 @@ def register_days_tools(server: FastMCP) -> None:
                 .options(selectinload(Entry.photos).selectinload(Photo.analysis))
             )
             row = (await db.execute(stmt)).scalar_one_or_none()
-        if row is None:
-            return None
-        return _entry_to_day_dict(row)
+            if row is None:
+                return None
+            return _entry_to_day_dict(row)
 
     @server.tool()
     @instrument_tool("list_days")
@@ -66,7 +66,7 @@ def register_days_tools(server: FastMCP) -> None:
                 .limit(_MAX_ENTRIES)
             )
             rows = (await db.execute(stmt)).scalars().all()
-        return {"days": [_day_summary(r) for r in rows]}
+            return {"days": [_day_summary(r) for r in rows]}
 
     @server.tool()
     @instrument_tool("save_day")
@@ -126,14 +126,14 @@ def register_days_tools(server: FastMCP) -> None:
             else:
                 response = await orchestrator.update_entry(parsed, EntryUpdate(**patch))
 
-        return {
-            "date": str(response.date),
-            "overall": response.overall,
-            "bloating": response.bloating,
-            "notes": response.notes,
-            "symptoms_json": response.symptoms_json,
-            "stool_status": response.stool_status,
-        }
+            return {
+                "date": str(response.date),
+                "overall": response.overall,
+                "bloating": response.bloating,
+                "notes": response.notes,
+                "symptoms_json": response.symptoms_json,
+                "stool_status": response.stool_status,
+            }
 
     @server.tool()
     @instrument_tool("log_flare")
@@ -161,9 +161,8 @@ def register_days_tools(server: FastMCP) -> None:
                 parsed,
                 EntryUpdate(symptom_events=events, symptoms_json=symptoms),
             )
-
-        return {
-            "date": str(response.date),
-            "symptom_events": [e.model_dump() for e in response.symptom_events],
-            "symptoms_json": response.symptoms_json,
-        }
+            return {
+                "date": str(response.date),
+                "symptom_events": [e.model_dump() for e in response.symptom_events],
+                "symptoms_json": response.symptoms_json,
+            }

@@ -58,15 +58,14 @@ def register_search_tools(server: FastMCP) -> None:
                 .limit(k)
             )
             rows = (await ro_db.execute(stmt)).all()
-
-        return {
-            "results": [
-                {
-                    "source_table": r.source_table,
-                    "source_id": r.source_id,
-                    "chunk_text": r.chunk_text,
-                    "distance": float(r.distance),
-                }
-                for r in rows
-            ]
-        }
+            return {
+                "results": [
+                    {
+                        "source_table": r.source_table,
+                        "source_id": r.source_id,
+                        "chunk_text": r.chunk_text,
+                        "distance": float(r.distance),
+                    }
+                    for r in rows
+                ]
+            }

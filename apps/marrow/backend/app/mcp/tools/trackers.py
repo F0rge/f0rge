@@ -25,9 +25,8 @@ def register_trackers_tools(server: FastMCP) -> None:
 
         async with mcp_tools.scoped_main_session(user_id) as db:
             log = await TrackerService(db).upsert_tracker_value(parsed, tracker_id, value)
-
-        return {
-            "tracker_id": log.tracker_id,
-            "date": str(log.date),
-            "value": log.value,
-        }
+            return {
+                "tracker_id": log.tracker_id,
+                "date": str(log.date),
+                "value": log.value,
+            }
