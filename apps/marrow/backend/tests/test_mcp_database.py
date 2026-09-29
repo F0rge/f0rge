@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import uuid
+from unittest.mock import patch
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from mcp.server.fastmcp import FastMCP
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.mcp.database import scoped_main_session, scoped_ro_session
+from app.mcp import tools as t_mod
 from app.models.hypothesis import Hypothesis
 from f0rge_db.tenant import apply_session_user_id, clear_tenant_session
 
@@ -23,44 +25,35 @@ async def test_rollback_before_clear_tenant_after_failed_sql(async_db: AsyncSess
     await clear_tenant_session(async_db)
 
 
+def _tool(server: FastMCP, name: str):
+    return next(t for t in server._tool_manager.list_tools() if t.name == name).fn
+
+
 @pytest.mark.asyncio
-async def test_scoped_ro_session_hypotheses_round_trip(
-    async_engine,
-) -> None:
-    """MCP hypotheses tools use real scoped sessions (not mocked) against Postgres."""
-    from unittest.mock import patch
-
-    from mcp.server.fastmcp import FastMCP
-
-    from app.mcp import tools as t_mod
-
-    maker = async_sessionmaker(async_engine, expire_on_commit=False)
-    session = maker()
+async def test_hypotheses_mcp_uses_scoped_main_session(async_db: AsyncSession) -> None:
+    """Hypotheses list/update run through scoped_main_session without DetachedInstanceError."""
     uid = uuid.UUID(settings.default_storage_user_id)
-    await apply_session_user_id(session, uid)
-    session.add(
+    await apply_session_user_id(async_db, uid)
+    async_db.add(
         Hypothesis(
-            slug="mcp-session-test",
-            title="MCP session test",
+            slug="mcp-scoped-session-test",
+            title="Scoped session test",
             status="live",
             layer=1,
             sort_order=99,
         )
     )
-    await session.commit()
+    await async_db.flush()
 
-    def _tool(server: FastMCP, name: str):
-        return next(t for t in server._tool_manager.list_tools() if t.name == name).fn
-
-    with patch("app.mcp.database.make_main_session", side_effect=lambda: maker()):
+    with patch("app.mcp.database.make_main_session", return_value=async_db):
         server = FastMCP("test")
         t_mod.register_tools(server)
         listed = await _tool(server, "hypotheses")()
         updated = await _tool(server, "update_hypothesis")(
-            slug="mcp-session-test",
+            slug="mcp-scoped-session-test",
             last_evidence="scoped session regression",
         )
 
-    assert any(h["slug"] == "mcp-session-test" for h in listed["hypotheses"])
+    slugs = {h["slug"] for h in listed["hypotheses"]}
+    assert "mcp-scoped-session-test" in slugs
     assert updated["last_evidence"] == "scoped session regression"
-    await session.close()

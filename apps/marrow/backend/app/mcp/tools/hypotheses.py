@@ -95,4 +95,4 @@ def register_hypotheses_tools(server: FastMCP) -> None:
             else:
                 raise ValueError("Provide hypothesis_id or slug.")
             row = await service.update(row_id, patch)
-        return _hypothesis_to_dict(row)
+            return _hypothesis_to_dict(row)
