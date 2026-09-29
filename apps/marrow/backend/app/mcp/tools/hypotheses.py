@@ -43,7 +43,7 @@ def register_hypotheses_tools(server: FastMCP) -> None:
         user_id = _mcp_user_id(ctx)
         import app.mcp.tools as mcp_tools
 
-        async with mcp_tools.scoped_ro_session(user_id) as db:
+        async with mcp_tools.scoped_main_session(user_id) as db:
             rows = await HypothesisService(db).list(status)
         return {"hypotheses": [_hypothesis_to_dict(r) for r in rows]}
 
@@ -95,4 +95,4 @@ def register_hypotheses_tools(server: FastMCP) -> None:
             else:
                 raise ValueError("Provide hypothesis_id or slug.")
             row = await service.update(row_id, patch)
-        return _hypothesis_to_dict(row)
+            return _hypothesis_to_dict(row)

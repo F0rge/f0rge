@@ -81,6 +81,8 @@ async def scoped_ro_session(user_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
         await apply_session_user_id(session, user_id)
         yield session
     finally:
+        # Match ``f0rge_db.engine.build_get_db``: rollback aborted txns before RESET.
+        await session.rollback()
         await clear_tenant_session(session)
         await session.close()
 
@@ -93,5 +95,6 @@ async def scoped_main_session(user_id: uuid.UUID) -> AsyncIterator[AsyncSession]
         await apply_session_user_id(session, user_id)
         yield session
     finally:
+        await session.rollback()
         await clear_tenant_session(session)
         await session.close()

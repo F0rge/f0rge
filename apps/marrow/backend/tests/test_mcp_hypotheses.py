@@ -31,9 +31,9 @@ async def test_list_hypotheses_mcp(async_db: AsyncSession) -> None:
     await _seed_hypothesis(async_db)
     from app.mcp import tools as t_mod
 
-    with patch("app.mcp.tools.scoped_ro_session") as mock_ro:
-        mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
-        mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
+    with patch("app.mcp.tools.scoped_main_session") as mock_main:
+        mock_main.return_value.__aenter__ = AsyncMock(return_value=async_db)
+        mock_main.return_value.__aexit__ = AsyncMock(return_value=False)
 
         server = FastMCP("test")
         t_mod.register_tools(server)
@@ -48,12 +48,7 @@ async def test_update_hypothesis_mcp_by_slug(async_db: AsyncSession) -> None:
     await _seed_hypothesis(async_db)
     from app.mcp import tools as t_mod
 
-    with (
-        patch("app.mcp.tools.scoped_ro_session") as mock_ro,
-        patch("app.mcp.tools.scoped_main_session") as mock_main,
-    ):
-        mock_ro.return_value.__aenter__ = AsyncMock(return_value=async_db)
-        mock_ro.return_value.__aexit__ = AsyncMock(return_value=False)
+    with patch("app.mcp.tools.scoped_main_session") as mock_main:
         mock_main.return_value.__aenter__ = AsyncMock(return_value=async_db)
         mock_main.return_value.__aexit__ = AsyncMock(return_value=False)
 
