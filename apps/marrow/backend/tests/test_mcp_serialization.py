@@ -51,9 +51,7 @@ async def test_mcp_read_tools_json_dump_after_session_closes(async_db: AsyncSess
         server = FastMCP("test")
         t_mod.register_tools(server)
         get_day = await _tool(server, "get_day")(date="2026-09-29")
-        listed = await _tool(server, "list_days")(
-            start_date="2026-09-01", end_date="2026-09-29"
-        )
+        listed = await _tool(server, "list_days")(start_date="2026-09-01", end_date="2026-09-29")
         protocol = await _tool(server, "treatments")(on_date="2026-09-29")
 
     json.dumps(get_day)
