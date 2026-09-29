@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 3004",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@f0rge/ui": "file:../../../libs/ui",
@@ -15,16 +16,19 @@
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "three": "^0.186.0"
   },
   "devDependencies": {
     "@types/pg": "^8.6.1",
     "@types/node": "^22.15.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.186.0",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.3.5",
     "pg": "^8.23.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

@@ -3950,6 +3950,29 @@ export function cancelSalesOrder(id: string): Promise<SalesOrder> {
   return apiFetch<SalesOrder>(`/orders/${id}/cancel`, { method: "POST" });
 }
 
+export type StorefrontHandoff = {
+  id: string;
+  external_order_id: string;
+  correlation_id: string;
+  status: "pending" | "processing" | "stock_conflict" | "imported" | "failed";
+  failure_code: string | null;
+  attempt_count: number;
+  last_attempt_at: string | null;
+  imported_at: string | null;
+  sales_order_id: string;
+  payment_journal_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export function listStorefrontHandoffs(): Promise<{ items: StorefrontHandoff[] }> {
+  return apiFetch<{ items: StorefrontHandoff[] }>("/storefront/orders");
+}
+
+export function retryStorefrontHandoff(id: string): Promise<StorefrontHandoff> {
+  return apiFetch<StorefrontHandoff>(`/storefront/orders/${id}/retry`, { method: "POST" });
+}
+
 export type PortalMe = {
   id: string;
   email: string;

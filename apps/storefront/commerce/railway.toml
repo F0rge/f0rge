@@ -1,0 +1,20 @@
+# Config-as-code for the isolated Storefront private-preview Medusa service.
+# Use the repository root as Railway Root Directory and this config file path.
+# Do not generate a public domain for this service; the web service uses its
+# private Railway address. Never attach it to the Firstout or Marrow project.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/storefront/commerce/Dockerfile"
+watchPatterns = [
+  "apps/storefront/commerce/**",
+  "package.json",
+  "package-lock.json",
+]
+
+[deploy]
+preDeployCommand = "../../node_modules/.bin/medusa db:migrate"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

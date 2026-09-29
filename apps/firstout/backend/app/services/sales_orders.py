@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from collections.abc import Awaitable, Callable
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
@@ -256,6 +257,10 @@ class SalesOrdersService:
         self,
         sales_order_id: uuid.UUID,
         user_id: uuid.UUID,
+        *,
+        tax_snapshot: Optional[list[tuple[Decimal, Decimal, Decimal]]] = None,
+        stock_source: UnitCostAuditSource = UnitCostAuditSource.SALES_ORDER,
+        before_commit: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> SalesOrderResponse:
         order = await self._require_open(sales_order_id)
         if order.invoice_id is not None:
@@ -269,9 +274,18 @@ class SalesOrdersService:
         total_inc = Decimal(0)
         sales_parts: list[tuple[str, Decimal, Decimal]] = []
         for index, line in enumerate(order.lines):
-            ex_vat = (Decimal(line.qty) * line.unit_ex_vat).quantize(CENT, rounding=ROUND_HALF_UP)
-            inc_vat = ex_to_inc(ex_vat)
-            line_vat = inc_vat - ex_vat
+            if tax_snapshot is None:
+                ex_vat = (Decimal(line.qty) * line.unit_ex_vat).quantize(
+                    CENT, rounding=ROUND_HALF_UP
+                )
+                inc_vat = ex_to_inc(ex_vat)
+                line_vat = inc_vat - ex_vat
+            else:
+                if len(tax_snapshot) != len(order.lines) + 1:
+                    raise ValidationError("Storefront tax snapshot does not match order lines")
+                ex_vat, line_vat, inc_vat = tax_snapshot[index]
+                if ex_vat + line_vat != inc_vat:
+                    raise ValidationError("Storefront tax snapshot line does not balance")
             subtotal += ex_vat
             vat_total += line_vat
             total_inc += inc_vat
@@ -289,6 +303,34 @@ class SalesOrdersService:
                     sku_id=line.sku_id,
                 )
             )
+
+        if tax_snapshot is not None:
+            delivery_ex, delivery_vat, delivery_inc = tax_snapshot[-1]
+            if delivery_ex + delivery_vat != delivery_inc:
+                raise ValidationError("Storefront delivery tax snapshot does not balance")
+            if delivery_ex or delivery_vat or delivery_inc:
+                subtotal += delivery_ex
+                vat_total += delivery_vat
+                total_inc += delivery_inc
+                sales_parts.append(("4000", Decimal(0), delivery_ex))
+                invoice_line_models.append(
+                    InvoiceLine(
+                        description="Storefront delivery",
+                        qty=1,
+                        unit_ex_vat=delivery_ex,
+                        ex_vat=delivery_ex,
+                        inc_vat=delivery_inc,
+                        vat_amount=delivery_vat,
+                        sort_order=len(invoice_line_models),
+                        sku_id=None,
+                    )
+                )
+            if (
+                subtotal != order.subtotal_ex_vat
+                or vat_total != order.vat_amount
+                or total_inc != order.total_inc_vat
+            ):
+                raise ValidationError("Storefront tax snapshot does not match the paid order")
 
         team = await TeamCRUD(self.db).get_first()
         if team is None:
@@ -354,7 +396,7 @@ class SalesOrdersService:
                         location_id=order.location_id,
                         qty=remaining,
                         user_id=user_id,
-                        source=UnitCostAuditSource.SALES_ORDER,
+                        source=stock_source,
                         note=f"Sales order {order.so_number} remainder",
                     )
                     line.held_qty = line.qty
@@ -391,6 +433,9 @@ class SalesOrdersService:
 
             order.invoice_id = invoice.id
             order.status = SalesOrderStatus.INVOICED
+            order.awaiting_stock = False
+            if before_commit is not None:
+                await before_commit()
 
         return self._to_response(await self._get_or_404(order.id))
 
