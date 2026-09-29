@@ -17,7 +17,7 @@
     "react-dom": "19.2.8",
     "eslint-plugin-react-hooks": "7.0.1",
     "sharp": "0.35.4",
-    "fast-uri": "3.1.6",
+    "fast-uri": "3.1.7",
     "browserslist": "4.29.0",
     "lodash": "4.18.1",
     "@graphql-codegen/plugin-helpers": {
