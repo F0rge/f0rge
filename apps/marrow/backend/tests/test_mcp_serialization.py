@@ -29,22 +29,21 @@ async def _seed_day_with_meal(async_db: AsyncSession, date_str: str) -> None:
     await async_db.flush()
 
 
-@asynccontextmanager
-async def _scoped_session_expire_on_exit(db: AsyncSession, _user_id: uuid.UUID):
-    yield db
-    await db.expire_all()
-
-
 @pytest.mark.asyncio
 async def test_mcp_read_tools_json_dump_after_session_closes(async_db: AsyncSession) -> None:
     """Regression: tool handlers must not return lazy ORM state (DetachedInstanceError)."""
     await _seed_day_with_meal(async_db, "2026-09-29")
     await _seed_treatment(async_db, active=True)
 
+    @asynccontextmanager
+    async def _scoped_ro_expire_on_exit(_user_id: uuid.UUID):
+        yield async_db
+        await async_db.expire_all()
+
     server = FastMCP("test")
     t_mod.register_tools(server)
 
-    with patch("app.mcp.tools.scoped_ro_session", _scoped_session_expire_on_exit):
+    with patch("app.mcp.tools.scoped_ro_session", _scoped_ro_expire_on_exit):
         get_day = await _tool(server, "get_day")(date="2026-09-29")
         listed = await _tool(server, "list_days")(start_date="2026-09-01", end_date="2026-09-29")
         protocol = await _tool(server, "treatments")(on_date="2026-09-29")
