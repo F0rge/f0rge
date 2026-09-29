@@ -3,7 +3,6 @@ from __future__ import annotations
 import datetime
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from mcp.server.fastmcp import FastMCP
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.mcp import tools as t_mod
 from app.models.entry import Entry
 from app.models.tracker import Tracker
-from app.models.treatment import Treatment
 
 from tests.test_mcp_tools import _seed_entry, _seed_lab, _seed_treatment
 
@@ -73,9 +71,7 @@ async def test_get_day_and_list_days(async_db: AsyncSession) -> None:
         server = FastMCP("test")
         t_mod.register_tools(server)
         day = await _tool_fn(server, "get_day")(date="2025-03-10")
-        listed = await _tool_fn(server, "list_days")(
-            start_date="2025-03-01", end_date="2025-03-31"
-        )
+        listed = await _tool_fn(server, "list_days")(start_date="2025-03-01", end_date="2025-03-31")
     assert day is not None
     assert day["date"] == "2025-03-10"
     assert listed["days"][0]["date"] == "2025-03-10"
@@ -165,9 +161,7 @@ async def test_log_dose_and_log_tracker(async_db: AsyncSession) -> None:
         dose = await _tool_fn(server, "log_dose")(
             treatment_id=treatment.id, date=target, doses_taken=1
         )
-        tracked = await _tool_fn(server, "log_tracker")(
-            tracker_id=tracker.id, date=target, value=3
-        )
+        tracked = await _tool_fn(server, "log_tracker")(tracker_id=tracker.id, date=target, value=3)
     assert dose["doses_taken"] == 1
     assert tracked["value"] == 3
 

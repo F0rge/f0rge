@@ -145,9 +145,7 @@ async def test_get_lab_history(async_db: AsyncSession) -> None:
     assert len(result["history"]) == 1
 
 
-async def test_search_empty_table(
-    async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_search_empty_table(async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.config import settings
     from app.mcp import tools as t_mod
 

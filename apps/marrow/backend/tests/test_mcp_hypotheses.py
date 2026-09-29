@@ -70,4 +70,3 @@ async def test_update_hypothesis_mcp_by_slug(async_db: AsyncSession) -> None:
     assert result["last_evidence"] == "negative breath test"
     assert result["kill_test"] == "negative prepped H2/CH4 + no high-folate/low-B12"
     assert listed["hypotheses"][0]["status"] == "killed"
-
