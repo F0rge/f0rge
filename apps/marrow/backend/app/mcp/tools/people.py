@@ -19,14 +19,13 @@ def register_people_tools(server: FastMCP) -> None:
 
         async with mcp_tools.scoped_ro_session(user_id) as db:
             response = await SocialService(db).list_connections()
-
-        return {
-            "accepted": [
-                {
-                    "connection_id": item.id,
-                    "handle": item.user.handle,
-                    "display_name": item.user.display_name,
-                }
-                for item in response.accepted
-            ]
-        }
+            return {
+                "accepted": [
+                    {
+                        "connection_id": item.id,
+                        "handle": item.user.handle,
+                        "display_name": item.user.display_name,
+                    }
+                    for item in response.accepted
+                ]
+            }

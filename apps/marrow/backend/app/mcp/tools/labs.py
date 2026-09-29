@@ -83,13 +83,11 @@ def register_labs_tools(server: FastMCP) -> None:
 
         async with mcp_tools.scoped_ro_session(user_id) as db:
             lab = await LabCRUD(db).get_by_id(lab_id)
-
-        if lab is None:
-            return None
-
-        return {
-            "lab_id": lab.id,
-            "date": str(lab.lab_date),
-            "name": lab.name,
-            "markers": [_lab_marker_to_dict(m) for m in lab.markers],
-        }
+            if lab is None:
+                return None
+            return {
+                "lab_id": lab.id,
+                "date": str(lab.lab_date),
+                "name": lab.name,
+                "markers": [_lab_marker_to_dict(m) for m in lab.markers],
+            }

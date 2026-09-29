@@ -59,24 +59,23 @@ def register_meals_tools(server: FastMCP) -> None:
             analysis = await PhotoAnalysisCRUD(db).get_for_photo_with_ingredients(photo_id)
             tags = await _tags_for_photo(db, photo_id)
             entry_date = str(photo.entry.date)
-
-        name = photo.label
-        if analysis is not None and analysis.dish_name:
-            name = name or analysis.dish_name
-        payload: dict[str, Any] = {
-            "photo_id": photo.id,
-            "meal_id": photo.meal_id,
-            "date": entry_date,
-            "name": name,
-            "meal_time": photo.meal_time.isoformat() if photo.meal_time else None,
-            "has_photo": photo.filename is not None,
-            "tags": tags,
-        }
-        if analysis is not None:
-            payload["analysis"] = _analysis_to_dict(analysis, photo_id)
-        else:
-            payload["ingredients"] = []
-        return payload
+            name = photo.label
+            if analysis is not None and analysis.dish_name:
+                name = name or analysis.dish_name
+            payload: dict[str, Any] = {
+                "photo_id": photo.id,
+                "meal_id": photo.meal_id,
+                "date": entry_date,
+                "name": name,
+                "meal_time": photo.meal_time.isoformat() if photo.meal_time else None,
+                "has_photo": photo.filename is not None,
+                "tags": tags,
+            }
+            if analysis is not None:
+                payload["analysis"] = _analysis_to_dict(analysis, photo_id)
+            else:
+                payload["ingredients"] = []
+            return payload
 
     @server.tool()
     @instrument_tool("log_meal")
@@ -238,12 +237,11 @@ def register_meals_tools(server: FastMCP) -> None:
                 if photo.meal is not None:
                     photo.meal.meal_time = parsed_time
             await PhotoCRUD(db).commit_refresh(photo)
-
-        return {
-            "photo_id": photo.id,
-            "name": photo.label,
-            "meal_time": photo.meal_time.isoformat() if photo.meal_time else None,
-        }
+            return {
+                "photo_id": photo.id,
+                "name": photo.label,
+                "meal_time": photo.meal_time.isoformat() if photo.meal_time else None,
+            }
 
     @server.tool()
     @instrument_tool("set_ingredients")
@@ -271,8 +269,7 @@ def register_meals_tools(server: FastMCP) -> None:
                     analysis.id, IngredientCreate(name=label.strip())
                 )
                 created.append(_ingredient_to_dict(row))
-
-        return {"photo_id": photo_id, "ingredients": created}
+            return {"photo_id": photo_id, "ingredients": created}
 
     @server.tool()
     @instrument_tool("tag_meal")
@@ -296,8 +293,7 @@ def register_meals_tools(server: FastMCP) -> None:
             if handles:
                 await tag_service.add_tags_to_photo(photo_id, handles)
             tags = await _tags_for_photo(db, photo_id)
-
-        return {"photo_id": photo_id, "tags": tags}
+            return {"photo_id": photo_id, "tags": tags}
 
     @server.tool()
     @instrument_tool("delete_meal")

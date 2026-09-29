@@ -23,6 +23,7 @@ After Postgres (pgvector), Redis, and Bucket `photos` exist:
 | `DATABASE_URL` | `postgresql+asyncpg://healthtracker_app:...@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/railway` (or rewrite `${{Postgres.DATABASE_URL}}` to asyncpg + app role) |
 | `MIGRATION_DATABASE_URL` | htmigrate (or Postgres owner) URL for alembic pre-deploy |
 | `MCP_READONLY_DATABASE_URL` | `healthtracker_ro` URL (MCP only) |
+| `OPENROUTER_API_KEY` | Same as API (`${{marrow-api.OPENROUTER_API_KEY}}` on `marrow-mcp`) — required for MCP `search` embeddings |
 | `REDIS_URL` | `${{Redis.REDIS_URL}}` (API + worker) |
 | `BUCKET_NAME` | `${{photos.BUCKET}}` |
 | `AWS_ACCESS_KEY_ID` | `${{photos.ACCESS_KEY_ID}}` |
