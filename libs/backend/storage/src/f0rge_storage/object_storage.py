@@ -142,13 +142,28 @@ class ObjectStorage:
     def exists_relative(self, relative_path: str, *, user_id: Optional[str] = None) -> bool:
         return self.resolve_relative_key(relative_path, user_id=user_id) is not None
 
+    def _resolve_user_prefix_candidates(self, user_id: Optional[str]) -> list[Optional[str]]:
+        """Prefixes to probe when locating an object for ``user_id``.
+
+        Legacy unprefixed keys and duplicate lookups under the reference user's
+        prefix apply only to that tenant. Other users must never inherit another
+        account's object just because the relative filename matches.
+        """
+        default_prefix = self.default_user_prefix()
+        primary = user_id or default_prefix
+        candidates: list[Optional[str]] = [primary]
+        if primary == default_prefix:
+            candidates.append(None)
+        return candidates
+
     def resolve_relative_key(
         self, relative_path: str, *, user_id: Optional[str] = None
     ) -> Optional[str]:
         """Return the concrete storage key/path that holds ``relative_path``.
 
-        Tries ``{user_id}/…``, then the configured default user prefix, then a
-        bare (unprefixed) key — Railway/Tigris syncs have used all three layouts.
+        Tries the canonical ``{user_id}/…`` key first. Legacy bare keys and
+        extra probes apply only when resolving for the configured reference user
+        (historical Fly/Railway uploads without per-tenant prefixes).
         """
         rel = relative_path.lstrip("/")
         if not self.enabled():
@@ -157,7 +172,7 @@ class ObjectStorage:
 
         seen: set[str] = set()
         candidates: list[str] = []
-        for uid in (user_id, self.default_user_prefix(), None):
+        for uid in self._resolve_user_prefix_candidates(user_id):
             key = self.build_object_key(rel, user_id=uid) if uid else rel
             if key in seen:
                 continue

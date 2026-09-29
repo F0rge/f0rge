@@ -149,12 +149,22 @@ def test_read_relative_canonical_get_skips_head() -> None:
 
 
 def test_read_relative_falls_back_to_legacy_layout() -> None:
-    stub = _GetStub({"default-user/a.jpg": b"legacy"})
+    """Reference-user reads may resolve unprefixed legacy keys."""
+    stub = _GetStub({"a.jpg": b"legacy-bare"})
     storage = _remote_storage(stub)
-    assert storage.read_relative("a.jpg", user_id="u1") == b"legacy"
-    assert stub.get_calls[0] == "u1/a.jpg"
-    assert "default-user/a.jpg" in stub.get_calls
-    assert "default-user/a.jpg" in stub.head_calls
+    assert storage.read_relative("a.jpg", user_id="default-user") == b"legacy-bare"
+    assert stub.get_calls[0] == "default-user/a.jpg"
+    assert "a.jpg" in stub.get_calls
+    assert "a.jpg" in stub.head_calls
+
+
+def test_read_relative_does_not_use_reference_user_legacy_for_other_tenants() -> None:
+    stub = _GetStub({"default-user/collide.jpg": b"reference-bytes"})
+    storage = _remote_storage(stub)
+    with pytest.raises(FileNotFoundError):
+        storage.read_relative("collide.jpg", user_id="other-tenant")
+    assert stub.get_calls == ["other-tenant/collide.jpg"]
+    assert "default-user/collide.jpg" not in stub.get_calls
 
 
 def test_read_bytes_missing_raises_file_not_found() -> None:
