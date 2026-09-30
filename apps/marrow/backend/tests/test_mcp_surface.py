@@ -52,6 +52,7 @@ def test_registered_tool_names() -> None:
         "hypotheses",
         "list_days",
         "list_people",
+        "list_supplements",
         "log_dose",
         "log_flare",
         "log_meal",
@@ -59,6 +60,7 @@ def test_registered_tool_names() -> None:
         "save_day",
         "search",
         "set_ingredients",
+        "set_supplements",
         "tag_meal",
         "treatments",
         "update_hypothesis",
@@ -93,6 +95,41 @@ async def test_save_day_only_touches_target_date(async_db: AsyncSession) -> None
     assert datetime.date(2025, 1, 1) in rows
     assert datetime.date.fromisoformat(target) in rows
     assert len(rows) == 2
+
+
+async def test_save_day_new_date_accepts_joint_pain_and_neuro(async_db: AsyncSession) -> None:
+    """Regression: EntryCreate got duplicate joint_pain/neuro kwargs for a date with no row."""
+    target = "2026-09-29"
+    with _mock_main_session(async_db):
+        server = FastMCP("test")
+        t_mod.register_tools(server)
+        result = await _tool_fn(server, "save_day")(
+            date=target, overall=4, joint_pain=3, neuro=2, notes="new day with pain scores"
+        )
+    assert result["date"] == target
+    row = (
+        await async_db.execute(
+            select(Entry).where(Entry.date == datetime.date.fromisoformat(target))
+        )
+    ).scalar_one()
+    assert (row.joint_pain, row.neuro, row.overall) == (3, 2, 4)
+    assert row.supplements == "" and row.sick is False
+
+
+async def test_save_day_new_date_defaults_joint_pain_and_neuro_to_zero(
+    async_db: AsyncSession,
+) -> None:
+    target = "2026-09-28"
+    with _mock_main_session(async_db):
+        server = FastMCP("test")
+        t_mod.register_tools(server)
+        await _tool_fn(server, "save_day")(date=target, overall=6)
+    row = (
+        await async_db.execute(
+            select(Entry).where(Entry.date == datetime.date.fromisoformat(target))
+        )
+    ).scalar_one()
+    assert (row.joint_pain, row.neuro) == (0, 0)
 
 
 async def test_log_flare_on_target_day(async_db: AsyncSession) -> None:

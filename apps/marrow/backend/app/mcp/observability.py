@@ -32,7 +32,7 @@ def _infer_row_count(result: Any) -> Optional[int]:
     if result is None:
         return 0
     if isinstance(result, dict):
-        for key in ("results", "entries", "history", "labs", "treatments", "rows"):
+        for key in ("results", "entries", "history", "labs", "treatments", "supplements", "rows"):
             if key in result and isinstance(result[key], list):
                 return len(result[key])
     return None

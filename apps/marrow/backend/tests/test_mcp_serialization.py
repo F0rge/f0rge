@@ -63,7 +63,7 @@ def test_list_tools_schema_succeeds() -> None:
     server = FastMCP("test")
     t_mod.register_tools(server)
     tools = server._tool_manager.list_tools()
-    assert len(tools) == 19
+    assert len(tools) == 21
     for registered in tools:
         assert registered.name
         assert registered.description
