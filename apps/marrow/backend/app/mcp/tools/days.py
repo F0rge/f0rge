@@ -28,7 +28,7 @@ def register_days_tools(server: FastMCP) -> None:
     @server.tool()
     @instrument_tool("get_day")
     async def get_day(date: str, ctx: Context = None) -> Optional[dict[str, Any]]:
-        """One check-in: scores, symptoms, notes, and meal summaries for an ISO date."""
+        """One check-in: scores, symptoms, supplements, notes, and meal summaries for an ISO date."""
         parsed = _validate_date(date, "date")
         user_id = _mcp_user_id(ctx)
         import app.mcp.tools as mcp_tools
@@ -112,15 +112,18 @@ def register_days_tools(server: FastMCP) -> None:
             orchestrator = EntryOrchestrator(db)
             existing = await EntryService(db).crud.get_by_date(parsed)
             if existing is None:
+                # Defaults first, patch last: joint_pain/neuro may be in the patch.
                 body = EntryCreate(
-                    date=parsed,
-                    diet_risk="",
-                    supplements="",
-                    sick=False,
-                    hot_shower=False,
-                    joint_pain=patch.get("joint_pain", 0),
-                    neuro=patch.get("neuro", 0),
-                    **patch,
+                    **{
+                        "date": parsed,
+                        "diet_risk": "",
+                        "supplements": "",
+                        "sick": False,
+                        "hot_shower": False,
+                        "joint_pain": 0,
+                        "neuro": 0,
+                        **patch,
+                    }
                 )
                 response = await orchestrator.create_entry(body)
             else:

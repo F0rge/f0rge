@@ -25,6 +25,7 @@ def register_tools(server: FastMCP) -> None:
     from app.mcp.tools.meals import register_meals_tools
     from app.mcp.tools.people import register_people_tools
     from app.mcp.tools.search import register_search_tools
+    from app.mcp.tools.supplements import register_supplements_tools
     from app.mcp.tools.trackers import register_trackers_tools
     from app.mcp.tools.treatments import register_treatments_tools
 
@@ -36,3 +37,4 @@ def register_tools(server: FastMCP) -> None:
     register_meals_tools(server)
     register_trackers_tools(server)
     register_people_tools(server)
+    register_supplements_tools(server)
