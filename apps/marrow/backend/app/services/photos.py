@@ -375,7 +375,6 @@ class PhotoService:
         if photo is None:
             raise NotFoundError("Photo not found")
         filename = photo.filename
-        meal_id = photo.meal_id
         user_id = photo.user_id
         entry_date = photo.entry.date
         user_id_str = str(user_id)
@@ -384,7 +383,6 @@ class PhotoService:
         # no files are removed and the DB row remains — consistent state.
         await self.crud.delete_and_commit(photo)
         await invalidate_user_insights_cache(user_id, entry_date)
-        await self.meal_crud.delete_if_orphaned(meal_id)
 
         # File cleanup happens after the successful commit.
         # Icon-only library meals have no object-storage file.
