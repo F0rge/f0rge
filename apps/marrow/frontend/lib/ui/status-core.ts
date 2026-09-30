@@ -30,7 +30,7 @@ export const statusFill = {
 /** Five-point wellbeing / core-scale solid dots (calendar) — polarity only. */
 export const scaleDotClass: Record<number, string> = {
   1: 'bg-destructive',
-  2: 'bg-warn',
+  2: 'bg-scale-poor',
   3: 'bg-chart-1',
   4: 'bg-chart-3',
   5: 'bg-ok',
@@ -39,7 +39,7 @@ export const scaleDotClass: Record<number, string> = {
 /** Soft badges for five-point scales on history surfaces. */
 export const scaleBadgeClass: Record<number, string> = {
   1: 'bg-destructive/15 text-destructive',
-  2: 'bg-warn/15 text-warn',
+  2: 'bg-scale-poor/15 text-scale-poor',
   3: 'bg-chart-1/20 text-foreground',
   4: 'bg-chart-3/20 text-ok',
   5: 'bg-ok/15 text-ok',

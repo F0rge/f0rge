@@ -35,7 +35,10 @@ class TreatmentLogService:
         if treatment is None:
             raise NotFoundError(f"Treatment {treatment_id} not found.")
 
-        clamped = max(0, min(doses_taken, treatment.doses_per_day or 0))
+        if treatment.doses_per_day is None:
+            clamped = max(0, doses_taken)
+        else:
+            clamped = max(0, min(doses_taken, treatment.doses_per_day))
 
         existing = await self.crud.get(treatment_id, date)
 

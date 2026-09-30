@@ -100,6 +100,7 @@ export function FoodCard({
 
         <PhotoCapture
           date={date}
+          existingPhotos={existingPhotos}
           ensureEntryExists={ensureEntryExists}
           onEntryEnsured={onEntryEnsured}
         />

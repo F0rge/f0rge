@@ -1,42 +1,66 @@
 from __future__ import annotations
 
-from typing import Any
+import datetime
+from typing import Any, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
-from sqlalchemy import select
 
 from app.mcp.observability import instrument_tool
-from app.mcp.tools._common import _mcp_user_id
-from app.models.treatment import Treatment
-from f0rge_db.tenant import owned_by_user
+from app.mcp.tools._common import _mcp_user_id, _validate_date
+from app.services.treatment_log import TreatmentLogService
+from app.utils.dates import local_today
 
 
 def register_treatments_tools(server: FastMCP) -> None:
     @server.tool()
-    @instrument_tool("list_treatments")
-    async def list_treatments(active_only: bool = True, ctx: Context = None) -> dict[str, Any]:
-        """List treatments. When active_only=True, only treatments with no end_date are returned."""
+    @instrument_tool("treatments")
+    async def treatments(
+        on_date: Optional[str] = None,
+        recent_days: int = 14,
+        ctx: Context = None,
+    ) -> dict[str, Any]:
+        """Active treatment protocol for a day plus recent dose logs."""
+        target = _validate_date(on_date, "on_date") if on_date else local_today()
         user_id = _mcp_user_id(ctx)
         import app.mcp.tools as mcp_tools
 
         async with mcp_tools.scoped_ro_session(user_id) as db:
-            stmt = select(Treatment).where(owned_by_user(Treatment.user_id))
-            if active_only:
-                stmt = stmt.where(Treatment.end_date.is_(None))
-            stmt = stmt.order_by(Treatment.start_date.desc())
-            rows = (await db.execute(stmt)).scalars().all()
-        return {
-            "treatments": [
-                {
-                    "id": r.id,
-                    "name": r.name,
-                    "group_name": r.group_name,
-                    "type": r.type,
-                    "start_date": str(r.start_date),
-                    "end_date": str(r.end_date) if r.end_date else None,
-                    "dose": r.dose,
-                    "notes": r.notes,
-                }
-                for r in rows
-            ]
-        }
+            service = TreatmentLogService(db)
+            protocol = await service.get_protocol(target)
+            start = target - datetime.timedelta(days=max(1, recent_days) - 1)
+            active_ids = [item.id for item in protocol.items]
+            logs = await service.crud.list_logs_in_range(active_ids, start, target)
+            return {
+                "on_date": str(target),
+                "protocol": protocol.model_dump(),
+                "recent_doses": [
+                    {
+                        "treatment_id": row.treatment_id,
+                        "date": str(row.date),
+                        "doses_taken": row.doses_taken,
+                    }
+                    for row in logs
+                ],
+            }
+
+    @server.tool()
+    @instrument_tool("log_dose")
+    async def log_dose(
+        treatment_id: int,
+        date: str,
+        doses_taken: int,
+        ctx: Context = None,
+    ) -> dict[str, Any]:
+        """Log how many doses of a treatment were taken on a calendar day."""
+        parsed = _validate_date(date, "date")
+        user_id = _mcp_user_id(ctx)
+        import app.mcp.tools as mcp_tools
+
+        async with mcp_tools.scoped_main_session(user_id) as db:
+            result = await TreatmentLogService(db).upsert(treatment_id, parsed, doses_taken)
+            return {
+                "treatment_id": treatment_id,
+                "date": str(parsed),
+                "doses_taken": result.log.doses_taken,
+                "today": result.today.model_dump(),
+            }

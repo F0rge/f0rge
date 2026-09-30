@@ -12,7 +12,7 @@ Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
 
 | App | Target | Branches | Manifest component |
 |-----|--------|----------|-------------------|
-| marrow | Railway project `zoological-fulfillment` (autodeploy + Actions smoke) | `develop`, `main` | `marrow-backend`, `marrow-frontend` |
+| marrow | Railway project `zoological-fulfillment` (autodeploy + Actions smoke) | `main` only | `marrow-backend`, `marrow-frontend` |
 | firstout | **Own** Railway project `Firstout` (`c76d8df1-…`). Hosts `firstout-dev` / `firstout-dev-api` on `leo-figueiredo.com` | `develop` only | `firstout-backend`, `firstout-frontend` |
 | dk tag printer | Pi Coolify | `main` only | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
 
@@ -27,13 +27,14 @@ Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/dep
 | Env | Branch | Frontend | Backend API | MCP |
 |---|---|---|---|---|
 | Production | `main` | https://marrow-health.com | https://api.marrow-health.com | https://mcp.marrow-health.com |
-| Develop | `develop` | https://app-dev.marrow-health.com | https://api-dev.marrow-health.com | https://mcp-dev.marrow-health.com |
+
+Marrow CI still integrates on the `develop` git branch; Railway deploy and Actions smoke for Marrow run on `main` only. Firstout continues to deploy from `develop`.
 
 Railway `*.up.railway.app` hostnames also work for interim smoke.
 
 - `develop` is the integration branch; PRs land there, run `.github/workflows/ci.yml`, then merge.
 - Promotion to prod is a PR `develop` → `main`, gated by the same CI.
-- After CI green on push to `develop`/`main`, [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) calls [`deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) (manifest + Nx affected → Railway smoke or Coolify).
+- After CI green on push to `develop`/`main`, [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) calls [`deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) (manifest + Nx affected → Railway smoke or Coolify). Marrow smoke/deploy targets production (`main`) only; pushes to `develop` still deploy Firstout when affected.
 
 ## Railway services
 

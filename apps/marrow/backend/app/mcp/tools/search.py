@@ -15,14 +15,9 @@ from f0rge_db.tenant import owned_by_user
 
 def register_search_tools(server: FastMCP) -> None:
     @server.tool()
-    @instrument_tool("search_health_data")
-    async def search_health_data(query: str, k: int = 8, ctx: Context = None) -> dict[str, Any]:
-        """Semantic search across all health data using vector similarity.
-
-        Embeds the query and returns the closest chunks from the embedding table.
-        Prefer this tool for open-ended questions. Use the typed tools for structured
-        date-range or marker-specific lookups.
-        """
+    @instrument_tool("search")
+    async def search(query: str, k: int = 8, ctx: Context = None) -> dict[str, Any]:
+        """Semantic search across notes, meals, and symptoms via vector similarity."""
         user_id = _mcp_user_id(ctx)
         import app.mcp.tools as mcp_tools
 
@@ -63,15 +58,14 @@ def register_search_tools(server: FastMCP) -> None:
                 .limit(k)
             )
             rows = (await ro_db.execute(stmt)).all()
-
-        return {
-            "results": [
-                {
-                    "source_table": r.source_table,
-                    "source_id": r.source_id,
-                    "chunk_text": r.chunk_text,
-                    "distance": float(r.distance),
-                }
-                for r in rows
-            ]
-        }
+            return {
+                "results": [
+                    {
+                        "source_table": r.source_table,
+                        "source_id": r.source_id,
+                        "chunk_text": r.chunk_text,
+                        "distance": float(r.distance),
+                    }
+                    for r in rows
+                ]
+            }
