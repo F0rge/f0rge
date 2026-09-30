@@ -27,6 +27,10 @@ test images are not launch assets.
 ## Verification
 
 `storefront-web` Playwright catalogue and discovery specs ran against the live
-local stack with all four fixture IDs set. The accessibility assertions inspect
-the browser's roles, focus, live status text, and image alternatives; an actual
-assistive-technology spoken walkthrough remains a manual release check.
+local stack with all four fixture IDs set. Automated accessibility-related
+assertions cover browser roles, keyboard focus, live status text and the gallery
+button's pressed state. They do not explicitly assert image `alt` attributes:
+the product detail hero has a descriptive alternative, while gallery
+thumbnails and product-card images use empty alternatives. An actual
+assistive-technology spoken walkthrough remains a manual release check and is
+not evidenced by this walkthrough.
