@@ -59,6 +59,10 @@ export async function requireStorefrontBff(req: MedusaRequest, res: MedusaRespon
 }
 
 export default defineMiddlewares({ routes: [{
+  matcher: "/hooks/peach",
+  methods: ["POST"],
+  bodyParser: { preserveRawBody: true, sizeLimit: "64kb" },
+}, {
   matcher: "/store/carts*",
   middlewares: [requireStorefrontBff],
 }, {

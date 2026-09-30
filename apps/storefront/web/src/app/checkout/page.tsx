@@ -7,7 +7,10 @@ import { useRouter } from "next/navigation";
 import type { Bag } from "@/lib/bag-server";
 
 type Fulfillment = "delivery" | "collection";
-type PreparedCheckout = { session_id: string; status: string; amount: number; currency_code: string; fulfillment_type: Fulfillment };
+type PreparedCheckout = {
+  session_id: string; status: string; amount: number; currency_code: string; fulfillment_type: Fulfillment;
+  provider_id?: string; redirect_url?: string | null;
+};
 type SavedAddress = { id: string; first_name?: string; last_name?: string; address_1?: string; address_2?: string; city?: string; province?: string; postal_code?: string; phone?: string };
 const money = (value: number, currency = "ZAR") => new Intl.NumberFormat("en-ZA", { style: "currency", currency }).format(value);
 const promiseDates = (from: string, by: string) => {
@@ -78,8 +81,14 @@ export default function CheckoutPage() {
       });
       const payload = await response.json() as { checkout?: PreparedCheckout; message?: string };
       if (!response.ok || !payload.checkout) throw new Error(payload.message || "Checkout could not be prepared");
+      if (payload.checkout.provider_id === "pp_peach_sandbox" && payload.checkout.redirect_url) {
+        const redirect = new URL(payload.checkout.redirect_url);
+        if (redirect.origin !== "https://testsecure.peachpayments.com") throw new Error("The hosted payment destination could not be verified");
+        window.location.assign(redirect.toString());
+        return;
+      }
       setCheckout(payload.checkout);
-      setPaymentStatus(payload.checkout.status);
+      setPaymentStatus(payload.checkout.status === "initiation_unknown" ? "unknown" : payload.checkout.status);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Checkout could not be prepared"); }
     finally { setBusy(false); }
   }
@@ -113,29 +122,37 @@ export default function CheckoutPage() {
   return <div className="content checkout-page">
     <p className="eyebrow">The Collector / secure checkout</p>
     <h1>Review your order</h1>
-    <p className="checkout-intro">Confirm your contact and fulfillment details. The server checks availability and calculates the final VAT-inclusive ZAR total before the test payment begins.</p>
+    <p className="checkout-intro">Confirm your contact and fulfillment details. The server checks availability and calculates the final VAT-inclusive ZAR total before payment.</p>
     <div className="checkout-layout">
       <section className="checkout-main">
         {!bag && !error && <p role="status">Loading your bag…</p>}
         {bag && bag.items.length === 0 && <p>Your bag is empty. <Link href="/shop" className="text-link">Explore all pieces ↗</Link></p>}
         {error && <p role="alert" className="bag-error">{error}</p>}
-        {checkout ? <div className="checkout-payment" data-testid="test-payment-panel">
-          <p className="eyebrow">Test payment only</p>
+        {checkout ? <div className="checkout-payment" data-testid={checkout.provider_id === "pp_peach_sandbox" ? "peach-payment-panel" : "test-payment-panel"}>
+          <p className="eyebrow">{checkout.provider_id === "pp_peach_sandbox" ? "Secure hosted payment" : "Test payment only"}</p>
           <h2>{money(total, checkout.currency_code.toUpperCase())}</h2>
-          <p>No real payment is taken. Choose an outcome to exercise the local simulator. Your confirmation access was saved before this payment session was returned.</p>
+          <p>{checkout.provider_id === "pp_peach_sandbox"
+            ? "Continue on Peach Payments secure checkout. The payment result will be confirmed by a signed server notification."
+            : "No real payment is taken. Choose an outcome to exercise the local simulator."} Your confirmation access was saved before this payment session was returned.</p>
           <p role="status" data-testid="payment-status">Payment status: {paymentStatus || "pending"}</p>
-          {paymentStatus === "declined" && <p role="alert">The test payment was declined. Your bag and reservation remain available until the hold expires.</p>}
-          {paymentStatus === "cancelled" && <p role="status">The test payment was cancelled. You can retry while the reservation is active.</p>}
+          {paymentStatus === "declined" && <p role="alert">{checkout.provider_id === "pp_peach_sandbox"
+            ? "Peach declined this payment. Do not reuse this checkout session; contact the store before trying another payment."
+            : "The test payment was declined. Your bag and reservation remain available until the hold expires."}</p>}
+          {paymentStatus === "cancelled" && <p role="status">{checkout.provider_id === "pp_peach_sandbox"
+            ? "The Peach checkout was cancelled. Contact the store before starting another payment for this bag."
+            : "The test payment was cancelled. You can retry while the reservation is active."}</p>}
           {paymentStatus === "pending" && <p role="status">The payment is pending. You can close this page and return to the private order confirmation later.</p>}
-          {paymentStatus === "unknown" && <p role="alert">The payment result is unknown. Your private confirmation page can check again without creating a second order.</p>}
-          {paymentStatus === "paid_exception" && <p role="alert">The test payment succeeded, but the inventory commitment needs recovery. Keep the private confirmation page for the current status.</p>}
-          <div className="test-payment-actions">
+          {paymentStatus === "unknown" && <p role="alert">{checkout.provider_id === "pp_peach_sandbox"
+            ? "Peach has not confirmed this payment yet. Do not pay again; wait for the status check or contact the store before retrying."
+            : "The payment result is unknown. Your private confirmation page can check again without creating a second order."}</p>}
+          {paymentStatus === "paid_exception" && <p role="alert">Payment succeeded, but the inventory commitment needs recovery. Keep the private confirmation page for the current status.</p>}
+          {checkout.provider_id !== "pp_peach_sandbox" && <div className="test-payment-actions">
             <button type="button" disabled={busy} onClick={() => void simulate("success")}>Simulate success</button>
             <button type="button" disabled={busy} onClick={() => void simulate("pending")}>Simulate pending</button>
             <button type="button" disabled={busy} onClick={() => void simulate("declined")}>Simulate decline</button>
             <button type="button" disabled={busy} onClick={() => void simulate("cancelled")}>Simulate cancellation</button>
             <button type="button" disabled={busy} onClick={() => void simulate("unknown")}>Simulate unknown result</button>
-          </div>
+          </div>}
           <Link className="text-link" href="/order/confirmation">Check private order status ↗</Link>
         </div> : <form ref={formRef} className="checkout-form" onSubmit={(event) => void prepare(event)}>
           <h2>Contact</h2>

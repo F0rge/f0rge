@@ -19,6 +19,7 @@ import {
 } from "@medusajs/medusa/core-flows";
 import { deliveryZones } from "../delivery-zones";
 import { testPaymentEnabled } from "../test-payment-config";
+import { peachPaymentEnabled, PEACH_PAYMENT_PROVIDER_ID } from "../peach-payment-config";
 import { southAfricaVatRate } from "../vat-config";
 
 // Adapted from Medusa DTC starter e3a237c initial-data-seed.ts; no demo apparel.
@@ -26,6 +27,11 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
   const enableTestPayment = testPaymentEnabled();
+  const paymentProviders = [
+    "pp_system_default",
+    ...(enableTestPayment ? ["pp_storefront-test_local"] : []),
+    ...(peachPaymentEnabled() ? [PEACH_PAYMENT_PROVIDER_ID] : []),
+  ];
 
   const { data: salesChannels } = await query.graph({
     entity: "sales_channel", fields: ["id", "name"],
@@ -81,7 +87,7 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
     await createRegionsWorkflow(container).run({
       input: { regions: [{
         name: "South Africa", currency_code: "zar", countries: ["za"], is_tax_inclusive: true, automatic_taxes: true,
-        payment_providers: ["pp_system_default", ...(enableTestPayment ? ["pp_storefront-test_local"] : [])],
+        payment_providers: paymentProviders,
       }] },
     });
     await createTaxRegionsWorkflow(container).run({
@@ -94,7 +100,7 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
         selector: { id: region.id }, update: {
           is_tax_inclusive: true,
           automatic_taxes: true,
-          payment_providers: ["pp_system_default", ...(enableTestPayment ? ["pp_storefront-test_local"] : [])],
+          payment_providers: paymentProviders,
         },
       } });
     }

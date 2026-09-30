@@ -51,6 +51,13 @@ configuration. No launch delivery rates are checked in. The included payment
 provider is a deterministic local test simulator; no real payment is taken and
 paid-order import into Firstout is outside this checkout slice.
 
+Peach Classic Hosted Checkout V2 is implemented as an opt-in sandbox provider;
+it stays disabled until its server-side credentials and signed webhook URL are
+configured. The callback route needs a narrowly reachable commerce ingress.
+Sandbox credentials are not available yet, so real provider interoperability
+and the Peach purchase walkthrough remain unverified. See
+[`docs/749-peach-hosted-checkout.md`](docs/749-peach-hosted-checkout.md).
+
 For local development, use independent Firstout and Medusa PostgreSQL databases
 and a Redis instance. Copy each `.env.example` to a local `.env`, then set a
 disposable Firstout machine token and its Team UUID on both sides. Bind
