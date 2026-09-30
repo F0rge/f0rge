@@ -10,6 +10,32 @@ that starter's supported Medusa v2.21.1 APIs. Its MIT notice is preserved in
 repository's Next 16 / React 19 and `@f0rge/ui` rules instead of importing the
 starter's Radix components or its password-based account pages.
 
+Customer accounts use Clerk-hosted passwordless sign-in while guest checkout
+remains available. Before enabling it, configure the Clerk instance to allow
+email-code or email-link sign-in and disable password sign-in. Create a Clerk
+JWT template named `storefront_medusa` with these claims:
+
+```json
+{
+  "aud": "storefront",
+  "email": "{{user.primary_email_address}}",
+  "email_verified": "{{user.email_verified}}",
+  "first_name": "{{user.first_name}}",
+  "last_name": "{{user.last_name}}"
+}
+```
+
+Set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and
+`STOREFRONT_CLERK_JWT_TEMPLATE=storefront_medusa` in the web runtime. Set the
+same Clerk secret key in commerce, plus `STOREFRONT_CLERK_ISSUER` to the exact
+issuer shown by Clerk and `STOREFRONT_CLERK_AUDIENCE=storefront`. Commerce can
+use `CLERK_JWT_KEY` instead of the secret key for networkless signature
+verification. Keep all private keys server-side. The storefront exchanges its
+server-verified Clerk session for a short-lived Medusa token and never sends
+that token to the browser. Saved addresses use Medusa's authenticated `/me`
+routes; cart ownership is tied to the Medusa customer ID and is not detached on
+logout. No Clerk tenant keys or OTP identities are included in this repository.
+
 Local ports: Firstout API 8003, Medusa 9000, public site 3004. Use separate
 PostgreSQL databases for Firstout and Medusa, plus Redis for Medusa. Configure
 `OPS_COMMERCE_TOKEN`, `OPS_COMMERCE_COMPANY_ID` (the Firstout team UUID) and
@@ -24,6 +50,13 @@ VAT-inclusive ZAR prices and calculates delivery from server-owned zone/rate
 configuration. No launch delivery rates are checked in. The included payment
 provider is a deterministic local test simulator; no real payment is taken and
 paid-order import into Firstout is outside this checkout slice.
+
+Peach Classic Hosted Checkout V2 is implemented as an opt-in sandbox provider;
+it stays disabled until its server-side credentials and signed webhook URL are
+configured. The callback route needs a narrowly reachable commerce ingress.
+Sandbox credentials are not available yet, so real provider interoperability
+and the Peach purchase walkthrough remain unverified. See
+[`docs/749-peach-hosted-checkout.md`](docs/749-peach-hosted-checkout.md).
 
 For local development, use independent Firstout and Medusa PostgreSQL databases
 and a Redis instance. Copy each `.env.example` to a local `.env`, then set a

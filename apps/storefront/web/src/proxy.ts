@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { NextResponse, type NextRequest } from "next/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
 const ROBOTS_HEADER = "noindex, nofollow, noarchive";
 
@@ -53,16 +54,14 @@ function isAuthorized(request: NextRequest, username: string, password: string):
     timingSafeEqual(digest(suppliedPassword), digest(password));
 }
 
-export function proxy(request: NextRequest): NextResponse {
-  const response = () => withRobotsHeader(NextResponse.next());
-
+function privatePreviewGate(request: NextRequest): NextResponse | null {
   // Railway's liveness probe receives no account or dependency information.
-  if (request.nextUrl.pathname === "/api/health") return response();
+  if (request.nextUrl.pathname === "/api/health") return withRobotsHeader(NextResponse.next());
 
   // Preserve the existing local development workflow while hosted runtimes
   // fail closed even if NODE_ENV was accidentally set to development.
   if (process.env.NODE_ENV === "development" && !isHostedRuntime()) {
-    return response();
+    return null;
   }
 
   const username = process.env.STOREFRONT_PREVIEW_USERNAME;
@@ -73,7 +72,34 @@ export function proxy(request: NextRequest): NextResponse {
   }
 
   if (!isAuthorized(request, username, password)) return unauthorized();
-  return response();
+  return null;
+}
+
+function withNoIndex(result: Response | null | undefined | void): NextResponse {
+  if (!result) return withRobotsHeader(NextResponse.next());
+  const headers = new Headers(result.headers);
+  headers.set("X-Robots-Tag", ROBOTS_HEADER);
+  if (result.status >= 300 || headers.has("Location")) headers.set("Cache-Control", "no-store");
+  return new NextResponse(result.body, { status: result.status, statusText: result.statusText, headers });
+}
+
+const clerkConfigured = Boolean(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+  process.env.CLERK_SECRET_KEY &&
+  process.env.STOREFRONT_CLERK_JWT_TEMPLATE,
+);
+const clerkProxy = clerkMiddleware(() => withRobotsHeader(NextResponse.next()), {
+  publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "",
+  secretKey: process.env.CLERK_SECRET_KEY || "",
+});
+
+export function proxy(request: NextRequest, event: NextFetchEvent) {
+  // Check Basic Auth before Clerk. Clerk can answer redirect or handshake
+  // requests before invoking its callback, which must never bypass this gate.
+  const denied = privatePreviewGate(request);
+  if (denied) return denied;
+  if (!clerkConfigured) return withRobotsHeader(NextResponse.next());
+  return Promise.resolve(clerkProxy(request, event)).then((result) => withNoIndex(result));
 }
 
 export const config = {

@@ -10,6 +10,7 @@ import {
 import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/framework/utils";
 import { checkoutHoldForCart, withCheckoutInventoryLock } from "../../../../../checkout-holds";
 import { deliveryZoneForAddress, deliveryZones } from "../../../../../delivery-zones";
+import { peachPaymentEnabled, PEACH_PAYMENT_PROVIDER_ID } from "../../../../../peach-payment-config";
 import { testPaymentEnabled } from "../../../../../test-payment-config";
 
 type FulfillmentType = "delivery" | "collection";
@@ -66,15 +67,27 @@ async function existingPaymentSession(container: MedusaContainer, cartId: string
   const { data: sessions } = await query.graph({
     entity: "payment_session",
     fields: ["id", "status", "amount", "currency_code", "provider_id", "data"],
-    filters: { payment_collection_id: collectionId, provider_id: "pp_storefront-test_local" },
+    filters: { payment_collection_id: collectionId },
   });
   return sessions[0] as Record<string, unknown> | undefined;
+}
+
+function checkoutSessionStatus(session: Record<string, unknown>): string {
+  const peachStatus = (session.data as Record<string, unknown> | undefined)?.peach_status;
+  if (peachStatus === "initiation_unknown" || peachStatus === "unknown") return "unknown";
+  if (peachStatus === "declined") return "declined";
+  if (peachStatus === "cancelled") return "cancelled";
+  if (peachStatus === "paid" || peachStatus === "captured") return "captured";
+  return typeof session.status === "string" ? session.status : "unknown";
 }
 
 export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<void> {
   res.setHeader("Cache-Control", "private, no-store, max-age=0");
   try {
-    if (!testPaymentEnabled()) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Test checkout is not enabled here");
+    const peachEnabled = peachPaymentEnabled();
+    const providerId = peachEnabled ? PEACH_PAYMENT_PROVIDER_ID
+      : testPaymentEnabled() ? "pp_storefront-test_local" : "";
+    if (!providerId) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Checkout is not available here");
     const input = checkoutInput(req.body);
     const accessToken = (req.body as Record<string, unknown>).confirmation_token;
     if (typeof accessToken !== "string" || !/^[A-Za-z0-9_-]{40,100}$/.test(accessToken)) {
@@ -120,15 +133,21 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       }
       const existingSession = await existingPaymentSession(req.scope, cartId);
       if (existingSession) {
+        if (existingSession.provider_id !== providerId) {
+          throw new MedusaError(MedusaError.Types.CONFLICT, "This bag already has a payment attempt. Do not start a second provider session; return to its private confirmation page for status.");
+        }
         if (cart.metadata?.storefront_checkout_sha256 !== checkoutFingerprint) {
           throw new MedusaError(MedusaError.Types.CONFLICT, "This payment attempt is already prepared. Start a new bag to change checkout details.");
         }
         return {
           review: null,
           session_id: existingSession.id,
-          status: existingSession.status,
+          status: checkoutSessionStatus(existingSession),
           amount: existingSession.amount,
           currency_code: existingSession.currency_code,
+          provider_id: providerId,
+          redirect_url: typeof (existingSession.data as Record<string, unknown> | undefined)?.redirect_url === "string"
+            ? (existingSession.data as Record<string, unknown>).redirect_url : null,
           fulfillment_type: input.fulfillment_type,
           hold_expires_at: hold.expires_at,
         };
@@ -182,15 +201,18 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
         collectionId = collection.id;
       }
       const { result: createdSession } = await createPaymentSessionsWorkflow(req.scope).run({
-        input: { payment_collection_id: collectionId, provider_id: "pp_storefront-test_local" },
+        input: { payment_collection_id: collectionId, provider_id: providerId },
       });
       const session = createdSession as unknown as Record<string, unknown>;
+      const sessionData = session.data as Record<string, unknown> | undefined;
       return {
         review: null,
         session_id: session.id,
-        status: session.status,
+        status: checkoutSessionStatus(session),
         amount: session.amount,
         currency_code: session.currency_code,
+        provider_id: providerId,
+        redirect_url: typeof sessionData?.redirect_url === "string" ? sessionData.redirect_url : null,
         fulfillment_type: input.fulfillment_type,
         hold_expires_at: hold.expires_at,
       };

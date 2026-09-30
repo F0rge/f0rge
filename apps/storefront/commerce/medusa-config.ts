@@ -1,5 +1,6 @@
 import { loadEnv, defineConfig } from '@medusajs/framework/utils'
 import { testPaymentEnabled } from './src/test-payment-config'
+import { peachPaymentEnabled } from './src/peach-payment-config'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 
@@ -52,10 +53,18 @@ modules.push({
   options: { providers: [{ resolve: "./src/modules/storefront-fulfillment", id: "storefront" }] },
 })
 
+const paymentProviders: Record<string, unknown>[] = []
 if (testPaymentEnabled()) {
+  paymentProviders.push({ resolve: "./src/modules/storefront-test-payment", id: "local" })
+}
+if (peachPaymentEnabled()) {
+  modules.push({ resolve: "./src/modules/storefront-peach" })
+  paymentProviders.push({ resolve: "./src/modules/storefront-peach-payment-provider", id: "sandbox" })
+}
+if (paymentProviders.length) {
   modules.push({
     resolve: "@medusajs/medusa/payment",
-    options: { providers: [{ resolve: "./src/modules/storefront-test-payment", id: "local" }] },
+    options: { providers: paymentProviders },
   })
 }
 
@@ -70,7 +79,22 @@ module.exports = defineConfig({
       authCors: process.env.AUTH_CORS || "http://localhost:9000,http://localhost:3004",
       jwtSecret: process.env.JWT_SECRET,
       cookieSecret: process.env.COOKIE_SECRET,
+      authMethodsPerActor: {
+        user: ["emailpass"],
+        customer: ["storefront-clerk"],
+      },
     }
   },
-  modules,
+  modules: [
+    ...modules,
+    {
+      resolve: "@medusajs/medusa/auth",
+      options: {
+        providers: [
+          { resolve: "@medusajs/medusa/auth-emailpass", id: "emailpass" },
+          { resolve: "./src/modules/storefront-clerk-auth", id: "storefront-clerk" },
+        ],
+      },
+    },
+  ],
 })
