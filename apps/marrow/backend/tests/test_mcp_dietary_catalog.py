@@ -106,9 +106,9 @@ async def two_user_catalogs(superuser_engine, async_engine) -> AsyncIterator[uui
             await conn.execute(sa.text("DELETE FROM users WHERE id = :id"), {"id": other})
 
 
+@pytest.mark.usefixtures("real_scoped_sessions")
 async def test_resource_lists_active_entries_with_aliases_and_flags(
     two_user_catalogs,
-    real_scoped_sessions,  # noqa: F811
 ) -> None:
     result = await _read_as(_LEO)
     by_name = {i["canonical_name"]: i for i in result["ingredients"]}
@@ -131,18 +131,18 @@ async def test_resource_lists_active_entries_with_aliases_and_flags(
     assert flour["category"] == "grains"
 
 
+@pytest.mark.usefixtures("real_scoped_sessions")
 async def test_resource_excludes_archived_ingredients(
     two_user_catalogs,
-    real_scoped_sessions,  # noqa: F811
 ) -> None:
     names = {i["canonical_name"] for i in (await _read_as(_LEO))["ingredients"]}
     assert "zz-oats" in names
     assert "zz-old thing" not in names
 
 
+@pytest.mark.usefixtures("real_scoped_sessions")
 async def test_resource_is_tenant_scoped(
     two_user_catalogs,
-    real_scoped_sessions,  # noqa: F811
 ) -> None:
     other = two_user_catalogs
     leo_names = {i["canonical_name"] for i in (await _read_as(_LEO))["ingredients"]}
@@ -153,10 +153,10 @@ async def test_resource_is_tenant_scoped(
     assert "zz-oats" not in other_names
 
 
+@pytest.mark.usefixtures("real_scoped_sessions")
 async def test_resource_caps_size_and_reports_truncation(
     two_user_catalogs,
-    real_scoped_sessions,
-    monkeypatch,  # noqa: F811
+    monkeypatch,
 ) -> None:
     monkeypatch.setattr(catalog_mod, "DIETARY_CATALOG_RESOURCE_MAX", 1)
     result = await _read_as(_LEO)
