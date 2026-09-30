@@ -72,6 +72,12 @@ async def _count(db: AsyncSession, model: type) -> int:
     return (await db.execute(select(func.count()).select_from(model))).scalar_one()
 
 
+async def _owned_meal_count(db: AsyncSession, owner_id: uuid.UUID) -> int:
+    """Meals owned by ``owner_id`` only — other tests leave committed meals behind."""
+    stmt = select(func.count()).select_from(Meal).where(Meal.owner_user_id == owner_id)
+    return (await db.execute(stmt)).scalar_one()
+
+
 async def _seed_mcp_meal_with_tag(
     db: AsyncSession, owner: AsyncClient, bea: AsyncClient, *, auto_accept: bool
 ) -> dict[str, Any]:
@@ -122,7 +128,7 @@ async def test_delete_endpoint_removes_mcp_meal_without_photo(
         assert await _bea_meal_count(bea) == 1
         assert await _count(async_db, PhotoIngredient) == 2
     else:
-        assert await _count(async_db, Meal) == 0
+        assert await _owned_meal_count(async_db, await _user_id(owner)) == 0
         assert await _count(async_db, PhotoAnalysis) == 0
         assert await _count(async_db, PhotoIngredient) == 0
 
@@ -144,5 +150,5 @@ async def test_mcp_delete_meal_removes_meal_without_photo(
     if auto_accept:
         assert await _bea_meal_count(bea) == 1
     else:
-        assert await _count(async_db, Meal) == 0
+        assert await _owned_meal_count(async_db, await _user_id(owner)) == 0
         assert await _count(async_db, PhotoIngredient) == 0
