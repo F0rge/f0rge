@@ -1,6 +1,6 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
-import { requireStorefrontBff } from "./middlewares";
+import storefrontMiddlewares, { requireStorefrontBff } from "./middlewares";
 
 type FakeResponse = {
   statusCode?: number;
@@ -82,5 +82,38 @@ describe("storefront BFF cart ownership", () => {
     await requireStorefrontBff(call.req, call.response, call.next);
     expect(call.next).toHaveBeenCalledTimes(1);
     expect(call.graph).not.toHaveBeenCalled();
+  });
+});
+
+describe("Peach webhook route hardening", () => {
+  it("blocks plain and encoded native Peach POSTs but passes other providers", async () => {
+    const routes = storefrontMiddlewares.routes ?? [];
+    const nativeRoute = routes.find((route) => route.matcher === "/hooks/payment/*");
+    expect(nativeRoute?.methods).toEqual(["POST"]);
+    expect(nativeRoute?.middlewares).toHaveLength(1);
+    const handler = nativeRoute?.middlewares?.[0];
+    if (!handler) throw new Error("Native Peach webhook blocker is not registered");
+
+    for (const path of ["/hooks/payment/peach_sandbox", "/hooks/payment/peach%5Fsandbox"]) {
+      const call = setup(path, null);
+      await handler(call.req, call.response, call.next);
+      expect(call.rawResponse.statusCode).toBe(404);
+      expect(call.next).not.toHaveBeenCalled();
+    }
+
+    const otherProvider = setup("/hooks/payment/other_provider", null);
+    await handler(otherProvider.req, otherProvider.response, otherProvider.next);
+    expect(otherProvider.next).toHaveBeenCalledTimes(1);
+    expect(otherProvider.rawResponse.statusCode).toBeUndefined();
+
+    const malformed = setup("/hooks/payment/peach%5sandbox", null);
+    await handler(malformed.req, malformed.response, malformed.next);
+    expect(malformed.rawResponse.statusCode).toBe(404);
+    expect(malformed.next).not.toHaveBeenCalled();
+
+    const customRoute = routes.find((route) => route.matcher === "/hooks/peach");
+    expect(customRoute?.methods).toEqual(["POST"]);
+    expect(customRoute?.bodyParser).toMatchObject({ preserveRawBody: true, sizeLimit: "64kb" });
+    expect(customRoute?.middlewares).not.toContain(handler);
   });
 });

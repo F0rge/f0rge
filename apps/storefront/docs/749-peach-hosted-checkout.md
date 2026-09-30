@@ -58,3 +58,9 @@ handling, exact amounts above the int32 range, stale-event protection and
 rejection of unverified authorization. A verified Peach debit is reported to
 Medusa as already captured; separate capture and refund operations are not
 supported in this release. These tests do not contact the Peach sandbox.
+
+Medusa's generic `/hooks/payment/peach_sandbox` ingress is disabled, including
+URL-encoded forms of the provider name. All Peach callback completion goes
+through the custom signature-verified inbox and inventory lock. Live local
+HTTP checks returned 404 for both the plain and encoded generic routes; the
+provider method also rejects events without a matching durable paid capture.

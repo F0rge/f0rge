@@ -122,7 +122,7 @@ describeWithPostgres("Peach durable inbox (isolated PostgreSQL)", () => {
       data: { ...paidEvent }, rawData: JSON.stringify(paidEvent), headers: {},
     };
     const action = await provider.getWebhookActionAndData(webhookPayload);
-    expect(action.action).toBe(PaymentActions.SUCCESSFUL);
+    expect(action.action).toBe(PaymentActions.NOT_SUPPORTED);
     expect(peachEventCanAdvance({ ...attempt, status: "declined", last_event_timestamp: "2026-09-30T11:59:00Z" }, {
       event_timestamp: paidEvent.event_timestamp, result_state: "paid",
     })).toBe(true);
@@ -130,6 +130,12 @@ describeWithPostgres("Peach durable inbox (isolated PostgreSQL)", () => {
     await updatePeachAttempt(db, attempt.id, {
       status: "captured", last_event_timestamp: paidEvent.event_timestamp, last_event_state: "paid",
     });
+    expect((await provider.getWebhookActionAndData(webhookPayload)).action).toBe(PaymentActions.SUCCESSFUL);
+    const lateDecline = webhook(`late-decline-${randomUUID()}`, attempt.merchant_reference,
+      "2026-09-30T12:01:00Z", "800.100.153");
+    expect((await provider.getWebhookActionAndData({
+      data: { ...lateDecline }, rawData: JSON.stringify(lateDecline), headers: {},
+    })).action).toBe(PaymentActions.NOT_SUPPORTED);
     const authorized = await provider.authorizePayment(authorizeInput);
     expect(authorized).toMatchObject({
       status: PaymentSessionStatus.CAPTURED,

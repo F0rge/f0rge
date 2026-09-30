@@ -58,10 +58,32 @@ export async function requireStorefrontBff(req: MedusaRequest, res: MedusaRespon
   }
 }
 
+export function blockNativePeachWebhook(req: MedusaRequest, res: MedusaResponse, next: MedusaNextFunction): void {
+  const pathname = (req.originalUrl || req.path || "").split("?")[0];
+  const providerSegment = pathname.split("/")[3];
+  let provider: string;
+  try {
+    if (!providerSegment) throw new Error("Missing payment provider");
+    provider = decodeURIComponent(providerSegment);
+  } catch {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  if (provider === "peach_sandbox") {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  next();
+}
+
 export default defineMiddlewares({ routes: [{
   matcher: "/hooks/peach",
   methods: ["POST"],
   bodyParser: { preserveRawBody: true, sizeLimit: "64kb" },
+}, {
+  matcher: "/hooks/payment/*",
+  methods: ["POST"],
+  middlewares: [blockNativePeachWebhook],
 }, {
   matcher: "/store/carts*",
   middlewares: [requireStorefrontBff],

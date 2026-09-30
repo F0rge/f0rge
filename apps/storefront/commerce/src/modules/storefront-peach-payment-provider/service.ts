@@ -167,14 +167,14 @@ export class StorefrontPeachPaymentProvider extends AbstractPaymentProvider {
     }
 
     const state = peachResultState(event.result_code, paymentType);
-    const action = state === "paid" ? PaymentActions.SUCCESSFUL
-      : state === "pending" || state === "unknown" ? PaymentActions.PENDING
-      : state === "declined" ? PaymentActions.FAILED
-      : state === "cancelled" ? PaymentActions.CANCELED
-      : PaymentActions.NOT_SUPPORTED;
-    if (action === PaymentActions.NOT_SUPPORTED) return { action };
+    // Only our isolated, signature-verified processor may advance an attempt
+    // to captured. The separate generic webhook ingress is disabled; this
+    // method only reports an already-durable, bound paid event internally.
+    if (attempt.status !== "captured" || attempt.last_event_state !== "paid" || state !== "paid") {
+      return { action: PaymentActions.NOT_SUPPORTED };
+    }
     return {
-      action,
+      action: PaymentActions.SUCCESSFUL,
       data: {
         session_id: attempt.payment_session_id,
         amount: minorToMajor(Number(attempt.amount_minor)),
