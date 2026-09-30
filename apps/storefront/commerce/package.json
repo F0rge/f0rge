@@ -21,6 +21,7 @@
     "test": "jest --passWithNoTests --runInBand"
   },
   "dependencies": {
+    "@clerk/backend": "^3.21.0",
     "@medusajs/admin-sdk": "2.21.1",
     "@medusajs/admin-shared": "2.21.1",
     "@medusajs/caching": "2.21.1",

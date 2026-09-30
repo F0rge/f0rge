@@ -45,6 +45,23 @@ describe("PostHog browser adapter", () => {
     expect(requests).toBe(1);
   });
 
+  it("rotates the anonymous analytics id when a customer signs out", async () => {
+    const ids = ["anonymous-before", "anonymous-after"];
+    const sent: PostHogCapturePayload[] = [];
+    const provider = createPostHogBrowserProvider({
+      projectToken: "phc_test_fixture",
+      createDistinctId: () => ids.shift() || "anonymous-next",
+      fetcher: async (_input, init) => { sent.push(JSON.parse(String(init?.body)) as PostHogCapturePayload); return new Response("ok"); },
+    });
+    const event = { name: "storefront_product_viewed", properties: { product_id: "prod_fixture" } } as const;
+    provider.capture(event);
+    provider.resetIdentity();
+    provider.capture(event);
+    await Promise.resolve();
+
+    expect(sent.map((payload) => payload.distinct_id)).toEqual(["anonymous-before", "anonymous-after"]);
+  });
+
   it("aborts pending capture work and ignores events after consent is withdrawn", async () => {
     let signal: AbortSignal | undefined;
     let requests = 0;

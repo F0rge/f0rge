@@ -1,12 +1,14 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Checkbox, Select } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
 import type { Bag } from "@/lib/bag-server";
 
 type Fulfillment = "delivery" | "collection";
 type PreparedCheckout = { session_id: string; status: string; amount: number; currency_code: string; fulfillment_type: Fulfillment };
+type SavedAddress = { id: string; first_name?: string; last_name?: string; address_1?: string; address_2?: string; city?: string; province?: string; postal_code?: string; phone?: string };
 const money = (value: number, currency = "ZAR") => new Intl.NumberFormat("en-ZA", { style: "currency", currency }).format(value);
 const promiseDates = (from: string, by: string) => {
   const format = (value: string) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
@@ -21,19 +23,56 @@ export default function CheckoutPage() {
   const [paymentStatus, setPaymentStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [accountAvailable, setAccountAvailable] = useState(false);
+  const [saveAddress, setSaveAddress] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    void fetch("/api/bag", { cache: "no-store" }).then(async (response) => {
-      if (!response.ok) throw new Error("Your bag could not be loaded");
-      setBag(await response.json() as Bag);
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Your bag could not be loaded"));
+    void (async () => {
+      try {
+        const session = await fetch("/api/account/session", { method: "POST", cache: "no-store" });
+        if (session.ok) {
+          setAccountAvailable(true);
+          const addressResponse = await fetch("/api/account/addresses", { cache: "no-store" });
+          if (addressResponse.ok) {
+            const payload = await addressResponse.json() as { addresses?: SavedAddress[] };
+            setSavedAddresses(payload.addresses || []);
+          }
+        }
+        const response = await fetch("/api/bag", { cache: "no-store" });
+        if (!response.ok) throw new Error("Your bag could not be loaded");
+        setBag(await response.json() as Bag);
+      } catch (reason) { setError(reason instanceof Error ? reason.message : "Your bag could not be loaded"); }
+    })();
   }, []);
+
+  function fillSavedAddress(id: string) {
+    const address = savedAddresses.find((candidate) => candidate.id === id);
+    if (!address || !formRef.current) return;
+    for (const field of ["first_name", "last_name", "address_1", "address_2", "city", "province", "postal_code", "phone"] as const) {
+      const input = formRef.current.elements.namedItem(field) as HTMLInputElement | null;
+      if (input) input.value = address[field] || (field === "province" ? "Gauteng" : "");
+    }
+  }
 
   async function prepare(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true); setError("");
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     try {
+      if (saveAddress && accountAvailable && fulfillment === "delivery") {
+        const addressResponse = await fetch("/api/account/addresses", {
+          method: "POST", headers: { "content-type": "application/json" }, cache: "no-store",
+          body: JSON.stringify({
+            first_name: values.first_name, last_name: values.last_name,
+            address_1: values.address_1, address_2: values.address_2,
+            city: values.city, province: values.province,
+            postal_code: values.postal_code, phone: values.phone,
+          }),
+        });
+        if (!addressResponse.ok) throw new Error("The address could not be saved. Review it or continue without saving.");
+      }
       const response = await fetch("/api/checkout/prepare", {
         method: "POST", headers: { "content-type": "application/json" }, cache: "no-store", body: JSON.stringify({ ...values, fulfillment_type: fulfillment }),
       });
@@ -98,7 +137,7 @@ export default function CheckoutPage() {
             <button type="button" disabled={busy} onClick={() => void simulate("unknown")}>Simulate unknown result</button>
           </div>
           <Link className="text-link" href="/order/confirmation">Check private order status ↗</Link>
-        </div> : <form className="checkout-form" onSubmit={(event) => void prepare(event)}>
+        </div> : <form ref={formRef} className="checkout-form" onSubmit={(event) => void prepare(event)}>
           <h2>Contact</h2>
           <label>Email<input name="email" type="email" autoComplete="email" required maxLength={254} /></label>
           <div className="checkout-fields">
@@ -113,6 +152,7 @@ export default function CheckoutPage() {
             <label><input type="radio" name="fulfillment_type" checked={fulfillment === "collection"} onChange={() => setFulfillment("collection")} /> Collection</label>
           </fieldset>
           {fulfillment === "delivery" ? <div className="checkout-address">
+            {savedAddresses.length > 0 && <Select label="Use a saved address" defaultValue="" onChange={(value) => fillSavedAddress(value || "")} data={[{ value: "", label: "Enter a new address" }, ...savedAddresses.map((address) => ({ value: address.id, label: `${address.address_1}${address.address_2 ? `, ${address.address_2}` : ""} — ${address.city}` }))]} />}
             <label>Street address<input name="address_1" autoComplete="address-line1" required maxLength={250} /></label>
             <label>Suburb<input name="address_2" autoComplete="address-line2" required maxLength={150} /></label>
             <div className="checkout-fields">
@@ -120,6 +160,7 @@ export default function CheckoutPage() {
               <label>Province<input name="province" autoComplete="address-level1" required maxLength={100} defaultValue="Gauteng" /></label>
             </div>
             <label>Postal code<input name="postal_code" inputMode="numeric" autoComplete="postal-code" pattern="[0-9]{4}" required /></label>
+            {accountAvailable && <Checkbox className="save-address-choice" checked={saveAddress} onChange={(event) => setSaveAddress(event.target.checked)} label="Save this address to your account for next time" />}
             <p className="checkout-help">Delivery is limited to server-configured Gauteng zones. Rates are set by the store and shown in your final total.</p>
           </div> : <p className="checkout-help">Collection is free. Collection point details will be provided with your order confirmation.</p>}
           <button className="bag-checkout" type="submit" disabled={busy || !held || !bag?.items.length}>

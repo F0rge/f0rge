@@ -12,6 +12,7 @@ export type PostHogCapturePayload = {
 
 export type PostHogBrowserProvider = BrowserAnalyticsProvider & {
   readonly isConfigured: boolean;
+  resetIdentity(): void;
   revoke(): void;
 };
 
@@ -43,6 +44,9 @@ export function createPostHogBrowserProvider(options: ProviderOptions = {}): Pos
 
   return {
     isConfigured: Boolean(token),
+    resetIdentity(): void {
+      if (enabled && token) distinctId = createDistinctId();
+    },
     capture(event: StorefrontBrowserEvent): void {
       if (!enabled || !token || !distinctId) return;
       const sanitized = sanitizeAnalyticsEvent(event);

@@ -12,6 +12,7 @@ type AnalyticsContextValue = {
   ready: boolean;
   capture(event: StorefrontBrowserEvent): void;
   choose(choice: AnalyticsConsentChoice): void;
+  resetIdentity(): void;
 };
 
 const AnalyticsContext = createContext<AnalyticsContextValue | null>(null);
@@ -60,7 +61,7 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
   const [choice, setChoice] = useState<AnalyticsConsentChoice | null>(null);
   const [ready, setReady] = useState(false);
   const choiceRef = useRef<AnalyticsConsentChoice | null>(null);
-  const providerRef = useRef<BrowserAnalyticsProvider & { revoke(): void } | null>(null);
+  const providerRef = useRef<BrowserAnalyticsProvider & { resetIdentity(): void; revoke(): void } | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -92,7 +93,11 @@ export function StorefrontAnalyticsProvider({ children }: { children: ReactNode 
     } catch { /* Analytics failures never interrupt shopping. */ }
   }, []);
 
-  const value = useMemo(() => ({ choice, ready, capture, choose }), [capture, choice, choose, ready]);
+  const resetIdentity = useCallback(() => {
+    try { providerRef.current?.resetIdentity(); } catch { /* Analytics failures never interrupt account actions. */ }
+  }, []);
+
+  const value = useMemo(() => ({ choice, ready, capture, choose, resetIdentity }), [capture, choice, choose, ready, resetIdentity]);
   return <AnalyticsContext.Provider value={value}>
     {children}
     <PageViewTracker enabled={choice === "accepted"} capture={capture} />

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { getCustomerContext } from "@/lib/customer-auth";
 
 export const cartCookie = "collector_cart";
 export const orderAccessCookie = "collector_order_access";
@@ -103,14 +104,37 @@ export class BagError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
+async function customerForBag() {
+  try { return await getCustomerContext(); }
+  catch {
+    // Optional account-service failures fall back to the guest path. The
+    // Medusa ownership check still denies access to any customer-owned cart.
+    return null;
+  }
+}
+
 export async function medusaResponse<T>(path: string, method = "GET", body?: unknown): Promise<{ status: number; payload: T & { message?: string } }> {
   const key = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY;
   if (!key) throw new Error("Medusa publishable key is missing");
+  const customer = await customerForBag();
+  const cartMatch = /^\/store\/carts\/(cart_[A-Za-z0-9_-]+)(?:\/|$)/.exec(path);
+  const attachingCart = path.endsWith("/storefront-customer");
+  const confirmationCapability = path.endsWith("/storefront-confirmation");
+  const headers = {
+    "x-publishable-api-key": key,
+    "x-storefront-bff-secret": secret(),
+    ...(customer ? { "x-storefront-customer-id": customer.id } : {}),
+  };
+  if (customer && cartMatch && !attachingCart && !confirmationCapability) {
+    const attached = await fetch(`${baseUrl}/store/carts/${encodeURIComponent(cartMatch[1])}/storefront-customer`, {
+      method: "POST", headers: { ...headers, "content-type": "application/json" }, body: "{}", cache: "no-store",
+    });
+    if (!attached.ok) throw new BagError(attached.status === 404 ? 404 : 503, "Bag not found");
+  }
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
-      "x-publishable-api-key": key,
-      "x-storefront-bff-secret": secret(),
+      ...headers,
       ...(body === undefined ? {} : { "content-type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -175,5 +199,9 @@ export async function createCart(): Promise<Bag> {
   const region = regions.find((item) => item.currency_code === "zar");
   if (!region) throw new BagError(503, "The South Africa region is unavailable");
   const { cart } = await medusaRequest<{ cart: MedusaCart }>("/store/carts", "POST", { region_id: region.id });
+  const customer = await customerForBag();
+  if (customer) {
+    await medusaRequest(`/store/carts/${encodeURIComponent(cart.id)}/storefront-customer`, "POST", {});
+  }
   return publicBag(cart);
 }

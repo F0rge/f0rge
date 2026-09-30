@@ -70,7 +70,22 @@ module.exports = defineConfig({
       authCors: process.env.AUTH_CORS || "http://localhost:9000,http://localhost:3004",
       jwtSecret: process.env.JWT_SECRET,
       cookieSecret: process.env.COOKIE_SECRET,
+      authMethodsPerActor: {
+        user: ["emailpass"],
+        customer: ["storefront-clerk"],
+      },
     }
   },
-  modules,
+  modules: [
+    ...modules,
+    {
+      resolve: "@medusajs/medusa/auth",
+      options: {
+        providers: [
+          { resolve: "@medusajs/medusa/auth-emailpass", id: "emailpass" },
+          { resolve: "./src/modules/storefront-clerk-auth", id: "storefront-clerk" },
+        ],
+      },
+    },
+  ],
 })
