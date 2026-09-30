@@ -9,24 +9,25 @@ from mcp.server.fastmcp import Context, FastMCP
 from app.crud.meal_tags import MealTagCRUD
 from app.crud.meals import MealCRUD
 from app.crud.photo_analysis import PhotoAnalysisCRUD
-from app.crud.photo_ingredient import PhotoIngredientCRUD
 from app.crud.photos import PhotoCRUD
+from app.mcp.ingredient_logging import (
+    ingredient_payload,
+    next_step,
+    resolve_for_current_user,
+    stage_ingredient_rows,
+    summary_fields,
+)
 from app.mcp.observability import instrument_tool
 from app.mcp.tools._common import (
     _analysis_to_dict,
-    _ingredient_to_dict,
     _mcp_user_id,
     _validate_date,
 )
 from app.models.meal import Meal
 from app.models.photo import Photo
 from app.models.photo_analysis import PhotoAnalysis
-from app.models.photo_ingredient import PhotoIngredient
-from app.schemas.food_analysis import IngredientCreate
 from app.services.entries import get_or_create_entry
-from app.services.food_analysis import FoodAnalysisService
 from app.services.food_analysis_orchestrator import FoodAnalysisOrchestrator
-from app.services.ingredient_lookup import IngredientLookupService
 from app.services.meal_tags import MealTagService
 from app.services.photo_storage import resize_image, save_photo, thumb_filename
 from app.prompts.ingredient_rules import INGREDIENT_TOOL_NOTE
@@ -56,8 +57,8 @@ _SET_INGREDIENTS_DESCRIPTION = (
 )
 _EDIT_MEAL_DESCRIPTION = (
     "Update a meal's display name and/or meal time. Does not change ingredients: "
-    "use set_ingredients for that (decomposed, catalogue-matched names; see "
-    "marrow://reference/meal-logging-guide)."
+    "use search_ingredients then set_ingredients for that (decomposed, catalogue-matched "
+    "names; see marrow://reference/meal-logging-guide)."
 )
 
 
@@ -129,9 +130,9 @@ def register_meals_tools(server: FastMCP) -> None:
             offset = effective_time.utcoffset()
             effective_time = (effective_time - offset).replace(tzinfo=None)
 
-        ingredient_names = [i.strip() for i in (ingredients or []) if i and i.strip()]
-
         async with mcp_tools.scoped_main_session(user_id) as db:
+            # Resolve (and validate) before any write so a bad request creates no meal.
+            resolutions, dropped = await resolve_for_current_user(db, ingredients or [])
             async with unit_of_work(db):
                 entry = await get_or_create_entry(db, parsed)
                 now = datetime.datetime.utcnow()
@@ -166,28 +167,9 @@ def register_meals_tools(server: FastMCP) -> None:
                 PhotoAnalysisCRUD(db).add(analysis)
                 await db.flush()
 
-                lookup = IngredientLookupService(db)
-                ingredient_crud = PhotoIngredientCRUD(db)
-                for label in ingredient_names:
-                    match = await lookup.lookup(label)
-                    ingredient_crud.add(
-                        PhotoIngredient(
-                            user_id=current_user_id(),
-                            analysis_id=analysis.id,
-                            name=label,
-                            canonical_name=match.canonical_name if match else None,
-                            visible=True,
-                            confidence=1.0,
-                            user_edited=True,
-                            histamine_score=match.histamine_score if match else None,
-                            fodmap_oligos=match.fodmap_oligos if match else None,
-                            fodmap_fructose=match.fodmap_fructose if match else None,
-                            fodmap_polyols=match.fodmap_polyols if match else None,
-                            fodmap_lactose=match.fodmap_lactose if match else None,
-                            contains_gluten=match.contains_gluten if match else None,
-                            contains_dairy=match.contains_dairy if match else None,
-                        )
-                    )
+                rows = stage_ingredient_rows(
+                    db.add, resolutions, user_id=current_user_id(), analysis_id=analysis.id
+                )
 
                 if photo_base64:
                     raw = base64.b64decode(photo_base64, validate=True)
@@ -207,13 +189,19 @@ def register_meals_tools(server: FastMCP) -> None:
                         photo.filename = filename
                         meal.filename = filename
 
+            result_ingredients = [
+                ingredient_payload(row, resolution) for row, resolution in zip(rows, resolutions)
+            ]
+
         return {
             "photo_id": photo.id,
             "meal_id": meal.id,
             "date": str(parsed),
             "name": name.strip(),
             "meal_time": effective_time.isoformat(),
-            "ingredient_count": len(ingredient_names),
+            **summary_fields(resolutions, dropped),
+            "ingredients": result_ingredients,
+            "next_step": next_step(resolutions, tool="log_meal"),
             "has_photo": photo.filename is not None,
         }
 
@@ -272,18 +260,24 @@ def register_meals_tools(server: FastMCP) -> None:
             analysis = await PhotoAnalysisCRUD(db).get_for_photo_with_ingredients(photo_id)
             if analysis is None:
                 raise NotFoundError("No meal analysis for this photo")
-            service = FoodAnalysisService(db, FoodAnalysisOrchestrator())
-            for ing in list(analysis.ingredients):
-                await service.delete_ingredient(ing.id)
-            created: list[dict[str, Any]] = []
-            for label in ingredients:
-                if not label.strip():
-                    continue
-                row = await service.add_ingredient(
-                    analysis.id, IngredientCreate(name=label.strip())
+            resolutions, dropped = await resolve_for_current_user(db, ingredients)
+            # One transaction: delete the old list and insert the new one, or change nothing.
+            async with unit_of_work(db):
+                for existing in list(analysis.ingredients):
+                    await db.delete(existing)
+                rows = stage_ingredient_rows(
+                    db.add, resolutions, user_id=current_user_id(), analysis_id=analysis.id
                 )
-                created.append(_ingredient_to_dict(row))
-            return {"photo_id": photo_id, "ingredients": created}
+                await db.flush()
+            created = [
+                ingredient_payload(row, resolution) for row, resolution in zip(rows, resolutions)
+            ]
+            return {
+                "photo_id": photo_id,
+                **summary_fields(resolutions, dropped),
+                "ingredients": created,
+                "next_step": next_step(resolutions, tool="set_ingredients"),
+            }
 
     @server.tool()
     @instrument_tool("tag_meal")

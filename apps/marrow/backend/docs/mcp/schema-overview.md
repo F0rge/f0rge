@@ -8,7 +8,7 @@ tool and no schema-dump resources. The registered surface is pinned by
 `tests/test_mcp_surface.py::test_registered_tool_names`; update that test, this file, and the
 day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added or removed.
 
-## Tools (21)
+## Tools (22)
 
 | Area | Tool | Kind | Notes |
 | --- | --- | --- | --- |
@@ -19,9 +19,10 @@ day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added 
 | Supplements | `list_supplements(include_archived=False)` | read | Per-user supplement catalog (keys for `set_supplements`) |
 | Supplements | `set_supplements(keys, date?, mode='replace')` | write | `replace` / `add` / `remove` the day's supplement keys |
 | Meals | `get_meal(photo_id)` | read | Ingredients, tags, photo metadata |
-| Meals | `log_meal(date, name, meal_time?, ingredients?, photo_base64?)` | write | No background vision; `ingredients` = decomposed, catalogue-named list (see below) |
+| Meals | `log_meal(date, name, meal_time?, ingredients?, photo_base64?)` | write | No background vision; `ingredients` = decomposed, catalogue-named list; returns per-ingredient match status (see below) |
 | Meals | `edit_meal(photo_id, name?, meal_time?)` | write | Name/time only; ingredients via `set_ingredients` |
-| Meals | `set_ingredients(photo_id, ingredients)` | write | Replaces the confirmed ingredient list (decomposed, catalogue-named) |
+| Meals | `search_ingredients(query, limit=10)` | read | Ranked lookup in the caller's active catalogue: canonical name, match type, score, flags |
+| Meals | `set_ingredients(photo_id, ingredients)` | write | Atomically replaces the ingredient list (all or nothing); returns per-ingredient match status |
 | Meals | `tag_meal(photo_id, handles)` | write | Tag accepted connections |
 | Meals | `delete_meal(photo_id)` | write | |
 | People | `list_people()` | read | Accepted connections who can be tagged |
@@ -54,46 +55,40 @@ day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added 
 
 ## Logging meals and ingredients
 
-`log_meal` and `set_ingredients` match each ingredient **name** to the caller's own catalogue
-(`dietary_ingredients` + `ingredient_aliases`) and copy its flags onto the `photo_ingredients`
-row. A name with no match is stored as-is with no FODMAP / histamine / gluten / dairy data, and
-**is never added to the catalogue automatically**. So clients must:
+`search_ingredients`, `log_meal` and `set_ingredients` match ingredient **names** against the
+caller's own *active* catalogue (`dietary_ingredients` + `ingredient_aliases`, RLS-scoped; archived
+entries count as unmatched). Matching is done in Python by one shared resolver
+(`app/services/ingredient_resolver.py`, `ingredient_matching.py`); the UI/Airflow
+`IngredientLookupService` is unchanged. **Catalogue entries are never created automatically**, and
+there is no server-side LLM splitting - the client decomposes products.
+
+Per-ingredient `match.status`:
+
+| status | meaning | flags stored? |
+| --- | --- | --- |
+| `exact` | name equals a canonical name | yes |
+| `alias` | name equals an alias | yes |
+| `normalised` | equal after plural/singular, case, accent, quantity (`(40 g)`) normalisation | yes |
+| `approximate` | close but not the same ingredient (token subset such as "gluten-free rolled oats", or a typo) | **no** - suggestions returned |
+| `unmatched` | nothing close, archived, or a quantified/branded product string | **no** - suggestions + composite hint |
+
+`search_ingredients` additionally reports `token_subset`, `fuzzy`, `partial` and `prefix`
+candidates. Both writers return `ingredient_count`, `matched_count`, `unmatched`, `approximate`,
+`composite_suspected`, `duplicates_dropped`, `ingredients[]` (each with `match`, `flags`) and a
+`next_step` hint. `set_ingredients` runs in a single transaction. Limits: 40 ingredients per call,
+case-insensitive de-duplication.
+
+Clients should:
 
 1. Put brand, pack size and quantity in the meal `name`, not in ingredient names.
 2. Decompose packaged or composite foods (muesli, bread, ready meals) into constituent
    ingredients, from the pack's ingredient list or photo.
-3. Use lowercase, singular, common English names, and the catalogue's exact `canonical_name`
-   when one fits (read `marrow://catalog/dietary-ingredients`).
+3. Call `search_ingredients` per ingredient and use the catalogue's exact `canonical_name`.
 4. Not invent ingredients; say which were inferred.
 
 Catalogue rows are per user and copied from the reference user at signup
 (`copy_user_catalog_from_reference`); gap-fill rows added later reach existing users through an
 Alembic data migration (e.g. `056`: muesli, flour, bread, pasta, cocoa).
-
-## Tenancy and RLS
-
-Every user-owned table has a `user_id` column (UUID FK to `users`). **Row Level Security (RLS)** is enabled with `FORCE ROW LEVEL SECURITY`. The `tenant_isolation` policy restricts rows to `user_id = current_setting('app.user_id')::uuid`.
-
-Every tool opens a scoped session (`app/mcp/database.py`) that sets `app.user_id` from the Bearer token before any query. Cross-tenant reads and writes are impossible under normal roles.
-
-## Database roles
-
-- Read tools use `scoped_ro_session` → the `healthtracker_ro` role (`MCP_READONLY_DATABASE_URL`, `SELECT` only; falls back to `DATABASE_URL` when unset) with a 10 s statement timeout.
-- Write tools use `scoped_main_session` → the app role (`DATABASE_URL`). Some read tools (e.g. `hypotheses`) also use the app role deliberately.
-- Tool payloads are built from ORM rows *after* the session context exits; cleanup expunges rows before rollback (`_rollback_keep_rows`) so they stay readable. Build or copy data inside the session, and cover new tools with the real-session tests in `tests/test_mcp_database.py`.
-- The MCP service currently has no `REDIS_URL`, so MCP writes cannot invalidate API-side Redis caches (entry 300 s, feature matrix 600 s, signals 1800 s TTLs apply) — see `railway_env.md`.
-
-## Core table groups
-
-| Group | Tables | Notes |
-| --- | --- | --- |
-| Daily check-in | `entries` | One row per user per calendar date; symptoms in `symptoms_json`; supplements as a CSV of catalog keys |
-| Meals & photos | `meals`, `photos`, `photo_analyses`, `photo_ingredients` | Photos link to entries via `entry_id`; analysis is per `meal_id` |
-| Labs | `labs`, `lab_markers`, `lab_marker_catalog`, `lab_marker_aliases` | Marker values reference per-user catalog rows |
-| Treatments | `treatments`, `treatment_log` | Protocol items and their dose logs (distinct from daily supplement toggles) |
-| Hypotheses | `hypotheses`, `n_of_1_slots` | Ranked questions, kill-tests |
-| Catalogs | `supplement_catalog`, `symptom_catalog`, `medication_catalog`, `dietary_ingredients`, `ingredient_aliases`, … | Per-user; seeded from reference user on signup |
-| Embeddings | `embedding_queue`, `embedding` | Async worker; powers `search` |
 
 ## Date and time conventions
 

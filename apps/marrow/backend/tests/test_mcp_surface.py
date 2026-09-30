@@ -59,6 +59,7 @@ def test_registered_tool_names() -> None:
         "log_tracker",
         "save_day",
         "search",
+        "search_ingredients",
         "set_ingredients",
         "set_supplements",
         "tag_meal",
