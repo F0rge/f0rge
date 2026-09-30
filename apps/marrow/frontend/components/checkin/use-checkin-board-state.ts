@@ -6,7 +6,7 @@ import { useAutosaveEntry } from '@/lib/hooks/use-autosave-entry'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
 import type { Entry, EntryCreate, MedicationIntake, StoolStatus, SymptomEvent } from '@/lib/api/types'
 import { DEFAULT_CARD_ORDER, loadCardOrder, loadHiddenCards, loadCollapsedCards, saveCollapsedCards, toggleCollapsedCard, type CardId, type CollapseId } from '@/lib/checkin/card-order'
-import { shouldApplyEntryHydration } from './checkin-board-entry-sync'
+import { shouldApplyEntryHydration, shouldSyncEntryPhotos } from './checkin-board-entry-sync'
 import { LG_DESKTOP_QUERY, useMediaQuery } from '@f0rge/ui'
 
 interface AutosaveFns {
@@ -216,6 +216,11 @@ export function useCheckinBoardState({
   ])
 
   useEffect(() => {
+    if (!shouldSyncEntryPhotos() || !existingEntry) return
+    setExistingPhotos(existingEntry.photos || [])
+  }, [existingEntry?.photos, existingEntry])
+
+  useEffect(() => {
     if (!shouldApplyEntryHydration(isDirty)) return
     if (existingEntry) {
       setOverall(existingEntry.overall)
@@ -249,7 +254,6 @@ export function useCheckinBoardState({
       setNotes(existingEntry.notes || '')
       setAlcoholUnits(existingEntry.alcohol_units ?? 0)
       setCaffeineServings(existingEntry.caffeine_servings ?? 0)
-      setExistingPhotos(existingEntry.photos || [])
     } else {
       // Entry gone (or never existed) — reset board so a save cannot resurrect stale values.
       dirtyRef.current = false

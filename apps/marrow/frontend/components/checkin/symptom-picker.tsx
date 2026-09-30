@@ -36,25 +36,10 @@ export function SymptomPicker({
       return
     }
     onChange({ ...value, [key]: 5 })
-    onEventsChange([...events, stamp(key, 5)])
   }
 
   const setSeverity = (key: string, severity: number) => {
     onChange({ ...value, [key]: severity })
-    const stampIndexes = events
-      .map((event, index) => ({ event, index }))
-      .filter(({ event }) => event.key === key)
-      .map(({ index }) => index)
-    if (stampIndexes.length === 0) {
-      onEventsChange([...events, stamp(key, severity)])
-      return
-    }
-    const latestIndex = stampIndexes[stampIndexes.length - 1]
-    onEventsChange(
-      events.map((event, index) =>
-        index === latestIndex ? { ...event, severity, time: nowHHMM() } : event,
-      ),
-    )
   }
 
   const logNow = (key: string) => {
@@ -71,7 +56,7 @@ export function SymptomPicker({
     <div className="space-y-3">
       <label className="text-sm font-semibold">Custom symptoms</label>
       <p className="text-xs text-muted-foreground">
-        Tap a number to stamp the time. Log now keeps the same score at a new time.
+        The score is for the whole day. Tap Log now to record a flare at the current time.
       </p>
 
       {isLoading && (

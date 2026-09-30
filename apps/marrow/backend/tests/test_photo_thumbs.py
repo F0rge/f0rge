@@ -308,3 +308,85 @@ async def test_remote_serve_returns_jpeg_without_redirect(
     thumb_key = f"{authed_user_id}/{thumb_filename(filename)}"
     assert thumb_key in stub.objects
     assert thumb_resp.content == stub.objects[thumb_key]
+
+
+def _jpeg_bytes(color: str) -> bytes:
+    img = Image.new("RGB", (400, 300), color=color)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+async def test_thumb_never_serves_reference_user_bytes_on_filename_collision(
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: legacy thumb keys for the reference user must not leak to others.
+
+    When two accounts share the same ``{date}_photo-N`` filename, a missing thumb
+    for user B must lazy-generate from B's full image — never fall back to user A's
+    legacy object at the reference prefix.
+    """
+    from app.models.meal import Meal
+    from app.models.photo import Photo
+    from app.services import object_storage
+    from tests.helpers import signup_client
+
+    monkeypatch.setattr(settings, "bucket_name", "test-bucket")
+    monkeypatch.setattr(settings, "aws_access_key_id", "test-key")
+    monkeypatch.setattr(settings, "aws_secret_access_key", "test-secret")
+    monkeypatch.setattr(settings, "aws_endpoint_url_s3", "http://storage.test")
+    monkeypatch.setattr(settings, "food_analysis_enabled", False)
+
+    stub = _MemoryS3()
+    monkeypatch.setattr(object_storage, "_s3_client", lambda: stub)
+
+    reference_user_id = uuid.UUID(settings.default_storage_user_id)
+    other_client = await signup_client(
+        async_db, f"thumb-privacy-{uuid.uuid4().hex[:8]}@example.com"
+    )
+    other_me = await other_client.get("/api/v1/auth/me")
+    other_user_id = uuid.UUID(other_me.json()["user_id"])
+    assert other_user_id != reference_user_id
+
+    day = datetime.date(2026, 9, 1)
+    filename = f"{day.isoformat()}_photo-1.jpg"
+    thumb_name = thumb_filename(filename)
+    reference_thumb = _jpeg_bytes("red")
+    other_full = _jpeg_bytes("blue")
+
+    stub.objects[f"{reference_user_id}/{thumb_name}"] = reference_thumb
+    stub.objects[f"{other_user_id}/{filename}"] = other_full
+
+    entry = await _make_entry(async_db, day, other_user_id)
+    now = datetime.datetime.utcnow()
+    meal = Meal(
+        owner_user_id=other_user_id,
+        filename=filename,
+        original_filename="meal.jpg",
+        meal_time=now,
+        created_at=now,
+    )
+    async_db.add(meal)
+    await async_db.flush()
+    photo = Photo(
+        user_id=other_user_id,
+        entry_id=entry.id,
+        meal_id=meal.id,
+        filename=filename,
+        original_filename="meal.jpg",
+        meal_time=now,
+        created_at=now,
+    )
+    async_db.add(photo)
+    await async_db.commit()
+    await async_db.refresh(photo)
+
+    file_resp = await other_client.get(f"/api/v1/photos/{photo.id}/file")
+    assert file_resp.status_code == 200
+    assert file_resp.content == other_full
+
+    thumb_resp = await other_client.get(f"/api/v1/photos/{photo.id}/thumb")
+    assert thumb_resp.status_code == 200
+    assert thumb_resp.content != reference_thumb
+    assert thumb_resp.content == stub.objects[f"{other_user_id}/{thumb_name}"]

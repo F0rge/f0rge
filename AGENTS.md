@@ -13,7 +13,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 ## Environments
 
-Marrow runs on Railway project **zoological-fulfillment** (`a633a271-…`). Environments: `production` ← branch `main`, `develop` ← branch `develop`. dk tag-printer stays on Coolify/Pi.
+Marrow runs on Railway project **zoological-fulfillment** (`a633a271-…`). **Production** deploys from git branch `main` only. The `develop` git branch remains the integration branch for CI and local work; it does not trigger Marrow deploy or Actions smoke. dk tag-printer stays on Coolify/Pi.
 
 ### Production (`main`)
 
@@ -26,18 +26,7 @@ Marrow runs on Railway project **zoological-fulfillment** (`a633a271-…`). Envi
 | Redis | `Redis` | via `REDIS_URL` |
 | Photos | bucket `photos` | via `AWS_*` / `BUCKET_NAME` |
 
-### Develop (`develop`)
-
-| Component | Railway service | URL |
-|---|---|---|
-| API + worker | `marrow-api` / `marrow-worker` | https://api-dev.marrow-health.com |
-| MCP | `marrow-mcp` | https://mcp-dev.marrow-health.com |
-| Frontend | `marrow-frontend` | https://app-dev.marrow-health.com |
-| Postgres | `pgvector-hRmh` | via `DATABASE_URL` |
-| Redis | `Redis-fVqY` | via `REDIS_URL` |
-| Photos | bucket `photos-dev` | via `AWS_*` / `BUCKET_NAME` |
-
-Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. CI smokes only (Railway autodeploys). See [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
+Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. Railway autodeploys production; GitHub Actions smoke runs on `main` only. See [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
 ## apps/dk (tag printer)
 
 DasKasas price tag tool — stateless FastAPI + Next.js, **no auth, no DB**.

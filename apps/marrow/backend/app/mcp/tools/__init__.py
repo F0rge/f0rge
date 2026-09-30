@@ -18,25 +18,21 @@ __all__ = [
 
 
 def register_tools(server: FastMCP) -> None:
-    """Register all MCP tools onto the server instance."""
-    from app.mcp.tools.entries import register_entries_tools
-    from app.mcp.tools.food import register_food_tools
+    """Register the public Marrow MCP tool surface."""
+    from app.mcp.tools.days import register_days_tools
     from app.mcp.tools.hypotheses import register_hypotheses_tools
     from app.mcp.tools.labs import register_labs_tools
-    from app.mcp.tools.metrics import register_metrics_tools
+    from app.mcp.tools.meals import register_meals_tools
+    from app.mcp.tools.people import register_people_tools
     from app.mcp.tools.search import register_search_tools
-    from app.mcp.tools.sql import register_sql_tools
     from app.mcp.tools.trackers import register_trackers_tools
     from app.mcp.tools.treatments import register_treatments_tools
-    from app.mcp.tools.weather import register_weather_tools
 
+    register_days_tools(server)
     register_search_tools(server)
-    register_entries_tools(server)
     register_labs_tools(server)
     register_treatments_tools(server)
     register_hypotheses_tools(server)
-    register_food_tools(server)
+    register_meals_tools(server)
     register_trackers_tools(server)
-    register_metrics_tools(server)
-    register_weather_tools(server)
-    register_sql_tools(server)
+    register_people_tools(server)

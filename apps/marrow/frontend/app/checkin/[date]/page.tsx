@@ -1,9 +1,9 @@
 'use client'
 
 import { use, useState, useEffect, useRef, useCallback } from 'react'
+import { toast } from 'sonner'
 import { CheckinBoard } from '@/components/checkin/checkin-board'
 import { CheckinBoardSkeleton } from '@/components/checkin/checkin-board-skeleton'
-import { AutosaveStatusPill } from '@/components/checkin/autosave-status-pill'
 import { FloatingStatusCapsule } from '@/components/checkin/floating-status-capsule'
 import { CheckinPageHeader } from '@/components/checkin/checkin-page-header'
 import { PageShell } from '@/components/layout/page-shell'
@@ -26,6 +26,7 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
   const flushRef = useRef<(() => void) | null>(null)
   const flushBeaconRef = useRef<(() => void) | null>(null)
   const retryRef = useRef<(() => void) | null>(null)
+  const lastErrorToastKeyRef = useRef<string | null>(null)
 
   const [focusedPhotoId, setFocusedPhotoId] = useState<number | null>(null)
   const handleClosePhotoFocus = useCallback(() => {
@@ -53,6 +54,22 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
   )
 
   useEffect(() => {
+    if (autosaveState.status !== 'error') {
+      lastErrorToastKeyRef.current = null
+      return
+    }
+    const key = autosaveState.errorMessage ?? 'save-error'
+    if (lastErrorToastKeyRef.current === key) return
+    lastErrorToastKeyRef.current = key
+    toast.error(autosaveState.errorMessage ?? "Couldn't save your check-in.", {
+      action: {
+        label: 'Retry',
+        onClick: () => retryRef.current?.(),
+      },
+    })
+  }, [autosaveState.status, autosaveState.errorMessage])
+
+  useEffect(() => {
     const handlePageHide = () => {
       flushBeaconRef.current?.()
     }
@@ -64,26 +81,11 @@ export default function CheckinDatePage({ params }: { params: Promise<{ date: st
     <>
       <FloatingStatusCapsule
         date={date}
-        status={autosaveState.status}
-        lastSavedAt={autosaveState.lastSavedAt}
-        errorMessage={autosaveState.errorMessage}
-        onRetry={() => retryRef.current?.()}
         sentinelRef={headerRef}
         hidden={isLoading}
       />
       <PageShell>
-        <CheckinPageHeader
-          date={date}
-          headerRef={headerRef}
-          actions={
-            <AutosaveStatusPill
-              status={autosaveState.status}
-              lastSavedAt={autosaveState.lastSavedAt}
-              errorMessage={autosaveState.errorMessage}
-              onRetry={() => retryRef.current?.()}
-            />
-          }
-        />
+        <CheckinPageHeader date={date} headerRef={headerRef} />
 
         {isError ? (
           <FetchError

@@ -141,7 +141,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     target: '[data-tour="checkin-header"]',
     title: 'Autosave',
     content:
-      'Edits save automatically as you go. Saving, saved, and errors show in the header; scroll down and a compact capsule keeps the date and status pinned at the top.',
+      'Edits save automatically as you go. If saving fails, you will see a toast with a retry option. Scroll down and a compact capsule keeps the date pinned at the top.',
     placement: 'bottom',
   },
   {

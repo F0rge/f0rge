@@ -24,10 +24,12 @@ def main() -> None:
     manifest = yaml.safe_load(manifest_path.read_text())
 
     if component_mode != "auto":
-        # Manual dispatch: marrow-only component override (existing behaviour).
-        deploy_api = component_mode in {"all", "api"}
-        deploy_mcp = component_mode in {"all", "mcp"}
-        deploy_frontend = component_mode in {"all", "frontend"}
+        # Manual dispatch: marrow-only component override (respect manifest branches).
+        marrow_backend = manifest["components"]["marrow-backend"]
+        marrow_allowed = environment in marrow_backend.get("branches", [])
+        deploy_api = marrow_allowed and component_mode in {"all", "api"}
+        deploy_mcp = marrow_allowed and component_mode in {"all", "mcp"}
+        deploy_frontend = marrow_allowed and component_mode in {"all", "frontend"}
         coolify = []
     else:
         nx_base = os.environ["NX_BASE"]

@@ -73,6 +73,20 @@ def make_main_session() -> AsyncSession:
     return maker()
 
 
+async def _rollback_keep_rows(session: AsyncSession) -> None:
+    """Roll back an aborted txn before RESET without expiring rows tools still read.
+
+    Match ``f0rge_db.engine.build_get_db`` (rollback before RESET), but MCP tools
+    build their payloads from ORM rows *after* the ``async with`` exits.
+    ``Session.rollback()`` expires every persistent instance regardless of
+    ``expire_on_commit``, which made later attribute access raise
+    ``DetachedInstanceError``. Expunging first detaches the rows with their loaded
+    state intact, so the rollback has nothing left to expire.
+    """
+    session.expunge_all()
+    await session.rollback()
+
+
 @asynccontextmanager
 async def scoped_ro_session(user_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
     """Read-only session with ``app.user_id`` set for RLS."""
@@ -81,6 +95,7 @@ async def scoped_ro_session(user_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
         await apply_session_user_id(session, user_id)
         yield session
     finally:
+        await _rollback_keep_rows(session)
         await clear_tenant_session(session)
         await session.close()
 
@@ -93,5 +108,6 @@ async def scoped_main_session(user_id: uuid.UUID) -> AsyncIterator[AsyncSession]
         await apply_session_user_id(session, user_id)
         yield session
     finally:
+        await _rollback_keep_rows(session)
         await clear_tenant_session(session)
         await session.close()
