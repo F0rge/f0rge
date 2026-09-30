@@ -121,7 +121,7 @@ async def _catalog_row(async_engine, user_id: uuid.UUID, key: str) -> Any:
             await s.execute(
                 sa.select(
                     SupplementCatalogItem.first_used_at, SupplementCatalogItem.last_used_at
-                ).where(SupplementCatalogItem.key == key)
+                ).where(SupplementCatalogItem.user_id == user_id, SupplementCatalogItem.key == key)
             )
         ).one_or_none()
         await s.rollback()
