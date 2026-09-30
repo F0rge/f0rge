@@ -4,11 +4,38 @@ Issue #759 asks for a private hosted Storefront with isolated Medusa data
 services, a real Firstout SKU round-trip, health checks, a rollback path, and a
 monthly total below USD 50.
 
-**Status:** repository scaffolding only. No Storefront Railway project or
-service has been provisioned, and there is no live host, SKU walkthrough, or
-Railway cost telemetry to report. Keep #759 open until the hosted checks and
+**Status:** an existing Storefront web service is running in the Vellano
+`develop` environment, but the isolated preview required by #759 is not
+provisioned or verified. No hosted SKU round-trip or cost telemetry is
+available. Keep #759 open until the isolated topology, hosted checks, and
 measured monthly cost are recorded. A dedicated Firstout machine credential
 and Clerk/Peach development credentials still require an owner.
+
+### Read-only hosted audit (2026-09-30 UTC)
+
+Railway metadata was checked with explicit project and environment IDs; no
+variables or logs were read, and no infrastructure was changed. The project is
+**Vellano** (`c76d8df1-d839-454c-a94a-79b930deaf38`), the existing Firstout /
+Vellano project. Its `production` environment has ID
+`a639e365-f653-44db-a46d-a6a94e083894` and zero service instances. Its
+`develop` environment (`7a8ce6f1-c514-4e5d-9c50-4b7918865321`) has one
+successful Storefront web deployment, commit
+`33c01651ecfb5f09003157dd35784a5cb91430d8` on `develop`, at
+`https://storefront-develop-6009.up.railway.app`. The project service list
+contains `storefront`, `vellano-frontend`, `vellano-api`, and `Postgres`; it
+does not show dedicated Storefront Medusa or Redis services. This does not
+demonstrate the project and data-service isolation required above.
+
+Unauthenticated `GET /api/health` returned `200` with exactly
+`{"status":"ok"}`. Unauthenticated `GET /` returned `503`, without a
+`WWW-Authenticate` challenge, and included
+`X-Robots-Tag: noindex, nofollow, noarchive`. The liveness result is healthy;
+the protected web journey is not verified. The deployment's preview credential
+configuration was not inspected, so the cause of the `503` is undetermined.
+No SKU parity, customer page, dedicated Firstout credential, monitoring/cost
+alert, or Railway usage measurement was verified. Keep this existing service
+separate from any new isolated preview work and do not connect it to Firstout
+or replace its data services as part of this runbook.
 
 ## Isolation and access rules
 
