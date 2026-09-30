@@ -22,8 +22,10 @@ def test_list_resources_returns_public_reference_set() -> None:
 
     uris = {str(resource.uri) for resource in server._resource_manager.list_resources()}
     assert uris == {
+        "marrow://catalog/dietary-ingredients",
         "marrow://catalog/lab-markers",
         "marrow://reference/check-in-day-map",
+        "marrow://reference/meal-logging-guide",
     }
 
 

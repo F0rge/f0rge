@@ -3,8 +3,8 @@
 Reference for agents using Leo's health tracker through the Marrow MCP server
 (`app/mcp/`, FastMCP name `marrow`, endpoint `https://mcp.marrow-health.com/mcp`, Bearer token auth).
 
-The MCP server exposes **typed tools and two reference resources only**. There is no raw SQL
-tool, no schema-dump resources, and no prompts. The registered surface is pinned by
+The MCP server exposes **typed tools, reference resources and one prompt**. There is no raw SQL
+tool and no schema-dump resources. The registered surface is pinned by
 `tests/test_mcp_surface.py::test_registered_tool_names`; update that test, this file, and the
 day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added or removed.
 
@@ -19,9 +19,9 @@ day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added 
 | Supplements | `list_supplements(include_archived=False)` | read | Per-user supplement catalog (keys for `set_supplements`) |
 | Supplements | `set_supplements(keys, date?, mode='replace')` | write | `replace` / `add` / `remove` the day's supplement keys |
 | Meals | `get_meal(photo_id)` | read | Ingredients, tags, photo metadata |
-| Meals | `log_meal(date, name, meal_time?, ingredients?, photo_base64?)` | write | No background vision |
-| Meals | `edit_meal(photo_id, name?, meal_time?)` | write | |
-| Meals | `set_ingredients(photo_id, ingredients)` | write | Replaces the confirmed ingredient list |
+| Meals | `log_meal(date, name, meal_time?, ingredients?, photo_base64?)` | write | No background vision; `ingredients` = decomposed, catalogue-named list (see below) |
+| Meals | `edit_meal(photo_id, name?, meal_time?)` | write | Name/time only; ingredients via `set_ingredients` |
+| Meals | `set_ingredients(photo_id, ingredients)` | write | Replaces the confirmed ingredient list (decomposed, catalogue-named) |
 | Meals | `tag_meal(photo_id, handles)` | write | Tag accepted connections |
 | Meals | `delete_meal(photo_id)` | write | |
 | People | `list_people()` | read | Accepted connections who can be tagged |
@@ -34,8 +34,41 @@ day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added 
 | Hypotheses | `update_hypothesis(hypothesis_id? / slug?, …)` | write | Unspecified fields unchanged; no create/delete |
 | Search | `search(query, k?)` | read | Semantic (vector) search over notes, meals, symptoms |
 
-Resources: `marrow://catalog/lab-markers` (canonical lab marker names/units) and
-`marrow://reference/check-in-day-map` (what a daily check-in contains and which tools write it).
+## Resources
+
+| URI | Scope | When to load |
+| --- | --- | --- |
+| `marrow://catalog/lab-markers` | Global reference | Canonical lab marker names and units |
+| `marrow://catalog/dietary-ingredients` | **Per user** (RLS) | Before `log_meal` / `set_ingredients`: the caller's active ingredient catalogue (canonical name, aliases, FODMAP / histamine / gluten / dairy flags). Archived entries are omitted; capped at 500 entries (`truncated: true` when cut) |
+| `marrow://reference/check-in-day-map` | Static | What a daily check-in contains and which tools write it |
+| `marrow://reference/meal-logging-guide` | Static | How to log meals and ingredients (decompose composite foods, naming, catalogue matching) |
+
+## Prompts and server instructions
+
+- Server `instructions` (sent on `initialize`) carry the meal-logging rules. Some clients inject
+  them into the system prompt, others ignore them — tool descriptions carry the same core
+  guidance.
+- Prompt `log_meal_guide(meal_description="")` renders the meal-logging guide as a user message.
+- The shared rule text lives in `app/prompts/ingredient_rules.py` (import-free; intended to be
+  shared later with the photo classifier prompt / Airflow DAG, not wired up yet).
+
+## Logging meals and ingredients
+
+`log_meal` and `set_ingredients` match each ingredient **name** to the caller's own catalogue
+(`dietary_ingredients` + `ingredient_aliases`) and copy its flags onto the `photo_ingredients`
+row. A name with no match is stored as-is with no FODMAP / histamine / gluten / dairy data, and
+**is never added to the catalogue automatically**. So clients must:
+
+1. Put brand, pack size and quantity in the meal `name`, not in ingredient names.
+2. Decompose packaged or composite foods (muesli, bread, ready meals) into constituent
+   ingredients, from the pack's ingredient list or photo.
+3. Use lowercase, singular, common English names, and the catalogue's exact `canonical_name`
+   when one fits (read `marrow://catalog/dietary-ingredients`).
+4. Not invent ingredients; say which were inferred.
+
+Catalogue rows are per user and copied from the reference user at signup
+(`copy_user_catalog_from_reference`); gap-fill rows added later reach existing users through an
+Alembic data migration (e.g. `056`: muesli, flour, bread, pasta, cocoa).
 
 ## Tenancy and RLS
 

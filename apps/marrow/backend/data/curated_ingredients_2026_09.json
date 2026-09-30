@@ -1,0 +1,144 @@
+{
+  "source": "mcp-catalogue-gap-fill-2026-09",
+  "source_version": "2026-09",
+  "ingredients": [
+    {
+      "canonical_name": "muesli",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "moderate",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "flour",
+      "category": "grains",
+      "histamine_score": 0,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "bread",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "pasta",
+      "category": "grains",
+      "histamine_score": 1,
+      "fodmap_oligos": "high",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": true,
+      "contains_dairy": false,
+      "confidence": "medium"
+    },
+    {
+      "canonical_name": "cocoa",
+      "category": "sweets",
+      "histamine_score": 2,
+      "fodmap_oligos": "low",
+      "fodmap_fructose": "low",
+      "fodmap_polyols": "low",
+      "fodmap_lactose": "low",
+      "contains_gluten": false,
+      "contains_dairy": false,
+      "confidence": "medium"
+    }
+  ],
+  "aliases": [
+    {
+      "alias": "granola",
+      "canonical_name": "muesli"
+    },
+    {
+      "alias": "white flour",
+      "canonical_name": "flour"
+    },
+    {
+      "alias": "wholemeal bread",
+      "canonical_name": "bread"
+    },
+    {
+      "alias": "whole wheat bread",
+      "canonical_name": "bread"
+    },
+    {
+      "alias": "baguette",
+      "canonical_name": "bread"
+    },
+    {
+      "alias": "ciabatta",
+      "canonical_name": "bread"
+    },
+    {
+      "alias": "brot",
+      "canonical_name": "bread",
+      "language": "de"
+    },
+    {
+      "alias": "pao",
+      "canonical_name": "bread",
+      "language": "pt"
+    },
+    {
+      "alias": "spaghetti",
+      "canonical_name": "pasta"
+    },
+    {
+      "alias": "spaghetti noodle",
+      "canonical_name": "pasta"
+    },
+    {
+      "alias": "fusilli",
+      "canonical_name": "pasta"
+    },
+    {
+      "alias": "linguine",
+      "canonical_name": "pasta"
+    },
+    {
+      "alias": "fettuccine",
+      "canonical_name": "pasta"
+    },
+    {
+      "alias": "tagliatelle",
+      "canonical_name": "pasta"
+    },
+    {
+      "alias": "rigatoni",
+      "canonical_name": "pasta"
+    },
+    {
+      "alias": "pates",
+      "canonical_name": "pasta",
+      "language": "fr"
+    },
+    {
+      "alias": "nudeln",
+      "canonical_name": "pasta",
+      "language": "de"
+    },
+    {
+      "alias": "cacao",
+      "canonical_name": "cocoa"
+    }
+  ]
+}
