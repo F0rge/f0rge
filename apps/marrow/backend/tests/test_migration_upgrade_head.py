@@ -71,7 +71,7 @@ def test_alembic_upgrade_head(migration_postgres_container: PostgresContainer) -
 
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "055", "expected head revision 055 after upgrade head"
+        assert version == "056", "expected head revision 056 after upgrade head"
 
         has_users = conn.execute(
             text(

@@ -6,8 +6,11 @@ single upsert here fully populates the ingredient. Runs LAST in the seed
 orchestrator (after build_aliases rebuilds the alias table) so the aliases it
 inserts survive that rebuild.
 
-Source file: backend/data/curated_ingredients_2026_07.json
+Source files (loaded in order; later files only add rows, same format):
+  backend/data/curated_ingredients_2026_07.json
+  backend/data/curated_ingredients_2026_09.json   (muesli, flour, bread, pasta, cocoa)
   { "source", "source_version", "ingredients": [...], "aliases": [...] }
+Aliases may carry an optional "language" (default "en").
 The per-row "confidence" key is provenance only and is ignored here.
 """
 
@@ -15,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
 from scripts._db import SyncSession
 from scripts._paths import data_dir
@@ -26,7 +30,11 @@ from app.database import Base  # noqa: F401
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
 
-DATA_PATH = data_dir() / "curated_ingredients_2026_07.json"
+CURATED_FILES = (
+    "curated_ingredients_2026_07.json",
+    "curated_ingredients_2026_09.json",
+)
+DATA_PATHS = tuple(data_dir() / name for name in CURATED_FILES)
 
 _COLS = (
     "category",
@@ -41,9 +49,14 @@ _COLS = (
 
 
 def load() -> None:
-    log.info("Loading curated ingredients from %s", DATA_PATH)
+    for path in DATA_PATHS:
+        _load_file(path)
 
-    with open(DATA_PATH) as f:
+
+def _load_file(path: Path) -> None:
+    log.info("Loading curated ingredients from %s", path)
+
+    with open(path) as f:
         payload = json.load(f)
 
     source = payload.get("source", "user-research-2026-07")
@@ -100,7 +113,11 @@ def load() -> None:
             if already:
                 ali_skipped += 1
                 continue
-            session.add(IngredientAlias(alias=alias, canonical_name=canonical, language="en"))
+            session.add(
+                IngredientAlias(
+                    alias=alias, canonical_name=canonical, language=a.get("language") or "en"
+                )
+            )
             ali_inserted += 1
 
     log.info(

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-02T14:03:12Z",
+  "generated_at": "2026-09-30T18:00:00Z",
   "files": [
     {
       "filename": "sighi_histamine.json",
@@ -36,6 +36,15 @@
       "downloaded_at": "2026-08-02T14:03:12Z",
       "row_count": 47,
       "notes": "Manually curated ingredients and aliases \u2014 research-based; Aug 2026 platform-meal gap fill"
+    },
+    {
+      "filename": "curated_ingredients_2026_09.json",
+      "sha256": "058b5b990b5ecbeeeb86791f1df03151e6176643f51032a66a0cce56bac6e417",
+      "source_url": null,
+      "source_name": "manual",
+      "downloaded_at": "2026-09-30T18:00:00Z",
+      "row_count": 5,
+      "notes": "Manually curated gap-fill (muesli, flour, bread, pasta, cocoa) so MCP meal logging finds common staples; flags follow existing wheat flour / white bread / penne pasta / cocoa powder rows and SIGHI, Monash-derived FODMAP and OFF gluten conventions"
     }
   ]
 }
