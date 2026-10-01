@@ -52,7 +52,7 @@ or replace its data services as part of this runbook.
 - The Next.js proxy requires HTTP Basic Auth for every non-development request.
   Set STOREFRONT_PREVIEW_USERNAME and STOREFRONT_PREVIEW_PASSWORD as
   server-only web-service variables. The password must be at least 32
-  characters. Missing or weak credentials return 503; unauthenticated
+  characters and the username must not contain `:`. Missing or weak credentials return 503; unauthenticated
   requests return 401. Never prefix these variables with NEXT_PUBLIC_ or
   pass them as Docker build arguments.
 - GET /api/health is the sole unauthenticated exception. It returns only
@@ -69,20 +69,25 @@ or replace its data services as part of this runbook.
 
 ## Railway service configuration
 
-For both app services, keep Railway's Root Directory at the repository root
-and select the checked-in config file in the service's Config as Code setting.
+For both app services, keep Railway's Root Directory at the repository root.
 The Docker build context must remain the repository root.
 
-| Service | Config file | Domain | Health check |
+| Service | Build configuration | Domain | Health check |
 | --- | --- | --- | --- |
-| storefront-web | apps/storefront/web/railway.toml | Railway HTTPS hostname; Basic Auth protected | /api/health |
-| storefront-commerce | apps/storefront/commerce/railway.toml | Private network only | /health |
+| storefront-web | `RAILWAY_DOCKERFILE_PATH=apps/storefront/web/Dockerfile` | Railway HTTPS hostname; Basic Auth protected | /api/health |
+| storefront-commerce | `RAILWAY_DOCKERFILE_PATH=apps/storefront/commerce/Dockerfile` | Private network only | /health |
 | storefront-postgres | Railway PostgreSQL plugin | Private network only | Railway-managed |
 | storefront-redis | Railway Redis plugin | Private network only | Railway-managed |
 
-The Medusa config runs its database migration as the pre-deploy command. Use
-Railway service references for the private database and Redis URLs; never paste
-connection strings into source, CI logs, or this runbook. Configure the
+Create new app services with the Dockerfile path above and set Medusa's
+pre-deploy command to `node /app/node_modules/.bin/medusa db:migrate`. Its
+runtime working directory is the compiled `.medusa/server` folder. Do not
+select the checked-in `railway.toml` files for new services: Railway's new
+service flow no longer uses legacy Config as Code files ([Railway documentation](https://docs.railway.com/config-as-code)). Use Railway service
+references for the private database and Redis URLs; never paste connection
+strings into source, CI logs, or this runbook. Hosted Medusa fails closed unless
+its dedicated database and Redis URLs exist and its JWT, cookie, and BFF
+secrets each contain at least 32 characters. Configure the remaining
 service-native Medusa settings from
 [the commerce environment example](../commerce/.env.example), using the
 dedicated Storefront services and the generated web origin.
@@ -93,8 +98,8 @@ intent; it contains no credential values.
 
 | Service | Variable names | Notes |
 | --- | --- | --- |
-| Web | MEDUSA_BACKEND_URL, NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY, NEXT_PUBLIC_BASE_URL, STOREFRONT_BFF_SECRET, STOREFRONT_PREVIEW_USERNAME, STOREFRONT_PREVIEW_PASSWORD, STOREFRONT_INDEXING_ENABLED, STOREFRONT_RUNTIME_KIND | Medusa URL must be its private service address. The BFF secret must match commerce. Only the publishable key and base URL use NEXT_PUBLIC_. Set runtime kind to hosted and keep indexing false. |
-| Commerce | FIRSTOUT_OPS_URL, FIRSTOUT_OPS_TOKEN, FIRSTOUT_OPS_COMPANY_ID, STOREFRONT_BFF_SECRET, STOREFRONT_TEST_PAYMENT_ENABLED, STOREFRONT_RUNTIME_KIND, STOREFRONT_VAT_RATE_PERCENT, STOREFRONT_GAUTENG_DELIVERY_ZONES | Keep the machine token only on commerce. Keep test payment disabled and delivery rates unset until Operations approves them. |
+| Web | MEDUSA_BACKEND_URL, NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY, NEXT_PUBLIC_BASE_URL, STOREFRONT_BFF_SECRET, STOREFRONT_PREVIEW_USERNAME, STOREFRONT_PREVIEW_PASSWORD, STOREFRONT_INDEXING_ENABLED, STOREFRONT_RUNTIME_KIND | Medusa URL must be its private service address. The BFF secret must match commerce and be at least 32 characters. Basic Auth username must not contain `:`; password must be at least 32 characters. Only the publishable key and base URL use NEXT_PUBLIC_. Set runtime kind to hosted and keep indexing false. |
+| Commerce | DATABASE_URL, REDIS_URL, JWT_SECRET, COOKIE_SECRET, FIRSTOUT_OPS_URL, FIRSTOUT_OPS_TOKEN, FIRSTOUT_OPS_COMPANY_ID, STOREFRONT_BFF_SECRET, STOREFRONT_TEST_PAYMENT_ENABLED, STOREFRONT_RUNTIME_KIND, STOREFRONT_VAT_RATE_PERCENT, STOREFRONT_GAUTENG_DELIVERY_ZONES | Use dedicated private PG/Redis references. JWT, cookie, and BFF secrets must each be at least 32 characters. Keep the machine token only on commerce. Firstout credentials are optional for read-only boot but required for SKU sync and acceptance. Keep test payment disabled and delivery rates unset until Operations approves them. |
 
 Firstout checks a static machine credential and the exact hostname of its own
 API request. The allowed hostname belongs to the Firstout API ingress, not the
@@ -121,8 +126,9 @@ project and services in this order:
    first-time bootstrap and source sync from the Medusa service context:
 
    ~~~bash
-   npx medusa exec ./src/scripts/bootstrap-storefront.ts
-   npx medusa exec ./src/scripts/sync-firstout.ts
+   cd /app/apps/storefront/commerce/.medusa/server
+   node /app/node_modules/.bin/medusa exec ./src/scripts/bootstrap-storefront.js
+   node /app/node_modules/.bin/medusa exec ./src/scripts/sync-firstout.js
    ~~~
 
    The migration runs before deploy. Obtain the Medusa publishable key from its
@@ -195,6 +201,13 @@ USD 0.15/GB-month for the database volume, and USD 0.05/GB for egress. It is
 **not an all-in Storefront forecast**. The following lines must be included
 before claiming the USD 50/month target:
 
+Railway's Hobby plan has a USD 5 monthly minimum that includes the first USD 5
+of resource usage; it is not added to the table total. This estimate assumes
+one replica per app service and no staging environment. Railway has no
+project-only hard spending cap: per-service CPU/memory limits constrain
+resource size, not the total bill. Set service limits after observing the
+deployed peak; do not change workspace-wide controls for this project.
+
 | Additional line | Private preview assumption | Remaining evidence |
 | --- | --- | --- |
 | Railway plan minimum and taxes | Existing workspace billing, no new plan purchase | Invoice treatment and marginal cost |
@@ -240,3 +253,23 @@ as part of rollback.
 - [ ] No public DNS, live payment provider, bag/checkout, or test payment used.
 - [ ] One-month Railway telemetry/invoice shows total under USD 50.
 - [ ] Hostname, timestamp, test SKU, checks, and redacted screenshot recorded.
+
+## Local production-image verification (2026-10-01)
+
+The corrected commerce image was exercised as its non-root runtime user against
+a separate disposable PostgreSQL database and Redis instance. Database migrations
+passed from the compiled server directory; the compiled bootstrap script passed
+twice consecutively. HTTP `/health` returned 200 `OK`, and `/app` returned 200
+with the built admin HTML. Commerce typechecking passed, and the image-builder
+test run passed 69 tests (four environment-gated tests skipped).
+
+The production web image also built and ran locally with synthetic preview
+credentials and the disposable commerce instance's publishable key. Anonymous
+page, account API, and asset requests returned 401 with `no-store` and
+`X-Robots-Tag: noindex, nofollow, noarchive`; the health probe returned 200.
+Authenticated home, shop, collections, and account pages returned 200 with
+private cache controls and the same robots header.
+
+These checks prove the image can migrate and boot locally. They do not prove a
+Railway deployment, Firstout SKU parity, provider interoperability, or the monthly
+cost target. Those hosted acceptance items remain outstanding.

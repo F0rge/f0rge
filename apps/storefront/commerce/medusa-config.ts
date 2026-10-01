@@ -1,8 +1,10 @@
 import { loadEnv, defineConfig } from '@medusajs/framework/utils'
+import { assertHostedCommerceConfig } from './src/hosted-commerce-config'
 import { testPaymentEnabled } from './src/test-payment-config'
 import { peachPaymentEnabled } from './src/peach-payment-config'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
+assertHostedCommerceConfig(process.env)
 
 const modules: Record<string, unknown>[] = process.env.REDIS_URL ? [
   {
