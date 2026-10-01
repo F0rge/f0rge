@@ -104,6 +104,36 @@ describe("Storefront Clerk auth provider", () => {
     expect(identities.create).not.toHaveBeenCalled();
   });
 
+  it("refreshes verified issuer, subject, and email after a concurrent identity-create conflict", async () => {
+    const staleIdentity: AuthIdentityDTO = {
+      id: "auth_1",
+      provider_identities: [{
+        id: "pi_1", provider: "storefront-clerk", entity_id: `${issuer}|user_clerk_123`,
+        provider_metadata: { issuer }, user_metadata: { email: "old@example.com", email_verified: true },
+      }],
+    };
+    const identities = createIdentityService(staleIdentity);
+    const stale = await identities.retrieve({ entity_id: `${issuer}|user_clerk_123` });
+    identities.create = jest.fn(async () => { throw new Error("unique conflict"); });
+    identities.retrieve = jest.fn(async () => ({
+      ...stale,
+      provider_identities: stale.provider_identities?.map((identity) => ({
+        ...identity,
+        user_metadata: { email: "old@example.com", email_verified: true },
+      })),
+    }));
+    const result = await new StorefrontClerkAuthProvider().authenticate({
+      body: { token: token({ email: "fresh@example.com", first_name: "Fresh", email_verified: true }) },
+    }, identities);
+    expect(result.success).toBe(true);
+    expect(identities.update).toHaveBeenCalledWith(`${issuer}|user_clerk_123`, expect.objectContaining({
+      provider_metadata: { issuer },
+      user_metadata: expect.objectContaining({
+        email: "fresh@example.com", email_verified: true, clerk_issuer: issuer, clerk_subject: "user_clerk_123",
+      }),
+    }));
+  });
+
   it("fails closed when Clerk verification configuration is missing", async () => {
     delete process.env.CLERK_JWT_KEY;
     const identities = createIdentityService();

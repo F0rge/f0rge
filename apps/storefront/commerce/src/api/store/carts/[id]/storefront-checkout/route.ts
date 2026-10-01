@@ -117,10 +117,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
 
       const { data: carts } = await query.graph({
         entity: "cart",
-        fields: ["id", "email", "metadata", "total", "currency_code", "payment_collection.payment_sessions.id"],
+        fields: ["id", "email", "customer_id", "metadata", "total", "currency_code", "payment_collection.payment_sessions.id"],
         filters: { id: cartId },
       });
-      const cart = carts[0] as { id: string; email?: string; metadata?: Record<string, unknown> | null; total?: number; currency_code: string } | undefined;
+      const cart = carts[0] as { id: string; email?: string; customer_id?: string | null; metadata?: Record<string, unknown> | null; total?: number; currency_code: string } | undefined;
       if (!cart) throw new MedusaError(MedusaError.Types.NOT_FOUND, "Bag not found");
       const confirmationDigest = createHash("sha256").update(accessToken).digest("hex");
       const checkoutFingerprint = createHash("sha256").update(JSON.stringify([
@@ -173,12 +173,16 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
         postal_code: input.postal_code,
         phone: input.phone,
       };
+      const checkoutMetadata = { ...(cart.metadata || {}) };
+      delete checkoutMetadata.storefront_owner_claim;
+      if (!cart.customer_id) checkoutMetadata.storefront_claimable_version = 1;
+      else delete checkoutMetadata.storefront_claimable_version;
       await updateCartWorkflow(req.scope).run({ input: {
         id: cartId,
         email: input.email,
         shipping_address: deliveryAddress,
         metadata: {
-          ...(cart.metadata || {}),
+          ...checkoutMetadata,
           storefront_confirmation_sha256: confirmationDigest,
           storefront_checkout_sha256: checkoutFingerprint,
           storefront_checkout: { fulfillment_type: input.fulfillment_type },

@@ -6,6 +6,7 @@ import { Button } from "@f0rge/ui";
 import { TextInput } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
+import { OrderHistory } from "./order-history";
 
 type Address = {
   id: string;
@@ -124,6 +125,7 @@ export function AccountClient({ customer }: AccountClientProps) {
         </article>)}
       </section>
     </div>
+    <OrderHistory />
     {error && <p role="alert" className="account-error">{error}</p>}
   </>;
 }
