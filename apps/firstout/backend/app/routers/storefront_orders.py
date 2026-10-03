@@ -9,7 +9,7 @@ from app.database import get_db
 from app.dependencies.auth import (
     get_storefront_refund_workflow_service,
     require_deliveries_mutate,
-    require_orders_or_storefront_refunds,
+    require_storefront_handoff_read,
     require_orders,
     require_storefront_refunds,
 )
@@ -35,7 +35,7 @@ def get_storefront_order_service(
 
 @router.get("", response_model=StorefrontHandoffListResponse)
 async def list_storefront_handoffs(
-    user_id: uuid.UUID = Depends(require_orders_or_storefront_refunds),
+    user_id: uuid.UUID = Depends(require_storefront_handoff_read),
     service: OpsCommerceService = Depends(get_storefront_order_service),
 ) -> StorefrontHandoffListResponse:
     return await service.list_handoffs(user_id)

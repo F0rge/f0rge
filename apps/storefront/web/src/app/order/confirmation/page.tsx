@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { fulfillmentStatusLabel } from "@/lib/order-fulfillment";
 
 type Confirmation = {
   status: "captured" | "pending" | "processing" | "declined" | "cancelled" | "paid_exception" | "unknown";
@@ -38,15 +39,6 @@ type Confirmation = {
   };
 };
 const money = (value: number, currency = "ZAR") => new Intl.NumberFormat("en-ZA", { style: "currency", currency }).format(value);
-const fulfillmentLabels: Record<string, string> = {
-  confirmed: "Order confirmed",
-  ready_for_delivery: "Preparing for delivery",
-  out_for_delivery: "Out for delivery",
-  delivered: "Delivered",
-  ready_for_collection: "Ready for collection",
-  collected: "Collected",
-  cancelled: "Order cancelled",
-};
 const refundLabels: Record<string, string> = {
   pending: "Refund is processing",
   succeeded: "Refund sent",
@@ -98,7 +90,7 @@ export default function OrderConfirmationPage() {
       <div className="confirmation-card">
         <section aria-live="polite">
           <h2>Fulfilment status</h2>
-          <p role="status">{fulfillmentLabels[result.order.fulfillment_status || "confirmed"] || "Order confirmed"}</p>
+          <p role="status">{fulfillmentStatusLabel(result.order.fulfillment_status)}</p>
           {result.order.fulfillment_promise?.estimated_from && result.order.fulfillment_promise.estimated_by && <p>
             {result.order.fulfillment_promise.estimated_from === result.order.fulfillment_promise.estimated_by
               ? `Estimated ready ${result.order.fulfillment_promise.estimated_by}`

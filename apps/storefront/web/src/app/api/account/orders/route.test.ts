@@ -23,7 +23,7 @@ describe("account order history BFF", () => {
     authState.customerMedusaFetch
       .mockResolvedValueOnce({ status: 200, payload: {
         count: 1,
-        orders: [{ id: "order_current", display_id: 17, created_at: "2026-10-01T00:00:00.000Z", currency_code: "zar", status: "completed", total: 12.5, metadata: { storefront_handoff_outbox: ["private"] }, email: "private@example.com" }],
+        orders: [{ id: "order_current", display_id: 17, created_at: "2026-10-01T00:00:00.000Z", currency_code: "zar", status: "completed", total: 12.5, metadata: { storefront_handoff_outbox: ["private"], storefront_fulfillment_status: { fulfillment_type: "collection", status: "ready_for_collection" } }, email: "private@example.com" }],
       } })
       .mockResolvedValueOnce({ status: 200, payload: { orders: [] } });
     const response = await GET(new Request("https://store.example/api/account/orders?customer_id=cus_other"));
@@ -31,7 +31,10 @@ describe("account order history BFF", () => {
     expect(authState.customerMedusaFetch).toHaveBeenNthCalledWith(1, expect.objectContaining({ token: "server-medusa-token" }),
       "/store/orders?limit=50&offset=0&fields=id,display_id,created_at,currency_code,status,total,metadata");
     expect(authState.customerMedusaFetch.mock.calls[0][1]).not.toContain("cus_other");
-    expect(body.orders).toEqual([expect.objectContaining({ id: "order_current", reference: 17, total: 12.5 })]);
+    expect(body.orders).toEqual([expect.objectContaining({
+      id: "order_current", reference: 17, total: 12.5,
+      fulfillment_type: "collection", fulfillment_status: "ready_for_collection",
+    })]);
     expect(body.orders[0]).not.toHaveProperty("email");
     expect(body.orders[0]).not.toHaveProperty("metadata");
     expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0");
@@ -84,7 +87,38 @@ describe("account order history BFF", () => {
     expect(html).toContain(orderMoney(1150, "ZAR"));
     expect(html).toContain("Pending confirmation");
     expect(html).toContain("Refunded");
+    expect(html).toContain("Order confirmed");
+    expect(html).toContain("Delivery");
     expect(html).not.toContain("private-refund");
+  });
+
+  it("shows collection readiness instead of the Medusa payment status", async () => {
+    const order = {
+      id: "order_collection", display_id: 19, currency_code: "zar", status: "completed", total: 1150,
+      metadata: {
+        storefront_checkout: { fulfillment_type: "collection" },
+        storefront_fulfillment_status: { fulfillment_type: "collection", status: "ready_for_collection" },
+      },
+      items: [{ id: "item_original", title: "Chair", quantity: 1, unit_price: 1150, total: 1150 }],
+    };
+    authState.customerMedusaFetch.mockResolvedValueOnce({ status: 200, payload: { orders: [order] } })
+      .mockResolvedValueOnce({ status: 200, payload: { orders: [] } });
+    const history = await GET(new Request("https://store.example/api/account/orders"));
+    expect((await history.json()).orders[0]).toMatchObject({
+      fulfillment_type: "collection", fulfillment_status: "ready_for_collection",
+    });
+    authState.customerMedusaFetch.mockResolvedValueOnce({ status: 200, payload: { order } });
+    const detail = await getOrder(new Request("https://store.example/api/account/orders/order_collection"), {
+      params: Promise.resolve({ id: "order_collection" }),
+    });
+    expect((await detail.json()).order).toMatchObject({
+      fulfillment_type: "collection", fulfillment_status: "ready_for_collection",
+    });
+    authState.customerMedusaFetch.mockResolvedValueOnce({ status: 200, payload: { order } });
+    const html = renderToStaticMarkup(await AccountOrderPage({ params: Promise.resolve({ id: "order_collection" }) }));
+    expect(html).toContain("Ready for collection");
+    expect(html).toContain("Showroom collection");
+    expect(html).not.toContain("Order status: completed");
   });
 
   it("does not call Medusa if there is no signed-in customer", async () => {

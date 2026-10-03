@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
+  canMutateDeliveries,
   canMutateOrders,
   cancelSalesOrder,
   confirmSalesOrder,
@@ -36,6 +37,7 @@ import {
   listSalesOrders,
   retryStorefrontHandoff,
   requestStorefrontRefund,
+  updateStorefrontCollectionStatus,
   remainderInvoiceSalesOrder,
   type Location,
   type SalesOrderListItem,
@@ -93,6 +95,8 @@ export default function OrdersPage() {
   const { user } = useAuth();
   const canMutate = canMutateOrders(user);
   const canRefund = user?.permissions.includes("sales.refunds") === true;
+  const canCollect = canMutateDeliveries(user);
+  const canReadHandoffs = canMutate || canRefund || canCollect;
   const [orders, setOrders] = useState<SalesOrderListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -106,6 +110,7 @@ export default function OrdersPage() {
   const [depositAmount, setDepositAmount] = useState("");
   const [handoffs, setHandoffs] = useState<StorefrontHandoff[]>([]);
   const [retryingHandoffId, setRetryingHandoffId] = useState<string | null>(null);
+  const [collectingHandoffId, setCollectingHandoffId] = useState<string | null>(null);
   const [refundHandoff, setRefundHandoff] = useState<StorefrontHandoff | null>(null);
   const [refundStatus, setRefundStatus] = useState<StorefrontRefundStatus | null>(null);
   const [refundMethod, setRefundMethod] = useState<"amount" | "lines">("amount");
@@ -130,7 +135,7 @@ export default function OrdersPage() {
         setOrders([]);
         setTotal(0);
       }
-      if (canMutate || canRefund) {
+      if (canReadHandoffs) {
         const handoffData = await listStorefrontHandoffs();
         setHandoffs(handoffData.items);
       } else setHandoffs([]);
@@ -139,7 +144,7 @@ export default function OrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [canMutate, canRefund, page, pageSize]);
+  }, [canMutate, canReadHandoffs, page, pageSize]);
 
   const openRefund = (handoff: StorefrontHandoff) => {
     const sequence = ++refundViewSequence.current;
@@ -287,8 +292,8 @@ export default function OrdersPage() {
   return (
     <Stack gap={5}>
       {error ? <InlineNotification kind="error" title={error} hideCloseButton /> : null}
-      <h1>{canMutate ? "Sales orders" : "Storefront refunds"}</h1>
-      {canMutate || canRefund ? (
+      <h1>{canMutate ? "Sales orders" : canCollect ? "Storefront collection" : "Storefront refunds"}</h1>
+      {canReadHandoffs ? (
         <section aria-labelledby="storefront-handoffs-heading">
           <Stack gap={3}>
             <h2 id="storefront-handoffs-heading">Storefront handoffs</h2>
@@ -301,7 +306,7 @@ export default function OrdersPage() {
                 className="storefront-handoff-row"
               >
                 <span>
-                  {handoff.external_order_id} · {handoff.status} · received {new Date(handoff.created_at).toLocaleString()}
+                  {handoff.external_order_id} · {handoff.status} · {handoff.fulfillment_type} · {handoff.fulfillment_status} · received {new Date(handoff.created_at).toLocaleString()}
                   {handoff.failure_code ? ` · ${handoff.failure_code}` : ""}
                   {` · attempts ${handoff.attempt_count} · ${handoff.correlation_id}`}
                 </span>
@@ -323,6 +328,46 @@ export default function OrdersPage() {
                     }}
                   >
                     Retry
+                  </Button>
+                ) : null}
+                {canCollect && handoff.status === "imported" && handoff.fulfillment_type === "collection" && handoff.fulfillment_status === "confirmed" ? (
+                  <Button
+                    size="sm"
+                    kind="secondary"
+                    disabled={collectingHandoffId === handoff.id}
+                    onClick={() => {
+                      setCollectingHandoffId(handoff.id);
+                      void updateStorefrontCollectionStatus(handoff.id, "ready_for_collection")
+                        .then(async () => {
+                          await loadOrders();
+                        })
+                        .catch((err) =>
+                          setError(err instanceof ApiError ? err.message : "Collection status could not be updated"),
+                        )
+                        .finally(() => setCollectingHandoffId(null));
+                    }}
+                  >
+                    Ready for collection
+                  </Button>
+                ) : null}
+                {canCollect && handoff.status === "imported" && handoff.fulfillment_type === "collection" && handoff.fulfillment_status === "ready_for_collection" ? (
+                  <Button
+                    size="sm"
+                    kind="secondary"
+                    disabled={collectingHandoffId === handoff.id}
+                    onClick={() => {
+                      setCollectingHandoffId(handoff.id);
+                      void updateStorefrontCollectionStatus(handoff.id, "collected")
+                        .then(async () => {
+                          await loadOrders();
+                        })
+                        .catch((err) =>
+                          setError(err instanceof ApiError ? err.message : "Collection status could not be updated"),
+                        )
+                        .finally(() => setCollectingHandoffId(null));
+                    }}
+                  >
+                    Collected
                   </Button>
                 ) : null}
                 {canRefund && handoff.status === "imported" ? (

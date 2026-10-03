@@ -543,6 +543,19 @@ async def test_collection_status_is_staff_mutable_idempotent_and_acknowledged_pe
     forbidden_books = await async_client.patch(status_url, json={"status": "ready_for_collection"})
     assert forbidden_books.status_code == 403
 
+    await async_client.post("/api/v1/auth/logout")
+    warehouse_login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": "warehouse@example.com", "password": settings.seed_warehouse_password},
+    )
+    assert warehouse_login.status_code == 200
+    warehouse_list = await async_client.get("/api/v1/storefront/orders")
+    assert warehouse_list.status_code == 200
+    assert any(item["id"] == handoff["id"] for item in warehouse_list.json()["items"])
+    warehouse_ready = await async_client.patch(status_url, json={"status": "ready_for_collection"})
+    assert warehouse_ready.status_code == 200
+    assert warehouse_ready.json()["fulfillment_status"] == "ready_for_collection"
+
     await owner_client.post("/api/v1/auth/logout")
     owner_login = await owner_client.post(
         "/api/v1/auth/login",
