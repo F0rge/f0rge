@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Eye, EyeOff, Pencil } from 'lucide-react'
-import { Field, FieldTitle, Input, Sheet, SheetContent } from '@f0rge/ui'
+import { Dialog, DialogContent } from '@f0rge/ui'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
 import { MealIconThumb, photoHasImage, useMealFileSrc } from '@/components/checkin/meal-icon-thumb'
 import { MealTimeChips } from '@/components/checkin/meal-time-chips'
@@ -286,30 +286,27 @@ function TitleEditor({ photoId, label, dishName }: TitleEditorProps) {
 
   if (editing) {
     return (
-      <Field className="gap-1">
-        <FieldTitle className="sr-only">Meal name</FieldTitle>
-        <Input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              commit(draft)
-            } else if (e.key === 'Escape') {
-              e.preventDefault()
-              setDraft(label ?? '')
-              setEditing(false)
-            }
-          }}
-          onBlur={() => commit(draft)}
-          disabled={updateLabel.isPending}
-          autoFocus
-          placeholder="Name this meal"
-          aria-label="Edit meal name"
-          className="text-sm font-semibold"
-        />
-      </Field>
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            commit(draft)
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            setDraft(label ?? '')
+            setEditing(false)
+          }
+        }}
+        onBlur={() => commit(draft)}
+        disabled={updateLabel.isPending}
+        autoFocus
+        placeholder="Name this meal"
+        aria-label="Edit meal name"
+        className="w-full rounded border border-border bg-background px-1.5 py-0.5 text-sm font-semibold leading-tight focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+      />
     )
   }
 
@@ -391,18 +388,17 @@ export function PhotoFocusOverlay({
   })
 
   return (
-    <Sheet
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) onClose()
       }}
     >
-      <SheetContent
-        side="bottom"
+      <DialogContent
         showCloseButton={false}
         style={gestureStyle}
         {...handlers}
-        className="inset-x-0 top-auto m-0 max-h-[92vh] w-full max-w-full min-w-0 grid grid-cols-1 grid-rows-[auto_auto_auto_1fr] gap-0 overflow-hidden rounded-b-none rounded-t-2xl border-t p-0 sm:inset-0 sm:top-0 sm:bottom-0 sm:m-auto sm:h-fit sm:max-w-2xl sm:rounded-2xl sm:border"
+        className="fixed inset-x-0 bottom-0 top-auto m-0 translate-none grid max-h-[92vh] w-full max-w-full min-w-0 grid-cols-1 grid-rows-[auto_auto_auto_1fr] gap-0 overflow-hidden rounded-b-none rounded-t-2xl p-0 duration-200 data-open:slide-in-from-bottom data-closed:slide-out-to-bottom sm:inset-0 sm:top-0 sm:bottom-0 sm:m-auto sm:h-fit sm:max-w-2xl sm:rounded-2xl sm:data-open:slide-in-from-bottom-0 sm:data-open:zoom-in-95 sm:data-closed:slide-out-to-bottom-0 sm:data-closed:zoom-out-95"
       >
         {/* Drag handle — bottom-sheet affordance on mobile only */}
         <div data-sheet-top-region className="flex justify-center pb-1 pt-2 sm:hidden">
@@ -531,7 +527,7 @@ export function PhotoFocusOverlay({
             />
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }

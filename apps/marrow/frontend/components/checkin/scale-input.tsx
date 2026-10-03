@@ -1,13 +1,6 @@
 'use client'
 
-import {
-  cn,
-  Field,
-  FieldDescription,
-  FieldTitle,
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@f0rge/ui'
+import { cn } from '@f0rge/ui'
 
 // Maximum label length for a segmented control segment.
 // Longest current label is 9 chars ("Very Poor" / "Very Good"), 3-char buffer
@@ -58,19 +51,15 @@ function assertValidScaleOptions(options: ScaleOption[]): void {
   }
 }
 
-const segmentItemClass =
-  'min-h-[44px] min-w-0 flex-1 justify-center px-1.5 text-center text-xs leading-tight whitespace-normal text-pretty sm:px-2.5 sm:text-sm sm:leading-normal sm:whitespace-nowrap data-[state=on]:bg-primary data-[state=on]:font-semibold data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm'
-
 export function ScaleInput({ label, options, value, onChange, description }: ScaleInputProps) {
   assertValidScaleOptions(options)
 
   const unset = value === null || value === ''
-  const selected = unset ? [] : [String(value)]
 
   return (
-    <Field className="gap-2">
+    <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <FieldTitle className="text-sm font-semibold">{label}</FieldTitle>
+        <label className="text-sm font-semibold leading-none">{label}</label>
         {unset && (
           <span
             aria-hidden
@@ -78,37 +67,45 @@ export function ScaleInput({ label, options, value, onChange, description }: Sca
           />
         )}
       </div>
-      {description ? <FieldDescription>{description}</FieldDescription> : null}
-      <ToggleGroup
-        spacing={0}
-        variant="outline"
-        value={selected}
-        onValueChange={(next) => {
-          const picked = next[0]
-          if (picked == null) return
-          const match = options.find((o) => String(o.value) === picked)
-          if (match) onChange(match.value)
-        }}
-        aria-label={unset ? `${label}, not rated yet` : label}
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      <div
         className={cn(
-          'grid w-full rounded-full p-1',
+          'relative grid w-full rounded-full p-1 gap-0.5',
           unset ? 'bg-muted ring-1 ring-dashed ring-chart-1/70' : 'bg-border',
         )}
         style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+        role="radiogroup"
+        aria-label={unset ? `${label}, not rated yet` : label}
       >
-        {options.map((option) => (
-          <ToggleGroupItem
-            key={String(option.value)}
-            value={String(option.value)}
-            className={cn(segmentItemClass, 'rounded-full border-0')}
-          >
-            {option.label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-      {unset ? (
-        <FieldDescription className="text-[11px]">Not rated — tap a level</FieldDescription>
-      ) : null}
-    </Field>
+        {options.map((option) => {
+          const isActive = !unset && value === option.value
+          return (
+            <button
+              key={String(option.value)}
+              type="button"
+              role="radio"
+              aria-checked={isActive}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                'relative z-20 inline-flex items-center justify-center',
+                'min-h-[44px] rounded-full px-1.5 sm:px-2.5',
+                'text-center text-xs leading-tight sm:text-sm sm:leading-normal',
+                'whitespace-normal text-pretty sm:whitespace-nowrap',
+                'font-medium',
+                'transition-all duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]',
+                'active:scale-[0.97]',
+                'focus-visible:outline-2 focus-visible:outline-foreground focus-visible:outline-offset-2',
+                isActive
+                  ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                  : 'bg-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+      {unset && <p className="text-[11px] text-muted-foreground">Not rated — tap a level</p>}
+    </div>
   )
 }

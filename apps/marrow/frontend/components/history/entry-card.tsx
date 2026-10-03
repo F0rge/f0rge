@@ -3,15 +3,6 @@
 import type { Entry } from '@/lib/api/types'
 import { useSymptomCatalog } from '@/lib/api/hooks'
 import { getOverallBadgeClass, getScaleLabel } from '@/lib/checkin/scale-labels'
-import {
-  Badge,
-  Card,
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemHeader,
-  ItemTitle,
-} from '@f0rge/ui'
 
 interface EntryCardProps {
   entry: Entry
@@ -58,23 +49,18 @@ export function EntryCard({ entry, onClick }: EntryCardProps) {
   const symptomLabels = new Map(catalog.map((item) => [item.key, item.label]))
 
   return (
-    <Card size="sm" className="p-0 ring-0">
-      <Item
-        variant="outline"
-        size="sm"
-        className="w-full cursor-pointer rounded-xl border-0 ring-1 ring-foreground/10 hover:bg-muted/40"
-        render={<button type="button" onClick={onClick} />}
-      >
-        <ItemHeader>
-          <ItemTitle>{formatDate(entry.date)}</ItemTitle>
-          <Badge className={getOverallBadgeClass(entry.overall, entry.schema_version)}>
-            {getScaleLabel('overall', entry.overall, entry.schema_version)}
-          </Badge>
-        </ItemHeader>
-        <ItemContent>
-          <ItemDescription>{getSummary(entry, symptomLabels)}</ItemDescription>
-        </ItemContent>
-      </Item>
-    </Card>
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-[var(--radius)] border border-border bg-card p-5 text-left transition-colors hover:bg-muted/40"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-foreground">{formatDate(entry.date)}</span>
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getOverallBadgeClass(entry.overall, entry.schema_version)}`}>
+          {getScaleLabel('overall', entry.overall, entry.schema_version)}
+        </span>
+      </div>
+      <p className="mt-1.5 text-sm text-muted-foreground">{getSummary(entry, symptomLabels)}</p>
+    </button>
   )
 }

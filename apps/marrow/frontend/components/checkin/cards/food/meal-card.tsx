@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Loader2, X } from 'lucide-react'
-import { Badge, Card, CardContent, cn } from '@f0rge/ui'
+import { cn } from '@f0rge/ui'
 import { ConfirmActionDialog } from '@/components/people/confirm-action-dialog'
 import { MealCompanionsSection } from '@/components/checkin/meal-companions-section'
 import { MealIconThumb, photoHasImage, useMealThumbSrc } from '@/components/checkin/meal-icon-thumb'
@@ -42,7 +42,7 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
     : []
 
   return (
-    <Card className="group relative gap-0 overflow-hidden py-0">
+    <div className="group relative overflow-hidden rounded-xl border border-border">
       <div
         role="button"
         tabIndex={0}
@@ -56,7 +56,7 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
         aria-label={`Review and edit ${title}`}
         className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <div className="relative aspect-square w-full overflow-hidden">
+        <div className="relative aspect-square w-full">
           {hasImage && thumbSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -72,16 +72,13 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
                 size="lg"
                 className="size-full rounded-none"
               />
-              <Badge
-                variant="secondary"
-                className="absolute left-1.5 top-1.5 bg-background/90 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-border"
-              >
+              <span className="absolute left-1.5 top-1.5 rounded-full bg-background/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-border">
                 Library
-              </Badge>
+              </span>
             </>
           )}
         </div>
-        <CardContent className="space-y-1 p-2.5">
+        <div className="p-2.5">
           {isAnalyzing ? (
             <div className="space-y-1">
               <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
@@ -100,24 +97,27 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
                   <span className="shrink-0 text-xs text-muted-foreground">({confidence}%)</span>
                 )}
                 {needsReview && (
-                  <Badge className={cn('ml-auto shrink-0 text-[10px]', statusPill.warn)}>
+                  <span className={cn('ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium', statusPill.warn)}>
                     Review
-                  </Badge>
+                  </span>
                 )}
               </div>
               <MealCompanionsSection photo={photo} variant="compact" />
               {badges.length > 0 && (
                 <span className="mt-1 inline-flex flex-wrap gap-0.5">
                   {badges.map((b, i) => (
-                    <Badge key={i} className={cn('text-[10px] leading-none', b.className)}>
+                    <span
+                      key={i}
+                      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${b.className}`}
+                    >
                       {b.label}
-                    </Badge>
+                    </span>
                   ))}
                 </span>
               )}
             </>
           )}
-        </CardContent>
+        </div>
       </div>
       <button
         type="button"
@@ -145,6 +145,6 @@ export function MealCard({ photo, onOpen, onDelete, deleting }: MealCardProps) {
           })
         }}
       />
-    </Card>
+    </div>
   )
 }

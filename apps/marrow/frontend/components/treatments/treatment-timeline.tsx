@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Treatment } from '@/lib/api/types'
-import { Button, ButtonGroup, ButtonGroupText, Card, cn } from '@f0rge/ui'
+import { cn } from '@f0rge/ui'
 import { groupTreatments } from '@/components/treatments/group-treatments'
 import { treatmentTimelineBarClass } from '@/lib/ui/status'
 
@@ -110,38 +110,34 @@ export function TreatmentTimeline({ treatments, onTreatmentClick }: TreatmentTim
 
   return (
     <div className="space-y-3">
-      <ButtonGroup className="w-full justify-between">
-        <Button
+      <div className="flex items-center justify-between">
+        <button
           type="button"
-          variant="outline"
-          size="icon-sm"
           onClick={() => setRangeStart((prev) => addDays(prev, -30))}
-          aria-label="Previous range"
+          className="flex size-8 items-center justify-center rounded-lg transition-colors hover:bg-muted"
         >
           <ChevronLeft className="size-4" />
-        </Button>
-        <ButtonGroupText className="flex-1 justify-center border-0 bg-transparent text-xs text-muted-foreground">
+        </button>
+        <span className="text-xs text-muted-foreground">
           {rangeStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
           {' - '}
           {rangeEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-        </ButtonGroupText>
-        <Button
+        </span>
+        <button
           type="button"
-          variant="outline"
-          size="icon-sm"
           onClick={() => setRangeStart((prev) => addDays(prev, 30))}
-          aria-label="Next range"
+          className="flex size-8 items-center justify-center rounded-lg transition-colors hover:bg-muted"
         >
           <ChevronRight className="size-4" />
-        </Button>
-      </ButtonGroup>
+        </button>
+      </div>
 
       {visibleTreatments.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No treatments in this date range.
         </p>
       ) : (
-        <Card className="overflow-x-auto p-0 ring-1 ring-foreground/10">
+        <div className="overflow-x-auto rounded-xl border border-border">
           <div className="min-w-[500px]">
             <div className="relative flex h-6 border-b border-border bg-muted/30">
               {weekMarkers.map((m, i) => (
@@ -235,7 +231,7 @@ export function TreatmentTimeline({ treatments, onTreatmentClick }: TreatmentTim
               </div>
             ))}
           </div>
-        </Card>
+        </div>
       )}
     </div>
   )

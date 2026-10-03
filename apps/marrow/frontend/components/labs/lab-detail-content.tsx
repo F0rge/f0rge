@@ -1,15 +1,7 @@
 'use client'
 
-import {
-  Badge,
-  Button,
-  Item,
-  ItemContent,
-  ItemGroup,
-  ItemHeader,
-  ItemTitle,
-  cn,
-} from '@f0rge/ui'
+import { Button } from '@f0rge/ui'
+import { cn } from '@f0rge/ui'
 import { LabAttachment } from './lab-attachment'
 import { MarkerSparkline } from './marker-sparkline'
 import type { Lab, LabType } from '@/lib/api/types'
@@ -49,43 +41,46 @@ interface LabDetailContentProps {
   pdfPreview?: boolean
 }
 
-function MarkerRow({ marker }: { marker: Lab['markers'][number] }) {
-  const value =
-    marker.value !== null ? String(marker.value) : marker.value_text ?? '—'
-
+function MarkerMobileCard({
+  marker,
+}: {
+  marker: Lab['markers'][number]
+}) {
   return (
-    <Item variant="outline" size="sm" className="rounded-xl bg-card">
-      <ItemContent>
-        <ItemHeader>
-          <ItemTitle className="break-words">{marker.display_name}</ItemTitle>
-          <Badge className={FLAG_CLASSES[marker.flag] ?? FLAG_CLASSES.unknown}>
-            {marker.flag}
-          </Badge>
-        </ItemHeader>
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <div>
-            <dt>Value</dt>
-            <dd className="tabular-nums text-foreground">{value}</dd>
-          </div>
-          <div>
-            <dt>Unit</dt>
-            <dd className="break-words text-foreground">{marker.unit ?? '—'}</dd>
-          </div>
-          <div className="col-span-2">
-            <dt>Ref range</dt>
-            <dd className="break-words text-foreground">
-              {formatRefRange(marker.ref_low, marker.ref_high, marker.ref_text)}
-            </dd>
-          </div>
-          <div className="col-span-2">
-            <dt className="mb-1">Trend</dt>
-            <dd>
-              <MarkerSparkline canonicalName={marker.canonical_name} />
-            </dd>
-          </div>
-        </dl>
-      </ItemContent>
-    </Item>
+    <div className="space-y-2 rounded-lg border border-border/60 p-3 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="break-words font-medium">{marker.display_name}</p>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${FLAG_CLASSES[marker.flag] ?? FLAG_CLASSES.unknown}`}
+        >
+          {marker.flag}
+        </span>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+        <div>
+          <dt className="text-muted-foreground">Value</dt>
+          <dd className="tabular-nums">
+            {marker.value !== null ? marker.value : marker.value_text ?? '—'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Unit</dt>
+          <dd className="break-words">{marker.unit ?? '—'}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-muted-foreground">Ref range</dt>
+          <dd className="break-words">
+            {formatRefRange(marker.ref_low, marker.ref_high, marker.ref_text)}
+          </dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="mb-1 text-muted-foreground">Trend</dt>
+          <dd>
+            <MarkerSparkline canonicalName={marker.canonical_name} />
+          </dd>
+        </div>
+      </dl>
+    </div>
   )
 }
 
@@ -129,11 +124,56 @@ export function LabDetailContent({
       )}
 
       {lab.markers.length > 0 ? (
-        <ItemGroup className="gap-2">
-          {lab.markers.map((marker) => (
-            <MarkerRow key={marker.id} marker={marker} />
-          ))}
-        </ItemGroup>
+        <>
+          <div className="space-y-2 sm:hidden">
+            {lab.markers.map((marker) => (
+              <MarkerMobileCard key={marker.id} marker={marker} />
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="pb-1.5 pr-3 font-medium">Marker</th>
+                  <th className="pb-1.5 pr-3 font-medium">Flag</th>
+                  <th className="pb-1.5 pr-3 font-medium">Value</th>
+                  <th className="pb-1.5 pr-3 font-medium">Unit</th>
+                  <th className="pb-1.5 pr-3 font-medium">Ref range</th>
+                  <th className="pb-1.5 font-medium">Trend</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lab.markers.map((marker) => (
+                  <tr
+                    key={marker.id}
+                    className="border-b border-border/50 last:border-0"
+                  >
+                    <td className="py-2 pr-3 font-medium">{marker.display_name}</td>
+                    <td className="py-2 pr-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${FLAG_CLASSES[marker.flag] ?? FLAG_CLASSES.unknown}`}>
+                        {marker.flag}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {marker.value !== null
+                        ? marker.value
+                        : marker.value_text ?? '—'}
+                    </td>
+                    <td className="py-2 pr-3 text-muted-foreground">
+                      {marker.unit ?? '—'}
+                    </td>
+                    <td className="py-2 pr-3 text-muted-foreground">
+                      {formatRefRange(marker.ref_low, marker.ref_high, marker.ref_text)}
+                    </td>
+                    <td className="py-2">
+                      <MarkerSparkline canonicalName={marker.canonical_name} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : (
         <p className="py-4 text-center text-sm text-muted-foreground">No markers recorded.</p>
       )}
