@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { fulfillmentStatusLabel } from "@/lib/order-fulfillment";
 
 type Confirmation = {
@@ -46,15 +47,17 @@ const refundLabels: Record<string, string> = {
 };
 
 export default function OrderConfirmationPage() {
+  const { attributionHeaders, setSensitiveOverlay } = useStorefrontAnalytics();
   const [result, setResult] = useState<Confirmation | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const emailAccess = useRef<{ order_id: string; access_token: string } | null>(null);
   const load = useCallback(async () => {
     try {
       const capability = emailAccess.current;
+      const analyticsHeaders = attributionHeaders();
       const response = await fetch("/api/order/confirmation", {
         method: capability ? "POST" : "GET",
-        headers: capability ? { "content-type": "application/json" } : undefined,
+        headers: capability ? { "content-type": "application/json", ...analyticsHeaders } : analyticsHeaders,
         body: capability ? JSON.stringify(capability) : undefined,
         cache: "no-store",
       });
@@ -66,7 +69,11 @@ export default function OrderConfirmationPage() {
     } catch {
       setUnavailable(true);
     }
-  }, []);
+  }, [attributionHeaders]);
+  useEffect(() => {
+    setSensitiveOverlay(true);
+    return () => setSensitiveOverlay(false);
+  }, [setSensitiveOverlay]);
   useEffect(() => {
     const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const orderId = fragment.get("order_id");
@@ -80,7 +87,7 @@ export default function OrderConfirmationPage() {
     return () => window.clearInterval(timer);
   }, [load]);
 
-  return <div className="content confirmation-page">
+  return <div className="content confirmation-page" data-storefront-no-capture="">
     <p className="eyebrow">The Collector / private order confirmation</p>
     {!result && !unavailable && <p role="status">Checking your order…</p>}
     {unavailable && <div role="alert"><h1>Confirmation temporarily unavailable</h1><p>Refresh this page to check again. Order details are available only through the private checkout capability saved in this browser.</p><button type="button" onClick={() => void load()}>Check again</button></div>}

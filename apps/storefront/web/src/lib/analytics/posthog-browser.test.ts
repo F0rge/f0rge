@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { analyticsEnvironment } from "./policy";
 import { createPostHogBrowserProvider, POSTHOG_CAPTURE_URL, type PostHogCapturePayload } from "./posthog-browser";
 
 describe("PostHog browser adapter", () => {
@@ -30,7 +31,15 @@ describe("PostHog browser adapter", () => {
       api_key: "phc_test_fixture",
       event: "storefront_search_results_viewed",
       distinct_id: "anonymous-session-id",
-      properties: { query_present: true, availability: "all", price_filter_active: false, sort_order: "default", result_count: 2 },
+      properties: {
+        query_present: true,
+        availability: "all",
+        price_filter_active: false,
+        sort_order: "default",
+        result_count: 2,
+        $geoip_disable: true,
+        environment: analyticsEnvironment(),
+      },
     });
   });
 

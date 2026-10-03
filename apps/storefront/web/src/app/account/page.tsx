@@ -14,7 +14,7 @@ export default async function AccountPage() {
     if (context) customer = { email: context.email, first_name: context.first_name, last_name: context.last_name };
   } catch { unavailable = true; }
 
-  return <div className="content account-page">
+  return <div className="content account-page" data-storefront-no-capture="">
     <p className="eyebrow">The Collector / customer account</p>
     <h1>Your account</h1>
     {unavailable ? <p role="alert" className="account-error">Customer sign-in is temporarily unavailable. Please try again later or continue shopping as a guest.</p>

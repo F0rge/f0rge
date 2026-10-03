@@ -167,13 +167,18 @@ not connect these configs to the Firstout or Marrow Railway projects.
 ## Optional analytics
 
 Optional storefront analytics stays off until a visitor accepts it. The browser
-adapter sends only typed page, product, filter, and active-attention events to
-PostHog Cloud EU; it does not use cookies, persistent identity, autocapture, or
-session replay. Before enabling it, create the dedicated EU project, disable
-project-level IP data capture in PostHog, then set its public project token as
-`NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` in the web environment. The token is a
-public ingestion key, not an API secret. Without it, the consent controls work
-but the adapter sends no requests.
+adapter sends typed browsing and commerce events to PostHog Cloud EU. Purchases
+and refunds are emitted by the server confirmation path, once per opaque order
+or refund id. Session replay is consent-gated, sampled at 10% of eligible
+sessions, masked, and off for auth, account, checkout, payment, and
+confirmation routes. The adapter does not use cookies, persistent identity, or
+autocapture. Before enabling it, use EU project `292683`, disable GeoIP
+enrichment and IP retention, set a USD 5 analytics billing limit (an alert is
+not a cap), then set the public project token as
+`NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`. The token is a public ingestion key, not
+an API secret. Without it, the consent controls work but the adapter sends no
+requests. Leave `NEXT_PUBLIC_STOREFRONT_ANALYTICS_ENV` unset so traffic stays
+marked `test`.
 
 The analytics browser test uses the named `STOREFRONT_ANALYTICS_E2E=true` opt-in,
 the synthetic Medusa catalogue at `web/e2e/analytics-medusa-fixture.mjs`, and a
@@ -192,4 +197,5 @@ by `availability` and `sort_order`; and product attention by
 `active_seconds` and `product_id`. Label each report that consented visitors are
 not a census, and keep denominators on the same consent scope. Search text and
 full URLs are intentionally not captured, so reports cannot break them down by
-query string. See `docs/757-consented-measurement.md`.
+query string. See `docs/757-consented-measurement.md` and
+`docs/758-purchase-funnels.md`.
