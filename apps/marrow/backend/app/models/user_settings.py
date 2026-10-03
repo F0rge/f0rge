@@ -37,6 +37,9 @@ class UserSettings(Base):
     llm_model: Mapped[str | None] = mapped_column(String, nullable=True)
     embedding_provider: Mapped[str] = mapped_column(String, nullable=False, default="openrouter")
     embedding_model: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Legacy single-token snapshot. Live tokens are external_api_tokens rows.
+    # Issuing a token must not write a new hash over this column; migration 057
+    # copies it. Drop the columns only after reads use the new table.
     external_api_token_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     external_api_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     onboarding_completed_at: Mapped[datetime.datetime | None] = mapped_column(

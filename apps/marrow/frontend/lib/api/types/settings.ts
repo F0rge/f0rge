@@ -47,6 +47,18 @@ export interface TestConnectionResponse {
   detail?: string | null
 }
 
+export interface ExternalApiTokenItem {
+  id: string
+  name: string
+  created_at: string | null
+}
+
+export interface ExternalApiTokenList {
+  tokens: ExternalApiTokenItem[]
+}
+
 export interface ExternalTokenResponse {
   token: string // Plaintext bearer token. Exposed exactly once.
+  id: string
+  name: string
 }

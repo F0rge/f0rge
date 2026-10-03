@@ -6370,13 +6370,13 @@
         }
       }
     },
-    "/api/v1/settings/external-token/regenerate": {
-      "post": {
+    "/api/v1/settings/external-tokens": {
+      "get": {
         "tags": [
           "settings"
         ],
-        "summary": "Regenerate External Token",
-        "operationId": "regenerate_external_token_api_v1_settings_external_token_regenerate_post",
+        "summary": "List External Tokens",
+        "operationId": "list_external_tokens_api_v1_settings_external_tokens_get",
         "parameters": [
           {
             "name": "ht_session",
@@ -6397,6 +6397,63 @@
         ],
         "responses": {
           "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiTokenListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Create External Token",
+        "operationId": "create_external_token_api_v1_settings_external_tokens_post",
+        "parameters": [
+          {
+            "name": "ht_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ht Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalTokenCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -6419,14 +6476,24 @@
         }
       }
     },
-    "/api/v1/settings/external-token/revoke": {
-      "post": {
+    "/api/v1/settings/external-tokens/{token_id}": {
+      "delete": {
         "tags": [
           "settings"
         ],
         "summary": "Revoke External Token",
-        "operationId": "revoke_external_token_api_v1_settings_external_token_revoke_post",
+        "operationId": "revoke_external_token_api_v1_settings_external_tokens__token_id__delete",
         "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Token Id"
+            }
+          },
           {
             "name": "ht_session",
             "in": "cookie",
@@ -6445,15 +6512,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SettingsResponse"
-                }
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -10836,19 +10896,92 @@
         "type": "object",
         "title": "EntryUpdate"
       },
+      "ExternalApiTokenItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ExternalApiTokenItem",
+        "description": "One live token. The secret is not stored, so the list shows the name only."
+      },
+      "ExternalApiTokenListResponse": {
+        "properties": {
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/ExternalApiTokenItem"
+            },
+            "type": "array",
+            "title": "Tokens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tokens"
+        ],
+        "title": "ExternalApiTokenListResponse"
+      },
+      "ExternalTokenCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ExternalTokenCreate",
+        "description": "Name chosen by the user. The secret is generated server-side."
+      },
       "ExternalTokenResponse": {
         "properties": {
           "token": {
             "type": "string",
             "title": "Token"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
           }
         },
         "type": "object",
         "required": [
-          "token"
+          "token",
+          "id",
+          "name"
         ],
         "title": "ExternalTokenResponse",
-        "description": "Plaintext token returned once on generation. Never returned by GET.\nStore it immediately \u2014 it cannot be recovered after this response."
+        "description": "Plaintext token returned once on creation. Never returned by GET.\nStore it immediately \u2014 it cannot be recovered after this response."
       },
       "ExtractedLab": {
         "properties": {

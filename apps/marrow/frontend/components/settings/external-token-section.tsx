@@ -2,16 +2,17 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Copy, Lock, RefreshCw, Trash2 } from 'lucide-react'
+import { Copy, Lock, Plus, Trash2 } from 'lucide-react'
+import { Button, FetchError, formatDisplayDateTime } from '@f0rge/ui'
+import { handleMutationError } from '@f0rge/ui/api'
+import { TextInput } from '@f0rge/ui/forms'
 import {
-  useUserSettings,
-  useRegenerateExternalToken,
+  useCreateExternalToken,
+  useExternalTokens,
   useRevokeExternalToken,
 } from '@/lib/api/hooks'
-import { handleMutationError } from '@f0rge/ui/api'
+import type { ExternalApiTokenItem } from '@/lib/api/types'
 import { SettingsCard } from './settings-card'
-import { BUTTON_CLASS } from './constants'
-import { statusText } from '@/lib/ui/status'
 
 const MCP_CONFIG_SNIPPET = `{
   "mcpServers": {
@@ -24,26 +25,34 @@ const MCP_CONFIG_SNIPPET = `{
   }
 }`
 
-export function ExternalTokenSection() {
-  const userSettings = useUserSettings()
-  const [plaintextToken, setPlaintextToken] = useState<string | null>(null)
-  const regenerate = useRegenerateExternalToken()
-  const revoke = useRevokeExternalToken()
+function tokenMeta(token: ExternalApiTokenItem): string | null {
+  if (!token.created_at) return null
+  return formatDisplayDateTime(token.created_at)
+}
 
-  const handleRegenerate = async () => {
+export function ExternalTokenSection() {
+  const tokens = useExternalTokens()
+  const create = useCreateExternalToken()
+  const revoke = useRevokeExternalToken()
+  const [name, setName] = useState('')
+  const [revealed, setRevealed] = useState<{ name: string; token: string } | null>(null)
+
+  const handleCreate = async () => {
+    const trimmed = name.trim()
+    if (!trimmed) return
     try {
-      const result = await regenerate.mutateAsync()
-      setPlaintextToken(result.token)
-      toast.success('Token regenerated — copy it now; it will not be shown again')
+      const result = await create.mutateAsync(trimmed)
+      setRevealed({ name: result.name, token: result.token })
+      setName('')
+      toast.success('Token created — copy it now; it will not be shown again')
     } catch (err) {
-      handleMutationError(err, 'Failed to regenerate token')
+      handleMutationError(err, 'Failed to create token')
     }
   }
 
-  const handleRevoke = async () => {
+  const handleRevoke = async (tokenId: string) => {
     try {
-      await revoke.mutateAsync()
-      setPlaintextToken(null)
+      await revoke.mutateAsync(tokenId)
       toast.success('Token revoked')
     } catch (err) {
       handleMutationError(err, 'Failed to revoke token')
@@ -59,116 +68,115 @@ export function ExternalTokenSection() {
     }
   }
 
+  const rows = tokens.data?.tokens ?? []
+
   return (
-    <SettingsCard icon={Lock} iconClassName="text-muted-foreground" title="External Access Token">
+    <SettingsCard icon={Lock} iconClassName="text-muted-foreground" title="External access tokens">
       <p className="text-xs text-muted-foreground">
-        For querying your health data from Claude Code or Claude Desktop via MCP.
+        For querying your health data from Claude Code or Claude Desktop via MCP. Each token stays
+        valid until you revoke it.
       </p>
 
-      {plaintextToken ? (
+      {revealed && (
         <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Copy the secret for {revealed.name} now. It will not be shown again.
+          </p>
           <div className="flex gap-2">
             <input
-              type="text"
               readOnly
-              value={plaintextToken}
-              className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm font-mono"
+              value={revealed.token}
+              aria-label={`Secret for ${revealed.name}`}
+              className="w-full rounded-lg border border-border bg-muted px-3 py-2 font-mono text-sm"
             />
-            <button
+            <Button
               type="button"
-              onClick={() => handleCopy(plaintextToken)}
+              variant="outline"
+              size="icon"
+              className="min-h-11 min-w-11"
               aria-label="Copy token"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-border px-3 transition-all hover:bg-muted"
+              onClick={() => handleCopy(revealed.token)}
             >
-              <Copy className="size-4" />
-            </button>
+              <Copy />
+            </Button>
           </div>
-          <p className={`text-xs ${statusText.warn}`}>
-            Copy this now — it will not be shown again. Closing this page will hide it.
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              disabled={regenerate.isPending}
-              className={BUTTON_CLASS}
-            >
-              <RefreshCw className={`size-4 ${regenerate.isPending ? 'animate-spin' : ''}`} />
-              {regenerate.isPending ? 'Regenerating...' : 'Regenerate'}
-            </button>
-            <button
-              type="button"
-              onClick={handleRevoke}
-              disabled={revoke.isPending}
-              className={BUTTON_CLASS}
-            >
-              <Trash2 className="size-4" />
-              {revoke.isPending ? 'Revoking...' : 'Revoke'}
-            </button>
-          </div>
-        </div>
-      ) : userSettings.data?.has_external_api_token ? (
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            Token exists (hidden). Regenerate to view a new one, or Revoke to disable.
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              disabled={regenerate.isPending}
-              className={BUTTON_CLASS}
-            >
-              <RefreshCw className={`size-4 ${regenerate.isPending ? 'animate-spin' : ''}`} />
-              {regenerate.isPending ? 'Regenerating...' : 'Regenerate'}
-            </button>
-            <button
-              type="button"
-              onClick={handleRevoke}
-              disabled={revoke.isPending}
-              className={BUTTON_CLASS}
-            >
-              <Trash2 className="size-4" />
-              {revoke.isPending ? 'Revoking...' : 'Revoke'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">No token generated yet.</p>
-          <button
-            type="button"
-            onClick={handleRegenerate}
-            disabled={regenerate.isPending}
-            className={BUTTON_CLASS}
-          >
-            <RefreshCw className={`size-4 ${regenerate.isPending ? 'animate-spin' : ''}`} />
-            {regenerate.isPending ? 'Regenerating...' : 'Regenerate'}
-          </button>
         </div>
       )}
 
-      {/* Connection examples */}
+      {tokens.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading tokens…</p>
+      ) : tokens.isError ? (
+        <FetchError message="Couldn't load tokens." onRetry={() => tokens.refetch()} />
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No tokens yet.</p>
+      ) : (
+        <ul className="space-y-2" aria-label="External access tokens">
+          {rows.map((token) => {
+            const meta = tokenMeta(token)
+            return (
+              <li
+                key={token.id}
+                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{token.name}</p>
+                  {meta && <p className="text-xs text-muted-foreground">{meta}</p>}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="min-h-11 min-w-11"
+                  aria-label={`Revoke ${token.name}`}
+                  disabled={revoke.isPending && revoke.variables === token.id}
+                  onClick={() => handleRevoke(token.id)}
+                >
+                  <Trash2 />
+                </Button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      <div className="flex items-end gap-2">
+        <TextInput
+          label="Name"
+          placeholder="laptop"
+          value={name}
+          onChange={(event) => setName(event.currentTarget.value)}
+          className="min-w-0 flex-1"
+          maxLength={64}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11 shrink-0"
+          onClick={handleCreate}
+          disabled={create.isPending || name.trim().length === 0}
+        >
+          <Plus />
+          {create.isPending ? 'Creating...' : 'Create token'}
+        </Button>
+      </div>
+
       <div className="space-y-2 pt-1">
         <p className="text-xs font-medium text-muted-foreground">Connection examples</p>
-
         <details className="rounded-lg border border-border">
           <summary className="cursor-pointer px-3 py-2 text-xs font-medium select-none">
             Claude / Cursor (JSON config)
           </summary>
-          <div className="border-t border-border px-3 py-2 space-y-2">
+          <div className="space-y-2 border-t border-border px-3 py-2">
             <pre className="overflow-x-auto rounded bg-muted p-2 text-xs leading-relaxed">{MCP_CONFIG_SNIPPET}</pre>
             <p className="text-xs text-muted-foreground">
-              Paste into Cursor <code className="rounded bg-muted px-1">~/.cursor/mcp.json</code> or Claude Desktop config. Replace <code className="rounded bg-muted px-1">{'{TOKEN}'}</code> with the regenerated token above.
+              Paste into Cursor <code className="rounded bg-muted px-1">~/.cursor/mcp.json</code> or
+              Claude Desktop config. Replace <code className="rounded bg-muted px-1">{'{TOKEN}'}</code> with
+              the secret shown once above.
             </p>
-            <button
-              type="button"
-              onClick={() => handleCopy(MCP_CONFIG_SNIPPET)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Copy className="size-3" />
+            <Button type="button" variant="ghost" size="sm" onClick={() => handleCopy(MCP_CONFIG_SNIPPET)}>
+              <Copy />
               Copy
-            </button>
+            </Button>
           </div>
         </details>
       </div>
