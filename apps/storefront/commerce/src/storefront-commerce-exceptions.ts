@@ -115,14 +115,21 @@ type OpsHealth = {
   opsReachable: boolean;
 };
 
-let opsHealth: OpsHealth = {
-  checkoutAllowed: true,
-  lastProjectionAt: new Date().toISOString(),
-  opsReachable: true,
+const INITIAL_OPS_HEALTH: OpsHealth = {
+  checkoutAllowed: false,
+  lastProjectionAt: null,
+  opsReachable: false,
 };
+
+let opsHealth: OpsHealth = { ...INITIAL_OPS_HEALTH };
 
 export function recordOpsCheckoutHealth(next: Partial<OpsHealth>): OpsHealth {
   opsHealth = { ...opsHealth, ...next };
+  return opsHealth;
+}
+
+export function resetOpsCheckoutHealth(): OpsHealth {
+  opsHealth = { ...INITIAL_OPS_HEALTH };
   return opsHealth;
 }
 

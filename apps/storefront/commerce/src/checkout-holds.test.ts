@@ -1,5 +1,5 @@
 import { availabilityMaxAgeMs, checkoutChanges, holdTtlMs, opsCheckoutChanges } from "./checkout-holds";
-import { recordOpsCheckoutHealth } from "./storefront-commerce-exceptions";
+import { recordOpsCheckoutHealth, resetOpsCheckoutHealth } from "./storefront-commerce-exceptions";
 
 const now = Date.parse("2026-09-28T10:00:00.000Z");
 const cart = {
@@ -47,6 +47,8 @@ test("staleness and reservation limits use configured durations", () => {
 });
 
 test("operational outage and stale projection block new checkout", () => {
+  resetOpsCheckoutHealth();
+  expect(opsCheckoutChanges(now)[0]).toMatch(/paid orders are kept/);
   recordOpsCheckoutHealth({
     checkoutAllowed: false,
     opsReachable: false,

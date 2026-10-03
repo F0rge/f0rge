@@ -86,7 +86,7 @@ export default function StorefrontExceptionsPage() {
     try {
       const updated = await repairStorefrontException(repairTarget.id, {
         reason,
-        idempotency_key: `ui-${repairTarget.id}`,
+        idempotency_key: `ui-${crypto.randomUUID()}`,
       });
       setAudits(updated.audits);
       setNotice(`${updated.kind} ${updated.status}`);

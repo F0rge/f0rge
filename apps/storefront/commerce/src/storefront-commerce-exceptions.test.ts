@@ -1,10 +1,12 @@
 import {
   applyExceptionRepair,
   classifyHandoffQueue,
+  currentOpsCheckoutHealth,
   HANDOFF_AGED_THRESHOLD_MS,
   operationalCheckoutBlock,
   recordOpsCheckoutHealth,
   redactAlertContext,
+  resetOpsCheckoutHealth,
 } from "./storefront-commerce-exceptions";
 
 test("classifies aged versus terminal paid-handoff queue items using a five-minute threshold", () => {
@@ -88,4 +90,30 @@ test("records a blocking ops health snapshot for checkout", () => {
   const health = recordOpsCheckoutHealth({ checkoutAllowed: false, opsReachable: false });
   expect(health.checkoutAllowed).toBe(false);
   recordOpsCheckoutHealth({ checkoutAllowed: true, opsReachable: true, lastProjectionAt: "2026-10-03T12:00:00.000Z" });
+});
+
+test("starts checkout blocked until ops health is recorded as reachable", () => {
+  const health = resetOpsCheckoutHealth();
+  expect(health).toEqual({
+    checkoutAllowed: false,
+    lastProjectionAt: null,
+    opsReachable: false,
+  });
+  expect(currentOpsCheckoutHealth()).toEqual(health);
+  const now = Date.parse("2026-10-03T12:00:00.000Z");
+  expect(operationalCheckoutBlock({
+    ...health,
+    nowMs: now,
+    maxAgeMs: 300_000,
+  })).toMatch(/paid orders are kept/);
+  recordOpsCheckoutHealth({
+    checkoutAllowed: true,
+    opsReachable: true,
+    lastProjectionAt: "2026-10-03T12:00:00.000Z",
+  });
+  expect(operationalCheckoutBlock({
+    ...currentOpsCheckoutHealth(),
+    nowMs: now,
+    maxAgeMs: 300_000,
+  })).toBeNull();
 });
