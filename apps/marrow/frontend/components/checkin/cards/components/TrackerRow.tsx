@@ -1,6 +1,6 @@
 'use client'
 
-import { Stepper } from '@f0rge/ui'
+import { TrackerValueStepper } from './tracker-value-stepper'
 import { Archive, Circle } from 'lucide-react'
 import { ICON_COMPONENT_MAP } from './IconPicker'
 import type { Tracker } from '@/lib/api/types'
@@ -132,7 +132,7 @@ export function TrackerRow({
           label={tracker.name}
         />
       ) : (
-        <Stepper
+        <TrackerValueStepper
           size="compact"
           min={0}
           max={99}

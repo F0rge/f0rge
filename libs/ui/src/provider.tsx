@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { MantineProvider } from '@mantine/core'
 import '@mantine/core/styles.css'
 
+import { TooltipProvider } from './components/ui/tooltip'
 import { mantineCssVariablesResolver, mantineTheme } from './forms/theme'
 
 export interface UiProviderProps {
@@ -19,7 +20,7 @@ export function UiProvider({ children, colorScheme = 'light' }: UiProviderProps)
       theme={mantineTheme}
       cssVariablesResolver={mantineCssVariablesResolver}
     >
-      {children}
+      <TooltipProvider>{children}</TooltipProvider>
     </MantineProvider>
   )
 }
