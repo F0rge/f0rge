@@ -271,6 +271,23 @@ export function consumeCapacity(
   };
 }
 
+/** Release one durable paid-order commitment after an accepted cancellation. */
+export function releaseCapacityCommitment(
+  state: MadeToOrderCapacityState,
+  offerId: string,
+  commitmentId: string,
+): { state: MadeToOrderCapacityState; released: number } {
+  const allocation = state.allocations[offerId];
+  if (!allocation) return { state, released: 0 };
+  const quantity = allocation.committed[commitmentId];
+  if (quantity === undefined) return { state, released: 0 };
+  const { [commitmentId]: _removed, ...committed } = allocation.committed;
+  return {
+    state: { ...state, allocations: { ...state.allocations, [offerId]: { ...allocation, committed } } },
+    released: quantity,
+  };
+}
+
 export function releaseExpiredCapacityHolds(
   state: MadeToOrderCapacityState,
   nowMs: number,

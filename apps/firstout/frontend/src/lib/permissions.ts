@@ -13,6 +13,7 @@ export const PERMISSION_CATALOG = [
   "sales.laybys",
   "sales.quotes",
   "sales.orders",
+  "sales.refunds",
   "sales.deliveries",
   "sales.customers",
   "books.mutate",

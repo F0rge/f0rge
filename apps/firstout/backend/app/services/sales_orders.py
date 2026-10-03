@@ -7,6 +7,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.crud.customer import CustomerCRUD
 from app.crud.location import LocationCRUD
@@ -18,6 +19,8 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.models.journal import JournalDocumentType
 from app.models.location import LocationType
+from app.models.ops_commerce_order import OpsCommerceOrder
+from app.models.ops_commerce_refund import OpsCommerceRefund
 from app.models.quote import Quote, QuoteStatus
 from app.models.sales_order import (
     SalesOrder,
@@ -55,6 +58,8 @@ from app.services.stocktakes import StocktakeService
 from app.services.vat import CENT, ex_to_inc
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+
+OPEN_STOREFRONT_REFUND_STATES = ("requested", "dispatching", "unknown", "pending", "needs_review")
 
 
 class SalesOrdersService:
@@ -174,7 +179,7 @@ class SalesOrdersService:
         data: SalesOrderConfirm,
         user_id: uuid.UUID,
     ) -> SalesOrderResponse:
-        order = await self._get_or_404(sales_order_id)
+        order = await self._get_or_404(sales_order_id, for_update=True)
         if order.status != SalesOrderStatus.DRAFT:
             raise ConflictError("Sales order is not a draft")
         async with unit_of_work(self.db):
@@ -194,7 +199,7 @@ class SalesOrdersService:
         user_id: uuid.UUID,
     ) -> SalesOrderResponse:
         del user_id
-        order = await self._require_open(sales_order_id)
+        order = await self._require_open(sales_order_id, for_update=True)
         new_total = order.amount_paid + data.amount
         if new_total > order.total_inc_vat:
             raise ValidationError("Payment would exceed sales order total")
@@ -203,41 +208,27 @@ class SalesOrdersService:
         return self._to_response(await self._get_or_404(order.id))
 
     async def cancel(self, sales_order_id: uuid.UUID, user_id: uuid.UUID) -> SalesOrderResponse:
-        order = await self._get_or_404(sales_order_id)
+        order = await self._get_or_404(sales_order_id, for_update=True)
+        storefront_handoff = await self.db.scalar(
+            select(OpsCommerceOrder.id).where(
+                OpsCommerceOrder.sales_order_id == sales_order_id,
+                OpsCommerceOrder.channel == "storefront",
+            )
+        )
+        if storefront_handoff is not None:
+            raise ConflictError("Storefront orders require the verified refund workflow to cancel")
         if order.status not in (
             SalesOrderStatus.DRAFT,
             SalesOrderStatus.OPEN,
             SalesOrderStatus.AWAITING_STOCK,
         ):
             raise ConflictError("Sales order cannot be cancelled")
-        location_ids = {
-            line.hold_location_id for line in order.lines if line.hold_location_id is not None
-        }
-        for location_id in location_ids:
-            await self.stocktakes.assert_location_unlocked(location_id)
         async with unit_of_work(self.db):
-            for line in order.lines:
-                if line.held_qty <= 0 or line.hold_location_id is None:
-                    continue
-                loc_stock = await self.location_stock_crud.get_by_sku_and_location(
-                    line.sku_id,
-                    line.hold_location_id,
-                )
-                unit_cost = line.hold_unit_cost_zar
-                if unit_cost is None:
-                    if loc_stock is None or loc_stock.unit_cost_zar is None:
-                        raise ValidationError("unit cost required")
-                    unit_cost = loc_stock.unit_cost_zar
-                await self.stock_movements.apply_incoming_qty(
-                    sku_id=line.sku_id,
-                    location_id=line.hold_location_id,
-                    qty=line.held_qty,
-                    unit_cost_zar=unit_cost,
-                    user_id=user_id,
-                    source=UnitCostAuditSource.SALES_ORDER,
-                    note=f"Sales order {order.so_number} cancel restock",
-                )
-                line.held_qty = 0
+            await self._release_held_stock(
+                order,
+                user_id,
+                note=f"Sales order {order.so_number} cancel restock",
+            )
             if order.amount_paid > 0:
                 refund_doc_id = order.payments[-1].id if order.payments else order.id
                 await self.posting.post(
@@ -253,6 +244,58 @@ class SalesOrdersService:
             order.hold_stock = False
         return self._to_response(await self._get_or_404(order.id))
 
+    async def complete_storefront_cancel_after_refund(
+        self, order: SalesOrder, user_id: uuid.UUID
+    ) -> None:
+        """Release held stock after verified refund; caller owns order lock and transaction."""
+        if order.invoice_id is not None or order.status not in (
+            SalesOrderStatus.OPEN,
+            SalesOrderStatus.AWAITING_STOCK,
+        ):
+            raise ConflictError("Storefront sales order is no longer eligible for cancellation")
+        if order.amount_paid != 0:
+            raise ConflictError(
+                "Storefront order must have a zero deposit balance before cancellation"
+            )
+        await self._release_held_stock(
+            order,
+            user_id,
+            note=f"Storefront sales order {order.so_number} cancel restock",
+        )
+        order.status = SalesOrderStatus.CANCELLED
+        order.hold_stock = False
+
+    async def _release_held_stock(
+        self, order: SalesOrder, user_id: uuid.UUID, *, note: str
+    ) -> None:
+        location_ids = {
+            line.hold_location_id for line in order.lines if line.hold_location_id is not None
+        }
+        for location_id in location_ids:
+            await self.stocktakes.assert_location_unlocked(location_id)
+        for line in order.lines:
+            if line.held_qty <= 0 or line.hold_location_id is None:
+                continue
+            loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+                line.sku_id,
+                line.hold_location_id,
+            )
+            unit_cost = line.hold_unit_cost_zar
+            if unit_cost is None:
+                if loc_stock is None or loc_stock.unit_cost_zar is None:
+                    raise ValidationError("unit cost required")
+                unit_cost = loc_stock.unit_cost_zar
+            await self.stock_movements.apply_incoming_qty(
+                sku_id=line.sku_id,
+                location_id=line.hold_location_id,
+                qty=line.held_qty,
+                unit_cost_zar=unit_cost,
+                user_id=user_id,
+                source=UnitCostAuditSource.SALES_ORDER,
+                note=note,
+            )
+            line.held_qty = 0
+
     async def create_remainder_invoice(
         self,
         sales_order_id: uuid.UUID,
@@ -262,9 +305,21 @@ class SalesOrdersService:
         stock_source: UnitCostAuditSource = UnitCostAuditSource.SALES_ORDER,
         before_commit: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> SalesOrderResponse:
-        order = await self._require_open(sales_order_id)
+        order = await self._require_open(sales_order_id, for_update=True)
         if order.invoice_id is not None:
             raise ConflictError("Sales order already invoiced")
+        unresolved_storefront_refund_id = await self.db.scalar(
+            select(OpsCommerceRefund.id)
+            .join(OpsCommerceOrder, OpsCommerceOrder.id == OpsCommerceRefund.handoff_id)
+            .where(
+                OpsCommerceOrder.sales_order_id == order.id,
+                OpsCommerceOrder.channel == "storefront",
+                OpsCommerceRefund.status.in_(OPEN_STOREFRONT_REFUND_STATES),
+            )
+            .limit(1)
+        )
+        if unresolved_storefront_refund_id is not None:
+            raise ConflictError("Resolve the Storefront refund before invoicing the sales order")
         issue_date = datetime.date.today()
         await assert_date_postable(self.db, issue_date)
 
@@ -560,14 +615,18 @@ class SalesOrdersService:
             raise NotFoundError("Customer not found")
         return customer
 
-    async def _get_or_404(self, sales_order_id: uuid.UUID) -> SalesOrder:
-        order = await self.crud.get_by_id(sales_order_id)
+    async def _get_or_404(
+        self, sales_order_id: uuid.UUID, *, for_update: bool = False
+    ) -> SalesOrder:
+        order = await self.crud.get_by_id(sales_order_id, for_update=for_update)
         if order is None:
             raise NotFoundError("Sales order not found")
         return order
 
-    async def _require_open(self, sales_order_id: uuid.UUID) -> SalesOrder:
-        order = await self._get_or_404(sales_order_id)
+    async def _require_open(
+        self, sales_order_id: uuid.UUID, *, for_update: bool = False
+    ) -> SalesOrder:
+        order = await self._get_or_404(sales_order_id, for_update=for_update)
         if order.status not in (SalesOrderStatus.OPEN, SalesOrderStatus.AWAITING_STOCK):
             raise ConflictError("Sales order is not open")
         return order

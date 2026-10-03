@@ -3,10 +3,12 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import {
   applyStorefrontFulfillmentEvent,
   mergeFulfillmentEvent,
+  releaseCancellationCommitmentsFromMetadata,
   syncStorefrontFulfillmentEvents,
   type StorefrontFulfillmentEvent,
 } from "./storefront-fulfillment-events";
 import { retryStorefrontOrderNotifications } from "./storefront-notifications";
+import { availableCapacity, mergeCapacityState, reserveCapacity, consumeCapacity } from "./made-to-order-capacity";
 
 const orderPromise = {
   version: 1,
@@ -100,6 +102,96 @@ test("applies an authenticated fulfillment event and queues exactly one status n
     if (priorCompany === undefined) delete process.env.FIRSTOUT_OPS_COMPANY_ID;
     else process.env.FIRSTOUT_OPS_COMPANY_ID = priorCompany;
   }
+});
+
+test("cancellation release plan preserves unrelated paid and made-to-order commitments", () => {
+  const offer = {
+    id: "bcd2f5d4-237b-43fb-a152-bef10a6a3eaa",
+    capacity: 2,
+    min_lead_time_days: 28,
+    max_lead_time_days: 42,
+    expires_at: "2026-10-15T12:00:00.000Z",
+  };
+  const acceptedAt = new Date("2026-09-28T12:00:00.000Z");
+  const initialCapacity = reserveCapacity(
+    mergeCapacityState(null, offer, "2026-09-28T11:00:00.000000Z"),
+    offer.id,
+    "cart-test",
+    "cart-mto-line",
+    1,
+    "2026-09-28T12:20:00.000Z",
+    acceptedAt,
+  );
+  const committedCapacity = consumeCapacity(
+    initialCapacity,
+    offer.id,
+    "cart-test",
+    "cart-mto-line",
+    "storefront:order_test123:item-mto",
+    1,
+    Date.parse("2026-09-28T12:01:00.000Z"),
+  );
+  const unrelatedCapacityHold = reserveCapacity(
+    committedCapacity,
+    offer.id,
+    "other-cart",
+    "other-mto-line",
+    1,
+    "2026-09-28T12:20:00.000Z",
+    acceptedAt,
+  );
+  const withUnrelatedCapacity = consumeCapacity(
+    unrelatedCapacityHold,
+    offer.id,
+    "other-cart",
+    "other-mto-line",
+    "storefront:other-order:item-mto",
+    1,
+    Date.parse("2026-09-28T12:01:00.000Z"),
+  );
+  const variant: Record<string, any> = {
+    source_sku_id: "3a02d72f-25ef-44c8-b7e0-2b4680f5145e",
+    source_observed_at: "2026-09-28T12:00:00.000Z",
+    storefront_made_to_order_capacity: withUnrelatedCapacity,
+    pending_paid_commitments: [
+      { commitment_id: "storefront:order_test123:item-mto", source_sku_id: "3a02d72f-25ef-44c8-b7e0-2b4680f5145e", quantity: 1 },
+      { commitment_id: "storefront:order_test123:item-stock", source_sku_id: "3a02d72f-25ef-44c8-b7e0-2b4680f5145e", quantity: 2 },
+      { commitment_id: "storefront:other-order:item-stock", source_sku_id: "3a02d72f-25ef-44c8-b7e0-2b4680f5145e", quantity: 3 },
+    ],
+    storefront_cancellation_releases: [{ event_id: "older-event", commitment_id: "prior-order", pending_paid_quantity: 1 }],
+  };
+  const cancel = event({ status: "cancelled", event_id: "e480335a-7c2e-4d15-9a84-3754f7566ec6", revision: 2 });
+
+  expect(availableCapacity(withUnrelatedCapacity.allocations[offer.id], acceptedAt.getTime())).toBe(0);
+  const first = releaseCancellationCommitmentsFromMetadata(variant, [
+    { commitmentId: "storefront:order_test123:item-mto", offerId: offer.id },
+    { commitmentId: "storefront:order_test123:item-stock" },
+  ], cancel.event_id);
+  expect(first.changed).toBe(true);
+  expect(first.metadata.pending_paid_commitments).toEqual([
+    { commitment_id: "storefront:other-order:item-stock", source_sku_id: "3a02d72f-25ef-44c8-b7e0-2b4680f5145e", quantity: 3 },
+  ]);
+  expect(availableCapacity(
+    first.metadata.storefront_made_to_order_capacity.allocations[offer.id], acceptedAt.getTime(),
+  )).toBe(1);
+  expect(first.metadata.storefront_made_to_order_capacity.allocations[offer.id].committed).toEqual({
+    "storefront:other-order:item-mto": 1,
+  });
+  expect(first.metadata.storefront_cancellation_releases).toEqual(expect.arrayContaining([
+    expect.objectContaining({ event_id: "older-event", commitment_id: "prior-order" }),
+    expect.objectContaining({ event_id: cancel.event_id, commitment_id: "storefront:order_test123:item-mto", pending_paid_quantity: 1, made_to_order_quantity: 1 }),
+    expect.objectContaining({ event_id: cancel.event_id, commitment_id: "storefront:order_test123:item-stock", pending_paid_quantity: 2, made_to_order_quantity: 0 }),
+  ]));
+  expect(first.metadata.storefront_cancellation_releases).not.toContainEqual(
+    expect.objectContaining({ event_id: cancel.event_id, commitment_id: "storefront:other-order:item-stock" }),
+  );
+
+  const replay = releaseCancellationCommitmentsFromMetadata(first.metadata, [
+    { commitmentId: "storefront:order_test123:item-mto", offerId: offer.id },
+    { commitmentId: "storefront:order_test123:item-stock" },
+  ], cancel.event_id);
+  expect(replay.changed).toBe(false);
+  expect(replay.metadata).toBe(first.metadata);
 });
 
 test("acknowledges a status message only after its durable order write succeeds", async () => {

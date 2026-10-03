@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { CustomerAuthError, customerMedusaFetch, getCustomerContext } from "@/lib/customer-auth";
+import { paidOrderHistory } from "@/lib/order-history";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ function summary(value: unknown) {
     created_at: typeof order.created_at === "string" ? order.created_at : null,
     currency_code: typeof order.currency_code === "string" ? order.currency_code : "ZAR",
     status: typeof order.status === "string" ? order.status : "pending",
-    total: typeof order.total === "number" || typeof order.total === "string" ? order.total : null,
+    total: paidOrderHistory(order)?.total ?? (typeof order.total === "number" || typeof order.total === "string" ? order.total : null),
   };
 }
 
@@ -31,7 +32,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const customer = await getCustomerContext();
     if (!customer) return privateReply({ message: "Sign in to view your orders" }, 401);
     const [history, claimable] = await Promise.all([
-      customerMedusaFetch(customer, `/store/orders?limit=50&offset=${offset}&fields=id,display_id,created_at,currency_code,status,total`),
+      customerMedusaFetch(customer, `/store/orders?limit=50&offset=${offset}&fields=id,display_id,created_at,currency_code,status,total,metadata`),
       offset === 0 ? customerMedusaFetch(customer, "/store/orders/storefront-account/claimable") : Promise.resolve(null),
     ]);
     if (history.status < 200 || history.status >= 300 || (claimable && (claimable.status < 200 || claimable.status >= 300))) {

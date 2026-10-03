@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { customerMedusaFetch, getCustomerContext } from "@/lib/customer-auth";
 import { orderMoney as money } from "@/lib/order-money";
+import { orderRefundStatus, paidOrderHistory } from "@/lib/order-history";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Order details", robots: { index: false, follow: false, noarchive: true }, referrer: "no-referrer" };
@@ -15,8 +16,9 @@ type OrderView = {
   subtotal?: number | string;
   shipping_total?: number | string;
   tax_total?: number | string;
-  items?: { title?: string; quantity?: number; total?: number | string }[];
+  items?: { id?: string; title?: string; quantity?: number; total?: number | string }[];
   shipping_methods?: { name?: string; total?: number | string }[];
+  refund_status?: ReturnType<typeof orderRefundStatus>;
 };
 
 export default async function AccountOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,12 +31,18 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
     signedIn = Boolean(customer);
     if (customer) {
       const fields = [
-        "id", "display_id", "status", "currency_code", "total", "subtotal", "shipping_total", "tax_total",
-        "items.title", "items.quantity", "items.total", "shipping_methods.name", "shipping_methods.total",
+        "id", "display_id", "status", "currency_code", "total", "subtotal", "shipping_total", "tax_total", "metadata",
+        "items.id", "items.title", "items.quantity", "items.total", "shipping_methods.name", "shipping_methods.total",
       ].join(",");
       const result = await customerMedusaFetch(customer, `/store/orders/${encodeURIComponent(id)}?fields=${fields}`);
       if (result.status >= 200 && result.status < 300 && result.payload.order && typeof result.payload.order === "object") {
-        order = result.payload.order as OrderView;
+        const raw = result.payload.order as OrderView & Record<string, unknown>;
+        const history = paidOrderHistory(raw);
+        order = { ...raw, total: history?.total ?? raw.total, refund_status: orderRefundStatus(raw),
+          items: raw.items?.map((item) => ({ ...item,
+            total: (typeof item.id === "string" ? history?.items.get(item.id) : undefined) ?? item.total,
+          })),
+        };
       }
     }
   } catch { /* Keep account order errors private and generic. */ }
@@ -51,6 +59,13 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
     <p className="eyebrow">The Collector / customer account</p>
     <h1>Order {order.display_id ?? order.id}</h1>
     <p>Order status: {order.status || "pending"}</p>
+    {order.refund_status && <section className="account-panel" aria-label="Refund status">
+      <h2>Refunds</h2>
+      <p>Returned to your payment method: {money(order.refund_status.refunded_amount_minor / 100, currency)}</p>
+      {order.refund_status.items.map((refund, index) => <p key={index}>
+        {money(refund.amount_minor / 100, refund.currency_code)} — {refund.status === "succeeded" ? "Refunded" : refund.status === "pending" ? "Pending confirmation" : "Refund failed"}
+      </p>)}
+    </section>}
     <section className="account-panel" aria-label="Order details">
       <h2>Items</h2>
       {(order.items || []).map((item, index) => <div className="checkout-summary-line" key={`${item.title || "item"}-${index}`}>
@@ -60,7 +75,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
         <span>{method.name || "Shipping"}</span><strong>{money(method.total, currency)}</strong>
       </div>)}
       <dl><dt>Subtotal</dt><dd>{money(order.subtotal, currency)}</dd><dt>Shipping</dt><dd>{money(order.shipping_total, currency)}</dd>
-        <dt>VAT included</dt><dd>{money(order.tax_total, currency)}</dd><dt>Total</dt><dd>{money(order.total, currency)}</dd></dl>
+        <dt>VAT included</dt><dd>{money(order.tax_total, currency)}</dd><dt>Total paid</dt><dd>{money(order.total, currency)}</dd></dl>
     </section>
     <Link href="/account" className="text-link">Back to your orders ↗</Link>
   </div>;

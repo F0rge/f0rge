@@ -4,7 +4,7 @@ import datetime
 import uuid
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StorefrontAddress(BaseModel):
@@ -209,6 +209,7 @@ FulfillmentStatus = Literal[
     "delivered",
     "ready_for_collection",
     "collected",
+    "cancelled",
 ]
 
 
@@ -245,6 +246,15 @@ class StorefrontCollectionStatusUpdate(BaseModel):
     status: Literal["ready_for_collection", "collected"]
 
 
+class StorefrontHandoffLineSnapshot(BaseModel):
+    external_line_id: str
+    title: str
+    sku: str
+    quantity: int
+    unit_ex_minor_zar: int
+    total_minor_zar: int
+
+
 class StorefrontHandoffResponse(BaseModel):
     id: uuid.UUID
     external_order_id: str
@@ -260,9 +270,146 @@ class StorefrontHandoffResponse(BaseModel):
     fulfillment_status: FulfillmentStatus
     fulfillment_revision: int
     fulfillment_promise: Optional[StorefrontOrderPromise] = None
+    lines: list[StorefrontHandoffLineSnapshot] = Field(default_factory=list)
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
 
 class StorefrontHandoffListResponse(BaseModel):
     items: list[StorefrontHandoffResponse]
+
+
+class StorefrontRefundRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    idempotency_key: uuid.UUID
+    amount_minor: Optional[int] = Field(default=None, gt=0)
+    selected_lines: Optional[list["StorefrontRefundLineSelection"]] = Field(
+        default=None, min_length=1, max_length=100
+    )
+    cancel_order: bool = False
+
+    @model_validator(mode="after")
+    def require_one_refund_selection(self) -> StorefrontRefundRequest:
+        if (self.amount_minor is None) == (self.selected_lines is None):
+            raise ValueError("Provide exactly one of amount_minor or selected_lines")
+        if self.selected_lines is not None:
+            line_ids = [line.external_line_id for line in self.selected_lines]
+            if len(set(line_ids)) != len(line_ids):
+                raise ValueError("Selected Storefront line identities must be unique")
+        return self
+
+
+class StorefrontRefundLineSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    external_line_id: str = Field(min_length=1, max_length=255)
+    quantity: int = Field(gt=0, le=10000)
+
+
+class StorefrontRefundResponse(BaseModel):
+    id: uuid.UUID
+    handoff_id: Optional[uuid.UUID]
+    amount_minor: int
+    provider_amount_minor: Optional[int] = None
+    currency_code: str
+    allocation: dict[str, int]
+    selected_lines: dict[str, int] = Field(default_factory=dict)
+    cancel_order: bool
+    status: Literal[
+        "requested", "dispatching", "unknown", "pending", "succeeded", "failed", "needs_review"
+    ]
+    provider_outcome: Optional[Literal["succeeded", "pending", "failed", "unknown"]] = None
+    provider_refund_id: Optional[str] = None
+    provider_result_code: Optional[str] = None
+    failure_code: Optional[str] = None
+    signature_verified: bool
+    financial_journal_id: Optional[uuid.UUID] = None
+    created_at: datetime.datetime
+    completed_at: Optional[datetime.datetime] = None
+
+
+class StorefrontRefundLineBalance(BaseModel):
+    external_line_id: str
+    title: str
+    sku: str
+    original_quantity: int
+    remaining_quantity: int
+    original_amount_minor: int
+    remaining_amount_minor: int
+
+
+class StorefrontRefundStatusResponse(BaseModel):
+    captured_amount_minor: int
+    confirmed_refund_minor: int
+    reserved_refund_minor: int
+    available_refund_minor: int
+    invoice_id: Optional[uuid.UUID]
+    invoice_refund_eligible: bool = False
+    invoice_refund_available_minor: int = 0
+    sales_order_amount_paid: str
+    line_balances: list[StorefrontRefundLineBalance] = Field(default_factory=list)
+    items: list[StorefrontRefundResponse]
+
+
+class StorefrontRefundCommand(BaseModel):
+    request_id: uuid.UUID
+    handoff_id: uuid.UUID
+    external_order_id: str
+    original_transaction_id: str
+    amount_minor: int
+    currency_code: str
+    cancel_order: bool
+    allocation: dict[str, int]
+    status: Literal["requested", "dispatching", "unknown", "pending"]
+
+
+class StorefrontRefundCommandList(BaseModel):
+    items: list[StorefrontRefundCommand]
+
+
+class StorefrontRefundDispatchOutcome(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["dispatching", "unknown", "pending"]
+    failure_code: Optional[str] = Field(default=None, max_length=64)
+
+
+class StorefrontRefundProviderEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: Optional[uuid.UUID] = None
+    provider_refund_id: str = Field(min_length=1, max_length=128)
+    webhook_id: Optional[str] = Field(default=None, max_length=200)
+    event_source: Literal["webhook", "response"]
+    referenced_capture_id: str = Field(min_length=1, max_length=128)
+    event_timestamp: datetime.datetime
+    amount_minor: int = Field(gt=0)
+    currency_code: Literal["ZAR"]
+    result_code: str = Field(min_length=1, max_length=32)
+    outcome: Literal["succeeded", "pending", "failed", "unknown"]
+    canonical_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    signature_verified: bool
+
+    @field_validator("event_timestamp", mode="after")
+    @classmethod
+    def normalize_event_timestamp(cls, value: datetime.datetime) -> datetime.datetime:
+        if value.tzinfo is None:
+            return value
+        offset = value.utcoffset()
+        if offset is None:
+            return value.replace(tzinfo=None)
+        return (value - offset).replace(tzinfo=None)
+
+
+class StorefrontRefundProviderEventResponse(BaseModel):
+    status: Literal["succeeded", "pending", "failed", "needs_review"]
+    provider_outcome: Literal["succeeded", "pending", "failed", "unknown"]
+    resolution_code: Optional[str] = None
+    request_id: Optional[uuid.UUID] = None
+    external_order_id: Optional[str] = None
+    handoff_id: Optional[uuid.UUID] = None
+    amount_minor: int
+    currency_code: str = "ZAR"
+    provider_refund_id: str
+    duplicate: bool

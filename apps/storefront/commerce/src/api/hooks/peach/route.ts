@@ -65,8 +65,12 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
   }
 
   const db = req.scope.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
-  const attempt = await findPeachAttemptByReference(db, event.merchant_reference);
-  if (!attempt) {
+  // Refund callbacks commonly contain only the refunded transaction and its
+  // referenced capture. They can be out-of-band, so do not require a checkout
+  // merchant reference or a local payment-attempt row for signed RF events.
+  const attempt = event.payment_type === "DB"
+    ? await findPeachAttemptByReference(db, event.merchant_reference) : undefined;
+  if (event.payment_type === "DB" && !attempt) {
     res.status(404).json({ message: "Peach payment attempt was not found" });
     return;
   }

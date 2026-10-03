@@ -4,6 +4,7 @@ import uuid
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.credit_note import CreditNoteCRUD
@@ -71,7 +72,7 @@ class StockReturnsService:
         return self._to_response(await self._get_or_404(return_id))
 
     async def create(self, data: StockReturnCreate, user_id: uuid.UUID) -> StockReturnResponse:
-        invoice = await self.invoice_crud.get_by_id(data.invoice_id)
+        invoice = await self.invoice_crud.get_by_id(data.invoice_id, for_update=True)
         if invoice is None:
             raise NotFoundError("Invoice not found")
 
@@ -110,26 +111,32 @@ class StockReturnsService:
         return self._to_response(await self._get_or_404(stock_return.id))
 
     async def complete(self, return_id: uuid.UUID, user_id: uuid.UUID) -> StockReturnResponse:
-        stock_return = await self._require_draft(return_id)
-        if not stock_return.lines:
-            raise ValidationError("Return has no lines")
-
-        await self._assert_invoice_not_credited(stock_return.invoice_id)
-
-        invoice = await self.invoice_crud.get_by_id(stock_return.invoice_id)
-        assert invoice is not None
-        invoice_lines_by_id = {line.id: line for line in invoice.lines}
-
-        if stock_return.disposition == StockReturnDisposition.RESTOCK:
-            await self.stocktakes.assert_location_unlocked(stock_return.location_id)
-            self._assert_restock_skus(stock_return.lines, invoice_lines_by_id)
-
-        subtotal, vat_amount, total_inc, sales_splits = self._compute_credit_amounts(
-            stock_return.lines,
-            invoice_lines_by_id,
+        invoice_id = await self.db.scalar(
+            select(StockReturn.invoice_id).where(StockReturn.id == return_id)
         )
-
+        if invoice_id is None:
+            raise NotFoundError("Return not found")
+        await self.invoice_crud.get_by_id(invoice_id, for_update=True)
         async with unit_of_work(self.db):
+            stock_return = await self.crud.get_by_id(return_id, for_update=True)
+            if stock_return is None:
+                raise NotFoundError("Return not found")
+            if stock_return.status != StockReturnStatus.DRAFT:
+                raise ConflictError("Return is not a draft")
+            if not stock_return.lines:
+                raise ValidationError("Return has no lines")
+
+            await self._assert_invoice_not_credited(stock_return.invoice_id)
+            invoice = await self.invoice_crud.get_by_id(stock_return.invoice_id, for_update=True)
+            assert invoice is not None
+            invoice_lines_by_id = {line.id: line for line in invoice.lines}
+            if stock_return.disposition == StockReturnDisposition.RESTOCK:
+                await self.stocktakes.assert_location_unlocked(stock_return.location_id)
+                self._assert_restock_skus(stock_return.lines, invoice_lines_by_id)
+            subtotal, vat_amount, total_inc, sales_splits = self._compute_credit_amounts(
+                stock_return.lines,
+                invoice_lines_by_id,
+            )
             credit_note = await self.credit_notes.create_for_return(
                 invoice=invoice,
                 reason=stock_return.reason.value,
@@ -186,8 +193,12 @@ class StockReturnsService:
         return self._to_response(await self._get_or_404(stock_return.id))
 
     async def cancel(self, return_id: uuid.UUID) -> StockReturnResponse:
-        stock_return = await self._require_draft(return_id)
         async with unit_of_work(self.db):
+            stock_return = await self.crud.get_by_id(return_id, for_update=True)
+            if stock_return is None:
+                raise NotFoundError("Return not found")
+            if stock_return.status != StockReturnStatus.DRAFT:
+                raise ConflictError("Return is not a draft")
             stock_return.status = StockReturnStatus.CANCELLED
         return self._to_response(await self._get_or_404(stock_return.id))
 

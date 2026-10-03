@@ -10,7 +10,7 @@ import type { Knex } from "knex";
 import { peachAccessToken, medusaAmountToMinor, minorToMajor, peachResultState } from "../../peach-checkout";
 import { peachPaymentConfig } from "../../peach-payment-config";
 import {
-  createPeachAttempt, findPeachAttemptByReference, findPeachAttemptBySession, updatePeachAttempt,
+  claimPeachRefundForMedusa, createPeachAttempt, findPeachAttemptByReference, findPeachAttemptBySession, updatePeachAttempt,
   type PeachAttempt,
 } from "../../peach-payment-store";
 
@@ -146,7 +146,34 @@ export class StorefrontPeachPaymentProvider extends AbstractPaymentProvider {
   async retrievePayment(input: RetrievePaymentInput): Promise<RetrievePaymentOutput> { return { data: input.data || {} }; }
   async updatePayment(input: UpdatePaymentInput): Promise<UpdatePaymentOutput> { return { data: input.data || {}, status: PaymentSessionStatus.PENDING }; }
   async deletePayment(_input: DeletePaymentInput): Promise<DeletePaymentOutput> { return { data: NO_DATA }; }
-  async refundPayment(_input: RefundPaymentInput): Promise<RefundPaymentOutput> { throw new Error("Peach refunds are not enabled for this storefront"); }
+  async refundPayment(input: RefundPaymentInput): Promise<RefundPaymentOutput> {
+    // Medusa's native Admin refund path is denied unless our reconciliation
+		// workflow created this exact Refund row with a one-use capability.
+    // A verified external Peach refund is already complete; this callback only
+    // records Medusa's native financial artifact and never sends another POST.
+    const context = input.context as { idempotency_key?: unknown } | undefined;
+    const refundId = typeof context?.idempotency_key === "string" ? context.idempotency_key : "";
+    const row = refundId ? await this.db()("refund").where({ id: refundId }).whereNull("deleted_at").first() as
+      { id: string; payment_id: string; amount: unknown; metadata?: unknown } | undefined : undefined;
+    const metadata = row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>).storefront_peach_refund : undefined;
+    const proof = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? metadata as Record<string, unknown> : {};
+    const amountMinor = medusaAmountToMinor(input.amount);
+    const dispatchId = typeof proof.request_id === "string" ? proof.request_id : "";
+    const providerRefundId = typeof proof.provider_refund_id === "string" ? proof.provider_refund_id : "";
+    const capability = typeof proof.authorization_key === "string" ? proof.authorization_key : "";
+    if (!row || !row.payment_id || amountMinor === null || !dispatchId || !providerRefundId || !capability ||
+      amountMinor !== medusaAmountToMinor(row.amount)) {
+      throw new Error("Peach refunds require a matching verified Storefront reconciliation intent");
+    }
+    const claimed = await claimPeachRefundForMedusa(this.db(), {
+      requestId: dispatchId, providerRefundId, capability, paymentId: row.payment_id,
+      refundId: row.id, amountMinor,
+    });
+    if (!claimed) throw new Error("Peach refund intent is not verified for this payment or was already consumed");
+    return { data: input.data || {} };
+  }
   async cancelPayment(input: CancelPaymentInput): Promise<CancelPaymentOutput> {
     return { data: { ...(input.data || {}), provider: "peach" } };
   }

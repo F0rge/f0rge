@@ -11,6 +11,7 @@ import {
   type PeachInboxEvent,
 } from "./peach-payment-store";
 import { prepareStorefrontOrderHandoff } from "./storefront-order-handoff";
+import { processClaimedPeachRefundWebhook } from "./storefront-peach-refunds";
 
 const providerRegistrationId = "peach_sandbox";
 type Container = MedusaContainer;
@@ -77,6 +78,15 @@ export async function processNextPeachWebhook(container: Container): Promise<boo
 }
 
 export async function processClaimedPeachWebhook(container: Container, db: Knex, event: PeachInboxEvent): Promise<"processed" | "ignored" | "paid_exception"> {
+  if (event.payment_type === "RF") {
+    const outcome = await processClaimedPeachRefundWebhook(container, db, event);
+    if (outcome === "needs_review") {
+      await completePeachWebhook(db, event.id, event.lease_token, "needs_review");
+      return "ignored";
+    }
+    await completePeachWebhook(db, event.id, event.lease_token, "processed");
+    return "processed";
+  }
   if (event.payment_type !== "DB") {
     await completePeachWebhook(db, event.id, event.lease_token, "ignored");
     return "ignored";
@@ -154,6 +164,7 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
         catch { await savePaidException(container, query, cartId, orderId, session.id, eventId); }
         await updatePeachAttempt(db, attempt.id, {
           status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
+          ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}), captured_order_id: orderId,
         });
       }
       await completePeachWebhook(db, event.id, event.lease_token, "processed");
@@ -177,6 +188,7 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
       await setSessionStatus(PaymentSessionStatus.CAPTURED);
       await updatePeachAttempt(db, attempt.id, {
         status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
+        ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}),
       });
       await completePeachWebhook(db, event.id, event.lease_token, "paid_exception");
       return "paid_exception";
@@ -187,6 +199,7 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
     // workflow, which now requires this durable confirmation.
     await updatePeachAttempt(db, attempt.id, {
       status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
+      ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}),
     });
     await setSessionStatus(PaymentSessionStatus.PENDING);
     await releaseCheckoutHoldWithinLock(container, cartId);
@@ -210,6 +223,7 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
       catch { await savePaidException(container, query, cartId, committedOrderId, session.id, eventId); }
       await updatePeachAttempt(db, attempt.id, {
         status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
+        ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}), captured_order_id: committedOrderId,
       });
       await completePeachWebhook(db, event.id, event.lease_token, "processed");
       return "processed";
@@ -219,6 +233,7 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
     await setSessionStatus(PaymentSessionStatus.CAPTURED);
     await updatePeachAttempt(db, attempt.id, {
       status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
+      ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}),
     });
     await completePeachWebhook(db, event.id, event.lease_token, "paid_exception");
     return "paid_exception";

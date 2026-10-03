@@ -28,12 +28,13 @@ class SalesOrderCRUD(BaseCRUD):
             selectinload(SalesOrder.payments),
         )
 
-    async def get_by_id(self, sales_order_id: uuid.UUID) -> Optional[SalesOrder]:
-        return (
-            await self.db.execute(
-                select(SalesOrder).options(*self._options()).where(SalesOrder.id == sales_order_id)
-            )
-        ).scalar_one_or_none()
+    async def get_by_id(
+        self, sales_order_id: uuid.UUID, *, for_update: bool = False
+    ) -> Optional[SalesOrder]:
+        stmt = select(SalesOrder).options(*self._options()).where(SalesOrder.id == sales_order_id)
+        if for_update:
+            stmt = stmt.execution_options(populate_existing=True).with_for_update()
+        return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_line_by_id(self, line_id: uuid.UUID) -> Optional[SalesOrderLine]:
         return (

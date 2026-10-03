@@ -52,6 +52,7 @@ class OpsCommerceOrder(UUIDPkMixin, TimestampMixin, Base):
     )
     last_attempt_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     imported_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    cancelled_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     sales_order_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("sales_orders.id", ondelete="RESTRICT"), nullable=False
     )
@@ -73,7 +74,7 @@ class OpsCommerceOrder(UUIDPkMixin, TimestampMixin, Base):
         CheckConstraint("attempt_count >= 0", name="ck_ops_commerce_orders_attempt_count"),
         CheckConstraint(
             "fulfillment_status IN ('confirmed', 'ready_for_delivery', 'out_for_delivery', "
-            "'delivered', 'ready_for_collection', 'collected')",
+            "'delivered', 'ready_for_collection', 'collected', 'cancelled')",
             name="ck_ops_commerce_orders_fulfillment_status",
         ),
         CheckConstraint(

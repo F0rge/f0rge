@@ -55,7 +55,7 @@ class OpsCommerceFulfillmentEvent(UUIDPkMixin, TimestampMixin, Base):
         ),
         CheckConstraint(
             "status IN ('ready_for_delivery', 'out_for_delivery', 'delivered', "
-            "'ready_for_collection', 'collected')",
+            "'ready_for_collection', 'collected', 'cancelled')",
             name="ck_ops_commerce_fulfillment_events_status",
         ),
         Index(

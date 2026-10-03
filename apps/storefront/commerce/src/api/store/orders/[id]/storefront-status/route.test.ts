@@ -16,14 +16,26 @@ function fixture(suppliedToken?: string) {
     display_id: 753,
     email: "private@example.test",
     currency_code: "zar",
-    subtotal: 100,
+    subtotal: 0,
     shipping_total: 0,
-    tax_total: 15,
-    total: 115,
-    items: [],
+    tax_total: 0,
+    total: 0,
+    items: [{ id: "item-original", title: "Original item", quantity: 1, unit_price: 0, total: 0, metadata: {} }],
     shipping_methods: [],
     shipping_address: null,
-    metadata: { storefront_confirmation_sha256: digest },
+    metadata: {
+      storefront_confirmation_sha256: digest,
+      storefront_handoff_outbox: {
+        status: "imported",
+        payload: {
+          external_order_id: orderId,
+          currency_code: "ZAR",
+          totals: { subtotal_ex_minor_zar: 10000, tax_minor_zar: 1500, delivery_ex_minor_zar: 0, delivery_total_minor_zar: 0, total_minor_zar: 11500 },
+          payment: { amount_minor_zar: 11500, currency_code: "ZAR", captured_at: "2026-10-01T12:00:00.000Z" },
+          lines: [{ external_line_id: "item-original", total_minor_zar: 11500 }],
+        },
+      },
+    },
   }] })) };
   const req = {
     params: { id: orderId },
@@ -66,7 +78,17 @@ test("returns the status snapshot only for the matching signed order capability"
     expect(response.headers["Referrer-Policy"]).toBe("no-referrer");
     expect(response.body).toMatchObject({
       status: "captured",
-      order: { reference: 753, email: "private@example.test", fulfillment_status: "confirmed" },
+      order: {
+        reference: 753,
+        email: "private@example.test",
+        fulfillment_status: "confirmed",
+        total: 115,
+        subtotal: 100,
+        tax_total: 15,
+        captured_amount_minor: 11500,
+        captured_at: "2026-10-01T12:00:00.000Z",
+        items: [{ total: 115, unit_price: 115 }],
+      },
     });
   } finally {
     if (priorSecret === undefined) delete process.env.STOREFRONT_BFF_SECRET;

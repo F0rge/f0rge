@@ -5,7 +5,15 @@ from __future__ import annotations
 from httpx import AsyncClient
 
 from app.config import settings
-from app.permissions import PERMISSION_CATALOG, ROLE_PRESETS, SLUG_OWNER, TILL_SELL
+from app.permissions import (
+    PERMISSION_CATALOG,
+    ROLE_PRESETS,
+    SALES_ORDERS,
+    SALES_REFUNDS,
+    SLUG_BOOKS,
+    SLUG_OWNER,
+    TILL_SELL,
+)
 from tests.test_purchase_orders import (
     _create_till,
     _location_id_by_name,
@@ -164,6 +172,8 @@ async def test_owner_has_every_key_and_cannot_strip_or_demote(
     assert me.status_code == 200
     assert set(me.json()["permissions"]) == set(PERMISSION_CATALOG)
     assert set(ROLE_PRESETS[SLUG_OWNER]) == set(PERMISSION_CATALOG)
+    assert SALES_REFUNDS in ROLE_PRESETS[SLUG_BOOKS]
+    assert SALES_ORDERS not in ROLE_PRESETS[SLUG_BOOKS]
 
     roles = await owner_client.get("/api/v1/roles")
     assert roles.status_code == 200

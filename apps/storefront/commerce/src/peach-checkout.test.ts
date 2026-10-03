@@ -23,6 +23,7 @@ describe("Peach Hosted Checkout V2 boundary", () => {
     expect(majorToMinor("1e3")).toBeNull();
     expect(medusaAmountToMinor({ raw: { value: "25.70", precision: 2 }, numeric: 25.7 })).toBe(2570);
     expect(medusaAmountToMinor({ raw: { value: "25.701", precision: 3 }, numeric: 25.701 })).toBeNull();
+    expect(medusaAmountToMinor({ value: "400.00", precision: 20 })).toBe(40000);
   });
 
   test("verifies the exact configured URL and raw form body before parsing", () => {
@@ -52,7 +53,8 @@ describe("Peach Hosted Checkout V2 boundary", () => {
     });
     expect(Object.keys(status || {}).sort()).toEqual([
       "amount_minor", "canonical_sha256", "checkout_id", "currency_code", "event_timestamp",
-      "merchant_reference", "payment_type", "raw_sha256", "result_code", "transaction_id", "webhook_id",
+      "merchant_reference", "payment_type", "raw_sha256", "referenced_transaction_id", "refund_request_id",
+      "result_code", "transaction_id", "webhook_id",
     ]);
     expect(parsePeachStatusResponse({
       amount: "10.00", checkoutId: "checkout-1", currency: "ZAR", merchantTransactionId: "Abc12345",
@@ -75,7 +77,8 @@ describe("Peach Hosted Checkout V2 boundary", () => {
     expect(event?.raw_sha256).toMatch(/^[a-f\d]{64}$/);
     expect(Object.keys(event || {}).sort()).toEqual([
       "amount_minor", "canonical_sha256", "checkout_id", "currency_code", "event_timestamp",
-      "merchant_reference", "payment_type", "raw_sha256", "result_code", "transaction_id", "webhook_id",
+      "merchant_reference", "payment_type", "raw_sha256", "referenced_transaction_id", "refund_request_id",
+      "result_code", "transaction_id", "webhook_id",
     ]);
     expect(event).not.toHaveProperty("card");
     expect(event).not.toHaveProperty("customer");
@@ -83,6 +86,20 @@ describe("Peach Hosted Checkout V2 boundary", () => {
     const conflicting = Buffer.from(`${raw.toString("utf8")}&result_code=800.100.153`);
     expect(parsePeachWebhook(conflicting, "webhook-2")).toBeNull();
     expect(parsePeachWebhook(raw, "")).toBeNull();
+  });
+
+  test("accepts signed RF callback facts without Checkout V2-only merchant fields", () => {
+    const refundId = "8ac7a49f8af08e94018af09246760e30";
+    const captureId = "8ac7a4a284c684140184c7a8f19a5530";
+    const raw = Buffer.from([
+      "amount=5.00", `id=${refundId}`, `referencedId=${captureId}`, "currency=ZAR", "paymentType=RF",
+      "result.code=000.100.110", "timestamp=2026-10-01T12%3A30%3A00Z",
+    ].join("&"));
+    const event = parsePeachWebhook(raw, "refund-webhook-1");
+    expect(event).toMatchObject({
+      payment_type: "RF", transaction_id: refundId, referenced_transaction_id: captureId,
+      checkout_id: "", merchant_reference: "", amount_minor: 500,
+    });
   });
 
   test("does not promote RF or uncertain, cancelled, and unrecognized results to paid", () => {

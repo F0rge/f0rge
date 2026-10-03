@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys, MedusaError } from "@medusajs/framework/utils";
+import { storefrontOrderHistory } from "../../../../../storefront-order-history";
 
 function validAccess(orderId: string, supplied: unknown, digest: unknown): boolean {
   const secret = process.env.STOREFRONT_BFF_SECRET;
@@ -35,6 +36,13 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
       throw new MedusaError(MedusaError.Types.NOT_FOUND, "Order status not found");
     }
     const checkout = order.metadata?.storefront_checkout || {};
+    const history = storefrontOrderHistory(order);
+    const refundRows = Array.isArray(order.metadata?.storefront_refunds) ? order.metadata.storefront_refunds : [];
+    const refunds = refundRows.filter((item: unknown) => item && typeof item === "object" &&
+      ["pending", "succeeded", "failed"].includes((item as Record<string, unknown>).status as string))
+      .map((item: Record<string, unknown>) => ({
+        amount_minor: Number(item.amount_minor), currency_code: item.currency_code, status: item.status,
+      }));
     const fulfillmentStatus = order.metadata?.storefront_fulfillment_status || {
       fulfillment_type: checkout.fulfillment_type || "delivery",
       status: "confirmed",
@@ -46,19 +54,27 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
         reference: order.display_id,
         email: order.email,
         currency_code: order.currency_code,
-        subtotal: order.subtotal,
-        shipping_total: order.shipping_total,
-        tax_total: order.tax_total,
-        total: order.total,
+        subtotal: history.subtotal,
+        shipping_total: history.shipping_total,
+        tax_total: history.tax_total,
+        total: history.total,
+        captured_amount_minor: history.captured_amount_minor,
+        captured_at: history.captured_at,
         fulfillment_type: fulfillmentStatus.fulfillment_type || checkout.fulfillment_type,
         fulfillment_status: fulfillmentStatus.status,
         fulfillment_revision: fulfillmentStatus.revision,
         fulfillment_promise: order.metadata?.storefront_fulfillment_promise || null,
+        refund_status: refunds.length ? {
+          refunded_amount_minor: refunds.filter((item: { status: string }) => item.status === "succeeded")
+            .reduce((sum: number, item: { amount_minor: number }) => sum + item.amount_minor, 0),
+          items: refunds,
+        } : null,
         items: (order.items || []).map((item: Record<string, any>) => ({
           title: item.title,
           quantity: item.quantity,
-          unit_price: item.unit_price,
-          total: item.total,
+          unit_price: history.itemTotals.has(String(item.id)) && Number(item.quantity) > 0
+            ? Number((history.itemTotals.get(String(item.id))! / Number(item.quantity)).toFixed(2)) : item.unit_price,
+          total: history.itemTotals.get(String(item.id)) ?? item.total,
           fulfillment_promise: item.metadata?.fulfillment_promise || null,
         })),
         shipping: (order.shipping_methods || []).map((method: Record<string, unknown>) => ({

@@ -12,6 +12,8 @@ const PeachWebhookInbox = model.define("storefront_peach_webhook_inbox", {
   payment_type: model.text(),
   result_code: model.text(),
   transaction_id: model.text().nullable(),
+  referenced_transaction_id: model.text().nullable(),
+  refund_request_id: model.text().nullable(),
   event_timestamp: model.text(),
   result_state: model.text(),
   raw_sha256: model.text(),

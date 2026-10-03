@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
+import { updateProductVariantsWorkflow } from "@medusajs/medusa/core-flows";
+import { withCheckoutInventoryLock } from "./checkout-holds";
+import { CAPACITY_STATE_METADATA_KEY, offerPresentation, readCapacityState, releaseCapacityCommitment } from "./made-to-order-capacity";
 import { withStorefrontOrderHandoffLock } from "./storefront-order-handoff";
+import { pendingCommitments } from "./ops-contract";
 import { enqueueFulfillmentStatusNotification } from "./storefront-notifications";
 
 type JsonRecord = Record<string, any>;
@@ -10,7 +14,8 @@ export type FulfillmentStatus =
   | "out_for_delivery"
   | "delivered"
   | "ready_for_collection"
-  | "collected";
+  | "collected"
+  | "cancelled";
 export type FulfillmentType = "delivery" | "collection";
 export type StorefrontFulfillmentEvent = {
   event_id: string;
@@ -68,7 +73,9 @@ function validateEvent(event: StorefrontFulfillmentEvent): void {
   if (!event.external_order_id || !Number.isSafeInteger(event.revision) || event.revision <= 0) {
     throw new Error("invalid_fulfillment_event");
   }
-  if (rank(event.fulfillment_type, event.status) < 1) throw new Error("invalid_fulfillment_status");
+  if (event.status !== "cancelled" && rank(event.fulfillment_type, event.status) < 1) {
+    throw new Error("invalid_fulfillment_status");
+  }
 }
 
 export function mergeFulfillmentEvent(
@@ -101,7 +108,10 @@ export function mergeFulfillmentEvent(
   }
 
   const isNewer = event.revision > currentState.revision;
-  const movesForward = rank(event.fulfillment_type, event.status) > rank(event.fulfillment_type, currentState.status);
+  const fulfilled = currentState.status === "delivered" || currentState.status === "collected";
+  const movesForward = currentState.status !== "cancelled" && (event.status === "cancelled"
+    ? !fulfilled
+    : rank(event.fulfillment_type, event.status) > rank(event.fulfillment_type, currentState.status));
   const changed = isNewer && movesForward;
   const state = changed ? {
     fulfillment_type: event.fulfillment_type,
@@ -118,10 +128,110 @@ async function getOrder(container: MedusaContainer, orderId: string): Promise<Js
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const { data } = await query.graph({
     entity: "order",
-    fields: ["id", "display_id", "email", "metadata"],
+    fields: ["id", "display_id", "email", "status", "metadata", "items.id", "items.quantity", "items.metadata", "items.variant.id", "items.variant.metadata"],
     filters: { id: orderId },
   });
   return data[0] as JsonRecord | undefined;
+}
+
+function appendCancellationAudit(
+  value: unknown,
+  entry: { event_id: string; commitment_id: string; pending_paid_quantity: number; made_to_order_quantity: number },
+): JsonRecord[] {
+  const audit = Array.isArray(value) ? value.filter((item): item is JsonRecord => !!item && typeof item === "object") : [];
+  if (audit.some((item) => item.event_id === entry.event_id && item.commitment_id === entry.commitment_id)) return audit;
+  return [...audit, { ...entry, recorded_at: new Date().toISOString() }].slice(-256);
+}
+
+type CancellationCommitment = { commitmentId: string; offerId?: string };
+
+/** Purely plan the removal of this order's pending paid and MTO commitments. */
+export function releaseCancellationCommitmentsFromMetadata(
+  metadata: JsonRecord,
+  commitments: CancellationCommitment[],
+  eventId: string,
+): { metadata: JsonRecord; changed: boolean } {
+  const ids = new Set(commitments.map(({ commitmentId }) => commitmentId));
+  const pending = pendingCommitments(metadata);
+  const remainingPending = pending.filter((entry) => !ids.has(entry.commitment_id));
+  const pendingById = new Map(pending.map((entry) => [entry.commitment_id, entry.quantity]));
+  let capacityState = readCapacityState(metadata);
+  let capacityChanged = false;
+  const releasedById = new Map<string, number>();
+  for (const { commitmentId, offerId } of commitments) {
+    if (!offerId) continue;
+    const released = releaseCapacityCommitment(capacityState, offerId, commitmentId);
+    capacityState = released.state;
+    capacityChanged ||= released.released > 0;
+    releasedById.set(commitmentId, released.released);
+  }
+
+  const pendingChanged = remainingPending.length !== pending.length;
+  if (!pendingChanged && !capacityChanged) return { metadata, changed: false };
+
+  const audit = Array.isArray(metadata.storefront_cancellation_releases)
+    ? metadata.storefront_cancellation_releases as JsonRecord[] : [];
+  const nextAudit = commitments.reduce((current, { commitmentId }) => {
+    const pendingQuantity = pendingById.get(commitmentId) || 0;
+    const madeToOrderQuantity = releasedById.get(commitmentId) || 0;
+    if (!pendingQuantity && !madeToOrderQuantity) return current;
+    return appendCancellationAudit(current, {
+      event_id: eventId,
+      commitment_id: commitmentId,
+      pending_paid_quantity: pendingQuantity,
+      made_to_order_quantity: madeToOrderQuantity,
+    });
+  }, audit);
+  const nextMetadata: JsonRecord = {
+    ...metadata,
+    pending_paid_commitments: remainingPending,
+    storefront_cancellation_releases: nextAudit,
+  };
+  if (capacityChanged) {
+    const presentation = offerPresentation(capacityState, Date.now());
+    nextMetadata[CAPACITY_STATE_METADATA_KEY] = capacityState;
+    nextMetadata.storefront_made_to_order_offer = presentation ? {
+      ...presentation,
+      observed_at: typeof metadata.source_observed_at === "string" ? metadata.source_observed_at : null,
+    } : null;
+  }
+  return { metadata: nextMetadata, changed: true };
+}
+
+/**
+ * Release only commitments created by this paid Storefront order. The caller
+ * holds the shared inventory lock and order-handoff lock, in that order.
+ */
+async function releaseCancelledOrderCommitments(
+  container: MedusaContainer,
+  order: JsonRecord,
+  event: StorefrontFulfillmentEvent,
+): Promise<void> {
+  const lines = Array.isArray(order.items) ? order.items as JsonRecord[] : [];
+  if (!lines.length) return;
+  const byVariant = new Map<string, { metadata: JsonRecord; entries: { commitmentId: string; offerId?: string }[] }>();
+  for (const line of lines) {
+    const variant = record(line.variant);
+    if (typeof variant.id !== "string") throw new Error("storefront_cancel_variant_missing");
+    const metadata = record(variant.metadata);
+    const fulfillment = record(line.metadata).fulfillment_promise;
+    const promise = record(fulfillment);
+    const commitmentId = `storefront:${order.id}:${line.id}`;
+    const row = byVariant.get(variant.id) || { metadata, entries: [] };
+    row.entries.push({
+      commitmentId,
+      offerId: promise.kind === "made_to_order" && typeof promise.offer_id === "string" ? promise.offer_id : undefined,
+    });
+    byVariant.set(variant.id, row);
+  }
+
+  for (const [variantId, grouped] of byVariant) {
+    const release = releaseCancellationCommitmentsFromMetadata(grouped.metadata, grouped.entries, event.event_id);
+    if (!release.changed) continue;
+    await updateProductVariantsWorkflow(container).run({
+      input: { product_variants: [{ id: variantId, metadata: release.metadata }] },
+    });
+  }
 }
 
 export async function applyStorefrontFulfillmentEvent(
@@ -132,7 +242,7 @@ export async function applyStorefrontFulfillmentEvent(
   const expectedCompany = process.env.FIRSTOUT_OPS_COMPANY_ID;
   if (!expectedCompany || event.company_id !== expectedCompany) throw new Error("fulfillment_company_mismatch");
 
-  return withStorefrontOrderHandoffLock(container, event.external_order_id, async () => {
+  const apply = () => withStorefrontOrderHandoffLock(container, event.external_order_id, async () => {
     const order = await getOrder(container, event.external_order_id);
     if (!order) throw new Error("storefront_order_not_found");
     const metadata = record(order.metadata);
@@ -149,6 +259,13 @@ export async function applyStorefrontFulfillmentEvent(
       : [];
     const merged = mergeFulfillmentEvent(current, processed, event, expectedPromise);
     if (merged.duplicate) return "duplicate";
+    if (merged.changed && event.status === "cancelled") {
+      const orderModule = container.resolve(Modules.ORDER) as unknown as {
+        cancel(orderId: string): Promise<unknown>;
+      };
+      if (order.status !== "canceled") await orderModule.cancel(order.id);
+      await releaseCancelledOrderCommitments(container, order, event);
+    }
 
     const nextMetadata: JsonRecord = {
       ...metadata,
@@ -167,6 +284,9 @@ export async function applyStorefrontFulfillmentEvent(
     order.metadata = nextMetadata;
     return merged.changed ? "applied" : "ignored";
   });
+  return event.status === "cancelled"
+    ? withCheckoutInventoryLock(container, apply)
+    : apply();
 }
 
 function requiredConfig(name: string): string {

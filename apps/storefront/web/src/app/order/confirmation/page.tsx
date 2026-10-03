@@ -16,6 +16,10 @@ type Confirmation = {
     fulfillment_type?: string;
     fulfillment_status?: string;
     fulfillment_revision?: number;
+    refund_status?: {
+      refunded_amount_minor: number;
+      items: { amount_minor: number; currency_code: string; status: "pending" | "succeeded" | "failed" }[];
+    } | null;
     fulfillment_promise?: {
       kind?: string;
       accepted_at?: string;
@@ -41,6 +45,12 @@ const fulfillmentLabels: Record<string, string> = {
   delivered: "Delivered",
   ready_for_collection: "Ready for collection",
   collected: "Collected",
+  cancelled: "Order cancelled",
+};
+const refundLabels: Record<string, string> = {
+  pending: "Refund is processing",
+  succeeded: "Refund sent",
+  failed: "Refund could not be completed",
 };
 
 export default function OrderConfirmationPage() {
@@ -106,6 +116,12 @@ export default function OrderConfirmationPage() {
         </div>)}
         {result.order.shipping.map((method, index) => <div className="checkout-summary-line" key={method.name + "-" + index}><span>{method.name}</span><strong>{money(method.total, result.order!.currency_code.toUpperCase())}</strong></div>)}
         <dl><dt>Subtotal</dt><dd>{money(result.order.subtotal, result.order.currency_code.toUpperCase())}</dd><dt>VAT included</dt><dd>{money(result.order.tax_total, result.order.currency_code.toUpperCase())}</dd><dt>Total paid</dt><dd>{money(result.order.total, result.order.currency_code.toUpperCase())}</dd></dl>
+        {result.order.refund_status?.items.length ? <section aria-live="polite">
+          <h2>Refund status</h2>
+          {result.order.refund_status.items.map((refund, index) => <p key={`${refund.status}-${refund.amount_minor}-${index}`} role="status">
+            {refundLabels[refund.status] || "Refund status updated"} · {money(refund.amount_minor / 100, refund.currency_code)}
+          </p>)}
+        </section> : null}
         {result.order.address && <section><h3>{result.order.fulfillment_type === "collection" ? "Collection" : "Delivery"}</h3><p>{result.order.address.first_name} {result.order.address.last_name}<br />{result.order.address.address_1}{result.order.address.address_2 ? ", " + result.order.address.address_2 : ""}<br />{result.order.address.city}, {result.order.address.province} {result.order.address.postal_code}</p></section>}
       </div>
     </>}
