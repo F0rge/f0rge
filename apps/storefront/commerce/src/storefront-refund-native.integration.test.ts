@@ -2,15 +2,18 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import path from "node:path";
 import { medusaIntegrationTestRunner } from "@medusajs/test-utils";
 import { createOrderPaymentCollectionWorkflow } from "@medusajs/core-flows";
+import { updateProductVariantsWorkflow } from "@medusajs/medusa/core-flows";
 import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import type { Knex } from "knex";
+import { consumeCapacity, mergeCapacityState, reserveCapacity } from "./made-to-order-capacity";
 import { PEACH_PAYMENT_PROVIDER_ID } from "./peach-payment-config";
 import { PEACH_REFUND_URL, parsePeachRefundResponse, peachCheckoutSignature, type PeachRefundObservation } from "./peach-refunds";
 import { createPeachAttempt, updatePeachAttempt } from "./peach-payment-store";
 import {
   persistAndProcessRefundObservation, syncStorefrontPeachRefundCommands,
 } from "./storefront-peach-refunds";
+import { syncStorefrontFulfillmentEvents, type StorefrontFulfillmentEvent } from "./storefront-fulfillment-events";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -106,7 +109,10 @@ async function firstoutJson(pathname: string, init: RequestInit, expectedStatus:
   return responseObject(await response.json());
 }
 
-async function createFirstoutMtoHandoff(externalOrderId: string, captureId: string): Promise<string> {
+async function createFirstoutMtoHandoff(
+  externalOrderId: string,
+  captureId: string,
+): Promise<{ handoffId: string; offerId: string; linePromise: JsonRecord }> {
   const ownerHeaders = { ...(await firstoutOwnerCookieHeaders()), "content-type": "application/json" };
 
   const suffix = randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase();
@@ -220,8 +226,11 @@ async function createFirstoutMtoHandoff(externalOrderId: string, captureId: stri
       },
     }),
   }, 201);
-  if (imported.status !== "imported" || typeof imported.id !== "string") throw new Error("firstout_synthetic_handoff_import_failed");
-  return imported.id;
+  if (imported.status !== "imported" || typeof imported.id !== "string" ||
+      typeof offer.made_to_order_offer_id !== "string") {
+    throw new Error("firstout_synthetic_handoff_import_failed");
+  }
+  return { handoffId: imported.id, offerId: offer.made_to_order_offer_id, linePromise };
 }
 
 type RefundSimulator = {
@@ -328,6 +337,10 @@ if (liveTestEnabled) {
         let paymentCollectionId: string;
         let captureId: string;
         let handoffId: string;
+        let mtoVariantId: string;
+        let mtoLineId: string;
+        let mtoOfferId: string;
+        let orderFulfillmentPromise: JsonRecord;
         let statusToken: string;
         let publishableApiKey: string;
         let simulator: RefundSimulator;
@@ -352,7 +365,31 @@ if (liveTestEnabled) {
             createOrders(input: JsonRecord): Promise<JsonRecord[] | JsonRecord>;
             addOrderTransactions(rows: JsonRecord[]): Promise<JsonRecord[]>;
             updateOrders(rows: JsonRecord[]): Promise<unknown>;
+            updateOrderLineItems(input: JsonRecord[]): Promise<unknown>;
+            updateOrderItem(selector: JsonRecord, data: JsonRecord): Promise<unknown>;
           };
+          const productModule = container.resolve(Modules.PRODUCT) as unknown as {
+            createProducts(input: JsonRecord): Promise<JsonRecord | JsonRecord[]>;
+          };
+          const productResult = await productModule.createProducts({
+            title: `Synthetic native refund integration product ${randomUUID().slice(0, 8)}`,
+            handle: `synthetic-native-refund-${randomUUID().replaceAll("-", "").slice(0, 12)}`,
+            status: "published",
+            options: [{ title: "Fulfillment", values: ["Made to order"] }],
+            variants: [{
+              title: "Made to order",
+              sku: `NATIVE-REFUND-${randomUUID().replaceAll("-", "").slice(0, 12)}`,
+              manage_inventory: false,
+              options: { Fulfillment: "Made to order" },
+            }],
+          });
+          const product = Array.isArray(productResult) ? productResult[0] : productResult;
+          const productVariants = Array.isArray(product?.variants) ? product.variants as JsonRecord[] : [];
+          const mtoVariant = productVariants[0];
+          if (typeof product?.id !== "string" || typeof mtoVariant?.id !== "string") {
+            throw new Error("medusa_native_test_product_variant_create_failed");
+          }
+          mtoVariantId = mtoVariant.id;
           const paymentModule = container.resolve(Modules.PAYMENT) as unknown as {
             createPaymentSession_(collectionId: string, input: JsonRecord): Promise<JsonRecord>;
             updatePaymentSession(input: JsonRecord): Promise<JsonRecord>;
@@ -368,6 +405,7 @@ if (liveTestEnabled) {
             estimated_from: new Date(Date.now() + 28 * 86400_000).toISOString().slice(0, 10),
             estimated_by: new Date(Date.now() + 42 * 86400_000).toISOString().slice(0, 10),
           };
+          orderFulfillmentPromise = fulfillmentPromise;
           const confirmationDigest = createHash("sha256").update(`native-refund-confirmation:${email}`).digest("hex");
           const orderResult = await orderModule.createOrders({
             currency_code: "zar",
@@ -379,6 +417,8 @@ if (liveTestEnabled) {
               unit_price: 1150,
               is_tax_inclusive: true,
               requires_shipping: false,
+              product_id: product.id,
+              variant_id: mtoVariantId,
             }],
             metadata: {
               storefront_fulfillment_promise: fulfillmentPromise,
@@ -393,6 +433,7 @@ if (liveTestEnabled) {
           captureId = randomUUID().replaceAll("-", "");
           const orderItem = Array.isArray(order.items) ? record(order.items[0]) : {};
           if (typeof orderItem?.id !== "string") throw new Error("medusa_native_test_order_line_create_failed");
+          mtoLineId = orderItem.id;
           await orderModule.updateOrders([{
             id: orderId,
             metadata: {
@@ -473,7 +514,63 @@ if (liveTestEnabled) {
           const capturedSnapshot = record(capturedOrder.data[0]);
           expect(medusaMajorAmount(record(capturedSnapshot.summary).raw_pending_difference)).toBe(0);
           expect(Number(capturedSnapshot.total)).toBe(1150);
-          handoffId = await createFirstoutMtoHandoff(orderId, captureId);
+          const imported = await createFirstoutMtoHandoff(orderId, captureId);
+          handoffId = imported.handoffId;
+          mtoOfferId = imported.offerId;
+          const acceptedLinePromise = imported.linePromise;
+          const commitmentId = `storefront:${orderId}:${orderItem.id}`;
+          await orderModule.updateOrderLineItems([{
+            selector: { id: orderItem.id },
+            data: { metadata: { fulfillment_promise: acceptedLinePromise } },
+          }]);
+          await orderModule.updateOrderItem(
+            { item_id: orderItem.id },
+            { metadata: { fulfillment_promise: acceptedLinePromise } },
+          );
+          const acceptedAt = new Date();
+          const capacityOffer = {
+            id: mtoOfferId,
+            capacity: 100,
+            min_lead_time_days: Number(acceptedLinePromise.min_lead_time_days),
+            max_lead_time_days: Number(acceptedLinePromise.max_lead_time_days),
+            expires_at: String(acceptedLinePromise.expires_at),
+          };
+          let capacityState = mergeCapacityState(null, capacityOffer, acceptedAt.toISOString());
+          capacityState = reserveCapacity(
+            capacityState,
+            mtoOfferId,
+            `refund-native-${orderId}`,
+            orderItem.id,
+            1,
+            new Date(Date.now() + 10 * 60_000).toISOString(),
+            acceptedAt,
+          );
+          capacityState = consumeCapacity(
+            capacityState,
+            mtoOfferId,
+            `refund-native-${orderId}`,
+            orderItem.id,
+            commitmentId,
+            1,
+            Date.now(),
+          );
+          await updateProductVariantsWorkflow(container).run({
+            input: {
+              product_variants: [{
+                id: mtoVariantId,
+                metadata: {
+                  source_sku_id: randomUUID(),
+                  source_observed_at: acceptedAt.toISOString(),
+                  storefront_made_to_order_capacity: capacityState,
+                  pending_paid_commitments: [{
+                    commitment_id: commitmentId,
+                    source_sku_id: randomUUID(),
+                    quantity: 1,
+                  }],
+                },
+              }],
+            },
+          });
         });
 
         afterAll(() => {
@@ -697,6 +794,127 @@ if (liveTestEnabled) {
           expect(refundItems.filter((item) => item.status === "succeeded")).toHaveLength(2);
           expect(refundItems.every((item) => typeof item.financial_journal_id === "string")).toBe(true);
           expect(refundItems.reduce((sum, item) => sum + Number(item.amount_minor), 0)).toBe(115000);
+
+          const variantQuery = container.resolve(ContainerRegistrationKeys.QUERY) as {
+            graph(input: JsonRecord): Promise<{ data: JsonRecord[] }>;
+          };
+          const paidVariant = record((await variantQuery.graph({
+            entity: "product_variant",
+            fields: ["id", "metadata"],
+            filters: { id: mtoVariantId },
+          })).data[0]);
+          const paidVariantMetadata = record(paidVariant.metadata);
+          const commitmentId = `storefront:${orderId}:${mtoLineId}`;
+          expect(paidVariantMetadata.pending_paid_commitments).toEqual([
+            expect.objectContaining({ commitment_id: commitmentId, quantity: 1 }),
+          ]);
+          const paidCapacityState = record(paidVariantMetadata.storefront_made_to_order_capacity);
+          const paidAllocations = record(paidCapacityState.allocations);
+          expect(record(paidAllocations[mtoOfferId]).committed).toEqual({ [commitmentId]: 1 });
+
+          const acceptedCancellation: StorefrontFulfillmentEvent = {
+            event_id: randomUUID(),
+            company_id: process.env.FIRSTOUT_OPS_COMPANY_ID!,
+            external_order_id: orderId,
+            revision: 1,
+            fulfillment_type: "collection",
+            status: "cancelled",
+            fulfillment_promise: orderFulfillmentPromise,
+            occurred_at: new Date().toISOString(),
+          };
+          const acknowledgedIds: string[] = [];
+          const cancellationFeed: typeof fetch = async (input, init) => {
+            const url = requestUrl(input);
+            const headers = init?.headers as Record<string, string>;
+            expect(headers.authorization).toBe(`Bearer ${process.env.FIRSTOUT_OPS_TOKEN}`);
+            expect(headers["x-ops-company-id"]).toBe(process.env.FIRSTOUT_OPS_COMPANY_ID);
+            if (url.pathname.endsWith("/fulfillment-events") && init?.method !== "POST") {
+              expect(url.search).toBe("?limit=100");
+              return new Response(JSON.stringify({ items: [acceptedCancellation] }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              });
+            }
+            if (url.pathname.endsWith("/fulfillment-events/ack") && init?.method === "POST") {
+              acknowledgedIds.push(...(JSON.parse(String(init.body)) as { event_ids: string[] }).event_ids);
+              return new Response(JSON.stringify({ acknowledged: acknowledgedIds.length }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              });
+            }
+            throw new Error("native_refund_cancellation_unexpected_firstout_request");
+          };
+          await expect(syncStorefrontFulfillmentEvents(container, cancellationFeed)).resolves.toEqual({
+            received: 1,
+            acknowledged: 1,
+          });
+          expect(acknowledgedIds).toEqual([acceptedCancellation.event_id]);
+
+          const canceledOrder = record((await query.graph({
+            entity: "order",
+            fields: ["id", "status", "canceled_at", "metadata"],
+            filters: { id: orderId },
+          })).data[0]);
+          expect(canceledOrder.status).toBe("canceled");
+          expect(canceledOrder.canceled_at).toEqual(expect.any(Date));
+          expect(record(canceledOrder.metadata).storefront_fulfillment_status).toMatchObject({
+            status: "cancelled",
+            event_id: acceptedCancellation.event_id,
+            revision: 1,
+          });
+
+          const canceledVariant = record((await variantQuery.graph({
+            entity: "product_variant",
+            fields: ["id", "metadata"],
+            filters: { id: mtoVariantId },
+          })).data[0]);
+          const canceledVariantMetadata = record(canceledVariant.metadata);
+          expect(canceledVariantMetadata.pending_paid_commitments).toEqual([]);
+          const canceledCapacityState = record(canceledVariantMetadata.storefront_made_to_order_capacity);
+          const canceledAllocation = record(record(canceledCapacityState.allocations)[mtoOfferId]);
+          expect(canceledAllocation.committed).toEqual({});
+          expect(canceledVariantMetadata.storefront_cancellation_releases).toEqual([
+            expect.objectContaining({
+              event_id: acceptedCancellation.event_id,
+              commitment_id: commitmentId,
+              pending_paid_quantity: 1,
+              made_to_order_quantity: 1,
+            }),
+          ]);
+
+          const canceledPayment = await paymentModule.retrievePayment(paymentId, { relations: ["captures", "refunds"] });
+          expect(Number(canceledPayment.amount)).toBe(1150);
+          expect((canceledPayment.captures as JsonRecord[]).reduce((sum, item) => sum + Number(item.amount), 0)).toBe(1150);
+          expect((canceledPayment.refunds as JsonRecord[]).map((item) => item.id).sort())
+            .toEqual((finalPayment.refunds as JsonRecord[]).map((item) => item.id).sort());
+          expect((canceledPayment.refunds as JsonRecord[])).toHaveLength(2);
+          expect(Number((await paymentModule.retrievePaymentCollection(paymentCollectionId, {})).refunded_amount)).toBe(1150);
+          const canceledCustomerStatus = record((await api.get(`/store/orders/${orderId}/storefront-status`, {
+            headers: {
+              "x-publishable-api-key": publishableApiKey,
+              "x-storefront-bff-secret": testBffSecret,
+              "x-storefront-order-status-token": statusToken,
+            },
+          })).data);
+          const canceledCustomerOrder = record(canceledCustomerStatus.order);
+          expect(Number(canceledCustomerOrder.total)).toBe(Number(finalCustomerOrder.total));
+          expect(canceledCustomerOrder.captured_amount_minor).toBe(finalCustomerOrder.captured_amount_minor);
+          expect(canceledCustomerOrder.captured_at).toBe(finalCustomerOrder.captured_at);
+          expect(canceledCustomerOrder.refund_status).toEqual(finalCustomerOrder.refund_status);
+          const canceledTransactions = await orderModule.listOrderTransactions({
+            order_id: orderId, reference: "refund",
+          }, { select: ["id", "amount", "currency_code", "reference", "reference_id"] });
+          expect(canceledTransactions).toHaveLength(2);
+          expect(canceledTransactions.reduce((sum, item) => sum + Math.abs(Number(item.amount)), 0)).toBe(1150);
+          const canceledSnapshot = record((await query.graph({
+            entity: "order",
+            fields: ["id", "summary.raw_refunded_total", "credit_lines.id", "credit_lines.amount", "credit_lines.reference"],
+            filters: { id: orderId },
+          })).data[0]);
+          expect(medusaMajorAmount(record(canceledSnapshot.summary).raw_refunded_total)).toBe(1150);
+          expect((canceledSnapshot.credit_lines as JsonRecord[]).filter((line) => line.reference === "storefront_refund"))
+            .toHaveLength(2);
+          expect(simulator.providerRequests).toHaveLength(2);
         }, 180_000);
       });
     },

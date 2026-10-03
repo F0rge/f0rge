@@ -107,3 +107,5 @@ set -a; . /private/tmp/storefront-native-cancellation.env; set +a
   /Users/leo/.npm/_npx/357891e2033dc9b1/node_modules/npm/bin/npm-cli.js \
   test -- --runTestsByPath src/storefront-cancellation-native.integration.test.ts --forceExit
 ```
+
+Final combined proof (2026-10-03): the native refund journey also applies an accepted cancellation to the captured, fully refunded order. It verifies unchanged original paid total, capture amount/timestamp, refund history, native Payment captures/refunds, refund transactions and credit lines; only matching made-to-order and pending-paid commitments release. The focused integrated test passed with Peach requests blocked.
