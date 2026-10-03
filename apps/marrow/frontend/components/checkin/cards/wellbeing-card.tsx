@@ -1,8 +1,7 @@
 'use client'
 
-import { Card } from '@f0rge/ui'
+import { Card, CardContent } from '@f0rge/ui'
 import { ScaleInput } from '@/components/checkin/scale-input'
-import { CheckinCardBody } from '@/components/checkin/checkin-card-body'
 import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
 
@@ -36,7 +35,7 @@ export function WellbeingCard({
         onToggleCollapsed={onToggleCollapsed}
       />
       {!collapsed && (
-      <CheckinCardBody>
+      <CardContent className="space-y-5">
         <ScaleInput
           label="How was your day?"
           value={overall}
@@ -97,7 +96,7 @@ export function WellbeingCard({
                 ]
           }
         />
-      </CheckinCardBody>
+      </CardContent>
       )}
     </Card>
   )

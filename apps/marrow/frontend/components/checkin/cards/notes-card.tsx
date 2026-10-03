@@ -1,7 +1,6 @@
 'use client'
 
-import { Card } from '@f0rge/ui'
-import { CheckinCardBody } from '@/components/checkin/checkin-card-body'
+import { Card, CardContent } from '@f0rge/ui'
 import { NotesInput } from '@/components/checkin/notes-input'
 import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
@@ -33,7 +32,7 @@ export function NotesCard({
         onToggleCollapsed={onToggleCollapsed}
       />
       {!collapsed && (
-        <CheckinCardBody panelClassName="space-y-0">
+        <CardContent>
           <NotesInput
             key={entryKey}
             value={value}
@@ -42,7 +41,7 @@ export function NotesCard({
             onBlur={onBlur}
             registerDraftFlush={registerDraftFlush}
           />
-        </CheckinCardBody>
+        </CardContent>
       )}
     </Card>
   )

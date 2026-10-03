@@ -1,6 +1,5 @@
 'use client'
 
-import { ToggleGroup, ToggleGroupItem } from '@f0rge/ui'
 import { TrackerValueStepper } from './tracker-value-stepper'
 import { Archive, Circle } from 'lucide-react'
 import { ICON_COMPONENT_MAP } from './IconPicker'
@@ -55,33 +54,31 @@ function CompactBinary({
   label: string
 }) {
   return (
-    <ToggleGroup
-      spacing={0}
-      variant="outline"
-      value={[value ? 'yes' : 'no']}
-      onValueChange={(next) => {
-        const picked = next[0]
-        if (picked === 'yes') onChange(true)
-        if (picked === 'no') onChange(false)
-      }}
-      aria-label={label}
-      className="shrink-0 overflow-hidden rounded-md"
-    >
-      <ToggleGroupItem
-        value="yes"
+    <div className="flex items-center rounded-md border border-border overflow-hidden shrink-0">
+      <button
+        type="button"
+        onClick={() => onChange(true)}
+        aria-pressed={value}
         aria-label={`${label}: Yes`}
-        className="px-3 py-1.5 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+          value ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+        }`}
       >
         Yes
-      </ToggleGroupItem>
-      <ToggleGroupItem
-        value="no"
+      </button>
+      <div className="w-px h-5 bg-border" aria-hidden="true" />
+      <button
+        type="button"
+        onClick={() => onChange(false)}
+        aria-pressed={!value}
         aria-label={`${label}: No`}
-        className="px-3 py-1.5 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+          !value ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+        }`}
       >
         No
-      </ToggleGroupItem>
-    </ToggleGroup>
+      </button>
+    </div>
   )
 }
 

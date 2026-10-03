@@ -1,7 +1,6 @@
 'use client'
 
-import { Card } from '@f0rge/ui'
-import { CheckinCardBody } from '@/components/checkin/checkin-card-body'
+import { Card, CardContent } from '@f0rge/ui'
 import { SymptomPicker } from '@/components/checkin/symptom-picker'
 import { CheckinCardHeader } from '@/components/checkin/checkin-card-header'
 import type { CheckinCardCollapseProps } from '@/components/checkin/checkin-card-collapse'
@@ -31,14 +30,14 @@ export function SymptomsCard({
         onToggleCollapsed={onToggleCollapsed}
       />
       {!collapsed && (
-        <CheckinCardBody panelClassName="space-y-0">
+        <CardContent>
           <SymptomPicker
             value={value}
             onChange={onChange}
             events={events}
             onEventsChange={onEventsChange}
           />
-        </CheckinCardBody>
+        </CardContent>
       )}
     </Card>
   )

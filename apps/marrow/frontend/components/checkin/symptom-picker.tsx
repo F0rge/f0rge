@@ -1,23 +1,7 @@
 'use client'
 
-import { X } from 'lucide-react'
-import {
-  Button,
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-  Field,
-  FieldDescription,
-  FieldTitle,
-  Frame,
-  FramePanel,
-  Skeleton,
-  ToggleGroup,
-  ToggleGroupItem,
-  cn,
-  nowHHMM,
-} from '@f0rge/ui'
+import { Loader2, X } from 'lucide-react'
+import { nowHHMM } from '@f0rge/ui'
 import { useSymptomCatalog } from '@/lib/api/hooks'
 import type { SymptomEvent } from '@/lib/api/types'
 
@@ -29,9 +13,6 @@ interface SymptomPickerProps {
 }
 
 const SEVERITY_VALUES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-
-const severityItemClass =
-  'min-h-[36px] min-w-0 flex-1 justify-center text-xs font-semibold tabular-nums data-[state=on]:bg-primary data-[state=on]:text-primary-foreground'
 
 function stamp(key: string, severity: number): SymptomEvent {
   return { key, severity, time: nowHHMM() }
@@ -72,30 +53,20 @@ export function SymptomPicker({
   }
 
   return (
-    <Field className="gap-3">
-      <FieldTitle className="text-sm font-semibold">Custom symptoms</FieldTitle>
-      <FieldDescription>
+    <div className="space-y-3">
+      <label className="text-sm font-semibold">Custom symptoms</label>
+      <p className="text-xs text-muted-foreground">
         The score is for the whole day. Tap Log now to record a flare at the current time.
-      </FieldDescription>
+      </p>
 
       {isLoading && (
-        <div className="space-y-2" aria-busy="true">
-          <Skeleton className="h-12 w-full rounded-xl" />
-          <Skeleton className="h-12 w-full rounded-xl" />
+        <div className="flex items-center justify-center py-4 text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
         </div>
       )}
 
-      {!isLoading && active.length === 0 && (
-        <Empty className="border-border py-8">
-          <EmptyHeader>
-            <EmptyTitle>No symptoms configured</EmptyTitle>
-            <EmptyDescription>Add symptoms in Customize to track them here.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      )}
-
-      {!isLoading && active.length > 0 && (
-        <Frame spacing="xs" variant="ghost" className="w-full">
+      {!isLoading && (
+        <div className="space-y-2">
           {active.map((symptom) => {
             const selected = symptom.key in value
             const severity = value[symptom.key]
@@ -103,57 +74,56 @@ export function SymptomPicker({
               .map((event, index) => ({ event, index }))
               .filter(({ event }) => event.key === symptom.key)
             return (
-              <FramePanel key={symptom.key} className="space-y-2 p-0">
+              <div key={symptom.key}>
                 <button
                   type="button"
                   aria-pressed={selected}
                   onClick={() => toggle(symptom.key)}
-                  className={cn(
-                    'min-h-[48px] w-full rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-all',
+                  className={`min-h-[48px] w-full rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-all ${
                     selected
                       ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                      : 'border-border bg-background text-muted-foreground',
-                  )}
+                      : 'border-border bg-background text-muted-foreground'
+                  }`}
                 >
                   {symptom.label}
                   {selected && (
-                    <span className="ml-2 text-primary-foreground/70">{severity}/10</span>
+                    <span className="ml-2 text-primary-foreground/70">
+                      {severity}/10
+                    </span>
                   )}
                 </button>
 
                 {selected && (
-                  <div className="space-y-1.5 px-0.5 pb-2">
-                    <ToggleGroup
-                      spacing={1}
-                      variant="outline"
-                      value={[String(severity)]}
-                      onValueChange={(next) => {
-                        const picked = next[0]
-                        if (picked == null) return
-                        setSeverity(symptom.key, Number(picked))
-                      }}
+                  <div className="mt-1.5 space-y-1.5">
+                    <div
+                      className="grid grid-cols-6 gap-1 px-0.5"
+                      role="group"
                       aria-label={`Severity for ${symptom.label}`}
-                      className="grid w-full grid-cols-6 gap-1"
                     >
                       {SEVERITY_VALUES.map((v) => (
-                        <ToggleGroupItem
+                        <button
                           key={v}
-                          value={String(v)}
+                          type="button"
                           aria-label={`Severity ${v}`}
-                          className={severityItemClass}
+                          aria-pressed={severity === v}
+                          onClick={() => setSeverity(symptom.key, v)}
+                          className={`min-h-[36px] rounded-lg border text-xs font-semibold tabular-nums transition-all ${
+                            severity === v
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background text-muted-foreground'
+                          }`}
                         >
                           {v}
-                        </ToggleGroupItem>
+                        </button>
                       ))}
-                    </ToggleGroup>
-                    <Button
+                    </div>
+                    <button
                       type="button"
-                      variant="outline"
-                      className="min-h-[44px] w-full justify-start text-xs font-medium text-muted-foreground"
                       onClick={() => logNow(symptom.key)}
+                      className="min-h-[44px] w-full rounded-lg border border-border bg-background px-3 text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
                       Log now · {severity}/10
-                    </Button>
+                    </button>
                     {stamps.map(({ event, index }) => (
                       <div
                         key={`${event.time ?? 'na'}-${index}`}
@@ -177,11 +147,11 @@ export function SymptomPicker({
                     ))}
                   </div>
                 )}
-              </FramePanel>
+              </div>
             )
           })}
-        </Frame>
+        </div>
       )}
-    </Field>
+    </div>
   )
 }

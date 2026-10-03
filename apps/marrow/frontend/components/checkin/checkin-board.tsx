@@ -11,14 +11,7 @@
 import { useMemo } from 'react'
 import Link from 'next/link'
 import type { AutosaveState } from '@/lib/hooks/use-autosave-entry'
-import {
-  Button,
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from '@f0rge/ui'
+import { EmptyBoard } from '@/components/shared/color-artifact'
 import type { Entry } from '@/lib/api/types'
 import { computeCardColSpans } from '@/lib/checkin/compute-card-col-spans'
 import { ProtocolCard } from './cards'
@@ -79,20 +72,18 @@ export function CheckinBoard({
 
         {visibleIds.length === 0 ? (
           <div className="col-span-12" data-tour="checkin-empty-sections">
-            <Empty className="border-border">
-              <EmptyHeader>
-                <EmptyTitle>No check-in sections visible</EmptyTitle>
-                <EmptyDescription>
-                  Every section is hidden. Open Reorder &amp; visibility to show sections on your
-                  daily check-in again.
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button render={<Link href="/customize/reorder" />} className="rounded-full">
+            <EmptyBoard
+              title="No check-in sections visible"
+              body="Every section is hidden. Open Reorder & visibility to show sections on your daily check-in again."
+              action={
+                <Link
+                  href="/customize/reorder"
+                  className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
+                >
                   Reorder &amp; visibility
-                </Button>
-              </EmptyContent>
-            </Empty>
+                </Link>
+              }
+            />
           </div>
         ) : (
           visibleIds.map((id) => (
