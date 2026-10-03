@@ -16,17 +16,20 @@ class TaxInvoiceCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
 
-    async def get_by_id(self, invoice_id: uuid.UUID) -> Optional[TaxInvoice]:
-        return (
-            await self.db.execute(
-                select(TaxInvoice)
-                .options(
-                    selectinload(TaxInvoice.customer),
-                    selectinload(TaxInvoice.lines),
-                )
-                .where(TaxInvoice.id == invoice_id)
+    async def get_by_id(
+        self, invoice_id: uuid.UUID, *, for_update: bool = False
+    ) -> Optional[TaxInvoice]:
+        stmt = (
+            select(TaxInvoice)
+            .options(
+                selectinload(TaxInvoice.customer),
+                selectinload(TaxInvoice.lines),
             )
-        ).scalar_one_or_none()
+            .where(TaxInvoice.id == invoice_id)
+        )
+        if for_update:
+            stmt = stmt.execution_options(populate_existing=True).with_for_update()
+        return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_for_customer(self, customer_id: uuid.UUID) -> list[TaxInvoice]:
         result = await self.db.execute(

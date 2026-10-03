@@ -21,6 +21,7 @@ CODE_CREDIT_CARD = "1110"
 CODE_PETTY_CASH = "1120"
 CODE_INVENTORY_CLEARING = "1130"
 CODE_SUPPLIER_CLEARING = "1140"
+CODE_STOREFRONT_CLEARING = "1150"
 CODE_AR = "1200"
 CODE_INVENTORY = "1300"
 CODE_AP = "2100"
@@ -33,6 +34,7 @@ CODE_FX = "6100"
 
 CHART_OF_ACCOUNTS: tuple[tuple[str, str, AccountType], ...] = (
     (CODE_BANK, "Bank", AccountType.ASSET),
+    (CODE_STOREFRONT_CLEARING, "Storefront gateway clearing", AccountType.ASSET),
     (CODE_AR, "Accounts receivable", AccountType.ASSET),
     (CODE_INVENTORY, "Inventory", AccountType.ASSET),
     (CODE_AP, "Accounts payable", AccountType.LIABILITY),
@@ -123,6 +125,18 @@ class ChartOfAccountsSeedService:
         async with unit_of_work(self.db):
             await self.crud.add_and_flush(
                 self._system_account(CODE_DEPOSITS, "Customer deposits", AccountType.LIABILITY)
+            )
+
+    async def ensure_storefront_gateway_clearing(self) -> None:
+        if await self.crud.get_by_code(CODE_STOREFRONT_CLEARING) is not None:
+            return
+        async with unit_of_work(self.db):
+            await self.crud.add_and_flush(
+                self._system_account(
+                    CODE_STOREFRONT_CLEARING,
+                    "Storefront gateway clearing",
+                    AccountType.ASSET,
+                )
             )
 
     async def ensure_category_chart(self) -> None:

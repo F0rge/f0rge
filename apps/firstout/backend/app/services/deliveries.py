@@ -31,6 +31,7 @@ from app.schemas.delivery import (
     DeliveryTrackingUpdate,
 )
 from app.schemas.page import Page, PageParams
+from app.services.storefront_fulfillment import StorefrontFulfillmentService
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
@@ -119,6 +120,10 @@ class DeliveriesService:
             delivery.status = DeliveryStatus.PACKED
             if body is not None and body.carton_count is not None:
                 delivery.carton_count = body.carton_count
+            if delivery.sales_order_id is not None:
+                await StorefrontFulfillmentService(self.db).record_delivery_transition(
+                    delivery.sales_order_id, DeliveryStatus.PACKED
+                )
         return self._to_response(await self._get_or_404(delivery_id))
 
     async def load(self, delivery_id: uuid.UUID) -> DeliveryResponse:
@@ -128,6 +133,10 @@ class DeliveriesService:
         async with unit_of_work(self.db):
             delivery.status = DeliveryStatus.LOADED
             delivery.loaded_at = datetime.datetime.utcnow()
+            if delivery.sales_order_id is not None:
+                await StorefrontFulfillmentService(self.db).record_delivery_transition(
+                    delivery.sales_order_id, DeliveryStatus.LOADED
+                )
         return self._to_response(await self._get_or_404(delivery_id))
 
     async def update_tracking(
@@ -161,6 +170,10 @@ class DeliveriesService:
                 delivery.tracking_number = body.tracking_number
             if body.carrier is not None:
                 delivery.carrier = body.carrier
+            if delivery.sales_order_id is not None:
+                await StorefrontFulfillmentService(self.db).record_delivery_transition(
+                    delivery.sales_order_id, DeliveryStatus.DELIVERED
+                )
         return self._to_response(await self._get_or_404(delivery_id))
 
     async def cancel(self, delivery_id: uuid.UUID) -> DeliveryResponse:

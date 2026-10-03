@@ -65,6 +65,11 @@ class SkuService:
 
         fields_set = data.model_fields_set
 
+        if "storefront_published" in fields_set:
+            if data.storefront_published is None:
+                raise ValidationError("storefront_published must be true or false")
+            sku.storefront_published = data.storefront_published
+
         if "our_ref" in fields_set:
             assert data.our_ref is not None
             if await self.crud.get_by_our_ref(data.our_ref, exclude_id=sku.id) is not None:
@@ -112,6 +117,58 @@ class SkuService:
 
         if "lead_time_days" in fields_set:
             sku.lead_time_days = data.lead_time_days
+
+        made_to_order_fields = {
+            "made_to_order_capacity",
+            "made_to_order_lead_time_min_days",
+            "made_to_order_lead_time_max_days",
+            "made_to_order_expires_at",
+        }
+        if made_to_order_fields.intersection(fields_set):
+            offer = {
+                field: getattr(data, field) if field in fields_set else getattr(sku, field)
+                for field in made_to_order_fields
+            }
+            if all(value is None for value in offer.values()):
+                sku.made_to_order_capacity = None
+                sku.made_to_order_lead_time_min_days = None
+                sku.made_to_order_lead_time_max_days = None
+                sku.made_to_order_expires_at = None
+                sku.made_to_order_offer_id = None
+            else:
+                capacity = offer["made_to_order_capacity"]
+                lead_min = offer["made_to_order_lead_time_min_days"]
+                lead_max = offer["made_to_order_lead_time_max_days"]
+                expires_at = offer["made_to_order_expires_at"]
+                if any(value is None for value in offer.values()):
+                    raise ValidationError(
+                        "Made-to-order capacity, lead-time range, and expiry must be set together"
+                    )
+                if lead_min > lead_max:
+                    raise ValidationError(
+                        "Made-to-order maximum lead time must be at least the minimum"
+                    )
+                if expires_at.tzinfo is None or expires_at.utcoffset() is None:
+                    raise ValidationError("Made-to-order expiry must include a timezone")
+                expires_at = expires_at.astimezone(datetime.timezone.utc)
+                now = datetime.datetime.now(datetime.timezone.utc)
+                if expires_at <= now:
+                    raise ValidationError("Made-to-order expiry must be in the future")
+
+                previous_expiry = sku.made_to_order_expires_at
+                previous_expired = previous_expiry is not None and previous_expiry <= now
+                if (
+                    sku.made_to_order_capacity != capacity
+                    or sku.made_to_order_offer_id is None
+                    or previous_expired
+                ):
+                    # Editing the finite allowance starts a new allocation cycle.
+                    # The Storefront retains earlier paid commitments by offer ID.
+                    sku.made_to_order_offer_id = uuid.uuid4()
+                sku.made_to_order_capacity = capacity
+                sku.made_to_order_lead_time_min_days = lead_min
+                sku.made_to_order_lead_time_max_days = lead_max
+                sku.made_to_order_expires_at = expires_at
 
         if "reorder_min" in fields_set:
             sku.reorder_min = data.reorder_min
@@ -305,6 +362,11 @@ class SkuService:
             preferred_supplier_id=sku.preferred_supplier_id,
             preferred_supplier_name=preferred_supplier_name,
             lead_time_days=sku.lead_time_days,
+            made_to_order_capacity=sku.made_to_order_capacity,
+            made_to_order_lead_time_min_days=sku.made_to_order_lead_time_min_days,
+            made_to_order_lead_time_max_days=sku.made_to_order_lead_time_max_days,
+            made_to_order_expires_at=sku.made_to_order_expires_at,
+            made_to_order_offer_id=sku.made_to_order_offer_id,
             reorder_min=sku.reorder_min,
             last_landed_cost_zar=last_landed_cost_zar,
             category=sku.category,
@@ -313,6 +375,7 @@ class SkuService:
             wholesale_inc_vat=inc_vat_or_none(sku.wholesale_ex_vat),
             retail_ex_vat=sku.retail_ex_vat,
             retail_inc_vat=inc_vat_or_none(sku.retail_ex_vat),
+            storefront_published=sku.storefront_published,
             carton_count=sku.carton_count,
             is_kit=is_kit,
             created_at=sku.created_at,

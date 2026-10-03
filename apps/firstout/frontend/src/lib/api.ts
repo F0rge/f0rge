@@ -259,6 +259,7 @@ export {
   canMutateDeliveries,
   canMutateLaybys,
   canMutateOrders,
+  canViewStorefrontExceptions,
   canMutatePicks,
   canMutateQuotes,
   canMutateReturns,
@@ -567,6 +568,11 @@ export type Sku = {
   preferred_supplier_id: string | null;
   preferred_supplier_name: string | null;
   lead_time_days: number | null;
+  made_to_order_capacity: number | null;
+  made_to_order_lead_time_min_days: number | null;
+  made_to_order_lead_time_max_days: number | null;
+  made_to_order_expires_at: string | null;
+  made_to_order_offer_id: string | null;
   reorder_min: number | null;
   last_landed_cost_zar: string | null;
   photo_storage_key: string | null;
@@ -576,11 +582,13 @@ export type Sku = {
   retail_inc_vat: string | null;
   carton_count: number;
   is_kit: boolean;
+  storefront_published?: boolean;
   created_at: string;
   updated_at: string;
 };
 
 export type UpdateSkuPricePayload = {
+  storefront_published?: boolean;
   our_ref?: string;
   our_barcode?: string;
   name?: string;
@@ -593,6 +601,10 @@ export type UpdateSkuPricePayload = {
   retail_inc_vat?: string | number | null;
   preferred_supplier_id?: string | null;
   lead_time_days?: number | null;
+  made_to_order_capacity?: number | null;
+  made_to_order_lead_time_min_days?: number | null;
+  made_to_order_lead_time_max_days?: number | null;
+  made_to_order_expires_at?: string | null;
   reorder_min?: number | null;
   supplier_ref?: string | null;
   carton_count?: number;
@@ -706,6 +718,61 @@ export function deleteSku(id: string): Promise<void> {
 
 export function skuPhotoUrl(id: string): string {
   return `/api/v1/skus/${id}/photo`;
+}
+
+export type ProductGroupVariant = {
+  source_sku_id: string;
+  sku: string;
+  name: string;
+  options: Record<string, string>;
+};
+
+export type ProductGroup = {
+  id: string;
+  title: string;
+  options: Record<string, string[]>;
+  storefront_published: boolean;
+  variants: ProductGroupVariant[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductGroupVariantWrite = Pick<ProductGroupVariant, "source_sku_id" | "options">;
+
+export function listProductGroups(): Promise<ProductGroup[]> {
+  return apiFetch<ProductGroup[]>("/product-groups");
+}
+
+export function createProductGroup(payload: {
+  title: string;
+  options: Record<string, string[]>;
+  variants: ProductGroupVariantWrite[];
+}): Promise<ProductGroup> {
+  return apiFetch<ProductGroup>("/product-groups", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProductGroup(id: string, payload: {
+  title?: string;
+  options?: Record<string, string[]>;
+  storefront_published?: boolean;
+}): Promise<ProductGroup> {
+  return apiFetch<ProductGroup>(`/product-groups/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function replaceProductGroupVariants(
+  id: string,
+  variants: ProductGroupVariantWrite[],
+): Promise<ProductGroup> {
+  return apiFetch<ProductGroup>(`/product-groups/${id}/variants`, {
+    method: "PUT",
+    body: JSON.stringify({ variants }),
+  });
 }
 
 export type SkuBomLine = {
@@ -3891,6 +3958,204 @@ export function remainderInvoiceSalesOrder(id: string): Promise<SalesOrder> {
 
 export function cancelSalesOrder(id: string): Promise<SalesOrder> {
   return apiFetch<SalesOrder>(`/orders/${id}/cancel`, { method: "POST" });
+}
+
+export type StorefrontFulfillmentType = "delivery" | "collection";
+export type StorefrontFulfillmentStatus =
+  | "confirmed"
+  | "ready_for_delivery"
+  | "out_for_delivery"
+  | "delivered"
+  | "ready_for_collection"
+  | "collected"
+  | "cancelled";
+
+export type StorefrontHandoff = {
+  id: string;
+  external_order_id: string;
+  correlation_id: string;
+  status: "pending" | "processing" | "stock_conflict" | "imported" | "failed";
+  failure_code: string | null;
+  attempt_count: number;
+  last_attempt_at: string | null;
+  imported_at: string | null;
+  sales_order_id: string;
+  payment_journal_id: string;
+  fulfillment_type: StorefrontFulfillmentType;
+  fulfillment_status: StorefrontFulfillmentStatus;
+  fulfillment_revision: number;
+  lines: {
+    external_line_id: string;
+    title: string;
+    sku: string;
+    quantity: number;
+    unit_ex_minor_zar: number;
+    total_minor_zar: number;
+  }[];
+  created_at: string;
+  updated_at: string;
+};
+
+export function listStorefrontHandoffs(): Promise<{ items: StorefrontHandoff[] }> {
+  return apiFetch<{ items: StorefrontHandoff[] }>("/storefront/orders");
+}
+
+export function retryStorefrontHandoff(id: string): Promise<StorefrontHandoff> {
+  return apiFetch<StorefrontHandoff>(`/storefront/orders/${id}/retry`, { method: "POST" });
+}
+
+export function updateStorefrontCollectionStatus(
+  id: string,
+  status: "ready_for_collection" | "collected",
+): Promise<StorefrontHandoff> {
+  return apiFetch<StorefrontHandoff>(`/storefront/orders/${id}/collection-status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export type StorefrontRefund = {
+  id: string;
+  handoff_id: string | null;
+  amount_minor: number;
+  provider_amount_minor: number | null;
+  currency_code: string;
+  allocation: Record<string, number>;
+  selected_lines: Record<string, number>;
+  cancel_order: boolean;
+  status: "requested" | "dispatching" | "unknown" | "pending" | "succeeded" | "failed" | "needs_review";
+  provider_refund_id: string | null;
+  provider_result_code: string | null;
+  failure_code: string | null;
+  signature_verified: boolean;
+  financial_journal_id: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type StorefrontRefundStatus = {
+  captured_amount_minor: number;
+  confirmed_refund_minor: number;
+  reserved_refund_minor: number;
+  available_refund_minor: number;
+  invoice_id: string | null;
+  invoice_refund_eligible: boolean;
+  invoice_refund_available_minor: number;
+  sales_order_amount_paid: string;
+  line_balances: {
+    external_line_id: string;
+    title: string;
+    sku: string;
+    original_quantity: number;
+    remaining_quantity: number;
+    original_amount_minor: number;
+    remaining_amount_minor: number;
+  }[];
+  items: StorefrontRefund[];
+};
+
+export type StorefrontRefundRequest = {
+  idempotency_key: string;
+  cancel_order: boolean;
+} & (
+  | { amount_minor: number; selected_lines?: never }
+  | { amount_minor?: never; selected_lines: { external_line_id: string; quantity: number }[] }
+);
+
+export function getStorefrontRefundStatus(handoffId: string): Promise<StorefrontRefundStatus> {
+  return apiFetch<StorefrontRefundStatus>(`/storefront/orders/${handoffId}/refunds`);
+}
+
+export function requestStorefrontRefund(
+  handoffId: string,
+  payload: StorefrontRefundRequest,
+): Promise<StorefrontRefund> {
+  return apiFetch<StorefrontRefund>(`/storefront/orders/${handoffId}/refunds`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type StorefrontExceptionKind =
+  | "aged_hold"
+  | "stale_sync"
+  | "missing_operational_paid_order"
+  | "unknown_payment"
+  | "refund_mismatch"
+  | "fulfilment_drift"
+  | "capacity_conflict";
+
+export type StorefrontExceptionAudit = {
+  id: string;
+  actor_user_id: string;
+  reason: string;
+  outcome: string;
+  detail: string | null;
+  created_at: string;
+};
+
+export type StorefrontException = {
+  id: string;
+  kind: StorefrontExceptionKind;
+  status: "open" | "aged" | "terminal" | "resolved";
+  age_seconds: number;
+  correlation_id: string;
+  explanation: string;
+  safe_action: string;
+  last_error: string | null;
+  financial: boolean;
+  amount_minor: number | null;
+  payment_reference: string | null;
+  provider_verified: boolean;
+  blocks_checkout: boolean;
+  can_repair: boolean;
+  detected_at: string;
+  resolved_at: string | null;
+  repair_count: number;
+  audits: StorefrontExceptionAudit[];
+};
+
+export type StorefrontExceptionList = {
+  items: StorefrontException[];
+  checkout_allowed: boolean;
+  paid_recovery_retained: true;
+};
+
+export type StorefrontExceptionAlert = {
+  id: string;
+  kind: StorefrontExceptionKind;
+  queue_class: "aged" | "terminal" | "retrying";
+  context: Record<string, unknown>;
+  created_at: string;
+};
+
+export function listStorefrontExceptions(): Promise<StorefrontExceptionList> {
+  return apiFetch<StorefrontExceptionList>("/storefront/exceptions");
+}
+
+export function getStorefrontException(id: string): Promise<StorefrontException> {
+  return apiFetch<StorefrontException>(`/storefront/exceptions/${id}`);
+}
+
+export function seedStorefrontExceptions(): Promise<StorefrontExceptionList> {
+  return apiFetch<StorefrontExceptionList>("/storefront/exceptions/seed", { method: "POST" });
+}
+
+export function repairStorefrontException(
+  id: string,
+  payload: { reason: string; idempotency_key: string },
+): Promise<StorefrontException> {
+  return apiFetch<StorefrontException>(`/storefront/exceptions/${id}/repair`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deliverStorefrontExceptionAlert(exceptionId?: string): Promise<StorefrontExceptionAlert> {
+  return apiFetch<StorefrontExceptionAlert>("/storefront/exceptions/alerts/test", {
+    method: "POST",
+    body: JSON.stringify(exceptionId ? { exception_id: exceptionId } : {}),
+  });
 }
 
 export type PortalMe = {

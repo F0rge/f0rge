@@ -48,6 +48,7 @@ import {
   UserFollow,
   UserMultiple,
   Wallet,
+  WarningAlt,
   ChartColumn,
   ChartLine,
   Currency,
@@ -108,6 +109,7 @@ const ICONS = {
   "/price-lists": Currency,
   "/proformas": Document,
   "/catalogue": Catalog,
+  "/product-groups": Product,
   "/stocktakes": InventoryManagement,
   "/adjustments": Report,
   "/import": DocumentImport,
@@ -122,6 +124,7 @@ const ICONS = {
   "/returns": Undo,
   "/quotes": Document,
   "/orders": Receipt,
+  "/storefront-exceptions": WarningAlt,
   "/laybys": PiggyBank,
   "/customers": UserFollow,
   "/ledger": Finance,
@@ -222,6 +225,9 @@ export function AppShell({ children }: AppShellProps) {
   const adminItems = ADMIN_NAV_ITEMS.filter(
     (item) => !("permission" in item) || can(user, item.permission),
   );
+  const salesNavItems = can(user, "sales.refunds") && !can(user, "sales.orders")
+    ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders" || item.href === "/storefront-exceptions")
+    : SALES_NAV_ITEMS;
 
   function renderNavMenu(
     title: string,
@@ -355,7 +361,7 @@ export function AppShell({ children }: AppShellProps) {
               "warehouse",
             )}
             {renderNavLink(TILL_NAV_ITEM.href, TILL_NAV_ITEM.label)}
-            {renderNavMenu("Sales", Store, isSalesPath(pathname), SALES_NAV_ITEMS, "sales")}
+            {salesNavItems.length ? renderNavMenu("Sales", Store, isSalesPath(pathname), salesNavItems, "sales") : null}
             {renderNavMenu("Books", Finance, isBooksPath(pathname), BOOKS_NAV_ITEMS, "books")}
             {canUseNia(user)
               ? NIA_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))

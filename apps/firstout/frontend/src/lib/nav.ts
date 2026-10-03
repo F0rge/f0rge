@@ -20,6 +20,7 @@ export const TILL_NAV_ITEM = { href: "/till", label: "Till" } as const;
 
 export const CATALOGUE_NAV_ITEMS = [
   { href: "/catalogue", label: "Catalogue" },
+  { href: "/product-groups", label: "Storefront products" },
   { href: "/suppliers", label: "Suppliers" },
   { href: "/price-lists", label: "Price lists" },
   { href: "/proformas", label: "Proformas" },
@@ -47,6 +48,7 @@ export const SALES_NAV_ITEMS = [
   { href: "/quotes", label: "Quotes" },
   { href: "/lookbooks", label: "Lookbooks" },
   { href: "/orders", label: "Orders" },
+  { href: "/storefront-exceptions", label: "Storefront exceptions" },
   { href: "/laybys", label: "Laybys" },
   { href: "/customers", label: "Customers" },
   { href: "/returns", label: "Returns" },
@@ -114,7 +116,8 @@ export function isSalesPath(pathname: string): boolean {
     pathname.startsWith("/customers/") ||
     pathname.startsWith("/quotes/") ||
     pathname.startsWith("/lookbooks/") ||
-    pathname.startsWith("/orders/")
+    pathname.startsWith("/orders/") ||
+    pathname.startsWith("/storefront-exceptions")
   );
 }
 

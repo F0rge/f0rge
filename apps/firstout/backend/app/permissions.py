@@ -13,6 +13,7 @@ STOCK_COST_VIEW = "stock.cost.view"
 TILL_SELL = "till.sell"
 TILL_DISCOUNT = "till.discount"
 SALES_RETURNS = "sales.returns"
+SALES_REFUNDS = "sales.refunds"
 SALES_LAYBYS = "sales.laybys"
 SALES_QUOTES = "sales.quotes"
 SALES_ORDERS = "sales.orders"
@@ -35,6 +36,7 @@ PERMISSION_CATALOG: tuple[str, ...] = (
     TILL_SELL,
     TILL_DISCOUNT,
     SALES_RETURNS,
+    SALES_REFUNDS,
     SALES_LAYBYS,
     SALES_QUOTES,
     SALES_ORDERS,
@@ -82,7 +84,7 @@ ROLE_PRESETS: dict[str, frozenset[str]] = {
         }
     ),
     SLUG_BOOKS: frozenset(
-        {BOOKS_MUTATE, BOOKS_JOURNALS, SALES_CUSTOMERS, STOCK_COST_VIEW, NIA_USE}
+        {BOOKS_MUTATE, BOOKS_JOURNALS, SALES_CUSTOMERS, STOCK_COST_VIEW, SALES_REFUNDS, NIA_USE}
     ),
 }
 

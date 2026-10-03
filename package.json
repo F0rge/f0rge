@@ -5,6 +5,8 @@
     "apps/marrow/frontend",
     "apps/dk/tag-printer/frontend",
     "apps/firstout/frontend",
+    "apps/storefront/commerce",
+    "apps/storefront/web",
     "libs/ui"
   ],
   "overrides": {
@@ -15,8 +17,14 @@
     "react-dom": "19.2.8",
     "eslint-plugin-react-hooks": "7.0.1",
     "sharp": "0.35.4",
-    "fast-uri": "3.1.5",
-    "nanoid": "3.3.18"
+    "fast-uri": "3.1.7",
+    "browserslist": "4.29.0",
+    "lodash": "4.18.1",
+    "@graphql-codegen/plugin-helpers": {
+      "lodash": "4.18.1"
+    },
+    "nanoid": "3.3.18",
+    "braces": "$braces"
   },
   "devDependencies": {
     "@nx/eslint": "~23.2.1",
@@ -29,5 +37,8 @@
     "@types/react": "^19",
     "nx": "~23.2.1",
     "typescript": "^5"
+  },
+  "dependencies": {
+    "braces": "file:vendor/braces/braces-3.0.4-f0rge.1.tgz"
   }
 }

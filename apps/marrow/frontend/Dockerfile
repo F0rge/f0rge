@@ -7,6 +7,7 @@ WORKDIR /app
 # npm workspaces: one root lockfile, one `npm ci` at the root. Copy each
 # workspace's package.json path-preserving so npm can resolve the tree.
 COPY package.json package-lock.json ./
+COPY vendor/braces/braces-3.0.4-f0rge.1.tgz ./vendor/braces/
 COPY apps/marrow/frontend/package.json ./apps/marrow/frontend/
 COPY apps/dk/tag-printer/frontend/package.json ./apps/dk/tag-printer/frontend/
 COPY apps/firstout/frontend/package.json ./apps/firstout/frontend/

@@ -1,0 +1,285 @@
+.sola-study {
+  position: relative;
+  height: 280svh;
+  min-height: 1900px;
+  overflow: clip;
+  border-block: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+.sola-study-stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  min-height: 660px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 60% 43%, rgba(217, 216, 145, .42), transparent 48%),
+    var(--paper);
+}
+.sola-study-topline {
+  position: absolute;
+  z-index: 3;
+  top: clamp(1.25rem, 4vh, 2.4rem);
+  left: clamp(1.2rem, 4vw, 3.5rem);
+  right: clamp(1.2rem, 4vw, 3.5rem);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  color: var(--muted);
+  font: 9px var(--mono);
+  letter-spacing: .09em;
+}
+.sola-study-top-actions { display: flex; align-items: center; gap: 1.4rem; }
+.sola-study-top-actions a,.sola-study-motion {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 44px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: .45rem 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+  font: 9px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.sola-study-motion:disabled { cursor: default; opacity: .7; }
+.sola-study-intro {
+  position: absolute;
+  z-index: 2;
+  top: 22%;
+  left: clamp(1.2rem, 4vw, 3.5rem);
+  max-width: 34rem;
+  pointer-events: none;
+}
+.sola-study-intro .eyebrow { color: var(--muted); margin-bottom: 1rem; }
+.sola-study-intro h2 {
+  margin: 0;
+  font-size: clamp(3.2rem, 7vw, 6.1rem);
+  line-height: .99;
+}
+.sola-study-intro h2 em { color: var(--oxblood); font-weight: 400; }
+.sola-study-cue {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-top: 1.4rem;
+  color: var(--muted);
+  font: 9px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.sola-study-big-type {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  color: rgba(88, 45, 56, .065);
+  font: 500 clamp(10rem, 29vw, 27rem)/.8 var(--serif);
+  letter-spacing: -.1em;
+  pointer-events: none;
+  transform: translateX(-47%);
+  user-select: none;
+}
+.sola-study-model {
+  position: absolute;
+  z-index: 1;
+  inset: 5% 2% 10% 23%;
+  pointer-events: none;
+}
+.sola-study-model canvas { display: block; width: 100%; height: 100%; }
+.sola-study-illustration {
+  width: 100%;
+  height: 100%;
+  color: var(--study-chair-wood);
+  transform: perspective(900px) rotateY(var(--study-rotation));
+  transform-origin: 50% 55%;
+}
+.sola-study-caption {
+  position: absolute;
+  z-index: 2;
+  left: clamp(1.2rem, 4vw, 3.5rem);
+  bottom: 16%;
+  width: min(25rem, 36vw);
+}
+.sola-study-caption .eyebrow { margin-bottom: .8rem; color: #9a5b51; }
+.sola-study-caption h3 {
+  margin: 0 0 .7rem;
+  font-size: clamp(1.6rem, 2.4vw, 2.2rem);
+  line-height: 1.12;
+}
+.sola-study-caption > p:last-child {
+  max-width: 24rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.sola-study-finishes {
+  position: absolute;
+  z-index: 3;
+  right: clamp(1.2rem, 4vw, 3.5rem);
+  bottom: 16%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 15rem;
+  text-align: right;
+}
+.sola-study-finishes > .eyebrow { margin-bottom: .8rem; font-size: 8px; }
+.sola-study-swatches { display: flex; gap: .65rem; }
+.sola-study-swatch {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+}
+.sola-study-swatch.selected { border-color: var(--ink); outline: 2px solid var(--paper); outline-offset: -5px; }
+.sola-study-finish-name { margin-top: .55rem; color: var(--muted); font: 9px var(--mono); }
+.sola-study-not-product { max-width: 14rem; margin: .6rem 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.sola-study-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 44px;
+  margin-top: .8rem;
+  border-bottom: 1px solid #b4988c;
+  padding: .35rem 0;
+  text-decoration: none;
+  text-transform: uppercase;
+  font: 9px var(--mono);
+  letter-spacing: .06em;
+}
+.sola-study-controls {
+  position: absolute;
+  z-index: 3;
+  left: clamp(1.2rem, 4vw, 3.5rem);
+  right: clamp(1.2rem, 4vw, 3.5rem);
+  bottom: 2rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+}
+.sola-study-chapters { display: flex; gap: .5rem; }
+.sola-study-chapters button {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-height: 44px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: .5rem .6rem;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: 9px var(--mono);
+  text-align: left;
+}
+.sola-study-chapters button span { color: #a15545; }
+.sola-study-chapters button.selected { border-bottom-color: var(--oxblood); color: var(--ink); }
+.sola-study-scrubber { display: flex; align-items: center; gap: .7rem; min-width: min(15rem, 28vw); color: var(--muted); font: 9px var(--mono); }
+.sola-study-scrubber input { flex: 1; min-width: 5rem; accent-color: var(--oxblood); }
+.sola-study-fallback {
+  position: absolute;
+  right: clamp(1.2rem, 4vw, 3.5rem);
+  bottom: 6rem;
+  max-width: 20rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+  text-align: right;
+}
+.sola-study.is-static { height: auto; min-height: 0; }
+.sola-study.is-static .sola-study-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, .8fr);
+  gap: 1rem 2rem;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 7rem clamp(1.2rem, 4vw, 3.5rem) 2rem;
+}
+.sola-study.is-static .sola-study-topline,
+.sola-study.is-static .sola-study-intro,
+.sola-study.is-static .sola-study-caption,
+.sola-study.is-static .sola-study-finishes,
+.sola-study.is-static .sola-study-controls {
+  position: relative;
+  inset: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  top: auto;
+}
+.sola-study.is-static .sola-study-topline { grid-column: 1 / -1; grid-row: 1; }
+.sola-study.is-static .sola-study-intro { grid-column: 1; grid-row: 2; }
+.sola-study.is-static .sola-study-model { position: absolute; inset: 18% 4% 26% 34%; }
+.sola-study.is-static .sola-study-big-type { top: 25%; left: 62%; font-size: clamp(8rem, 24vw, 20rem); }
+.sola-study.is-static .sola-study-caption { grid-column: 1; grid-row: 3; width: auto; max-width: 26rem; }
+.sola-study.is-static .sola-study-finishes { grid-column: 2; grid-row: 2 / span 2; align-self: end; justify-self: end; }
+.sola-study.is-static .sola-study-controls { grid-column: 1 / -1; grid-row: 4; align-items: center; }
+.sola-study.is-static .sola-study-fallback { position: static; grid-column: 1 / -1; max-width: none; text-align: left; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 760px) {
+  .sola-study { height: 230svh; min-height: 1550px; }
+  .sola-study-stage { min-height: 700px; }
+  .sola-study-topline { top: 1rem; }
+  .sola-study-topline > span { max-width: 8rem; line-height: 1.5; }
+  .sola-study-top-actions { gap: .7rem; }
+  .sola-study-top-actions a,.sola-study-motion { font-size: 8px; }
+  .sola-study-intro { top: 16%; }
+  .sola-study-intro h2 { font-size: clamp(2.8rem, 12vw, 4.2rem); }
+  .sola-study-big-type { top: 31%; left: 52%; font-size: 38vw; }
+  .sola-study-model { inset: 18% -5% 28% 4%; }
+  .sola-study-caption { bottom: 18%; width: min(58%, 21rem); }
+  .sola-study-caption h3 { font-size: 1.5rem; }
+  .sola-study-caption > p:last-child { font-size: 11px; }
+  .sola-study-finishes { right: 1.2rem; bottom: 19%; max-width: 40%; }
+  .sola-study-finishes > .eyebrow { font-size: 7px; }
+  .sola-study-not-product { font-size: 9px; }
+  .sola-study-controls { left: 1.2rem; right: 1.2rem; bottom: 1rem; display: grid; gap: .5rem; }
+  .sola-study-chapters { justify-content: space-between; gap: .1rem; }
+  .sola-study-chapters button { gap: .35rem; padding-inline: .25rem; font-size: 8px; }
+  .sola-study-scrubber { width: 100%; min-width: 0; }
+  .sola-study-fallback { right: 1.2rem; bottom: 5.7rem; width: 40%; font-size: 9px; }
+  .sola-study.is-static .sola-study-stage {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    padding: 6rem 1.2rem 1.5rem;
+  }
+  .sola-study.is-static .sola-study-topline { grid-column: 1; grid-row: 1; }
+  .sola-study.is-static .sola-study-intro { grid-column: 1; grid-row: 2; }
+  .sola-study.is-static .sola-study-model { inset: 18% -6% auto 22%; height: 24rem; }
+  .sola-study.is-static .sola-study-big-type { top: 25%; left: 58%; font-size: 35vw; }
+  .sola-study.is-static .sola-study-caption { grid-column: 1; grid-row: 3; margin-top: 12rem; }
+  .sola-study.is-static .sola-study-finishes { grid-column: 1; grid-row: 4; justify-self: start; align-items: flex-start; max-width: none; text-align: left; }
+  .sola-study.is-static .sola-study-controls { grid-column: 1; grid-row: 5; }
+}
+@media (max-width: 420px) {
+  .sola-study-chapters button { flex-direction: column; align-items: flex-start; }
+  .sola-study-fallback { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sola-study,.sola-study * { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
