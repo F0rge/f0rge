@@ -90,10 +90,9 @@ const clerkConfigured = Boolean(
   process.env.CLERK_SECRET_KEY &&
   process.env.STOREFRONT_CLERK_JWT_TEMPLATE,
 );
-const clerkProxy = clerkMiddleware(() => withRobotsHeader(NextResponse.next()), {
-  publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "",
-  secretKey: process.env.CLERK_SECRET_KEY || "",
-});
+// Keys come from the environment. Passing secretKey here is a dynamic key and
+// requires CLERK_ENCRYPTION_KEY, which this single-tenant app does not use.
+const clerkProxy = clerkMiddleware(() => withRobotsHeader(NextResponse.next()));
 
 export function proxy(request: NextRequest, event: NextFetchEvent) {
   // Check Basic Auth before Clerk. Clerk can answer redirect or handshake
@@ -105,5 +104,9 @@ export function proxy(request: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ["/:path*"],
+  matcher: [
+    "/:path*",
+    "/(api|trpc)(.*)",
+    "/__clerk/:path*",
+  ],
 };
