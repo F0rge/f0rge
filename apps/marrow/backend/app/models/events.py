@@ -33,9 +33,15 @@ def _create_meal_for_photo(_mapper, connection, target: Photo) -> None:
     target.meal_id = meal_id
 
 
-@event.listens_for(Photo, "after_delete")
-def _cleanup_orphan_meal(_mapper, connection, target: Photo) -> None:
-    """Remove the canonical meal when the last placement is deleted."""
+@event.listens_for(Photo, "before_delete")
+def _flag_orphan_meal(_mapper, connection, target: Photo) -> None:
+    """Decide whether this is the last placement, while its tags still exist.
+
+    Must run *before* the row is deleted: ``meal_tags.source_photo_id`` cascades, so
+    by ``after_delete`` the ``delivered`` tags that prove another user holds a copy
+    are already gone. Row-level security also hides those recipient copies from the
+    ``photos`` count, so a delivered tag is the only reliable signal.
+    """
     remaining = connection.execute(
         select(func.count())
         .select_from(Photo.__table__)
@@ -44,8 +50,6 @@ def _cleanup_orphan_meal(_mapper, connection, target: Photo) -> None:
             Photo.__table__.c.id != target.id,
         )
     ).scalar_one()
-    if remaining > 0:
-        return
     delivered_tags = connection.execute(
         select(func.count())
         .select_from(MealTag.__table__)
@@ -54,9 +58,14 @@ def _cleanup_orphan_meal(_mapper, connection, target: Photo) -> None:
             MealTag.__table__.c.status == "delivered",
         )
     ).scalar_one()
-    if delivered_tags > 0:
-        return
-    connection.execute(delete(Meal.__table__).where(Meal.__table__.c.id == target.meal_id))
+    target._delete_orphan_meal = remaining == 0 and delivered_tags == 0
+
+
+@event.listens_for(Photo, "after_delete")
+def _cleanup_orphan_meal(_mapper, connection, target: Photo) -> None:
+    """Remove the canonical meal when the last placement is deleted."""
+    if getattr(target, "_delete_orphan_meal", False):
+        connection.execute(delete(Meal.__table__).where(Meal.__table__.c.id == target.meal_id))
 
 
 @event.listens_for(PhotoAnalysis, "before_insert")
