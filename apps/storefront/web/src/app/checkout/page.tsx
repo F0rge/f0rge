@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Checkbox, Select } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
+import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
+import { zarMinorUnits } from "@/lib/analytics/money";
 import type { Bag } from "@/lib/bag-server";
 
 type Fulfillment = "delivery" | "collection";
@@ -20,6 +22,8 @@ const promiseDates = (from: string, by: string) => {
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const { capture, attributionHeaders, setSensitiveOverlay } = useStorefrontAnalytics();
+  const startedCart = useRef("");
   const [bag, setBag] = useState<Bag | null>(null);
   const [fulfillment, setFulfillment] = useState<Fulfillment>("delivery");
   const [checkout, setCheckout] = useState<PreparedCheckout | null>(null);
@@ -49,6 +53,20 @@ export default function CheckoutPage() {
       } catch (reason) { setError(reason instanceof Error ? reason.message : "Your bag could not be loaded"); }
     })();
   }, []);
+
+  useEffect(() => {
+    setSensitiveOverlay(Boolean(checkout));
+    return () => setSensitiveOverlay(false);
+  }, [checkout, setSensitiveOverlay]);
+
+  useEffect(() => {
+    if (!bag?.id || !bag.items.length || startedCart.current === bag.id) return;
+    const valueMinor = zarMinorUnits(bag.total);
+    if (valueMinor === null) return;
+    startedCart.current = bag.id;
+    const checkoutType = accountAvailable ? "account" : "guest";
+    capture({ name: "storefront_checkout_started", properties: { cart_id: bag.id, item_count: bag.items.length, value_minor: valueMinor, checkout_type: checkoutType } });
+  }, [accountAvailable, bag, capture]);
 
   function fillSavedAddress(id: string) {
     const address = savedAddresses.find((candidate) => candidate.id === id);
@@ -81,15 +99,24 @@ export default function CheckoutPage() {
       });
       const payload = await response.json() as { checkout?: PreparedCheckout; message?: string };
       if (!response.ok || !payload.checkout) throw new Error(payload.message || "Checkout could not be prepared");
+      if (bag?.id) {
+        const checkoutType = accountAvailable ? "account" : "guest";
+        capture({ name: "storefront_shipping_method_selected", properties: { cart_id: bag.id, method_id: fulfillment } });
+        capture({ name: "storefront_checkout_step_completed", properties: { cart_id: bag.id, step: "fulfillment", checkout_type: checkoutType } });
+      }
       if (payload.checkout.provider_id === "pp_peach_sandbox" && payload.checkout.redirect_url) {
         const redirect = new URL(payload.checkout.redirect_url);
         if (redirect.origin !== "https://testsecure.peachpayments.com") throw new Error("The hosted payment destination could not be verified");
+        setSensitiveOverlay(true);
         window.location.assign(redirect.toString());
         return;
       }
       setCheckout(payload.checkout);
       setPaymentStatus(payload.checkout.status === "initiation_unknown" ? "unknown" : payload.checkout.status);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Checkout could not be prepared"); }
+    } catch (reason) {
+      capture({ name: "storefront_friction_noted", properties: { surface: "checkout", kind: "checkout_unavailable" } });
+      setError(reason instanceof Error ? reason.message : "Checkout could not be prepared");
+    }
     finally { setBusy(false); }
   }
 
@@ -98,7 +125,7 @@ export default function CheckoutPage() {
     setBusy(true); setError("");
     try {
       const response = await fetch("/api/checkout/payment", {
-        method: "POST", headers: { "content-type": "application/json" }, cache: "no-store",
+        method: "POST", headers: { "content-type": "application/json", ...attributionHeaders() }, cache: "no-store",
         body: JSON.stringify({ session_id: checkout.session_id, outcome, event_id: eventId }),
       });
       const payload = await response.json() as { payment?: { status?: string }; message?: string };
@@ -106,6 +133,9 @@ export default function CheckoutPage() {
       const status = payload.payment?.status || "unknown";
       setPaymentStatus(status);
       if (status === "captured") router.push("/order/confirmation");
+      if (status === "declined" || status === "cancelled" || status === "unknown") {
+        capture({ name: "storefront_friction_noted", properties: { surface: "payment", kind: status === "declined" ? "payment_declined" : status === "cancelled" ? "payment_cancelled" : "payment_unknown" } });
+      }
     } catch (reason) {
       setPaymentStatus("unknown");
       setError(reason instanceof Error ? reason.message : "Payment status is unknown");
@@ -119,7 +149,7 @@ export default function CheckoutPage() {
 
   const held = bag?.hold?.status === "active" && Date.parse(bag.hold.expires_at) > Date.now();
   const total = checkout ? Number(checkout.amount) : bag?.total || 0;
-  return <div className="content checkout-page">
+  return <div className="content checkout-page" data-storefront-no-capture="">
     <p className="eyebrow">The Collector / secure checkout</p>
     <h1>Review your order</h1>
     <p className="checkout-intro">Confirm your contact and fulfillment details. The server checks availability and calculates the final VAT-inclusive ZAR total before payment.</p>

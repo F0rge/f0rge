@@ -24,7 +24,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       cartAttached = attached.status >= 200 && attached.status < 300;
       if (attached.status === 404) {
         const response = privateReply({
-          customer: { email: customer.email, first_name: customer.first_name, last_name: customer.last_name },
+          customer: { id: customer.id, email: customer.email, first_name: customer.first_name, last_name: customer.last_name },
           cart_attached: false,
         });
         response.cookies.set(cartCookie, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 });
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (!cartAttached) return privateReply({ message: "Your bag could not be linked to this account" }, 503);
     }
     const response = privateReply({
-      customer: { email: customer.email, first_name: customer.first_name, last_name: customer.last_name },
+      customer: { id: customer.id, email: customer.email, first_name: customer.first_name, last_name: customer.last_name },
       cart_attached: cartAttached,
     });
     if (cartAttached && cartId) response.cookies.set(cartCookie, signedCart(cartId), {

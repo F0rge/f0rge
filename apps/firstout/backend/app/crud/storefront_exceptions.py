@@ -36,16 +36,26 @@ class StorefrontExceptionCRUD:
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def get_by_seed_key(
-        self, company_id: uuid.UUID, seed_key: str
+        self, company_id: uuid.UUID, seed_key: str, *, for_update: bool = False
     ) -> Optional[StorefrontCommerceException]:
-        return (
-            await self.db.execute(
-                select(StorefrontCommerceException).where(
-                    StorefrontCommerceException.company_id == company_id,
-                    StorefrontCommerceException.seed_key == seed_key,
-                )
+        stmt = select(StorefrontCommerceException).where(
+            StorefrontCommerceException.company_id == company_id,
+            StorefrontCommerceException.seed_key == seed_key,
+        )
+        if for_update:
+            stmt = stmt.with_for_update()
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def list_by_correlation(
+        self, company_id: uuid.UUID, correlation_id: str
+    ) -> list[StorefrontCommerceException]:
+        result = await self.db.execute(
+            select(StorefrontCommerceException).where(
+                StorefrontCommerceException.company_id == company_id,
+                StorefrontCommerceException.correlation_id == correlation_id,
             )
-        ).scalar_one_or_none()
+        )
+        return list(result.scalars().all())
 
     async def add(self, row: StorefrontCommerceException) -> StorefrontCommerceException:
         self.db.add(row)

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { MedusaVariant, StoreProduct } from "@/lib/medusa";
 import { useProductAttention } from "@/components/analytics/use-product-attention";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
+import { zarMinorUnits } from "@/lib/analytics/money";
 
 function formatPrice(variant?: MedusaVariant): string {
   const amount = variant?.calculated_price?.calculated_amount;
@@ -109,6 +110,11 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
           const response = await fetch("/api/bag", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ variant_id: variant.id, quantity: 1 }) });
           const result = await response.json();
           if (!response.ok) throw new Error(result.message || "Could not add this piece");
+          const valueMinor = zarMinorUnits(variant.calculated_price?.calculated_amount);
+          if (valueMinor !== null) capture({
+            name: "storefront_cart_item_added",
+            properties: { variant_id: variant.id, product_id: product.id, quantity: 1, value_minor: valueMinor },
+          });
           setBagMessage("Added to bag. Review your bag when ready.");
         } catch (error) { setBagMessage(error instanceof Error ? error.message : "Could not add this piece"); }
         finally { setAdding(false); }
