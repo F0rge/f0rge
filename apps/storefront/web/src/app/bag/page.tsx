@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
+import { zarMinorUnits } from "@/lib/analytics/money";
 import type { Bag } from "@/lib/bag-server";
 
 const money = (value: number) => new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(value);
@@ -23,6 +25,8 @@ async function bagRequest(method: string, path = "/api/bag", body?: unknown): Pr
 
 export default function BagPage() {
   const router = useRouter();
+  const { capture } = useStorefrontAnalytics();
+  const viewedCart = useRef("");
   const [bag, setBag] = useState<Bag | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -32,6 +36,13 @@ export default function BagPage() {
     catch (reason) { setError(reason instanceof Error ? reason.message : "Please try again"); }
   }, []);
   useEffect(() => { void loadBag(); }, [loadBag]);
+  useEffect(() => {
+    if (!bag?.id || bag.items.length === 0 || viewedCart.current === bag.id) return;
+    const valueMinor = zarMinorUnits(bag.total);
+    if (valueMinor === null) return;
+    viewedCart.current = bag.id;
+    capture({ name: "storefront_cart_viewed", properties: { cart_id: bag.id, item_count: bag.items.length, value_minor: valueMinor } });
+  }, [bag, capture]);
 
   async function update(method: string, path: string, body?: unknown) {
     setBusy(true); setError("");
@@ -69,7 +80,11 @@ export default function BagPage() {
             const quantity = Number(event.target.value);
             if (quantity !== item.quantity) void update("PATCH", "/api/bag", { item_id: item.id, quantity });
           }} />
-          <button type="button" className="bag-remove" disabled={busy || held} onClick={() => void update("DELETE", `/api/bag?item_id=${encodeURIComponent(item.id)}`)}>Remove</button>
+          <button type="button" className="bag-remove" disabled={busy || held} onClick={() => {
+            const valueMinor = zarMinorUnits(item.total);
+            if (valueMinor !== null) capture({ name: "storefront_cart_item_removed", properties: { variant_id: item.variant_id, quantity: item.quantity, value_minor: valueMinor, ...(bag.id ? { cart_id: bag.id } : {}) } });
+            void update("DELETE", `/api/bag?item_id=${encodeURIComponent(item.id)}`);
+          }}>Remove</button>
         </div><strong>{money(item.total)}</strong>
       </div>)}</div>
       <aside className="bag-summary"><p className="eyebrow">Order summary</p><dl><dt>Subtotal</dt><dd>{money(bag.subtotal)}</dd><dt>Total incl. VAT</dt><dd data-testid="bag-total">{money(bag.total)}</dd></dl>

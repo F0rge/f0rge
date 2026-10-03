@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { publishPaymentFailure } from "@/lib/analytics/posthog-server";
 import { currentCartId, medusaResponse } from "@/lib/bag-server";
 import { isSameOrigin } from "@/lib/same-origin";
 
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     );
     if (status < 200 || status >= 300) return reply({ message: payload.message || "Payment status could not be updated" }, status);
+    void publishPaymentFailure({ headers: request.headers, cartId, outcome }).catch(() => undefined);
     return reply({ payment: { status: payload.payment?.status, duplicate: payload.payment?.duplicate === true } }, status);
   } catch (error) {
     return reply({ message: error instanceof Error ? error.message : "Payment status is unknown" }, 503);

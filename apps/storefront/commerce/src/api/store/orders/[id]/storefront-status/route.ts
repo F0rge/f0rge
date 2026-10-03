@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { ContainerRegistrationKeys, MedusaError } from "@medusajs/framework/utils";
+import { storefrontAnalyticsOrderId, storefrontCustomerRefund } from "../../../../../storefront-analytics-ids";
 import { storefrontOrderHistory } from "../../../../../storefront-order-history";
 
 function validAccess(orderId: string, supplied: unknown, digest: unknown): boolean {
@@ -40,9 +41,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
     const refundRows = Array.isArray(order.metadata?.storefront_refunds) ? order.metadata.storefront_refunds : [];
     const refunds = refundRows.filter((item: unknown) => item && typeof item === "object" &&
       ["pending", "succeeded", "failed"].includes((item as Record<string, unknown>).status as string))
-      .map((item: Record<string, unknown>) => ({
-        amount_minor: Number(item.amount_minor), currency_code: item.currency_code, status: item.status,
-      }));
+      .map((item: Record<string, unknown>) => storefrontCustomerRefund(item));
     const fulfillmentStatus = order.metadata?.storefront_fulfillment_status || {
       fulfillment_type: checkout.fulfillment_type || "delivery",
       status: "confirmed",
@@ -52,6 +51,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse): Promise<void
       status: "captured",
       order: {
         reference: order.display_id,
+        analytics_order_id: storefrontAnalyticsOrderId(order.id),
         email: order.email,
         currency_code: order.currency_code,
         subtotal: history.subtotal,

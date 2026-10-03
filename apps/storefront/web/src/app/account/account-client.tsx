@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useClerk } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { Button } from "@f0rge/ui";
 import { TextInput } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
@@ -28,8 +28,10 @@ interface AccountClientProps {
 
 export function AccountClient({ customer }: AccountClientProps) {
   const { signOut } = useClerk();
+  const { user, isLoaded } = useUser();
   const router = useRouter();
-  const { resetIdentity } = useStorefrontAnalytics();
+  const { resetIdentity, identify } = useStorefrontAnalytics();
+  const [customerId, setCustomerId] = useState<string | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [draft, setDraft] = useState<AddressDraft>(blankAddress);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,12 +49,19 @@ export function AccountClient({ customer }: AccountClientProps) {
     void (async () => {
       try {
         const response = await fetch("/api/account/session", { method: "POST", cache: "no-store" });
-        const payload = await response.json() as { message?: string };
+        const payload = await response.json() as { customer?: { id?: string }; message?: string };
         if (!response.ok) throw new Error(payload.message || "Your account could not be opened");
+        if (payload.customer?.id) setCustomerId(payload.customer.id);
         await loadAddresses();
       } catch (reason) { setError(reason instanceof Error ? reason.message : "Your account could not be opened"); }
     })();
   }, [loadAddresses]);
+
+  useEffect(() => {
+    if (!customerId || !isLoaded) return;
+    const createdAt = user?.createdAt ? new Date(user.createdAt).getTime() : 0;
+    identify(customerId, { created: createdAt > 0 && Date.now() - createdAt < 10 * 60 * 1000 });
+  }, [customerId, identify, isLoaded, user]);
 
   async function saveAddress(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");

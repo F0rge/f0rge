@@ -2,12 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
+import { ANALYTICS_CUSTOMER_TYPE_HEADER } from "@/lib/analytics/attribution";
+import { confirmedPaymentStep } from "@/lib/analytics/commerce-events";
 import { fulfillmentStatusLabel } from "@/lib/order-fulfillment";
 
 type Confirmation = {
   status: "captured" | "pending" | "processing" | "declined" | "cancelled" | "paid_exception" | "unknown";
   order?: {
     reference: number;
+    analytics_order_id?: string;
     email: string;
     currency_code: string;
     subtotal: number;
@@ -46,15 +50,18 @@ const refundLabels: Record<string, string> = {
 };
 
 export default function OrderConfirmationPage() {
+  const { attributionHeaders, capture, setSensitiveOverlay } = useStorefrontAnalytics();
   const [result, setResult] = useState<Confirmation | null>(null);
+  const notedPayment = useRef<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const emailAccess = useRef<{ order_id: string; access_token: string } | null>(null);
   const load = useCallback(async () => {
     try {
       const capability = emailAccess.current;
+      const analyticsHeaders = attributionHeaders();
       const response = await fetch("/api/order/confirmation", {
         method: capability ? "POST" : "GET",
-        headers: capability ? { "content-type": "application/json" } : undefined,
+        headers: capability ? { "content-type": "application/json", ...analyticsHeaders } : analyticsHeaders,
         body: capability ? JSON.stringify(capability) : undefined,
         cache: "no-store",
       });
@@ -66,7 +73,31 @@ export default function OrderConfirmationPage() {
     } catch {
       setUnavailable(true);
     }
-  }, []);
+  }, [attributionHeaders]);
+  useEffect(() => {
+    setSensitiveOverlay(true);
+    return () => setSensitiveOverlay(false);
+  }, [setSensitiveOverlay]);
+  useEffect(() => {
+    const step = confirmedPaymentStep({
+      status: result?.status,
+      analyticsOrderId: result?.order?.analytics_order_id,
+      customerType: attributionHeaders()[ANALYTICS_CUSTOMER_TYPE_HEADER] ?? null,
+    });
+    if (!step) return;
+    const orderId = step.properties.cart_id;
+    if (notedPayment.current === orderId) return;
+    const storageKey = `storefront-payment-step:${orderId}`;
+    try {
+      if (window.sessionStorage.getItem(storageKey) === "1") {
+        notedPayment.current = orderId;
+        return;
+      }
+      window.sessionStorage.setItem(storageKey, "1");
+    } catch { /* A private session still emits once for this page load. */ }
+    notedPayment.current = orderId;
+    capture(step);
+  }, [attributionHeaders, capture, result]);
   useEffect(() => {
     const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const orderId = fragment.get("order_id");
@@ -80,7 +111,7 @@ export default function OrderConfirmationPage() {
     return () => window.clearInterval(timer);
   }, [load]);
 
-  return <div className="content confirmation-page">
+  return <div className="content confirmation-page" data-storefront-no-capture="">
     <p className="eyebrow">The Collector / private order confirmation</p>
     {!result && !unavailable && <p role="status">Checking your order…</p>}
     {unavailable && <div role="alert"><h1>Confirmation temporarily unavailable</h1><p>Refresh this page to check again. Order details are available only through the private checkout capability saved in this browser.</p><button type="button" onClick={() => void load()}>Check again</button></div>}

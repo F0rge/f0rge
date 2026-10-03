@@ -87,9 +87,11 @@ test("returns the status snapshot only for the matching signed order capability"
         tax_total: 15,
         captured_amount_minor: 11500,
         captured_at: "2026-10-01T12:00:00.000Z",
+        analytics_order_id: orderId,
         items: [{ total: 115, unit_price: 115 }],
       },
     });
+    expect(JSON.stringify(response.body)).not.toContain("provider_refund_id");
   } finally {
     if (priorSecret === undefined) delete process.env.STOREFRONT_BFF_SECRET;
     else process.env.STOREFRONT_BFF_SECRET = priorSecret;

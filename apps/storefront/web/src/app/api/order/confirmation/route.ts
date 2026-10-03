@@ -8,6 +8,7 @@ import {
   signedEmailOrderAccess,
   storefrontOrderStatusResponse,
 } from "@/lib/bag-server";
+import { publishConfirmationOutcomes } from "@/lib/analytics/posthog-server";
 import { isSameOrigin } from "@/lib/same-origin";
 
 function reply(payload: unknown, status: number): NextResponse {
@@ -18,17 +19,23 @@ function reply(payload: unknown, status: number): NextResponse {
   return response;
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const emailAccess = await currentEmailOrderAccess();
     if (emailAccess) {
       const { status, payload } = await storefrontOrderStatusResponse(emailAccess.orderId, emailAccess.token);
+      if (status >= 200 && status < 300) {
+        void publishConfirmationOutcomes({ headers: request.headers, orderId: emailAccess.orderId, payload }).catch(() => undefined);
+      }
       return reply(payload, status);
     }
     const cartId = await currentCartId();
     const token = cartId ? await currentOrderAccessToken(cartId) : null;
     if (!cartId || !token) return reply({ message: "Order confirmation not found" }, 404);
     const { status, payload } = await orderConfirmationResponse(cartId, token);
+    if (status >= 200 && status < 300) {
+      void publishConfirmationOutcomes({ headers: request.headers, cartId, payload }).catch(() => undefined);
+    }
     return reply(payload, status);
   } catch {
     return reply({ message: "Order confirmation is temporarily unavailable" }, 503);
@@ -49,6 +56,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   try {
     const { status, payload } = await storefrontOrderStatusResponse(orderId, token);
+    if (status >= 200 && status < 300) {
+      void publishConfirmationOutcomes({ headers: request.headers, orderId, payload }).catch(() => undefined);
+    }
     const response = reply(payload, status);
     if (status >= 200 && status < 300) {
       response.cookies.set(emailOrderAccessCookie, signedEmailOrderAccess(orderId, token), {

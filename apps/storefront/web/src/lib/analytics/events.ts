@@ -1,3 +1,5 @@
+import { sanitizeCommerceBrowserEvent, type StorefrontCommerceBrowserEvent } from "./commerce-events";
+
 export type AnalyticsPageKey = "home" | "shop" | "collections" | "product";
 export type AnalyticsSurface = "home" | "shop" | "collections";
 export type SearchSortOrder = "default" | "price_asc" | "price_desc";
@@ -10,10 +12,11 @@ export type StorefrontBrowserEvent =
   | { name: "storefront_product_media_selected"; properties: { product_id: string; media_index: number } }
   | { name: "storefront_product_variant_selected"; properties: { product_id: string; option_id: string; value_index: number; variant_id?: string } }
   | { name: "storefront_search_results_viewed"; properties: { query_present: boolean; category_id?: string; collection_id?: string; availability: "all" | "in_stock"; price_filter_active: boolean; sort_order: SearchSortOrder; result_count: number } }
-  | { name: "storefront_product_attention_summary"; properties: { product_id: string; active_seconds: number; visibility_threshold: "half_visible" } };
+  | { name: "storefront_product_attention_summary"; properties: { product_id: string; active_seconds: number; visibility_threshold: "half_visible" } }
+  | StorefrontCommerceBrowserEvent;
 
 export type AnalyticsProperties = Record<string, boolean | number | string>;
-export type SanitizedAnalyticsEvent = { name: StorefrontBrowserEvent["name"]; properties: AnalyticsProperties };
+export type SanitizedAnalyticsEvent = { name: string; properties: AnalyticsProperties };
 
 /** A provider-neutral sink that can be implemented by a browser or server adapter. */
 export interface AnalyticsProvider<Event> {
@@ -134,7 +137,7 @@ export function sanitizeAnalyticsEvent(input: unknown): SanitizedAnalyticsEvent 
         : null;
     }
     default:
-      return null;
+      return sanitizeCommerceBrowserEvent(input);
   }
 }
 
