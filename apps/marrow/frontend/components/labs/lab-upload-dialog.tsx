@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Upload, Loader2, FileText } from 'lucide-react'
 import {
@@ -9,13 +9,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  Button,
+  cn,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  useFileUpload,
 } from '@f0rge/ui'
-import { Button } from '@f0rge/ui'
 import { useExtractLabUpload, useImportLabUpload } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
 import { LabFormDialog } from './lab-form-dialog'
 import type { ExtractionResult } from '@/lib/api/types'
-import { cn } from '@f0rge/ui'
 import { statusText } from '@/lib/ui/status'
 
 interface LabUploadDialogProps {
@@ -25,23 +29,32 @@ interface LabUploadDialogProps {
 
 type Phase = 'pick' | 'extracting' | 'review' | 'done'
 
+const ACCEPT = '.pdf,image/jpeg,image/png,image/webp'
+
 export function LabUploadDialog({ open, onOpenChange }: LabUploadDialogProps) {
   const [phase, setPhase] = useState<Phase>('pick')
-  const [dragOver, setDragOver] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [result, setResult] = useState<ExtractionResult | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const extractUpload = useExtractLabUpload()
   const importUpload = useImportLabUpload()
 
+  const [{ isDragging, errors }, fileActions] = useFileUpload({
+    accept: ACCEPT,
+    multiple: false,
+    onFilesAdded: (added) => {
+      const file = added[0]?.file
+      if (file instanceof File) processFile(file)
+    },
+  })
+
   function reset() {
     setPhase('pick')
-    setDragOver(false)
     setSelectedFile(null)
     setResult(null)
     setConfirmOpen(false)
+    fileActions.clearFiles()
   }
 
   function handleClose(o: boolean) {
@@ -62,18 +75,6 @@ export function LabUploadDialog({ open, onOpenChange }: LabUploadDialogProps) {
       setPhase('pick')
       setSelectedFile(null)
     }
-  }
-
-  function handleFilePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) processFile(file)
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setDragOver(false)
-    const file = e.dataTransfer.files[0]
-    if (file) processFile(file)
   }
 
   async function handleDirectImport() {
@@ -99,33 +100,33 @@ export function LabUploadDialog({ open, onOpenChange }: LabUploadDialogProps) {
           </DialogHeader>
 
           {phase === 'pick' && (
-            <div className="space-y-4">
+            <Field>
+              <FieldLabel>Lab file</FieldLabel>
               <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() => fileRef.current?.click()}
-                className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-12 transition-colors ${
-                  dragOver
+                onDragEnter={fileActions.handleDragEnter}
+                onDragLeave={fileActions.handleDragLeave}
+                onDragOver={fileActions.handleDragOver}
+                onDrop={fileActions.handleDrop}
+                onClick={fileActions.openFileDialog}
+                className={cn(
+                  'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-12 transition-colors',
+                  isDragging
                     ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-primary/50 hover:bg-muted/40'
-                }`}
+                    : 'border-border hover:border-primary/50 hover:bg-muted/40',
+                )}
               >
                 <Upload className="size-8 text-muted-foreground" />
                 <div className="text-center">
                   <p className="text-sm font-medium">Drop a PDF or image here</p>
                   <p className="text-xs text-muted-foreground">or click to browse</p>
                 </div>
-                <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, WebP</p>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".pdf,image/jpeg,image/png,image/webp"
-                  onChange={handleFilePick}
-                  className="hidden"
-                />
+                <FieldDescription>PDF, JPEG, PNG, WebP</FieldDescription>
+                <input {...fileActions.getInputProps({ accept: ACCEPT })} className="sr-only" />
               </div>
-            </div>
+              {errors.length > 0 && (
+                <p className="text-sm text-destructive">{errors[0]}</p>
+              )}
+            </Field>
           )}
 
           {phase === 'extracting' && (

@@ -2,14 +2,15 @@
 
 import { toast } from 'sonner'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
 } from '@f0rge/ui'
-import { Button } from '@f0rge/ui'
 import { Select, Textarea, useForm } from '@f0rge/ui/forms'
 import { useUpdateTreatment } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
@@ -56,16 +57,16 @@ export function DiscontinueDialog({ open, onOpenChange, treatment }: Discontinue
   })
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isCorrection ? 'Update reason' : 'Discontinue treatment'}</DialogTitle>
-          <DialogDescription>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="sm:max-w-md">
+        <AlertDialogHeader className="text-left sm:text-left">
+          <AlertDialogTitle>{isCorrection ? 'Update reason' : 'Discontinue treatment'}</AlertDialogTitle>
+          <AlertDialogDescription>
             {isCorrection
               ? `Update why ${treatment.name} was stopped.`
               : `Record why ${treatment.name} is being stopped.`}
-          </DialogDescription>
-        </DialogHeader>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
 
         <form onSubmit={handleConfirm} className="space-y-4">
           <Select
@@ -85,13 +86,14 @@ export function DiscontinueDialog({ open, onOpenChange, treatment }: Discontinue
             {...form.getInputProps('note')}
           />
 
-          <DialogFooter>
+          <AlertDialogFooter className="sm:justify-end">
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
             <Button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? 'Saving...' : 'Discontinue'}
             </Button>
-          </DialogFooter>
+          </AlertDialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

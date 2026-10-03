@@ -9,7 +9,17 @@ import { EntryCard } from '@/components/history/entry-card'
 import { ProtocolStreakHint } from '@/components/history/protocol-streak-hint'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
-import { FetchError } from '@f0rge/ui'
+import {
+  Button,
+  ButtonGroup,
+  ButtonGroupText,
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+  FetchError,
+} from '@f0rge/ui'
 import { useEntries } from '@/lib/api/hooks'
 
 function getCurrentMonth(): string {
@@ -57,25 +67,29 @@ function HistoryContent() {
     <PageShell>
       <PageHeader title="History" />
 
-      <div className="mb-4 flex items-center justify-between">
-        <button
+      <ButtonGroup className="mb-4 w-full justify-between">
+        <Button
           type="button"
+          variant="outline"
+          size="icon"
           onClick={() => setMonth(shiftMonth(month, -1))}
           aria-label="Previous month"
-          className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted"
         >
           <ChevronLeft className="size-5" />
-        </button>
-        <span className="text-sm font-medium">{formatMonthLabel(month)}</span>
-        <button
+        </Button>
+        <ButtonGroupText className="flex-1 justify-center border-0 bg-transparent">
+          {formatMonthLabel(month)}
+        </ButtonGroupText>
+        <Button
           type="button"
+          variant="outline"
+          size="icon"
           onClick={() => setMonth(shiftMonth(month, 1))}
           aria-label="Next month"
-          className="flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted"
         >
           <ChevronRight className="size-5" />
-        </button>
-      </div>
+        </Button>
+      </ButtonGroup>
 
       <ProtocolStreakHint month={month} />
 
@@ -86,18 +100,17 @@ function HistoryContent() {
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : (entries ?? []).length === 0 ? (
-        <div
-          className="rounded-[var(--radius)] border border-border bg-card px-5 py-6 text-center"
-          role="status"
-        >
-          <p className="text-sm text-muted-foreground">No entries this month yet.</p>
-          <Link
-            href="/checkin"
-            className="mt-3 inline-flex min-h-[44px] items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
-          >
-            Start today&apos;s check-in
-          </Link>
-        </div>
+        <Empty className="border-border" role="status">
+          <EmptyHeader>
+            <EmptyTitle>No entries this month yet</EmptyTitle>
+            <EmptyDescription>Log a check-in to see it on the calendar.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button render={<Link href="/checkin" />} nativeButton={false}>
+              Start today&apos;s check-in
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : (
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-7" data-tour="history-calendar">
