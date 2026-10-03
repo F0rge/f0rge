@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { CONSENTED_MEASUREMENT_DISCLAIMER, consentedBrowsingReports } from '../src/lib/analytics/reports'
 
 const consentKey = 'storefront-analytics-consent-v1'
 const productHandle = '11111111-1111-4111-8111-111111111111'
@@ -80,6 +81,8 @@ test('product attention excludes hidden and idle time and sends one visit summar
   await page.goto(productUrl)
   await expect(page.getByRole('heading', { name: /Test chair/ })).toBeVisible()
   await expect(page.locator('.hero-study')).toBeInViewport({ ratio: 0.5 })
+  await expect(page.locator('.product-attention-region')).toBeInViewport({ ratio: 0.5 })
+  await page.evaluate(() => document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })))
   await page.clock.runFor(5_000)
   await page.evaluate(() => {
     let state = 'hidden'
@@ -104,4 +107,34 @@ test('product attention excludes hidden and idle time and sends one visit summar
   await expect.poll(() => captured.filter((event) => event.event === 'storefront_product_attention_summary').length).toBe(1)
   const summary = captured.find((event) => event.event === 'storefront_product_attention_summary')
   expect(summary?.properties).toMatchObject({ product_id: 'prod_test_chair', active_seconds: 10, visibility_threshold: 'half_visible' })
+})
+
+test('shop impressions and reports stay on the consented allowlist', async ({ page }) => {
+  await chooseStoredConsent(page, 'accepted')
+  await page.goto('/shop?utm_source=spring_news&utm_campaign=bedroom-sale')
+  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
+  await page.locator('a.product-card').first().scrollIntoViewIfNeeded()
+  await expect.poll(() => captured.some((event) => event.event === 'storefront_product_impressed')).toBe(true)
+  await page.locator('a.product-card').first().click()
+  await expect(page.getByRole('heading', { name: /Test chair/ })).toBeVisible()
+  await expect(page.locator('.product-attention-region')).toBeVisible()
+  const names = captured.map((event) => event.event)
+  expect(names).toContain('storefront_product_selected')
+  expect(names.filter((name) => name === 'storefront_search_results_viewed')).toHaveLength(1)
+  const reports = consentedBrowsingReports(captured.map((event) => ({ name: event.event, properties: event.properties })))
+  expect(reports.acquisition.disclaimer).toBe(CONSENTED_MEASUREMENT_DISCLAIMER)
+  expect(reports.product.scope).toBe('consented_visitors')
+  expect(reports.search.rows[0]).toMatchObject({ result_count: 1, query_present: false })
+})
+
+test('analytics transport failure does not block browsing', async ({ page }) => {
+  await page.unroute('https://eu.i.posthog.com/i/v0/e/')
+  await page.route('https://eu.i.posthog.com/i/v0/e/', async (route) => {
+    await route.fulfill({ status: 500, contentType: 'application/json', body: '{"status":"error"}' })
+  })
+  await chooseStoredConsent(page, 'accepted')
+  await page.goto('/shop')
+  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
+  await page.getByRole('link', { name: /Test chair/ }).first().click()
+  await expect(page.getByRole('heading', { name: /Test chair/ })).toBeVisible()
 })

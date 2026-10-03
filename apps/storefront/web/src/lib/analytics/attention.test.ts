@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isProductAttentionEligible, ProductAttentionAccumulator } from "./attention";
+import { isProductAttentionEligible, productAttentionVisibility, ProductAttentionAccumulator } from "./attention";
 
 describe("product attention accumulation", () => {
   it("requires at least half visibility, a visible document, and focus", () => {
@@ -7,6 +7,12 @@ describe("product attention accumulation", () => {
     expect(isProductAttentionEligible(0.5, "visible", true)).toBe(true);
     expect(isProductAttentionEligible(1, "hidden", true)).toBe(false);
     expect(isProductAttentionEligible(1, "visible", false)).toBe(false);
+  });
+
+  it("lets a long product region qualify when it covers half the viewport", () => {
+    expect(productAttentionVisibility(0.2, 400, 800)).toBe(0.5);
+    expect(productAttentionVisibility(0.6, 100, 800)).toBe(0.6);
+    expect(isProductAttentionEligible(productAttentionVisibility(0.2, 400, 800), "visible", true)).toBe(true);
   });
 
   it("counts only visible, focused intervals and caps idle time at 30 seconds", () => {

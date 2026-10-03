@@ -16,6 +16,8 @@ type AnalyticsContextValue = {
 };
 
 const AnalyticsContext = createContext<AnalyticsContextValue | null>(null);
+let lastTrackedPageKey = "";
+let attributionSent = false;
 
 function browserConsentStorage(): ConsentStorage | null {
   try {
@@ -27,25 +29,26 @@ function browserConsentStorage(): ConsentStorage | null {
 
 function PageViewTracker({ enabled, capture }: { enabled: boolean; capture(event: StorefrontBrowserEvent): void }) {
   const pathname = usePathname();
-  const lastPageRef = useRef("");
-  const attributionSentRef = useRef(false);
 
   useEffect(() => {
-    if (!enabled || !pathname) return;
+    if (!enabled) {
+      lastTrackedPageKey = "";
+      attributionSent = false;
+      return;
+    }
+    if (!pathname) return;
     const page = analyticsPageForPathname(pathname);
     if (!page) return;
     const pageKey = `${page.pageKey}:${page.productId || ""}`;
-    if (lastPageRef.current === pageKey) return;
+    if (lastTrackedPageKey === pageKey) return;
 
-    const acquisition = attributionSentRef.current
-      ? {}
-      : acquisitionProperties(window.location.search, document.referrer);
+    const acquisition = attributionSent ? {} : acquisitionProperties(window.location.search, document.referrer);
     capture({
       name: "storefront_page_viewed",
       properties: { page_key: page.pageKey, ...(page.productId ? { product_id: page.productId } : {}), ...acquisition },
     });
-    lastPageRef.current = pageKey;
-    attributionSentRef.current = true;
+    lastTrackedPageKey = pageKey;
+    attributionSent = true;
   }, [capture, enabled, pathname]);
 
   return null;

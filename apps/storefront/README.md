@@ -183,11 +183,13 @@ Start the fixture from `apps/storefront/web` with
 `MEDUSA_BACKEND_URL=http://127.0.0.1:9011 NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_test_fixture NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_test_fixture NEXT_PUBLIC_BASE_URL=http://localhost:3004 npm run dev -- --webpack`.
 Then run `STOREFRONT_ANALYTICS_E2E=true npx playwright test --config playwright.config.ts e2e/analytics.spec.ts`.
 The test-only token is safe only because the browser test intercepts ingestion;
-do not use it for live browsing. The tests verify reject/withdraw behavior,
-event allowlists, and active-time summaries without contacting PostHog. Once the
-EU project exists, create these initial
+do not use it for live browsing or a production PostHog project. The tests verify
+reject/withdraw behavior, event allowlists, and active-time summaries without
+contacting PostHog. Once the EU test project exists, create these initial
 saved reports in its UI: accepted page views by `page_key` and campaign; product
 impressions and selections by `surface` and `product_id`; search-result count
 by `availability` and `sort_order`; and product attention by
-`active_seconds` and `product_id`. Search text and full URLs are intentionally
-not captured, so reports cannot break them down by query string.
+`active_seconds` and `product_id`. Label each report that consented visitors are
+not a census, and keep denominators on the same consent scope. Search text and
+full URLs are intentionally not captured, so reports cannot break them down by
+query string. See `docs/757-consented-measurement.md`.
