@@ -1,6 +1,7 @@
 'use client'
 
-import { Card, CardContent } from '@f0rge/ui'
+import { Card } from '@f0rge/ui'
+import { CheckinCardBody } from '@/components/checkin/checkin-card-body'
 import { ScaleInput } from '@/components/checkin/scale-input'
 import { BristolInput } from '@/components/checkin/bristol-input'
 import type { StoolStatus } from '@/lib/api/types'
@@ -35,7 +36,7 @@ export function GutCard({
         onToggleCollapsed={onToggleCollapsed}
       />
       {!collapsed && (
-      <CardContent className="space-y-5">
+      <CheckinCardBody>
         <ScaleInput
           label="Bloating"
           value={bloating}
@@ -73,7 +74,7 @@ export function GutCard({
             />
           )}
         </div>
-      </CardContent>
+      </CheckinCardBody>
       )}
     </Card>
   )

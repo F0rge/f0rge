@@ -1,4 +1,4 @@
-import { Card, CardContent, cn } from '@f0rge/ui'
+import { Card, CardContent, Skeleton, cn } from '@f0rge/ui'
 
 function CheckinCardSkeleton({
   className,
@@ -11,11 +11,11 @@ function CheckinCardSkeleton({
     <Card className={cn('h-full', className)}>
       <CardContent className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-          <div className="h-5 w-14 animate-pulse rounded-full bg-muted" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-5 w-14 rounded-full" />
         </div>
         {Array.from({ length: contentLines }, (_, i) => (
-          <div key={i} className="h-10 w-full animate-pulse rounded-xl bg-muted" />
+          <Skeleton key={i} className="h-10 w-full rounded-xl" />
         ))}
       </CardContent>
     </Card>

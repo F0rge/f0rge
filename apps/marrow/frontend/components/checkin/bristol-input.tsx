@@ -1,5 +1,13 @@
 'use client'
 
+import {
+  Field,
+  FieldDescription,
+  FieldTitle,
+  ToggleGroup,
+  ToggleGroupItem,
+} from '@f0rge/ui'
+
 const BRISTOL_TYPES: { value: number; label: string; hint: string }[] = [
   { value: 1, label: '1', hint: 'Separate hard lumps' },
   { value: 2, label: '2', hint: 'Lumpy sausage' },
@@ -15,37 +23,43 @@ interface BristolInputProps {
   onChange: (value: number) => void
 }
 
+const bristolItemClass =
+  'min-h-[44px] w-full justify-center text-sm font-semibold data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm'
+
 export function BristolInput({ value, onChange }: BristolInputProps) {
   const active = BRISTOL_TYPES.find((b) => b.value === value)
 
   return (
-    <div className="space-y-2">
-      <label className="text-xs font-medium text-muted-foreground">
+    <Field className="gap-2">
+      <FieldTitle className="text-xs font-medium text-muted-foreground">
         Bristol stool type
-      </label>
-      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7 sm:gap-1.5">
-        {BRISTOL_TYPES.map((b) => {
-          const isActive = value === b.value
-          return (
-            <button
-              key={b.value}
-              type="button"
-              onClick={() => onChange(b.value)}
-              className={`min-h-[44px] rounded-lg border text-sm font-semibold transition-all ${
-                isActive
-                  ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                  : 'border-border bg-background text-foreground hover:bg-muted'
-              }`}
-              aria-label={`Bristol type ${b.value}: ${b.hint}`}
-            >
-              {b.label}
-            </button>
-          )
-        })}
-      </div>
-      <p className="text-xs text-muted-foreground">
+      </FieldTitle>
+      <ToggleGroup
+        spacing={0}
+        variant="outline"
+        value={value != null ? [String(value)] : []}
+        onValueChange={(next) => {
+          const picked = next[0]
+          if (picked == null) return
+          onChange(Number(picked))
+        }}
+        aria-label="Bristol stool type"
+        className="grid w-full grid-cols-4 gap-2 sm:grid-cols-7 sm:gap-1.5"
+      >
+        {BRISTOL_TYPES.map((b) => (
+          <ToggleGroupItem
+            key={b.value}
+            value={String(b.value)}
+            aria-label={`Bristol type ${b.value}: ${b.hint}`}
+            className={bristolItemClass}
+          >
+            {b.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      <FieldDescription className="text-xs">
         {active ? `Type ${active.value}: ${active.hint}` : '1 = hard pellets, 4 = ideal, 7 = liquid'}
-      </p>
-    </div>
+      </FieldDescription>
+    </Field>
   )
 }

@@ -8,7 +8,19 @@ import { TagPeoplePicker } from './tag-people-picker'
 import { useUploadPhoto, useUpdatePhotoLabel } from '@/lib/api/hooks'
 import { useConnections, useGroups } from '@/lib/api/hooks/social'
 import { getErrorDetail } from '@f0rge/ui/api'
-import { Button, cn } from '@f0rge/ui'
+import {
+  Button,
+  Field,
+  FieldTitle,
+  Input,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  cn,
+  useFileUpload,
+} from '@f0rge/ui'
 import { defaultMealTimeForEntry, entryLocalDate } from '@/lib/checkin/meal-time'
 import { statusText } from '@/lib/ui/status'
 import type { Photo } from '@/lib/api/types'
@@ -46,7 +58,7 @@ export function PhotoCapture({
   onEntryEnsured,
 }: PhotoCaptureProps) {
   const cameraRef = useRef<HTMLInputElement>(null)
-  const galleryRef = useRef<HTMLInputElement>(null)
+  const handleFileSelectRef = useRef<(files: FileList | null) => void>(() => {})
   const uploadPhoto = useUploadPhoto()
   const updatePhotoLabel = useUpdatePhotoLabel()
   const connections = useConnections()
@@ -203,6 +215,25 @@ export function PhotoCapture({
     }
   }, [date, enqueueUpload, runUpload])
 
+  useEffect(() => {
+    handleFileSelectRef.current = handleFileSelect
+  }, [handleFileSelect])
+
+  const [, { getInputProps: getGalleryInputProps, openFileDialog }] = useFileUpload({
+    accept: 'image/*',
+    multiple: true,
+    onFilesAdded: (added) => {
+      const dt = new DataTransfer()
+      for (const item of added) {
+        if (item.file instanceof File) dt.items.add(item.file)
+      }
+      if (dt.files.length > 0) {
+        handleFileSelectRef.current(dt.files)
+        setMealActionsOpen(false)
+      }
+    },
+  })
+
   const handleLabelChange = useCallback(
     (stagedId: string, label: string) => {
       setPhotos((prev) =>
@@ -220,9 +251,8 @@ export function PhotoCapture({
 
   return (
     <div className="space-y-3">
-      <label className="text-sm font-medium leading-none">Add meal</label>
-
-      <div className="space-y-2">
+      <Field className="gap-2">
+        <FieldTitle className="text-sm font-medium">Add meal</FieldTitle>
         <button
           type="button"
           aria-expanded={mealActionsOpen}
@@ -235,51 +265,64 @@ export function PhotoCapture({
             className={cn('size-4 shrink-0 transition-transform', mealActionsOpen && 'rotate-180')}
           />
         </button>
-        {mealActionsOpen && (
-          <div id="meal-log-actions" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <button
+      </Field>
+
+      <Sheet open={mealActionsOpen} onOpenChange={setMealActionsOpen}>
+        <SheetContent side="bottom" id="meal-log-actions" className="gap-4">
+          <SheetHeader className="text-left">
+            <SheetTitle>Add a meal photo</SheetTitle>
+            <SheetDescription>Camera, files, or a saved library meal.</SheetDescription>
+          </SheetHeader>
+          <div className="flex flex-col gap-2">
+            <Button
               type="button"
-              onClick={() => cameraRef.current?.click()}
-              className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+              variant="outline"
+              className="min-h-[48px] justify-start gap-2"
+              onClick={() => {
+                cameraRef.current?.click()
+                setMealActionsOpen(false)
+              }}
             >
               <Camera className="size-4 shrink-0" />
               Open camera
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              onClick={() => galleryRef.current?.click()}
-              className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+              variant="outline"
+              className="min-h-[48px] justify-start gap-2"
+              onClick={() => openFileDialog()}
             >
               <ImageIcon className="size-4 shrink-0" />
               From files
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              onClick={() => setLibraryOpen(true)}
-              className="em-press flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-full border border-border bg-background px-2 py-2 text-xs font-medium hover:bg-muted sm:text-sm sm:flex-row sm:gap-2"
+              variant="outline"
+              className="min-h-[48px] justify-start gap-2"
+              onClick={() => {
+                setLibraryOpen(true)
+                setMealActionsOpen(false)
+              }}
             >
               <BookOpen className="size-4 shrink-0" />
               From library
-            </button>
+            </Button>
           </div>
-        )}
-      </div>
+        </SheetContent>
+      </Sheet>
 
       <input
         ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
-        onChange={(e) => { void handleFileSelect(e.target.files) }}
+        onChange={(e) => {
+          void handleFileSelect(e.target.files)
+          setMealActionsOpen(false)
+        }}
         className="hidden"
       />
-      <input
-        ref={galleryRef}
-        type="file"
-        accept="image/*"
-        onChange={(e) => { void handleFileSelect(e.target.files) }}
-        className="hidden"
-      />
+      <input {...getGalleryInputProps({ className: 'hidden' })} />
 
       {photos.length > 0 && (
         <div className="space-y-3">
@@ -310,15 +353,19 @@ export function PhotoCapture({
                     </div>
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <input
-                    type="text"
-                    value={photo.label}
-                    onChange={(e) => handleLabelChange(photo.id, e.target.value)}
-                    ref={(el) => { if (photo.status === 'staged' && !photo.serverPhotoId && el) el.focus() }}
-                    placeholder="Label (optional)"
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
+                <div className="min-w-0 flex-1">
+                  <Field className="gap-1">
+                    <FieldTitle className="sr-only">Meal label</FieldTitle>
+                    <Input
+                      type="text"
+                      value={photo.label}
+                      onChange={(e) => handleLabelChange(photo.id, e.target.value)}
+                      ref={(el) => {
+                        if (photo.status === 'staged' && !photo.serverPhotoId && el) el.focus()
+                      }}
+                      placeholder="Label (optional)"
+                    />
+                  </Field>
                   <p className="mt-1 text-xs text-muted-foreground truncate">{photo.file.name}</p>
                   {photo.status === 'error' && (
                     <>

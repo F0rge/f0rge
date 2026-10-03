@@ -1,5 +1,7 @@
 'use client'
 
+import { Field, FieldTitle, ToggleGroup, ToggleGroupItem } from '@f0rge/ui'
+
 interface BinaryInputProps {
   label: string
   value: boolean
@@ -8,34 +10,32 @@ interface BinaryInputProps {
   falseLabel: string
 }
 
+const binaryItemClass =
+  'min-h-[48px] flex-1 justify-center rounded-xl text-sm font-medium data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm'
+
 export function BinaryInput({ label, value, onChange, trueLabel, falseLabel }: BinaryInputProps) {
   return (
-    <div className="space-y-3">
-      <label className="text-sm font-semibold leading-none">{label}</label>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(true)}
-          className={`min-h-[48px] flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
-            value
-              ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-              : 'border-border bg-background text-foreground hover:bg-muted'
-          }`}
-        >
+    <Field className="gap-3">
+      <FieldTitle className="text-sm font-semibold">{label}</FieldTitle>
+      <ToggleGroup
+        spacing={2}
+        variant="outline"
+        value={[value ? 'true' : 'false']}
+        onValueChange={(next) => {
+          const picked = next[0]
+          if (picked === 'true') onChange(true)
+          if (picked === 'false') onChange(false)
+        }}
+        aria-label={label}
+        className="flex w-full gap-2"
+      >
+        <ToggleGroupItem value="true" className={binaryItemClass}>
           {trueLabel}
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(false)}
-          className={`min-h-[48px] flex-1 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
-            !value
-              ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-              : 'border-border bg-background text-foreground hover:bg-muted'
-          }`}
-        >
+        </ToggleGroupItem>
+        <ToggleGroupItem value="false" className={binaryItemClass}>
           {falseLabel}
-        </button>
-      </div>
-    </div>
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </Field>
   )
 }
