@@ -58,6 +58,15 @@ describe("Clerk and private-preview proxy composition", () => {
     expect(clerkState.invoked).toHaveBeenCalledTimes(1);
   });
 
+  it("matches the Clerk handshake path after the API matcher", async () => {
+    const { config } = await import("./proxy");
+    const api = config.matcher.indexOf("/(api|trpc)(.*)");
+    const clerk = config.matcher.indexOf("/__clerk/:path*");
+    expect(api).toBeGreaterThanOrEqual(0);
+    expect(clerk).toBe(api + 1);
+    expect(config.matcher.filter((pattern) => pattern === "/__clerk/:path*")).toHaveLength(1);
+  });
+
   it("marks account and order-confirmation pages private and non-indexable", async () => {
     const { proxy } = await import("./proxy");
     const authorization = `Basic ${Buffer.from("preview-user:test-preview-password-that-is-long-enough").toString("base64")}`;
