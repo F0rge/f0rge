@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Card, CardContent } from '@f0rge/ui'
+import { Card } from '@f0rge/ui'
+import { CheckinCardBody } from '@/components/checkin/checkin-card-body'
 import { PhotoCapture } from '@/components/checkin/photo-capture'
 import { RecentMealsStrip } from '@/components/checkin/recent-meals-strip'
 import type { Entry } from '@/lib/api/types'
@@ -69,7 +70,7 @@ export function FoodCard({
         onToggleCollapsed={onToggleCollapsed}
       />
       {!collapsed && (
-      <CardContent className="space-y-6">
+      <CheckinCardBody panelClassName="space-y-6">
         <DietRiskSection
           existingEntry={existingEntry}
           existingPhotos={existingPhotos}
@@ -104,7 +105,7 @@ export function FoodCard({
           ensureEntryExists={ensureEntryExists}
           onEntryEnsured={onEntryEnsured}
         />
-      </CardContent>
+      </CheckinCardBody>
       )}
     </Card>
   )

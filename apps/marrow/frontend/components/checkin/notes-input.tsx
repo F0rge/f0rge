@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Textarea } from '@f0rge/ui/forms'
+import { Field, FieldDescription, FieldTitle, Textarea } from '@f0rge/ui'
 import { useFocusScrollIntoView } from '@/hooks/keyboard-viewport'
 import { shouldHydrateNotesDraft } from '@/components/checkin/notes-input-sync'
 
@@ -102,23 +102,24 @@ export function NotesInput({
   const remaining = 500 - draft.length
 
   return (
-    <div className="space-y-3">
+    <Field className="gap-3">
+      <FieldTitle>Notes (optional)</FieldTitle>
       <Textarea
         ref={textareaRef}
-        label="Notes (optional)"
         value={draft}
         onChange={handleChange}
         onFocus={onFocusScroll}
         onBlur={handleBlur}
         placeholder="Anything notable today... meals, events, how you felt"
-        minRows={3}
         maxLength={500}
-        autosize
-        classNames={{ input: 'min-h-[80px] resize-none' }}
+        rows={3}
+        className="min-h-[80px] resize-none field-sizing-content"
       />
-      <p className={`text-xs text-right ${remaining < 50 ? 'text-destructive' : 'text-muted-foreground'}`}>
+      <FieldDescription
+        className={`text-right text-xs ${remaining < 50 ? 'text-destructive' : ''}`}
+      >
         {remaining} characters remaining
-      </p>
-    </div>
+      </FieldDescription>
+    </Field>
   )
 }
