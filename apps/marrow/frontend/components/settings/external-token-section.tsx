@@ -3,9 +3,28 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Copy, Lock, Plus, Trash2 } from 'lucide-react'
-import { Button, FetchError, formatDisplayDateTime } from '@f0rge/ui'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  FetchError,
+  Field,
+  FieldLabel,
+  formatDisplayDateTime,
+  Input,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from '@f0rge/ui'
 import { handleMutationError } from '@f0rge/ui/api'
-import { TextInput } from '@f0rge/ui/forms'
 import {
   useCreateExternalToken,
   useExternalTokens,
@@ -36,6 +55,7 @@ export function ExternalTokenSection() {
   const revoke = useRevokeExternalToken()
   const [name, setName] = useState('')
   const [revealed, setRevealed] = useState<{ name: string; token: string } | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<ExternalApiTokenItem | null>(null)
 
   const handleCreate = async () => {
     const trimmed = name.trim()
@@ -50,10 +70,12 @@ export function ExternalTokenSection() {
     }
   }
 
-  const handleRevoke = async (tokenId: string) => {
+  const handleRevokeConfirm = async () => {
+    if (!revokeTarget) return
     try {
-      await revoke.mutateAsync(tokenId)
+      await revoke.mutateAsync(revokeTarget.id)
       toast.success('Token revoked')
+      setRevokeTarget(null)
     } catch (err) {
       handleMutationError(err, 'Failed to revoke token')
     }
@@ -83,11 +105,11 @@ export function ExternalTokenSection() {
             Copy the secret for {revealed.name} now. It will not be shown again.
           </p>
           <div className="flex gap-2">
-            <input
+            <Input
               readOnly
               value={revealed.token}
               aria-label={`Secret for ${revealed.name}`}
-              className="w-full rounded-lg border border-border bg-muted px-3 py-2 font-mono text-sm"
+              className="font-mono text-sm"
             />
             <Button
               type="button"
@@ -114,25 +136,27 @@ export function ExternalTokenSection() {
           {rows.map((token) => {
             const meta = tokenMeta(token)
             return (
-              <li
-                key={token.id}
-                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{token.name}</p>
-                  {meta && <p className="text-xs text-muted-foreground">{meta}</p>}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="min-h-11 min-w-11"
-                  aria-label={`Revoke ${token.name}`}
-                  disabled={revoke.isPending && revoke.variables === token.id}
-                  onClick={() => handleRevoke(token.id)}
-                >
-                  <Trash2 />
-                </Button>
+              <li key={token.id}>
+                <Item variant="outline" size="sm" className="rounded-lg">
+                  <ItemContent>
+                    <ItemTitle className="truncate">{token.name}</ItemTitle>
+                    {meta && <ItemDescription>{meta}</ItemDescription>}
+                  </ItemContent>
+                  <ItemActions>
+                    <Badge variant="secondary" className="text-[10px]">active</Badge>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="min-h-11 min-w-11"
+                      aria-label={`Revoke ${token.name}`}
+                      disabled={revoke.isPending && revoke.variables === token.id}
+                      onClick={() => setRevokeTarget(token)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </ItemActions>
+                </Item>
               </li>
             )
           })}
@@ -140,14 +164,16 @@ export function ExternalTokenSection() {
       )}
 
       <div className="flex items-end gap-2">
-        <TextInput
-          label="Name"
-          placeholder="laptop"
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-          className="min-w-0 flex-1"
-          maxLength={64}
-        />
+        <Field className="min-w-0 flex-1">
+          <FieldLabel htmlFor="token-name">Name</FieldLabel>
+          <Input
+            id="token-name"
+            placeholder="laptop"
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+            maxLength={64}
+          />
+        </Field>
         <Button
           type="button"
           variant="outline"
@@ -180,6 +206,30 @@ export function ExternalTokenSection() {
           </div>
         </details>
       </div>
+
+      <AlertDialog open={revokeTarget !== null} onOpenChange={(open) => { if (!open) setRevokeTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader className="text-left sm:text-left">
+            <AlertDialogTitle>Revoke token?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {revokeTarget
+                ? `“${revokeTarget.name}” will stop working immediately. MCP clients using it will lose access.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-end">
+            <AlertDialogCancel type="button" disabled={revoke.isPending}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleRevokeConfirm()}
+              disabled={revoke.isPending}
+            >
+              {revoke.isPending ? 'Revoking…' : 'Revoke token'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SettingsCard>
   )
 }

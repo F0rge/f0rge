@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import {
+  Card,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -42,13 +43,16 @@ export function SignalsTrendCard({ series }: Props) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
-        className={cn(
-          'w-full rounded-xl bg-card p-3 text-left ring-1 ring-foreground/10',
-          'transition-colors hover:bg-muted/40 active:bg-muted/60',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        )}
+        render={
+          <Card
+            className={cn(
+              'w-full cursor-pointer gap-2 py-3 text-left transition-colors hover:bg-muted/40 active:bg-muted/60',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            )}
+          />
+        }
       >
-        <div className="mb-1 flex items-center justify-between gap-1">
+        <div className="mb-1 flex items-center justify-between gap-1 px-3">
           <span className="truncate text-xs font-medium text-card-foreground">
             {series.label}
           </span>
@@ -67,8 +71,10 @@ export function SignalsTrendCard({ series }: Props) {
             <DeltaArrow delta={series.delta_30d} goodDirection={series.good_direction} />
           </span>
         </div>
-        <TrendSparkline points={series.points} />
-        <div className="mt-1 flex items-baseline gap-2">
+        <div className="px-1">
+          <TrendSparkline points={series.points} />
+        </div>
+        <div className="mt-1 flex items-baseline gap-2 px-3">
           <span className="text-sm font-semibold tabular-nums">{currentDisplay}</span>
           <span className="text-xs text-muted-foreground">7d avg {avgDisplay}</span>
         </div>

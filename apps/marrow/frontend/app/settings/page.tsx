@@ -8,7 +8,16 @@ import {
   SlidersHorizontal, Sparkles, SunMoon, Tag, UserPlus, UserRound, UsersRound,
   UtensilsCrossed, type LucideIcon,
 } from 'lucide-react'
-import { Input } from '@f0rge/ui'
+import {
+  Card,
+  Input,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from '@f0rge/ui'
 import { handleMutationError } from '@f0rge/ui/api'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
@@ -108,18 +117,20 @@ export default function SettingsPage() {
           title: 'Appearance',
           description: 'Theme for this device',
           node: (
-            <div key="Appearance" className="flex items-center gap-3 px-4 py-3.5">
-              <IconWell>
-                <SunMoon className="size-4" />
-              </IconWell>
-              <div className="min-w-0 flex-1">
-                <span className="text-sm font-medium">Appearance</span>
-                <p className="mt-0.5 text-xs leading-snug text-muted-foreground">Theme for this device</p>
-              </div>
-              <div className="-my-2 -mr-3 w-40 shrink-0">
+            <Item key="Appearance" variant="default" size="sm" className="rounded-none border-0 px-4 py-3.5">
+              <ItemMedia variant="icon">
+                <IconWell>
+                  <SunMoon className="size-4" />
+                </IconWell>
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle className="font-medium">Appearance</ItemTitle>
+                <ItemDescription>Theme for this device</ItemDescription>
+              </ItemContent>
+              <ItemActions className="-my-2 w-40 shrink-0">
                 <ThemeToggle />
-              </div>
-            </div>
+              </ItemActions>
+            </Item>
           ),
         },
         accordion('Onboarding', 'Replay the guided app tour', GraduationCap, <OnboardingSection />),
@@ -155,18 +166,22 @@ export default function SettingsPage() {
         {
           title: 'Log out',
           node: (
-            <button
+            <Item
               key="Log out"
-              type="button"
-              onClick={handleLogout}
-              disabled={logout.isPending}
-              className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+              variant="default"
+              size="sm"
+              className="rounded-none border-0 px-4 py-3.5 transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+              render={<button type="button" onClick={handleLogout} disabled={logout.isPending} />}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <LogOut className="size-4 text-destructive" />
-              </span>
-              <span className="flex-1 text-sm font-medium text-destructive">Log out</span>
-            </button>
+              <ItemMedia variant="icon">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                  <LogOut className="size-4 text-destructive" />
+                </span>
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle className="font-medium text-destructive">Log out</ItemTitle>
+              </ItemContent>
+            </Item>
           ),
         },
       ],
@@ -210,9 +225,9 @@ export default function SettingsPage() {
       {visibleGroups.map((group) => (
         <section key={group.title} className="space-y-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h2>
-          <div className="divide-y divide-muted overflow-hidden rounded-xl border border-border">
+          <Card className="gap-0 overflow-hidden py-0">
             {group.rows.map((row) => row.node)}
-          </div>
+          </Card>
         </section>
       ))}
 

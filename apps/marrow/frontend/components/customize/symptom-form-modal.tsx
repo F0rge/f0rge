@@ -7,14 +7,18 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  Field,
+  FieldError,
+  FieldLabel,
+  Input,
 } from '@f0rge/ui'
-import { Button } from '@f0rge/ui'
-import { TextInput, useForm } from '@f0rge/ui/forms'
+import { useForm } from '@f0rge/ui/forms'
 import { useAddSymptomCatalogItem, useUpdateSymptomCatalogItem } from '@/lib/api/hooks'
 import { ApiError, handleMutationError } from '@f0rge/ui/api'
 import type { SymptomCatalogItem } from '@/lib/api/types'
@@ -93,19 +97,23 @@ export function SymptomFormModal({ open, onClose, symptom }: SymptomFormModalPro
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <TextInput
+          <Field data-invalid={form.getInputProps('label').error ? true : undefined}>
+            <FieldLabel htmlFor="symptom-label">Label</FieldLabel>
+            <Input
+              id="symptom-label"
               key={form.key('label')}
-              label="Label"
               placeholder="e.g. Brain fog"
               autoFocus
               required
               {...form.getInputProps('label')}
             />
+            {form.getInputProps('label').error && (
+              <FieldError>{form.getInputProps('label').error}</FieldError>
+            )}
             <p className="mt-1 text-[11px] text-muted-foreground">
               Key: <span className="font-mono">{previewKey || '—'}</span>
             </p>
-          </div>
+          </Field>
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" size="sm" onClick={handleClose}>

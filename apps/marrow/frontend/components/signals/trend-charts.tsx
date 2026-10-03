@@ -1,13 +1,26 @@
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Line, LineChart, XAxis, YAxis } from 'recharts'
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@f0rge/ui'
 import type { SignalsTrendSeries } from '@/lib/api/types/signals'
-import { chartStroke } from '@/lib/ui/status'
-import { SignalsChartTooltip, chartAxisTick } from './chart-tooltip'
+
+const sparkConfig = {
+  value: { label: 'Value', color: 'var(--chart-1)' },
+} satisfies ChartConfig
+
+const fullConfig = {
+  value: { label: 'Value', color: 'var(--chart-1)' },
+  avg7: { label: '7-day avg', color: 'var(--muted-foreground)' },
+} satisfies ChartConfig
 
 export function TrendSparkline({ points }: { points: SignalsTrendSeries['points'] }) {
   const data = points
     .filter((p) => p.value !== null)
     .slice(-30)
-    .map((p) => ({ date: p.date, v: p.value }))
+    .map((p) => ({ date: p.date, value: p.value }))
 
   if (data.length < 2) {
     return (
@@ -18,17 +31,17 @@ export function TrendSparkline({ points }: { points: SignalsTrendSeries['points'
   }
 
   return (
-    <ResponsiveContainer width="100%" height={40}>
-      <LineChart data={data}>
+    <ChartContainer config={sparkConfig} className="aspect-auto h-10 w-full">
+      <LineChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
         <Line
           type="monotone"
-          dataKey="v"
-          stroke={chartStroke[1]}
+          dataKey="value"
+          stroke="var(--color-value)"
           strokeWidth={1.5}
           dot={false}
         />
       </LineChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   )
 }
 
@@ -42,15 +55,15 @@ export function TrendFullChart({ series }: { series: SignalsTrendSeries }) {
     }))
 
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <ChartContainer config={fullConfig} className="aspect-auto h-[200px] w-full">
       <LineChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-        <XAxis dataKey="date" tick={chartAxisTick} interval="preserveStartEnd" />
-        <YAxis tick={chartAxisTick} />
-        <Tooltip content={<SignalsChartTooltip />} />
+        <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+        <YAxis tick={{ fontSize: 10 }} width={32} />
+        <ChartTooltip content={<ChartTooltipContent />} />
         <Line
           type="monotone"
           dataKey="value"
-          stroke={chartStroke[1]}
+          stroke="var(--color-value)"
           strokeWidth={1.5}
           dot={false}
           name="Value"
@@ -58,13 +71,13 @@ export function TrendFullChart({ series }: { series: SignalsTrendSeries }) {
         <Line
           type="monotone"
           dataKey="avg7"
-          stroke={chartStroke.muted}
+          stroke="var(--color-avg7)"
           strokeWidth={1.5}
           dot={false}
           strokeDasharray="4 2"
           name="7-day avg"
         />
       </LineChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   )
 }

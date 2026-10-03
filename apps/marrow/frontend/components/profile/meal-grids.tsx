@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { LayoutGrid, Tag } from 'lucide-react'
-import { cn, formatDisplayDate, formatLocalDate } from '@f0rge/ui'
+import { Card, cn, formatDisplayDate, formatLocalDate } from '@f0rge/ui'
 import {
   MealIconThumb,
   photoHasImage,
@@ -56,7 +56,7 @@ function GridTile({
   const { src: thumbSrc, onError: onThumbError } = useMealThumbSrc(photo.id)
 
   return (
-    <div
+    <Card
       role="button"
       tabIndex={0}
       onClick={() => onOpen(photo.id)}
@@ -67,7 +67,7 @@ function GridTile({
         }
       }}
       aria-label={`Open ${name || 'meal photo'}`}
-      className="relative aspect-square cursor-pointer overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative aspect-square cursor-pointer gap-0 overflow-hidden p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {photoHasImage(photo) && thumbSrc ? (
         <Image
@@ -99,7 +99,7 @@ function GridTile({
           {when && <span className="block truncate text-[8.5px] text-white/75">{when}</span>}
         </span>
       )}
-    </div>
+    </Card>
   )
 }
 

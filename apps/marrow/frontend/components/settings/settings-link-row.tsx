@@ -6,7 +6,16 @@
 
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@f0rge/ui'
+import {
+  Badge,
+  cn,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from '@f0rge/ui'
 import { IconWell } from '@/components/shared/color-artifact'
 import type { ReactNode } from 'react'
 
@@ -14,15 +23,16 @@ function CountBadge({ count }: { count: number }) {
   if (count <= 0) return null
   const label = count > 9 ? '9+' : String(count)
   return (
-    <span
+    <Badge
+      variant="secondary"
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full bg-chart-1 text-[10px] font-semibold leading-none text-foreground',
-        label.length === 1 ? 'size-[18px]' : 'h-[18px] min-w-[18px] px-1',
+        'h-[18px] min-w-[18px] justify-center rounded-full bg-chart-1 px-1 text-[10px] font-semibold text-foreground',
+        label.length === 1 && 'size-[18px] px-0',
       )}
       aria-hidden
     >
       {label}
-    </span>
+    </Badge>
   )
 }
 
@@ -38,18 +48,28 @@ interface SettingsLinkRowProps {
 
 export function SettingsLinkRow({ href, icon, title, description, badge = 0 }: SettingsLinkRowProps) {
   return (
-    <Link
-      href={href}
-      className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/50 active:bg-muted"
-      aria-label={badge > 0 ? `${title}, ${badge} pending` : undefined}
+    <Item
+      variant="default"
+      size="sm"
+      className="rounded-none border-0 px-4 py-3.5 transition-colors hover:bg-muted/50 active:bg-muted"
+      render={
+        <Link
+          href={href}
+          aria-label={badge > 0 ? `${title}, ${badge} pending` : undefined}
+        />
+      }
     >
-      <IconWell>{icon}</IconWell>
-      <div className="min-w-0 flex-1">
-        <span className="text-sm font-medium">{title}</span>
-        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p>
-      </div>
-      <CountBadge count={badge} />
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-    </Link>
+      <ItemMedia variant="icon">
+        <IconWell>{icon}</IconWell>
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle className="font-medium">{title}</ItemTitle>
+        <ItemDescription>{description}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <CountBadge count={badge} />
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </ItemActions>
+    </Item>
   )
 }

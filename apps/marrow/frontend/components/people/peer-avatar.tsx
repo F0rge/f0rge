@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
-import { cn } from '@f0rge/ui'
+import { Avatar, AvatarFallback, AvatarImage, cn } from '@f0rge/ui'
 
 interface PeerAvatarProps {
   handle: string
@@ -17,11 +16,6 @@ const SIZE_CLASS = {
   md: 'size-10',
 } as const
 
-const SIZE_PX = {
-  sm: 32,
-  md: 40,
-} as const
-
 export function PeerAvatar({
   handle,
   avatarDefaultIndex,
@@ -30,30 +24,17 @@ export function PeerAvatar({
   className,
 }: PeerAvatarProps) {
   const [failed, setFailed] = useState(false)
-  const px = SIZE_PX[size]
+  const defaultSrc = `/avatars/defaults/${String(avatarDefaultIndex).padStart(2, '0')}.svg`
+  const customSrc = `/api/v1/social/users/${handle}/avatar`
 
-  if (hasCustomAvatar && handle && !failed) {
-    return (
-      <Image
-        src={`/api/v1/social/users/${handle}/avatar`}
-        alt=""
-        width={px}
-        height={px}
-        unoptimized
-        onError={() => setFailed(true)}
-        className={cn('rounded-full bg-muted object-cover', SIZE_CLASS[size], className)}
-      />
-    )
-  }
-
-  const src = `/avatars/defaults/${String(avatarDefaultIndex).padStart(2, '0')}.svg`
   return (
-    <Image
-      src={src}
-      alt=""
-      width={px}
-      height={px}
-      className={cn('rounded-full bg-muted object-cover', SIZE_CLASS[size], className)}
-    />
+    <Avatar className={cn(SIZE_CLASS[size], className)}>
+      {hasCustomAvatar && handle && !failed ? (
+        <AvatarImage src={customSrc} alt="" onError={() => setFailed(true)} />
+      ) : (
+        <AvatarImage src={defaultSrc} alt="" />
+      )}
+      <AvatarFallback aria-hidden />
+    </Avatar>
   )
 }

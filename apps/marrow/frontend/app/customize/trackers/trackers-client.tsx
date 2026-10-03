@@ -7,35 +7,16 @@
  * Seeded trackers (is_seed: true) are excluded from both active and archived lists.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import {
-  DndContext,
-  DragOverlay,
-  closestCenter,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  arrayMove,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
 import { ArrowLeft, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@f0rge/ui'
+import { Button, Sortable } from '@f0rge/ui'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { TrackerFormModal } from '@/components/customize/tracker-form-modal'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
-import {
-  SortableTrackerRow,
-  GhostRow,
-} from '@/components/customize/sortable-tracker-row'
+import { SortableTrackerRow } from '@/components/customize/sortable-tracker-row'
 import { ArchivedTrackersList } from '@/components/customize/archived-trackers-list'
 import { useTrackers, useUpdateTracker, useReorderTrackers } from '@/lib/api/hooks'
 import type { Tracker } from '@/lib/api/types'
@@ -46,57 +27,24 @@ export default function TrackersClient() {
   const reorderTrackers = useReorderTrackers()
 
   // Exclude seeded trackers from both lists
-  const active = allTrackers
-    .filter((t) => !t.archived && !t.is_seed)
-    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+  const active = useMemo(
+    () =>
+      allTrackers
+        .filter((t) => !t.archived && !t.is_seed)
+        .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name)),
+    [allTrackers],
+  )
 
   const archived = allTrackers.filter((t) => t.archived && !t.is_seed)
+
+  const [orderedActive, setOrderedActive] = useState(active)
+  useEffect(() => {
+    setOrderedActive(active)
+  }, [active])
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTracker, setEditingTracker] = useState<Tracker | undefined>(undefined)
-
-  // dnd-kit drag state (track active id + initial width so DragOverlay matches the source row)
-  const [activeId, setActiveId] = useState<number | null>(null)
-  const [dragOverlayWidth, setDragOverlayWidth] = useState<number | undefined>(undefined)
-  const activeTracker = active.find((t) => t.id === activeId) ?? null
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
-  )
-
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveId(event.active.id as number)
-    // Capture the source row's rendered width so the overlay doesn't collapse
-    // when it renders outside the parent list (see dnd_kit_grid_drag_reorder.md).
-    const rect = event.active.rect.current.initial
-    setDragOverlayWidth(rect ? rect.width : undefined)
-  }, [])
-
-  function handleDragEnd(event: DragEndEvent) {
-    setActiveId(null)
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const activeList = allTrackers
-      .filter((t) => !t.archived && !t.is_seed)
-      .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
-
-    const oldIdx = activeList.findIndex((t) => t.id === active.id)
-    const newIdx = activeList.findIndex((t) => t.id === over.id)
-    if (oldIdx === -1 || newIdx === -1) return
-
-    const reordered = arrayMove(activeList, oldIdx, newIdx)
-    reorderTrackers.mutate(
-      reordered.map((t) => t.id),
-      { onError: () => toast.error('Failed to reorder trackers') },
-    )
-  }
-
-  const handleDragCancel = useCallback(() => {
-    setActiveId(null)
-  }, [])
 
   function handleOpenCreate() {
     setEditingTracker(undefined)
@@ -169,37 +117,27 @@ export default function TrackersClient() {
           .
         </p>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
+        <Sortable
+          value={orderedActive}
+          onValueChange={setOrderedActive}
+          getItemValue={(t) => String(t.id)}
+          onValueCommit={(reordered) => {
+            reorderTrackers.mutate(
+              reordered.map((t) => t.id),
+              { onError: () => toast.error('Failed to reorder trackers') },
+            )
+          }}
+          className="overflow-hidden rounded-lg border border-border bg-card"
         >
-          <SortableContext
-            items={active.map((t) => t.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="rounded-lg border border-border bg-card">
-              {active.map((tracker) => (
-                <SortableTrackerRow
-                  key={tracker.id}
-                  tracker={tracker}
-                  onEdit={handleEdit}
-                  onArchive={handleArchive}
-                />
-              ))}
-            </div>
-          </SortableContext>
-
-          <DragOverlay>
-            {activeTracker !== null ? (
-              <div style={{ width: dragOverlayWidth }}>
-                <GhostRow tracker={activeTracker} />
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+          {orderedActive.map((tracker) => (
+            <SortableTrackerRow
+              key={tracker.id}
+              tracker={tracker}
+              onEdit={handleEdit}
+              onArchive={handleArchive}
+            />
+          ))}
+        </Sortable>
       )}
 
       <ArchivedTrackersList archived={archived} onRestore={handleRestore} />

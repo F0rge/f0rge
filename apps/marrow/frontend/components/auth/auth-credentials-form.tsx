@@ -3,8 +3,15 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
-import { Button, useDebouncedValue } from '@f0rge/ui'
-import { isEmail, PasswordInput, TextInput, useForm } from '@f0rge/ui/forms'
+import {
+  Button,
+  Field,
+  FieldError,
+  FieldLabel,
+  Input,
+  useDebouncedValue,
+} from '@f0rge/ui'
+import { isEmail, PasswordInput, useForm } from '@f0rge/ui/forms'
 import { useHandleAvailable } from '@/lib/api/hooks'
 import { statusText } from '@/lib/ui/status'
 
@@ -66,43 +73,57 @@ export function AuthCredentialsForm({
     })
   })
 
+  const emailProps = form.getInputProps('email')
+  const handleProps = form.getInputProps('handle')
+  const passwordProps = form.getInputProps('password')
+
   return (
     <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
-      <TextInput
-        key={form.key('email')}
-        label="Email"
-        type="email"
-        autoComplete="email"
-        inputMode="email"
-        required
-        disabled={loading}
-        error={error ? ' ' : undefined}
-        {...form.getInputProps('email')}
-      />
+      <Field data-invalid={emailProps.error ? true : undefined}>
+        <FieldLabel htmlFor="auth-email">Email</FieldLabel>
+        <Input
+          id="auth-email"
+          key={form.key('email')}
+          type="email"
+          autoComplete="email"
+          inputMode="email"
+          required
+          disabled={loading}
+          {...emailProps}
+        />
+        {emailProps.error && <FieldError>{emailProps.error}</FieldError>}
+      </Field>
 
       {!isLogin && (
-        <div>
-          <TextInput
-            key={form.key('handle')}
-            label="Handle"
-            leftSection={<span className="text-sm text-muted-foreground">@</span>}
-            placeholder="your_name"
-            required
-            autoComplete="off"
-            spellCheck={false}
-            disabled={loading}
-            {...form.getInputProps('handle')}
-          />
+        <Field data-invalid={handleProps.error ? true : undefined}>
+          <FieldLabel htmlFor="auth-handle">Handle</FieldLabel>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              @
+            </span>
+            <Input
+              id="auth-handle"
+              key={form.key('handle')}
+              className="pl-7"
+              placeholder="your_name"
+              required
+              autoComplete="off"
+              spellCheck={false}
+              disabled={loading}
+              {...handleProps}
+            />
+          </div>
+          {handleProps.error && <FieldError>{handleProps.error}</FieldError>}
           {handleStatus === 'available' && (
-            <p className={`mt-1 text-xs ${statusText.ok}`}>Available</p>
+            <p className={`text-xs ${statusText.ok}`}>Available</p>
           )}
           {handleStatus === 'taken' && (
-            <p className="mt-1 text-xs text-destructive">Already taken</p>
+            <p className="text-xs text-destructive">Already taken</p>
           )}
           {handleStatus === 'invalid' && (
-            <p className="mt-1 text-xs text-destructive">Use 3–30 characters: a-z, 0-9, _</p>
+            <p className="text-xs text-destructive">Use 3–30 characters: a-z, 0-9, _</p>
           )}
-        </div>
+        </Field>
       )}
 
       <PasswordInput
@@ -111,7 +132,7 @@ export function AuthCredentialsForm({
         autoComplete={isLogin ? 'current-password' : 'new-password'}
         required
         disabled={loading}
-        {...form.getInputProps('password')}
+        {...passwordProps}
       />
 
       {error && <p className="text-sm text-destructive">{error}</p>}

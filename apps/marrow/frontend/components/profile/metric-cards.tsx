@@ -1,7 +1,7 @@
 'use client'
 
 import { Triangle } from 'lucide-react'
-import { cn, formatLocalDate } from '@f0rge/ui'
+import { Card, cn, formatLocalDate } from '@f0rge/ui'
 import { useInsightsTrends } from '@/lib/api/hooks'
 import type { TrendSeries } from '@/lib/api/types'
 import { statusText } from '@/lib/ui/status'
@@ -131,20 +131,19 @@ export function MetricCards() {
   return (
     <section aria-label="Metric trends" className="flex gap-2 overflow-x-auto pb-1">
       {cards.map((c) => (
-        <div
-          key={c.key}
-          className="w-[118px] flex-none rounded-xl bg-card p-3 ring-1 ring-foreground/10"
-        >
-          <p className="truncate text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <Card key={c.key} className="w-[118px] flex-none gap-0 py-3">
+          <p className="truncate px-3 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
             {c.label}
           </p>
-          <p className="mt-1 flex items-baseline gap-1">
+          <p className="mt-1 flex items-baseline gap-1 px-3">
             <span className="text-[19px] font-bold leading-none tabular-nums">{c.value}</span>
             <span className="text-[10px] text-muted-foreground">{c.unit}</span>
           </p>
-          {c.delta !== null && <Delta delta={c.delta} downIsGood={c.downIsGood} />}
-          {c.spark.length >= MIN_SPARK_POINTS && <Sparkline xs={c.spark} />}
-        </div>
+          <div className="px-3">
+            {c.delta !== null && <Delta delta={c.delta} downIsGood={c.downIsGood} />}
+            {c.spark.length >= MIN_SPARK_POINTS && <Sparkline xs={c.spark} />}
+          </div>
+        </Card>
       ))}
     </section>
   )

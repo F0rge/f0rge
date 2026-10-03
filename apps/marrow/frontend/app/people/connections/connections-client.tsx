@@ -3,7 +3,17 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, UserPlus } from 'lucide-react'
-import { Button, Card, useDebouncedValue } from '@f0rge/ui'
+import {
+  Button,
+  Card,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+  useDebouncedValue,
+} from '@f0rge/ui'
 import { TextInput } from '@f0rge/ui/forms'
 import { PeerAvatar } from '@/components/people/peer-avatar'
 import { PageHeader } from '@/components/layout/page-header'
@@ -194,20 +204,20 @@ function SearchResultRow({
   })
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-muted px-3 py-2">
-      <PeerAvatar
-        handle={user.handle}
-        avatarDefaultIndex={user.avatar_default_index}
-        hasCustomAvatar={user.has_custom_avatar}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">@{user.handle}</p>
-        {user.display_name && (
-          <p className="text-xs text-muted-foreground">{user.display_name}</p>
-        )}
-      </div>
-      <div className="shrink-0">{action}</div>
-    </div>
+    <Item variant="outline" size="sm" className="rounded-lg">
+      <ItemMedia>
+        <PeerAvatar
+          handle={user.handle}
+          avatarDefaultIndex={user.avatar_default_index}
+          hasCustomAvatar={user.has_custom_avatar}
+        />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>@{user.handle}</ItemTitle>
+        {user.display_name && <ItemDescription>{user.display_name}</ItemDescription>}
+      </ItemContent>
+      <ItemActions className="shrink-0">{action}</ItemActions>
+    </Item>
   )
 }
 
@@ -263,19 +273,19 @@ function ConnectionRow({
   actions: React.ReactNode
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-muted px-3 py-2">
-      <PeerAvatar
-        handle={item.user.handle}
-        avatarDefaultIndex={item.user.avatar_default_index}
-        hasCustomAvatar={item.user.has_custom_avatar}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">@{item.user.handle}</p>
-        {item.user.display_name && (
-          <p className="text-xs text-muted-foreground">{item.user.display_name}</p>
-        )}
-      </div>
-      <div className="flex shrink-0 gap-2">{actions}</div>
-    </div>
+    <Item variant="outline" size="sm" className="rounded-lg">
+      <ItemMedia>
+        <PeerAvatar
+          handle={item.user.handle}
+          avatarDefaultIndex={item.user.avatar_default_index}
+          hasCustomAvatar={item.user.has_custom_avatar}
+        />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>@{item.user.handle}</ItemTitle>
+        {item.user.display_name && <ItemDescription>{item.user.display_name}</ItemDescription>}
+      </ItemContent>
+      <ItemActions className="flex shrink-0 gap-2">{actions}</ItemActions>
+    </Item>
   )
 }

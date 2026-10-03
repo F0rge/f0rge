@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AuthCredentialsForm } from '@/components/auth/auth-credentials-form'
 import { MarrowWordmark } from '@/components/brand/marrow-wordmark'
+import { Card } from '@f0rge/ui'
 import { useSignup } from '@/lib/api/hooks'
 import { getErrorDetail } from '@f0rge/ui/api'
 
@@ -28,7 +29,7 @@ export default function SignupPage() {
 
   return (
     <div className="auth-shell">
-      <div className="auth-panel space-y-8">
+      <Card className="auth-panel w-full max-w-md gap-6 p-6 sm:p-8">
         <div className="text-center">
           <h1 className="flex justify-center">
             <MarrowWordmark className="h-8" />
@@ -42,7 +43,7 @@ export default function SignupPage() {
           loading={signup.isPending}
           error={error}
         />
-      </div>
+      </Card>
     </div>
   )
 }

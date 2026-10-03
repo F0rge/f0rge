@@ -1,12 +1,20 @@
 /**
  * HubRow — a single entry in the /customize hub list.
  *
- * Anatomy: [icon] [title + description flex-1] [tier pill + chevron]
+ * Anatomy: [icon tile] [title + description flex-1] [tier pill + chevron]
  */
 
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@f0rge/ui'
+import {
+  cn,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from '@f0rge/ui'
 import { IconWell } from '@/components/shared/color-artifact'
 import { toneFromTier } from '@/lib/ui/status'
 import { TierPill, type Tier } from './tier-pill'
@@ -37,42 +45,44 @@ export function HubRow({
   variant = 'list',
 }: HubRowProps) {
   const inner = (
-    <div
+    <Item
+      variant="default"
+      size="sm"
       className={cn(
-        'flex items-center gap-3 px-4 py-3.5',
+        'rounded-none border-0 px-4 py-3.5',
         variant === 'list' && 'border-t border-muted first:border-t-0',
         variant === 'tile' && 'h-full',
-        comingSoon ? 'opacity-50' : 'hover:bg-muted/50 active:bg-muted transition-colors',
+        comingSoon ? 'opacity-50' : 'hover:bg-muted/50 active:bg-muted',
       )}
     >
-      <IconWell tone={tier ? toneFromTier(tier) : undefined} muted={comingSoon}>
-        {icon}
-      </IconWell>
-
-      {/* Title + description */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{title}</span>
+      <ItemMedia variant="icon">
+        <IconWell tone={tier ? toneFromTier(tier) : undefined} muted={comingSoon}>
+          {icon}
+        </IconWell>
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle className="flex flex-wrap items-center gap-2 font-medium">
+          {title}
           {tier && <TierPill tier={tier} />}
           {comingSoon && (
             <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               Soon
             </span>
           )}
-        </div>
-        <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{description}</p>
-      </div>
-
-      {/* Chevron */}
+        </ItemTitle>
+        <ItemDescription>{description}</ItemDescription>
+      </ItemContent>
       {!comingSoon && (
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        <ItemActions>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        </ItemActions>
       )}
-    </div>
+    </Item>
   )
 
   if (comingSoon) {
     return <div aria-disabled="true">{inner}</div>
   }
 
-  return <Link href={href}>{inner}</Link>
+  return <Link href={href} className="block">{inner}</Link>
 }

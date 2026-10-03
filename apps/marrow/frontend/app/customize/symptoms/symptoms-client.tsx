@@ -7,35 +7,16 @@
  * All symptoms are user-created (no is_seed concept).
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import {
-  DndContext,
-  DragOverlay,
-  closestCenter,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  arrayMove,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
 import { ArrowLeft, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@f0rge/ui'
+import { Button, Sortable } from '@f0rge/ui'
 import { TierBanner } from '@/components/customize/tier-banner'
 import { SymptomFormModal } from '@/components/customize/symptom-form-modal'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
-import {
-  SortableSymptomRow,
-  GhostRow,
-} from '@/components/customize/sortable-symptom-row'
+import { SortableSymptomRow } from '@/components/customize/sortable-symptom-row'
 import { ArchivedSymptomsList } from '@/components/customize/archived-symptoms-list'
 import {
   useSymptomCatalog,
@@ -49,55 +30,24 @@ export default function SymptomsClient() {
   const updateSymptom = useUpdateSymptomCatalogItem()
   const reorderSymptoms = useReorderSymptomCatalog()
 
-  const active = allSymptoms
-    .filter((s) => !s.archived)
-    .sort((a, b) => a.sort_order - b.sort_order)
+  const active = useMemo(
+    () =>
+      allSymptoms
+        .filter((s) => !s.archived)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    [allSymptoms],
+  )
 
   const archived = allSymptoms.filter((s) => s.archived)
+
+  const [orderedActive, setOrderedActive] = useState(active)
+  useEffect(() => {
+    setOrderedActive(active)
+  }, [active])
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
   const [editingSymptom, setEditingSymptom] = useState<SymptomCatalogItem | undefined>(undefined)
-
-  // dnd-kit drag state
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [dragOverlayWidth, setDragOverlayWidth] = useState<number | undefined>(undefined)
-  const activeSymptom = active.find((s) => s.key === activeId) ?? null
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
-  )
-
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveId(event.active.id as string)
-    const rect = event.active.rect.current.initial
-    setDragOverlayWidth(rect ? rect.width : undefined)
-  }, [])
-
-  function handleDragEnd(event: DragEndEvent) {
-    setActiveId(null)
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const activeList = allSymptoms
-      .filter((s) => !s.archived)
-      .sort((a, b) => a.sort_order - b.sort_order)
-
-    const oldIdx = activeList.findIndex((s) => s.key === active.id)
-    const newIdx = activeList.findIndex((s) => s.key === over.id)
-    if (oldIdx === -1 || newIdx === -1) return
-
-    const reordered = arrayMove(activeList, oldIdx, newIdx)
-    reorderSymptoms.mutate(
-      reordered.map((s) => s.key),
-      { onError: () => toast.error('Failed to reorder symptoms') },
-    )
-  }
-
-  const handleDragCancel = useCallback(() => {
-    setActiveId(null)
-  }, [])
 
   function handleOpenCreate() {
     setEditingSymptom(undefined)
@@ -169,37 +119,27 @@ export default function SymptomsClient() {
           .
         </p>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
+        <Sortable
+          value={orderedActive}
+          onValueChange={setOrderedActive}
+          getItemValue={(s) => s.key}
+          onValueCommit={(reordered) => {
+            reorderSymptoms.mutate(
+              reordered.map((s) => s.key),
+              { onError: () => toast.error('Failed to reorder symptoms') },
+            )
+          }}
+          className="overflow-hidden rounded-lg border border-border bg-card"
         >
-          <SortableContext
-            items={active.map((s) => s.key)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="rounded-lg border border-border bg-card">
-              {active.map((symptom) => (
-                <SortableSymptomRow
-                  key={symptom.key}
-                  symptom={symptom}
-                  onEdit={handleEdit}
-                  onArchive={handleArchive}
-                />
-              ))}
-            </div>
-          </SortableContext>
-
-          <DragOverlay>
-            {activeSymptom !== null ? (
-              <div style={{ width: dragOverlayWidth }}>
-                <GhostRow symptom={activeSymptom} />
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+          {orderedActive.map((symptom) => (
+            <SortableSymptomRow
+              key={symptom.key}
+              symptom={symptom}
+              onEdit={handleEdit}
+              onArchive={handleArchive}
+            />
+          ))}
+        </Sortable>
       )}
 
       <ArchivedSymptomsList archived={archived} onRestore={handleRestore} />

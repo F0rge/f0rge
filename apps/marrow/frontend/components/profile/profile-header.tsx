@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ClipboardCheck, Menu, Share, Users, UsersRound, type LucideIcon } from 'lucide-react'
-import { cn } from '@f0rge/ui'
+import { Card, cn } from '@f0rge/ui'
 import { toast } from 'sonner'
 import { StreakRing } from '@/components/profile/streak-ring'
 import {
@@ -92,42 +92,44 @@ export function ProfileHeader() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-4">
-        <StreakRing streak={stats.data?.current_streak_days ?? 0} />
-        <div className="min-w-0 flex-1">
-          {name && <p className="truncate text-base font-bold">{name}</p>}
-          {subline && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subline}</p>}
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            <StatChip
-              href="/history"
-              icon={ClipboardCheck}
-              value={stats.data?.total_checkins ?? 0}
-              label="Check-ins"
-            />
-            <StatChip
-              href="/people/connections"
-              icon={Users}
-              value={connections.data?.accepted.length ?? 0}
-              label="Connections"
-            />
-            <StatChip
-              href="/people/groups"
-              icon={UsersRound}
-              value={groups.data?.filter((g) => g.my_status === 'joined').length ?? 0}
-              label="Groups"
-            />
+      <Card className="mt-4 gap-4 py-4">
+        <div className="flex items-center gap-4 px-4">
+          <StreakRing streak={stats.data?.current_streak_days ?? 0} />
+          <div className="min-w-0 flex-1">
+            {name && <p className="truncate text-base font-bold">{name}</p>}
+            {subline && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subline}</p>}
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              <StatChip
+                href="/history"
+                icon={ClipboardCheck}
+                value={stats.data?.total_checkins ?? 0}
+                label="Check-ins"
+              />
+              <StatChip
+                href="/people/connections"
+                icon={Users}
+                value={connections.data?.accepted.length ?? 0}
+                label="Connections"
+              />
+              <StatChip
+                href="/people/groups"
+                icon={UsersRound}
+                value={groups.data?.filter((g) => g.my_status === 'joined').length ?? 0}
+                label="Groups"
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="mt-4 flex gap-2">
-        <Link href="/account" className={profileActionLinkClass}>
-          Edit profile
-        </Link>
-        <Link href="/customize" className={profileActionLinkClass}>
-          Customize
-        </Link>
-      </div>
+        <div className="flex gap-2 px-4">
+          <Link href="/account" className={profileActionLinkClass}>
+            Edit profile
+          </Link>
+          <Link href="/customize" className={profileActionLinkClass}>
+            Customize
+          </Link>
+        </div>
+      </Card>
     </header>
   )
 }

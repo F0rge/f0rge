@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Badge, cn } from '@f0rge/ui'
+import { Badge, Card, cn } from '@f0rge/ui'
 import type { SignalsDriver } from '@/lib/api/types/signals'
 import { crossesZero, polarityTone } from './polarity'
 import { DriverDetail } from './driver-detail'
@@ -23,16 +23,22 @@ export function DriverCard({ driver }: Props) {
 
   return (
     <>
-      <button
-        type="button"
+      <Card
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setOpen(true)
+          }
+        }}
         className={cn(
-          'w-full rounded-xl bg-card p-3 text-left ring-1 ring-foreground/10',
-          'transition-colors hover:bg-muted/40 active:bg-muted/60',
+          'cursor-pointer gap-2 py-3 transition-colors hover:bg-muted/40 active:bg-muted/60',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >
-        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 px-3">
           <span className="truncate text-sm font-medium">{driver.label}</span>
           <Badge variant={tierVariant(driver.tier)} className="text-[10px]">
             {driver.tier}
@@ -46,7 +52,7 @@ export function DriverCard({ driver }: Props) {
             </Badge>
           )}
         </div>
-        <div className="flex items-baseline justify-between gap-2">
+        <div className="flex items-baseline justify-between gap-2 px-3">
           <span
             className={cn(
               'text-lg font-semibold tabular-nums',
@@ -61,8 +67,8 @@ export function DriverCard({ driver }: Props) {
               : '—'}
           </span>
         </div>
-        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{driver.reason}</p>
-      </button>
+        <p className="line-clamp-2 px-3 text-xs text-muted-foreground">{driver.reason}</p>
+      </Card>
 
       <DriverDetail driver={driver} open={open} onOpenChange={setOpen} />
     </>
