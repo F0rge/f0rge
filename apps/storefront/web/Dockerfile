@@ -3,6 +3,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY vendor/braces/braces-3.0.4-f0rge.1.tgz ./vendor/braces/
 COPY apps/storefront/web/package.json ./apps/storefront/web/
 COPY libs/ui/package.json ./libs/ui/
 RUN npm ci --workspace=@f0rge/storefront-web --include-workspace-root=false
