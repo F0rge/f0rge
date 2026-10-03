@@ -38,5 +38,9 @@ describe("storefront analytics event allowlist", () => {
       properties: { product_id: "person@example.com" },
     })).toBeNull();
     expect(sanitizeAnalyticsEvent({ name: "arbitrary_event", properties: { email: "person@example.com" } })).toBeNull();
+    expect(sanitizeAnalyticsEvent({
+      name: "storefront_page_viewed",
+      properties: { page_key: "home", email: "person@example.com", token: "secret", utm_source: "bad source" },
+    })).toEqual({ name: "storefront_page_viewed", properties: { page_key: "home" } });
   });
 });
