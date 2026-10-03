@@ -71,7 +71,15 @@ def test_alembic_upgrade_head(migration_postgres_container: PostgresContainer) -
 
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "056", "expected head revision 056 after upgrade head"
+        assert version == "057", "expected head revision 057 after upgrade head"
+
+        has_tokens = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema='public' AND table_name='external_api_tokens'"
+            )
+        ).fetchone()
+        assert has_tokens, "external_api_tokens missing after upgrade head"
 
         has_users = conn.execute(
             text(
