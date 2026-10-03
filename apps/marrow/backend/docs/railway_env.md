@@ -24,7 +24,7 @@ After Postgres (pgvector), Redis, and Bucket `photos` exist:
 | `MIGRATION_DATABASE_URL` | htmigrate (or Postgres owner) URL for alembic pre-deploy |
 | `MCP_READONLY_DATABASE_URL` | `healthtracker_ro` URL (MCP only) |
 | `OPENROUTER_API_KEY` | Same as API (`${{marrow-api.OPENROUTER_API_KEY}}` on `marrow-mcp`) — required for MCP `search` embeddings |
-| `REDIS_URL` | `${{Redis.REDIS_URL}}` (API + worker) |
+| `REDIS_URL` | `${{Redis.REDIS_URL}}` (API + worker). Not set on `marrow-mcp` today: MCP writes then skip cache invalidation (entry/feature-matrix/signals keys live until TTL) |
 | `BUCKET_NAME` | `${{photos.BUCKET}}` |
 | `AWS_ACCESS_KEY_ID` | `${{photos.ACCESS_KEY_ID}}` |
 | `AWS_SECRET_ACCESS_KEY` | `${{photos.SECRET_ACCESS_KEY}}` |

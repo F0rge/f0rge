@@ -1371,24 +1371,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/settings/external-token/regenerate": {
+    "/api/v1/settings/external-tokens": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List External Tokens */
+        get: operations["list_external_tokens_api_v1_settings_external_tokens_get"];
         put?: never;
-        /** Regenerate External Token */
-        post: operations["regenerate_external_token_api_v1_settings_external_token_regenerate_post"];
+        /** Create External Token */
+        post: operations["create_external_token_api_v1_settings_external_tokens_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/settings/external-token/revoke": {
+    "/api/v1/settings/external-tokens/{token_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1397,9 +1398,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
         /** Revoke External Token */
-        post: operations["revoke_external_token_api_v1_settings_external_token_revoke_post"];
-        delete?: never;
+        delete: operations["revoke_external_token_api_v1_settings_external_tokens__token_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2590,13 +2591,48 @@ export interface components {
             symptom_events?: components["schemas"]["SymptomEvent"][] | null;
         };
         /**
+         * ExternalApiTokenItem
+         * @description One live token. The secret is not stored, so the list shows the name only.
+         */
+        ExternalApiTokenItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** ExternalApiTokenListResponse */
+        ExternalApiTokenListResponse: {
+            /** Tokens */
+            tokens: components["schemas"]["ExternalApiTokenItem"][];
+        };
+        /**
+         * ExternalTokenCreate
+         * @description Name chosen by the user. The secret is generated server-side.
+         */
+        ExternalTokenCreate: {
+            /** Name */
+            name: string;
+        };
+        /**
          * ExternalTokenResponse
-         * @description Plaintext token returned once on generation. Never returned by GET.
+         * @description Plaintext token returned once on creation. Never returned by GET.
          *     Store it immediately — it cannot be recovered after this response.
          */
         ExternalTokenResponse: {
             /** Token */
             token: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** ExtractedLab */
         ExtractedLab: {
@@ -8145,7 +8181,7 @@ export interface operations {
             };
         };
     };
-    regenerate_external_token_api_v1_settings_external_token_regenerate_post: {
+    list_external_tokens_api_v1_settings_external_tokens_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -8158,6 +8194,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalApiTokenListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_external_token_api_v1_settings_external_tokens_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ht_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8176,11 +8247,13 @@ export interface operations {
             };
         };
     };
-    revoke_external_token_api_v1_settings_external_token_revoke_post: {
+    revoke_external_token_api_v1_settings_external_tokens__token_id__delete: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                token_id: string;
+            };
             cookie?: {
                 ht_session?: string | null;
             };
@@ -8188,13 +8261,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["SettingsResponse"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

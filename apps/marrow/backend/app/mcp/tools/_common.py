@@ -36,6 +36,11 @@ def _mcp_user_id(ctx: Context | None) -> uuid.UUID:
     return current_user_id()
 
 
+def _parse_supplements(csv: str | None) -> list[str]:
+    """``entries.supplements`` CSV of catalog keys -> ordered list of keys."""
+    return [k.strip() for k in (csv or "").split(",") if k.strip()]
+
+
 def _ingredient_to_dict(row: PhotoIngredient) -> dict[str, Any]:
     return {
         "id": row.id,
@@ -92,6 +97,7 @@ def _day_summary(row: Entry) -> dict[str, Any]:
         "date": str(row.date),
         "overall": row.overall,
         "bloating": row.bloating,
+        "supplements": _parse_supplements(row.supplements),
         "notes_preview": (row.notes or "")[:120] if row.notes else None,
         "meal_count": len(row.photos) if row.photos is not None else 0,
     }
@@ -117,6 +123,7 @@ def _entry_to_dict(row: Entry) -> dict[str, Any]:
         "hot_shower": row.hot_shower,
         "alcohol_units": row.alcohol_units,
         "caffeine_servings": row.caffeine_servings,
+        "supplements": _parse_supplements(row.supplements),
         "stool_status": row.stool_status,
         "bristol_type": row.bristol_type,
         "notes": row.notes,

@@ -178,7 +178,7 @@ async def test_seeded_exceptions_repair_audit_denial_and_checkout_block(
     assert denied_list.status_code == 403
     denied_repair = await async_client.post(
         f"/api/v1/storefront/exceptions/{stale['id']}/repair",
-        json={"reason": "Warehouse should not repair", "idempotency_key": "wh-1"},
+        json={"reason": "Warehouse should not repair", "idempotency_key": "wh-denied"},
     )
     assert denied_repair.status_code == 403
 

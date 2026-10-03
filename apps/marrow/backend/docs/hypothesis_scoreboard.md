@@ -36,10 +36,10 @@ No `DELETE`.
 
 Tools (token-scoped to the authenticated user):
 
-- `list_hypotheses`
+- `hypotheses` (read; optional `status` filter)
 - `update_hypothesis` (id or slug; writes use the app role, not `healthtracker_ro`)
-- `get_n_of_1`
-- `update_n_of_1`
+
+There is no MCP tool for the n-of-1 slot; use the REST endpoints above.
 
 ## Seed for handle `leo`
 
