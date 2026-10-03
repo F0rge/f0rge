@@ -125,6 +125,15 @@ test('shop impressions and reports stay on the consented allowlist', async ({ pa
   expect(reports.acquisition.disclaimer).toBe(CONSENTED_MEASUREMENT_DISCLAIMER)
   expect(reports.product.scope).toBe('consented_visitors')
   expect(reports.search.rows[0]).toMatchObject({ result_count: 1, query_present: false })
+  expect(reports.product.rows).toContainEqual({
+    event: 'storefront_product_selected',
+    surface: 'shop',
+    product_id: 'prod_test_chair',
+    event_count: 1,
+  })
+  await page.getByRole('link', { name: /All pieces/ }).click()
+  await expect(page.getByRole('heading', { name: 'Explore the collection.' })).toBeVisible()
+  await expect.poll(() => captured.filter((event) => event.event === 'storefront_search_results_viewed').length).toBe(2)
 })
 
 test('analytics transport failure does not block browsing', async ({ page }) => {

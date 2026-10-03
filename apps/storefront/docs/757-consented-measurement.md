@@ -28,9 +28,12 @@ are sent once.
 
 Initial reports (also implemented by `consentedBrowsingReports`):
 
-- Acquisition: accepted page views by `page_key` and campaign
-- Product: impressions and selections by `surface` / `product_id`; attention by `active_seconds`
-- Search: result counts by `availability` and `sort_order`
+- Acquisition: accepted page views grouped by `page_key`, `utm_source` and
+  `utm_campaign` with `event_count`
+- Product: impressions and selections grouped by `surface` and `product_id` with
+  `event_count`; attention grouped by `product_id` with summed `active_seconds`
+- Search: result counts grouped by `availability`, `sort_order` and
+  `query_present` (summed `result_count`)
 
 Every report is scoped to `consented_visitors`. Labels must state that consented
 visitors are not a census, and denominators stay on that same consent scope.
