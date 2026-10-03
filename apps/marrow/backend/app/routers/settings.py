@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from app.dependencies.settings import get_settings_service
 from app.middleware.auth import get_current_user_id
 from app.schemas.settings import (
     CheckinDefaultsUpdate,
     EmbeddingSettingsUpdate,
+    ExternalApiTokenListResponse,
+    ExternalTokenCreate,
     ExternalTokenResponse,
     LLMSettingsUpdate,
     ProfileTagFilterUpdate,
@@ -67,20 +69,34 @@ async def test_embedding_connection(
     return await service.test_embedding(emb)
 
 
-@router.post("/external-token/regenerate", response_model=ExternalTokenResponse)
-async def regenerate_external_token(
+@router.get("/external-tokens", response_model=ExternalApiTokenListResponse)
+async def list_external_tokens(
+    service: SettingsService = Depends(get_settings_service),
+    _user_id: uuid.UUID = Depends(get_current_user_id),
+) -> ExternalApiTokenListResponse:
+    return await service.list_external_tokens()
+
+
+@router.post(
+    "/external-tokens",
+    response_model=ExternalTokenResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_external_token(
+    data: ExternalTokenCreate,
     service: SettingsService = Depends(get_settings_service),
     _user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> ExternalTokenResponse:
-    return await service.regenerate_external_token()
+    return await service.create_external_token(data.name)
 
 
-@router.post("/external-token/revoke", response_model=SettingsResponse)
+@router.delete("/external-tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_external_token(
+    token_id: uuid.UUID,
     service: SettingsService = Depends(get_settings_service),
     _user_id: uuid.UUID = Depends(get_current_user_id),
-) -> SettingsResponse:
-    return await service.revoke_external_token()
+) -> None:
+    await service.revoke_external_token(token_id)
 
 
 @router.post("/onboarding/complete", response_model=SettingsResponse)

@@ -22,7 +22,9 @@ A **day** is the primary unit of logging. One `entries` row per user per date.
 
 ## Notes and lifestyle
 - `notes` (free text)
-- `sick`, `hot_shower`, `alcohol_units`, `caffeine_servings`, `supplements`
+- `sick`, `hot_shower`, `alcohol_units`, `caffeine_servings`
+- `supplements`: list of catalog keys taken that day (e.g. `["nac", "magnesium"]`); returned by
+  `get_day` and `list_days`; keys come from `list_supplements`
 
 ## Meals (separate tools)
 Meals attach to the day's entry via photos/meals. Use `get_day` for scores and meal summaries;
@@ -31,6 +33,7 @@ Meals attach to the day's entry via photos/meals. Use `get_day` for scores and m
 ## MCP write tools for a day
 - `save_day` — upsert scores, symptoms, stool fields, notes
 - `log_flare` — append a timed symptom event (and update `symptoms_json` for that key)
+- `set_supplements` — replace / add / remove the day's supplement keys (`list_supplements` for valid keys)
 """
 
 

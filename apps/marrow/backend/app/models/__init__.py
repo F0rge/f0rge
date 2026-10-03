@@ -24,6 +24,7 @@ from app.models.lab_marker_catalog import LabMarkerCatalog
 from app.models.lab_marker_alias import LabMarkerAlias
 from app.models.lab_marker import LabMarker
 from app.models.user_settings import UserSettings
+from app.models.external_api_token import ExternalApiToken
 from app.models.embedding import Embedding
 from app.models.embedding_queue import EmbeddingQueue
 from app.models.tracker import Tracker
@@ -63,6 +64,7 @@ __all__ = [
     "LabMarkerAlias",
     "LabMarker",
     "UserSettings",
+    "ExternalApiToken",
     "Embedding",
     "EmbeddingQueue",
     "Tracker",

@@ -9,6 +9,7 @@ from app.mcp.auth import BearerTokenVerifier
 from app.mcp.prompts import register_prompts
 from app.mcp.resources import register_resources
 from app.mcp.tools import register_tools
+from app.prompts.ingredient_rules import MCP_SERVER_INSTRUCTIONS
 
 
 def create_server() -> FastMCP:
@@ -26,6 +27,7 @@ def create_server() -> FastMCP:
     issuer = AnyHttpUrl("https://mcp.marrow-health.com")
     return FastMCP(
         name="marrow",
+        instructions=MCP_SERVER_INSTRUCTIONS,
         host=settings.mcp_server_host,
         port=settings.mcp_server_port,
         streamable_http_path="/mcp",

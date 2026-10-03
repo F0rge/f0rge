@@ -11,9 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.mcp.auth import BearerTokenVerifier
+from app.models.external_api_token import ExternalApiToken
 from app.models.user_settings import UserSettings
+from app.services.llm.encryption import hash_external_api_token
 from app.services.settings_service import SettingsService
 from f0rge_db.tenant import apply_service_role
+from tests.test_external_token import _seed_legacy_hash
 
 
 @pytest.fixture(autouse=True)
@@ -32,23 +35,30 @@ def fernet_key(monkeypatch: pytest.MonkeyPatch) -> str:
     return key
 
 
+def _verifier_session(async_db: AsyncSession):
+    return patch("app.mcp.auth.make_main_session")
+
+
+async def _verify(async_db: AsyncSession, token: str):
+    verifier = BearerTokenVerifier()
+    with _verifier_session(async_db) as mock_session_ctx:
+        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
+        mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+        return await verifier.verify_token(token)
+
+
 async def test_valid_token_passes_verification(async_db: AsyncSession) -> None:
     """A matching token returns an AccessToken bound to the owning user_id."""
     svc = SettingsService(async_db)
-    resp = await svc.regenerate_external_token()
+    resp = await svc.create_external_token("phone")
 
-    result = await async_db.execute(
-        select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
-    )
-    row = result.scalar_one()
-    assert row.external_api_token_hash is not None
-    expected_user_id = str(row.user_id)
+    token_row = (
+        await async_db.execute(select(ExternalApiToken).where(ExternalApiToken.id == resp.id))
+    ).scalar_one()
+    assert token_row.token_hash == hash_external_api_token(resp.token)
+    expected_user_id = str(token_row.user_id)
 
-    verifier = BearerTokenVerifier()
-    with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
-        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
-        mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
-        access_token = await verifier.verify_token(resp.token)
+    access_token = await _verify(async_db, resp.token)
 
     assert access_token is not None
     assert access_token.client_id == expected_user_id
@@ -57,37 +67,61 @@ async def test_valid_token_passes_verification(async_db: AsyncSession) -> None:
 
 async def test_wrong_token_returns_none(async_db: AsyncSession) -> None:
     svc = SettingsService(async_db)
-    await svc.regenerate_external_token()
+    await svc.create_external_token("phone")
 
-    verifier = BearerTokenVerifier()
-    wrong_token = secrets.token_urlsafe(32)
-
-    with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
-        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
-        mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
-        access_token = await verifier.verify_token(wrong_token)
+    access_token = await _verify(async_db, secrets.token_urlsafe(32))
 
     assert access_token is None
 
 
 async def test_revoked_token_returns_none(async_db: AsyncSession) -> None:
     svc = SettingsService(async_db)
-    resp = await svc.regenerate_external_token()
-    await svc.revoke_external_token()
+    resp = await svc.create_external_token("phone")
+    await svc.revoke_external_token(resp.id)
 
-    result = await async_db.execute(
-        select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
-    )
-    row = result.scalar_one()
-    assert row.external_api_token_hash is None
+    remaining = (
+        await async_db.execute(select(ExternalApiToken).where(ExternalApiToken.id == resp.id))
+    ).scalar_one_or_none()
+    assert remaining is None
 
-    verifier = BearerTokenVerifier()
-    with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
-        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
-        mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
-        access_token = await verifier.verify_token(resp.token)
+    access_token = await _verify(async_db, resp.token)
 
     assert access_token is None
+
+
+async def test_legacy_hash_and_second_token_both_authenticate(async_db: AsyncSession) -> None:
+    """Copied hash keeps working; a new token is additive; revoking one leaves the other."""
+    legacy_plaintext = "legacy-token-still-valid-0123456789abcd"
+    original_hash = await _seed_legacy_hash(async_db, legacy_plaintext)
+    svc = SettingsService(async_db)
+    second = await svc.create_external_token("phone")
+
+    settings_row = (
+        await async_db.execute(
+            select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
+        )
+    ).scalar_one()
+    assert settings_row.external_api_token_hash == original_hash
+    expected_user_id = str(settings_row.user_id)
+
+    legacy_access = await _verify(async_db, legacy_plaintext)
+    second_access = await _verify(async_db, second.token)
+    assert legacy_access is not None
+    assert second_access is not None
+    assert legacy_access.client_id == expected_user_id
+    assert second_access.client_id == legacy_access.client_id
+
+    await svc.revoke_external_token(second.id)
+
+    assert await _verify(async_db, legacy_plaintext) is not None
+    assert await _verify(async_db, second.token) is None
+
+    settings_row = (
+        await async_db.execute(
+            select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
+        )
+    ).scalar_one()
+    assert settings_row.external_api_token_hash == original_hash
 
 
 async def test_no_settings_row_returns_none() -> None:
@@ -117,24 +151,19 @@ async def test_verify_survives_empty_app_user_id_guc(async_db: AsyncSession) -> 
 
 
 async def test_verify_uses_hash_lookup_not_decrypt(async_db: AsyncSession) -> None:
-    """Verifier matches via external_api_token_hash, not ciphertext decryption."""
+    """Verifier matches the token-table hash, not ciphertext decryption."""
     svc = SettingsService(async_db)
-    resp = await svc.regenerate_external_token()
+    resp = await svc.create_external_token("phone")
 
     result = await async_db.execute(
         select(UserSettings).where(UserSettings.user_id == settings.default_storage_user_id)
     )
     row = result.scalar_one()
-    assert row.external_api_token_hash is not None
     expected_user_id = str(row.user_id)
     row.external_api_token_encrypted = b"corrupt-ciphertext"
     await async_db.flush()
 
-    verifier = BearerTokenVerifier()
-    with patch("app.mcp.auth.make_main_session") as mock_session_ctx:
-        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=async_db)
-        mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
-        access_token = await verifier.verify_token(resp.token)
+    access_token = await _verify(async_db, resp.token)
 
     assert access_token is not None
     assert access_token.client_id == expected_user_id
