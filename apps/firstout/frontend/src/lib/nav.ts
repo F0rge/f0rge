@@ -48,6 +48,7 @@ export const SALES_NAV_ITEMS = [
   { href: "/quotes", label: "Quotes" },
   { href: "/lookbooks", label: "Lookbooks" },
   { href: "/orders", label: "Orders" },
+  { href: "/storefront-exceptions", label: "Storefront exceptions" },
   { href: "/laybys", label: "Laybys" },
   { href: "/customers", label: "Customers" },
   { href: "/returns", label: "Returns" },
@@ -115,7 +116,8 @@ export function isSalesPath(pathname: string): boolean {
     pathname.startsWith("/customers/") ||
     pathname.startsWith("/quotes/") ||
     pathname.startsWith("/lookbooks/") ||
-    pathname.startsWith("/orders/")
+    pathname.startsWith("/orders/") ||
+    pathname.startsWith("/storefront-exceptions")
   );
 }
 

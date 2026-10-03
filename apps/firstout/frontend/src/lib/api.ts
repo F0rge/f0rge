@@ -259,6 +259,7 @@ export {
   canMutateDeliveries,
   canMutateLaybys,
   canMutateOrders,
+  canViewStorefrontExceptions,
   canMutatePicks,
   canMutateQuotes,
   canMutateReturns,
@@ -4072,6 +4073,88 @@ export function requestStorefrontRefund(
   return apiFetch<StorefrontRefund>(`/storefront/orders/${handoffId}/refunds`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export type StorefrontExceptionKind =
+  | "aged_hold"
+  | "stale_sync"
+  | "missing_operational_paid_order"
+  | "unknown_payment"
+  | "refund_mismatch"
+  | "fulfilment_drift"
+  | "capacity_conflict";
+
+export type StorefrontExceptionAudit = {
+  id: string;
+  actor_user_id: string;
+  reason: string;
+  outcome: string;
+  detail: string | null;
+  created_at: string;
+};
+
+export type StorefrontException = {
+  id: string;
+  kind: StorefrontExceptionKind;
+  status: "open" | "aged" | "terminal" | "resolved";
+  age_seconds: number;
+  correlation_id: string;
+  explanation: string;
+  safe_action: string;
+  last_error: string | null;
+  financial: boolean;
+  amount_minor: number | null;
+  payment_reference: string | null;
+  provider_verified: boolean;
+  blocks_checkout: boolean;
+  can_repair: boolean;
+  detected_at: string;
+  resolved_at: string | null;
+  repair_count: number;
+  audits: StorefrontExceptionAudit[];
+};
+
+export type StorefrontExceptionList = {
+  items: StorefrontException[];
+  checkout_allowed: boolean;
+  paid_recovery_retained: true;
+};
+
+export type StorefrontExceptionAlert = {
+  id: string;
+  kind: StorefrontExceptionKind;
+  queue_class: "aged" | "terminal" | "retrying";
+  context: Record<string, unknown>;
+  created_at: string;
+};
+
+export function listStorefrontExceptions(): Promise<StorefrontExceptionList> {
+  return apiFetch<StorefrontExceptionList>("/storefront/exceptions");
+}
+
+export function getStorefrontException(id: string): Promise<StorefrontException> {
+  return apiFetch<StorefrontException>(`/storefront/exceptions/${id}`);
+}
+
+export function seedStorefrontExceptions(): Promise<StorefrontExceptionList> {
+  return apiFetch<StorefrontExceptionList>("/storefront/exceptions/seed", { method: "POST" });
+}
+
+export function repairStorefrontException(
+  id: string,
+  payload: { reason: string; idempotency_key: string },
+): Promise<StorefrontException> {
+  return apiFetch<StorefrontException>(`/storefront/exceptions/${id}/repair`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deliverStorefrontExceptionAlert(exceptionId?: string): Promise<StorefrontExceptionAlert> {
+  return apiFetch<StorefrontExceptionAlert>("/storefront/exceptions/alerts/test", {
+    method: "POST",
+    body: JSON.stringify(exceptionId ? { exception_id: exceptionId } : {}),
   });
 }
 

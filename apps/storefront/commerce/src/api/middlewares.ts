@@ -148,7 +148,7 @@ export async function requireStorefrontBff(req: MedusaRequest, res: MedusaRespon
     return;
   }
   const lowerPath = path.toLowerCase();
-  const protectedStoreRoute = /^\/store\/(?:carts|orders|customers)(?:\/|$)/i.test(path) ||
+  const protectedStoreRoute = /^\/store\/(?:carts|orders|customers|storefront-alerts)(?:\/|$)/i.test(path) ||
     /^\/auth\/customer\/storefront-clerk(?:\/|$)/i.test(path);
   if (!protectedStoreRoute) {
     next();
@@ -205,7 +205,7 @@ export default defineMiddlewares({ routes: [{
   matcher: "/store/*",
   middlewares: [(req, res, next) => {
     const path = normalizedPath(req);
-    if (path && /^\/store\/(?:carts|orders|customers)(?:\/|$)/i.test(path)) {
+    if (path && /^\/store\/(?:carts|orders|customers|storefront-alerts)(?:\/|$)/i.test(path)) {
       res.setHeader("Cache-Control", "private, no-store, max-age=0");
       res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
     }

@@ -1,6 +1,7 @@
 import type { MedusaContainer } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, MedusaError, Modules, ProductStatus } from "@medusajs/framework/utils";
 import { reconcileStorefrontHandoffs } from "./storefront-order-handoff";
+import { recordOpsCheckoutHealth, refreshOpsCheckoutHealth } from "./storefront-commerce-exceptions";
 import { CAPACITY_STATE_METADATA_KEY, mergeCapacityState, offerPresentation } from "./made-to-order-capacity";
 import {
   createInventoryLevelsWorkflow, createProductsWorkflow, createProductVariantsWorkflow,
@@ -106,7 +107,14 @@ export async function syncFirstout(container: MedusaContainer): Promise<void> {
 }
 
 async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
-  const sourceProducts = await fetchOpsProducts();
+  let sourceProducts;
+  try {
+    sourceProducts = await fetchOpsProducts();
+    await refreshOpsCheckoutHealth();
+  } catch (error) {
+    recordOpsCheckoutHealth({ opsReachable: false, checkoutAllowed: false });
+    throw error;
+  }
   await reconcileStorefrontHandoffs(
     container,
     sourceProducts.flatMap((product) => product.acknowledged_commitment_ids),

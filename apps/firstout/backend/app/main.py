@@ -67,6 +67,7 @@ from app.routers import (
     nia_threads,
     nia_usage as nia_usage_router,
     ops_commerce,
+    storefront_exceptions,
     storefront_orders,
     reports,
     roles,
@@ -236,6 +237,7 @@ app.include_router(skus.skus_router)
 app.include_router(product_groups.router)
 app.include_router(ops_commerce.router)
 app.include_router(storefront_orders.router)
+app.include_router(storefront_exceptions.router)
 app.include_router(catalogue_imports.catalogue_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)

@@ -98,6 +98,7 @@ describe("storefront BFF cart ownership", () => {
       "/STORE/orders/order_test",
       "/STORE/customers/me",
       "/store/carts%2fcart_test",
+      "/store/storefront-alerts/test",
       "/auth/customer/storefront-clerk",
       "/auth/customer/storefront%2Dclerk/register",
     ]) {

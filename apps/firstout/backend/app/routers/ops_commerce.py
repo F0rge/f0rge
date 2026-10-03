@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies.auth import get_storefront_refund_workflow_service
 from app.schemas.ops_commerce import OpsProductsResponse
+from app.schemas.storefront_exceptions import StorefrontCheckoutSafetyResponse
 from app.schemas.ops_commerce_order import (
     StorefrontFulfillmentEventAck,
     StorefrontFulfillmentEventAckResponse,
@@ -40,6 +41,20 @@ async def list_products(
     service: OpsCommerceService = Depends(get_ops_commerce_service),
 ) -> OpsProductsResponse:
     return await service.products(
+        authorization=authorization,
+        requested_company=x_ops_company_id,
+        request_host=request.url.hostname or "",
+    )
+
+
+@router.get("/checkout-safety", response_model=StorefrontCheckoutSafetyResponse)
+async def checkout_safety(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_ops_company_id: Optional[str] = Header(default=None),
+    service: OpsCommerceService = Depends(get_ops_commerce_service),
+) -> StorefrontCheckoutSafetyResponse:
+    return await service.checkout_safety(
         authorization=authorization,
         requested_company=x_ops_company_id,
         request_host=request.url.hostname or "",
