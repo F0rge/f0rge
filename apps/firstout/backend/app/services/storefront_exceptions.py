@@ -330,6 +330,14 @@ class StorefrontExceptionService:
         blocking = await self.crud.blocking_open(company_id)
         if not blocking:
             return StorefrontCheckoutSafetyResponse(checkout_allowed=True, reason=None)
+        if any((row.seed_key or "").startswith("restore:") for row in blocking):
+            return StorefrontCheckoutSafetyResponse(
+                checkout_allowed=False,
+                reason=(
+                    "Restored checkout stays gated until provider, order, "
+                    "stock, and capacity are reconciled"
+                ),
+            )
         kinds = sorted({row.kind for row in blocking})
         reason = "Operational outage or stale projection blocks new checkout"
         if "stale_sync" in kinds:
