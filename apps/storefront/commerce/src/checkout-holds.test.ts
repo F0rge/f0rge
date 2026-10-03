@@ -1,4 +1,5 @@
-import { availabilityMaxAgeMs, checkoutChanges, holdTtlMs } from "./checkout-holds";
+import { availabilityMaxAgeMs, checkoutChanges, holdTtlMs, opsCheckoutChanges } from "./checkout-holds";
+import { recordOpsCheckoutHealth } from "./storefront-commerce-exceptions";
 
 const now = Date.parse("2026-09-28T10:00:00.000Z");
 const cart = {
@@ -43,4 +44,19 @@ test("staleness and reservation limits use configured durations", () => {
     if (previousTtl === undefined) delete process.env.STOREFRONT_HOLD_TTL_SECONDS;
     else process.env.STOREFRONT_HOLD_TTL_SECONDS = previousTtl;
   }
+});
+
+test("operational outage and stale projection block new checkout", () => {
+  recordOpsCheckoutHealth({
+    checkoutAllowed: false,
+    opsReachable: false,
+    lastProjectionAt: "2026-09-28T09:00:00.000Z",
+  });
+  expect(opsCheckoutChanges(now)[0]).toMatch(/paid orders are kept/);
+  recordOpsCheckoutHealth({
+    checkoutAllowed: true,
+    opsReachable: true,
+    lastProjectionAt: "2026-09-28T09:59:00.000Z",
+  });
+  expect(opsCheckoutChanges(now)).toEqual([]);
 });

@@ -23,6 +23,10 @@ import {
   type FulfillmentPromise,
   type MadeToOrderCapacityState,
 } from "./made-to-order-capacity";
+import {
+  currentOpsCheckoutHealth,
+  operationalCheckoutBlock,
+} from "./storefront-commerce-exceptions";
 
 type CartLine = { id: string; variant_id: string | null; quantity: number; unit_price: number; metadata?: Record<string, unknown> | null };
 type Cart = { id: string; metadata: Record<string, unknown> | null; items: CartLine[] | null; currency_code: string };
@@ -238,6 +242,18 @@ export function checkoutChanges(cart: Cart, variants: Variant[], nowMs: number, 
   return [...new Set(changes)];
 }
 
+export function opsCheckoutChanges(nowMs = Date.now()): string[] {
+  const health = currentOpsCheckoutHealth();
+  const message = operationalCheckoutBlock({
+    checkoutAllowed: health.checkoutAllowed,
+    lastProjectionAt: health.lastProjectionAt,
+    nowMs,
+    maxAgeMs: availabilityMaxAgeMs(),
+    opsReachable: health.opsReachable,
+  });
+  return message ? [message] : [];
+}
+
 async function retrieveCart(container: MedusaContainer, cartId: string): Promise<Cart> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const { data } = await query.graph({
@@ -335,7 +351,7 @@ export async function checkoutHoldForCart(container: MedusaContainer, cartId: st
   const cart = await retrieveCart(container, cartId);
   const existing = await cartReservations(container, cartId);
   const variants = await retrieveVariants(container, cart);
-  const changes = checkoutChanges(cart, variants, nowMs, availabilityMaxAgeMs());
+  const changes = [...opsCheckoutChanges(nowMs), ...checkoutChanges(cart, variants, nowMs, availabilityMaxAgeMs())];
   const storedHold = holdMetadata(cart);
   if (!activeHoldMatches(cart, variants, existing, nowMs)) {
     await releaseCapacityForCart(container, cart, variants, storedHold, nowMs);
@@ -370,7 +386,7 @@ export async function startCheckoutHold(container: MedusaContainer, cartId: stri
     const cart = await retrieveCart(container, cartId);
     const existing = await cartReservations(container, cartId);
     const variants = await retrieveVariants(container, cart);
-    const changes = checkoutChanges(cart, variants, nowMs, availabilityMaxAgeMs());
+    const changes = [...opsCheckoutChanges(nowMs), ...checkoutChanges(cart, variants, nowMs, availabilityMaxAgeMs())];
     const oldHold = holdMetadata(cart);
     if (oldHold?.status === "active" && activeHoldMatches(cart, variants, existing, nowMs) && !changes.length) {
       return oldHold;

@@ -48,6 +48,7 @@ import {
   UserFollow,
   UserMultiple,
   Wallet,
+  WarningAlt,
   ChartColumn,
   ChartLine,
   Currency,
@@ -123,6 +124,7 @@ const ICONS = {
   "/returns": Undo,
   "/quotes": Document,
   "/orders": Receipt,
+  "/storefront-exceptions": WarningAlt,
   "/laybys": PiggyBank,
   "/customers": UserFollow,
   "/ledger": Finance,
@@ -224,7 +226,7 @@ export function AppShell({ children }: AppShellProps) {
     (item) => !("permission" in item) || can(user, item.permission),
   );
   const salesNavItems = can(user, "sales.refunds") && !can(user, "sales.orders")
-    ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders")
+    ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders" || item.href === "/storefront-exceptions")
     : SALES_NAV_ITEMS;
 
   function renderNavMenu(

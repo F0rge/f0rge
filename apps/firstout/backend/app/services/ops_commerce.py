@@ -33,6 +33,7 @@ from app.models.sku import Sku
 from app.models.team import Team
 from app.models.user import User
 from app.schemas.ops_commerce import OpsProductResponse, OpsProductsResponse
+from app.schemas.storefront_exceptions import StorefrontCheckoutSafetyResponse
 from app.schemas.ops_commerce_order import (
     StorefrontCollectionStatusUpdate,
     StorefrontFulfillmentEvent,
@@ -43,6 +44,7 @@ from app.schemas.ops_commerce_order import (
     StorefrontHandoffResponse,
     StorefrontPaidOrder,
 )
+from app.services.storefront_exceptions import StorefrontExceptionService
 from app.services.storefront_fulfillment import StorefrontFulfillmentService
 from app.services.chart_of_accounts import (
     CODE_DEPOSITS,
@@ -161,6 +163,20 @@ class OpsCommerceService:
         await self._require_company_staff(staff_user_id, company_id)
         rows = await self.orders.list_latest(company_id)
         return StorefrontHandoffListResponse(items=[self._response(row) for row in rows])
+
+    async def checkout_safety(
+        self,
+        *,
+        authorization: Optional[str],
+        requested_company: Optional[str],
+        request_host: str,
+    ) -> StorefrontCheckoutSafetyResponse:
+        company_id = await self._authorize(
+            authorization=authorization,
+            requested_company=requested_company,
+            request_host=request_host,
+        )
+        return await StorefrontExceptionService(self.db).checkout_safety(company_id)
 
     async def retry_handoff(
         self,
