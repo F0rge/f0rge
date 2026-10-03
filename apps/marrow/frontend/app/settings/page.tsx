@@ -130,7 +130,7 @@ export default function SettingsPage() {
       rows: [
         accordion('Weather', 'Local weather data for your check-ins', Cloud, <WeatherSection />),
         accordion('Health data', 'Import sleep, HRV, steps, and more', Heart, <HealthDataSection />),
-        accordion('External access token', 'API access for external tools', Lock, <ExternalTokenSection />),
+        accordion('External access tokens', 'Bearer tokens for MCP clients', Lock, <ExternalTokenSection />),
       ],
     },
     {

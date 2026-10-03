@@ -40,6 +40,7 @@ USER_OWNED_TABLES: tuple[str, ...] = (
     "embedding",
     "embedding_queue",
     "user_settings",
+    "external_api_tokens",
     "diet_tag_catalog",
     "supplement_catalog",
     "symptom_catalog",
@@ -69,7 +70,7 @@ async def enable_row_level_security(conn: AsyncConnection) -> None:
     await create_service_role_policy(
         conn,
         name="mcp_auth_lookup",
-        tables=("user_settings",),
+        tables=("user_settings", "external_api_tokens"),
         role="mcp_auth",
         command="SELECT",
     )

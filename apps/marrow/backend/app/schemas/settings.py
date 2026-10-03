@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import datetime
 import re
+import uuid
 from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator
@@ -49,11 +51,41 @@ class TestConnectionResponse(BaseModel):
     detail: Optional[str] = None
 
 
+class ExternalTokenCreate(BaseModel):
+    """Name chosen by the user. The secret is generated server-side."""
+
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        name = value.strip()
+        if not name:
+            raise ValueError("Token name is required")
+        if len(name) > 64:
+            raise ValueError("Token name must be at most 64 characters")
+        return name
+
+
+class ExternalApiTokenItem(BaseModel):
+    """One live token. The secret is not stored, so the list shows the name only."""
+
+    id: uuid.UUID
+    name: str
+    created_at: Optional[datetime.datetime] = None
+
+
+class ExternalApiTokenListResponse(BaseModel):
+    tokens: list[ExternalApiTokenItem]
+
+
 class ExternalTokenResponse(BaseModel):
-    """Plaintext token returned once on generation. Never returned by GET.
+    """Plaintext token returned once on creation. Never returned by GET.
     Store it immediately — it cannot be recovered after this response."""
 
     token: str
+    id: uuid.UUID
+    name: str
 
 
 class TaggedMealModeUpdate(BaseModel):
