@@ -10,21 +10,10 @@ import { DiscontinueDialog } from '@/components/treatments/discontinue-dialog'
 import { TreatmentTimeline } from '@/components/treatments/treatment-timeline'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
-import {
-  Button,
-  ButtonGroup,
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-  FetchError,
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@f0rge/ui'
+import { FetchError } from '@f0rge/ui'
 import { EmptyMark } from '@/components/shared/color-artifact'
 import type { Treatment } from '@/lib/api/types'
+import { cn } from '@f0rge/ui'
 import { groupTreatments } from '@/components/treatments/group-treatments'
 
 export default function TreatmentsPage() {
@@ -64,36 +53,50 @@ export default function TreatmentsPage() {
         title="Treatments"
         actions={
           <div className="flex items-center gap-1">
-            <ToggleGroup
-              spacing={0}
-              variant="outline"
-              value={[view]}
-              onValueChange={(next) => {
-                const picked = next[0]
-                if (picked === 'list' || picked === 'timeline') setView(picked)
-              }}
-              className="rounded-lg border border-border p-0.5"
-            >
-              <ToggleGroupItem value="list" size="sm" className="gap-1 px-2.5 text-xs">
+            <div className="flex rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => setView('list')}
+                className={cn(
+                  'flex items-center gap-1 rounded-l-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  view === 'list'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
                 <List className="size-3.5" />
                 List
-              </ToggleGroupItem>
-              <ToggleGroupItem value="timeline" size="sm" className="gap-1 px-2.5 text-xs">
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('timeline')}
+                className={cn(
+                  'flex items-center gap-1 rounded-r-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  view === 'timeline'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
                 <BarChart3 className="size-3.5" />
                 Timeline
-              </ToggleGroupItem>
-            </ToggleGroup>
-
-            <ButtonGroup>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setUploadOpen(true)}>
-                <Upload className="size-3.5" />
-                Upload
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={openAdd}>
-                <Plus className="size-4" />
-                Add
-              </Button>
-            </ButtonGroup>
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              <Upload className="size-3.5" />
+              Upload
+            </button>
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              <Plus className="size-4" />
+              Add
+            </button>
           </div>
         }
       />
@@ -105,20 +108,20 @@ export default function TreatmentsPage() {
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : !treatments || treatments.length === 0 ? (
-        <Empty className="border-border py-16">
-          <EmptyHeader>
-            <EmptyMedia>
-              <EmptyMark />
-            </EmptyMedia>
-            <EmptyTitle>No treatments yet</EmptyTitle>
-            <EmptyDescription>
-              Track courses of antibiotics, antimicrobials, and other treatments.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button type="button" onClick={openAdd}>Add treatment</Button>
-          </EmptyContent>
-        </Empty>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <EmptyMark className="mb-4" />
+          <h2 className="mb-1 text-lg font-semibold">No treatments yet</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Track courses of antibiotics, antimicrobials, and other treatments.
+          </p>
+          <button
+            type="button"
+            onClick={openAdd}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Add treatment
+          </button>
+        </div>
       ) : view === 'list' ? (
         <div className="space-y-5">
           {groupTreatments(treatments).map((section) => (
