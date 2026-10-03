@@ -96,7 +96,7 @@ const dropAnimationConfig: DropAnimation = {
  * module-scoped so their identities stay stable; an inline `getSnapshot` is the
  * classic cause of an infinite re-subscribe loop.
  */
-const subscribeToNothing = () => () => {}
+const subscribeToNothing = () => () => undefined
 const getIsMounted = () => true
 const getIsMountedOnServer = () => false
 
