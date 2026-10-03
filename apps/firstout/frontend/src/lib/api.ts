@@ -3959,6 +3959,16 @@ export function cancelSalesOrder(id: string): Promise<SalesOrder> {
   return apiFetch<SalesOrder>(`/orders/${id}/cancel`, { method: "POST" });
 }
 
+export type StorefrontFulfillmentType = "delivery" | "collection";
+export type StorefrontFulfillmentStatus =
+  | "confirmed"
+  | "ready_for_delivery"
+  | "out_for_delivery"
+  | "delivered"
+  | "ready_for_collection"
+  | "collected"
+  | "cancelled";
+
 export type StorefrontHandoff = {
   id: string;
   external_order_id: string;
@@ -3970,6 +3980,9 @@ export type StorefrontHandoff = {
   imported_at: string | null;
   sales_order_id: string;
   payment_journal_id: string;
+  fulfillment_type: StorefrontFulfillmentType;
+  fulfillment_status: StorefrontFulfillmentStatus;
+  fulfillment_revision: number;
   lines: {
     external_line_id: string;
     title: string;
@@ -3988,6 +4001,16 @@ export function listStorefrontHandoffs(): Promise<{ items: StorefrontHandoff[] }
 
 export function retryStorefrontHandoff(id: string): Promise<StorefrontHandoff> {
   return apiFetch<StorefrontHandoff>(`/storefront/orders/${id}/retry`, { method: "POST" });
+}
+
+export function updateStorefrontCollectionStatus(
+  id: string,
+  status: "ready_for_collection" | "collected",
+): Promise<StorefrontHandoff> {
+  return apiFetch<StorefrontHandoff>(`/storefront/orders/${id}/collection-status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
 }
 
 export type StorefrontRefund = {

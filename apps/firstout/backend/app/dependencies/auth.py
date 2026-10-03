@@ -350,11 +350,11 @@ async def require_storefront_refunds(
     return await _require_keys(user_id, db, (SALES_REFUNDS,))
 
 
-async def require_orders_or_storefront_refunds(
+async def require_storefront_handoff_read(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
-    return await _require_keys(user_id, db, (SALES_ORDERS, SALES_REFUNDS))
+    return await _require_keys(user_id, db, (SALES_ORDERS, SALES_REFUNDS, SALES_DELIVERIES))
 
 
 async def require_owner(
