@@ -90,7 +90,7 @@ export default function OrderConfirmationPage() {
       <div className="confirmation-card">
         <section aria-live="polite">
           <h2>Fulfilment status</h2>
-          <p role="status">{fulfillmentStatusLabel(result.order.fulfillment_status)}</p>
+          <p role="status">{fulfillmentStatusLabel(result.order.fulfillment_status || "confirmed")}</p>
           {result.order.fulfillment_promise?.estimated_from && result.order.fulfillment_promise.estimated_by && <p>
             {result.order.fulfillment_promise.estimated_from === result.order.fulfillment_promise.estimated_by
               ? `Estimated ready ${result.order.fulfillment_promise.estimated_by}`

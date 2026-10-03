@@ -87,9 +87,11 @@ describe("account order history BFF", () => {
     expect(html).toContain(orderMoney(1150, "ZAR"));
     expect(html).toContain("Pending confirmation");
     expect(html).toContain("Refunded");
-    expect(html).toContain("Order confirmed");
-    expect(html).toContain("Delivery");
+    expect(html).not.toContain("Order confirmed");
+    expect(html).not.toContain("Delivery");
     expect(html).not.toContain("private-refund");
+    expect(body.order.fulfillment_status).toBeNull();
+    expect(body.order.fulfillment_type).toBeNull();
   });
 
   it("shows collection readiness instead of the Medusa payment status", async () => {

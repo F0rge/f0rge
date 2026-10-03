@@ -18,22 +18,32 @@ const FULFILLMENT_STATUSES = new Set(Object.keys(FULFILLMENT_STATUS_LABELS));
 const FULFILLMENT_TYPES = new Set(["delivery", "collection"]);
 
 export function fulfillmentStatusLabel(status: string | null | undefined): string {
-  return FULFILLMENT_STATUS_LABELS[status || "confirmed"] || "Order confirmed";
+  return status && FULFILLMENT_STATUS_LABELS[status] ? FULFILLMENT_STATUS_LABELS[status] : "";
+}
+
+function knownType(value: unknown): string | null {
+  return FULFILLMENT_TYPES.has(String(value)) ? String(value) : null;
+}
+
+function knownStatus(value: unknown): string | null {
+  return FULFILLMENT_STATUSES.has(String(value)) ? String(value) : null;
 }
 
 /** Customer-visible fulfilment from Medusa metadata, never the raw payment status. */
 export function storefrontOrderFulfillment(order: RecordValue): {
-  fulfillment_type: string;
-  fulfillment_status: string;
+  fulfillment_type: string | null;
+  fulfillment_status: string | null;
 } {
   const metadata = record(order.metadata);
   const current = record(metadata.storefront_fulfillment_status);
-  const checkout = record(metadata.storefront_checkout);
-  const type = FULFILLMENT_TYPES.has(String(current.fulfillment_type))
-    ? String(current.fulfillment_type)
-    : FULFILLMENT_TYPES.has(String(checkout.fulfillment_type))
-      ? String(checkout.fulfillment_type)
-      : "delivery";
-  const status = FULFILLMENT_STATUSES.has(String(current.status)) ? String(current.status) : "confirmed";
-  return { fulfillment_type: type, fulfillment_status: status };
+  const snapshotType = knownType(current.fulfillment_type);
+  const snapshotStatus = knownStatus(current.status);
+  if (snapshotType || snapshotStatus) {
+    return { fulfillment_type: snapshotType, fulfillment_status: snapshotStatus };
+  }
+  const checkoutType = knownType(record(metadata.storefront_checkout).fulfillment_type);
+  if (checkoutType) {
+    return { fulfillment_type: checkoutType, fulfillment_status: "confirmed" };
+  }
+  return { fulfillment_type: null, fulfillment_status: null };
 }

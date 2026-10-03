@@ -12,8 +12,8 @@ type OrderView = {
   id: string;
   display_id?: number;
   status?: string;
-  fulfillment_type?: string;
-  fulfillment_status?: string;
+  fulfillment_type?: string | null;
+  fulfillment_status?: string | null;
   currency_code?: string;
   total?: number | string;
   subtotal?: number | string;
@@ -62,11 +62,12 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
   return <div className="content account-page account-order-detail">
     <p className="eyebrow">The Collector / customer account</p>
     <h1>Order {order.display_id ?? order.id}</h1>
-    <section className="account-panel" aria-label="Fulfilment status">
+    {order.fulfillment_status || order.fulfillment_type ? <section className="account-panel" aria-label="Fulfilment status">
       <h2>Fulfilment</h2>
-      <p role="status">{fulfillmentStatusLabel(order.fulfillment_status)}</p>
-      <p>{order.fulfillment_type === "collection" ? "Showroom collection" : "Delivery"}</p>
-    </section>
+      {order.fulfillment_status ? <p role="status">{fulfillmentStatusLabel(order.fulfillment_status)}</p> : null}
+      {order.fulfillment_type === "collection" ? <p>Showroom collection</p> : null}
+      {order.fulfillment_type === "delivery" ? <p>Delivery</p> : null}
+    </section> : null}
     {order.refund_status && <section className="account-panel" aria-label="Refund status">
       <h2>Refunds</h2>
       <p>Returned to your payment method: {money(order.refund_status.refunded_amount_minor / 100, currency)}</p>

@@ -12,13 +12,19 @@ type OrderSummary = {
   created_at: string | null;
   currency_code: string;
   status: string;
-  fulfillment_status?: string;
-  fulfillment_type?: string;
+  fulfillment_status?: string | null;
+  fulfillment_type?: string | null;
   total: string | number | null;
 };
 
 function orderLabel(order: OrderSummary): string {
   return `Order ${order.reference ?? order.id}`;
+}
+
+function orderHistoryLine(order: OrderSummary): string {
+  const date = order.created_at ? new Date(order.created_at).toLocaleDateString("en-ZA") : "Date unavailable";
+  const status = fulfillmentStatusLabel(order.fulfillment_status);
+  return status ? `${date} · ${status}` : date;
 }
 
 export function OrderHistory() {
@@ -68,14 +74,14 @@ export function OrderHistory() {
     {loading ? <p role="status">Loading your orders…</p> : error && !orders.length && !claimable.length
       ? <p role="alert" className="account-error">{error}</p>
       : orders.length ? <ul className="account-order-list">{orders.map((order) => <li key={order.id}>
-        <div><strong>{orderLabel(order)}</strong><p>{order.created_at ? new Date(order.created_at).toLocaleDateString("en-ZA") : "Date unavailable"} · {fulfillmentStatusLabel(order.fulfillment_status)}</p></div>
+        <div><strong>{orderLabel(order)}</strong><p>{orderHistoryLine(order)}</p></div>
         <div className="account-order-actions"><strong>{money(order.total, order.currency_code)}</strong><Link href={`/account/orders/${encodeURIComponent(order.id)}`} className="text-link">View order ↗</Link></div>
       </li>)}</ul> : !claimable.length && <p>Orders placed while signed in will appear here.</p>}
     {claimable.length > 0 && <div className="account-claimable">
       <h3>Link a recent guest order</h3>
       <p>These new guest orders match your verified sign-in email. Linking adds them to your account without changing the original order details.</p>
       <ul className="account-order-list">{claimable.map((order) => <li key={order.id}>
-        <div><strong>{orderLabel(order)}</strong><p>{order.created_at ? new Date(order.created_at).toLocaleDateString("en-ZA") : "Date unavailable"} · {fulfillmentStatusLabel(order.fulfillment_status)}</p></div>
+        <div><strong>{orderLabel(order)}</strong><p>{orderHistoryLine(order)}</p></div>
         <Button type="button" className="account-secondary" disabled={Boolean(busyId)} onClick={() => void claim(order.id)}>{busyId === order.id ? "Linking…" : "Link order"}</Button>
       </li>)}</ul>
     </div>}
