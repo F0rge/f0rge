@@ -6,13 +6,18 @@ import {
   Line,
   XAxis,
   YAxis,
-  Tooltip,
   ReferenceArea,
   ReferenceLine,
-  ResponsiveContainer,
   Dot,
 } from 'recharts'
-import { FetchError } from '@f0rge/ui'
+import {
+  Button,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+  FetchError,
+} from '@f0rge/ui'
 import { Loader2, Pin, PinOff } from 'lucide-react'
 import { useMarkerHistory, useTreatments } from '@/lib/api/hooks'
 import type { MarkerFlag } from '@/lib/api/types'
@@ -38,8 +43,6 @@ function getPinned(): string[] {
     const raw = localStorage.getItem(PINNED_KEY)
     return raw ? (JSON.parse(raw) as string[]) : []
   } catch {
-    // Intentional swallow: corrupt localStorage value just means "no pins
-    // yet" — not a mutation the user triggered, nothing to toast.
     return []
   }
 }
@@ -48,9 +51,7 @@ function setPinned(list: string[]) {
   try {
     localStorage.setItem(PINNED_KEY, JSON.stringify(list))
   } catch {
-    // Intentional swallow: storage full/disabled (e.g. private browsing).
-    // Pin state is a nice-to-have preference, not worth interrupting the
-    // user with a toast over.
+    // storage unavailable — pin is optional
   }
 }
 
@@ -59,14 +60,12 @@ function computeRefBand(
   yMin: number,
   yMax: number,
 ): { low: number | null; high: number | null } {
-  // Collect non-null ref values across series
   const lows = points.map((p) => p.ref_low).filter((v): v is number => v !== null)
   const highs = points.map((p) => p.ref_high).filter((v): v is number => v !== null)
   const low = lows.length > 0 ? Math.min(...lows) : null
   const high = highs.length > 0 ? Math.max(...highs) : null
 
   if (low === null && high === null) return { low: null, high: null }
-  // Half-bands: use chart domain edge when only one bound is set
   return {
     low: low ?? yMin,
     high: high ?? yMax,
@@ -93,12 +92,9 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
 
   function togglePin() {
     const current = getPinned()
-    let next: string[]
-    if (pinned) {
-      next = current.filter((c) => c !== canonicalName)
-    } else {
-      next = [...current, canonicalName]
-    }
+    const next = pinned
+      ? current.filter((c) => c !== canonicalName)
+      : [...current, canonicalName]
     setPinned(next)
     setPinnedState(!pinned)
   }
@@ -137,47 +133,54 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
   const refBand = computeRefBand(numericPoints, domainMin, domainMax)
 
   const chartData = numericPoints.map((p) => ({
-    date: p.lab_date.slice(5), // MM-DD display
+    date: p.lab_date.slice(5),
     fullDate: p.lab_date,
     value: p.value,
     flag: p.flag,
     unit: p.unit,
   }))
 
+  const chartConfig = {
+    value: {
+      label: displayName ?? canonicalName,
+      color: chartStroke[1],
+    },
+  } satisfies ChartConfig
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">{displayName ?? canonicalName}</p>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={togglePin}
-          className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
           aria-label={pinned ? 'Unpin from Signals' : 'Pin to Signals'}
         >
           {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
           {pinned ? 'Unpin' : 'Pin to Signals'}
-        </button>
+        </Button>
       </div>
 
-      <ResponsiveContainer width="100%" height={220}>
+      <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
         <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
           <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-          <YAxis
-            tick={{ fontSize: 10 }}
-            domain={[domainMin, domainMax]}
-          />
-          <Tooltip
-            contentStyle={{ fontSize: 12 }}
-            content={({ payload }) => {
-              if (!payload?.length) return null
-              const p = payload[0].payload as { value: number; flag: string; unit: string | null; date: string }
-              return (
-                <div className="rounded-lg border border-border bg-background px-2 py-1 text-xs shadow-sm">
-                  <p className="font-medium">{p.date}</p>
-                  <p>{p.value}{p.unit ? ` ${p.unit}` : ''} &middot; {p.flag}</p>
-                </div>
-              )
-            }}
+          <YAxis tick={{ fontSize: 10 }} domain={[domainMin, domainMax]} />
+          <ChartTooltip
+            content={
+              <ChartTooltipContent
+                labelFormatter={(_, payload) => {
+                  const row = payload?.[0]?.payload as { fullDate?: string } | undefined
+                  return row?.fullDate ?? ''
+                }}
+                formatter={(value, _name, item) => {
+                  const row = item.payload as { unit: string | null; flag: string }
+                  const unit = row.unit ? ` ${row.unit}` : ''
+                  return [`${value}${unit} · ${row.flag}`, displayName ?? canonicalName]
+                }}
+              />
+            }
           />
 
           {refBand.low !== null && refBand.high !== null && (
@@ -215,14 +218,13 @@ export function MarkerHistoryChart({ canonicalName, displayName }: MarkerHistory
           <Line
             type="monotone"
             dataKey="value"
-            stroke={chartStroke[1]}
+            stroke="var(--color-value)"
             strokeWidth={2}
             dot={<FlagDot />}
             activeDot={{ r: 5 }}
-            name={displayName ?? canonicalName}
           />
         </LineChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     </div>
   )
 }

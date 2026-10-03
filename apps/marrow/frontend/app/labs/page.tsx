@@ -13,7 +13,19 @@ import { MarkerList } from '@/components/labs/marker-list'
 import { EmptyMark } from '@/components/shared/color-artifact'
 import { PageShell } from '@/components/layout/page-shell'
 import { PageHeader } from '@/components/layout/page-header'
-import { cn, FetchError } from '@f0rge/ui'
+import {
+  Button,
+  ButtonGroup,
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  FetchError,
+  ToggleGroup,
+  ToggleGroupItem,
+} from '@f0rge/ui'
 import type { Lab } from '@/lib/api/types'
 
 type View = 'by-lab' | 'by-marker'
@@ -34,51 +46,36 @@ export default function LabsPage() {
         title="Labs"
         actions={
           <div className="flex items-center gap-1">
-            <div className="flex rounded-lg border border-border">
-              <button
-                type="button"
-                onClick={() => setView('by-lab')}
-                className={cn(
-                  'flex items-center gap-1 rounded-l-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                  view === 'by-lab'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
+            <ToggleGroup
+              spacing={0}
+              variant="outline"
+              value={[view]}
+              onValueChange={(next) => {
+                const picked = next[0]
+                if (picked === 'by-lab' || picked === 'by-marker') setView(picked)
+              }}
+              className="rounded-lg border border-border p-0.5"
+            >
+              <ToggleGroupItem value="by-lab" size="sm" className="gap-1 px-2.5 text-xs">
                 <List className="size-3.5" />
                 By Lab
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('by-marker')}
-                className={cn(
-                  'flex items-center gap-1 rounded-r-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                  view === 'by-marker'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
+              </ToggleGroupItem>
+              <ToggleGroupItem value="by-marker" size="sm" className="gap-1 px-2.5 text-xs">
                 <FlaskConical className="size-3.5" />
                 By Marker
-              </button>
-            </div>
+              </ToggleGroupItem>
+            </ToggleGroup>
 
-            <button
-              type="button"
-              onClick={() => setUploadOpen(true)}
-              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-            >
-              <Upload className="size-3.5" />
-              Upload
-            </button>
-            <button
-              type="button"
-              onClick={() => setAddOpen(true)}
-              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-            >
-              <Plus className="size-4" />
-              Add
-            </button>
+            <ButtonGroup>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setUploadOpen(true)}>
+                <Upload className="size-3.5" />
+                Upload
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAddOpen(true)}>
+                <Plus className="size-4" />
+                Add
+              </Button>
+            </ButtonGroup>
           </div>
         }
       />
@@ -96,29 +93,25 @@ export default function LabsPage() {
           )}
 
           {!isLoading && !isError && (!labs || labs.length === 0) && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <EmptyMark className="mb-4" />
-              <h2 className="mb-1 text-lg font-semibold">No labs yet</h2>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Add lab results manually or upload a PDF/image for automatic extraction.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setUploadOpen(true)}
-                  className="rounded-lg border border-primary px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-                >
+            <Empty className="border-border py-16">
+              <EmptyHeader>
+                <EmptyMedia>
+                  <EmptyMark />
+                </EmptyMedia>
+                <EmptyTitle>No labs yet</EmptyTitle>
+                <EmptyDescription>
+                  Add lab results manually or upload a PDF/image for automatic extraction.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent className="flex-row gap-2">
+                <Button type="button" variant="outline" onClick={() => setUploadOpen(true)}>
                   Upload lab
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAddOpen(true)}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                >
+                </Button>
+                <Button type="button" onClick={() => setAddOpen(true)}>
                   Add manually
-                </button>
-              </div>
-            </div>
+                </Button>
+              </EmptyContent>
+            </Empty>
           )}
 
           {!isLoading && !isError && labs && labs.length > 0 && (

@@ -3,14 +3,24 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  Field,
+  FieldLabel,
 } from '@f0rge/ui'
 import { Button, cn, formatLocalDate } from '@f0rge/ui'
+import { TreatmentCourseTimeline } from './treatment-course-timeline'
 import { Checkbox, NumberInput, Textarea, TextInput, useForm } from '@f0rge/ui/forms'
 import { useTreatments, useCreateTreatment, useUpdateTreatment, useDeleteTreatment } from '@/lib/api/hooks'
 import { handleMutationError } from '@f0rge/ui/api'
@@ -122,13 +132,10 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
 
   async function handleDelete() {
     if (!treatment) return
-    if (!confirmDelete) {
-      setConfirmDelete(true)
-      return
-    }
     try {
       await deleteMutation.mutateAsync(treatment.id)
       toast.success('Treatment deleted')
+      setConfirmDelete(false)
       onOpenChange(false)
     } catch (err) {
       handleMutationError(err, 'Failed to delete treatment')
@@ -152,6 +159,10 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
           </DialogDescription>
         </DialogHeader>
 
+        {isEdit && treatment && (
+          <TreatmentCourseTimeline treatment={treatment} />
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <TextInput
             key={form.key('name')}
@@ -160,8 +171,8 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
             {...form.getInputProps('name')}
           />
 
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium leading-none">Type</p>
+          <Field>
+            <FieldLabel>Type</FieldLabel>
             <div className="grid grid-cols-3 gap-1.5">
               {TREATMENT_TYPES.map((t) => (
                 <button
@@ -179,7 +190,7 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
                 </button>
               ))}
             </div>
-          </div>
+          </Field>
 
           <TextInput
             key={form.key('group')}
@@ -256,11 +267,11 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
               <Button
                 type="button"
                 variant="destructive"
-                onClick={handleDelete}
+                onClick={() => setConfirmDelete(true)}
                 disabled={isPending}
                 className="sm:mr-auto"
               >
-                {confirmDelete ? 'Confirm delete' : 'Delete'}
+                Delete
               </Button>
             )}
             <Button type="submit" disabled={isPending}>
@@ -269,6 +280,27 @@ export function TreatmentFormDialog({ open, onOpenChange, treatment }: Treatment
           </DialogFooter>
         </form>
       </DialogContent>
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader className="text-left sm:text-left">
+            <AlertDialogTitle>Delete treatment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes {treatment?.name ?? 'this treatment'} and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-end">
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={handleDelete}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }
