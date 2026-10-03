@@ -54,7 +54,17 @@ describe("Clerk and private-preview proxy composition", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("https://clerk.example/redirect");
     expect(response.headers.get("x-robots-tag")).toContain("noindex");
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0");
     expect(clerkState.invoked).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks account and order-confirmation pages private and non-indexable", async () => {
+    const { proxy } = await import("./proxy");
+    const authorization = `Basic ${Buffer.from("preview-user:test-preview-password-that-is-long-enough").toString("base64")}`;
+    for (const path of ["/account", "/account/orders/order_safe", "/order/confirmation"]) {
+      const response = await proxy(new NextRequest(`https://storefront.example${path}`, { headers: { authorization } }), {} as never);
+      expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0");
+      expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    }
   });
 });

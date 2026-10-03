@@ -16,19 +16,22 @@ class StockReturnCRUD(BaseCRUD):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(db)
 
-    async def get_by_id(self, return_id: uuid.UUID) -> Optional[StockReturn]:
-        return (
-            await self.db.execute(
-                select(StockReturn)
-                .options(
-                    selectinload(StockReturn.invoice),
-                    selectinload(StockReturn.location),
-                    selectinload(StockReturn.lines).selectinload(StockReturnLine.invoice_line),
-                    selectinload(StockReturn.lines).selectinload(StockReturnLine.sku),
-                )
-                .where(StockReturn.id == return_id)
+    async def get_by_id(
+        self, return_id: uuid.UUID, *, for_update: bool = False
+    ) -> Optional[StockReturn]:
+        stmt = (
+            select(StockReturn)
+            .options(
+                selectinload(StockReturn.invoice),
+                selectinload(StockReturn.location),
+                selectinload(StockReturn.lines).selectinload(StockReturnLine.invoice_line),
+                selectinload(StockReturn.lines).selectinload(StockReturnLine.sku),
             )
-        ).scalar_one_or_none()
+            .where(StockReturn.id == return_id)
+        )
+        if for_update:
+            stmt = stmt.execution_options(populate_existing=True).with_for_update()
+        return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_all(self) -> list[StockReturn]:
         result = await self.db.execute(

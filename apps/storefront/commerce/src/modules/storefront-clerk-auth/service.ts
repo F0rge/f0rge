@@ -71,6 +71,8 @@ export class StorefrontClerkAuthProvider extends AbstractAuthModuleProvider {
             first_name: text(claims.first_name) || "",
             last_name: text(claims.last_name) || "",
             email_verified: true,
+            clerk_issuer: issuer,
+            clerk_subject: subject,
           },
         });
         return { success: true, authIdentity };
@@ -85,6 +87,8 @@ export class StorefrontClerkAuthProvider extends AbstractAuthModuleProvider {
       first_name: text(claims.first_name) || "",
       last_name: text(claims.last_name) || "",
       email_verified: true,
+      clerk_issuer: issuer,
+      clerk_subject: subject,
     };
     try {
       const authIdentity = await identities.create({
@@ -100,7 +104,14 @@ export class StorefrontClerkAuthProvider extends AbstractAuthModuleProvider {
         const authIdentity = await identities.retrieve({ entity_id: entityId });
         const linkedIssuer = authIdentity.provider_identities?.find((identity) => identity.entity_id === entityId)?.provider_metadata?.issuer;
         if (linkedIssuer !== issuer) return { success: false, error: "Invalid customer session" };
-        return { success: true, authIdentity };
+        // A concurrent insert can make the token exchange win after the first
+        // request's claims changed. Refresh metadata from the just-verified
+        // token so a claim never relies on a stale email snapshot.
+        const refreshed = await identities.update(entityId, {
+          provider_metadata: { issuer },
+          user_metadata: userMetadata,
+        });
+        return { success: true, authIdentity: refreshed };
       } catch {
         return { success: false, error: "Customer sign-in could not be completed" };
       }

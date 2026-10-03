@@ -46,16 +46,19 @@ async def ops_headers(
     }
 
 
-async def _paid_order_payload(owner_client: AsyncClient) -> tuple[dict[str, object], str]:
+async def _paid_order_payload(
+    owner_client: AsyncClient, *, fixture_tag: str = "748"
+) -> tuple[dict[str, object], str]:
+    fixture_name = "Storefront chair" if fixture_tag == "748" else f"Storefront chair {fixture_tag}"
     locations = await owner_client.get("/api/v1/locations")
     location_id = next(row["id"] for row in locations.json() if row["name"] == "Kramerville")
     created = await owner_client.post(
         "/api/v1/skus",
         json={
-            "our_ref": "STOREFRONT-CHAIR-748",
-            "our_barcode": "STOREFRONT-CHAIR-748-BAR",
-            "name": "Storefront chair",
-            "design": "Storefront chair",
+            "our_ref": f"STOREFRONT-CHAIR-{fixture_tag}",
+            "our_barcode": f"STOREFRONT-CHAIR-{fixture_tag}-BAR",
+            "name": fixture_name,
+            "design": fixture_name,
             "fabric": "Oak",
             "opening_location_id": location_id,
             "opening_qty": 2,
@@ -74,21 +77,29 @@ async def _paid_order_payload(owner_client: AsyncClient) -> tuple[dict[str, obje
         {
             "company_id": "00000000-0000-0000-0000-000000000001",
             "channel": "storefront",
-            "external_order_id": "order-748-001",
-            "external_payment_id": "payment-748-001",
-            "correlation_id": "storefront:order-748-001",
+            "external_order_id": f"order-{fixture_tag}-001",
+            "external_payment_id": f"payment-{fixture_tag}-001",
+            "correlation_id": f"storefront:order-{fixture_tag}-001",
             "currency_code": "ZAR",
             "customer": {
-                "external_id": "customer-748-001",
-                "name": "Ada Storefront",
-                "email": "ada-storefront@example.com",
+                "external_id": f"customer-{fixture_tag}-001",
+                "name": "Ada Storefront"
+                if fixture_tag == "748"
+                else f"Ada Storefront {fixture_tag}",
+                "email": (
+                    "ada-storefront@example.com"
+                    if fixture_tag == "748"
+                    else f"ada-storefront-{fixture_tag}@example.com"
+                ),
                 "phone": "+27110000001",
                 "billing_address": "1 Main Street, Johannesburg, 2000",
             },
             "fulfillment": {
                 "type": "delivery",
-                "reference": "delivery-748-001",
-                "recipient": "Ada Storefront",
+                "reference": f"delivery-{fixture_tag}-001",
+                "recipient": "Ada Storefront"
+                if fixture_tag == "748"
+                else f"Ada Storefront {fixture_tag}",
                 "address": {
                     "address_1": "1 Main Street",
                     "address_2": "Apt 2",
@@ -105,8 +116,8 @@ async def _paid_order_payload(owner_client: AsyncClient) -> tuple[dict[str, obje
                 {
                     "external_line_id": "line-1",
                     "source_sku_id": sku_id,
-                    "sku": "STOREFRONT-CHAIR-748",
-                    "title": "Storefront chair",
+                    "sku": f"STOREFRONT-CHAIR-{fixture_tag}",
+                    "title": fixture_name,
                     "quantity": 1,
                     "unit_ex_minor_zar": 100000,
                     "ex_minor_zar": 100000,
@@ -124,7 +135,7 @@ async def _paid_order_payload(owner_client: AsyncClient) -> tuple[dict[str, obje
             },
             "payment": {
                 "provider": "peach",
-                "reference": "gateway-ref-748-001",
+                "reference": f"gateway-ref-{fixture_tag}-001",
                 "captured_at": "2026-09-28T18:00:00Z",
                 "amount_minor_zar": 115000,
                 "currency_code": "ZAR",
@@ -470,8 +481,12 @@ async def test_paid_handoff_machine_and_staff_routes_enforce_their_own_permissio
         json={"email": "books@example.com", "password": settings.seed_books_password},
     )
     assert books_login.status_code == 200
-    forbidden_staff = await async_client.get("/api/v1/storefront/orders")
-    assert forbidden_staff.status_code == 403
+    refund_read = await async_client.get("/api/v1/storefront/orders")
+    assert refund_read.status_code == 200
+    forbidden_retry = await async_client.post(
+        "/api/v1/storefront/orders/00000000-0000-4000-8000-000000000001/retry"
+    )
+    assert forbidden_retry.status_code == 403
 
 
 @pytest.mark.asyncio

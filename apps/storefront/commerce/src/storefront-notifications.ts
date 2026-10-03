@@ -7,7 +7,7 @@ type JsonRecord = Record<string, any>;
 type NotificationStatus = "pending" | "processing" | "retry_wait" | "sent";
 type NotificationEntry = {
   id: string;
-  kind: "order_confirmation" | "fulfillment_status";
+  kind: "order_confirmation" | "fulfillment_status" | "refund_status";
   status: NotificationStatus;
   recipient: string;
   template: string;
@@ -44,11 +44,51 @@ function required(name: string): string {
 function providerTemplate(entry: NotificationEntry): string {
   const template = entry.kind === "order_confirmation"
     ? process.env.STOREFRONT_SENDGRID_ORDER_TEMPLATE_ID
-    : process.env.STOREFRONT_SENDGRID_STATUS_TEMPLATE_ID;
+    : entry.kind === "refund_status"
+      ? process.env.STOREFRONT_SENDGRID_REFUND_TEMPLATE_ID
+      : process.env.STOREFRONT_SENDGRID_STATUS_TEMPLATE_ID;
   if (process.env.STOREFRONT_SENDGRID_API_KEY && !template?.trim()) {
     throw new Error(`sendgrid_${entry.kind}_template_unconfigured`);
   }
   return template?.trim() || entry.template;
+}
+
+export function enqueueRefundStatusNotification(
+  current: unknown,
+  orderMetadata: JsonRecord,
+  refund: { provider_refund_id: string; amount_minor: number; currency_code: string; status: "pending" | "succeeded" | "failed" },
+): NotificationEntry[] {
+  const outbox = entries(current);
+  const id = `refund:${refund.provider_refund_id}:${refund.status}`;
+  if (outbox.some((entry) => entry.id === id)) return outbox;
+  const recipient = typeof orderMetadata.email === "string" ? orderMetadata.email.trim().toLowerCase() : "";
+  if (!recipient) throw new Error("storefront_order_email_missing");
+  const now = new Date().toISOString();
+  return [...outbox, {
+    id,
+    kind: "refund_status",
+    status: "pending",
+    recipient,
+    template: "storefront-refund-status",
+    data: {
+      order: {
+        reference: orderMetadata.display_id,
+        fulfillment_promise: orderMetadata.storefront_fulfillment_promise ?? null,
+      },
+      refund: {
+        amount_minor: refund.amount_minor,
+        currency_code: refund.currency_code,
+        status: refund.status,
+      },
+    },
+    attempt_count: 0,
+    created_at: now,
+    updated_at: now,
+    next_attempt_at: now,
+    lease_until: null,
+    sent_at: null,
+    failure_code: null,
+  }];
 }
 
 function accessUrl(orderId: string, confirmationDigest: string): string {

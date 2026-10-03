@@ -8,6 +8,7 @@ export type PeachPaymentConfig = {
   merchantId: string;
   entityId: string;
   webhookSecret: string;
+  checkoutSecret: string | null;
   checkoutBaseUrl: string;
   authBaseUrl: string;
   webhookUrl: string;
@@ -50,6 +51,9 @@ export function peachPaymentConfig(env: PeachPaymentEnvironment = process.env): 
     merchantId: env.PEACH_MERCHANT_ID!.trim(),
     entityId: env.PEACH_ENTITY_ID!.trim(),
     webhookSecret: env.PEACH_WEBHOOK_SECRET!.trim(),
+    // Hosted checkout can remain configured while refunds stay disabled until
+    // the dedicated Checkout signing token is provisioned.
+    checkoutSecret: env.PEACH_CHECKOUT_SECRET?.trim() || null,
     checkoutBaseUrl: SANDBOX_CHECKOUT_URL,
     authBaseUrl: SANDBOX_AUTH_URL,
     webhookUrl,
@@ -59,6 +63,11 @@ export function peachPaymentConfig(env: PeachPaymentEnvironment = process.env): 
 
 export function peachPaymentEnabled(env: PeachPaymentEnvironment = process.env): boolean {
   return peachPaymentConfig(env) !== null;
+}
+
+export function peachRefundEnabled(env: PeachPaymentEnvironment = process.env): boolean {
+  const config = peachPaymentConfig(env);
+  return config !== null && config.checkoutSecret !== null;
 }
 
 function assertAllowedUrl(value: string, env: PeachPaymentEnvironment): void {

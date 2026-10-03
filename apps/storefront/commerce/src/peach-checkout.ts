@@ -10,6 +10,8 @@ export type PeachWebhookEvent = {
   payment_type: string;
   result_code: string;
   transaction_id: string | null;
+  referenced_transaction_id: string | null;
+  refund_request_id: string | null;
   event_timestamp: string;
   raw_sha256: string;
   canonical_sha256: string;
@@ -30,9 +32,14 @@ export function medusaAmountToMinor(value: unknown): number | null {
   if (typeof value === "number") return majorToMinor(value);
   if (typeof value === "string") return majorToMinor(value);
   if (!value || typeof value !== "object") return null;
-  const amount = value as { raw?: { value?: unknown }; numeric?: unknown; numeric_?: unknown; toString?: () => string };
+  const amount = value as { raw?: { value?: unknown }; value?: unknown; numeric?: unknown; numeric_?: unknown; toString?: () => string };
   const rawValue = amount.raw?.value;
   if (typeof rawValue === "number" || typeof rawValue === "string") return majorToMinor(rawValue);
+  // MikroORM serializes Medusa's raw big-number column directly as
+  // { value, precision }; the hydrated BigNumber instance instead exposes
+  // that object under `.raw`. Both values are expressed in major currency
+  // units, so normalize them identically.
+  if (typeof amount.value === "number" || typeof amount.value === "string") return majorToMinor(amount.value);
   if (typeof amount.numeric === "number" || typeof amount.numeric === "string") return majorToMinor(amount.numeric);
   if (typeof amount.numeric_ === "number" || typeof amount.numeric_ === "string") return majorToMinor(amount.numeric_);
   if (typeof amount.toString === "function") return majorToMinor(amount.toString());
@@ -83,20 +90,30 @@ export function parsePeachWebhook(rawBody: Buffer | string, webhookId: string): 
   const resultCode = dottedResultCode ?? underscoredResultCode;
   const timestamp = one("timestamp");
   const transactionId = one("id");
+  const referencedTransactionId = one("referencedId");
   const amountMinor = majorToMinor(amount);
-  if (!webhookId || webhookId.length > 200 || !checkoutId || !/^[A-Za-z0-9_-]{1,64}$/.test(checkoutId) ||
-    !merchantReference || !/^[A-Za-z0-9]{8,16}$/.test(merchantReference) || amountMinor === null ||
-    !currency || !/^[A-Za-z]{3}$/.test(currency) || !paymentType || !resultCode || resultCode.length > 32 ||
+  const normalizedPaymentType = paymentType?.toUpperCase() || "";
+  const isRefund = normalizedPaymentType === "RF";
+  if (!webhookId || webhookId.length > 200 || amountMinor === null || !currency ||
+    !/^[A-Za-z]{3}$/.test(currency) || !resultCode || resultCode.length > 32 ||
     !timestamp || !Number.isFinite(Date.parse(timestamp))) return null;
+  if (isRefund) {
+    if (!referencedTransactionId || !/^[a-f0-9]{32}$/i.test(referencedTransactionId) ||
+      !transactionId || !/^[a-f0-9]{32}$/i.test(transactionId)) return null;
+  } else if (normalizedPaymentType !== "DB" || !checkoutId || !/^[A-Za-z0-9._-]{1,64}$/.test(checkoutId) ||
+    !merchantReference || !/^[A-Za-z0-9]{8,16}$/.test(merchantReference)) return null;
   const normalized = {
     webhook_id: webhookId,
-    checkout_id: checkoutId,
-    merchant_reference: merchantReference,
+    checkout_id: checkoutId || "",
+    merchant_reference: merchantReference || "",
     amount_minor: amountMinor,
     currency_code: currency.toUpperCase(),
-    payment_type: paymentType.toUpperCase(),
+    payment_type: normalizedPaymentType as string,
     result_code: resultCode,
-    transaction_id: transactionId && transactionId.length <= 128 ? transactionId : null,
+    transaction_id: transactionId && /^[a-f0-9]{32}$/i.test(transactionId) ? transactionId : null,
+    referenced_transaction_id: referencedTransactionId && /^[a-f0-9]{32}$/i.test(referencedTransactionId)
+      ? referencedTransactionId : null,
+    refund_request_id: null,
     event_timestamp: timestamp,
   };
   return {
@@ -196,6 +213,8 @@ export function parsePeachStatusResponse(body: Record<string, unknown>): PeachWe
     payment_type: fields.paymentType,
     result_code: fields.resultCode,
     transaction_id: fields.transactionId,
+    referenced_transaction_id: null,
+    refund_request_id: null,
     event_timestamp: fields.eventTimestamp,
   };
   return {

@@ -75,6 +75,7 @@ async def test_create_trade_customer_list_includes_crm_fields(owner_client: Asyn
 
 
 async def test_unpaid_invoice_increases_open_invoices_zar(owner_client: AsyncClient) -> None:
+    issue_date = date.today().isoformat()
     customer = await owner_client.post(
         "/api/v1/customers",
         json={"name": "CRM Invoice Customer S10"},
@@ -86,7 +87,7 @@ async def test_unpaid_invoice_increases_open_invoices_zar(owner_client: AsyncCli
         "/api/v1/invoices",
         json={
             "customer_id": customer_id,
-            "issue_date": "2026-09-01",
+            "issue_date": issue_date,
             "lines": [{"description": "Sofa", "qty": 1, "unit_ex_vat": "1000.00"}],
         },
     )
@@ -99,7 +100,7 @@ async def test_unpaid_invoice_increases_open_invoices_zar(owner_client: AsyncCli
     assert Decimal(body["open_invoices_zar"]) == Decimal("1150.00")
     assert body["overdue_invoices_count"] == 0
     assert Decimal(body["overdue_invoices_zar"]) == Decimal("0.00")
-    assert body["last_purchase_date"] == "2026-09-01"
+    assert body["last_purchase_date"] == issue_date
 
 
 async def test_overdue_uses_custom_customer_terms(owner_client: AsyncClient) -> None:

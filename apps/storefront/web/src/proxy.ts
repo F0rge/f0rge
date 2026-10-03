@@ -75,12 +75,14 @@ function privatePreviewGate(request: NextRequest): NextResponse | null {
   return null;
 }
 
-function withNoIndex(result: Response | null | undefined | void): NextResponse {
-  if (!result) return withRobotsHeader(NextResponse.next());
-  const headers = new Headers(result.headers);
+function withNoIndex(result: Response | null | undefined | void, pathname = ""): NextResponse {
+  const response = result || NextResponse.next();
+  const headers = new Headers(response.headers);
   headers.set("X-Robots-Tag", ROBOTS_HEADER);
-  if (result.status >= 300 || headers.has("Location")) headers.set("Cache-Control", "no-store");
-  return new NextResponse(result.body, { status: result.status, statusText: result.statusText, headers });
+  if (/^\/(?:account(?:\/|$)|api\/account(?:\/|$)|order\/confirmation(?:\/|$))/.test(pathname)) {
+    headers.set("Cache-Control", "private, no-store, max-age=0");
+  } else if (response.status >= 300 || headers.has("Location")) headers.set("Cache-Control", "no-store");
+  return new NextResponse(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 const clerkConfigured = Boolean(
@@ -98,8 +100,8 @@ export function proxy(request: NextRequest, event: NextFetchEvent) {
   // requests before invoking its callback, which must never bypass this gate.
   const denied = privatePreviewGate(request);
   if (denied) return denied;
-  if (!clerkConfigured) return withRobotsHeader(NextResponse.next());
-  return Promise.resolve(clerkProxy(request, event)).then((result) => withNoIndex(result));
+  if (!clerkConfigured) return withNoIndex(NextResponse.next(), request.nextUrl.pathname);
+  return Promise.resolve(clerkProxy(request, event)).then((result) => withNoIndex(result, request.nextUrl.pathname));
 }
 
 export const config = {

@@ -3970,6 +3970,14 @@ export type StorefrontHandoff = {
   imported_at: string | null;
   sales_order_id: string;
   payment_journal_id: string;
+  lines: {
+    external_line_id: string;
+    title: string;
+    sku: string;
+    quantity: number;
+    unit_ex_minor_zar: number;
+    total_minor_zar: number;
+  }[];
   created_at: string;
   updated_at: string;
 };
@@ -3980,6 +3988,68 @@ export function listStorefrontHandoffs(): Promise<{ items: StorefrontHandoff[] }
 
 export function retryStorefrontHandoff(id: string): Promise<StorefrontHandoff> {
   return apiFetch<StorefrontHandoff>(`/storefront/orders/${id}/retry`, { method: "POST" });
+}
+
+export type StorefrontRefund = {
+  id: string;
+  handoff_id: string | null;
+  amount_minor: number;
+  provider_amount_minor: number | null;
+  currency_code: string;
+  allocation: Record<string, number>;
+  selected_lines: Record<string, number>;
+  cancel_order: boolean;
+  status: "requested" | "dispatching" | "unknown" | "pending" | "succeeded" | "failed" | "needs_review";
+  provider_refund_id: string | null;
+  provider_result_code: string | null;
+  failure_code: string | null;
+  signature_verified: boolean;
+  financial_journal_id: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type StorefrontRefundStatus = {
+  captured_amount_minor: number;
+  confirmed_refund_minor: number;
+  reserved_refund_minor: number;
+  available_refund_minor: number;
+  invoice_id: string | null;
+  invoice_refund_eligible: boolean;
+  invoice_refund_available_minor: number;
+  sales_order_amount_paid: string;
+  line_balances: {
+    external_line_id: string;
+    title: string;
+    sku: string;
+    original_quantity: number;
+    remaining_quantity: number;
+    original_amount_minor: number;
+    remaining_amount_minor: number;
+  }[];
+  items: StorefrontRefund[];
+};
+
+export type StorefrontRefundRequest = {
+  idempotency_key: string;
+  cancel_order: boolean;
+} & (
+  | { amount_minor: number; selected_lines?: never }
+  | { amount_minor?: never; selected_lines: { external_line_id: string; quantity: number }[] }
+);
+
+export function getStorefrontRefundStatus(handoffId: string): Promise<StorefrontRefundStatus> {
+  return apiFetch<StorefrontRefundStatus>(`/storefront/orders/${handoffId}/refunds`);
+}
+
+export function requestStorefrontRefund(
+  handoffId: string,
+  payload: StorefrontRefundRequest,
+): Promise<StorefrontRefund> {
+  return apiFetch<StorefrontRefund>(`/storefront/orders/${handoffId}/refunds`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export type PortalMe = {

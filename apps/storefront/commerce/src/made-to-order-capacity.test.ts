@@ -3,6 +3,7 @@ import {
   consumeCapacity,
   mergeCapacityState,
   readCapacityState,
+  releaseCapacityCommitment,
   releaseCapacityHold,
   releaseExpiredCapacityHolds,
   reserveCapacity,
@@ -87,6 +88,25 @@ test("success consumes once and replayed stale catalogue sync cannot restore the
   }, { ...offer, capacity: 1 }, "2026-09-28T11:59:59.000000Z");
   expect(replayed.allocations[offer.id].committed).toEqual(committed.allocations[offer.id].committed);
   expect(availableCapacity(replayed.allocations[offer.id], acceptedAt.getTime())).toBe(0);
+});
+
+test("accepted cancellation releases one paid commitment exactly once", () => {
+  const held = reserveCapacity(
+    initialState(), offer.id, "cart-a", "line-a", 1,
+    "2026-09-28T12:20:00.000Z", acceptedAt,
+  );
+  const committed = consumeCapacity(
+    held, offer.id, "cart-a", "line-a", "storefront:order-a:item-a", 1,
+    Date.parse("2026-09-28T12:01:00.000Z"),
+  );
+  expect(availableCapacity(committed.allocations[offer.id], acceptedAt.getTime())).toBe(0);
+
+  const released = releaseCapacityCommitment(committed, offer.id, "storefront:order-a:item-a");
+  expect(released.released).toBe(1);
+  expect(availableCapacity(released.state.allocations[offer.id], acceptedAt.getTime())).toBe(1);
+  const replay = releaseCapacityCommitment(released.state, offer.id, "storefront:order-a:item-a");
+  expect(replay.released).toBe(0);
+  expect(replay.state).toBe(released.state);
 });
 
 test("an offer expiry blocks consumption even when the separate hold TTL still has time", () => {

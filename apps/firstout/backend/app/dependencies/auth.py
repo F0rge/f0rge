@@ -19,6 +19,7 @@ from app.permissions import (
     SALES_ORDERS,
     SALES_QUOTES,
     SALES_RETURNS,
+    SALES_REFUNDS,
     SETTINGS_MUTATE,
     STOCK_COST_VIEW,
     STOCK_RECEIVE,
@@ -64,6 +65,7 @@ from app.services.laybys import LaybysService
 from app.services.lookbooks import LookbooksService
 from app.services.quotes import QuotesService
 from app.services.sales_orders import SalesOrdersService
+from app.services.storefront_refund_workflow import StorefrontRefundWorkflowService
 from app.services.deliveries import DeliveriesService
 from app.services.stock_returns import StockReturnsService
 from app.services.stocktakes import StocktakeService
@@ -282,6 +284,12 @@ def get_sales_order_service(db: AsyncSession = Depends(get_db)) -> SalesOrdersSe
     return SalesOrdersService(db)
 
 
+def get_storefront_refund_workflow_service(
+    db: AsyncSession = Depends(get_db),
+) -> StorefrontRefundWorkflowService:
+    return StorefrontRefundWorkflowService(db)
+
+
 def get_till_orchestrator(db: AsyncSession = Depends(get_db)) -> TillOrchestrator:
     return TillOrchestrator(db)
 
@@ -333,6 +341,20 @@ async def require_orders(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (SALES_ORDERS,))
+
+
+async def require_storefront_refunds(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_REFUNDS,))
+
+
+async def require_orders_or_storefront_refunds(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (SALES_ORDERS, SALES_REFUNDS))
 
 
 async def require_owner(

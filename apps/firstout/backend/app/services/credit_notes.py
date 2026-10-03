@@ -60,7 +60,7 @@ class CreditNoteService:
         return self._to_response(credit_note)
 
     async def create(self, data: CreditNoteCreate) -> CreditNoteResponse:
-        invoice = await self.invoice_crud.get_by_id(data.invoice_id)
+        invoice = await self.invoice_crud.get_by_id(data.invoice_id, for_update=True)
         if invoice is None:
             raise NotFoundError("Invoice not found")
 

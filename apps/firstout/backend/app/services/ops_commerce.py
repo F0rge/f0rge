@@ -39,6 +39,7 @@ from app.schemas.ops_commerce_order import (
     StorefrontFulfillmentEventAckResponse,
     StorefrontFulfillmentEventList,
     StorefrontHandoffListResponse,
+    StorefrontHandoffLineSnapshot,
     StorefrontHandoffResponse,
     StorefrontPaidOrder,
 )
@@ -613,6 +614,17 @@ class OpsCommerceService:
     @staticmethod
     def _response(row: OpsCommerceOrder) -> StorefrontHandoffResponse:
         fulfillment = row.payload.get("fulfillment", {})
+        lines = [
+            StorefrontHandoffLineSnapshot(
+                external_line_id=line["external_line_id"],
+                title=line["title"],
+                sku=line["sku"],
+                quantity=line["quantity"],
+                unit_ex_minor_zar=line["unit_ex_minor_zar"],
+                total_minor_zar=line["total_minor_zar"],
+            )
+            for line in row.payload.get("lines", [])
+        ]
         return StorefrontHandoffResponse(
             id=row.id,
             external_order_id=row.external_order_id,
@@ -628,6 +640,7 @@ class OpsCommerceService:
             fulfillment_status=row.fulfillment_status,
             fulfillment_revision=row.fulfillment_revision,
             fulfillment_promise=row.payload.get("fulfillment_promise"),
+            lines=lines,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )

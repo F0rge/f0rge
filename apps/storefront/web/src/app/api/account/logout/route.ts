@@ -8,9 +8,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   response.headers.set("Cache-Control", "private, no-store, max-age=0");
   response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
   if (!sameOrigin) return response;
-  for (const name of [cartCookie, orderAccessCookie, emailOrderAccessCookie]) {
+  const protectedCookies = [
+    [cartCookie, "/"],
+    [orderAccessCookie, "/"],
+    [emailOrderAccessCookie, "/api/order/confirmation"],
+  ] as const;
+  for (const [name, path] of protectedCookies) {
     response.cookies.set(name, "", {
-      httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0,
+      httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path, maxAge: 0,
     });
   }
   return response;

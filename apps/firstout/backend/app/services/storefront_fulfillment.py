@@ -43,6 +43,21 @@ class StorefrontFulfillmentService:
             await self._transition(handoff, status, expected_type="collection")
         return await self.orders.get_by_id(handoff_id)  # type: ignore[return-value]
 
+    async def mark_cancelled(self, handoff: OpsCommerceOrder) -> None:
+        """Append the cancellation to the same durable customer status stream."""
+        if handoff.status != "imported":
+            raise ConflictError("The paid order must be imported before cancellation")
+        if handoff.fulfillment_status != "confirmed":
+            raise ConflictError("Only an unfulfilled Storefront order can be cancelled")
+        fulfillment_type = self._fulfillment_type(handoff)
+        if fulfillment_type is None:
+            raise ConflictError("Storefront order fulfilment type is invalid")
+        await self._transition(
+            handoff,
+            "cancelled",
+            expected_type=fulfillment_type,
+        )
+
     async def record_delivery_transition(
         self,
         sales_order_id: uuid.UUID,
@@ -86,14 +101,19 @@ class StorefrontFulfillmentService:
 
         allowed_next = {
             "collection": {
-                "confirmed": {"ready_for_collection"},
+                "confirmed": {"ready_for_collection", "cancelled"},
                 "ready_for_collection": {"collected"},
             },
             "delivery": {
                 # Existing deliveries can be packed/loaded before the Storefront
                 # bridge is deployed. Their next staff action may be completion,
                 # so record the current forward state without replaying each step.
-                "confirmed": {"ready_for_delivery", "out_for_delivery", "delivered"},
+                "confirmed": {
+                    "ready_for_delivery",
+                    "out_for_delivery",
+                    "delivered",
+                    "cancelled",
+                },
                 "ready_for_delivery": {"out_for_delivery", "delivered"},
                 "out_for_delivery": {"delivered"},
             },

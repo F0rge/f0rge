@@ -36,6 +36,7 @@ export async function customerMedusaFetch(context: Pick<CustomerContext, "token"
     headers: {
       "x-publishable-api-key": publishableKey,
       authorization: `Bearer ${context.token}`,
+      "x-storefront-bff-secret": process.env.STOREFRONT_BFF_SECRET || "",
       ...(body === undefined ? {} : { "content-type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),

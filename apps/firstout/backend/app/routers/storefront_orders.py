@@ -6,13 +6,23 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies.auth import require_deliveries_mutate, require_orders
+from app.dependencies.auth import (
+    get_storefront_refund_workflow_service,
+    require_deliveries_mutate,
+    require_orders_or_storefront_refunds,
+    require_orders,
+    require_storefront_refunds,
+)
 from app.schemas.ops_commerce_order import (
     StorefrontCollectionStatusUpdate,
     StorefrontHandoffListResponse,
     StorefrontHandoffResponse,
+    StorefrontRefundRequest,
+    StorefrontRefundResponse,
+    StorefrontRefundStatusResponse,
 )
 from app.services.ops_commerce import OpsCommerceService
+from app.services.storefront_refund_workflow import StorefrontRefundWorkflowService
 
 router = APIRouter(prefix="/api/v1/storefront/orders", tags=["storefront-orders"])
 
@@ -25,7 +35,7 @@ def get_storefront_order_service(
 
 @router.get("", response_model=StorefrontHandoffListResponse)
 async def list_storefront_handoffs(
-    user_id: uuid.UUID = Depends(require_orders),
+    user_id: uuid.UUID = Depends(require_orders_or_storefront_refunds),
     service: OpsCommerceService = Depends(get_storefront_order_service),
 ) -> StorefrontHandoffListResponse:
     return await service.list_handoffs(user_id)
@@ -48,3 +58,22 @@ async def update_storefront_collection_status(
     service: OpsCommerceService = Depends(get_storefront_order_service),
 ) -> StorefrontHandoffResponse:
     return await service.update_collection_status(handoff_id, body, user_id)
+
+
+@router.post("/{handoff_id}/refunds", response_model=StorefrontRefundResponse)
+async def request_storefront_refund(
+    handoff_id: uuid.UUID,
+    body: StorefrontRefundRequest,
+    user_id: uuid.UUID = Depends(require_storefront_refunds),
+    service: StorefrontRefundWorkflowService = Depends(get_storefront_refund_workflow_service),
+) -> StorefrontRefundResponse:
+    return await service.request_refund_for_staff(handoff_id, body, user_id)
+
+
+@router.get("/{handoff_id}/refunds", response_model=StorefrontRefundStatusResponse)
+async def get_storefront_refunds(
+    handoff_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(require_storefront_refunds),
+    service: StorefrontRefundWorkflowService = Depends(get_storefront_refund_workflow_service),
+) -> StorefrontRefundStatusResponse:
+    return await service.get_status_for_staff(handoff_id, user_id)

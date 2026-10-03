@@ -48,8 +48,10 @@ The private Storefront supports guest checkout for collection and configured
 Gauteng delivery. It applies the configured South African VAT rate to
 VAT-inclusive ZAR prices and calculates delivery from server-owned zone/rate
 configuration. No launch delivery rates are checked in. The included payment
-provider is a deterministic local test simulator; no real payment is taken and
-paid-order import into Firstout is outside this checkout slice.
+provider is a deterministic local test simulator; no real payment is taken.
+The paid-order handoff to Firstout is implemented, but the dedicated Firstout
+Ops credential and live hosted round-trip are not yet verified. Peach remains
+disabled until its sandbox credentials and signed webhook URL are configured.
 
 Peach Classic Hosted Checkout V2 is implemented as an opt-in sandbox provider;
 it stays disabled until its server-side credentials and signed webhook URL are

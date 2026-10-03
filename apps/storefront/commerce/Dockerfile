@@ -2,6 +2,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY vendor/braces/braces-3.0.4-f0rge.1.tgz ./vendor/braces/
 COPY apps/storefront/commerce/package.json ./apps/storefront/commerce/
 RUN npm ci --workspace=@f0rge/storefront-commerce --include-workspace-root=false
 
@@ -21,9 +22,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=9000
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/apps/storefront/commerce ./apps/storefront/commerce
-WORKDIR /app/apps/storefront/commerce
+WORKDIR /app/apps/storefront/commerce/.medusa/server
 USER node
 EXPOSE 9000
-CMD ["../../node_modules/.bin/medusa", "start"]
+CMD ["node", "/app/node_modules/.bin/medusa", "start"]
