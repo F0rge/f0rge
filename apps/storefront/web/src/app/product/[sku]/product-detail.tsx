@@ -60,9 +60,11 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
     if (choice === "accepted") capture({ name: "storefront_product_viewed", properties: { product_id: product.id } });
   }, [capture, choice, product.id]);
 
-  return <article className="content product-page">
+  return <article className="content product-page-shell">
+    <div ref={attentionRef} className="product-attention-region" aria-hidden="true" />
+    <div className="product-page">
     <div className="gallery">
-      <div ref={attentionRef} className="product-image hero-study">{image ? <img src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} /> : <span aria-hidden="true">Object study</span>}</div>
+      <div className="product-image hero-study">{image ? <img src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} /> : <span aria-hidden="true">Object study</span>}</div>
       <p className="sr-only" aria-live="polite">{imagePosition ? `Image ${imagePosition} of ${gallery.length} for ${product.title}` : `No image for ${product.title}`}</p>
       {gallery.length > 1 && <div className="gallery-thumbnails" aria-label="Product images">{gallery.map((url, index) => <button key={url} type="button" className={url === image ? "active" : ""} onClick={() => {
         setActiveImage(url);
@@ -112,6 +114,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
         finally { setAdding(false); }
       }}>{adding ? "Adding…" : "Add to bag"}</button>
       {bagMessage && <p role="status" className="bag-feedback">{bagMessage} <Link href="/bag">View bag</Link></p>}
+    </div>
     </div>
   </article>;
 }

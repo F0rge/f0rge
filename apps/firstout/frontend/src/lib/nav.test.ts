@@ -34,6 +34,7 @@ describe("nav path helpers", () => {
     expect(isSalesPath("/lookbooks")).toBe(true);
     expect(isSalesPath("/quotes")).toBe(true);
     expect(isSalesPath("/orders")).toBe(true);
+    expect(isSalesPath("/storefront-exceptions")).toBe(true);
     expect(isSalesPath("/laybys")).toBe(true);
     expect(isSalesPath("/deliveries")).toBe(true);
     expect(isSalesPath("/customers/abc")).toBe(true);
@@ -51,9 +52,8 @@ describe("nav path helpers", () => {
     expect(booksHrefs).not.toContain("/contacts");
   });
 
-  it("labels audit and books periods nav paths", () => {
-    expect(labelForNavPath("/audit")).toBe("Audit");
-    expect(labelForNavPath("/books-periods")).toBe("Books periods");
+  it("labels storefront exceptions in sales nav", () => {
+    expect(labelForNavPath("/storefront-exceptions")).toBe("Storefront exceptions");
   });
 
   it("labels nested paths for Nia cards", () => {

@@ -1,11 +1,22 @@
 export const PRODUCT_ATTENTION_IDLE_MS = 30_000;
+export const PRODUCT_ATTENTION_VISIBILITY = 0.5;
+
+/** Half the region visible, or the region covering half the viewport so long pages can still qualify. */
+export function productAttentionVisibility(
+  intersectionRatio: number,
+  visibleHeight: number,
+  viewportHeight: number,
+): number {
+  const viewportCoverage = viewportHeight > 0 ? visibleHeight / viewportHeight : 0;
+  return Math.max(intersectionRatio, viewportCoverage);
+}
 
 export function isProductAttentionEligible(
-  intersectionRatio: number,
+  visibility: number,
   visibilityState: DocumentVisibilityState,
   hasFocus: boolean,
 ): boolean {
-  return intersectionRatio >= 0.5 && visibilityState === "visible" && hasFocus;
+  return visibility >= PRODUCT_ATTENTION_VISIBILITY && visibilityState === "visible" && hasFocus;
 }
 
 /** Deterministic accumulator; callers decide whether the product region is measurable. */

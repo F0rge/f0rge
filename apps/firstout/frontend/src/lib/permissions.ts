@@ -99,6 +99,10 @@ export function canMutateOrders(user: PermissionHolder): boolean {
   return can(user, "sales.orders");
 }
 
+export function canViewStorefrontExceptions(user: PermissionHolder): boolean {
+  return can(user, "sales.orders") || can(user, "sales.refunds");
+}
+
 export function canMutateCustomers(user: PermissionHolder): boolean {
   return can(user, "sales.customers");
 }

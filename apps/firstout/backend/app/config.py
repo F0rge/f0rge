@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     ops_commerce_token: str = ""
     ops_commerce_company_id: str = ""
     ops_commerce_allowed_host: str = ""
+    storefront_exception_fixtures: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

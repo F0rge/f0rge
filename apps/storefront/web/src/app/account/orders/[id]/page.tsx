@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { customerMedusaFetch, getCustomerContext } from "@/lib/customer-auth";
+import { fulfillmentStatusLabel, storefrontOrderFulfillment } from "@/lib/order-fulfillment";
 import { orderMoney as money } from "@/lib/order-money";
 import { orderRefundStatus, paidOrderHistory } from "@/lib/order-history";
 
@@ -11,6 +12,8 @@ type OrderView = {
   id: string;
   display_id?: number;
   status?: string;
+  fulfillment_type?: string | null;
+  fulfillment_status?: string | null;
   currency_code?: string;
   total?: number | string;
   subtotal?: number | string;
@@ -38,7 +41,8 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
       if (result.status >= 200 && result.status < 300 && result.payload.order && typeof result.payload.order === "object") {
         const raw = result.payload.order as OrderView & Record<string, unknown>;
         const history = paidOrderHistory(raw);
-        order = { ...raw, total: history?.total ?? raw.total, refund_status: orderRefundStatus(raw),
+        const fulfillment = storefrontOrderFulfillment(raw);
+        order = { ...raw, ...fulfillment, total: history?.total ?? raw.total, refund_status: orderRefundStatus(raw),
           items: raw.items?.map((item) => ({ ...item,
             total: (typeof item.id === "string" ? history?.items.get(item.id) : undefined) ?? item.total,
           })),
@@ -58,7 +62,12 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
   return <div className="content account-page account-order-detail">
     <p className="eyebrow">The Collector / customer account</p>
     <h1>Order {order.display_id ?? order.id}</h1>
-    <p>Order status: {order.status || "pending"}</p>
+    {order.fulfillment_status || order.fulfillment_type ? <section className="account-panel" aria-label="Fulfilment status">
+      <h2>Fulfilment</h2>
+      {order.fulfillment_status ? <p role="status">{fulfillmentStatusLabel(order.fulfillment_status)}</p> : null}
+      {order.fulfillment_type === "collection" ? <p>Showroom collection</p> : null}
+      {order.fulfillment_type === "delivery" ? <p>Delivery</p> : null}
+    </section> : null}
     {order.refund_status && <section className="account-panel" aria-label="Refund status">
       <h2>Refunds</h2>
       <p>Returned to your payment method: {money(order.refund_status.refunded_amount_minor / 100, currency)}</p>

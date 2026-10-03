@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { CustomerAuthError, customerMedusaFetch, getCustomerContext } from "@/lib/customer-auth";
+import { storefrontOrderFulfillment } from "@/lib/order-fulfillment";
 import { paidOrderHistory } from "@/lib/order-history";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ function summary(value: unknown) {
     created_at: typeof order.created_at === "string" ? order.created_at : null,
     currency_code: typeof order.currency_code === "string" ? order.currency_code : "ZAR",
     status: typeof order.status === "string" ? order.status : "pending",
+    ...storefrontOrderFulfillment(order),
     total: paidOrderHistory(order)?.total ?? (typeof order.total === "number" || typeof order.total === "string" ? order.total : null),
   };
 }

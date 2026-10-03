@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
-import { isProductAttentionEligible, ProductAttentionAccumulator } from "@/lib/analytics/attention";
+import { isProductAttentionEligible, productAttentionVisibility, ProductAttentionAccumulator } from "@/lib/analytics/attention";
 import { useStorefrontAnalytics } from "./analytics-provider";
 
 const activityEvents = ["pointerdown", "pointermove", "keydown", "scroll", "touchstart"] as const;
@@ -18,14 +18,19 @@ export function useProductAttention(productId: string): RefObject<HTMLDivElement
     if (!target || choice !== "accepted" || typeof IntersectionObserver === "undefined") return;
 
     const attention = new ProductAttentionAccumulator(() => performance.now());
-    let intersectionRatio = 0;
-    const updateEligibility = () => {
-      attention.setEligible(isProductAttentionEligible(intersectionRatio, document.visibilityState, document.hasFocus()));
+    let visibility = 0;
+    const measureFromEntry = (entry?: IntersectionObserverEntry) => {
+      visibility = productAttentionVisibility(
+        entry?.intersectionRatio ?? 0,
+        entry?.intersectionRect.height ?? 0,
+        entry?.rootBounds?.height || window.innerHeight,
+      );
+      attention.setEligible(isProductAttentionEligible(visibility, document.visibilityState, document.hasFocus()));
     };
-    const observer = new IntersectionObserver(([entry]) => {
-      intersectionRatio = entry?.intersectionRatio ?? 0;
-      updateEligibility();
-    }, { threshold: [0.5] });
+    const updateEligibility = () => {
+      attention.setEligible(isProductAttentionEligible(visibility, document.visibilityState, document.hasFocus()));
+    };
+    const observer = new IntersectionObserver(([entry]) => measureFromEntry(entry), { threshold: [0, 0.25, 0.5, 0.75, 1] });
     const onActivity = () => attention.noteInteraction();
     const onPageHide = (event: PageTransitionEvent) => {
       if (event.persisted) attention.setEligible(false);
