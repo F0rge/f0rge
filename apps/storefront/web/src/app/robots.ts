@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 import { canonicalUrl, storefrontIndexable } from "@/lib/launch-indexing";
 
 export default function robots(): MetadataRoute.Robots {
-  if (!storefrontIndexable()) return { rules: { userAgent: "*", disallow: "/" } };
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "https://collector.example";
+  const base = process.env.NEXT_PUBLIC_BASE_URL;
+  if (!storefrontIndexable() || !base) return { rules: { userAgent: "*", disallow: "/" } };
   return {
     rules: {
       userAgent: "*",

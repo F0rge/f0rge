@@ -46,6 +46,24 @@ The first hero image and the product gallery image request high priority and res
 
 If a pack file fails validation, leave indexing disabled and leave the private preview gate on. Do not add a live Peach key and do not start new payment attempts. Redeploy the last verified git release. Do not restore by overwriting paid-order tables or integration state. The loader's rejected path does not change the shelf it was given.
 
+## Local walkthrough (2026-10-05)
+
+The absent-pack command above exited 1. `loaded` was false, `public_selling` was false, `published_variants` was 0, and the five owner findings were the only output. No secret value was printed.
+
+`npm run dev` in `apps/storefront/web` served:
+
+| Request | Result |
+| --- | --- |
+| `GET /support` | 200, `X-Robots-Tag: noindex, nofollow, noarchive`, body contains the unpublished notice and footer links to privacy, delivery, and returns. It does not contain a trading name or mailbox. |
+| `GET /policies/privacy`, `/policies/delivery`, `/policies/returns` | 200, unpublished notice, `noindex` |
+| `GET /robots.txt` | `User-Agent: *` / `Disallow: /` |
+| `GET /sitemap.xml` | empty `urlset` |
+| `GET /` | 500 because Medusa is not running. That is a missing local commerce process, not an approved catalogue. |
+
+Commerce `npm test` : 27 passed, 4 skipped, 125 passed tests. Web `npm test`: 16 files, 55 tests. `tsc --noEmit` passed in both apps.
+
+Hosted Clerk, Peach, a real catalogue, and production LCP/CLS runs were not exercised.
+
 ## Still open
 
 #762 stays open. The owner still has to supply the approved catalogue, policies, palette choice, and provisioning. #758 is also still open. A live discovery-to-confirmation walkthrough with that catalogue, measured LCP/CLS, and hosted auth or payment is not possible until those inputs exist.

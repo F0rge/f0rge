@@ -3,8 +3,8 @@ import { canonicalUrl, sitemapPaths, storefrontIndexable } from "@/lib/launch-in
 import { listStoreProducts, productPath, publicCollections } from "@/lib/medusa";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  if (!storefrontIndexable()) return [];
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "https://collector.example";
+  const base = process.env.NEXT_PUBLIC_BASE_URL;
+  if (!storefrontIndexable() || !base) return [];
   let products: { path: string }[] = [];
   let collections: { handle: string }[] = [];
   try {

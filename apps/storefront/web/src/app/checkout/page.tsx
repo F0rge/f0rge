@@ -151,6 +151,7 @@ export default function CheckoutPage() {
   }
 
   const held = bag?.hold?.status === "active" && Date.parse(bag.hold.expires_at) > Date.now();
+  const feedback = error ? purchaseFeedback(error, true) : null;
   const total = checkout ? Number(checkout.amount) : bag?.total || 0;
   return <div className="content checkout-page" data-storefront-no-capture="">
     <p className="eyebrow">The Collector / secure checkout</p>
@@ -160,7 +161,7 @@ export default function CheckoutPage() {
       <section className="checkout-main">
         {!bag && !error && <p role="status">Loading your bag…</p>}
         {bag && bag.items.length === 0 && <p>Your bag is empty. <Link href="/shop" className="text-link">Explore all pieces ↗</Link></p>}
-        {error && <p ref={errorRef} id="checkout-error" role={purchaseFeedback(error, true).role} tabIndex={purchaseFeedback(error, true).tabIndex} className="bag-error">{error}</p>}
+        {feedback && <p ref={errorRef} id="checkout-error" role={feedback.role} tabIndex={feedback.tabIndex} className="bag-error">{feedback.message}</p>}
         {checkout ? <div className="checkout-payment" data-testid={checkout.provider_id === "pp_peach_sandbox" ? "peach-payment-panel" : "test-payment-panel"}>
           <p className="eyebrow">{checkout.provider_id === "pp_peach_sandbox" ? "Secure hosted payment" : "Test payment only"}</p>
           <h2>{money(total, checkout.currency_code.toUpperCase())}</h2>
