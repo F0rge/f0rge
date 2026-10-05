@@ -60,14 +60,14 @@ function dedicatedMailbox(value: unknown): boolean {
   return !RESERVED_MAIL_DOMAINS.some((suffix) => domain === suffix.slice(1) || domain.endsWith(suffix));
 }
 
-function softwareName(value: unknown): boolean {
+function isFirstoutName(value: unknown): boolean {
   return typeof value === "string" && value.trim().toLowerCase() === "firstout";
 }
 
 function businessConfirmed(value: unknown): boolean {
   const business = record(value);
   if (!business) return false;
-  if (softwareName(business.legal_name) || softwareName(business.trading_name)) return false;
+  if (isFirstoutName(business.legal_name) || isFirstoutName(business.trading_name)) return false;
   const vatKnown = business.vat_registered === false ||
     (business.vat_registered === true && typeof business.vat_number === "string" && /^\d{10}$/.test(business.vat_number));
   return text(business.legal_name, 3) && text(business.trading_name, 2) && text(business.contact_address, 12) &&
