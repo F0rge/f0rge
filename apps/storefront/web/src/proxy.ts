@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
+import { robotsHeader } from "./lib/launch-indexing";
 
 const ROBOTS_HEADER = "noindex, nofollow, noarchive";
 
@@ -82,7 +83,9 @@ function privatePreviewGate(request: NextRequest): NextResponse | null {
 function withNoIndex(result: Response | null | undefined | void, pathname = ""): NextResponse {
   const response = result || NextResponse.next();
   const headers = new Headers(response.headers);
-  headers.set("X-Robots-Tag", ROBOTS_HEADER);
+  const robots = robotsHeader(pathname);
+  if (robots) headers.set("X-Robots-Tag", robots);
+  else headers.delete("X-Robots-Tag");
   if (/^\/(?:account(?:\/|$)|api\/account(?:\/|$)|order\/confirmation(?:\/|$))/.test(pathname)) {
     headers.set("Cache-Control", "private, no-store, max-age=0");
   } else if (response.status >= 300 || headers.has("Location")) headers.set("Cache-Control", "no-store");

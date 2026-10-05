@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { AnalyticsConsentChoice } from "@/lib/analytics/consent";
 import styles from "./analytics-consent.module.css";
 
@@ -26,7 +27,7 @@ export function AnalyticsConsentPanel({ choice, ready, choose }: {
       {choice && <button className={styles.closeButton} type="button" onClick={() => setSettingsOpen(false)} aria-label="Close privacy settings">×</button>}
     </div>
     <p id="analytics-consent-description">
-      Optional analytics helps us understand which pieces and shop filters are useful. It stays off until you allow it. We never send search text, personal details or payment data.
+      Optional analytics helps us understand which pieces and shop filters are useful. It stays off until you allow it. We never send search text, personal details or payment data. <Link href="/policies/privacy">Read the privacy notice</Link> before you choose.
     </p>
     {!analyticsConfigured && <p className={styles.status}>Optional analytics is not configured yet.</p>}
     <div className={styles.actions}>

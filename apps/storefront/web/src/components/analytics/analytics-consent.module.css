@@ -14,6 +14,7 @@
 .headingRow { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
 .headingRow h2 { margin: 0; font: 500 1.35rem var(--serif); }
 .panel p { margin: .65rem 0 0; color: var(--muted); font-size: .78rem; line-height: 1.6; }
+.panel a { color: var(--ink); }
 .panel .status { font-family: var(--mono); font-size: .65rem; }
 .actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
 .primaryButton,.secondaryButton,.settingsButton,.closeButton {

@@ -16,6 +16,7 @@ describe("Clerk and private-preview proxy composition", () => {
   const envNames = [
     "STOREFRONT_RUNTIME_KIND", "STOREFRONT_PRIVATE_PREVIEW",
     "STOREFRONT_PREVIEW_USERNAME", "STOREFRONT_PREVIEW_PASSWORD",
+    "STOREFRONT_INDEXING_ENABLED", "RAILWAY_ENVIRONMENT_NAME", "NEXT_PUBLIC_BASE_URL",
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY", "STOREFRONT_CLERK_JWT_TEMPLATE",
   ] as const;
   let saved: Record<string, string | undefined>;
@@ -102,6 +103,22 @@ describe("Clerk and private-preview proxy composition", () => {
     expect(api).toBeGreaterThanOrEqual(0);
     expect(clerk).toBe(api + 1);
     expect(config.matcher.filter((pattern) => pattern === "/__clerk/:path*")).toHaveLength(1);
+  });
+
+  it("indexes catalogue routes only when production indexing is explicitly enabled", async () => {
+    process.env.STOREFRONT_PRIVATE_PREVIEW = "off";
+    process.env.STOREFRONT_INDEXING_ENABLED = "true";
+    process.env.RAILWAY_ENVIRONMENT_NAME = "production";
+    process.env.NEXT_PUBLIC_BASE_URL = "https://collector.example";
+    delete process.env.STOREFRONT_PREVIEW_USERNAME;
+    delete process.env.STOREFRONT_PREVIEW_PASSWORD;
+    const { proxy } = await import("./proxy");
+    const shop = await proxy(new NextRequest("https://collector.example/shop"), {} as never);
+    const account = await proxy(new NextRequest("https://collector.example/account"), {} as never);
+    const checkout = await proxy(new NextRequest("https://collector.example/checkout"), {} as never);
+    expect(shop.headers.get("x-robots-tag")).toBeNull();
+    expect(account.headers.get("x-robots-tag")).toContain("noindex");
+    expect(checkout.headers.get("x-robots-tag")).toContain("noindex");
   });
 
   it("marks account and order-confirmation pages private and non-indexable", async () => {
