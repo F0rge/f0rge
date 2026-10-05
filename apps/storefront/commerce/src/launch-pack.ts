@@ -328,6 +328,12 @@ function catalogueFindings(value: unknown): LaunchPackFinding[] {
   return findings;
 }
 
+export function containsForbiddenSecret(value: unknown): boolean {
+  const hit = { secret: false, customers: false };
+  walkPack(value, hit);
+  return hit.secret;
+}
+
 export function assessLaunchPack(pack: unknown, now: Date = new Date()): LaunchPackAssessment {
   const root = record(pack);
   if (!root) return { ready: false, findings: ABSENT };
