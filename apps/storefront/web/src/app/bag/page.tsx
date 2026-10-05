@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
+import { purchaseFeedback } from "@/lib/purchase-feedback";
 import type { Bag } from "@/lib/bag-server";
 
 const money = (value: number) => new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(value);
@@ -30,6 +31,7 @@ export default function BagPage() {
   const [bag, setBag] = useState<Bag | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const loadBag = useCallback(async () => {
     setError("");
     try { setBag(await bagRequest("GET")); }
@@ -43,6 +45,7 @@ export default function BagPage() {
     viewedCart.current = bag.id;
     capture({ name: "storefront_cart_viewed", properties: { cart_id: bag.id, item_count: bag.items.length, value_minor: valueMinor } });
   }, [bag, capture]);
+  useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
 
   async function update(method: string, path: string, body?: unknown) {
     setBusy(true); setError("");
@@ -65,7 +68,7 @@ export default function BagPage() {
   return <div className="content bag-page">
     <p className="eyebrow">The Collector / your selection</p>
     <h1>Your bag</h1>
-    {error && <p role="alert" className="bag-error">{error}</p>}
+    {error && <p ref={errorRef} id="bag-error" role={purchaseFeedback(error, true).role} tabIndex={purchaseFeedback(error, true).tabIndex} className="bag-error">{error}</p>}
     {!bag && error && <button type="button" className="bag-retry" onClick={() => void loadBag()}>Retry loading bag</button>}
     {!bag && !error && <p role="status">Loading your bag…</p>}
     {bag && bag.items.length === 0 && <div className="bag-empty"><p>Your bag is empty.</p><Link className="text-link" href="/shop">Explore all pieces ↗</Link></div>}

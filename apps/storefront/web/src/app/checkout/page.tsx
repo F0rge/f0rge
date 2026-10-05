@@ -6,6 +6,7 @@ import { Checkbox, Select } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
+import { purchaseFeedback } from "@/lib/purchase-feedback";
 import type { Bag } from "@/lib/bag-server";
 
 type Fulfillment = "delivery" | "collection";
@@ -30,6 +31,7 @@ export default function CheckoutPage() {
   const [paymentStatus, setPaymentStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [accountAvailable, setAccountAvailable] = useState(false);
   const [saveAddress, setSaveAddress] = useState(false);
@@ -67,6 +69,7 @@ export default function CheckoutPage() {
     const checkoutType = accountAvailable ? "account" : "guest";
     capture({ name: "storefront_checkout_started", properties: { cart_id: bag.id, item_count: bag.items.length, value_minor: valueMinor, checkout_type: checkoutType } });
   }, [accountAvailable, bag, capture]);
+  useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
 
   function fillSavedAddress(id: string) {
     const address = savedAddresses.find((candidate) => candidate.id === id);
@@ -157,7 +160,7 @@ export default function CheckoutPage() {
       <section className="checkout-main">
         {!bag && !error && <p role="status">Loading your bag…</p>}
         {bag && bag.items.length === 0 && <p>Your bag is empty. <Link href="/shop" className="text-link">Explore all pieces ↗</Link></p>}
-        {error && <p role="alert" className="bag-error">{error}</p>}
+        {error && <p ref={errorRef} id="checkout-error" role={purchaseFeedback(error, true).role} tabIndex={purchaseFeedback(error, true).tabIndex} className="bag-error">{error}</p>}
         {checkout ? <div className="checkout-payment" data-testid={checkout.provider_id === "pp_peach_sandbox" ? "peach-payment-panel" : "test-payment-panel"}>
           <p className="eyebrow">{checkout.provider_id === "pp_peach_sandbox" ? "Secure hosted payment" : "Test payment only"}</p>
           <h2>{money(total, checkout.currency_code.toUpperCase())}</h2>
