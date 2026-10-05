@@ -58,6 +58,10 @@ function privatePreviewGate(request: NextRequest): NextResponse | null {
   // Railway's liveness probe receives no account or dependency information.
   if (request.nextUrl.pathname === "/api/health") return withRobotsHeader(NextResponse.next());
 
+  // Hosted preview stays fail-closed unless this is explicitly turned off.
+  // Unsetting the Basic Auth credentials without this flag still returns 503.
+  if (process.env.STOREFRONT_PRIVATE_PREVIEW === "off") return null;
+
   // Preserve the existing local development workflow while hosted runtimes
   // fail closed even if NODE_ENV was accidentally set to development.
   if (process.env.NODE_ENV === "development" && !isHostedRuntime()) {
