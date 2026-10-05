@@ -35,7 +35,7 @@ export type FirstSaleReadiness = {
 const ABSENT_MISSING = [
   "Owner catalogue pack is absent.",
   "Reviewed policies are absent.",
-  "Provider credentials, callbacks, and sender records are absent.",
+  "Provider credentials, callbacks, allowed origins, and sender records are absent.",
   "Named launch operator is absent.",
   "Hosted guest and Clerk purchases were not recorded.",
   "Operator fulfilment, refund, return, and recovery were not recorded.",
@@ -321,11 +321,13 @@ function environmentFindings(value: unknown): string[] {
 }
 
 function providerFindings(value: unknown): string[] {
-  if (value === undefined) return ["Provider credentials, callbacks, and sender records are absent."];
+  const absentProviders = "Provider credentials, callbacks, allowed origins, and sender records are absent.";
+  if (value === undefined) return [absentProviders];
   const providers = record(value);
   if (!providers || providers.clerk_callback_recorded !== true || providers.peach_callback_recorded !== true ||
-      providers.email_sender_recorded !== true || providers.posthog_eu_recorded !== true) {
-    return ["Provider credentials, callbacks, and sender records are absent."];
+      providers.email_sender_recorded !== true || providers.posthog_eu_recorded !== true ||
+      providers.allowed_origins_recorded !== true) {
+    return [absentProviders];
   }
   return [];
 }

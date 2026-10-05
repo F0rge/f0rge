@@ -328,17 +328,20 @@ function catalogueFindings(value: unknown): LaunchPackFinding[] {
   return findings;
 }
 
-export function containsForbiddenSecret(value: unknown): boolean {
+export function scanLaunchPack(value: unknown): { secret: boolean; customers: boolean } {
   const hit = { secret: false, customers: false };
   walkPack(value, hit);
-  return hit.secret;
+  return hit;
+}
+
+export function containsForbiddenSecret(value: unknown): boolean {
+  return scanLaunchPack(value).secret;
 }
 
 export function assessLaunchPack(pack: unknown, now: Date = new Date()): LaunchPackAssessment {
   const root = record(pack);
   if (!root) return { ready: false, findings: ABSENT };
-  const hit = { secret: false, customers: false };
-  walkPack(root, hit);
+  const hit = scanLaunchPack(root);
   if (hit.secret) return { ready: false, findings: [provisioningFinding("Launch pack must not contain secrets.")] };
   const findings = [
     ...(businessConfirmed(root.business) ? [] : [ABSENT[0]]),

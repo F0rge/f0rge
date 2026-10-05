@@ -60,7 +60,7 @@ test("absent evidence is a no-go and leaves public selling off", () => {
     missing: [
       "Owner catalogue pack is absent.",
       "Reviewed policies are absent.",
-      "Provider credentials, callbacks, and sender records are absent.",
+      "Provider credentials, callbacks, allowed origins, and sender records are absent.",
       "Named launch operator is absent.",
       "Hosted guest and Clerk purchases were not recorded.",
       "Operator fulfilment, refund, return, and recovery were not recorded.",
@@ -83,7 +83,7 @@ test("hosted guest and Clerk purchases that cover stocked, lead-time, delivery, 
   expect(result.missing).toEqual([
     "Owner catalogue pack is absent.",
     "Reviewed policies are absent.",
-    "Provider credentials, callbacks, and sender records are absent.",
+    "Provider credentials, callbacks, allowed origins, and sender records are absent.",
     "Named launch operator is absent.",
     "Operator fulfilment, refund, return, and recovery were not recorded.",
     "Consented, rejected, and withdrawn analytics journeys were not recorded.",
@@ -281,6 +281,18 @@ function readyEnvironment() {
   };
 }
 
+test("provider evidence without recorded allowed origins stays open", () => {
+  const result = assessFirstSaleReadiness({
+    providers: {
+      clerk_callback_recorded: true,
+      peach_callback_recorded: true,
+      email_sender_recorded: true,
+      posthog_eu_recorded: true,
+    },
+  });
+  expect(result.missing.some((line) => line.startsWith("Provider credentials"))).toBe(true);
+});
+
 test("a private Storefront environment, recorded callbacks, and a named operator close those gates", () => {
   const result = assessFirstSaleReadiness({
     environment: readyEnvironment(),
@@ -290,6 +302,7 @@ test("a private Storefront environment, recorded callbacks, and a named operator
       peach_callback_recorded: true,
       email_sender_recorded: true,
       posthog_eu_recorded: true,
+      allowed_origins_recorded: true,
     },
   });
   expect(result.missing.some((line) => line.startsWith("Environment identity"))).toBe(false);
@@ -481,6 +494,7 @@ function completeEvidence(authorization: Record<string, boolean>) {
       peach_callback_recorded: true,
       email_sender_recorded: true,
       posthog_eu_recorded: true,
+      allowed_origins_recorded: true,
     },
     owner_decision: authorization,
   };
