@@ -14,7 +14,8 @@ vi.mock("@clerk/nextjs/server", () => ({
 
 describe("Clerk and private-preview proxy composition", () => {
   const envNames = [
-    "STOREFRONT_RUNTIME_KIND", "STOREFRONT_PREVIEW_USERNAME", "STOREFRONT_PREVIEW_PASSWORD",
+    "STOREFRONT_RUNTIME_KIND", "STOREFRONT_PRIVATE_PREVIEW",
+    "STOREFRONT_PREVIEW_USERNAME", "STOREFRONT_PREVIEW_PASSWORD",
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "CLERK_SECRET_KEY", "STOREFRONT_CLERK_JWT_TEMPLATE",
   ] as const;
   let saved: Record<string, string | undefined>;
@@ -22,6 +23,7 @@ describe("Clerk and private-preview proxy composition", () => {
   beforeEach(() => {
     saved = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
     process.env.STOREFRONT_RUNTIME_KIND = "hosted";
+    delete process.env.STOREFRONT_PRIVATE_PREVIEW;
     process.env.STOREFRONT_PREVIEW_USERNAME = "preview-user";
     process.env.STOREFRONT_PREVIEW_PASSWORD = "test-preview-password-that-is-long-enough";
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_fake";
@@ -56,6 +58,41 @@ describe("Clerk and private-preview proxy composition", () => {
     expect(response.headers.get("x-robots-tag")).toContain("noindex");
     expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0");
     expect(clerkState.invoked).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips Basic Auth when the private preview is off", async () => {
+    process.env.STOREFRONT_PRIVATE_PREVIEW = "off";
+    delete process.env.STOREFRONT_PREVIEW_USERNAME;
+    delete process.env.STOREFRONT_PREVIEW_PASSWORD;
+    const { proxy } = await import("./proxy");
+    const response = await proxy(new NextRequest("https://storefront.example/"), {} as never);
+    expect(response.status).not.toBe(401);
+    expect(response.status).not.toBe(503);
+    expect(await response.text()).not.toContain("Private preview access is unavailable.");
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    expect(clerkState.invoked).toHaveBeenCalledTimes(1);
+  });
+
+  it("still fail-closes hosted traffic when the private preview flag is unset", async () => {
+    delete process.env.STOREFRONT_PREVIEW_USERNAME;
+    delete process.env.STOREFRONT_PREVIEW_PASSWORD;
+    const { proxy } = await import("./proxy");
+    const response = await proxy(new NextRequest("https://storefront.example/"), {} as never);
+    expect(response.status).toBe(503);
+    expect(await response.text()).toContain("Private preview access is unavailable.");
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    expect(clerkState.invoked).not.toHaveBeenCalled();
+  });
+
+  it("leaves the health check open and noindex when the private preview is off", async () => {
+    process.env.STOREFRONT_PRIVATE_PREVIEW = "off";
+    delete process.env.STOREFRONT_PREVIEW_USERNAME;
+    delete process.env.STOREFRONT_PREVIEW_PASSWORD;
+    const { proxy } = await import("./proxy");
+    const response = await proxy(new NextRequest("https://storefront.example/api/health"), {} as never);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    expect(clerkState.invoked).not.toHaveBeenCalled();
   });
 
   it("matches the Clerk handshake path after the API matcher", async () => {
