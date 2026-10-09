@@ -22,3 +22,12 @@ refund allocation weights; rounding never splits or renames order lines.
 The durable handoff payload retains the full allocation. Sales-order unit prices
 are the two-decimal base; tax invoices use the immutable line net/VAT/gross and
 delivery snapshot rather than multiplying the base or recalculating VAT.
+
+Both initial import and later staff invoicing load that snapshot from the durable
+handoff. Made-to-order and mixed orders retain the accepted delivery fee and exact
+line cents when stock arrives. Lines are matched by their original Storefront
+identity, SKU, quantity and base unit price, independently of database row order;
+a changed operational line blocks invoicing instead of reallocating paid money.
+Current catalogue prices are irrelevant to the accepted invoice. Deposits (less
+any completed refunds) are applied to the full paid invoice under the existing
+refund and books-period guards.

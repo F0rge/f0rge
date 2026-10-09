@@ -719,3 +719,183 @@ async def test_paid_native_rounding_keeps_invoice_capture_and_refund_cents(
     ) == len(quantities)
     amount, allocation = allocate_selected_line_refund(handoff.payload, {"line-1": 1})
     assert amount == 100000 and allocation == {"line-1": 100000}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mixed", [False, True])
+async def test_later_mto_invoice_preserves_paid_rounding_delivery_and_deposit(
+    mixed: bool,
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+    ops_headers: dict[str, str],
+) -> None:
+    from app.crud.sales_order import SalesOrderCRUD
+    from app.crud.tax_invoice import TaxInvoiceCRUD
+    from app.models.unit_cost_audit import UnitCostAuditSource
+    from app.services.chart_of_accounts import CODE_AR
+    from app.services.stock_movements import StockMovementService
+    from f0rge_db.crud import unit_of_work
+
+    payload, stocked_sku_id = await _paid_order_payload(owner_client, fixture_tag="mto-money")
+    payload["company_id"] = ops_headers["X-Ops-Company-ID"]
+    created = await owner_client.post(
+        "/api/v1/skus",
+        json={
+            "our_ref": "STOREFRONT-MTO-MONEY",
+            "our_barcode": "STOREFRONT-MTO-MONEY-BAR",
+            "name": "Paid MTO sofa",
+            "design": "Paid MTO sofa",
+            "fabric": "Linen",
+        },
+    )
+    assert created.status_code == 201
+    mto_sku_id = created.json()["id"]
+    now = datetime.now(timezone.utc)
+    offer = await owner_client.patch(
+        f"/api/v1/skus/{mto_sku_id}",
+        json={
+            "retail_inc_vat": "1000.00",
+            "storefront_published": True,
+            "made_to_order_capacity": 3,
+            "made_to_order_lead_time_min_days": 28,
+            "made_to_order_lead_time_max_days": 42,
+            "made_to_order_expires_at": (now + timedelta(days=7)).isoformat(),
+        },
+    )
+    assert offer.status_code == 200
+    promise = {
+        "kind": "made_to_order",
+        "offer_id": offer.json()["made_to_order_offer_id"],
+        "min_lead_time_days": 28,
+        "max_lead_time_days": 42,
+        "estimated_from": (now + timedelta(days=28)).date().isoformat(),
+        "estimated_by": (now + timedelta(days=42)).date().isoformat(),
+        "expires_at": offer.json()["made_to_order_expires_at"],
+    }
+    stocked_line = payload["lines"][0]
+    stocked_line["fulfillment_promise"] = {
+        "kind": "stocked",
+        "estimated_from": now.date().isoformat(),
+        "estimated_by": now.date().isoformat(),
+    }
+    mto_line = {
+        "external_line_id": "line-mto",
+        "source_sku_id": mto_sku_id,
+        "sku": "STOREFRONT-MTO-MONEY",
+        "title": "Paid MTO sofa",
+        "quantity": 2,
+        "unit_ex_minor_zar": 86956,
+        "unit_ex_remainder_minor_zar": 1,
+        "ex_minor_zar": 173913,
+        "vat_minor_zar": 26087,
+        "total_minor_zar": 200000,
+        "fulfillment_promise": promise,
+    }
+    payload["lines"] = [mto_line, stocked_line] if mixed else [mto_line]
+    payload["fulfillment_promise"] = {
+        "version": 1,
+        "kind": "mixed" if mixed else "made_to_order",
+        "accepted_at": now.isoformat(),
+        "estimated_from": promise["estimated_from"],
+        "estimated_by": promise["estimated_by"],
+    }
+    payload["fulfillment"].update(
+        fee_ex_minor_zar=10000, fee_vat_minor_zar=1500, fee_total_minor_zar=11500
+    )
+    payload["totals"].update(
+        subtotal_ex_minor_zar=173913 + (100000 if mixed else 0),
+        tax_minor_zar=27587 + (15000 if mixed else 0),
+        delivery_ex_minor_zar=10000,
+        delivery_tax_minor_zar=1500,
+        delivery_total_minor_zar=11500,
+        total_minor_zar=211500 + (115000 if mixed else 0),
+    )
+    payload["payment"]["amount_minor_zar"] = payload["totals"]["total_minor_zar"]
+    imported = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    assert imported.status_code == 201 and imported.json()["status"] == "imported"
+    handoff = await async_db.get(OpsCommerceOrder, UUID(imported.json()["id"]))
+    assert handoff is not None
+    order = await SalesOrderCRUD(async_db).get_by_id(handoff.sales_order_id)
+    assert order is not None and order.invoice_id is None and order.awaiting_stock
+    assert order.location_id is not None
+    actor_id = await async_db.scalar(select(User.id).where(User.role == "owner"))
+    assert actor_id is not None
+    async with unit_of_work(async_db):
+        await StockMovementService(async_db).apply_incoming_qty(
+            sku_id=UUID(mto_sku_id),
+            location_id=order.location_id,
+            qty=2,
+            unit_cost_zar=Decimal("100.00"),
+            user_id=actor_id,
+            source=UnitCostAuditSource.RECEIVE,
+            note="Receive the paid MTO goods",
+        )
+    from app.services.sales_orders import SalesOrdersService
+
+    # Database relationship order is not a paid line identity.
+    order.lines.reverse()
+    snapshot = await SalesOrdersService(async_db)._storefront_tax_snapshot(order)
+    assert snapshot is not None
+    for index, line in enumerate(order.lines):
+        expected = mto_line if line.sku_id == UUID(mto_sku_id) else stocked_line
+        assert snapshot[index] == tuple(
+            Decimal(expected[field]) / 100
+            for field in ("ex_minor_zar", "vat_minor_zar", "total_minor_zar")
+        )
+    mto_order_line = next(line for line in order.lines if line.sku_id == UUID(mto_sku_id))
+    async with unit_of_work(async_db):
+        mto_order_line.qty = 3
+    edited_order = await owner_client.post(f"/api/v1/orders/{order.id}/invoice")
+    assert edited_order.status_code == 409
+    assert await async_db.scalar(select(func.count()).select_from(TaxInvoice)) == 0
+    async with unit_of_work(async_db):
+        mto_order_line.qty = 2
+    # The accepted money belongs to the order even if the current offer changes.
+    changed_price = await owner_client.patch(
+        f"/api/v1/skus/{mto_sku_id}", json={"retail_inc_vat": "2300.00"}
+    )
+    assert changed_price.status_code == 200
+    issued = await owner_client.post(f"/api/v1/orders/{order.id}/invoice")
+    assert issued.status_code == 200, issued.text
+    invoice = await TaxInvoiceCRUD(async_db).get_by_id(UUID(issued.json()["invoice_id"]))
+    assert invoice is not None
+    assert (
+        invoice.total_inc_vat
+        == invoice.amount_paid
+        == Decimal(payload["payment"]["amount_minor_zar"]) / 100
+    )
+    assert invoice.subtotal_ex_vat == Decimal(183913 + (100000 if mixed else 0)) / 100
+    assert invoice.vat_amount == Decimal(27587 + (15000 if mixed else 0)) / 100
+    invoice_by_sku = {line.sku_id: line for line in invoice.lines}
+    mto = invoice_by_sku[UUID(mto_sku_id)]
+    assert (mto.ex_vat, mto.vat_amount, mto.inc_vat) == (
+        Decimal("1739.13"),
+        Decimal("260.87"),
+        Decimal("2000.00"),
+    )
+    assert mto.qty == 2 and mto.unit_ex_vat == Decimal("869.56")
+    if mixed:
+        stocked = invoice_by_sku[UUID(stocked_sku_id)]
+        assert (stocked.ex_vat, stocked.vat_amount, stocked.inc_vat) == (
+            Decimal("1000.00"),
+            Decimal("150.00"),
+            Decimal("1150.00"),
+        )
+    delivery = invoice_by_sku[None]
+    assert (delivery.ex_vat, delivery.vat_amount, delivery.inc_vat) == (
+        Decimal("100.00"),
+        Decimal("15.00"),
+        Decimal("115.00"),
+    )
+    ar_balance = await async_db.scalar(
+        select(func.sum(JournalLine.debit_zar - JournalLine.credit_zar))
+        .join(Account, Account.id == JournalLine.account_id)
+        .join(JournalEntry, JournalEntry.id == JournalLine.entry_id)
+        .where(Account.code == CODE_AR, JournalEntry.document_id.in_([order.id, invoice.id]))
+    )
+    assert ar_balance == Decimal("0.00")
+    repeated = await owner_client.post(f"/api/v1/orders/{order.id}/invoice")
+    assert repeated.status_code == 409
+    assert await async_db.scalar(select(func.count()).select_from(TaxInvoice)) == 1

@@ -54,6 +54,17 @@ class OpsCommerceOrdersCRUD:
             stmt = stmt.with_for_update()
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
+    async def get_by_sales_order(self, sales_order_id: uuid.UUID) -> Optional[OpsCommerceOrder]:
+        # The paid payload is immutable; do not invert the handoff -> order lock order.
+        return (
+            await self.db.execute(
+                select(OpsCommerceOrder).where(
+                    OpsCommerceOrder.sales_order_id == sales_order_id,
+                    OpsCommerceOrder.channel == "storefront",
+                )
+            )
+        ).scalar_one_or_none()
+
     async def list_latest(
         self,
         company_id: uuid.UUID,

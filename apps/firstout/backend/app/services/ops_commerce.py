@@ -428,18 +428,6 @@ class OpsCommerceService:
 
         actor = await StorefrontSystemActorService(self.db).ensure(handoff.company_id)
         actor_id = requested_by_user_id or actor.id
-        money = self._money
-        invoice_tax_snapshot = [
-            (money(line.ex_minor_zar), money(line.vat_minor_zar), money(line.total_minor_zar))
-            for line in payload.lines
-        ]
-        invoice_tax_snapshot.append(
-            (
-                money(payload.totals.delivery_ex_minor_zar),
-                money(payload.totals.delivery_tax_minor_zar),
-                money(payload.totals.delivery_total_minor_zar),
-            )
-        )
 
         async def record_acknowledgements() -> None:
             for line in payload.lines:
@@ -507,7 +495,6 @@ class OpsCommerceService:
                 await SalesOrdersService(self.db).create_remainder_invoice(
                     sales_order.id,
                     actor_id,
-                    tax_snapshot=invoice_tax_snapshot,
                     stock_source=UnitCostAuditSource.STOREFRONT,
                     before_commit=record_acknowledgements,
                 )
