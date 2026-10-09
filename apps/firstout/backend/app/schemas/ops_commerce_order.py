@@ -2,9 +2,17 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 
 class StorefrontAddress(BaseModel):
@@ -100,6 +108,7 @@ class StorefrontOrderLine(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     quantity: int = Field(gt=0, le=10000)
     unit_ex_minor_zar: int = Field(ge=0)
+    unit_ex_remainder_minor_zar: int = Field(default=0, ge=0)
     ex_minor_zar: int = Field(ge=0)
     vat_minor_zar: int = Field(ge=0)
     total_minor_zar: int = Field(ge=0)
@@ -109,9 +118,22 @@ class StorefrontOrderLine(BaseModel):
     def line_balances(self) -> StorefrontOrderLine:
         if self.ex_minor_zar + self.vat_minor_zar != self.total_minor_zar:
             raise ValueError("order line components do not balance")
-        if self.unit_ex_minor_zar * self.quantity != self.ex_minor_zar:
+        if self.unit_ex_remainder_minor_zar >= self.quantity:
+            raise ValueError("order line unit rounding remainder exceeds its quantity")
+        if (
+            self.unit_ex_minor_zar * self.quantity + self.unit_ex_remainder_minor_zar
+            != self.ex_minor_zar
+        ):
             raise ValueError("order line unit price does not match its subtotal")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize_allocation(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        payload = handler(self)
+        # Keep existing canonical hashes unchanged when no unit cent allocation is needed.
+        if self.unit_ex_remainder_minor_zar == 0:
+            payload.pop("unit_ex_remainder_minor_zar", None)
+        return payload
 
 
 class StorefrontOrderTotals(BaseModel):

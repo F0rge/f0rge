@@ -634,3 +634,88 @@ async def test_existing_paid_delivery_can_catch_up_directly_to_completed(
     assert handoff.fulfillment_revision == 1
     event = await async_db.scalar(select(OpsCommerceFulfillmentEvent))
     assert event is not None and event.status == "delivered"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("quantities", [[2], [1, 1]])
+async def test_paid_native_rounding_keeps_invoice_capture_and_refund_cents(
+    quantities: list[int],
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+    ops_headers: dict[str, str],
+) -> None:
+    from app.crud.sales_order import SalesOrderCRUD
+    from app.crud.tax_invoice import TaxInvoiceCRUD
+    from app.schemas.ops_commerce_order import StorefrontPaidOrder
+    from app.services.storefront_refunds import allocate_selected_line_refund
+
+    payload, _ = await _paid_order_payload(owner_client, fixture_tag="money-a")
+    payload["company_id"] = ops_headers["X-Ops-Company-ID"]
+    # Native Medusa VAT-inclusive totals for R1,000 x2 yield R260.87 VAT.
+    # The whole-order cent is allocated by stable line ID rather than lost.
+    if quantities == [2]:
+        payload["lines"][0].update(
+            quantity=2,
+            unit_ex_minor_zar=86956,
+            unit_ex_remainder_minor_zar=1,
+            ex_minor_zar=173913,
+            vat_minor_zar=26087,
+            total_minor_zar=200000,
+        )
+    else:
+        other, _ = await _paid_order_payload(owner_client, fixture_tag="money-b")
+        second = {**other["lines"][0], "external_line_id": "line-2"}
+        payload["lines"].append(second)
+        payload["lines"][0].update(
+            unit_ex_minor_zar=86956,
+            ex_minor_zar=86956,
+            vat_minor_zar=13044,
+            total_minor_zar=100000,
+        )
+        second.update(
+            unit_ex_minor_zar=86957,
+            ex_minor_zar=86957,
+            vat_minor_zar=13043,
+            total_minor_zar=100000,
+        )
+    payload["totals"].update(
+        subtotal_ex_minor_zar=173913,
+        tax_minor_zar=26087,
+        total_minor_zar=200000,
+    )
+    payload["payment"]["amount_minor_zar"] = 200000
+    request_snapshot = StorefrontPaidOrder.model_validate(payload).model_dump(mode="json")
+    first = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    assert first.status_code == 201, first.text
+    repeated = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    assert repeated.status_code == 200 and repeated.json()["id"] == first.json()["id"]
+    handoff = await async_db.get(OpsCommerceOrder, UUID(first.json()["id"]))
+    assert handoff is not None and handoff.payload == request_snapshot
+    order = await SalesOrderCRUD(async_db).get_by_id(handoff.sales_order_id)
+    assert order is not None and order.invoice_id is not None
+    invoice = await TaxInvoiceCRUD(async_db).get_by_id(order.invoice_id)
+    assert invoice is not None
+    assert invoice.total_inc_vat == invoice.amount_paid == Decimal("2000.00")
+    assert invoice.subtotal_ex_vat == Decimal("1739.13")
+    assert invoice.vat_amount == Decimal("260.87")
+    assert [line.unit_ex_vat for line in order.lines] == (
+        [Decimal("869.56")] if quantities == [2] else [Decimal("869.56"), Decimal("869.57")]
+    )
+    assert sorted(line.ex_vat for line in invoice.lines) == sorted(
+        Decimal(line["ex_minor_zar"]) / 100 for line in request_snapshot["lines"]
+    )
+    assert await async_db.scalar(
+        select(func.count())
+        .select_from(OpsCommerceAcknowledgement)
+        .where(
+            OpsCommerceAcknowledgement.commitment_id.like(
+                f"storefront:{payload['external_order_id']}:%"
+            )
+        )
+    ) == len(quantities)
+    amount, allocation = allocate_selected_line_refund(handoff.payload, {"line-1": 1})
+    assert amount == 100000 and allocation == {"line-1": 100000}
