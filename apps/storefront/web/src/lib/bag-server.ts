@@ -49,12 +49,22 @@ export function signedOrderAccess(cartId: string, token: string): string {
   return `v1.${cartId}.${token}.${orderAccessSignature(cartId, token)}`;
 }
 
-export function verifyOrderAccess(value: string | undefined, cartId: string): string | null {
+function verifiedOrderAccess(value: string | undefined): { cartId: string; token: string } | null {
   const match = /^v1\.(cart_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{40,100})\.([A-Za-z0-9_-]+)$/.exec(value || "");
-  if (!match || match[1] !== cartId) return null;
-  const expected = Buffer.from(orderAccessSignature(cartId, match[2]));
+  if (!match) return null;
+  const expected = Buffer.from(orderAccessSignature(match[1], match[2]));
   const actual = Buffer.from(match[3]);
-  return expected.length === actual.length && timingSafeEqual(expected, actual) ? match[2] : null;
+  return expected.length === actual.length && timingSafeEqual(expected, actual)
+    ? { cartId: match[1], token: match[2] } : null;
+}
+
+export function verifyOrderAccess(value: string | undefined, cartId: string): string | null {
+  const access = verifiedOrderAccess(value);
+  return access?.cartId === cartId ? access.token : null;
+}
+
+export async function currentOrderAccess(): Promise<{ cartId: string; token: string } | null> {
+  return verifiedOrderAccess((await cookies()).get(orderAccessCookie)?.value);
 }
 
 export async function currentOrderAccessToken(cartId: string): Promise<string | null> {
@@ -96,6 +106,7 @@ export type BagItem = { id: string; variant_id: string; title: string; thumbnail
 export type Bag = { id: string | null; items: BagItem[]; subtotal: number; total: number; currency_code: string; hold?: { expires_at: string; status: string; changes?: string[]; fulfillment_promise?: BagFulfillmentSummary } | null };
 type MedusaCart = Omit<Bag, "id" | "items"> & {
   id: string;
+  completed_at?: string | null;
   items?: (Omit<BagItem, "fulfillment_promise"> & { metadata?: { fulfillment_promise?: BagFulfillmentPromise } | null })[] | null;
   metadata?: { storefront_hold?: Bag["hold"] };
 };
@@ -191,6 +202,7 @@ export function publicBag(cart?: MedusaCart | null): Bag {
 
 export async function getCart(id: string): Promise<Bag> {
   const { cart } = await medusaRequest<{ cart: MedusaCart }>(`/store/carts/${encodeURIComponent(id)}`);
+  if (cart.completed_at) throw new BagError(410, "This bag has already been checked out");
   return publicBag(cart);
 }
 
