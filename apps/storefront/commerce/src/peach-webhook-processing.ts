@@ -118,8 +118,31 @@ export async function processClaimedPeachWebhook(container: Container, db: Knex,
     const session = sessions[0] as unknown as PaymentSession | undefined;
     if (!session || medusaAmountToMinor(session.amount) !== Number(event.amount_minor) ||
       session.currency_code.toUpperCase() !== event.currency_code) {
-      await completePeachWebhook(db, event.id, event.lease_token, "ignored");
-      return "ignored";
+      if (state !== "paid") {
+        await completePeachWebhook(db, event.id, event.lease_token, "ignored");
+        return "ignored";
+      }
+      // Native session invalidation cannot revoke an external charge. The
+      // attempt and verified inbox, including the original checkout snapshot,
+      // remain the operator's recovery source even if no cart survives.
+      await updatePeachAttempt(db, attempt.id, {
+        status: "captured", last_event_timestamp: event.event_timestamp, last_event_state: state,
+        ...(event.transaction_id ? { captured_transaction_id: event.transaction_id } : {}),
+      });
+      let originalCartId = attempt.cart_id;
+      if (!originalCartId) {
+        // Backfill recovery context for pre-migration attempts when Medusa's
+        // soft-deleted session still retains its original collection link.
+        const nativeSession = await db("payment_session").where({ id: attempt.payment_session_id }).first();
+        if (nativeSession?.payment_collection_id) {
+          const { data: links } = await query.graph({ entity: "cart_payment_collection", fields: ["cart_id"],
+            filters: { payment_collection_id: nativeSession.payment_collection_id } });
+          originalCartId = typeof links[0]?.cart_id === "string" ? links[0].cart_id : null;
+        }
+      }
+      if (originalCartId) await savePaidException(container, query, originalCartId, attempt.captured_order_id, attempt.payment_session_id, eventId);
+      await completePeachWebhook(db, event.id, event.lease_token, "paid_exception");
+      return "paid_exception";
     }
 
     const { data: cartLinks } = await query.graph({

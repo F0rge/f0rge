@@ -204,8 +204,16 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
         const { result: collection } = await createPaymentCollectionForCartWorkflow(req.scope).run({ input: { cart_id: cartId } });
         collectionId = collection.id;
       }
+      const { data: checkoutCarts } = await query.graph({
+        entity: "cart",
+        fields: ["id", "email", "customer_id", "currency_code", "total", "metadata", "items.*", "shipping_address.*", "shipping_methods.*"],
+        filters: { id: cartId },
+      });
+      if (!checkoutCarts[0]) throw new MedusaError(MedusaError.Types.NOT_FOUND, "Bag not found");
       const { result: createdSession } = await createPaymentSessionsWorkflow(req.scope).run({
-        input: { payment_collection_id: collectionId, provider_id: providerId },
+        input: { payment_collection_id: collectionId, provider_id: providerId, data: {
+          storefront_cart_id: cartId, storefront_checkout_snapshot: checkoutCarts[0],
+        } },
       });
       const session = createdSession as unknown as Record<string, unknown>;
       const sessionData = session.data as Record<string, unknown> | undefined;

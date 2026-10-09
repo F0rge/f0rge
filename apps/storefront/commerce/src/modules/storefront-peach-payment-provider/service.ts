@@ -49,6 +49,9 @@ export class StorefrontPeachPaymentProvider extends AbstractPaymentProvider {
     const { token } = await peachAccessToken(config);
     const { attempt, created } = await createPeachAttempt(db, {
       paymentSessionId: sessionId, amountMinor, currencyCode: currency,
+      cartId: typeof input.data?.storefront_cart_id === "string" ? input.data.storefront_cart_id : null,
+      checkoutSnapshot: input.data?.storefront_checkout_snapshot && typeof input.data.storefront_checkout_snapshot === "object"
+        ? input.data.storefront_checkout_snapshot as Record<string, unknown> : null,
     });
     if (!created) return this.existingAttempt(attempt);
 

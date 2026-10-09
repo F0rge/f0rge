@@ -109,3 +109,11 @@ test("never leaves the guest claim marker on a checkout already owned by a custo
   expect(metadata).not.toHaveProperty("storefront_owner_claim");
   expect(metadata.storefront_order_snapshot).toEqual({ financial: { total: 1234 }, contact: { email: "guest@example.test" } });
 });
+
+test("binds the durable payment to the original cart and immutable checkout snapshot before provider initiation", async () => {
+  const { response, cart, paymentSessionRun } = await runCheckout(null);
+  expect(response.statusCode).toBe(200);
+  expect(paymentSessionRun).toHaveBeenCalledWith({ input: expect.objectContaining({
+    data: { storefront_cart_id: cart.id, storefront_checkout_snapshot: cart },
+  }) });
+});
