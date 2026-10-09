@@ -7,6 +7,7 @@ import { TextInput } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { OrderHistory } from "./order-history";
+import { logoutCustomer } from "@/lib/customer-logout";
 
 type Address = {
   id: string;
@@ -89,11 +90,7 @@ export function AccountClient({ customer }: AccountClientProps) {
   async function logout() {
     setBusy(true); setError("");
     try {
-      const response = await fetch("/api/account/logout", { method: "POST", cache: "no-store" });
-      if (!response.ok) throw new Error("Could not end your customer session");
-      resetIdentity();
-      await signOut({ redirectUrl: "/account" });
-      router.refresh();
+      await logoutCustomer({ resetIdentity, signOut, refresh: () => router.refresh() });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not end your customer session"); setBusy(false); }
   }
 
