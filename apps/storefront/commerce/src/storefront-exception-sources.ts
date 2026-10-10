@@ -66,7 +66,7 @@ export async function peachSourceRows(db: Knex): Promise<{
       const page = await db<Record<string, unknown>>(table).whereNull("deleted_at").where("id", ">", after).orderBy("id").limit(500);
       result.push(...page);
       if (page.length < 500) break;
-      const id = page.at(-1)?.id;
+      const id = page[page.length - 1]?.id;
       if (typeof id !== "string" || id <= after) throw new Error("exception_scan_pagination_invalid");
       after = id;
     }
