@@ -550,6 +550,37 @@ export async function deliverStorefrontOrderOutbox(
   });
 }
 
+/** Staff-authorized retry retains the immutable payload and never steals an active lease. */
+export async function retryStorefrontOrderHandoff(container: MedusaContainer, orderId: string, replayImported = false): Promise<StorefrontHandoffOutbox | null> {
+  await withStorefrontOrderHandoffLock(container, orderId, async () => {
+    const order = await retrieveOrder(container, orderId);
+    if (!order || !record(order.metadata).storefront_confirmation_sha256) throw new Error("paid_order_recovery_missing");
+    const outbox = existingOutbox(order);
+    if (!outbox || (outbox.status === "imported" && !replayImported)) return;
+    if (outbox.status === "processing" && outbox.lease_until && Date.parse(outbox.lease_until) > Date.now()) {
+      throw new Error("handoff_recovery_lease_active");
+    }
+    if (!outbox.payload) return; // Existing snapshot reconstruction validates the retained paid facts.
+    await persistOutbox(container, order, { ...outbox, status: "pending", failure_code: null,
+      next_attempt_at: null, lease_until: null, updated_at: new Date().toISOString() });
+  });
+  // Deliver performs the real capacity commitment and operational import under
+  // inventory -> order locking, so release the previous order lock first.
+  const result = await deliverStorefrontOrderOutbox(container, orderId);
+  if (result?.status === "imported") {
+    await withStorefrontOrderHandoffLock(container, orderId, async () => {
+      const order = await retrieveOrder(container, orderId);
+      if (!order || existingOutbox(order)?.status !== "imported") return;
+      const metadata = record(order.metadata);
+      if (record(metadata.storefront_capacity_exception).status !== "paid_exception") return;
+      await container.resolve(Modules.ORDER).updateOrders([{ id: orderId, metadata: { ...metadata,
+        storefront_capacity_exception: { ...record(metadata.storefront_capacity_exception), status: "resolved", resolved_at: new Date().toISOString() },
+      } }]);
+    });
+  }
+  return result;
+}
+
 type LockingModule = {
   execute<T>(key: string, operation: () => Promise<T>): Promise<T>;
 };

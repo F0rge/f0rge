@@ -10,6 +10,8 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Index,
+    text,
     String,
     UniqueConstraint,
 )
@@ -42,6 +44,13 @@ class StorefrontCommerceException(UUIDPkMixin, TimestampMixin, Base):
     )
     kind: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="fixture", server_default="fixture"
+    )
+    source_received_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    repair_pending: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     seed_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     correlation_id: Mapped[str] = mapped_column(String(255), nullable=False)
     explanation: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -59,6 +68,15 @@ class StorefrontCommerceException(UUIDPkMixin, TimestampMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("company_id", "seed_key", name="uq_storefront_exception_seed"),
+        Index(
+            "uq_storefront_live_exception_identity",
+            "company_id",
+            "kind",
+            "correlation_id",
+            unique=True,
+            postgresql_where=text("source = 'commerce'"),
+        ),
+        CheckConstraint("source IN ('fixture', 'commerce')", name="ck_storefront_exception_source"),
         CheckConstraint(
             "kind IN ('aged_hold', 'stale_sync', 'missing_operational_paid_order', "
             "'unknown_payment', 'refund_mismatch', 'fulfilment_drift', 'capacity_conflict')",
@@ -99,7 +117,7 @@ class StorefrontExceptionAudit(UUIDPkMixin, TimestampMixin, Base):
             "exception_id", "idempotency_key", name="uq_storefront_exception_audit_key"
         ),
         CheckConstraint(
-            "outcome IN ('repaired', 'already_resolved', 'denied', 'needs_provider')",
+            "outcome IN ('repaired', 'already_resolved', 'denied', 'needs_provider', 'repair_requested', 'repair_failed')",
             name="ck_storefront_exception_audit_outcome",
         ),
     )
@@ -126,5 +144,51 @@ class StorefrontExceptionAlert(UUIDPkMixin, TimestampMixin, Base):
         CheckConstraint(
             "queue_class IN ('aged', 'terminal', 'retrying')",
             name="ck_storefront_exception_alert_class",
+        ),
+    )
+
+
+class StorefrontExceptionProjection(Base):
+    """Company-wide watermark for complete successful commerce scans."""
+
+    __tablename__ = "storefront_exception_projections"
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("teams.id", ondelete="RESTRICT"), primary_key=True
+    )
+    observed_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    received_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+
+
+class StorefrontExceptionCommand(UUIDPkMixin, TimestampMixin, Base):
+    """Durable staff-authorized action executed by the commerce source worker."""
+
+    __tablename__ = "storefront_exception_commands"
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("teams.id", ondelete="RESTRICT"), nullable=False
+    )
+    exception_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("storefront_commerce_exceptions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    audit_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("storefront_exception_audits.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    detail: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    completed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "exception_id", "idempotency_key", name="uq_storefront_exception_command_key"
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'repaired', 'not_repaired')",
+            name="ck_storefront_exception_command_status",
         ),
     )

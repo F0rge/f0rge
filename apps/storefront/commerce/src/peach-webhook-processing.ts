@@ -7,7 +7,7 @@ import { medusaAmountToMinor, peachAccessToken, peachCheckoutStatus, parsePeachS
 import { PEACH_PAYMENT_PROVIDER_ID, peachPaymentConfig } from "./peach-payment-config";
 import {
   claimPeachAttemptStatusCheck, claimPeachWebhook, completePeachWebhook, findPeachAttemptByReference,
-  listPeachAttemptsForStatusCheck, peachEventCanAdvance, receivePeachWebhook, retryPeachWebhook, updatePeachAttempt,
+  findPeachAttemptBySession, listPeachAttemptsForStatusCheck, peachEventCanAdvance, receivePeachWebhook, retryPeachWebhook, updatePeachAttempt,
   type PeachInboxEvent,
 } from "./peach-payment-store";
 import { prepareStorefrontOrderHandoff } from "./storefront-order-handoff";
@@ -27,11 +27,12 @@ type PaymentSession = {
 };
 
 /** Reconciles known checkouts through Peach's read-only V2 status endpoint. */
-export async function reconcilePeachCheckoutStatuses(container: Container): Promise<number> {
+export async function reconcilePeachCheckoutStatuses(container: Container, paymentSessionId?: string): Promise<number> {
   const config = peachPaymentConfig();
   if (!config) return 0;
   const db = container.resolve(ContainerRegistrationKeys.PG_CONNECTION) as Knex;
-  const attempts = await listPeachAttemptsForStatusCheck(db);
+  const targeted = paymentSessionId ? await findPeachAttemptBySession(db, paymentSessionId) : undefined;
+  const attempts = paymentSessionId ? (targeted ? [targeted] : []) : await listPeachAttemptsForStatusCheck(db);
   if (!attempts.length) return 0;
 
   let token: string;

@@ -435,3 +435,27 @@ class StorefrontRefundProviderEventResponse(BaseModel):
     currency_code: str = "ZAR"
     provider_refund_id: str
     duplicate: bool
+
+
+class StorefrontOrderStatusRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    external_order_ids: list[str] = Field(min_length=1, max_length=500)
+
+    @field_validator("external_order_ids")
+    @classmethod
+    def bounded_unique_ids(cls, values: list[str]) -> list[str]:
+        if len(set(values)) != len(values):
+            raise ValueError("duplicate external order identity")
+        if any(not value.strip() or len(value) > 255 for value in values):
+            raise ValueError("external order identities must contain 1 to 255 characters")
+        return values
+
+
+class StorefrontOrderStatusItem(BaseModel):
+    external_order_id: str
+    status: Literal["imported", "missing", "stock_conflict", "failed"]
+
+
+class StorefrontOrderStatusResponse(BaseModel):
+    items: list[StorefrontOrderStatusItem]

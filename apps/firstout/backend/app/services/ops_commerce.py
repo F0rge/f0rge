@@ -43,6 +43,9 @@ from app.schemas.ops_commerce_order import (
     StorefrontHandoffLineSnapshot,
     StorefrontHandoffResponse,
     StorefrontPaidOrder,
+    StorefrontOrderStatusRequest,
+    StorefrontOrderStatusItem,
+    StorefrontOrderStatusResponse,
 )
 from app.services.storefront_exceptions import StorefrontExceptionService
 from app.services.storefront_fulfillment import StorefrontFulfillmentService
@@ -102,6 +105,36 @@ class OpsCommerceService:
                 for sku in snapshots
             ],
         )
+
+    async def order_statuses(
+        self,
+        data: StorefrontOrderStatusRequest,
+        *,
+        authorization: Optional[str],
+        requested_company: Optional[str],
+        request_host: str,
+    ) -> StorefrontOrderStatusResponse:
+        company_id = await self._authorize(
+            authorization=authorization,
+            requested_company=requested_company,
+            request_host=request_host,
+        )
+        receipts = await self.orders.receipt_statuses(company_id, data.external_order_ids)
+        items = []
+        for external_order_id in data.external_order_ids:
+            state, order_exists = receipts.get(external_order_id, ("missing", False))
+            if not order_exists:
+                status = "missing"
+            elif state == "imported":
+                status = "imported"
+            elif state == "stock_conflict":
+                status = "stock_conflict"
+            else:
+                status = "failed"
+            items.append(
+                StorefrontOrderStatusItem(external_order_id=external_order_id, status=status)
+            )
+        return StorefrontOrderStatusResponse(items=items)
 
     async def accept_paid_order(
         self,

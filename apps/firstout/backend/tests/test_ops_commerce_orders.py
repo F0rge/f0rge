@@ -899,3 +899,82 @@ async def test_later_mto_invoice_preserves_paid_rounding_delivery_and_deposit(
     repeated = await owner_client.post(f"/api/v1/orders/{order.id}/invoice")
     assert repeated.status_code == 409
     assert await async_db.scalar(select(func.count()).select_from(TaxInvoice)) == 1
+
+
+@pytest.mark.asyncio
+async def test_machine_order_receipts_require_scoped_durable_handoff_and_order(
+    owner_client: AsyncClient,
+    async_db: AsyncSession,
+    ops_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from f0rge_db.crud import unit_of_work
+
+    payload, _ = await _paid_order_payload(owner_client, fixture_tag="receipt")
+    payload["company_id"] = ops_headers["X-Ops-Company-ID"]
+    accepted = await owner_client.post(
+        "/api/v1/ops-commerce/v1/orders", json=payload, headers=ops_headers
+    )
+    assert accepted.status_code == 201 and accepted.json()["status"] == "imported"
+    handoff = await async_db.get(OpsCommerceOrder, UUID(accepted.json()["id"]))
+    assert handoff is not None
+    sales_order_id = handoff.sales_order_id
+    immutable_sha = handoff.payload_sha256
+    immutable_payload = handoff.payload.copy()
+    external_id = payload["external_order_id"]
+    path = "/api/v1/ops-commerce/v1/orders/status"
+    request = {"external_order_ids": ["order-receipt-missing", external_id]}
+    receipts = await owner_client.post(path, json=request, headers=ops_headers)
+    assert receipts.status_code == 200, receipts.text
+    assert receipts.json() == {
+        "items": [
+            {"external_order_id": "order-receipt-missing", "status": "missing"},
+            {"external_order_id": external_id, "status": "imported"},
+        ]
+    }
+    assert await async_db.scalar(select(func.count()).select_from(SalesOrder)) == 1
+    assert await async_db.scalar(select(func.count()).select_from(TaxInvoice)) == 1
+    for status, result in [
+        ("stock_conflict", "stock_conflict"),
+        ("failed", "failed"),
+        ("processing", "failed"),
+    ]:
+        async with unit_of_work(async_db):
+            handoff.status = status
+        current = await owner_client.post(
+            path, json={"external_order_ids": [external_id]}, headers=ops_headers
+        )
+        assert current.json() == {"items": [{"external_order_id": external_id, "status": result}]}
+    await async_db.refresh(handoff)
+    assert handoff.payload_sha256 == immutable_sha and handoff.payload == immutable_payload
+    duplicate = await owner_client.post(
+        path, json={"external_order_ids": [external_id, external_id]}, headers=ops_headers
+    )
+    assert duplicate.status_code == 422
+    oversized = await owner_client.post(
+        path, json={"external_order_ids": [f"order-{i}" for i in range(501)]}, headers=ops_headers
+    )
+    assert oversized.status_code == 422
+    unauthenticated = await owner_client.post(path, json=request)
+    assert unauthenticated.status_code == 401
+    async with unit_of_work(async_db):
+        other_company = Team(name="Other receipt company")
+        async_db.add(other_company)
+        await async_db.flush()
+    monkeypatch.setattr(settings, "ops_commerce_company_id", str(other_company.id))
+    other_headers = {**ops_headers, "X-Ops-Company-ID": str(other_company.id)}
+    other = await owner_client.post(
+        path, json={"external_order_ids": [external_id]}, headers=other_headers
+    )
+    assert other.json() == {"items": [{"external_order_id": external_id, "status": "missing"}]}
+    monkeypatch.setattr(settings, "ops_commerce_company_id", ops_headers["X-Ops-Company-ID"])
+    async with unit_of_work(async_db):
+        await async_db.delete(handoff)
+    surviving_order = await async_db.get(SalesOrder, sales_order_id)
+    assert surviving_order is not None
+    lost_receipt = await owner_client.post(
+        path, json={"external_order_ids": [external_id]}, headers=ops_headers
+    )
+    assert lost_receipt.json() == {
+        "items": [{"external_order_id": external_id, "status": "missing"}]
+    }

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ops_commerce_order import OpsCommerceOrder
+from app.models.sales_order import SalesOrder
 
 
 class OpsCommerceOrdersCRUD:
@@ -64,6 +65,23 @@ class OpsCommerceOrdersCRUD:
                 )
             )
         ).scalar_one_or_none()
+
+    async def receipt_statuses(
+        self, company_id: uuid.UUID, external_order_ids: list[str]
+    ) -> dict[str, tuple[str, bool]]:
+        result = await self.db.execute(
+            select(OpsCommerceOrder.external_order_id, OpsCommerceOrder.status, SalesOrder.id)
+            .outerjoin(SalesOrder, SalesOrder.id == OpsCommerceOrder.sales_order_id)
+            .where(
+                OpsCommerceOrder.company_id == company_id,
+                OpsCommerceOrder.channel == "storefront",
+                OpsCommerceOrder.external_order_id.in_(external_order_ids),
+            )
+        )
+        return {
+            external_id: (status, order_id is not None)
+            for external_id, status, order_id in result.all()
+        }
 
     async def list_latest(
         self,
