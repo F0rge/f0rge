@@ -5,9 +5,12 @@ identity, ZAR retail price, and available stock. Medusa can also store a
 description, images, SEO, dimensions, materials, and care instructions when a
 merchant has them. Firstout's catalogue does not. The sync creates new products
 as drafts, then publishes every in-stock (or finite made-to-order) product into
-the **In stock** collection, handle `in-stock`. A product leaves that collection
-and returns to draft when it is no longer in the Ops feed or none of its variants
-has positive stock or a live made-to-order offer. Later sync runs update
+the **In stock** collection, handle `in-stock`. Each product is published on its
+own. A product the publication hook rejects for a missing tax-inclusive ZAR
+price stays a draft. The sync does not invent a price, and that rejection does
+not roll back the priced products in the same run. A product leaves that
+collection and returns to draft when it is no longer in the Ops feed or none of
+its variants has positive stock or a live made-to-order offer. Later sync runs update
 source-owned variant fields. A group has the stable handle
 `firstout-group-<group UUID>`.
 
