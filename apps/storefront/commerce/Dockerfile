@@ -22,9 +22,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=9000
+RUN apk add --no-cache su-exec
+COPY apps/storefront/commerce/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 755 /usr/local/bin/docker-entrypoint.sh
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/apps/storefront/commerce ./apps/storefront/commerce
 WORKDIR /app/apps/storefront/commerce/.medusa/server
-USER node
 EXPOSE 9000
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "/app/node_modules/.bin/medusa", "start"]
