@@ -17,10 +17,21 @@ function hasActiveHold(hold: { status: string; expires_at: string } | null | und
   return hold?.status === "active" && Date.parse(hold.expires_at) > Date.now();
 }
 
+async function activeCart(id: string | null) {
+  if (!id) return null;
+  try { return await getCart(id); }
+  catch (error) {
+    // Completed carts and stale ownership/access cannot be used for a new bag.
+    // Preserve payment capabilities: they are independent of this cart cookie.
+    if (error instanceof BagError && (error.status === 404 || error.status === 410)) return null;
+    throw error;
+  }
+}
+
 export async function GET() {
   try {
     const id = await currentCartId();
-    return NextResponse.json(id ? await getCart(id) : publicBag());
+    return NextResponse.json(await activeCart(id) || publicBag());
   } catch (error) { return reply(error); }
 }
 
@@ -36,12 +47,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Choose a valid item and quantity" }, { status: 400 });
     }
     const existingId = await currentCartId();
-    const cart = existingId ? await getCart(existingId) : await createCart();
+    const cart = await activeCart(existingId) || await createCart();
     if (!cart.id) throw new BagError(503, "Bag unavailable");
     if (hasActiveHold(cart.hold)) return NextResponse.json({ message: "Change bag to edit this reservation" }, { status: 409 });
     const { cart: updated } = await medusaRequest<CartResponse>(`/store/carts/${cart.id}/line-items`, "POST", { variant_id: variantId, quantity });
     const response = NextResponse.json(publicBag(updated));
-    if (!existingId) response.cookies.set(cartCookie, signedCart(cart.id), {
+    if (cart.id !== existingId) response.cookies.set(cartCookie, signedCart(cart.id), {
       httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30,
     });
     return response;

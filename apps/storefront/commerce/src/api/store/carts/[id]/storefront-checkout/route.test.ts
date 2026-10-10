@@ -1,5 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
-import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import {
   addShippingMethodToCartWorkflow,
   createPaymentCollectionForCartWorkflow,
@@ -54,7 +54,9 @@ function fixture(customerId: string | null) {
       fulfillment_type: "collection",
       confirmation_token: "x".repeat(43),
     },
-    scope: { resolve: (key: string) => key === ContainerRegistrationKeys.QUERY ? { graph } : undefined },
+    scope: { resolve: (key: string) => key === ContainerRegistrationKeys.QUERY ? { graph }
+      : key === Modules.LOCKING ? { execute: async (_key: string, operation: () => Promise<unknown>) => operation() }
+      : key === Modules.CART ? { retrieveCart: async () => cart, updateCarts: jest.fn(async (_id: string, input: Record<string, unknown>) => Object.assign(cart, input)) } : undefined },
   } as unknown as MedusaRequest;
   const response = {
     headers: {} as Record<string, string>,
@@ -108,4 +110,12 @@ test("never leaves the guest claim marker on a checkout already owned by a custo
   expect(metadata).not.toHaveProperty("storefront_claimable_version");
   expect(metadata).not.toHaveProperty("storefront_owner_claim");
   expect(metadata.storefront_order_snapshot).toEqual({ financial: { total: 1234 }, contact: { email: "guest@example.test" } });
+});
+
+test("binds the durable payment to the original cart and immutable checkout snapshot before provider initiation", async () => {
+  const { response, cart, paymentSessionRun } = await runCheckout(null);
+  expect(response.statusCode).toBe(200);
+  expect(paymentSessionRun).toHaveBeenCalledWith({ input: expect.objectContaining({
+    data: { storefront_cart_id: cart.id, storefront_checkout_snapshot: cart },
+  }) });
 });

@@ -44,7 +44,7 @@ export default function StorefrontExceptionsPage() {
   const [items, setItems] = useState<StorefrontException[]>([]);
   const [checkoutAllowed, setCheckoutAllowed] = useState(true);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{ kind: "info" | "success"; title: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [repairTarget, setRepairTarget] = useState<StorefrontException | null>(null);
   const [reason, setReason] = useState("");
@@ -89,7 +89,9 @@ export default function StorefrontExceptionsPage() {
         idempotency_key: `ui-${crypto.randomUUID()}`,
       });
       setAudits(updated.audits);
-      setNotice(`${updated.kind} ${updated.status}`);
+      setNotice(updated.repair_pending
+        ? { kind: "info", title: "Repair requested. Waiting for commerce to confirm the result. Refresh status to check progress." }
+        : { kind: "success", title: `${updated.kind} ${updated.status}` });
       await load();
       setRepairTarget(null);
     } catch (err) {
@@ -102,7 +104,7 @@ export default function StorefrontExceptionsPage() {
   return (
     <Stack gap={5}>
       {error ? <InlineNotification kind="error" title={error} hideCloseButton /> : null}
-      {notice ? <InlineNotification kind="success" title={notice} hideCloseButton /> : null}
+      {notice ? <InlineNotification kind={notice.kind} title={notice.title} hideCloseButton /> : null}
       <h1>Storefront exceptions</h1>
       {!checkoutAllowed ? (
         <InlineNotification
@@ -114,6 +116,20 @@ export default function StorefrontExceptionsPage() {
         <p>New checkout is allowed. Paid order recovery remains available.</p>
       )}
       <Stack gap={3} orientation="horizontal">
+        <Button
+          size="sm"
+          kind="tertiary"
+          disabled={loading}
+          onClick={() => {
+            setLoading(true);
+            setNotice(null);
+            void load()
+              .catch((err) => setError(err instanceof Error ? err.message : "Could not refresh exceptions."))
+              .finally(() => setLoading(false));
+          }}
+        >
+          Refresh status
+        </Button>
         {canSeed ? (
           <Button
             size="sm"
@@ -125,7 +141,7 @@ export default function StorefrontExceptionsPage() {
                 .then(async (data) => {
                   setItems(data.items);
                   setCheckoutAllowed(data.checkout_allowed);
-                  setNotice("Seeded exception types are on the queue.");
+                  setNotice({ kind: "success", title: "Seeded exception types are on the queue." });
                 })
                 .catch((err) => setError(err instanceof Error ? err.message : "Could not seed exceptions."))
                 .finally(() => setLoading(false));
@@ -183,7 +199,9 @@ export default function StorefrontExceptionsPage() {
                   {row.financial && row.amount_minor == null ? " · financial fields hidden" : ""}
                 </TableCell>
                 <TableCell>
-                  {row.can_repair ? (
+                  {row.repair_pending ? (
+                    <span role="status">Repair pending</span>
+                  ) : row.can_repair ? (
                     <Button size="sm" kind="secondary" onClick={() => openRepair(row)}>
                       Repair
                     </Button>
@@ -203,12 +221,13 @@ export default function StorefrontExceptionsPage() {
         secondaryButtonText="Close"
         onRequestClose={() => setRepairTarget(null)}
         onRequestSubmit={() => void submitRepair()}
-        primaryButtonDisabled={loading || reason.trim().length < 8}
+        primaryButtonDisabled={loading || !repairTarget?.can_repair || repairTarget.repair_pending || reason.trim().length < 8}
       >
         {repairTarget ? (
           <Stack gap={4}>
             <p>{repairTarget.explanation}</p>
             <p>Safe action: {repairTarget.safe_action}</p>
+            {repairTarget.repair_pending ? <p role="status">Repair pending. Waiting for commerce to confirm the result.</p> : null}
             <TextArea
               id="exception-repair-reason"
               labelText="Reason"

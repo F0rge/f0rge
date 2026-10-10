@@ -686,9 +686,11 @@ async function ensureNativeOrderRefundAccounting(
   });
 }
 
-async function reconcileVerifiedMedusaRefunds(container: MedusaContainer, db: Knex): Promise<void> {
-  const rows = await db<PeachRefundDispatch>(PEACH_REFUNDS_TABLE).whereNull("deleted_at")
-    .whereIn("status", ["verified", "recording_medusa_refund"]).limit(25);
+export async function reconcileVerifiedMedusaRefunds(container: MedusaContainer, db: Knex, requestId?: string): Promise<void> {
+  const query = db<PeachRefundDispatch>(PEACH_REFUNDS_TABLE).whereNull("deleted_at")
+    .whereIn("status", ["verified", "recording_medusa_refund"]);
+  if (requestId) query.where({ request_id: requestId });
+  const rows = await query.limit(25);
   for (const row of rows) {
     if (!row.medusa_payment_id) continue;
     try {

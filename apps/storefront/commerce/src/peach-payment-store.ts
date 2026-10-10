@@ -10,6 +10,8 @@ export const PEACH_REFUNDS_TABLE = "storefront_peach_refund_dispatch";
 export type PeachAttempt = {
   id: string;
   payment_session_id: string;
+  cart_id?: string | null;
+  checkout_snapshot?: Record<string, unknown> | null;
   merchant_reference: string;
   nonce: string;
   checkout_id: string | null;
@@ -113,6 +115,8 @@ export async function claimPeachAttemptStatusCheck(db: Knex, id: string): Promis
 
 export async function createPeachAttempt(db: Knex, input: {
   paymentSessionId: string;
+  cartId?: string | null;
+  checkoutSnapshot?: Record<string, unknown> | null;
   amountMinor: number;
   currencyCode: string;
 }): Promise<{ attempt: PeachAttempt; created: boolean }> {
@@ -129,6 +133,8 @@ export async function createPeachAttempt(db: Knex, input: {
       const attempt: PeachAttempt = {
         id: `spay_${randomUUID().replaceAll("-", "")}`,
         payment_session_id: input.paymentSessionId,
+        cart_id: input.cartId || null,
+        checkout_snapshot: input.checkoutSnapshot || null,
         merchant_reference: randomUUID().replaceAll("-", "").slice(0, 16),
         nonce: randomUUID().replaceAll("-", ""),
         checkout_id: null,

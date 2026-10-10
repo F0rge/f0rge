@@ -132,6 +132,9 @@ jobs:
       - name: Verify braces security backport
         run: node scripts/security/check-braces.cjs
 
+      - name: Verify fixed dependencies and Medusa compatibility
+        run: node scripts/security/check-ci-dependencies.cjs
+
       - name: npm audit (high severity, production deps)
         run: npm audit --omit=dev --audit-level=high
 

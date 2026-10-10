@@ -10,13 +10,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies.auth import get_storefront_refund_workflow_service
 from app.schemas.ops_commerce import OpsProductsResponse
-from app.schemas.storefront_exceptions import StorefrontCheckoutSafetyResponse
+from app.schemas.storefront_exceptions import (
+    StorefrontCheckoutSafetyResponse,
+    StorefrontExceptionObservations,
+    StorefrontExceptionScanResponse,
+    StorefrontExceptionCommandList,
+    StorefrontExceptionCommandResult,
+    StorefrontExceptionCommandResultResponse,
+)
 from app.schemas.ops_commerce_order import (
     StorefrontFulfillmentEventAck,
     StorefrontFulfillmentEventAckResponse,
     StorefrontFulfillmentEventList,
     StorefrontHandoffResponse,
     StorefrontPaidOrder,
+    StorefrontOrderStatusRequest,
+    StorefrontOrderStatusResponse,
     StorefrontRefundCommandList,
     StorefrontRefundDispatchOutcome,
     StorefrontRefundProviderEvent,
@@ -24,6 +33,7 @@ from app.schemas.ops_commerce_order import (
     StorefrontRefundResponse,
 )
 from app.services.ops_commerce import OpsCommerceService
+from app.services.storefront_exception_machine import StorefrontExceptionMachineService
 from app.services.storefront_refund_workflow import StorefrontRefundWorkflowService
 
 router = APIRouter(prefix="/api/v1/ops-commerce/v1", tags=["ops-commerce"])
@@ -55,6 +65,22 @@ async def checkout_safety(
     service: OpsCommerceService = Depends(get_ops_commerce_service),
 ) -> StorefrontCheckoutSafetyResponse:
     return await service.checkout_safety(
+        authorization=authorization,
+        requested_company=x_ops_company_id,
+        request_host=request.url.hostname or "",
+    )
+
+
+@router.post("/orders/status", response_model=StorefrontOrderStatusResponse)
+async def order_statuses(
+    body: StorefrontOrderStatusRequest,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_ops_company_id: Optional[str] = Header(default=None),
+    service: OpsCommerceService = Depends(get_ops_commerce_service),
+) -> StorefrontOrderStatusResponse:
+    return await service.order_statuses(
+        body,
         authorization=authorization,
         requested_company=x_ops_company_id,
         request_host=request.url.hostname or "",
@@ -167,3 +193,53 @@ async def record_refund_event(
         requested_company=x_ops_company_id,
         request_host=request.url.hostname or "",
     )
+
+
+def get_exception_machine_service(
+    db: AsyncSession = Depends(get_db),
+) -> StorefrontExceptionMachineService:
+    return StorefrontExceptionMachineService(db)
+
+
+async def require_exception_machine_company(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_ops_company_id: Optional[str] = Header(default=None),
+    service: StorefrontExceptionMachineService = Depends(get_exception_machine_service),
+) -> uuid.UUID:
+    return await service.authorize(
+        authorization=authorization,
+        requested_company=x_ops_company_id,
+        request_host=request.url.hostname or "",
+    )
+
+
+@router.post("/exceptions/observations", response_model=StorefrontExceptionScanResponse)
+async def observe_commerce_exceptions(
+    body: StorefrontExceptionObservations,
+    company_id: uuid.UUID = Depends(require_exception_machine_company),
+    service: StorefrontExceptionMachineService = Depends(get_exception_machine_service),
+) -> StorefrontExceptionScanResponse:
+    return await service.observe(body, company_id)
+
+
+@router.get("/exceptions/commands", response_model=StorefrontExceptionCommandList)
+async def list_exception_commands(
+    limit: int = 100,
+    company_id: uuid.UUID = Depends(require_exception_machine_company),
+    service: StorefrontExceptionMachineService = Depends(get_exception_machine_service),
+) -> StorefrontExceptionCommandList:
+    return await service.commands(company_id, max(1, min(limit, 500)))
+
+
+@router.post(
+    "/exceptions/commands/{command_id}/result",
+    response_model=StorefrontExceptionCommandResultResponse,
+)
+async def record_exception_command_result(
+    command_id: uuid.UUID,
+    body: StorefrontExceptionCommandResult,
+    company_id: uuid.UUID = Depends(require_exception_machine_company),
+    service: StorefrontExceptionMachineService = Depends(get_exception_machine_service),
+) -> StorefrontExceptionCommandResultResponse:
+    return await service.result(command_id, body, company_id)
