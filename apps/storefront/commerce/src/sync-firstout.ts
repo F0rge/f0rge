@@ -173,6 +173,29 @@ type CatalogueProduct = {
   id: string; external_id: string | null; status: string; collection_id?: string | null;
 };
 
+// The publication hook rejects a product with no tax-inclusive ZAR price. That
+// string is the only signal we continue past: the product stays a draft, and
+// the priced products in the same run still publish. No price is invented.
+export function missingTaxInclusiveZarPrice(error: unknown): boolean {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current = error;
+  for (let depth = 0; current && depth < 5; depth += 1) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    if (current instanceof Error) {
+      parts.push(current.message);
+      current = Reflect.get(current, "cause");
+      continue;
+    }
+    if (typeof current === "object" && current && "message" in current) {
+      parts.push(String((current as { message: unknown }).message));
+    }
+    break;
+  }
+  return parts.join("\n").includes("tax-inclusive ZAR price is missing");
+}
+
 async function catalogueCollectionId(container: MedusaContainer): Promise<string> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const { data } = await query.graph({ entity: "product_collection", fields: ["id", "handle"] });
@@ -197,6 +220,20 @@ async function setCatalogueMembership(
   }
 }
 
+async function publishCatalogueProducts(container: MedusaContainer, ids: string[], collectionId: string) {
+  const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
+  for (const id of ids) {
+    try {
+      await updateProductsWorkflow(container).run({
+        input: { selector: { id: [id] }, update: { status: ProductStatus.PUBLISHED, collection_id: collectionId } },
+      });
+    } catch (error) {
+      if (!missingTaxInclusiveZarPrice(error)) throw error;
+      logger.warn(`Left Firstout product ${id} unpublished because a tax-inclusive ZAR price is missing`);
+    }
+  }
+}
+
 async function publishCatalogue(container: MedusaContainer, readyIds: Set<string>) {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const { data } = await query.graph({
@@ -212,9 +249,7 @@ async function publishCatalogue(container: MedusaContainer, readyIds: Set<string
     .filter((product) => !readyIds.has(product.external_id || "") &&
       (product.status !== ProductStatus.DRAFT || !!product.collection_id))
     .map((product) => product.id);
-  if (publish.length && collectionId) {
-    await setCatalogueMembership(container, publish, { status: ProductStatus.PUBLISHED, collection_id: collectionId });
-  }
+  if (publish.length && collectionId) await publishCatalogueProducts(container, publish, collectionId);
   if (withdraw.length) {
     await setCatalogueMembership(container, withdraw, { status: ProductStatus.DRAFT, collection_id: null });
   }
