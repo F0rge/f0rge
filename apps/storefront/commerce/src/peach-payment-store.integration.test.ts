@@ -12,6 +12,7 @@ import { parsePeachWebhook } from "./peach-checkout";
 import { StorefrontPeachPaymentProvider } from "./modules/storefront-peach-payment-provider/service";
 import { Migration20260930180331 } from "./modules/storefront-peach/migrations/Migration20260930180331";
 import { Migration20261001090000 } from "./modules/storefront-peach/migrations/Migration20261001090000";
+import { Migration20261009120000 } from "./modules/storefront-peach/migrations/Migration20261009120000";
 import processPeachWebhooksJob from "./jobs/process-peach-webhooks";
 import {
   persistAndProcessRefundObservation, processClaimedPeachRefundWebhook, syncStorefrontPeachRefundCommands,
@@ -72,6 +73,9 @@ describeWithPostgres("Peach durable inbox (isolated PostgreSQL)", () => {
     const refundMigrationCollector: Migration20261001090000 = Object.create(Migration20261001090000.prototype);
     Reflect.set(refundMigrationCollector, "addSql", (statement: string) => migrationSql.push(statement));
     await refundMigrationCollector.up();
+    const bindingMigrationCollector: Migration20261009120000 = Object.create(Migration20261009120000.prototype);
+    Reflect.set(bindingMigrationCollector, "addSql", (statement: string) => migrationSql.push(statement));
+    await bindingMigrationCollector.up();
     for (const statement of migrationSql) await db.raw(statement);
   });
 
@@ -92,6 +96,57 @@ describeWithPostgres("Peach durable inbox (isolated PostgreSQL)", () => {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
+  });
+
+  test("persists original checkout context before hosted POST and keeps a deleted-session capture in the real inbox", async () => {
+    const sessionId = `session-deleted-${randomUUID()}`;
+    const cartId = `cart-original-${randomUUID()}`;
+    const snapshot = { id: cartId, total: 10, currency_code: "zar", items: [{ id: "item_original", quantity: 1 }] };
+    const provider = new StorefrontPeachPaymentProvider({ [ContainerRegistrationKeys.PG_CONNECTION]: db });
+    const hostedBoundary = jest.spyOn(global, "fetch").mockImplementation(async (url) => {
+      if (String(url).endsWith("/api/oauth/token")) {
+        return new Response(JSON.stringify({ access_token: "test-provider-token", expires_in: 300 }), { status: 200 });
+      }
+      expect(String(url)).toMatch(/\/v2\/checkout$/);
+      // This assertion runs at the external boundary, before Peach could accept
+      // money and before its response has supplied a checkout ID.
+      const durable = await db("storefront_peach_payment_attempt").where({ payment_session_id: sessionId }).first();
+      expect(durable).toMatchObject({ cart_id: cartId, checkout_snapshot: snapshot, status: "initiating" });
+      return new Response(JSON.stringify({ checkoutId: "checkout-1", redirectUrl: "https://testsecure.peachpayments.com/pay/test" }), { status: 200 });
+    });
+    try {
+      await provider.initiatePayment({ amount: 10, currency_code: "zar", context: { idempotency_key: sessionId },
+        data: { storefront_cart_id: cartId, storefront_checkout_snapshot: snapshot } });
+    } finally {
+      hostedBoundary.mockRestore();
+    }
+    const attempt = await db("storefront_peach_payment_attempt").where({ payment_session_id: sessionId }).first();
+    const event = webhook(`deleted-paid-${randomUUID()}`, attempt.merchant_reference, new Date().toISOString(), "000.000.000");
+    const inbox = await receivePeachWebhook(db, event, "verified-test-signature");
+    const claimed = await claimPeachWebhook(db, inbox.id);
+    if (!claimed) throw new Error("Paid inbox row was not claimable");
+    // Query and locking are the native Medusa adapters. All attempt/inbox
+    // persistence, event advancement and the inventory-lock wrapper are real.
+    const locking = { execute: async (_key: string, operation: () => Promise<unknown>) => operation() };
+    const graph = async ({ entity }: { entity: string }) => {
+      if (entity === "payment_session" || entity === "cart") return { data: [] };
+      throw new Error(`Unexpected graph entity ${entity}`);
+    };
+    const container = { resolve(key: string) {
+      if (key === Modules.LOCKING) return locking;
+      if (key === ContainerRegistrationKeys.QUERY) return { graph };
+      throw new Error(`Unexpected Medusa service ${key}`);
+    } } as unknown as MedusaContainer;
+    expect(await processClaimedPeachWebhook(container, db, claimed)).toBe("paid_exception");
+    expect(await findPeachAttemptByReference(db, attempt.merchant_reference)).toMatchObject({
+      cart_id: cartId, checkout_snapshot: snapshot, status: "captured", captured_transaction_id: event.transaction_id,
+      last_event_state: "paid",
+    });
+    expect(await db("storefront_peach_webhook_inbox").where({ id: claimed.id }).first()).toMatchObject({
+      status: "paid_exception", lease_token: null, transaction_id: event.transaction_id,
+    });
+    expect(await claimPeachWebhook(db, inbox.id)).toBeUndefined();
+    await db("storefront_peach_payment_attempt").where({ id: attempt.id }).update({ deleted_at: new Date() });
   });
 
   test("deduplicates by webhook ID and atomically permits one concurrent claim", async () => {

@@ -11,6 +11,7 @@ import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/frame
 import { checkoutHoldForCart, withCheckoutInventoryLock } from "../../../../../checkout-holds";
 import { deliveryZoneForAddress, deliveryZones } from "../../../../../delivery-zones";
 import { peachPaymentEnabled, PEACH_PAYMENT_PROVIDER_ID } from "../../../../../peach-payment-config";
+import { updateStorefrontCheckoutContact } from "../../../../../storefront-checkout-contact";
 import { testPaymentEnabled } from "../../../../../test-payment-config";
 
 type FulfillmentType = "delivery" | "collection";
@@ -179,7 +180,6 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
       else delete checkoutMetadata.storefront_claimable_version;
       await updateCartWorkflow(req.scope).run({ input: {
         id: cartId,
-        email: input.email,
         shipping_address: deliveryAddress,
         metadata: {
           ...checkoutMetadata,
@@ -198,14 +198,25 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
         options: [{ id: option.id }],
       } });
 
+      await updateStorefrontCheckoutContact(req.scope, {
+        id: cartId, email: input.email, customer_id: cart.customer_id || null,
+      });
       const { data: collections } = await query.graph({ entity: "cart_payment_collection", fields: ["payment_collection_id"], filters: { cart_id: cartId } });
       let collectionId = collections[0]?.payment_collection_id as string | undefined;
       if (!collectionId) {
         const { result: collection } = await createPaymentCollectionForCartWorkflow(req.scope).run({ input: { cart_id: cartId } });
         collectionId = collection.id;
       }
+      const { data: checkoutCarts } = await query.graph({
+        entity: "cart",
+        fields: ["id", "email", "customer_id", "currency_code", "total", "metadata", "items.*", "shipping_address.*", "shipping_methods.*"],
+        filters: { id: cartId },
+      });
+      if (!checkoutCarts[0]) throw new MedusaError(MedusaError.Types.NOT_FOUND, "Bag not found");
       const { result: createdSession } = await createPaymentSessionsWorkflow(req.scope).run({
-        input: { payment_collection_id: collectionId, provider_id: providerId },
+        input: { payment_collection_id: collectionId, provider_id: providerId, data: {
+          storefront_cart_id: cartId, storefront_checkout_snapshot: checkoutCarts[0],
+        } },
       });
       const session = createdSession as unknown as Record<string, unknown>;
       const sessionData = session.data as Record<string, unknown> | undefined;

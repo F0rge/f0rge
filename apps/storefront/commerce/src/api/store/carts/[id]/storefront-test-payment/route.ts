@@ -1,7 +1,7 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import { processPaymentWorkflow, updateCartWorkflow } from "@medusajs/medusa/core-flows";
 import { ContainerRegistrationKeys, MedusaError, Modules, PaymentActions, PaymentSessionStatus } from "@medusajs/framework/utils";
-import { checkoutHoldForCart, releaseCheckoutHoldWithinLock, withCheckoutInventoryLock } from "../../../../../checkout-holds";
+import { releaseCheckoutHoldWithinLock, withCheckoutInventoryLock } from "../../../../../checkout-holds";
 import { testPaymentEnabled } from "../../../../../test-payment-config";
 import { prepareStorefrontOrderHandoff } from "../../../../../storefront-order-handoff";
 
@@ -186,14 +186,11 @@ export async function POST(req: MedusaRequest, res: MedusaResponse): Promise<voi
         return await preparePaidHandoff(req, cartId, existingOrderId, session, eventId, eventOutcome, eventData, true);
       }
 
-      const recoveringCapturedPayment = session.status === PaymentSessionStatus.CAPTURED ||
-        session.data?.outcome === "success" || (prior?.outcome === "success" && prior.status === "processing");
-      if (!recoveringCapturedPayment) {
-        const hold = await checkoutHoldForCart(req.scope, cartId);
-        if (!hold.ready) {
-          throw new MedusaError(MedusaError.Types.CONFLICT, "Your reservation or made-to-order allowance expired. Return to your bag and review availability before paying.");
-        }
-      }
+      // This trusted test-provider event represents an already successful
+      // payment callback, including success after pending/browser close. An
+      // expired bag hold cannot revoke it. Checkout preparation validates new
+      // payment attempts; completion below retains paid_exception if native
+      // stock or finite capacity can no longer fulfill the captured callback.
 
       await markEvent(req, session, { event_id: eventId, outcome: eventOutcome, status: "processing" }, eventData, PaymentSessionStatus.PENDING);
       await releaseCheckoutHoldWithinLock(req.scope, cartId);

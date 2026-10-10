@@ -1,5 +1,5 @@
 import type { MedusaContainer } from "@medusajs/framework/types";
-import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
+import { BigNumber, ContainerRegistrationKeys, MathBN, Modules } from "@medusajs/framework/utils";
 import { updateProductVariantsWorkflow } from "@medusajs/medusa/core-flows";
 import { withCheckoutInventoryLock } from "./checkout-holds";
 import { commitMadeToOrderCapacity } from "./made-to-order-capacity-store";
@@ -45,6 +45,7 @@ type PaidOrderPayload = {
     title: string;
     quantity: number;
     unit_ex_minor_zar: number;
+    unit_ex_remainder_minor_zar?: number;
     ex_minor_zar: number;
     vat_minor_zar: number;
     total_minor_zar: number;
@@ -81,8 +82,11 @@ type StorefrontHandoffOutbox = {
   failure_code: string | null;
 };
 
+const ROUND_HALF_UP = 4;
+const ROUND_FLOOR = 3;
+
 const ORDER_FIELDS = [
-  "id", "display_id", "created_at", "email", "currency_code", "subtotal", "shipping_total", "tax_total", "total",
+  "id", "display_id", "created_at", "email", "currency_code", "subtotal", "shipping_total", "shipping_tax_total", "tax_total", "total",
   "customer_id", "metadata",
   "items.id", "items.title", "items.quantity", "items.detail.quantity", "items.unit_price", "items.subtotal", "items.tax_total", "items.total",
   "items.metadata", "items.variant.sku", "items.variant.metadata",
@@ -103,18 +107,53 @@ function string(value: unknown, field: string): string {
   return value.trim();
 }
 
-function majorAmount(value: unknown): number | null {
-  if (typeof value === "number") return value;
-  if (!value || typeof value !== "object") return null;
-  const numeric = (value as { numeric_?: unknown }).numeric_;
-  return typeof numeric === "number" ? numeric : null;
+function majorAmount(value: unknown, field: string): ReturnType<typeof MathBN.convert> {
+  let amount: ReturnType<typeof MathBN.convert>;
+  if (value instanceof BigNumber) amount = MathBN.convert(value);
+  else if (typeof value === "number" || typeof value === "string") amount = MathBN.convert(value);
+  else {
+    const source = record(value);
+    const raw = record(source.raw_).value;
+    const numeric = source.numeric_;
+    if (typeof raw === "string" || typeof raw === "number") amount = MathBN.convert(raw);
+    else if (typeof numeric === "number") amount = MathBN.convert(numeric);
+    else throw new Error(`invalid_${field}`);
+  }
+  if (!amount.isFinite() || amount.isNegative()) throw new Error(`invalid_${field}`);
+  return amount;
 }
 
 function minor(value: unknown, field: string): number {
-  const amount = majorAmount(value);
-  if (amount === null || !Number.isFinite(amount) || amount < 0) throw new Error(`invalid_${field}`);
-  const result = Math.round(amount * 100);
+  const result = MathBN.mult(majorAmount(value, field), 100).decimalPlaces(0, ROUND_HALF_UP).toNumber();
   if (!Number.isSafeInteger(result)) throw new Error(`invalid_${field}`);
+  return result;
+}
+
+type MoneyComponent = { id: string; amount: ReturnType<typeof MathBN.convert>; maximum?: number };
+
+/** Apportion aggregate rounded cents by largest remainder, bounded by gross for
+ * tax allocations. Ties use stable line IDs, with delivery last.
+ */
+function allocateCents(components: MoneyComponent[], total: number): Map<string, number> {
+  if (new Set(components.map((component) => component.id)).size !== components.length) {
+    throw new Error("duplicate_money_component");
+  }
+  const shares = components.map((component) => {
+    const cents = MathBN.mult(component.amount, 100);
+    const floor = cents.integerValue(ROUND_FLOOR).toNumber();
+    if (!Number.isSafeInteger(floor) || floor < 0 || (component.maximum !== undefined && floor > component.maximum)) {
+      throw new Error("invalid_money_allocation");
+    }
+    return { ...component, floor, fraction: MathBN.sub(cents, floor) };
+  });
+  const remaining = total - shares.reduce((sum, share) => sum + share.floor, 0);
+  const candidates = shares.filter((share) => !share.fraction.isZero() &&
+    (share.maximum === undefined || share.floor < share.maximum))
+    .sort((left, right) => right.fraction.comparedTo(left.fraction) ||
+      Number(left.id === "delivery") - Number(right.id === "delivery") || left.id.localeCompare(right.id));
+  if (remaining < 0 || remaining > candidates.length) throw new Error("invalid_money_allocation");
+  const result = new Map(shares.map((share) => [share.id, share.floor]));
+  for (const share of candidates.slice(0, remaining)) result.set(share.id, share.floor + 1);
   return result;
 }
 
@@ -185,17 +224,40 @@ export function buildPayload(order: JsonRecord): PaidOrderPayload {
     .find((value) => typeof value === "string" && value.trim());
   const externalPaymentId = string(paymentData.provider_payment_id || payment.id, "payment_id");
 
+  const total = minor(order.total, "order_total");
+  const grossComponents = [
+    ...items.map((item) => ({ id: string(item.id, "line_id"), amount: majorAmount(item.total ?? item.subtotal, "line_total") })),
+    { id: "delivery", amount: majorAmount(order.shipping_total ?? 0, "shipping_total") },
+  ];
+  if (minor(new BigNumber(MathBN.sum(...grossComponents.map((part) => part.amount))), "gross_total") !== total) {
+    throw new Error("order_total_mismatch");
+  }
+  if (minor(payment.amount, "payment_amount") !== total) throw new Error("payment_amount_mismatch");
+  const grossById = allocateCents(grossComponents, total);
+  const shippingTotal = grossById.get("delivery")!;
+  const orderTaxTotal = minor(order.tax_total ?? 0, "order_tax_total");
+  const itemTaxes = items.map((item) => majorAmount(item.tax_total ?? 0, "line_tax"));
+  const rawShippingTax = order.shipping_tax_total ?? new BigNumber(MathBN.sub(
+    majorAmount(order.tax_total ?? 0, "order_tax_total"), ...itemTaxes,
+  ));
+  const taxById = allocateCents([
+    ...items.map((item, index) => ({
+      id: string(item.id, "line_id"), maximum: grossById.get(item.id)!, amount: itemTaxes[index],
+    })),
+    { id: "delivery", maximum: shippingTotal, amount: majorAmount(rawShippingTax, "shipping_tax") },
+  ], orderTaxTotal);
+
   const lines = items.map((item) => {
     const variant = record(item.variant);
     const metadata = record(variant.metadata);
     const sourceSkuId = string(metadata.source_sku_id, "source_sku_id");
     const quantity = Number(item.quantity);
     if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new Error("invalid_quantity");
-    const gross = minor(item.total ?? item.subtotal, "line_total");
-    const tax = minor(item.tax_total ?? 0, "line_tax");
+    const gross = grossById.get(string(item.id, "line_id"))!;
+    const tax = taxById.get(string(item.id, "line_id"))!;
     if (tax > gross) throw new Error("invalid_line_tax");
     const ex = gross - tax;
-    if (ex % quantity !== 0) throw new Error("line_discount_requires_unit_allocation");
+    const unitRemainder = ex % quantity;
     const itemPromise = record(item.metadata).fulfillment_promise;
     const linePromise = itemPromise && Object.keys(itemPromise).length ? itemPromise : undefined;
     return {
@@ -204,7 +266,8 @@ export function buildPayload(order: JsonRecord): PaidOrderPayload {
       sku: string(variant.sku, "sku"),
       title: string(item.title, "line_title"),
       quantity,
-      unit_ex_minor_zar: ex / quantity,
+      unit_ex_minor_zar: Math.floor(ex / quantity),
+      ...(unitRemainder ? { unit_ex_remainder_minor_zar: unitRemainder } : {}),
       ex_minor_zar: ex,
       vat_minor_zar: tax,
       total_minor_zar: gross,
@@ -217,15 +280,10 @@ export function buildPayload(order: JsonRecord): PaidOrderPayload {
     throw new Error("missing_made_to_order_line_promise");
   }
   const shippingMethods = Array.isArray(order.shipping_methods) ? order.shipping_methods as JsonRecord[] : [];
-  const shippingTotal = minor(order.shipping_total ?? 0, "shipping_total");
-  const lineTaxTotal = lines.reduce((total, line) => total + line.vat_minor_zar, 0);
-  const orderTaxTotal = minor(order.tax_total ?? 0, "order_tax_total");
-  const shippingTax = Math.max(0, orderTaxTotal - lineTaxTotal);
-  if (shippingTax > shippingTotal) throw new Error("invalid_shipping_tax");
+  const shippingTax = taxById.get("delivery")!;
   const deliveryEx = shippingTotal - shippingTax;
   const deliveryTotal = deliveryEx + shippingTax;
   const subtotalEx = lines.reduce((total, line) => total + line.ex_minor_zar, 0);
-  const total = minor(order.total, "order_total");
   const capturedAt = payment.captured_at || order.created_at;
   const recipient = [shippingAddress.first_name, shippingAddress.last_name]
     .filter((value) => typeof value === "string" && value.trim()).join(" ");
@@ -490,6 +548,37 @@ export async function deliverStorefrontOrderOutbox(
     return saveFailure(container, orderId, started, "ops_unavailable", true, now);
   }
   });
+}
+
+/** Staff-authorized retry retains the immutable payload and never steals an active lease. */
+export async function retryStorefrontOrderHandoff(container: MedusaContainer, orderId: string, replayImported = false): Promise<StorefrontHandoffOutbox | null> {
+  await withStorefrontOrderHandoffLock(container, orderId, async () => {
+    const order = await retrieveOrder(container, orderId);
+    if (!order || !record(order.metadata).storefront_confirmation_sha256) throw new Error("paid_order_recovery_missing");
+    const outbox = existingOutbox(order);
+    if (!outbox || (outbox.status === "imported" && !replayImported)) return;
+    if (outbox.status === "processing" && outbox.lease_until && Date.parse(outbox.lease_until) > Date.now()) {
+      throw new Error("handoff_recovery_lease_active");
+    }
+    if (!outbox.payload) return; // Existing snapshot reconstruction validates the retained paid facts.
+    await persistOutbox(container, order, { ...outbox, status: "pending", failure_code: null,
+      next_attempt_at: null, lease_until: null, updated_at: new Date().toISOString() });
+  });
+  // Deliver performs the real capacity commitment and operational import under
+  // inventory -> order locking, so release the previous order lock first.
+  const result = await deliverStorefrontOrderOutbox(container, orderId);
+  if (result?.status === "imported") {
+    await withStorefrontOrderHandoffLock(container, orderId, async () => {
+      const order = await retrieveOrder(container, orderId);
+      if (!order || existingOutbox(order)?.status !== "imported") return;
+      const metadata = record(order.metadata);
+      if (record(metadata.storefront_capacity_exception).status !== "paid_exception") return;
+      await container.resolve(Modules.ORDER).updateOrders([{ id: orderId, metadata: { ...metadata,
+        storefront_capacity_exception: { ...record(metadata.storefront_capacity_exception), status: "resolved", resolved_at: new Date().toISOString() },
+      } }]);
+    });
+  }
+  return result;
 }
 
 type LockingModule = {

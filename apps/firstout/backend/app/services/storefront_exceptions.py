@@ -14,6 +14,7 @@ from app.models.storefront_commerce_exception import (
     StorefrontCommerceException,
     StorefrontExceptionAlert,
     StorefrontExceptionAudit,
+    StorefrontExceptionCommand,
 )
 from app.models.user import User
 from app.permissions import SALES_ORDERS, SALES_REFUNDS
@@ -28,7 +29,7 @@ from app.schemas.storefront_exceptions import (
     StorefrontExceptionResponse,
 )
 from app.services.permissions import PermissionService
-from f0rge_core.exceptions import NotFoundError, ValidationError
+from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
 
 HANDOFF_AGED_SECONDS = 5 * 60
@@ -229,10 +230,39 @@ class StorefrontExceptionService:
                 raise ForbiddenError("Operational repair requires sales.orders")
             existing = await self.crud.audit_by_key(row.id, body.idempotency_key)
             if existing is not None:
+                if existing.reason != body.reason.strip():
+                    raise ConflictError("Repair identity was already used for another reason")
                 if existing.outcome == "needs_provider":
                     provider_required = True
                 else:
                     return await self.get_exception(row.id, staff_user_id)
+            elif row.source == "commerce" and row.status != "resolved":
+                pending = await self.crud.pending_command(row.id)
+                audit = await self.crud.add_audit(
+                    StorefrontExceptionAudit(
+                        exception_id=row.id,
+                        actor_user_id=staff_user_id,
+                        idempotency_key=body.idempotency_key,
+                        reason=body.reason.strip(),
+                        outcome="repair_requested",
+                        detail="Source worker repair queued"
+                        if pending is None
+                        else "Source worker repair already queued",
+                    )
+                )
+                if pending is None:
+                    await self.crud.add_command(
+                        StorefrontExceptionCommand(
+                            company_id=company_id,
+                            exception_id=row.id,
+                            audit_id=audit.id,
+                            action=row.safe_action,
+                            idempotency_key=body.idempotency_key,
+                            status="pending",
+                            created_at=datetime.datetime.utcnow(),
+                        )
+                    )
+                row.repair_pending = True
             elif financial and not row.provider_verified:
                 await self.crud.add_audit(
                     StorefrontExceptionAudit(
@@ -386,7 +416,8 @@ class StorefrontExceptionService:
             payment_reference=row.payment_reference if show_finance else None,
             provider_verified=row.provider_verified if show_finance else False,
             blocks_checkout=row.blocks_checkout,
-            can_repair=can_repair and row.status != "resolved",
+            can_repair=can_repair and row.status != "resolved" and not row.repair_pending,
+            repair_pending=row.repair_pending,
             detected_at=row.detected_at,
             resolved_at=row.resolved_at,
             repair_count=row.repair_count,

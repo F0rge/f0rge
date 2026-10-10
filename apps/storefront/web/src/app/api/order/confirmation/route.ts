@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  currentCartId,
+  currentOrderAccess,
   currentEmailOrderAccess,
-  currentOrderAccessToken,
   emailOrderAccessCookie,
   orderConfirmationResponse,
   signedEmailOrderAccess,
@@ -29,9 +28,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
       return reply(payload, status);
     }
-    const cartId = await currentCartId();
-    const token = cartId ? await currentOrderAccessToken(cartId) : null;
-    if (!cartId || !token) return reply({ message: "Order confirmation not found" }, 404);
+    const access = await currentOrderAccess();
+    if (!access) return reply({ message: "Order confirmation not found" }, 404);
+    const { cartId, token } = access;
     const { status, payload } = await orderConfirmationResponse(cartId, token);
     if (status >= 200 && status < 300) {
       void publishConfirmationOutcomes({ headers: request.headers, cartId, payload }).catch(() => undefined);

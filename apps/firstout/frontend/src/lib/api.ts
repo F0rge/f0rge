@@ -4109,6 +4109,7 @@ export type StorefrontException = {
   provider_verified: boolean;
   blocks_checkout: boolean;
   can_repair: boolean;
+  repair_pending: boolean;
   detected_at: string;
   resolved_at: string | null;
   repair_count: number;
