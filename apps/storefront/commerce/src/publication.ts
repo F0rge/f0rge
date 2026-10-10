@@ -37,6 +37,11 @@ function positive(value: unknown): boolean {
   return (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) &&
     Number.isFinite(Number(value)) && Number(value) > 0;
 }
+
+export function hasTaxInclusiveZarPrice(variant: Pick<PublicationVariant, "prices" | "metadata">): boolean {
+  return variant.metadata?.source_price_includes_tax === true &&
+    !!variant.prices?.some((price) => price.currency_code === "zar" && positive(price.amount));
+}
 function hasFiniteMadeToOrderOffer(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const offer = value as Record<string, unknown>;
@@ -82,8 +87,7 @@ export function publicationProblems(product: PublicationProduct, variant: Public
   const selected = new Map((variant.options || []).map((option) => [option.option?.title, option.value]));
   if (!optionKeys.size || selected.size !== optionKeys.size ||
       [...optionKeys].some((key) => !usefulText(selected.get(key), 1))) problems.push("variant options are incomplete");
-  if (!variant.prices?.some((price) => price.currency_code === "zar" && positive(Number(price.amount))) ||
-      variant.metadata?.source_price_includes_tax !== true) problems.push("tax-inclusive ZAR price is missing");
+  if (!hasTaxInclusiveZarPrice(variant)) problems.push("tax-inclusive ZAR price is missing");
   const gallery = new Set([...(product.images || []), ...(variant.images || [])].map((image) => image.url).filter(publicImage));
   const attested = suitableImageUrls(variant.metadata?.suitable_image_urls);
   if (attested?.length && !attested.every((url) => publicImage(url) && gallery.has(url))) {
