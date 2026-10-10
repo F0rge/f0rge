@@ -1,5 +1,6 @@
 import { loadEnv, defineConfig } from '@medusajs/framework/utils'
 import { assertHostedCommerceConfig } from './src/hosted-commerce-config'
+import { hostedLocalFileOptions } from './src/file-storage-url'
 import { testPaymentEnabled } from './src/test-payment-config'
 import { peachPaymentEnabled } from './src/peach-payment-config'
 
@@ -69,6 +70,17 @@ if (paymentProviders.length) {
     options: { providers: paymentProviders },
   })
 }
+
+modules.push({
+  resolve: "@medusajs/medusa/file",
+  options: {
+    providers: [{
+      resolve: "@medusajs/medusa/file-local",
+      id: "local",
+      options: hostedLocalFileOptions(process.env),
+    }],
+  },
+})
 
 module.exports = defineConfig({
   projectConfig: {
