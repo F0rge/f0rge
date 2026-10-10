@@ -1,5 +1,5 @@
 import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
-import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import {
   addShippingMethodToCartWorkflow,
   createPaymentCollectionForCartWorkflow,
@@ -54,7 +54,9 @@ function fixture(customerId: string | null) {
       fulfillment_type: "collection",
       confirmation_token: "x".repeat(43),
     },
-    scope: { resolve: (key: string) => key === ContainerRegistrationKeys.QUERY ? { graph } : undefined },
+    scope: { resolve: (key: string) => key === ContainerRegistrationKeys.QUERY ? { graph }
+      : key === Modules.LOCKING ? { execute: async (_key: string, operation: () => Promise<unknown>) => operation() }
+      : key === Modules.CART ? { retrieveCart: async () => cart, updateCarts: jest.fn(async (_id: string, input: Record<string, unknown>) => Object.assign(cart, input)) } : undefined },
   } as unknown as MedusaRequest;
   const response = {
     headers: {} as Record<string, string>,
