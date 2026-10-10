@@ -26,22 +26,30 @@ test("allows only a complete, published, channel-available variant", () => {
   expect(publicationProblems(product, variant, "sc_2")).toContain("product is not in the cart sales channel");
 });
 
-test("requires explicit suitable public images for the selected finish", () => {
-  expect(publicationProblems(product, { ...variant, metadata: { ...variant.metadata, suitable_image_urls: photos.slice(0, 2) } })).toContain(
-    "three public gallery photos attested for this variant are required",
+test("allows a catalogue product without photos and rejects an attested photo that is not public", () => {
+  const withoutPhotos = { ...(variant.metadata || {}) };
+  delete withoutPhotos.suitable_image_urls;
+  expect(publicationProblems(
+    { ...product, description: null, metadata: {}, images: [] },
+    { ...variant, material: null, length: null, width: null, height: null, images: [], metadata: withoutPhotos },
+    "sc_1",
+  )).toEqual([]);
+  expect(publicationProblems(product, { ...variant, metadata: { ...variant.metadata, suitable_image_urls: photos.slice(0, 2) } })).toEqual([]);
+  expect(publicationProblems(product, { ...variant, metadata: { ...variant.metadata, suitable_image_urls: ["https://images.example.com/not-in-the-gallery.jpg"] } })).toContain(
+    "attested gallery photos must be public images on this variant",
   );
   expect(publicationProblems(product, { ...variant, metadata: { ...variant.metadata, suitable_image_urls: [...photos.slice(0, 2), "https://private.example.com/charcoal.jpg"] } })).toContain(
-    "three public gallery photos attested for this variant are required",
+    "attested gallery photos must be public images on this variant",
   );
   expect(publicationProblems(product, { ...variant, metadata: { ...variant.metadata, suitable_image_urls: [...photos.slice(0, 2), "https://images.example.com/sand-3.jpg?token=secret"] } })).toContain(
-    "three public gallery photos attested for this variant are required",
+    "attested gallery photos must be public images on this variant",
   );
   for (const host of ["127.0.0.1", "10.0.0.1", "192.168.1.2", "foo.internal", "localhost", "[::1]"]) {
     const urls = [1, 2, 3].map((index) => `https://${host}/sand-${index}.jpg`);
     const privateGallery = { ...product, images: urls.map((url) => ({ url })) };
     const privateVariant = { ...variant, metadata: { ...variant.metadata, suitable_image_urls: urls } };
     expect(publicationProblems(privateGallery, privateVariant)).toContain(
-      "three public gallery photos attested for this variant are required",
+      "attested gallery photos must be public images on this variant",
     );
   }
 });
@@ -58,12 +66,12 @@ test("accepts local generated demo photos only with the explicit non-production 
     expect(publicationProblems(localProduct, localVariant)).toEqual([]);
     process.env.NODE_ENV = "production";
     expect(publicationProblems(localProduct, localVariant)).toContain(
-      "three public gallery photos attested for this variant are required",
+      "attested gallery photos must be public images on this variant",
     );
     process.env.NODE_ENV = "development";
     process.env.STOREFRONT_ALLOW_LOCAL_TEST_IMAGES = "false";
     expect(publicationProblems(localProduct, localVariant)).toContain(
-      "three public gallery photos attested for this variant are required",
+      "attested gallery photos must be public images on this variant",
     );
   } finally {
     if (oldFlag === undefined) delete process.env.STOREFRONT_ALLOW_LOCAL_TEST_IMAGES;
@@ -73,7 +81,7 @@ test("accepts local generated demo photos only with the explicit non-production 
   }
 });
 
-test("requires tax-inclusive price, dimensions, care, and availability or lead time", () => {
+test("requires a tax-inclusive price and stock or a finite made-to-order offer", () => {
   const noStock = { ...variant, metadata: { ...variant.metadata, source_available_quantity: 0 } };
   expect(publicationProblems(product, noStock)).toContain("stock or a positive lead time is required");
   expect(publicationProblems(product, { ...noStock, metadata: { ...noStock.metadata, lead_time_days: "21" } })).toContain("stock or a positive lead time is required");
@@ -84,8 +92,8 @@ test("requires tax-inclusive price, dimensions, care, and availability or lead t
     },
   } })).toEqual([]);
   expect(publicationProblems(product, { ...variant, metadata: { ...variant.metadata, source_price_includes_tax: false } })).toContain("tax-inclusive ZAR price is missing");
-  expect(publicationProblems(product, { ...variant, width: null })).toContain("dimensions or dimension unit are missing");
-  expect(publicationProblems({ ...product, metadata: {} }, variant)).toContain("material or care instructions are missing");
+  expect(publicationProblems(product, { ...variant, width: null, material: null })).toEqual([]);
+  expect(publicationProblems({ ...product, description: "Short oak tray.", metadata: {}, images: photos.map((url) => ({ url })) }, variant)).toEqual([]);
 });
 
 test("the Medusa query seam rejects a direct cart addition for an incomplete variant", async () => {
@@ -97,9 +105,9 @@ test("the Medusa query seam rejects a direct cart addition for an incomplete var
   }));
 });
 
-test("rejects an incomplete Firstout product created directly as published", async () => {
+test("rejects a published Firstout product with no price and no stock", async () => {
   const graph = jest.fn().mockResolvedValue({
-    data: [{ ...product, variants: [{ ...variant, length: null }] }],
+    data: [{ ...product, variants: [{ ...variant, prices: [], metadata: { ...variant.metadata, source_price_includes_tax: false, source_available_quantity: 0 } }] }],
   });
   const container = { resolve: () => ({ graph }) } as unknown as MedusaContainer;
   await expect(assertPublishedProductComplete(container, product.id)).rejects.toThrow("cannot be published");

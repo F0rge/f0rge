@@ -1,38 +1,44 @@
 # Firstout storefront publication
 
 The private Ops snapshot owns product-group membership, option values, source SKU
-identity, ZAR retail price, and available stock. Medusa owns product descriptions,
-images, collections, SEO, dimensions, materials, care instructions, and publication.
-The sync creates new products as drafts and updates only source-owned variant fields
-on later runs. A group has the stable handle `firstout-group-<group UUID>`.
+identity, ZAR retail price, and available stock. Medusa can also store a
+description, images, SEO, dimensions, materials, and care instructions when a
+merchant has them. Firstout's catalogue does not. The sync creates new products
+as drafts, then publishes every in-stock (or finite made-to-order) product into
+the **In stock** collection, handle `in-stock`. A product leaves that collection
+and returns to draft when it is no longer in the Ops feed or none of its variants
+has positive stock or a live made-to-order offer. Later sync runs update
+source-owned variant fields. A group has the stable handle
+`firstout-group-<group UUID>`.
 
-Before publishing a Firstout product in Medusa Admin, complete every variant:
+What the shop requires before a Firstout product is published:
 
-- Give the product a useful description (at least 80 characters).
-- Set a material on the product or variant.
-- Set positive length, width, and height on the product or variant, and set product
-  metadata `dimension_unit` to `cm` or `mm`.
-- Set product metadata `care_instructions` to useful care text (at least 15 characters).
-- Production publication requires at least three distinct public HTTPS photos
-  suitable for each finish.
-  For **each variant**, set metadata `suitable_image_urls` to a JSON array of at
-  least three photo URLs from that product's or variant's Medusa gallery (a JSON
-  array entered as text in Admin is accepted). This is the
-  merchant's explicit suitability attestation; a shared gallery does not
-  automatically count for every finish. Private hosts and signed/query-string
-  URLs are rejected. Local generated demo photos are accepted only outside
-  production with `STOREFRONT_ALLOW_LOCAL_TEST_IMAGES=true`, and only from
-  `http://127.0.0.1:3004/demo/`.
-- Ensure the Ops retail price is positive and tax inclusive. The bootstrap marks
-  ZAR store currency and South Africa region tax inclusive.
-- Ensure the Ops stock is positive, or set variant metadata `lead_time_days` to a
-  positive number for made-to-order items (numeric text in Admin is accepted).
+- A title, SKU, and source SKU id.
+- Complete option values projected from Ops.
+- A positive tax-inclusive ZAR price. The bootstrap marks ZAR store currency and
+  the South Africa region tax inclusive.
+- Positive Ops stock, or a finite made-to-order offer with remaining capacity and
+  a lead-time window.
 
-Each variant must have the source SKU identity and complete option values projected
-from Ops. The publication workflow rejects incomplete products. The add-to-cart and
-complete-cart workflow hooks recheck the selected variant and its sales channel, so
-calling Medusa's Store API directly does not bypass the gate.
+What the shop does not require, because Firstout does not store it:
+
+- A long description. A short description is shown when one exists.
+- A material, care instructions, or dimensions.
+- Photos. The product card uses a placeholder when the gallery is empty.
+
+If a merchant attests photos, set variant metadata `suitable_image_urls` to a
+JSON array of URLs from that product's or variant's Medusa gallery (a JSON array
+entered as text in Admin is accepted). There is no minimum count. Private hosts
+and signed/query-string URLs are rejected. Local generated demo photos are
+accepted only outside production with `STOREFRONT_ALLOW_LOCAL_TEST_IMAGES=true`,
+and only from `http://127.0.0.1:3004/demo/`.
+
+The publication workflow rejects a product that fails the required checks above.
+The add-to-cart and complete-cart workflow hooks recheck the selected variant
+and its sales channel, so calling Medusa's Store API directly does not bypass
+the gate.
 
 If option **names** change after a group is projected, sync stops and requires a
-manual Medusa option migration. Option values and SKU membership can change;
-membership changes return an already published product to draft for review.
+manual Medusa option migration. Option values and SKU membership can change. A
+group stays published only while every variant still has stock or a live
+made-to-order offer.

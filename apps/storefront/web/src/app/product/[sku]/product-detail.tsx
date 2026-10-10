@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { MedusaVariant, StoreProduct } from "@/lib/medusa";
 import { useProductAttention } from "@/components/analytics/use-product-attention";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
+import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
 
 function formatPrice(variant?: MedusaVariant): string {
   const amount = variant?.calculated_price?.calculated_amount;
@@ -38,6 +39,8 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [bagMessage, setBagMessage] = useState("");
+  const [bagFailed, setBagFailed] = useState(false);
+  const feedbackRef = useRef<HTMLParagraphElement>(null);
   const image = activeImage && gallery.includes(activeImage) ? activeImage : gallery[0];
   const imagePosition = image ? gallery.indexOf(image) + 1 : 0;
   const quantity = variant?.inventory_quantity ?? 0;
@@ -57,6 +60,9 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const dimensions = [variant?.length ?? product.length, variant?.width ?? product.width, variant?.height ?? product.height];
   const hasDimensions = dimensions.every((value) => value != null && value > 0);
   const care = variant?.metadata?.care_instructions || product.metadata?.care_instructions;
+  const description = customerFacingCopy(product.description);
+  const feedback = bagMessage ? purchaseFeedback(bagMessage, bagFailed) : null;
+  useEffect(() => { if (bagMessage) feedbackRef.current?.focus(); }, [bagMessage]);
   useEffect(() => {
     if (choice === "accepted") capture({ name: "storefront_product_viewed", properties: { product_id: product.id } });
   }, [capture, choice, product.id]);
@@ -65,7 +71,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
     <div ref={attentionRef} className="product-attention-region" aria-hidden="true" />
     <div className="product-page">
     <div className="gallery">
-      <div className="product-image hero-study">{image ? <img src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} /> : <span aria-hidden="true">Object study</span>}</div>
+      <div className="product-image hero-study">{image ? <img src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} width={800} height={1000} fetchPriority="high" /> : <span aria-hidden="true">Object study</span>}</div>
       <p className="sr-only" aria-live="polite">{imagePosition ? `Image ${imagePosition} of ${gallery.length} for ${product.title}` : `No image for ${product.title}`}</p>
       {gallery.length > 1 && <div className="gallery-thumbnails" aria-label="Product images">{gallery.map((url, index) => <button key={url} type="button" className={url === image ? "active" : ""} onClick={() => {
         setActiveImage(url);
@@ -76,7 +82,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
       <Link href="/shop" className="back-link">← All pieces</Link>
       <p className="eyebrow">The Collector / furniture</p>
       <h1>{product.title}</h1>
-      <p>{product.description || "A considered addition to your living space."}</p>
+      {description && <p>{description}</p>}
       {options.length > 0 && <div className="variant-options">{options.map((option) => {
         const values = option.values?.map(({ value }) => value) || Array.from(new Set(product.variants.flatMap((candidate) => candidate.options?.filter((item) => (item.option_id || item.option?.id) === option.id).map((item) => item.value) || [])));
         return <div key={option.id}><label htmlFor={`option-${option.id}`}>{option.title}</label><select id={`option-${option.id}`} value={choices[option.id] || ""} onChange={(event) => {
@@ -105,7 +111,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
       </dl>}
       <button className="add-to-bag" type="button" disabled={!variant || !variant.calculated_price || (quantity < 1 && !offerAvailable) || adding} onClick={async () => {
         if (!variant) return;
-        setAdding(true); setBagMessage("");
+        setAdding(true); setBagMessage(""); setBagFailed(false);
         try {
           const response = await fetch("/api/bag", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ variant_id: variant.id, quantity: 1 }) });
           const result = await response.json();
@@ -115,11 +121,15 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
             name: "storefront_cart_item_added",
             properties: { variant_id: variant.id, product_id: product.id, quantity: 1, value_minor: valueMinor },
           });
+          setBagFailed(false);
           setBagMessage("Added to bag. Review your bag when ready.");
-        } catch (error) { setBagMessage(error instanceof Error ? error.message : "Could not add this piece"); }
+        } catch (error) {
+          setBagFailed(true);
+          setBagMessage(error instanceof Error ? error.message : "Could not add this piece");
+        }
         finally { setAdding(false); }
       }}>{adding ? "Adding…" : "Add to bag"}</button>
-      {bagMessage && <p role="status" className="bag-feedback">{bagMessage} <Link href="/bag">View bag</Link></p>}
+      {feedback && <p ref={feedbackRef} role={feedback.role} tabIndex={feedback.tabIndex} className="bag-feedback">{feedback.message}{!bagFailed && <> <Link href="/bag">View bag</Link></>}</p>}
     </div>
     </div>
   </article>;

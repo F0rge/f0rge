@@ -12,8 +12,8 @@ export default async function HomePage() {
   return <>
     <section className="hero">
       <div className="hero-heading"><p className="eyebrow">The Collector · considered interiors</p><h1>Objects for a <em>life in colour.</em></h1><Link className="text-link light" href="/shop">Explore the collection <span aria-hidden="true">↗</span></Link></div>
-      <div className="hero-grid">{featured.map((product) => <ProductCard key={product.id} product={product} hero />)}</div>
-      {featured.length === 0 && <p className="hero-empty">Our collection is taking shape. Explore again soon.</p>}
+      <div className="hero-grid">{featured.map((product, index) => <ProductCard key={product.id} product={product} hero priority={index === 0} />)}</div>
+      {featured.length === 0 && <p className="hero-empty">No pieces are published yet.</p>}
       <div className="hero-footer"><span>Furniture selected for everyday living</span><span>{products.length} {products.length === 1 ? "piece" : "pieces"}</span></div>
     </section>
     <section className="content home-intro"><p className="eyebrow">An edited point of view</p><h2>Pieces to keep close.</h2><p>Explore furniture that brings warmth, shape and character to a room.</p><Link href="/shop" className="text-link">Shop all pieces <span aria-hidden="true">↗</span></Link></section>

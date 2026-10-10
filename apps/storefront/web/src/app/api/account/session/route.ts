@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { currentCartId, medusaResponse, cartCookie, orderAccessCookie, signedCart } from "@/lib/bag-server";
+import { currentCartId, medusaResponse, cartCookie, signedCart } from "@/lib/bag-server";
 import { CustomerAuthError, getCustomerContext } from "@/lib/customer-auth";
 import { isSameOrigin } from "@/lib/same-origin";
 
@@ -28,7 +28,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           cart_attached: false,
         });
         response.cookies.set(cartCookie, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 });
-        response.cookies.set(orderAccessCookie, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 });
         return response;
       }
       if (!cartAttached) return privateReply({ message: "Your bag could not be linked to this account" }, 503);

@@ -52,6 +52,8 @@ from app.models.storefront_commerce_exception import (
     StorefrontCommerceException,
     StorefrontExceptionAlert,
     StorefrontExceptionAudit,
+    StorefrontExceptionCommand,
+    StorefrontExceptionProjection,
 )
 from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, PickStatus
 from app.models.price_list import PriceList, PriceListItem
@@ -167,6 +169,8 @@ __all__ = [
     "StorefrontCommerceException",
     "StorefrontExceptionAlert",
     "StorefrontExceptionAudit",
+    "StorefrontExceptionCommand",
+    "StorefrontExceptionProjection",
     "Payment",
     "PaymentDirection",
     "Pick",

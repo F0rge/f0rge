@@ -1,4 +1,4 @@
-import { allowsFiniteBackorder, groupOpsProducts } from "./sync-firstout";
+import { allowsFiniteBackorder, catalogueExternalIds, groupOpsProducts, isCatalogueRow } from "./sync-firstout";
 import type { OpsProduct } from "./ops-contract";
 
 const base: OpsProduct = {
@@ -19,6 +19,28 @@ test("projects two SKUs into one stable group identity, retaining standalone ide
   expect(groups[0].externalId).toBe("firstout-group-f6c64903-48ad-4202-a918-7903a40020ce");
   expect(groups[0].rows.map((row) => row.sku)).toEqual(["ARC-SAND", "ARC-CHAR"]);
   expect(groups[1].externalId).toBe("firstout-627a41f1-9892-4bbc-bcfb-b4149474235d");
+});
+
+test("the shop collection keeps in-stock rows and a live made-to-order offer, and drops an empty group", () => {
+  const offer = {
+    id: "46ce043c-b680-4b87-8833-4d169ddad492",
+    capacity: 2,
+    min_lead_time_days: 21,
+    max_lead_time_days: 28,
+    expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+  };
+  const expired = { ...offer, expires_at: new Date(Date.now() - 1_000).toISOString() };
+  const stocked = { ...base, product_group_id: null, product_title: null, options: {}, sku: "SIDE-1", source_sku_id: "627a41f1-9892-4bbc-bcfb-b4149474235d" };
+  const madeToOrder = { ...stocked, source_sku_id: "da9cdb14-9126-408d-a3bd-ab8352d2d810", sku: "SIDE-2", available_quantity: 0, made_to_order_offer: offer };
+  const empty = { ...stocked, source_sku_id: "11111111-1111-4111-8111-111111111111", sku: "SIDE-0", available_quantity: 0, made_to_order_offer: expired };
+  const mixedOut = { ...base, source_sku_id: "22222222-2222-4222-8222-222222222222", sku: "ARC-OUT", available_quantity: 0, made_to_order_offer: null };
+  expect(isCatalogueRow(stocked)).toBe(true);
+  expect(isCatalogueRow(madeToOrder)).toBe(true);
+  expect(isCatalogueRow(empty)).toBe(false);
+  expect(catalogueExternalIds([stocked, madeToOrder, empty, base, mixedOut])).toEqual([
+    `firstout-${stocked.source_sku_id}`,
+    `firstout-${madeToOrder.source_sku_id}`,
+  ]);
 });
 
 test("Medusa backorder is available only while a finite source offer is live", () => {

@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.crud.customer import CustomerCRUD
 from app.crud.location import LocationCRUD
+from app.crud.ops_commerce_orders import OpsCommerceOrdersCRUD
 from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sales_order import SalesOrderCRUD
 from app.crud.sku import SkuCRUD
@@ -30,6 +31,7 @@ from app.models.sales_order import (
 )
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.models.unit_cost_audit import UnitCostAuditSource
+from app.schemas.ops_commerce_order import StorefrontPaidOrder
 from app.schemas.page import Page, PageParams
 from app.schemas.quote import QuoteAccept
 from app.schemas.sales_order import (
@@ -296,12 +298,50 @@ class SalesOrdersService:
             )
             line.held_qty = 0
 
+    async def _storefront_tax_snapshot(
+        self, order: SalesOrder
+    ) -> Optional[list[tuple[Decimal, Decimal, Decimal]]]:
+        handoff = await OpsCommerceOrdersCRUD(self.db).get_by_sales_order(order.id)
+        if handoff is None:
+            return None
+        paid_order = StorefrontPaidOrder.model_validate(handoff.payload)
+        by_identity = {
+            f"Storefront line {line.external_line_id}": line for line in paid_order.lines
+        }
+        if len(order.lines) != len(by_identity) or {line.notes for line in order.lines} != set(
+            by_identity
+        ):
+            raise ConflictError("Storefront order lines no longer match the paid snapshot")
+        snapshot: list[tuple[Decimal, Decimal, Decimal]] = []
+        for line in order.lines:
+            paid_line = by_identity[line.notes]
+            if (
+                line.sku_id != paid_line.source_sku_id
+                or line.qty != paid_line.quantity
+                or line.unit_ex_vat != Decimal(paid_line.unit_ex_minor_zar) / 100
+            ):
+                raise ConflictError("Storefront order lines no longer match the paid snapshot")
+            snapshot.append(
+                (
+                    Decimal(paid_line.ex_minor_zar) / 100,
+                    Decimal(paid_line.vat_minor_zar) / 100,
+                    Decimal(paid_line.total_minor_zar) / 100,
+                )
+            )
+        snapshot.append(
+            (
+                Decimal(paid_order.totals.delivery_ex_minor_zar) / 100,
+                Decimal(paid_order.totals.delivery_tax_minor_zar) / 100,
+                Decimal(paid_order.totals.delivery_total_minor_zar) / 100,
+            )
+        )
+        return snapshot
+
     async def create_remainder_invoice(
         self,
         sales_order_id: uuid.UUID,
         user_id: uuid.UUID,
         *,
-        tax_snapshot: Optional[list[tuple[Decimal, Decimal, Decimal]]] = None,
         stock_source: UnitCostAuditSource = UnitCostAuditSource.SALES_ORDER,
         before_commit: Optional[Callable[[], Awaitable[None]]] = None,
     ) -> SalesOrderResponse:
@@ -320,6 +360,9 @@ class SalesOrdersService:
         )
         if unresolved_storefront_refund_id is not None:
             raise ConflictError("Resolve the Storefront refund before invoicing the sales order")
+        tax_snapshot = await self._storefront_tax_snapshot(order)
+        if tax_snapshot is not None:
+            stock_source = UnitCostAuditSource.STOREFRONT
         issue_date = datetime.date.today()
         await assert_date_postable(self.db, issue_date)
 

@@ -84,16 +84,10 @@ export function publicationProblems(product: PublicationProduct, variant: Public
       [...optionKeys].some((key) => !usefulText(selected.get(key), 1))) problems.push("variant options are incomplete");
   if (!variant.prices?.some((price) => price.currency_code === "zar" && positive(Number(price.amount))) ||
       variant.metadata?.source_price_includes_tax !== true) problems.push("tax-inclusive ZAR price is missing");
-  if (![variant.length ?? product.length, variant.width ?? product.width, variant.height ?? product.height].every(positive) ||
-      !["cm", "mm"].includes(String(product.metadata?.dimension_unit || ""))) problems.push("dimensions or dimension unit are missing");
-  if (!usefulText(variant.material || product.material, 2) ||
-      !usefulText(product.metadata?.care_instructions, 15)) problems.push("material or care instructions are missing");
-  if (!usefulText(product.description, 80)) problems.push("product description is too short");
   const gallery = new Set([...(product.images || []), ...(variant.images || [])].map((image) => image.url).filter(publicImage));
   const attested = suitableImageUrls(variant.metadata?.suitable_image_urls);
-  if (!attested || new Set(attested).size < 3 ||
-      !attested.every((url) => publicImage(url) && gallery.has(url))) {
-    problems.push("three public gallery photos attested for this variant are required");
+  if (attested?.length && !attested.every((url) => publicImage(url) && gallery.has(url))) {
+    problems.push("attested gallery photos must be public images on this variant");
   }
   if (!positive(variant.metadata?.source_available_quantity) &&
       !hasFiniteMadeToOrderOffer(variant.metadata?.storefront_made_to_order_offer)) {
