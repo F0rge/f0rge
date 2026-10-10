@@ -58,7 +58,7 @@ if (enabled) {
         if (url.endsWith("/exceptions/commands")) return new Response(JSON.stringify({ items: pending }));
         if (url.endsWith("/result")) {
           results.push(JSON.parse(String(init?.body)));
-          return new Response(JSON.stringify({ outcome: results.at(-1)?.outcome }));
+          return new Response(JSON.stringify({ outcome: results[results.length - 1]?.outcome }));
         }
         if (url.endsWith("/orders/status")) {
           const ids: string[] = JSON.parse(String(init?.body)).external_order_ids;
@@ -153,8 +153,8 @@ if (enabled) {
         expect(results).toEqual([{ outcome: "repaired", detail: "fresh_complete_scan_confirms_source_convergence" }]);
         const remaining = await inventory.listReservationItems({ id: [activeHoldId, paidReservationId] });
         expect(remaining).toHaveLength(2);
-        expect(calls.at(-2)).toContain("/exceptions/observations");
-        expect(calls.at(-1)).toContain("/result");
+        expect(calls[calls.length - 2]).toContain("/exceptions/observations");
+        expect(calls[calls.length - 1]).toContain("/result");
         const products = container.resolve<IProductModuleService>(Modules.PRODUCT);
         const active = await products.retrieveProductVariant(variantId);
         await products.updateProductVariants(variantId, { metadata: { ...active.metadata, source_observed_at: new Date().toISOString(),
