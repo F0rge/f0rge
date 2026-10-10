@@ -1,4 +1,4 @@
-import type { MedusaContainer } from "@medusajs/framework/types";
+import type { IInventoryService, MedusaContainer, ReservationItemDTO } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, MedusaError, Modules, ProductStatus } from "@medusajs/framework/utils";
 import { reconcileStorefrontHandoffs } from "./storefront-order-handoff";
 import { recordOpsCheckoutHealth, refreshOpsCheckoutHealth } from "./storefront-commerce-exceptions";
@@ -79,7 +79,57 @@ async function fetchOpsProducts(): Promise<OpsProduct[]> {
   return parseOpsProducts(await response.json(), companyId).products;
 }
 
-async function writeStock(container: MedusaContainer, variantId: string, locationId: string, quantity: number) {
+type PaidReservationOrder = {
+  metadata?: Record<string, unknown> | null;
+  items?: { id: string }[];
+  payment_collections?: { payments?: { captured_at?: string | Date | null }[] }[];
+};
+
+async function paidOrderReservedQuantity(container: MedusaContainer, inventoryItemId: string, locationId: string): Promise<number> {
+  const inventory = container.resolve<IInventoryService>(Modules.INVENTORY);
+  const reservations: ReservationItemDTO[] = [];
+  const pageSize = 500;
+  for (let skip = 0; ; skip += pageSize) {
+    const page = await inventory.listReservationItems({ inventory_item_id: inventoryItemId, location_id: locationId }, { skip, take: pageSize });
+    reservations.push(...page);
+    if (page.length < pageSize) break;
+  }
+  const orderReservations = reservations.filter((row) => row.line_item_id && !row.created_by?.startsWith("storefront_hold:"));
+  if (!orderReservations.length) return 0;
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const relevantOrderIds = new Set<string>();
+  for (let skip = 0; ; skip += pageSize) {
+    const { data: orderItems } = await query.graph({
+      entity: "order_item", fields: ["item_id", "order_id"],
+      filters: { item_id: orderReservations.map((row) => row.line_item_id!) },
+      pagination: { skip, take: pageSize },
+    });
+    for (const item of orderItems) {
+      // Medusa returns the selected native FK although its generated OrderItem
+      // type omits it. Validate the wire field rather than guessing ownership.
+      const orderId: unknown = Reflect.get(item, "order_id");
+      if (typeof orderId !== "string" || !orderId) {
+        throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Native reservation order mapping is missing");
+      }
+      relevantOrderIds.add(orderId);
+    }
+    if (orderItems.length < pageSize) break;
+  }
+  const orderIds = [...relevantOrderIds];
+  if (!orderIds.length) return 0;
+  const { data: orders } = await query.graph({
+    entity: "order", fields: ["id", "metadata", "items.id", "payment_collections.payments.captured_at"],
+    filters: { id: orderIds }, pagination: { take: orderIds.length },
+  });
+  const paidLines = new Set((orders as PaidReservationOrder[])
+    .filter((order) => order.metadata?.storefront_confirmation_sha256 &&
+      order.payment_collections?.some((collection) => collection.payments?.some((payment) => payment.captured_at)))
+    .flatMap((order) => (order.items || []).map((item) => item.id)));
+  return orderReservations.filter((row) => paidLines.has(row.line_item_id!))
+    .reduce((quantity, row) => quantity + Number(row.quantity), 0);
+}
+
+export async function writeStock(container: MedusaContainer, variantId: string, locationId: string, quantity: number) {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
   const { data: variants } = await query.graph({
     entity: "product_variant", fields: ["id", "inventory_items.inventory_item_id"], filters: { id: variantId },
@@ -90,13 +140,19 @@ async function writeStock(container: MedusaContainer, variantId: string, locatio
     entity: "inventory_level", fields: ["id", "inventory_item_id", "location_id", "stocked_quantity"],
     filters: { inventory_item_id: itemId, location_id: locationId },
   });
+  // Ops availability (less unacknowledged paid commitments) already excludes
+  // these sold units. Native reservations must remain for fulfillment, so add
+  // them to stocked quantity and let Medusa subtract them exactly once. Active
+  // cart holds and reservations outside captured Storefront orders still reduce
+  // sellable stock normally.
+  const stockedQuantity = quantity + await paidOrderReservedQuantity(container, itemId, locationId);
   if (levels.length) {
     await updateInventoryLevelsWorkflow(container).run({ input: { updates: [{
-      id: levels[0].id, inventory_item_id: itemId, location_id: locationId, stocked_quantity: quantity,
+      id: levels[0].id, inventory_item_id: itemId, location_id: locationId, stocked_quantity: stockedQuantity,
     }] } });
   } else {
     await createInventoryLevelsWorkflow(container).run({ input: { inventory_levels: [{
-      inventory_item_id: itemId, location_id: locationId, stocked_quantity: quantity,
+      inventory_item_id: itemId, location_id: locationId, stocked_quantity: stockedQuantity,
     }] } });
   }
 }
@@ -248,13 +304,15 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
       const remainingPending = pending.filter((item) => !acknowledged.has(item.commitment_id));
       const commitmentsChanged = remainingPending.length !== pending.length;
       const projectionChanged = variant.metadata?.source_projected_quantity !== projected || commitmentsChanged;
+      // Reservation consumption/cancellation can change independently of the
+      // source revision. Rebase stock on every accepted projection.
+      await writeStock(container, variant.id, locations[0].id, projected);
       if (!optionsChanged && !revisionChanged && !observationChanged && !projectionChanged && !capacityChanged && !backorderChanged) continue;
       await updateProductVariantsWorkflow(container).run({ input: { product_variants: [{
         id: variant.id, allow_backorder: allowBackorder, ...(revisionChanged ? { sku: row.sku, prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }] } : {}),
         ...(optionsChanged ? { options: nextOptions, title: variantTitle(row) } : {}),
         metadata: { ...variant.metadata, source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: projected, pending_paid_commitments: remainingPending, source_price_includes_tax: true, ...nextCapacityMetadata },
       }] } });
-      if (revisionChanged || projectionChanged) await writeStock(container, variant.id, locations[0].id, projected);
     }
   }
 
