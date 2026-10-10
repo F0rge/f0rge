@@ -1,4 +1,4 @@
-import { allowsFiniteBackorder, catalogueExternalIds, groupOpsProducts, isCatalogueRow } from "./sync-firstout";
+import { allowsFiniteBackorder, catalogueExternalIds, groupOpsProducts, isCatalogueRow, missingTaxInclusiveZarPrice } from "./sync-firstout";
 import type { OpsProduct } from "./ops-contract";
 
 const base: OpsProduct = {
@@ -41,6 +41,16 @@ test("the shop collection keeps in-stock rows and a live made-to-order offer, an
     `firstout-${stocked.source_sku_id}`,
     `firstout-${madeToOrder.source_sku_id}`,
   ]);
+});
+
+test("a missing tax-inclusive ZAR price is the only publication rejection the sync continues past", () => {
+  const price = new Error("Variant variant_01M48YWEX49XJCTR3EWVMNVM88 cannot be published: tax-inclusive ZAR price is missing");
+  const wrapped = new Error("wrapped");
+  Reflect.set(wrapped, "cause", price);
+  expect(missingTaxInclusiveZarPrice(price)).toBe(true);
+  expect(missingTaxInclusiveZarPrice(wrapped)).toBe(true);
+  expect(missingTaxInclusiveZarPrice(new Error("Variant variant_x cannot be published: stock or a positive lead time is required"))).toBe(false);
+  expect(missingTaxInclusiveZarPrice(new Error("connection reset"))).toBe(false);
 });
 
 test("Medusa backorder is available only while a finite source offer is live", () => {
