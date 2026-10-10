@@ -4,7 +4,7 @@ import { reconcileStorefrontHandoffs } from "./storefront-order-handoff";
 import { recordOpsCheckoutHealth, refreshOpsCheckoutHealth } from "./storefront-commerce-exceptions";
 import { CAPACITY_STATE_METADATA_KEY, mergeCapacityState, offerPresentation } from "./made-to-order-capacity";
 import {
-  createInventoryLevelsWorkflow, createProductsWorkflow, createProductVariantsWorkflow,
+  createCollectionsWorkflow, createInventoryLevelsWorkflow, createProductsWorkflow, createProductVariantsWorkflow,
   deleteProductVariantsWorkflow, updateInventoryLevelsWorkflow, updateProductVariantsWorkflow,
   updateProductsWorkflow,
 } from "@medusajs/medusa/core-flows";
@@ -22,6 +22,8 @@ type CommerceProduct = {
 type VariantInventory = { inventory_items?: { inventory_item_id: string }[] };
 type SourceGroup = { externalId: string; title: string; rows: OpsProduct[]; grouped: boolean };
 const SOURCE_PREFIX = "firstout-";
+export const CATALOGUE_COLLECTION_HANDLE = "in-stock";
+export const CATALOGUE_COLLECTION_TITLE = "In stock";
 
 function syncedCapacityMetadata(row: OpsProduct, metadata: Record<string, unknown> | null) {
   const state = mergeCapacityState(metadata, row.made_to_order_offer, row.revision);
@@ -39,6 +41,10 @@ export function allowsFiniteBackorder(row: OpsProduct): boolean {
   return !!row.made_to_order_offer && Date.parse(row.made_to_order_offer.expires_at) > Date.now();
 }
 
+export function isCatalogueRow(row: OpsProduct): boolean {
+  return row.available_quantity > 0 || allowsFiniteBackorder(row);
+}
+
 export function groupOpsProducts(source: OpsProduct[]): SourceGroup[] {
   const groups = new Map<string, SourceGroup>();
   for (const row of source) {
@@ -49,6 +55,12 @@ export function groupOpsProducts(source: OpsProduct[]): SourceGroup[] {
     else groups.set(externalId, { externalId, title: row.product_title || row.name, rows: [row], grouped });
   }
   return [...groups.values()];
+}
+
+export function catalogueExternalIds(source: OpsProduct[]): string[] {
+  return groupOpsProducts(source)
+    .filter((group) => group.rows.length > 0 && group.rows.every(isCatalogueRow))
+    .map((group) => group.externalId);
 }
 
 function variantTitle(row: OpsProduct): string {
@@ -98,6 +110,57 @@ async function writeStock(container: MedusaContainer, variantId: string, locatio
     await createInventoryLevelsWorkflow(container).run({ input: { inventory_levels: [{
       inventory_item_id: itemId, location_id: locationId, stocked_quantity: quantity,
     }] } });
+  }
+}
+
+type CatalogueProduct = {
+  id: string; external_id: string | null; status: string; collection_id?: string | null;
+};
+
+async function catalogueCollectionId(container: MedusaContainer): Promise<string> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const { data } = await query.graph({ entity: "product_collection", fields: ["id", "handle"] });
+  const existing = (data as { id?: string; handle?: string }[]).find((item) => item.handle === CATALOGUE_COLLECTION_HANDLE)?.id;
+  if (existing) return existing;
+  const { result } = await createCollectionsWorkflow(container).run({
+    input: { collections: [{ title: CATALOGUE_COLLECTION_TITLE, handle: CATALOGUE_COLLECTION_HANDLE }] },
+  });
+  const created = (Array.isArray(result) ? result : []) as { id?: string }[];
+  const id = created[0]?.id;
+  if (!id) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Medusa did not create the In stock collection");
+  return id;
+}
+
+async function setCatalogueMembership(
+  container: MedusaContainer, ids: string[], update: { status: ProductStatus; collection_id: string | null },
+) {
+  for (let index = 0; index < ids.length; index += 20) {
+    await updateProductsWorkflow(container).run({
+      input: { selector: { id: ids.slice(index, index + 20) }, update },
+    });
+  }
+}
+
+async function publishCatalogue(container: MedusaContainer, readyIds: Set<string>) {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY);
+  const { data } = await query.graph({
+    entity: "product", fields: ["id", "external_id", "status", "collection_id"],
+  });
+  const products = (data as CatalogueProduct[]).filter((product) => product.external_id?.startsWith(SOURCE_PREFIX));
+  const wanted = products.filter((product) => readyIds.has(product.external_id || ""));
+  const collectionId = wanted.length ? await catalogueCollectionId(container) : null;
+  const publish = wanted
+    .filter((product) => product.status !== ProductStatus.PUBLISHED || product.collection_id !== collectionId)
+    .map((product) => product.id);
+  const withdraw = products
+    .filter((product) => !readyIds.has(product.external_id || "") &&
+      (product.status !== ProductStatus.DRAFT || !!product.collection_id))
+    .map((product) => product.id);
+  if (publish.length && collectionId) {
+    await setCatalogueMembership(container, publish, { status: ProductStatus.PUBLISHED, collection_id: collectionId });
+  }
+  if (withdraw.length) {
+    await setCatalogueMembership(container, withdraw, { status: ProductStatus.DRAFT, collection_id: null });
   }
 }
 
@@ -258,12 +321,5 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
     }
   }
 
-  const liveIds = new Set(groups.map((group) => group.externalId));
-  for (const product of existing) {
-    if (!liveIds.has(product.external_id!) && product.status !== ProductStatus.DRAFT) {
-      await updateProductsWorkflow(container).run({ input: {
-        selector: { id: product.id }, update: { status: ProductStatus.DRAFT },
-      } });
-    }
-  }
+  await publishCatalogue(container, new Set(catalogueExternalIds(sourceProducts)));
 }
