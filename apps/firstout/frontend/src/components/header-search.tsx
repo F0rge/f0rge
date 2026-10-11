@@ -79,7 +79,7 @@ export function HeaderSearch({ className }: HeaderSearchProps) {
   }
 
   return (
-    <div ref={rootRef} className={className ?? "firstout-header-search"}>
+    <div ref={rootRef} className={className ?? "firstout-header-search"} data-tour="header-search">
       <Search
         size="sm"
         labelText="Search SKUs, POs, invoices"
