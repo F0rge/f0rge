@@ -1,4 +1,5 @@
 import "server-only";
+import { roomCollectionHandles } from "./catalogue-collections";
 
 type MedusaRegion = { id: string; currency_code: string };
 export type MedusaImage = { id: string; url: string };
@@ -56,6 +57,7 @@ export type StoreProduct = {
     dimension_unit?: "cm" | "mm";
     seo_title?: string;
     seo_description?: string;
+    storefront_room_collections?: string[];
   } | null;
   material?: string | null;
   length?: number | null;
@@ -103,6 +105,7 @@ function publicProduct(product: StoreProduct): StoreProduct {
       dimension_unit: product.metadata?.dimension_unit,
       seo_title: product.metadata?.seo_title,
       seo_description: product.metadata?.seo_description,
+      storefront_room_collections: roomCollectionHandles(product.metadata?.storefront_room_collections),
     },
     categories: (product.categories || []).map(({ id, name, handle }) => ({ id, name, handle })),
     collection: product.collection ? { id: product.collection.id, title: product.collection.title, handle: product.collection.handle } : null,
