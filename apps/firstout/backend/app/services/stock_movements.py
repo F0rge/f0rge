@@ -127,7 +127,11 @@ class StockMovementService:
         bin_id: Optional[uuid.UUID] = None,
         record_audit: bool = True,
     ) -> LocationStock:
-        loc_stock = await self.location_stock_crud.get_by_sku_and_location(sku_id, location_id)
+        loc_stock = await self.location_stock_crud.get_by_sku_and_location(
+            sku_id,
+            location_id,
+            for_update=True,
+        )
         if loc_stock is None or loc_stock.on_hand < qty:
             raise ConflictError("Insufficient on-hand quantity")
         old_cost = loc_stock.unit_cost_zar
