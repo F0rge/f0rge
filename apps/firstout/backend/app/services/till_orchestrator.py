@@ -223,6 +223,13 @@ class TillOrchestrator:
         if subtotal <= 0:
             raise ValidationError("Sale total must be positive")
 
+        if (
+            data.tender == "cash"
+            and data.amount_tendered is not None
+            and data.amount_tendered < total_inc
+        ):
+            raise ValidationError("Cash tendered is less than the amount due")
+
         if not self.credit.is_walk_in(customer):
             await self.credit.assert_within_limit(
                 customer, total_inc, credit_override=data.credit_override

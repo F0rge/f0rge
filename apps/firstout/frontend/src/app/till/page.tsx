@@ -93,6 +93,7 @@ import {
   saveTillCart,
   type TillKitBlock,
 } from "@/lib/till-kit-pick";
+import { cashTenderIsShort } from "@/lib/till-tender";
 import {
   isDesktopPointer,
   isProtectedScanField,
@@ -501,7 +502,9 @@ export default function TillPage() {
     setAmountTendered(totalIncLabel);
   }, [totalIncLabel]);
 
-  const tenderedAmount = parsePriceInput(amountTendered) ?? summary.totalIncVat;
+  const enteredTender = parsePriceInput(amountTendered);
+  const tenderedAmount = enteredTender ?? summary.totalIncVat;
+  const cashShort = cashTenderIsShort(tender, enteredTender, summary.totalIncVat);
   const changeAmount = Math.max(0, tenderedAmount - summary.totalIncVat);
   const showChange = tender === "cash" || tender === "eft";
 
@@ -655,6 +658,10 @@ export default function TillPage() {
       setError("Override reason is required.");
       return;
     }
+    if (cashTenderIsShort(tender, parsePriceInput(amountTendered), summary.totalIncVat)) {
+      setError("Cash tendered is less than the amount due.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setCreditBlock(null);
@@ -675,6 +682,9 @@ export default function TillPage() {
           return payload;
         }),
         tender,
+        ...(tender === "cash"
+          ? { amount_tendered: formatPriceAmount(tenderedAmount) }
+          : {}),
         ...(customerId ? { customer_id: customerId } : {}),
         ...(pickId ? { pick_id: pickId } : {}),
         ...(pickIds.length > 0 ? { pick_ids: pickIds } : {}),
@@ -1235,6 +1245,8 @@ export default function TillPage() {
                   id="till-amount-tendered"
                   labelText="Amount Tendered"
                   value={amountTendered}
+                  invalid={cashShort}
+                  invalidText="Cash tendered is less than the amount due."
                   onChange={(event) => setAmountTendered(event.target.value)}
                 />
 
@@ -1249,6 +1261,7 @@ export default function TillPage() {
                   disabled={
                     !saleValid ||
                     submitting ||
+                    cashShort ||
                     (creditOverride && canOverrideCredit && !creditOverrideReason.trim())
                   }
                   onClick={() => void handleCompleteSale()}
