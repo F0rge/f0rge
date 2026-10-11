@@ -13,20 +13,21 @@ test('published catalogue filters compose and price sorting orders real products
   test.skip(!sourceSkuId || !otherSkuId, 'Set published STOREFRONT_TEST_SKU_ID and STOREFRONT_TEST_OTHER_SKU_ID')
 
   await page.goto('/shop?sort=price-desc')
-  const prices = await page.locator('.product-card .product-meta span').allTextContents()
+  await expect(page.locator('.product-card:visible').nth(1)).toBeVisible()
+  const prices = await page.locator('.product-card:visible .product-meta span').allTextContents()
   const amounts = prices.map(parseRandAmount)
   expect(amounts.length).toBeGreaterThanOrEqual(2)
   expect(amounts.every(Number.isFinite)).toBe(true)
   expect(amounts).toEqual([...amounts].sort((a, b) => b - a))
 
   await page.goto('/shop?category=sofas&collection=living-room&availability=in-stock&min=1&max=100000&sort=price-desc')
-  await expect(page.locator(`a[href="/product/${sourceSkuId}"]`)).toBeVisible()
-  await expect(page.locator(`a[href="/product/${otherSkuId}"]`)).toHaveCount(0)
-  await expect(page.getByLabel('Category')).toHaveValue('sofas')
-  await expect(page.getByLabel('Collection')).toHaveValue('living-room')
-  await expect(page.getByLabel('Availability')).toHaveValue('in-stock')
+  await expect(page.locator(`a:visible[href="/product/${sourceSkuId}"]`)).toBeVisible()
+  await expect(page.locator(`a:visible[href="/product/${otherSkuId}"]`)).toHaveCount(0)
+  await expect(page.locator('.catalogue-filters:visible').getByLabel('Category')).toHaveValue('sofas')
+  await expect(page.locator('.catalogue-filters:visible').getByLabel('Collection')).toHaveValue('living-room')
+  await expect(page.locator('.catalogue-filters:visible').getByLabel('Availability')).toHaveValue('in-stock')
   await page.reload()
-  await expect(page.locator(`a[href="/product/${sourceSkuId}"]`)).toBeVisible()
+  await expect(page.locator(`a:visible[href="/product/${sourceSkuId}"]`)).toBeVisible()
 })
 
 test('a price-filtered card shows the qualifying group variant price', async ({ page }) => {
@@ -42,7 +43,7 @@ test('a price-filtered card shows the qualifying group variant price', async ({ 
 
   const minimum = Math.max(first, second)
   await page.goto(`/shop?min=${minimum}&sort=price-asc`)
-  const card = page.locator(`a[href="/product/${groupHandle}"]`)
+  const card = page.locator(`a:visible[href="/product/${groupHandle}"]`)
   await expect(card).toBeVisible()
   const shownPrice = parseRandAmount(await card.locator('.product-meta span').innerText())
   expect(shownPrice).toBeGreaterThanOrEqual(minimum)
@@ -52,7 +53,7 @@ test('draft product is absent from discovery and direct navigation', async ({ pa
   test.skip(!draftSkuId, 'Set STOREFRONT_TEST_DRAFT_SKU_ID to a Medusa draft source SKU ID')
 
   await page.goto('/shop')
-  await expect(page.locator(`a[href="/product/${draftSkuId}"]`)).toHaveCount(0)
+  await expect(page.locator(`a:visible[href="/product/${draftSkuId}"]`)).toHaveCount(0)
   const response = await page.goto(`/product/${draftSkuId}`)
   expect(response?.status()).toBe(404)
   await expect(page.getByRole('heading', { name: 'We can’t find this piece.' })).toBeVisible()
@@ -61,7 +62,7 @@ test('draft product is absent from discovery and direct navigation', async ({ pa
 
 test('catalogue metadata and non-production robots policy describe public routes', async ({ page }) => {
   await page.goto('/shop')
-  await expect(page).toHaveTitle(/Shop furniture \| The Collector/)
+  await expect(page).toHaveTitle(/Shop furniture \| Vellano/)
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'http://localhost:3004/shop')
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /furniture collection/)
@@ -82,14 +83,14 @@ test('mobile keyboard path reaches filters and gallery without horizontal overfl
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.locator('#main-content')).toBeInViewport()
-  await page.getByLabel('Search furniture').focus()
+  await page.locator('.catalogue-filters:visible').getByLabel('Search furniture').focus()
   await page.keyboard.type('Arc')
   await page.getByRole('button', { name: 'Show pieces' }).focus()
   await page.keyboard.press('Enter')
-  await expect(page.locator(`a[href="/product/${sourceSkuId}"]`)).toBeVisible()
+  await expect(page.locator(`a:visible[href="/product/${sourceSkuId}"]`)).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 
-  await page.locator(`a[href="/product/${sourceSkuId}"]`).focus()
+  await page.locator(`a:visible[href="/product/${sourceSkuId}"]`).focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(new RegExp(`/product/${sourceSkuId}$`))
   const galleryChoice = page.getByRole('button', { name: 'Show image 2 of 3' })

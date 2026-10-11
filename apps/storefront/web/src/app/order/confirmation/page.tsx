@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@f0rge/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
@@ -112,9 +113,9 @@ export default function OrderConfirmationPage() {
   }, [load]);
 
   return <div className="content confirmation-page" data-storefront-no-capture="">
-    <p className="eyebrow">The Collector / private order confirmation</p>
+    <p className="eyebrow">Vellano / private order confirmation</p>
     {!result && !unavailable && <p role="status">Checking your order…</p>}
-    {unavailable && <div role="alert"><h1>Confirmation temporarily unavailable</h1><p>Refresh this page to check again. Order details are available only through the private checkout capability saved in this browser.</p><button type="button" onClick={() => void load()}>Check again</button></div>}
+    {unavailable && <div role="alert"><h1>Confirmation temporarily unavailable</h1><p>Refresh this page to check again. Open your private confirmation link or return in the browser you used at checkout.</p><Button type="button" onClick={() => void load()}>Check again</Button></div>}
     {result?.status === "captured" && result.order && <>
       <h1>Thank you. Your order is confirmed.</h1>
       <p role="status">Private order reference {result.order.reference} · contact email {result.order.email}</p>
@@ -149,7 +150,7 @@ export default function OrderConfirmationPage() {
       </div>
     </>}
     {result?.status === "pending" && <div role="status"><h1>Payment is pending</h1><p>This private page will update when the payment result arrives. You can close the browser and return to this page later.</p></div>}
-    {result?.status === "unknown" && <div role="alert"><h1>Payment result is unknown</h1><p>We could not confirm the result yet. Keep this private page open or return later to check again; another order will not be created by checking.</p><button type="button" onClick={() => void load()}>Check again</button></div>}
+    {result?.status === "unknown" && <div role="alert"><h1>Payment result is unknown</h1><p>We could not confirm the result yet. Keep this private page open or return later to check again; another order will not be created by checking.</p><Button type="button" onClick={() => void load()}>Check again</Button></div>}
     {result?.status === "processing" && <div role="status"><h1>Payment received</h1><p>Your order is being committed. This page will update automatically.</p></div>}
     {result?.status === "declined" && <div role="alert"><h1>Payment was declined</h1><p>No paid order was created. Return to your bag and try again while your reservation is active.</p><Link href="/bag" className="text-link">Return to your bag ↗</Link></div>}
     {result?.status === "cancelled" && <div role="status"><h1>Payment was cancelled</h1><p>No paid order was created. You can return to your bag to retry before the reservation expires.</p><Link href="/bag" className="text-link">Return to your bag ↗</Link></div>}

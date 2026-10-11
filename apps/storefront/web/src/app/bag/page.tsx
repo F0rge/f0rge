@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@f0rge/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -67,10 +68,10 @@ export default function BagPage() {
   const held = bag?.hold?.status === "active" && Date.parse(bag.hold.expires_at) > Date.now();
   const feedback = error ? purchaseFeedback(error, true) : null;
   return <div className="content bag-page">
-    <p className="eyebrow">The Collector / your selection</p>
+    <p className="eyebrow">Vellano / your selection</p>
     <h1>Your bag</h1>
     {feedback && <p ref={errorRef} id="bag-error" role={feedback.role} tabIndex={feedback.tabIndex} className="bag-error">{feedback.message}</p>}
-    {!bag && error && <button type="button" className="bag-retry" onClick={() => void loadBag()}>Retry loading bag</button>}
+    {!bag && error && <Button type="button" className="bag-retry" onClick={() => void loadBag()}>Retry loading bag</Button>}
     {!bag && !error && <p role="status">Loading your bag…</p>}
     {bag && bag.items.length === 0 && <div className="bag-empty"><p>Your bag is empty.</p><Link className="text-link" href="/shop">Explore all pieces ↗</Link></div>}
     {bag && bag.items.length > 0 && <div className="bag-layout">
@@ -84,11 +85,11 @@ export default function BagPage() {
             const quantity = Number(event.target.value);
             if (quantity !== item.quantity) void update("PATCH", "/api/bag", { item_id: item.id, quantity });
           }} />
-          <button type="button" className="bag-remove" disabled={busy || held} onClick={() => {
+          <Button type="button" className="bag-remove" disabled={busy || held} onClick={() => {
             const valueMinor = zarMinorUnits(item.total);
             if (valueMinor !== null) capture({ name: "storefront_cart_item_removed", properties: { variant_id: item.variant_id, quantity: item.quantity, value_minor: valueMinor, ...(bag.id ? { cart_id: bag.id } : {}) } });
             void update("DELETE", `/api/bag?item_id=${encodeURIComponent(item.id)}`);
-          }}>Remove</button>
+          }}>Remove</Button>
         </div><strong>{money(item.total)}</strong>
       </div>)}</div>
       <aside className="bag-summary"><p className="eyebrow">Order summary</p><dl><dt>Subtotal</dt><dd>{money(bag.subtotal)}</dd><dt>Total incl. VAT</dt><dd data-testid="bag-total">{money(bag.total)}</dd></dl>
@@ -98,8 +99,8 @@ export default function BagPage() {
           <p>{bag.hold.fulfillment_promise.kind === "mixed" ? "Your stocked and made-to-order pieces will be fulfilled together." : bag.hold.fulfillment_promise.kind === "made_to_order" ? "Your order is made to order." : "Your pieces are in stock."}</p>
           <p>Estimated ready {promiseDates(bag.hold.fulfillment_promise.estimated_from, bag.hold.fulfillment_promise.estimated_by)}.</p>
         </div>}
-        {held ? <><p role="status">Reserved until {new Date(bag.hold!.expires_at).toLocaleTimeString("en-ZA")}</p><Link className="bag-checkout" href="/checkout">Continue checkout</Link><button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Change bag</button><button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Cancel reservation</button></>
-          : <button type="button" className="bag-checkout" disabled={busy} onClick={() => void beginCheckout()}>{bag.hold?.status === "review" ? "Accept changes and continue" : "Continue to checkout"}</button>}
+        {held ? <><p role="status">Reserved until {new Date(bag.hold!.expires_at).toLocaleTimeString("en-ZA")}</p><Link className="bag-checkout" href="/checkout">Continue checkout</Link><Button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Change bag</Button><Button type="button" disabled={busy} onClick={() => void update("DELETE", "/api/bag/checkout")}>Cancel reservation</Button></>
+          : <Button type="button" className="bag-checkout" disabled={busy} onClick={() => void beginCheckout()}>{bag.hold?.status === "review" ? "Accept changes and continue" : "Continue to checkout"}</Button>}
         <p className="bag-note">Availability is confirmed when you continue to checkout. No payment is taken here.</p>
       </aside>
     </div>}

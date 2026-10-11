@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Button } from "@f0rge/ui";
 import { Checkbox, Select } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
@@ -154,9 +155,9 @@ export default function CheckoutPage() {
   const feedback = error ? purchaseFeedback(error, true) : null;
   const total = checkout ? Number(checkout.amount) : bag?.total || 0;
   return <div className="content checkout-page" data-storefront-no-capture="">
-    <p className="eyebrow">The Collector / secure checkout</p>
+    <p className="eyebrow">Vellano / secure checkout</p>
     <h1>Review your order</h1>
-    <p className="checkout-intro">Confirm your contact and fulfillment details. The server checks availability and calculates the final VAT-inclusive ZAR total before payment.</p>
+    <p className="checkout-intro">Confirm your details and choose how to receive your pieces. Review the final total, including VAT, before payment.</p>
     <div className="checkout-layout">
       <section className="checkout-main">
         {!bag && !error && <p role="status">Loading your bag…</p>}
@@ -166,8 +167,8 @@ export default function CheckoutPage() {
           <p className="eyebrow">{checkout.provider_id === "pp_peach_sandbox" ? "Secure hosted payment" : "Test payment only"}</p>
           <h2>{money(total, checkout.currency_code.toUpperCase())}</h2>
           <p>{checkout.provider_id === "pp_peach_sandbox"
-            ? "Continue on Peach Payments secure checkout. The payment result will be confirmed by a signed server notification."
-            : "No real payment is taken. Choose an outcome to exercise the local simulator."} Your confirmation access was saved before this payment session was returned.</p>
+            ? "Continue to Peach Payments to complete your secure payment. Return here to check your order status."
+            : "No real payment is taken. Choose an outcome to exercise the local simulator."} You can return to your private order status page to check for updates.</p>
           <p role="status" data-testid="payment-status">Payment status: {paymentStatus || "pending"}</p>
           {paymentStatus === "declined" && <p role="alert">{checkout.provider_id === "pp_peach_sandbox"
             ? "Peach declined this payment. Do not reuse this checkout session; contact the store before trying another payment."
@@ -179,13 +180,13 @@ export default function CheckoutPage() {
           {paymentStatus === "unknown" && <p role="alert">{checkout.provider_id === "pp_peach_sandbox"
             ? "Peach has not confirmed this payment yet. Do not pay again; wait for the status check or contact the store before retrying."
             : "The payment result is unknown. Your private confirmation page can check again without creating a second order."}</p>}
-          {paymentStatus === "paid_exception" && <p role="alert">Payment succeeded, but the inventory commitment needs recovery. Keep the private confirmation page for the current status.</p>}
+          {paymentStatus === "paid_exception" && <p role="alert">Payment succeeded, but your order needs attention from the store. Keep your private confirmation page to check for updates.</p>}
           {checkout.provider_id !== "pp_peach_sandbox" && <div className="test-payment-actions">
-            <button type="button" disabled={busy} onClick={() => void simulate("success")}>Simulate success</button>
-            <button type="button" disabled={busy} onClick={() => void simulate("pending")}>Simulate pending</button>
-            <button type="button" disabled={busy} onClick={() => void simulate("declined")}>Simulate decline</button>
-            <button type="button" disabled={busy} onClick={() => void simulate("cancelled")}>Simulate cancellation</button>
-            <button type="button" disabled={busy} onClick={() => void simulate("unknown")}>Simulate unknown result</button>
+            <Button type="button" disabled={busy} onClick={() => void simulate("success")}>Simulate success</Button>
+            <Button type="button" disabled={busy} onClick={() => void simulate("pending")}>Simulate pending</Button>
+            <Button type="button" disabled={busy} onClick={() => void simulate("declined")}>Simulate decline</Button>
+            <Button type="button" disabled={busy} onClick={() => void simulate("cancelled")}>Simulate cancellation</Button>
+            <Button type="button" disabled={busy} onClick={() => void simulate("unknown")}>Simulate unknown result</Button>
           </div>}
           <Link className="text-link" href="/order/confirmation">Check private order status ↗</Link>
         </div> : <form ref={formRef} className="checkout-form" onSubmit={(event) => void prepare(event)}>
@@ -212,13 +213,13 @@ export default function CheckoutPage() {
             </div>
             <label>Postal code<input name="postal_code" inputMode="numeric" autoComplete="postal-code" pattern="[0-9]{4}" required /></label>
             {accountAvailable && <Checkbox className="save-address-choice" checked={saveAddress} onChange={(event) => setSaveAddress(event.target.checked)} label="Save this address to your account for next time" />}
-            <p className="checkout-help">Delivery is limited to server-configured Gauteng zones. Rates are set by the store and shown in your final total.</p>
+            <p className="checkout-help">Delivery is available in selected Gauteng areas. The delivery charge is shown in your final total.</p>
           </div> : <p className="checkout-help">Collection is free. Collection point details will be provided with your order confirmation.</p>}
-          <button className="bag-checkout" type="submit" disabled={busy || !held || !bag?.items.length}>
+          <Button className="bag-checkout" type="submit" disabled={busy || !held || !bag?.items.length}>
             {busy ? "Checking order…" : "Review total and continue"}
-          </button>
+          </Button>
           {!held && <p role="alert">Your reservation expired. Return to your bag to review and reserve the pieces again.</p>}
-          <button className="checkout-back" type="button" disabled={busy} onClick={() => void releaseHold()}>Change bag</button>
+          <Button className="checkout-back" type="button" disabled={busy} onClick={() => void releaseHold()}>Change bag</Button>
         </form>}
       </section>
       <aside className="checkout-summary">
@@ -230,7 +231,7 @@ export default function CheckoutPage() {
           <p>Estimated ready {promiseDates(bag.hold.fulfillment_promise.estimated_from, bag.hold.fulfillment_promise.estimated_by)}.</p>
         </div>}
         <dl><dt>Bag total incl. VAT</dt><dd>{money(bag?.total || 0)}</dd><dt>Final total incl. VAT</dt><dd data-testid="checkout-total">{money(total)}</dd></dl>
-        <p>Prices and delivery are checked by the server. Any change returns you to review before payment.</p>
+        <p>Prices, availability and delivery are confirmed before payment. You can review any changes before continuing.</p>
         <p>Availability is reserved until {bag?.hold?.expires_at ? new Date(bag.hold.expires_at).toLocaleTimeString("en-ZA") : "your hold expires"}.</p>
       </aside>
     </div>

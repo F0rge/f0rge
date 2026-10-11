@@ -6,7 +6,7 @@ export function ProductCard({ product, hero = false, variants, priority = false 
   const shownVariants = variants ?? product.variants;
   const prices = shownVariants.map((variant) => variant.calculated_price?.calculated_amount).filter((value): value is number => value != null);
   return <TrackedProductLink href={productPath(product)} productId={product.id} className={hero ? "product-card hero-card" : "product-card"}>
-    <div className="product-image">{image ? <img src={image} alt="" width={800} height={1000} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} /> : <span className="image-placeholder" aria-hidden="true">The Collector</span>}</div>
-    <div className="product-meta"><strong>{product.title}</strong><span>{new Set(prices).size > 1 ? "From " : ""}{priceLabel(lowestPricedVariant(shownVariants))}</span></div>
+    <div className="product-image">{image ? <img src={image} alt="" width={800} height={1000} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} /> : <span className="image-placeholder" aria-hidden="true">Vellano</span>}</div>
+    <div className="product-meta"><strong>{product.title}</strong><span className="product-card-price">{new Set(prices).size > 1 ? "From " : ""}{priceLabel(lowestPricedVariant(shownVariants))}</span></div>{(product.material || product.categories?.[0]?.name) && <p className="product-card-detail">{product.material || product.categories?.[0]?.name}</p>}
   </TrackedProductLink>;
 }

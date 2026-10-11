@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-async function openHome(page: Page) {
+async function openHome(page: Page, expandStudy = true) {
   await page.addInitScript(() => {
     window.__studyEvents = [];
     window.addEventListener("storefront:study", (event) => {
@@ -19,6 +19,10 @@ async function openHome(page: Page) {
   });
   await page.goto("/");
   await expect(page.locator("#sola-study")).toBeAttached();
+  if (expandStudy) {
+    await page.locator(".home-study > summary").click();
+    await expect(page.locator("#sola-study")).toBeVisible();
+  }
 }
 
 async function scrollStudy(page: Page, progress: number) {
@@ -51,16 +55,18 @@ function trackWebglChunk(page: Page) {
 test("Three.js stays out of the initial route and loads only near the study", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const webgl = trackWebglChunk(page);
-  await openHome(page);
+  await openHome(page, false);
+  await expect(page.locator("#sola-study")).toBeHidden();
   await page.waitForLoadState("networkidle");
   await webgl.settle();
 
-  const distanceBelowFold = await page.locator("#sola-study").evaluate((section) =>
+  const distanceBelowFold = await page.locator(".home-study").evaluate((section) =>
     section.getBoundingClientRect().top - window.innerHeight,
   );
   expect(distanceBelowFold).toBeGreaterThan(200);
   expect(webgl.urls).toHaveLength(0);
 
+  await page.locator(".home-study > summary").click();
   await page.locator("#sola-study").scrollIntoViewIfNeeded();
   await expect.poll(async () => {
     await webgl.settle();
@@ -173,7 +179,7 @@ test("a forced WebGL failure leaves the editorial study and shopping available",
   await expect(page.getByRole("heading", { name: "Good from every angle." })).toBeVisible();
   await expect(page.locator("#sola-study canvas")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Browse the collection" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Bag" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Bag", exact: true })).toBeVisible();
 });
 
 test("mobile study preserves page navigation and has no horizontal overflow", async ({ page }) => {
@@ -182,7 +188,7 @@ test("mobile study preserves page navigation and has no horizontal overflow", as
   await page.locator("#sola-study").scrollIntoViewIfNeeded();
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await expect(page.getByRole("link", { name: "Bag" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Bag", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "The silhouette" })).toBeVisible();
   await expect(page.getByRole("slider", { name: "Rotate and explore the Sola chair study" })).toBeVisible();
 
