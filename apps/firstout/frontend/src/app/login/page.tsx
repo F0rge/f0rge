@@ -46,6 +46,7 @@ export default function LoginPage() {
         <section className="firstout-login-card">
           <Stack gap={6}>
             <div>
+              <img className="firstout-login-mark" src="/brand/logo-transparent.png" alt="Firstout" width={72} height={72} />
               <h1 className="cds--type-productive-heading-04">Log in</h1>
               <p className="cds--type-body-01">Sign in to the Firstout back office.</p>
             </div>

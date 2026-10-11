@@ -261,6 +261,29 @@ body {
   border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
 }
 
+.firstout-login-mark {
+  display: block;
+  width: 4.5rem;
+  height: auto;
+  margin-bottom: 1.5rem;
+}
+
+.firstout-brand.cds--header__name {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 0.25rem 1rem;
+}
+
+.firstout-brand .cds--header__name--prefix {
+  display: none;
+}
+
+.firstout-brand img {
+  display: block;
+  height: 2rem;
+  width: auto;
+}
+
 .firstout-forbidden {
   max-width: 32rem;
 }
