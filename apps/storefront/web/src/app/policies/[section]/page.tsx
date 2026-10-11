@@ -28,7 +28,7 @@ export default async function PolicySectionPage({ params }: PolicyPageProps) {
   if (!section) notFound();
   const page = policyPage(currentCustomerPolicies(), section);
   return <article className="content policy-page">
-    <p className="eyebrow">The Collector</p>
+    <p className="eyebrow">Vellano</p>
     <h1>{page.title}</h1>
     {page.paragraphs.map((paragraph, index) => <p key={`${section}-${index}`}>{paragraph}</p>)}
   </article>;
