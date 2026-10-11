@@ -1825,3 +1825,90 @@ body {
     padding: 1rem 1rem 12rem;
   }
 }
+
+.firstout-tour-anchor {
+  display: inline-flex;
+  align-self: stretch;
+}
+
+.firstout-tour-tooltip {
+  position: relative;
+  box-sizing: border-box;
+  width: min(26rem, calc(100vw - 2rem));
+  padding: 1rem 2.25rem 0.75rem 1rem;
+  background: #ffffff;
+  color: #161616;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+.firstout-tour-tooltip h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.firstout-tour-tooltip__body {
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.firstout-tour-tooltip__meta {
+  margin: 0.75rem 0 0;
+  color: #525252;
+  font-size: 0.75rem;
+}
+
+.firstout-tour-tooltip__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+}
+
+.firstout-tour-tooltip__skip {
+  margin-right: auto;
+}
+
+.firstout-tour-tooltip__close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  background: transparent;
+  color: #161616;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.firstout-tour-tooltip__primary,
+.firstout-tour-tooltip__ghost {
+  min-height: 2rem;
+  padding: 0 1rem;
+  border: 0;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.firstout-tour-tooltip__primary {
+  background: #0f62fe;
+  color: #ffffff;
+}
+
+.firstout-tour-tooltip__primary:hover {
+  background: #0353e9;
+}
+
+.firstout-tour-tooltip__ghost {
+  background: transparent;
+  color: #0f62fe;
+}
+
+.firstout-tour-tooltip__ghost:hover {
+  background: #e8e8e8;
+}
