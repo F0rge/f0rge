@@ -89,32 +89,33 @@ class PaymentService:
         if currency != "ZAR":
             raise ValidationError("Invoice payments must be in ZAR")
 
-        invoice = await self.invoice_crud.get_by_id(data.invoice_id)
-        if invoice is None:
-            raise NotFoundError("Invoice not found")
-
         amount = assert_payment_cents(data.amount)
-        remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
-        if remaining <= 0:
-            raise ValidationError("Invoice is already fully paid")
-        if amount > remaining:
-            raise ValidationError(overpayment_message(remaining, "ZAR", invoice.invoice_number))
-
         await assert_date_postable(self.db, data.paid_on)
 
-        payment = Payment(
-            payment_number="",
-            direction=PaymentDirection.IN,
-            invoice_id=invoice.id,
-            amount=amount,
-            currency=currency,
-            fx_to_zar=Decimal("1"),
-            amount_zar=amount,
-            fx_gain_loss_zar=Decimal(0),
-            paid_on=data.paid_on,
-        )
-
         async with unit_of_work(self.db):
+            invoice = await self.invoice_crud.get_by_id(data.invoice_id, for_update=True)
+            if invoice is None:
+                raise NotFoundError("Invoice not found")
+
+            remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
+            if remaining <= 0:
+                raise ValidationError("Invoice is already fully paid")
+            if amount > remaining:
+                raise ValidationError(
+                    overpayment_message(remaining, "ZAR", invoice.invoice_number)
+                )
+
+            payment = Payment(
+                payment_number="",
+                direction=PaymentDirection.IN,
+                invoice_id=invoice.id,
+                amount=amount,
+                currency=currency,
+                fx_to_zar=Decimal("1"),
+                amount_zar=amount,
+                fx_gain_loss_zar=Decimal(0),
+                paid_on=data.paid_on,
+            )
             payment.payment_number = await self.crud.get_next_payment_number()
             await self.crud.add_and_flush(payment)
             await self.posting.post(
@@ -150,63 +151,61 @@ class PaymentService:
         if data.invoice_id is not None:
             raise ValidationError("invoice_id must not be set for payment out")
 
-        bill = await self.bill_crud.get_by_id(data.bill_id)
-        if bill is None:
-            raise NotFoundError("Bill not found")
-
         currency = SupplierService.normalize_currency(data.currency)
-        if currency != bill.currency:
-            raise ValidationError("Payment currency must match bill currency")
-
         amount = assert_payment_cents(data.amount)
-        remaining_foreign = cents(bill.amount_foreign - bill.amount_paid_foreign)
-        if remaining_foreign <= 0:
-            raise ValidationError("Bill is already fully paid")
-        if amount > remaining_foreign:
-            raise ValidationError(
-                overpayment_message(remaining_foreign, currency, bill.bill_number)
-            )
-
-        fx_to_zar = self._resolve_fx(currency, data.fx_to_zar)
-        cleared_zar = booked_portion(
-            amount=amount,
-            amount_foreign=bill.amount_foreign,
-            amount_zar=bill.amount_zar,
-            amount_paid_foreign=bill.amount_paid_foreign,
-            amount_paid_zar=bill.amount_paid_zar,
-        )
-        if cleared_zar <= 0:
-            raise ValidationError("Payment is too small to reduce this bill.")
-        settlement_zar = cents(convert_bill_to_zar(amount, currency, fx_to_zar))
-        if settlement_zar <= 0:
-            raise ValidationError("Payment is too small to reduce this bill.")
-        diff = settlement_zar - cleared_zar
-        fx_gain_loss = cleared_zar - settlement_zar
-
-        journal_lines: list[tuple[str, Decimal, Decimal]] = [
-            (CODE_AP, cleared_zar, Decimal(0)),
-            (CODE_BANK, Decimal(0), settlement_zar),
-        ]
-        if diff > 0:
-            journal_lines.append((CODE_FX, diff, Decimal(0)))
-        elif diff < 0:
-            journal_lines.append((CODE_FX, Decimal(0), abs(diff)))
-
         await assert_date_postable(self.db, data.paid_on)
 
-        payment = Payment(
-            payment_number="",
-            direction=PaymentDirection.OUT,
-            bill_id=bill.id,
-            amount=amount,
-            currency=currency,
-            fx_to_zar=fx_to_zar,
-            amount_zar=settlement_zar,
-            fx_gain_loss_zar=fx_gain_loss,
-            paid_on=data.paid_on,
-        )
-
         async with unit_of_work(self.db):
+            bill = await self.bill_crud.get_by_id(data.bill_id, for_update=True)
+            if bill is None:
+                raise NotFoundError("Bill not found")
+            if currency != bill.currency:
+                raise ValidationError("Payment currency must match bill currency")
+
+            remaining_foreign = cents(bill.amount_foreign - bill.amount_paid_foreign)
+            if remaining_foreign <= 0:
+                raise ValidationError("Bill is already fully paid")
+            if amount > remaining_foreign:
+                raise ValidationError(
+                    overpayment_message(remaining_foreign, currency, bill.bill_number)
+                )
+
+            fx_to_zar = self._resolve_fx(currency, data.fx_to_zar)
+            cleared_zar = booked_portion(
+                amount=amount,
+                amount_foreign=bill.amount_foreign,
+                amount_zar=bill.amount_zar,
+                amount_paid_foreign=bill.amount_paid_foreign,
+                amount_paid_zar=bill.amount_paid_zar,
+            )
+            if cleared_zar <= 0:
+                raise ValidationError("Payment is too small to reduce this bill.")
+            settlement_zar = cents(convert_bill_to_zar(amount, currency, fx_to_zar))
+            if settlement_zar <= 0:
+                raise ValidationError("Payment is too small to reduce this bill.")
+            diff = settlement_zar - cleared_zar
+            fx_gain_loss = cleared_zar - settlement_zar
+
+            journal_lines: list[tuple[str, Decimal, Decimal]] = [
+                (CODE_AP, cleared_zar, Decimal(0)),
+                (CODE_BANK, Decimal(0), settlement_zar),
+            ]
+            if diff > 0:
+                journal_lines.append((CODE_FX, diff, Decimal(0)))
+            elif diff < 0:
+                journal_lines.append((CODE_FX, Decimal(0), abs(diff)))
+
+            payment = Payment(
+                payment_number="",
+                direction=PaymentDirection.OUT,
+                bill_id=bill.id,
+                amount=amount,
+                currency=currency,
+                fx_to_zar=fx_to_zar,
+                amount_zar=settlement_zar,
+                fx_gain_loss_zar=fx_gain_loss,
+                paid_on=data.paid_on,
+            )
             payment.payment_number = await self.crud.get_next_payment_number()
             await self.crud.add_and_flush(payment)
             await self.posting.post(
