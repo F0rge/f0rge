@@ -168,17 +168,20 @@ class LocationStockCRUD(BaseCRUD):
         self,
         sku_id: uuid.UUID,
         location_id: uuid.UUID,
+        *,
+        for_update: bool = False,
     ) -> Optional[LocationStock]:
-        return (
-            await self.db.execute(
-                select(LocationStock)
-                .options(selectinload(LocationStock.location))
-                .where(
-                    LocationStock.sku_id == sku_id,
-                    LocationStock.location_id == location_id,
-                )
+        stmt = (
+            select(LocationStock)
+            .options(selectinload(LocationStock.location))
+            .where(
+                LocationStock.sku_id == sku_id,
+                LocationStock.location_id == location_id,
             )
-        ).scalar_one_or_none()
+        )
+        if for_update:
+            stmt = stmt.execution_options(populate_existing=True).with_for_update(of=LocationStock)
+        return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_by_location_id(self, location_id: uuid.UUID) -> list[LocationStock]:
         result = await self.db.execute(
