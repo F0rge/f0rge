@@ -23,6 +23,7 @@ from app.models.location import Location
 from app.models.sku import Sku
 from app.models.supplier import Supplier
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
+from app.services.payment_terms import invoice_open_balance_expr
 from app.schemas.bank_import import (
     AgedBucket,
     AgedLine,
@@ -116,10 +117,11 @@ class ReportsService:
         self.po_crud = PurchaseOrderCRUD(db)
 
     async def aged_ar(self, as_of: datetime.date) -> AgedReport:
+        open_balance = invoice_open_balance_expr()
         result = await self.db.execute(
-            select(TaxInvoice, Customer.name)
+            select(TaxInvoice, Customer.name, open_balance.label("open_balance"))
             .join(Customer, TaxInvoice.customer_id == Customer.id)
-            .where(TaxInvoice.total_inc_vat > TaxInvoice.amount_paid)
+            .where(open_balance > 0)
             .order_by(TaxInvoice.issue_date)
         )
         lines: list[AgedLine] = []
@@ -131,8 +133,8 @@ class ReportsService:
             "90+": Decimal(0),
         }
 
-        for invoice, customer_name in result.all():
-            balance = invoice.total_inc_vat - invoice.amount_paid
+        for invoice, customer_name, open_balance_value in result.all():
+            balance = Decimal(open_balance_value)
             if balance <= 0:
                 continue
             days = (as_of - invoice.issue_date).days

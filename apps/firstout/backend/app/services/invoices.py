@@ -25,14 +25,14 @@ from app.schemas.page import Page, PageParams
 from app.services.books_events import BooksEventService
 from app.services.books_periods import assert_date_postable
 from app.services.category_posting import CategoryPostingService
-from app.services.customer_credit import CustomerCreditService
 from app.services.chart_of_accounts import (
     CODE_AR,
     CODE_VAT,
     LedgerPostingService,
 )
+from app.services.customer_credit import CustomerCreditService
 from app.services.invoice_pdf import build_tax_invoice_pdf
-from app.services.payment_terms import compute_due_date
+from app.services.payment_terms import compute_due_date, invoice_collectible_balance
 from app.services.pricing import resolve_unit_ex_vat
 from app.services.settings import SettingsService
 from app.services.vat import CENT, ex_to_inc
@@ -219,7 +219,7 @@ class InvoiceService:
 
     @staticmethod
     def _to_list_item(invoice: TaxInvoice) -> InvoiceListItem:
-        balance = invoice.total_inc_vat - invoice.amount_paid
+        balance = invoice_collectible_balance(invoice)
         return InvoiceListItem(
             id=invoice.id,
             invoice_number=invoice.invoice_number,
@@ -238,7 +238,7 @@ class InvoiceService:
 
     @staticmethod
     def _to_response(invoice: TaxInvoice) -> InvoiceResponse:
-        balance = invoice.total_inc_vat - invoice.amount_paid
+        balance = invoice_collectible_balance(invoice)
         return InvoiceResponse(
             id=invoice.id,
             invoice_number=invoice.invoice_number,

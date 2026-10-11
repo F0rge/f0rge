@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi.responses import Response
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.bill import BillCRUD
@@ -13,6 +14,7 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
+from app.models.credit_note import CreditNote
 from app.models.journal import JournalDocumentType
 from app.models.payment import Payment, PaymentDirection
 from app.schemas.page import Page, PageParams
@@ -75,22 +77,12 @@ class PaymentService:
         if currency != "ZAR":
             raise ValidationError("Invoice payments must be in ZAR")
 
-        invoice = await self.invoice_crud.get_by_id(data.invoice_id)
-        if invoice is None:
-            raise NotFoundError("Invoice not found")
-
-        remaining = invoice.total_inc_vat - invoice.amount_paid
-        if remaining <= 0:
-            raise ValidationError("Invoice is already fully paid")
-        if data.amount != remaining:
-            raise ValidationError("Payment amount must equal the remaining invoice balance")
-
         await assert_date_postable(self.db, data.paid_on)
 
         payment = Payment(
             payment_number="",
             direction=PaymentDirection.IN,
-            invoice_id=invoice.id,
+            invoice_id=data.invoice_id,
             amount=data.amount,
             currency=currency,
             fx_to_zar=Decimal("1"),
@@ -100,6 +92,21 @@ class PaymentService:
         )
 
         async with unit_of_work(self.db):
+            invoice = await self.invoice_crud.get_by_id(data.invoice_id, for_update=True)
+            if invoice is None:
+                raise NotFoundError("Invoice not found")
+
+            credited = await self.db.scalar(
+                select(func.coalesce(func.sum(CreditNote.total_inc_vat), 0)).where(
+                    CreditNote.invoice_id == invoice.id
+                )
+            )
+            remaining = invoice.total_inc_vat - invoice.amount_paid - Decimal(credited or 0)
+            if remaining <= 0:
+                raise ValidationError("Invoice is already fully paid")
+            if data.amount != remaining:
+                raise ValidationError("Payment amount must equal the remaining invoice balance")
+
             payment.payment_number = await self.crud.get_next_payment_number()
             await self.crud.add_and_flush(payment)
             await self.posting.post(
@@ -135,50 +142,46 @@ class PaymentService:
         if data.invoice_id is not None:
             raise ValidationError("invoice_id must not be set for payment out")
 
-        bill = await self.bill_crud.get_by_id(data.bill_id)
-        if bill is None:
-            raise NotFoundError("Bill not found")
-
         currency = SupplierService.normalize_currency(data.currency)
-        if currency != bill.currency:
-            raise ValidationError("Payment currency must match bill currency")
-
-        remaining_foreign = bill.amount_foreign
-        if bill.amount_paid_zar > 0:
-            raise ValidationError("Bill is already fully paid")
-        if data.amount != remaining_foreign:
-            raise ValidationError("Payment amount must equal the full bill amount")
-
-        fx_to_zar = self._resolve_fx(currency, data.fx_to_zar)
-        settlement_zar = convert_bill_to_zar(data.amount, currency, fx_to_zar)
-        booked_zar = bill.amount_zar - bill.amount_paid_zar
-        diff = settlement_zar - booked_zar
-        fx_gain_loss = booked_zar - settlement_zar
-
-        journal_lines: list[tuple[str, Decimal, Decimal]] = [
-            (CODE_AP, booked_zar, Decimal(0)),
-            (CODE_BANK, Decimal(0), settlement_zar),
-        ]
-        if diff > 0:
-            journal_lines.append((CODE_FX, diff, Decimal(0)))
-        elif diff < 0:
-            journal_lines.append((CODE_FX, Decimal(0), abs(diff)))
-
         await assert_date_postable(self.db, data.paid_on)
 
-        payment = Payment(
-            payment_number="",
-            direction=PaymentDirection.OUT,
-            bill_id=bill.id,
-            amount=data.amount,
-            currency=currency,
-            fx_to_zar=fx_to_zar,
-            amount_zar=settlement_zar,
-            fx_gain_loss_zar=fx_gain_loss,
-            paid_on=data.paid_on,
-        )
-
         async with unit_of_work(self.db):
+            bill = await self.bill_crud.get_by_id(data.bill_id, for_update=True)
+            if bill is None:
+                raise NotFoundError("Bill not found")
+            if currency != bill.currency:
+                raise ValidationError("Payment currency must match bill currency")
+            if bill.amount_paid_zar > 0:
+                raise ValidationError("Bill is already fully paid")
+            if data.amount != bill.amount_foreign:
+                raise ValidationError("Payment amount must equal the full bill amount")
+
+            fx_to_zar = self._resolve_fx(currency, data.fx_to_zar)
+            settlement_zar = convert_bill_to_zar(data.amount, currency, fx_to_zar)
+            booked_zar = bill.amount_zar - bill.amount_paid_zar
+            diff = settlement_zar - booked_zar
+            fx_gain_loss = booked_zar - settlement_zar
+
+            journal_lines: list[tuple[str, Decimal, Decimal]] = [
+                (CODE_AP, booked_zar, Decimal(0)),
+                (CODE_BANK, Decimal(0), settlement_zar),
+            ]
+            if diff > 0:
+                journal_lines.append((CODE_FX, diff, Decimal(0)))
+            elif diff < 0:
+                journal_lines.append((CODE_FX, Decimal(0), abs(diff)))
+
+            payment = Payment(
+                payment_number="",
+                direction=PaymentDirection.OUT,
+                bill_id=bill.id,
+                amount=data.amount,
+                currency=currency,
+                fx_to_zar=fx_to_zar,
+                amount_zar=settlement_zar,
+                fx_gain_loss_zar=fx_gain_loss,
+                paid_on=data.paid_on,
+            )
             payment.payment_number = await self.crud.get_next_payment_number()
             await self.crud.add_and_flush(payment)
             await self.posting.post(
