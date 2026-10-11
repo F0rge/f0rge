@@ -6,6 +6,7 @@ from typing import AsyncIterator, cast
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.types import ExceptionHandler
 from f0rge_core.handlers import register_exception_handlers
 
@@ -79,14 +80,26 @@ from app.services.storefront_system_actor import StorefrontSystemActorService
 from app.services.users import BootstrapService
 
 
+async def seed_boot_fixtures(session: AsyncSession) -> None:
+    """Role users, storefront system actor, and Walk-in customer.
+
+    Owner bootstrap, locations, and the chart of accounts stay outside this
+    gate. Catalogue refill stays on SEED_PLAYGROUND.
+    """
+    if not settings.seed_boot_fixtures:
+        return
+    await RoleUserSeedService(session).seed()
+    await StorefrontSystemActorService(session).ensure()
+    await TillSeedService(session).seed_if_empty()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with async_session_maker() as session:
         await RoleSeedService(session).seed()
         await BootstrapService(session).seed_if_empty()
         await LocationSeedService(session).seed_if_empty()
-        await RoleUserSeedService(session).seed()
-        await StorefrontSystemActorService(session).ensure()
+        await seed_boot_fixtures(session)
         coa = ChartOfAccountsSeedService(session)
         await coa.seed_if_empty()
         await coa.ensure_opening_equity()
@@ -94,7 +107,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.ensure_storefront_gateway_clearing()
         await coa.ensure_category_chart()
         await coa.ensure_bank_accounts()
-        await TillSeedService(session).seed_if_empty()
         await PlaygroundSeedService(session).seed_if_enabled()
     yield
 

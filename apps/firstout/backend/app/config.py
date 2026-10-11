@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     seed_books_password: str = "change-me-books"
     seed_warehouse_password: str = "change-me-warehouse"
     seed_buyer_password: str = "change-me-buyer"
+    # Role logins, the storefront system user, and the Walk-in customer.
+    # Off so a wiped database stays wiped. Owner bootstrap is separate.
+    seed_boot_fixtures: bool = False
     seed_playground: bool = False
 
     settings_encryption_key: str = ""
