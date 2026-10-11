@@ -1,6 +1,6 @@
 """Drop Nia, lookbooks, and storefront exception tables.
 
-Revision ID: 062_drop_nia_lookbooks_exceptions
+Revision ID: 062_drop_nia_lookbooks
 Revises: 061_live_commerce_exceptions
 
 Staff merchandising for the public shop is gone. Product groups and
@@ -17,7 +17,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "062_drop_nia_lookbooks_exceptions"
+revision: str = "062_drop_nia_lookbooks"
 down_revision: Union[str, Sequence[str], None] = "061_live_commerce_exceptions"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

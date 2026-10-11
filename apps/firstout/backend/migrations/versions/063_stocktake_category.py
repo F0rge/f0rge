@@ -1,7 +1,7 @@
 """Optional category filter on a stocktake.
 
 Revision ID: 063_stocktake_category
-Revises: 062_drop_nia_lookbooks_exceptions
+Revises: 062_drop_nia_lookbooks
 
 Null means the count covers every SKU. A value is a case-insensitive match
 on skus.category.
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "063_stocktake_category"
-down_revision: Union[str, Sequence[str], None] = "062_drop_nia_lookbooks_exceptions"
+down_revision: Union[str, Sequence[str], None] = "062_drop_nia_lookbooks"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
