@@ -164,16 +164,21 @@ Both are free under the MIT license ([shadcn/ui license](https://github.com/shad
 menu uses the shared Dialog and purchase actions use the shared Button. New app-local
 primitive copies or a second component engine are unnecessary.
 
-`web/src/app/style.css` defines the warm ivory, charcoal and olive visual skin
+`web/src/app/style.css` defines the white, near-black and vivid violet visual skin
 and imports the shared semantic token map. Tailwind generates the shared kit's
 utilities through `web/postcss.config.mjs`; `tailwindcss` and `@tailwindcss/postcss`
 are declared at the existing locked 4.3.2 versions in this workspace.
-Typography uses local serif and system sans-serif stacks, without a remote font
+Typography uses a local system sans-serif stack, without a remote font
 request. The homepage hero and collection covers use published Medusa catalogue
 imagery, with a neutral branded fallback when an image is unavailable. The local
 demo assets are not substituted for live merchandise. The optional illustrative
 chair study is collapsed beneath shoppable content and remains clearly separate
 from product finish choices or manufacturing claims.
+
+A translucent sticky header keeps navigation available while scrolling. One-time
+section reveals, a short gallery fade and gentle card lift add feedback without a
+motion dependency. Content remains visible before JavaScript loads, focus cancels
+section motion, and reduced-motion preferences disable these animations.
 
 ## Private Railway preview
 

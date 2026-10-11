@@ -48,3 +48,29 @@ for (const width of [390, 320]) {
     await expect(trigger).toBeFocused()
   })
 }
+
+for (const width of [1440, 390]) {
+  test(`section navigation leaves its heading below the sticky header at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/shop')
+    if (width < 1050) {
+      await page.getByRole('button', { name: 'Open menu' }).click()
+      const dialog = page.getByRole('dialog', { name: /^Vellano$/i })
+      await dialog.getByRole('link', { name: 'Our approach' }).click()
+      await expect(dialog).toBeHidden()
+    } else {
+      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Our approach' }).click()
+    }
+    await expect(page).toHaveURL(/\/#our-approach$/)
+    const heading = page.locator('#our-approach:visible').getByRole('heading')
+    await expect(heading).toBeInViewport()
+    await expect.poll(() => heading.evaluate((element) => {
+      const header = document.querySelector('.site-header')
+      if (!header) throw new Error('Storefront header is missing')
+      return element.getBoundingClientRect().top >= header.getBoundingClientRect().bottom
+    })).toBe(true)
+    const header = page.locator('.site-header')
+    expect(await header.evaluate((element) => element.getBoundingClientRect().top)).toBeGreaterThanOrEqual(0)
+    expect(await header.evaluate((element) => element.getBoundingClientRect().top)).toBeLessThanOrEqual(1)
+  })
+}

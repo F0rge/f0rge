@@ -17,7 +17,7 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return <header className="site-header">
-    <Link href="/" className="wordmark" aria-label="Vellano home">VELLANO</Link>
+    <Link href="/" className="wordmark" aria-label="Vellano home">Vellano</Link>
     <nav className="desktop-navigation" aria-label="Main navigation">
       {links.map((link) => <Link key={link.href} href={link.href} aria-current={pathname === link.href ? "page" : undefined}>{link.label}</Link>)}
     </nav>
@@ -32,15 +32,15 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2 6h16M2 14h16" stroke="currentColor" strokeWidth="1.25"/></svg>
         </DialogTrigger>
         <DialogContent className="mobile-menu">
-          <DialogTitle className="wordmark">VELLANO</DialogTitle>
-          <DialogDescription>Furniture for a considered home.</DialogDescription>
+          <DialogTitle className="wordmark">Vellano</DialogTitle>
+          <DialogDescription>Find furniture for your everyday life.</DialogDescription>
           <nav aria-label="Mobile navigation">
             {links.map((link) => <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)} aria-current={pathname === link.href ? "page" : undefined}>{link.label}<span aria-hidden="true">↗</span></Link>)}
             <Link href="/account" onClick={() => setMenuOpen(false)}>Account<span aria-hidden="true">↗</span></Link>
             <Link href="/support" onClick={() => setMenuOpen(false)}>Support<span aria-hidden="true">↗</span></Link>
           </nav>
           {clerkConfigured && <div className="mobile-menu-auth"><HeaderAuth /></div>}
-          <p className="menu-note">A little less. A little better.</p>
+          <p className="menu-note">Furniture. For everyday life.</p>
         </DialogContent>
       </Dialog>
     </div>

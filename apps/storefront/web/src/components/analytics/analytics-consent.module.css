@@ -5,31 +5,34 @@
   bottom: 1rem;
   width: min(27rem, calc(100vw - 2rem));
   padding: 1.5rem;
+  border-radius: 22px;
   border: 1px solid var(--line);
-  background: var(--paper);
-  color: var(--ink);
-  box-shadow: 0 12px 38px rgb(41 46 38 / 12%);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 12px 38px rgb(0 0 0 / 12%);
 }
 
 .headingRow { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
-.headingRow h2 { margin: 0; font: 400 1.65rem var(--serif); }
+.headingRow h2 { margin: 0; font: 600 1.2rem var(--sans); }
 .panel p { margin: .65rem 0 0; color: var(--muted-foreground); font-size: .85rem; line-height: 1.6; }
-.panel a { color: var(--ink); }
+.panel a { color: var(--foreground); }
 .panel .status { font-family: var(--mono); font-size: .75rem; }
 .actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
 .primaryButton,.secondaryButton,.settingsButton,.closeButton {
   min-height: 44px;
   padding: .65rem .8rem;
-  border: 1px solid var(--oxblood);
+  border: 1px solid var(--primary);
+  border-radius: 999px;
   cursor: pointer;
   font: 12px var(--sans);
-  letter-spacing: .035em;
+  letter-spacing: 0;
   text-transform: none;
 }
-.primaryButton { background: var(--oxblood); color: #fff; }
-.secondaryButton,.settingsButton { background: var(--paper); color: var(--oxblood); }
-.settingsButton { position: fixed; z-index: 40; right: 1rem; bottom: 1rem; box-shadow: 0 5px 18px rgb(41 46 38 / 10%); }
-.closeButton { width: 44px; padding: 0; border-color: transparent; background: transparent; color: var(--ink); font: 1.5rem var(--sans); }
+.primaryButton { background: var(--primary); color: #fff; }
+.primaryButton:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.secondaryButton,.settingsButton { background: var(--background); color: var(--primary); }
+.settingsButton { position: fixed; z-index: 40; right: 1rem; bottom: 1rem; box-shadow: 0 5px 18px rgb(0 0 0 / 8%); }
+.closeButton { width: 44px; border-radius: 50%; padding: 0; border-color: transparent; background: transparent; color: var(--foreground); font: 1.5rem var(--sans); }
 
 @media (max-width: 600px) {
   .panel { right: .5rem; bottom: .5rem; width: calc(100vw - 1rem); }

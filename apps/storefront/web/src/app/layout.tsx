@@ -25,10 +25,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY && process.env.STOREFRONT_CLERK_JWT_TEMPLATE);
   const storefront = <UiProvider><StorefrontAnalyticsProvider>
     <a className="skip-link" href="#main-content">Skip to content</a>
-    <div className="announcement">Considered furniture. Everyday living.</div>
     <SiteHeader clerkConfigured={clerkConfigured} />
     <main id="main-content">{children}</main>
     <SiteFooter />
   </StorefrontAnalyticsProvider></UiProvider>;
-  return <html lang="en-ZA" data-scroll-behavior="smooth" data-collector-skin={skin ?? undefined}><body>{clerkConfigured ? <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}>{storefront}</ClerkProvider> : storefront}</body></html>;
+  return <html lang="en-ZA" data-scroll-behavior="smooth" data-collector-skin={skin ?? undefined}><body>{clerkConfigured ? <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY} appearance={{ variables: { colorPrimary: "var(--primary)", fontFamily: "var(--sans)", borderRadius: "10px" } }}>{storefront}</ClerkProvider> : storefront}</body></html>;
 }

@@ -114,6 +114,33 @@ test("desktop study supports scroll and manual controls without trapping page sc
   await expect(section).toHaveClass(/is-static/);
 });
 
+test("Skip study moves keyboard users forward to the following content", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openHome(page);
+  await scrollStudy(page, 0);
+
+  const study = page.locator("#sola-study");
+  const skip = study.getByRole("link", { name: "Skip study", exact: true });
+  const destination = page.locator("#after-study");
+  await expect(skip).toHaveAttribute("href", "#after-study");
+  await expect(destination).toHaveAttribute("tabindex", "-1");
+  expect(await destination.evaluate((target) => {
+    const section = document.querySelector("#sola-study");
+    if (!section) throw new Error("Study section is missing");
+    return target.getBoundingClientRect().top >= section.getBoundingClientRect().bottom;
+  })).toBe(true);
+
+  await skip.focus();
+  const before = await page.evaluate(() => window.scrollY);
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL(/#after-study$/);
+  await expect(destination).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+  await expect(destination).toBeInViewport();
+  await expect(destination.getByRole("heading", { name: "Choose with confidence." })).toBeVisible();
+});
+
 test("semantic entry, progress and finish events are stable and deduplicated", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await openHome(page);
