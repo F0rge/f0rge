@@ -399,6 +399,7 @@ export default function JournalsPage() {
               Import CSV
             </Button>
             <Button
+              data-tour="journal-new"
               onClick={() => {
                 resetCreateForm();
                 setCreateOpen(true);

@@ -388,7 +388,7 @@ export default function ReportsPage() {
             onChange={(event) => setToDate(event.target.value)}
           />
         </DatePicker>
-        <Button kind="primary" disabled={loading} onClick={() => void loadReports()}>
+        <Button data-tour="reports-refresh" kind="primary" disabled={loading} onClick={() => void loadReports()}>
           {loading ? "Loading…" : "Refresh"}
         </Button>
       </Stack>

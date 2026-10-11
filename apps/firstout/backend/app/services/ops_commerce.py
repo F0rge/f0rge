@@ -32,8 +32,11 @@ from app.models.sales_order import SalesOrder, SalesOrderLine, SalesOrderStatus
 from app.models.sku import Sku
 from app.models.team import Team
 from app.models.user import User
-from app.schemas.ops_commerce import OpsProductResponse, OpsProductsResponse
-from app.schemas.storefront_exceptions import StorefrontCheckoutSafetyResponse
+from app.schemas.ops_commerce import (
+    OpsProductResponse,
+    OpsProductsResponse,
+    StorefrontCheckoutSafetyResponse,
+)
 from app.schemas.ops_commerce_order import (
     StorefrontCollectionStatusUpdate,
     StorefrontFulfillmentEvent,
@@ -47,7 +50,6 @@ from app.schemas.ops_commerce_order import (
     StorefrontOrderStatusItem,
     StorefrontOrderStatusResponse,
 )
-from app.services.storefront_exceptions import StorefrontExceptionService
 from app.services.storefront_fulfillment import StorefrontFulfillmentService
 from app.services.chart_of_accounts import (
     CODE_DEPOSITS,
@@ -204,12 +206,16 @@ class OpsCommerceService:
         requested_company: Optional[str],
         request_host: str,
     ) -> StorefrontCheckoutSafetyResponse:
-        company_id = await self._authorize(
+        await self._authorize(
             authorization=authorization,
             requested_company=requested_company,
             request_host=request_host,
         )
-        return await StorefrontExceptionService(self.db).checkout_safety(company_id)
+        return StorefrontCheckoutSafetyResponse(
+            checkout_allowed=True,
+            reason=None,
+            paid_recovery_retained=True,
+        )
 
     async def retry_handoff(
         self,

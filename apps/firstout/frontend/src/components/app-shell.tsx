@@ -48,8 +48,6 @@ import {
   UserFollow,
   UserMultiple,
   Wallet,
-  WarningAlt,
-  ChartColumn,
   ChartLine,
   Currency,
   DocumentSubtract,
@@ -60,8 +58,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 
 import { useAuth } from "@/lib/auth";
-import { bindCanvasUser } from "@/lib/nia-canvas-store";
-import { clearDockSession } from "@/lib/nia-dock-session";
 import { resetMainScroll } from "@/lib/reset-main-scroll";
 import { can } from "@/lib/permissions";
 import {
@@ -69,7 +65,6 @@ import {
   BOOKS_NAV_ITEMS,
   CATALOGUE_NAV_ITEMS,
   HOME_NAV_ITEM,
-  NIA_NAV_ITEMS,
   SALES_NAV_ITEMS,
   STOCK_NAV_ITEMS,
   TILL_NAV_ITEM,
@@ -83,13 +78,7 @@ import {
   isWarehousePath,
 } from "@/lib/nav";
 import { HeaderSearch } from "@/components/header-search";
-import {
-  NiaDockPanel,
-  NiaDockProvider,
-  NiaHeaderAction,
-} from "@/components/nia/nia-dock";
-import { TourProvider, TourReplayButton } from "@/components/tour/tour-provider";
-import { canUseNia } from "@/lib/permissions";
+import { OverviewTourButton, PageTourButton, TourProvider } from "@/components/tour/tour-provider";
 import {
   getNarrowViewportServerSnapshot,
   getNarrowViewportSnapshot,
@@ -110,7 +99,6 @@ const ICONS = {
   "/price-lists": Currency,
   "/proformas": Document,
   "/catalogue": Catalog,
-  "/product-groups": Product,
   "/stocktakes": InventoryManagement,
   "/adjustments": Report,
   "/import": DocumentImport,
@@ -125,7 +113,6 @@ const ICONS = {
   "/returns": Undo,
   "/quotes": Document,
   "/orders": Receipt,
-  "/storefront-exceptions": WarningAlt,
   "/laybys": PiggyBank,
   "/customers": UserFollow,
   "/ledger": Finance,
@@ -137,7 +124,6 @@ const ICONS = {
   "/payments": Wallet,
   "/bank-reconciliation": DocumentTasks,
   "/reports": ChartLine,
-  "/canvas": ChartColumn,
   "/vat201": Document,
   "/books-periods": Calendar,
   "/till": Store,
@@ -173,19 +159,13 @@ export function AppShell({ children }: AppShellProps) {
     getNarrowViewportServerSnapshot,
   );
   const isPublic =
-    pathname === "/login" || pathname.startsWith("/trade") || pathname.startsWith("/c/");
+    pathname === "/login" || pathname.startsWith("/trade");
 
   useEffect(() => {
     if (!loading && !user && !isPublic) {
       router.replace("/login");
     }
   }, [loading, user, isPublic, router]);
-
-  useEffect(() => {
-    if (user) {
-      bindCanvasUser(user.id);
-    }
-  }, [user]);
 
   useEffect(() => {
     if (narrow) {
@@ -227,7 +207,7 @@ export function AppShell({ children }: AppShellProps) {
     (item) => !("permission" in item) || can(user, item.permission),
   );
   const salesNavItems = can(user, "sales.refunds") && !can(user, "sales.orders")
-    ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders" || item.href === "/storefront-exceptions")
+    ? SALES_NAV_ITEMS.filter((item) => item.href === "/orders")
     : SALES_NAV_ITEMS;
 
   function renderNavMenu(
@@ -289,14 +269,12 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   async function handleLogout() {
-    clearDockSession();
     await logout();
     router.push("/login");
   }
 
   return (
-    <TourProvider userId={user.id} nia={canUseNia(user)}>
-    <NiaDockProvider enabled={canUseNia(user)}>
+    <TourProvider userId={user.id}>
       <div
         className="firstout-shell"
         data-nav-expanded={expanded ? "true" : "false"}
@@ -324,14 +302,12 @@ export function AppShell({ children }: AppShellProps) {
             </HeaderName>
             <HeaderGlobalBar>
               <HeaderSearch />
-              <span className="firstout-tour-anchor" data-tour="header-tour">
-                <TourReplayButton />
+              <span className="firstout-tour-anchor" data-tour="header-page-tour">
+                <PageTourButton />
               </span>
-              {canUseNia(user) ? (
-                <span className="firstout-tour-anchor" data-tour="header-nia">
-                  <NiaHeaderAction />
-                </span>
-              ) : null}
+              <span className="firstout-tour-anchor" data-tour="header-overview-tour">
+                <OverviewTourButton />
+              </span>
               <span className="firstout-header-user" title={user.email}>
                 {user.display_name || user.email}
               </span>
@@ -373,9 +349,6 @@ export function AppShell({ children }: AppShellProps) {
             {renderNavLink(TILL_NAV_ITEM.href, TILL_NAV_ITEM.label)}
             {salesNavItems.length ? renderNavMenu("Sales", Store, isSalesPath(pathname), salesNavItems, "sales") : null}
             {renderNavMenu("Books", Finance, isBooksPath(pathname), BOOKS_NAV_ITEMS, "books")}
-            {canUseNia(user)
-              ? NIA_NAV_ITEMS.map((item) => renderNavLink(item.href, item.label))
-              : null}
             {renderNavMenu("Admin", Settings, isAdminPath(pathname), adminItems, "admin")}
           </SideNavItems>
         </SideNav>
@@ -384,10 +357,8 @@ export function AppShell({ children }: AppShellProps) {
         <main id="main-content" className="firstout-main">
           {children}
         </main>
-        {canUseNia(user) ? <NiaDockPanel enabled /> : null}
       </Theme>
     </div>
-    </NiaDockProvider>
     </TourProvider>
   );
 }

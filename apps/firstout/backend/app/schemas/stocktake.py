@@ -11,6 +11,7 @@ from app.models.stocktake import StocktakeStatus
 
 class StocktakeCreate(BaseModel):
     location_id: uuid.UUID
+    category: Optional[str] = Field(default=None, max_length=64)
 
 
 class StocktakeLineCountUpdate(BaseModel):
@@ -40,6 +41,7 @@ class StocktakeResponse(BaseModel):
     location_id: uuid.UUID
     location_name: str
     status: StocktakeStatus
+    category: Optional[str]
     started_at: datetime.datetime
     completed_at: Optional[datetime.datetime]
     lines: list[StocktakeLineResponse]

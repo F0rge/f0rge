@@ -16,14 +16,10 @@
     "@carbon/styles": "^1.95.0",
     "barcode-detector": "^3.2.2",
     "jsbarcode": "^3.12.3",
-    "jspreadsheet-ce": "^5.0.4",
-    "jsuites": "^5.13.5",
     "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "react-joyride": "^3.2.0",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "react-joyride": "^3.2.0"
   },
   "devDependencies": {
     "@types/node": "^26",

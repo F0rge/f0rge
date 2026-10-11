@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-AuditSource = Literal["books", "nia", "cost"]
+AuditSource = Literal["books", "cost"]
 
 
 class AuditEventItem(BaseModel):

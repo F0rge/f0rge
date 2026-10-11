@@ -508,7 +508,7 @@ export default function TransfersPage() {
           <Button kind="ghost" size="sm" onClick={() => setLines((current) => [...current, newDraftLine()])}>
             Add line
           </Button>
-          <Button disabled={submitting || !formValid} onClick={() => void handleCreateDraft()}>
+          <Button data-tour="transfer-save" disabled={submitting || !formValid} onClick={() => void handleCreateDraft()}>
             {submitting ? "Saving…" : "Save draft"}
           </Button>
         </Stack>

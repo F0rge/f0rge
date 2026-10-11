@@ -146,7 +146,7 @@ export default function RolesPage() {
             Preset roles are read-only. Create a custom role, then assign it on Users.
           </p>
         </div>
-        <Button onClick={openCreate}>Create role</Button>
+        <Button data-tour="role-new" onClick={openCreate}>Create role</Button>
       </div>
 
       {error ? (

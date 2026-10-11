@@ -470,6 +470,7 @@ export default function NewSkuPage() {
               Back to catalogue
             </Button>
             <Button
+              data-tour="sku-save"
               kind="primary"
               type="submit"
               renderIcon={Save}

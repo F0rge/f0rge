@@ -1,14 +1,15 @@
 "use client";
 
 import { HeaderGlobalAction } from "@carbon/react";
-import { Help } from "@carbon/icons-react";
-import { useRouter } from "next/navigation";
+import { Compass, Help } from "@carbon/icons-react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -16,28 +17,33 @@ import { ACTIONS, EVENTS, STATUS, useJoyride, type EventData } from "react-joyri
 
 import { TourTooltip } from "@/components/tour/tour-tooltip";
 import { buildJoyrideSteps } from "@/lib/tour-navigation";
-import { stepsForUser } from "@/lib/tour-steps";
+import { OVERVIEW_STEPS, pageTourForPath } from "@/lib/tour-steps";
 import {
-  readTourCompletion,
-  writeTourCompletion,
+  readPageTourCompletion,
+  writeOverviewCompletion,
+  writePageTourCompletion,
   type TourCompletion,
 } from "@/lib/tour-storage";
 
+type TourMode = "page" | "overview";
+
 type TourContextValue = {
-  startTour: () => void;
-  isRunning: boolean;
+  startPageTour: () => void;
+  startOverviewTour: () => void;
+  pageTourAvailable: boolean;
+  running: TourMode | null;
 };
 
 const TourContext = createContext<TourContextValue | null>(null);
 
 type TourProviderProps = {
   userId: string;
-  nia: boolean;
   children: ReactNode;
 };
 
-export function TourProvider({ userId, nia, children }: TourProviderProps) {
+export function TourProvider({ userId, children }: TourProviderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const navigate = useCallback(
     (route: string) => {
       router.push(route);
@@ -45,20 +51,34 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
     [router],
   );
 
+  const pageTour = pageTourForPath(pathname);
+  const [mode, setMode] = useState<TourMode>("page");
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const holdAutoRef = useRef(false);
+  const suppressAutoUntilRef = useRef(0);
+
+  const definitions = useMemo(
+    () => (mode === "overview" ? OVERVIEW_STEPS : (pageTour?.steps ?? [])),
+    [mode, pageTour],
+  );
   const steps = useMemo(
-    () => buildJoyrideSteps(stepsForUser({ nia }), navigate),
-    [navigate, nia],
+    () => buildJoyrideSteps(definitions, navigate),
+    [definitions, navigate],
   );
 
   const finish = useCallback(
     (completion: TourCompletion) => {
-      writeTourCompletion(userId, completion);
+      if (mode === "overview") {
+        writeOverviewCompletion(userId, completion);
+        suppressAutoUntilRef.current = Date.now() + 2000;
+      } else if (pageTour) {
+        writePageTourCompletion(userId, pageTour.id, completion);
+      }
       setRun(false);
       setStepIndex(0);
     },
-    [userId],
+    [mode, pageTour, userId],
   );
 
   const onEvent = useCallback(
@@ -118,17 +138,33 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
       textColor: "#161616",
       overlayColor: "rgba(22, 22, 22, 0.6)",
       arrowColor: "#ffffff",
-      width: 416,
+      width: 360,
     },
   });
 
-  const startTour = useCallback(() => {
+  const begin = useCallback((next: TourMode) => {
+    holdAutoRef.current = true;
+    setMode(next);
     setStepIndex(0);
     setRun(false);
     window.setTimeout(() => {
       setRun(true);
+      window.setTimeout(() => {
+        holdAutoRef.current = false;
+      }, 0);
     }, 0);
   }, []);
+
+  const startPageTour = useCallback(() => {
+    if (!pageTour) {
+      return;
+    }
+    begin("page");
+  }, [begin, pageTour]);
+
+  const startOverviewTour = useCallback(() => {
+    begin("overview");
+  }, [begin]);
 
   useEffect(() => {
     if (!run) {
@@ -146,22 +182,34 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
   }, [controls, run]);
 
   useEffect(() => {
-    if (readTourCompletion(userId)) {
+    if (holdAutoRef.current || run) {
+      return;
+    }
+    if (Date.now() < suppressAutoUntilRef.current) {
+      return;
+    }
+    if (!pageTour) {
+      return;
+    }
+    if (readPageTourCompletion(userId, pageTour.id)) {
       return;
     }
     const timer = window.setTimeout(() => {
+      setMode("page");
       setStepIndex(0);
       setRun(true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [userId]);
+  }, [pageTour, pathname, run, userId]);
 
   const value = useMemo(
     () => ({
-      startTour,
-      isRunning: run,
+      startPageTour,
+      startOverviewTour,
+      pageTourAvailable: pageTour !== null,
+      running: run ? mode : null,
     }),
-    [run, startTour],
+    [mode, pageTour, run, startOverviewTour, startPageTour],
   );
 
   return (
@@ -180,15 +228,31 @@ export function useTour(): TourContextValue {
   return context;
 }
 
-export function TourReplayButton() {
-  const { isRunning, startTour } = useTour();
+export function PageTourButton() {
+  const { running, startPageTour, pageTourAvailable } = useTour();
+  if (!pageTourAvailable) {
+    return null;
+  }
   return (
     <HeaderGlobalAction
-      aria-label={isRunning ? "Restart app tour" : "App tour"}
+      aria-label={running === "page" ? "Restart page tour" : "Page tour"}
       tooltipAlignment="end"
-      onClick={() => startTour()}
+      onClick={() => startPageTour()}
     >
       <Help size={20} />
+    </HeaderGlobalAction>
+  );
+}
+
+export function OverviewTourButton() {
+  const { running, startOverviewTour } = useTour();
+  return (
+    <HeaderGlobalAction
+      aria-label={running === "overview" ? "Restart overview tour" : "Overview tour"}
+      tooltipAlignment="end"
+      onClick={() => startOverviewTour()}
+    >
+      <Compass size={20} />
     </HeaderGlobalAction>
   );
 }

@@ -235,7 +235,7 @@ export default function UsersPage() {
           <h1 className="cds--type-productive-heading-04">Users</h1>
           <p className="cds--type-body-01">Create and manage back-office accounts.</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>Create user</Button>
+        <Button data-tour="user-new" onClick={() => setCreateOpen(true)}>Create user</Button>
       </div>
 
       {error ? (

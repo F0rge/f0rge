@@ -51,9 +51,6 @@ function formatAuditAt(value: string): string {
 }
 
 function sourceLabel(source: AuditSource): string {
-  if (source === "nia") {
-    return "Nia";
-  }
   if (source === "cost") {
     return "Cost";
   }
@@ -121,7 +118,7 @@ export default function AuditPage() {
       <div>
         <h1 className="cds--type-productive-heading-04">Audit</h1>
         <p className="cds--type-body-01">
-          Unified activity across books, Nia, and cost audit. Select a row to open the related
+          Unified activity across books and cost audit. Select a row to open the related
           document.
         </p>
       </div>
@@ -136,13 +133,14 @@ export default function AuditPage() {
         />
       ) : null}
 
+      <div data-tour="audit-events">
       {loading ? (
         <p className="cds--type-body-01">Loading audit events…</p>
       ) : total === 0 && !error ? (
         <InlineNotification
           kind="info"
           title="No events"
-          subtitle="Audit events will appear here as books, Nia, and cost activity occurs."
+          subtitle="Audit events will appear here as books and cost activity occurs."
           hideCloseButton
           lowContrast
         />
@@ -198,6 +196,7 @@ export default function AuditPage() {
           />
         </>
       )}
+      </div>
     </Stack>
   );
 }

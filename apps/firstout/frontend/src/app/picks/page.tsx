@@ -196,7 +196,7 @@ function PicksPageContent() {
             Allocate kit components or reserved sales-order lines across locations.
           </p>
         </div>
-        {canMutate ? <Button onClick={() => setCreateOpen(true)}>New pick</Button> : null}
+        {canMutate ? <Button data-tour="pick-new" onClick={() => setCreateOpen(true)}>New pick</Button> : null}
       </div>
 
       {error ? (

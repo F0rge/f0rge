@@ -23,6 +23,7 @@ import {
   getStocktake,
   isActiveLocation,
   listLocations,
+  listSkus,
   listStocktakes,
   startStocktake,
   type Location,
@@ -48,6 +49,8 @@ export default function StocktakesPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [active, setActive] = useState<Stocktake | null>(null);
   const [locationId, setLocationId] = useState("");
+  const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,12 +60,25 @@ export default function StocktakesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [summaryData, locationData] = await Promise.all([
+      const [summaryData, locationData, skuData] = await Promise.all([
         listStocktakes(),
         listLocations(),
+        listSkus(),
       ]);
       setStocktakes(summaryData);
       setLocations(locationData.filter(isActiveLocation));
+      const seen = new Map<string, string>();
+      for (const sku of skuData) {
+        const value = sku.category?.trim();
+        if (!value) {
+          continue;
+        }
+        const key = value.toLowerCase();
+        if (!seen.has(key)) {
+          seen.set(key, value);
+        }
+      }
+      setCategories([...seen.values()].sort((a, b) => a.localeCompare(b)));
       const activeSummary = summaryData.find((entry) => entry.status === "in_progress");
       if (activeSummary && !sessionDismissedRef.current) {
         setActive(await getStocktake(activeSummary.id));
@@ -96,8 +112,9 @@ export default function StocktakesPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await startStocktake({ location_id: locationId });
+      await startStocktake({ location_id: locationId, category });
       setLocationId("");
+      setCategory("");
       await load();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -155,7 +172,7 @@ export default function StocktakesPage() {
           <div>
             <h1 className="cds--type-productive-heading-04">Stocktakes</h1>
             <p className="cds--type-body-01">
-              Count on-hand stock for one location. Completing posts quantity adjustments.
+              Count on-hand stock for one location. Choose a category to count only those SKUs.
             </p>
           </div>
 
@@ -172,7 +189,7 @@ export default function StocktakesPage() {
               <InlineNotification
                 kind="info"
                 title="Stocktake paused"
-                subtitle={`${inProgress[0].location_name} is still in progress. Resume to continue counting.`}
+                subtitle={`${inProgress[0].location_name}${inProgress[0].category ? ` (${inProgress[0].category})` : ""} is still in progress. Resume to continue counting.`}
                 hideCloseButton
                 lowContrast
               />
@@ -201,7 +218,20 @@ export default function StocktakesPage() {
                   <SelectItem key={entry.id} value={entry.id} text={entry.name} />
                 ))}
               </Select>
+              <Select
+                id="stocktake-category"
+                labelText="Category"
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                helperText="All categories counts every SKU. A category counts only that group."
+              >
+                <SelectItem value="" text="All categories" />
+                {categories.map((entry) => (
+                  <SelectItem key={entry} value={entry} text={entry} />
+                ))}
+              </Select>
               <Button
+                data-tour="stocktake-start"
                 disabled={submitting || !locationId}
                 onClick={() => void handleStart()}
               >
@@ -228,6 +258,7 @@ export default function StocktakesPage() {
             <TableHead>
               <TableRow>
                 <TableHeader>Location</TableHeader>
+                <TableHeader>Category</TableHeader>
                 <TableHeader>Status</TableHeader>
                 <TableHeader>Started</TableHeader>
                 <TableHeader>Completed</TableHeader>
@@ -237,6 +268,7 @@ export default function StocktakesPage() {
               {history.map((entry) => (
                 <TableRow key={entry.id}>
                   <TableCell>{entry.location_name}</TableCell>
+                  <TableCell>{entry.category ?? "All"}</TableCell>
                   <TableCell>{STOCKTAKE_STATUS_LABELS[entry.status]}</TableCell>
                   <TableCell>{formatDateTime(entry.started_at)}</TableCell>
                   <TableCell>{formatDateTime(entry.completed_at)}</TableCell>

@@ -17,15 +17,6 @@ class Settings(BaseSettings):
     seed_buyer_password: str = "change-me-buyer"
     seed_playground: bool = False
 
-    openrouter_api_key: str = ""
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_model: str = "openai/gpt-4o-mini"
-    # OpenRouter unified reasoning (pydantic-ai openrouter_reasoning → extra_body.reasoning).
-    # GLM-5.3 / glm-5.3-flash always reason; effort low|high|max (default max upstream).
-    openrouter_reasoning_effort: str = "low"
-    # When true, set reasoning.exclude (clear_thinking) so thinking is not in content.
-    openrouter_reasoning_exclude: bool = True
-    nia_schedule_ticker: bool = True
     settings_encryption_key: str = ""
     wa_verify_token: str = ""
 
@@ -39,7 +30,6 @@ class Settings(BaseSettings):
     ops_commerce_token: str = ""
     ops_commerce_company_id: str = ""
     ops_commerce_allowed_host: str = ""
-    storefront_exception_fixtures: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

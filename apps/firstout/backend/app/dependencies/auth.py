@@ -10,8 +10,6 @@ from app.middleware.auth import get_current_user_id
 from app.permissions import (
     BOOKS_MUTATE,
     CATALOGUE_MUTATE,
-    NIA_ADMIN,
-    NIA_USE,
     PO_RAISE,
     SALES_CUSTOMERS,
     SALES_DELIVERIES,
@@ -62,7 +60,6 @@ from app.services.sku_bom import SkuBomService
 from app.services.skus import SkuService
 from app.services.stock_adjustments import StockAdjustmentService
 from app.services.laybys import LaybysService
-from app.services.lookbooks import LookbooksService
 from app.services.quotes import QuotesService
 from app.services.sales_orders import SalesOrdersService
 from app.services.storefront_refund_workflow import StorefrontRefundWorkflowService
@@ -78,12 +75,6 @@ from app.services.users import BootstrapService, ProfileService, UserService
 from app.services.vat201_periods import Vat201PeriodService
 from app.services.books_periods import BooksPeriodService
 from app.services.audit_hub import AuditHubService
-from app.services.nia_audit import NiaAuditService
-from app.services.nia_caps import NiaCapsService
-from app.services.nia_run import NiaRunService
-from app.services.nia_schedule import NiaScheduleService
-from app.services.nia_threads import NiaThreadsService
-from app.services.nia_usage import NiaUsageService
 
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
@@ -276,10 +267,6 @@ def get_quote_service(db: AsyncSession = Depends(get_db)) -> QuotesService:
     return QuotesService(db)
 
 
-def get_lookbook_service(db: AsyncSession = Depends(get_db)) -> LookbooksService:
-    return LookbooksService(db)
-
-
 def get_sales_order_service(db: AsyncSession = Depends(get_db)) -> SalesOrdersService:
     return SalesOrdersService(db)
 
@@ -460,41 +447,3 @@ async def require_picks_mutate(
     db: AsyncSession = Depends(get_db),
 ) -> uuid.UUID:
     return await _require_keys(user_id, db, (STOCK_TRANSFER, TILL_SELL, SALES_DELIVERIES))
-
-
-async def require_nia_use(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (NIA_USE,))
-
-
-async def require_nia_admin(
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> uuid.UUID:
-    return await _require_keys(user_id, db, (NIA_ADMIN,))
-
-
-def get_nia_threads_service(db: AsyncSession = Depends(get_db)) -> NiaThreadsService:
-    return NiaThreadsService(db)
-
-
-def get_nia_usage_service(db: AsyncSession = Depends(get_db)) -> NiaUsageService:
-    return NiaUsageService(db)
-
-
-def get_nia_run_service(db: AsyncSession = Depends(get_db)) -> NiaRunService:
-    return NiaRunService(db)
-
-
-def get_nia_audit_service(db: AsyncSession = Depends(get_db)) -> NiaAuditService:
-    return NiaAuditService(db)
-
-
-def get_nia_caps_service(db: AsyncSession = Depends(get_db)) -> NiaCapsService:
-    return NiaCapsService(db)
-
-
-def get_nia_schedule_service(db: AsyncSession = Depends(get_db)) -> NiaScheduleService:
-    return NiaScheduleService(db)

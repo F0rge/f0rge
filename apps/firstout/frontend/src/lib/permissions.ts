@@ -18,8 +18,6 @@ export const PERMISSION_CATALOG = [
   "sales.customers",
   "books.mutate",
   "books.journals",
-  "nia.use",
-  "nia.admin",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_CATALOG)[number];
@@ -99,10 +97,6 @@ export function canMutateOrders(user: PermissionHolder): boolean {
   return can(user, "sales.orders");
 }
 
-export function canViewStorefrontExceptions(user: PermissionHolder): boolean {
-  return can(user, "sales.orders") || can(user, "sales.refunds");
-}
-
 export function canMutateCustomers(user: PermissionHolder): boolean {
   return can(user, "sales.customers");
 }
@@ -119,10 +113,3 @@ export function canMutatePicks(user: PermissionHolder): boolean {
   return can(user, "stock.transfer") || can(user, "till.sell") || can(user, "sales.deliveries");
 }
 
-export function canUseNia(user: PermissionHolder): boolean {
-  return can(user, "nia.use");
-}
-
-export function canAdminNia(user: PermissionHolder): boolean {
-  return can(user, "nia.admin");
-}

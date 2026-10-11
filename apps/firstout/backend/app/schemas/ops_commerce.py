@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -33,3 +33,11 @@ class OpsProductResponse(BaseModel):
 class OpsProductsResponse(BaseModel):
     company_id: uuid.UUID
     products: list[OpsProductResponse]
+
+
+class StorefrontCheckoutSafetyResponse(BaseModel):
+    """Shop sync treats a non-OK response as checkout paused. Always allow."""
+
+    checkout_allowed: bool
+    reason: Optional[str] = None
+    paid_recovery_retained: Literal[True] = True

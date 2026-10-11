@@ -24,9 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
-  canAdminNia,
   canMutateSettings,
-  canUseNia,
   getSettings,
   isActiveLocation,
   listLocations,
@@ -37,8 +35,6 @@ import {
   type DocumentSequence,
   type Location,
 } from "@/lib/api";
-import { NiaCapsSettings } from "@/components/nia/nia-caps-settings";
-import { NiaScheduleSettings } from "@/components/nia/nia-schedule-settings";
 import { CommunicationsSettings } from "@/app/settings/communications-settings";
 import { useAuth } from "@/lib/auth";
 
@@ -80,7 +76,7 @@ function SettingsSaveButton({
     );
   }
   return (
-    <Button kind="primary" disabled={saving} onClick={onSave}>
+    <Button kind="primary" data-tour="settings-save" disabled={saving} onClick={onSave}>
       {saving ? "Saving…" : "Save settings"}
     </Button>
   );
@@ -89,8 +85,6 @@ function SettingsSaveButton({
 export default function SettingsPage() {
   const { user } = useAuth();
   const canMutate = canMutateSettings(user);
-  const canUseNiaAssistant = canUseNia(user);
-  const canAdminNiaCaps = canAdminNia(user);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [vatPercent, setVatPercent] = useState("15");
   const [currency, setCurrency] = useState("ZAR");
@@ -114,8 +108,6 @@ export default function SettingsPage() {
   const [documentSequences, setDocumentSequences] = useState<DocumentSequence[]>([]);
   const [preferWarehouse, setPreferWarehouse] = useState(true);
   const [pickPriority, setPickPriority] = useState<string[]>([]);
-  const [niaMonthlyTokenCap, setNiaMonthlyTokenCap] = useState(500000);
-  const [niaCapsRefreshKey, setNiaCapsRefreshKey] = useState(0);
   const [locations, setLocations] = useState<Location[]>([]);
   const [addLocationId, setAddLocationId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -154,7 +146,6 @@ export default function SettingsPage() {
     setDocumentSequences(data.document_sequences);
     setPreferWarehouse(data.always_prefer_warehouse);
     setPickPriority(data.pick_priority);
-    setNiaMonthlyTokenCap(data.nia_monthly_token_cap);
   }
 
   useEffect(() => {
@@ -215,10 +206,8 @@ export default function SettingsPage() {
         })),
         always_prefer_warehouse: preferWarehouse,
         pick_priority: pickPriority,
-        ...(canAdminNiaCaps ? { nia_monthly_token_cap: niaMonthlyTokenCap } : {}),
       });
       applySettings(updated);
-      setNiaCapsRefreshKey((key) => key + 1);
       setNotice(updated.warning ?? "Settings saved.");
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : "Failed to save settings");
@@ -376,7 +365,6 @@ export default function SettingsPage() {
             <Tab>Locations</Tab>
             <Tab>Operations</Tab>
             <Tab>Communications</Tab>
-            {canUseNiaAssistant || canAdminNiaCaps ? <Tab>Nia</Tab> : null}
           </TabList>
           <TabPanels>
             <TabPanel>
@@ -693,51 +681,6 @@ export default function SettingsPage() {
                 <CommunicationsSettings />
               </Tile>
             </TabPanel>
-
-            {canUseNiaAssistant || canAdminNiaCaps ? (
-              <TabPanel>
-                <Tile>
-                  <Stack gap={5}>
-                    <div>
-                      <h2 className="cds--type-productive-heading-03">Nia</h2>
-                      <p className="cds--type-body-01 firstout-muted-text">
-                        Token caps and scheduled jobs. Nia never emails, takes till payment, or
-                        eFiles.
-                      </p>
-                    </div>
-                    <Tabs>
-                      <TabList aria-label="Nia settings">
-                        <Tab>Usage</Tab>
-                        {canUseNiaAssistant ? <Tab>Scheduled</Tab> : null}
-                      </TabList>
-                      <TabPanels>
-                        <TabPanel>
-                          <NiaCapsSettings
-                            canUse={canUseNiaAssistant}
-                            canAdmin={canAdminNiaCaps}
-                            teamDefaultCap={niaMonthlyTokenCap}
-                            teamDefaultDisabled={!canMutate || saving}
-                            onTeamDefaultCapChange={setNiaMonthlyTokenCap}
-                            refreshKey={niaCapsRefreshKey}
-                            hideChrome
-                          />
-                        </TabPanel>
-                        {canUseNiaAssistant ? (
-                          <TabPanel>
-                            <NiaScheduleSettings />
-                          </TabPanel>
-                        ) : null}
-                      </TabPanels>
-                    </Tabs>
-                    <SettingsSaveButton
-                      canMutate={canMutate}
-                      saving={saving}
-                      onSave={() => void handleSave()}
-                    />
-                  </Stack>
-                </Tile>
-              </TabPanel>
-            ) : null}
           </TabPanels>
         </Tabs>
       ) : null}
