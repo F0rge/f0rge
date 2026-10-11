@@ -21,6 +21,7 @@ from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
 from app.models.ops_commerce_fulfillment_event import OpsCommerceFulfillmentEvent
 from app.models.ops_commerce_order import OpsCommerceOrder
 from app.models.sales_order import SalesOrder, SalesOrderLine, SalesOrderPayment, SalesOrderStatus
+from app.models.sku import Sku
 from app.models.tax_invoice import TaxInvoice
 from app.models.unit_cost_audit import UnitCostAudit
 from app.models.account import Account
@@ -371,6 +372,11 @@ async def test_paid_handoff_posts_external_tender_once_and_acknowledges_stock_af
     }
     assert balances["1150"] == (Decimal("1150.00"), Decimal("0.00"))
     assert balances["2300"] == (Decimal("0.00"), Decimal("1150.00"))
+
+    sku = await async_db.get(Sku, UUID(sku_id))
+    assert sku is not None
+    sku.storefront_published = True
+    await async_db.flush()
 
     published = await owner_client.get(
         "/api/v1/ops-commerce/v1/products",
