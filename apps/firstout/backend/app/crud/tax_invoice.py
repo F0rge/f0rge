@@ -24,6 +24,7 @@ class TaxInvoiceCRUD(BaseCRUD):
             .options(
                 selectinload(TaxInvoice.customer),
                 selectinload(TaxInvoice.lines),
+                selectinload(TaxInvoice.credit_note),
             )
             .where(TaxInvoice.id == invoice_id)
         )
@@ -79,7 +80,10 @@ class TaxInvoiceCRUD(BaseCRUD):
 
         stmt = (
             select(TaxInvoice)
-            .options(selectinload(TaxInvoice.customer))
+            .options(
+                selectinload(TaxInvoice.customer),
+                selectinload(TaxInvoice.credit_note),
+            )
             .join(Customer, TaxInvoice.customer_id == Customer.id)
         )
         if filters:
