@@ -35,27 +35,43 @@ export async function currentCartId(): Promise<string | null> {
   return verifyCart((await cookies()).get(cartCookie)?.value);
 }
 
-function orderAccessSignature(cartId: string, token: string): string {
-  return createHmac("sha256", secret()).update(`order-confirmation:v1:${cartId}:${token}`).digest("base64url");
+function orderAccessSignature(cartId: string, token: string, issuedAt?: string): string {
+  const payload = issuedAt === undefined
+    ? `order-confirmation:v1:${cartId}:${token}`
+    : `order-confirmation:v2:${cartId}:${token}:${issuedAt}`;
+  return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-function emailOrderAccessSignature(orderId: string, token: string): string {
-  return createHmac("sha256", secret()).update(`email-order-cookie:v1:${orderId}:${token}`).digest("base64url");
+function emailOrderAccessSignature(orderId: string, token: string, issuedAt?: string): string {
+  const payload = issuedAt === undefined
+    ? `email-order-cookie:v1:${orderId}:${token}`
+    : `email-order-cookie:v2:${orderId}:${token}:${issuedAt}`;
+  return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
 export function newOrderAccessToken(): string { return randomBytes(32).toString("base64url"); }
 
-export function signedOrderAccess(cartId: string, token: string): string {
-  return `v1.${cartId}.${token}.${orderAccessSignature(cartId, token)}`;
+export function signedOrderAccess(cartId: string, token: string, issuedAt = Date.now()): string {
+  const issued = String(issuedAt);
+  return `v2.${cartId}.${token}.${issued}.${orderAccessSignature(cartId, token, issued)}`;
 }
 
-function verifiedOrderAccess(value: string | undefined): { cartId: string; token: string } | null {
-  const match = /^v1\.(cart_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{40,100})\.([A-Za-z0-9_-]+)$/.exec(value || "");
-  if (!match) return null;
-  const expected = Buffer.from(orderAccessSignature(match[1], match[2]));
-  const actual = Buffer.from(match[3]);
+function verifiedOrderAccess(value: string | undefined): { cartId: string; token: string; issuedAt: number } | null {
+  const current = /^v2\.(cart_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{40,100})\.(\d{1,16})\.([A-Za-z0-9_-]+)$/.exec(value || "");
+  if (current) {
+    const expected = Buffer.from(orderAccessSignature(current[1], current[2], current[3]));
+    const actual = Buffer.from(current[4]);
+    return expected.length === actual.length && timingSafeEqual(expected, actual)
+      ? { cartId: current[1], token: current[2], issuedAt: Number(current[3]) }
+      : null;
+  }
+  const legacy = /^v1\.(cart_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{40,100})\.([A-Za-z0-9_-]+)$/.exec(value || "");
+  if (!legacy) return null;
+  const expected = Buffer.from(orderAccessSignature(legacy[1], legacy[2]));
+  const actual = Buffer.from(legacy[3]);
   return expected.length === actual.length && timingSafeEqual(expected, actual)
-    ? { cartId: match[1], token: match[2] } : null;
+    ? { cartId: legacy[1], token: legacy[2], issuedAt: 0 }
+    : null;
 }
 
 export function verifyOrderAccess(value: string | undefined, cartId: string): string | null {
@@ -63,7 +79,7 @@ export function verifyOrderAccess(value: string | undefined, cartId: string): st
   return access?.cartId === cartId ? access.token : null;
 }
 
-export async function currentOrderAccess(): Promise<{ cartId: string; token: string } | null> {
+export async function currentOrderAccess(): Promise<{ cartId: string; token: string; issuedAt: number } | null> {
   return verifiedOrderAccess((await cookies()).get(orderAccessCookie)?.value);
 }
 
@@ -71,18 +87,27 @@ export async function currentOrderAccessToken(cartId: string): Promise<string | 
   return verifyOrderAccess((await cookies()).get(orderAccessCookie)?.value, cartId);
 }
 
-export function signedEmailOrderAccess(orderId: string, token: string): string {
-  return `e1.${orderId}.${token}.${emailOrderAccessSignature(orderId, token)}`;
+export function signedEmailOrderAccess(orderId: string, token: string, issuedAt = Date.now()): string {
+  const issued = String(issuedAt);
+  return `e2.${orderId}.${token}.${issued}.${emailOrderAccessSignature(orderId, token, issued)}`;
 }
 
-export async function currentEmailOrderAccess(): Promise<{ orderId: string; token: string } | null> {
+export async function currentEmailOrderAccess(): Promise<{ orderId: string; token: string; issuedAt: number } | null> {
   const value = (await cookies()).get(emailOrderAccessCookie)?.value || "";
-  const match = /^e1\.(order_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{43})$/.exec(value);
-  if (!match) return null;
-  const expected = Buffer.from(emailOrderAccessSignature(match[1], match[2]));
-  const actual = Buffer.from(match[3]);
+  const current = /^e2\.(order_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})\.(\d{1,16})\.([A-Za-z0-9_-]{43})$/.exec(value);
+  if (current) {
+    const expected = Buffer.from(emailOrderAccessSignature(current[1], current[2], current[3]));
+    const actual = Buffer.from(current[4]);
+    return expected.length === actual.length && timingSafeEqual(expected, actual)
+      ? { orderId: current[1], token: current[2], issuedAt: Number(current[3]) }
+      : null;
+  }
+  const legacy = /^e1\.(order_[A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{43})$/.exec(value);
+  if (!legacy) return null;
+  const expected = Buffer.from(emailOrderAccessSignature(legacy[1], legacy[2]));
+  const actual = Buffer.from(legacy[3]);
   return expected.length === actual.length && timingSafeEqual(expected, actual)
-    ? { orderId: match[1], token: match[2] }
+    ? { orderId: legacy[1], token: legacy[2], issuedAt: 0 }
     : null;
 }
 
