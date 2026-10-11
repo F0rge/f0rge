@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi.responses import Response
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.bill import BillCRUD
@@ -13,6 +14,7 @@ from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.user import TeamCRUD
 from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.models.books_event import BooksDocumentType, BooksEventAction
+from app.models.credit_note import CreditNote
 from app.models.journal import JournalDocumentType
 from app.models.payment import Payment, PaymentDirection
 from app.schemas.page import Page, PageParams
@@ -97,7 +99,14 @@ class PaymentService:
             if invoice is None:
                 raise NotFoundError("Invoice not found")
 
-            remaining = cents(invoice.total_inc_vat - invoice.amount_paid)
+            credited = await self.db.scalar(
+                select(func.coalesce(func.sum(CreditNote.total_inc_vat), 0)).where(
+                    CreditNote.invoice_id == invoice.id
+                )
+            )
+            remaining = cents(
+                invoice.total_inc_vat - invoice.amount_paid - Decimal(credited or 0)
+            )
             if remaining <= 0:
                 raise ValidationError("Invoice is already fully paid")
             if amount > remaining:
