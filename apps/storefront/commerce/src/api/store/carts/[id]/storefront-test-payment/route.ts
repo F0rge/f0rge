@@ -107,7 +107,7 @@ async function preparePaidHandoff(
 ): Promise<{ status: "captured" | "paid_exception"; order_id: string; duplicate: boolean }> {
   try {
     const outbox = await prepareStorefrontOrderHandoff(req.scope, orderId);
-    if (!outbox) throw new Error("Durable Storefront handoff state is unavailable");
+    if (!outbox) throw new Error("Durable Vellano handoff state is unavailable");
     await markEvent(req, session, { event_id: eventId, outcome, status: "captured" }, eventData, PaymentSessionStatus.CAPTURED);
     return { status: "captured", order_id: orderId, duplicate };
   } catch (error) {

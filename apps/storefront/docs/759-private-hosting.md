@@ -1,10 +1,10 @@
-# Storefront private Railway preview
+# Vellano private Railway preview
 
-Issue #759 asks for a private hosted Storefront with isolated Medusa data
+Issue #759 asks for a private hosted Vellano with isolated Medusa data
 services, a real Firstout SKU round-trip, health checks, a rollback path, and a
 monthly total below USD 50.
 
-**Status:** an existing Storefront web service is running in the Vellano
+**Status:** an existing Vellano web service is running in the Vellano
 `develop` environment, but the isolated preview required by #759 is not
 provisioned or verified. No hosted SKU round-trip or cost telemetry is
 available. Keep #759 open until the isolated topology, hosted checks, and
@@ -19,11 +19,11 @@ variables or logs were read, and no infrastructure was changed. The project is
 Vellano project. Its `production` environment has ID
 `a639e365-f653-44db-a46d-a6a94e083894` and zero service instances. Its
 `develop` environment (`7a8ce6f1-c514-4e5d-9c50-4b7918865321`) has one
-successful Storefront web deployment, commit
+successful Vellano web deployment, commit
 `33c01651ecfb5f09003157dd35784a5cb91430d8` on `develop`, at
 `https://storefront-develop-6009.up.railway.app`. The project service list
 contains `storefront`, `vellano-frontend`, `vellano-api`, and `Postgres`; it
-does not show dedicated Storefront Medusa or Redis services. This does not
+does not show dedicated Vellano Medusa or Redis services. This does not
 demonstrate the project and data-service isolation required above.
 
 Unauthenticated `GET /api/health` returned `200` with exactly
@@ -39,7 +39,7 @@ or replace its data services as part of this runbook.
 
 ## Isolation and access rules
 
-- Create a new Railway project named **F0rge Storefront Preview**, with one
+- Create a new Railway project named **F0rge Vellano Preview**, with one
   environment named **private-preview**. Do not reuse the Firstout/Vellano or
   Marrow projects, their services, their databases, Redis instances, buckets,
   or credentials.
@@ -74,8 +74,8 @@ The Docker build context must remain the repository root.
 
 | Service | Build configuration | Domain | Health check |
 | --- | --- | --- | --- |
-| storefront-web | `RAILWAY_DOCKERFILE_PATH=apps/storefront/web/Dockerfile` | Railway HTTPS hostname; Basic Auth protected | /api/health |
-| storefront-commerce | `RAILWAY_DOCKERFILE_PATH=apps/storefront/commerce/Dockerfile` | Private network only | /health |
+| vellano-web | `RAILWAY_DOCKERFILE_PATH=apps/storefront/web/Dockerfile` | Railway HTTPS hostname; Basic Auth protected | /api/health |
+| vellano-commerce | `RAILWAY_DOCKERFILE_PATH=apps/storefront/commerce/Dockerfile` | Private network only | /health |
 | storefront-postgres | Railway PostgreSQL plugin | Private network only | Railway-managed |
 | storefront-redis | Railway Redis plugin | Private network only | Railway-managed |
 
@@ -90,10 +90,10 @@ its dedicated database and Redis URLs exist and its JWT, cookie, and BFF
 secrets each contain at least 32 characters. Configure the remaining
 service-native Medusa settings from
 [the commerce environment example](../commerce/.env.example), using the
-dedicated Storefront services and the generated web origin.
+dedicated Vellano services and the generated web origin.
 
 Set values in Railway's protected variable editor or an approved secret
-manager. This table lists only the Storefront integration variables and their
+manager. This table lists only the Vellano integration variables and their
 intent; it contains no credential values.
 
 | Service | Variable names | Notes |
@@ -103,8 +103,8 @@ intent; it contains no credential values.
 
 Firstout checks a static machine credential and the exact hostname of its own
 API request. The allowed hostname belongs to the Firstout API ingress, not the
-Storefront web host. There is no token-issuance endpoint in the repository. An
-owner must provision a distinct Storefront machine token through the approved
+Vellano web host. There is no token-issuance endpoint in the repository. An
+owner must provision a distinct Vellano machine token through the approved
 Firstout environment path. Do not reuse another integration's token or change
 the Firstout hostname allowlist for this preview.
 
@@ -164,7 +164,7 @@ hosted walkthrough is complete based on CI or /api/health alone.
 
 ## CI and local checks
 
-Storefront TypeScript projects carry the existing platform:ts tag, so
+Vellano TypeScript projects carry the existing platform:ts tag, so
 Nx-affected CI runs lint, typecheck, and build for changed projects. This
 change adds no deploy workflow or deploy manifest entry: deployment remains an
 owner-controlled action after reviewing the private project. Before
@@ -198,7 +198,7 @@ with low average resource use and no separate staging stack.
 
 The resource estimate applies USD 10/GB-month for memory, USD 20/vCPU-month,
 USD 0.15/GB-month for the database volume, and USD 0.05/GB for egress. It is
-**not an all-in Storefront forecast**. The following lines must be included
+**not an all-in Vellano forecast**. The following lines must be included
 before claiming the USD 50/month target:
 
 Railway's Hobby plan has a USD 5 monthly minimum that includes the first USD 5
@@ -223,7 +223,7 @@ Confirm actual invoice treatment and record Railway's observed usage after a
 representative month. Current product sync does not provision product media
 storage. The estimate has not been verified against a provisioned service, and
 workspace-level billing controls are not a project-level hard cap. Do not
-claim the Storefront is under USD 50/month until every required line above is
+claim Vellano is under USD 50/month until every required line above is
 measured or explicitly budgeted. If telemetry approaches the target, stop the
 preview and review resource settings with the owner.
 
@@ -234,7 +234,7 @@ Pricing references: [Railway plans](https://docs.railway.com/pricing/plans),
 ## Rollback
 
 This preview is isolated from Firstout and Marrow data. If a deployment fails,
-revert the changed commit or select the last known-good Storefront deployment
+revert the changed commit or select the last known-good Vellano deployment
 in Railway; restore the previous web/Medusa image pair and verify both health
 checks. If schema rollback is unsafe, roll forward from a database backup
 instead of deleting or reusing the database. If the private boundary fails,

@@ -15,6 +15,8 @@ import {
   linkSalesChannelsToApiKeyWorkflow,
   linkSalesChannelsToStockLocationWorkflow,
   updateRegionsWorkflow,
+  updateApiKeysWorkflow,
+  updateSalesChannelsWorkflow,
   updateStoresWorkflow,
 } from "@medusajs/medusa/core-flows";
 import { deliveryZones } from "../delivery-zones";
@@ -39,16 +41,19 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   let channelId = salesChannels[0]?.id;
   if (!channelId) {
     const { result } = await createSalesChannelsWorkflow(container).run({
-      input: { salesChannelsData: [{ name: "Storefront", description: "Firstout retail website" }] },
+      input: { salesChannelsData: [{ name: "Vellano", description: "Vellano retail website" }] },
     });
     channelId = result[0].id;
   }
+  await updateSalesChannelsWorkflow(container).run({
+    input: { selector: { id: channelId }, update: { name: "Vellano", description: "Vellano retail website" } },
+  });
 
   const { data: stores } = await query.graph({ entity: "store", fields: ["id", "supported_currencies.*"] });
   if (!stores.length) {
     await createStoresWorkflow(container).run({
       input: { stores: [{
-        name: "Storefront",
+        name: "Vellano",
         supported_currencies: [{ currency_code: "zar", is_default: true, is_tax_inclusive: true }],
         default_sales_channel_id: channelId,
       }] },
@@ -60,24 +65,34 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
       throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE,
         "Store has multiple currencies; set ZAR tax-inclusive in Medusa Admin before syncing Firstout");
     }
-    // Medusa creates a new store with EUR as its only currency. This dedicated
-    // Storefront uses ZAR exclusively, so normalize that default on first boot.
+    // Medusa creates a new store with EUR as its only currency. Vellano uses ZAR
+    // exclusively, so normalize that default whenever bootstrap runs.
     await updateStoresWorkflow(container).run({ input: {
       selector: { id: store.id },
-      update: { supported_currencies: [{ currency_code: "zar", is_default: true, is_tax_inclusive: true }] },
+      update: {
+        name: "Vellano",
+        supported_currencies: [{ currency_code: "zar", is_default: true, is_tax_inclusive: true }],
+      },
     } });
   }
 
   const { data: keys } = await query.graph({
-    entity: "api_key", fields: ["id", "type"], filters: { type: "publishable" },
+    entity: "api_key", fields: ["id", "title", "type"], filters: { type: "publishable" },
   });
   if (!keys.length) {
     const { result: [key] } = await createApiKeysWorkflow(container).run({
-      input: { api_keys: [{ title: "Storefront public key", type: "publishable", created_by: "" }] },
+      input: { api_keys: [{ title: "Vellano public key", type: "publishable", created_by: "" }] },
     });
     await linkSalesChannelsToApiKeyWorkflow(container).run({
       input: { id: key.id, add: [channelId] },
     });
+  }
+  for (const key of keys) {
+    if (key.title === "Storefront public key") {
+      await updateApiKeysWorkflow(container).run({
+        input: { selector: { id: key.id }, update: { title: "Vellano public key" } },
+      });
+    }
   }
 
   const { data: regions } = await query.graph({
@@ -173,7 +188,7 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   if (!shippingSet) {
     await createLocationFulfillmentSetWorkflow(container).run({ input: {
       location_id: locationId,
-      fulfillment_set_data: { name: "Storefront shipping", type: "shipping" },
+      fulfillment_set_data: { name: "Vellano shipping", type: "shipping" },
     } });
     const { data: refreshed } = await query.graph({
       entity: "stock_location", fields: ["id", "fulfillment_sets.id", "fulfillment_sets.name", "fulfillment_sets.type", "fulfillment_sets.service_zones.id", "fulfillment_sets.service_zones.name"],
@@ -217,5 +232,5 @@ export default async function bootstrapStorefront({ container }: ExecArgs) {
   }));
   if (newOptions.length) await createShippingOptionsWorkflow(container).run({ input: newOptions });
 
-  logger.info("South African Storefront bootstrap complete. Set the public API key from Medusa Admin.");
+  logger.info("Vellano bootstrap complete. Set the public API key from Medusa Admin.");
 }

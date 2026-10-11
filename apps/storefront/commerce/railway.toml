@@ -1,4 +1,4 @@
-# Config-as-code for the isolated Storefront private-preview Medusa service.
+# Config-as-code for the Vellano commerce service.
 # Use the repository root as Railway Root Directory and this config file path.
 # Do not generate a public domain for this service; the web service uses its
 # private Railway address. Never attach it to the Firstout or Marrow project.

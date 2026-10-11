@@ -1,14 +1,14 @@
 {
-  "name": "storefront-web",
+  "name": "vellano-web",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
   "sourceRoot": "apps/storefront/web/src",
-  "implicitDependencies": ["storefront-commerce"],
+  "implicitDependencies": ["vellano-commerce"],
   "targets": {
     "typecheck": {
       "executor": "nx:run-commands",
       "options": { "cwd": "apps/storefront/web", "command": "npm run typecheck" }
     }
   },
-  "tags": ["platform:ts", "scope:storefront"]
+  "tags": ["platform:ts", "scope:vellano"]
 }

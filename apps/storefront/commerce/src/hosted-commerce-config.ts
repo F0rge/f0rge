@@ -11,12 +11,12 @@ export function assertHostedCommerceConfig(env: Environment): void {
   const required = ['DATABASE_URL', 'REDIS_URL']
   const missing = required.filter((name) => !env[name]?.trim())
   if (missing.length) {
-    throw new Error(`Hosted Storefront requires ${missing.join(', ')}`)
+    throw new Error(`Hosted Vellano requires ${missing.join(', ')}`)
   }
 
   const weakSecrets = ['JWT_SECRET', 'COOKIE_SECRET', 'STOREFRONT_BFF_SECRET']
     .filter((name) => (env[name]?.trim().length ?? 0) < 32)
   if (weakSecrets.length) {
-    throw new Error(`Hosted Storefront requires at least 32 characters for ${weakSecrets.join(', ')}`)
+    throw new Error(`Hosted Vellano requires at least 32 characters for ${weakSecrets.join(', ')}`)
   }
 }

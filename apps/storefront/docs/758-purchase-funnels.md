@@ -80,7 +80,7 @@ on 2026-10-03:
 
 ## Live walkthrough still unmet
 
-A human still has to click through project `292683` and a running storefront:
+A human still has to click through project `292683` and a running Vellano:
 
 1. In PostHog, turn off GeoIP enrichment and IP retention. Set the analytics
    billing limit to USD 5, and add alerts at 70% and 90%. Confirm event

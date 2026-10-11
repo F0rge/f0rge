@@ -63,6 +63,6 @@ project was used.
 ## Test sink
 
 Use `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_test_fixture` with Playwright
-intercepting `https://eu.i.posthog.com/i/v0/e/`. Do not point the storefront at a
+intercepting `https://eu.i.posthog.com/i/v0/e/`. Do not point Vellano at a
 production PostHog project for this work. Analytics HTTP failures must not block
 shop or product browsing.

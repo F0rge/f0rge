@@ -28,8 +28,8 @@ const boundaryRule = {
           onlyDependOnLibsWithTags: ["scope:shared", "scope:firstout"],
         },
         {
-          sourceTag: "scope:storefront",
-          onlyDependOnLibsWithTags: ["scope:shared", "scope:storefront"],
+          sourceTag: "scope:vellano",
+          onlyDependOnLibsWithTags: ["scope:shared", "scope:vellano"],
         },
       ],
     },

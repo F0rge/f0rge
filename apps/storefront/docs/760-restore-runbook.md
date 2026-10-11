@@ -1,4 +1,4 @@
-# Storefront restore rehearsal and recovery
+# Vellano restore rehearsal and recovery
 
 Issue #760. Operators restore commerce state into an isolated environment and
 reconcile provider, order, stock, and capacity truth before checkout reopens.
@@ -81,7 +81,7 @@ Checkout stays gated while any of these are unresolved as restore rows.
 
 ## Isolated restore
 
-1. Keep the storefront private and non-indexable. Disable new payment attempts.
+1. Keep Vellano private and non-indexable. Disable new payment attempts.
 2. Restore only into a clean isolated database. Do not overwrite live data.
 3. Leave credentials out of the dump. Inject them from the secret store after
    the restore.
