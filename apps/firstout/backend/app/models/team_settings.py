@@ -24,7 +24,6 @@ from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 
 DEFAULT_VAT_RATE = Decimal("0.15")
 DEFAULT_HOME_CURRENCY = "ZAR"
-DEFAULT_NIA_MONTHLY_TOKEN_CAP = 500000
 DEFAULT_LEGAL_NAME = "Firstout"
 DEFAULT_ADDRESS = "Kramerville, Johannesburg, South Africa"
 DEFAULT_VAT_NUMBER = "4123456789"
@@ -61,12 +60,6 @@ class TeamSettings(UUIDPkMixin, TimestampMixin, Base):
         nullable=False,
         default=list,
         server_default=text("'[]'::jsonb"),
-    )
-    nia_monthly_token_cap: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=DEFAULT_NIA_MONTHLY_TOKEN_CAP,
-        server_default=text("500000"),
     )
     legal_name: Mapped[str] = mapped_column(
         Text,

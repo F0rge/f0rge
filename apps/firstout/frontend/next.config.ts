@@ -8,10 +8,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: repoRoot,
   turbopack: { root: repoRoot },
   allowedDevOrigins: ["127.0.0.1", "localhost"],
-  transpilePackages: ["@carbon/react", "@carbon/icons-react", "jspreadsheet-ce", "jsuites"],
+  transpilePackages: ["@carbon/react", "@carbon/icons-react"],
   async rewrites() {
-    // App Router routes under src/app/api/v1/nia/threads/[threadId]/{run,resume}
-    // win over this rewrite (afterFiles) so SSE is piped, not buffered.
     return [
       {
         source: "/api/:path*",

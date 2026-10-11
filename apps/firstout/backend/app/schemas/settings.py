@@ -28,7 +28,6 @@ class SettingsResponse(BaseModel):
     warning: Optional[str] = None
     always_prefer_warehouse: bool
     pick_priority: list[uuid.UUID]
-    nia_monthly_token_cap: int
     legal_name: str
     trading_name: Optional[str] = None
     address: str
@@ -52,7 +51,6 @@ class SettingsUpdate(BaseModel):
     home_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     always_prefer_warehouse: Optional[bool] = None
     pick_priority: Optional[list[uuid.UUID]] = None
-    nia_monthly_token_cap: Optional[int] = Field(default=None, ge=0)
     legal_name: Optional[str] = Field(default=None, min_length=1)
     trading_name: Optional[str] = None
     address: Optional[str] = Field(default=None, min_length=1)

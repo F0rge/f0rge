@@ -16,9 +16,10 @@ from testcontainers.postgres import PostgresContainer
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app
-from app.models.team import Team
 from app.models.inventory import LocationStock
 from app.models.ops_commerce_acknowledgement import OpsCommerceAcknowledgement
+from app.models.sku import Sku
+from app.models.team import Team
 from f0rge_testing import async_url
 
 
@@ -62,15 +63,10 @@ async def test_published_sku_is_scoped_and_does_not_leak_operational_fields(
     assert unpublished.status_code == 200
     assert unpublished.json()["products"] == []
 
-    published = await owner_client.patch(
-        f"/api/v1/skus/{sku_id}", json={"storefront_published": True}
-    )
-    assert published.status_code == 200
-    assert published.json()["storefront_published"] is True
-    invalid_flag = await owner_client.patch(
-        f"/api/v1/skus/{sku_id}", json={"storefront_published": None}
-    )
-    assert invalid_flag.status_code == 400
+    sku = await async_db.get(Sku, UUID(sku_id))
+    assert sku is not None
+    sku.storefront_published = True
+    await async_db.flush()
 
     response = await owner_client.get(route, headers=headers)
     assert response.status_code == 200

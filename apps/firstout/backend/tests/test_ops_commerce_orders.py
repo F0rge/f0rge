@@ -70,7 +70,7 @@ async def _paid_order_payload(
     assert (
         await owner_client.patch(
             f"/api/v1/skus/{sku_id}",
-            json={"retail_inc_vat": "1150.00", "storefront_published": True},
+            json={"retail_inc_vat": "1150.00"},
         )
     ).status_code == 200
     return (
@@ -170,7 +170,6 @@ async def test_mixed_paid_order_imports_awaiting_stock_without_minting_mto_inven
         f"/api/v1/skus/{mto_sku_id}",
         json={
             "retail_inc_vat": "1150.00",
-            "storefront_published": True,
             "made_to_order_capacity": 3,
             "made_to_order_lead_time_min_days": 28,
             "made_to_order_lead_time_max_days": 42,
@@ -755,7 +754,6 @@ async def test_later_mto_invoice_preserves_paid_rounding_delivery_and_deposit(
         f"/api/v1/skus/{mto_sku_id}",
         json={
             "retail_inc_vat": "1000.00",
-            "storefront_published": True,
             "made_to_order_capacity": 3,
             "made_to_order_lead_time_min_days": 28,
             "made_to_order_lead_time_max_days": 42,

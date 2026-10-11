@@ -33,7 +33,7 @@ def _resolve_user_id(
 
 
 class AuthContextMiddleware:
-    """Pure ASGI so Nia SSE is not buffered by ``BaseHTTPMiddleware``."""
+    """Pure ASGI so streaming responses are not buffered by ``BaseHTTPMiddleware``."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app

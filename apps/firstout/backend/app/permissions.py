@@ -21,8 +21,6 @@ SALES_DELIVERIES = "sales.deliveries"
 SALES_CUSTOMERS = "sales.customers"
 BOOKS_MUTATE = "books.mutate"
 BOOKS_JOURNALS = "books.journals"
-NIA_USE = "nia.use"
-NIA_ADMIN = "nia.admin"
 
 PERMISSION_CATALOG: tuple[str, ...] = (
     USERS_MANAGE,
@@ -44,8 +42,6 @@ PERMISSION_CATALOG: tuple[str, ...] = (
     SALES_CUSTOMERS,
     BOOKS_MUTATE,
     BOOKS_JOURNALS,
-    NIA_USE,
-    NIA_ADMIN,
 )
 
 PERMISSION_CATALOG_SET: frozenset[str] = frozenset(PERMISSION_CATALOG)
@@ -66,9 +62,9 @@ ROLE_PRESET_NAMES: dict[str, str] = {
 
 ROLE_PRESETS: dict[str, frozenset[str]] = {
     SLUG_OWNER: frozenset(PERMISSION_CATALOG),
-    SLUG_BUYER: frozenset({CATALOGUE_MUTATE, PO_RAISE, STOCK_COST_VIEW, NIA_USE}),
+    SLUG_BUYER: frozenset({CATALOGUE_MUTATE, PO_RAISE, STOCK_COST_VIEW}),
     SLUG_WAREHOUSE: frozenset(
-        {STOCK_RECEIVE, STOCK_TRANSFER, STOCK_ADJUST, SALES_RETURNS, SALES_DELIVERIES, NIA_USE}
+        {STOCK_RECEIVE, STOCK_TRANSFER, STOCK_ADJUST, SALES_RETURNS, SALES_DELIVERIES}
     ),
     SLUG_TILL: frozenset(
         {
@@ -80,11 +76,10 @@ ROLE_PRESETS: dict[str, frozenset[str]] = {
             SALES_ORDERS,
             SALES_DELIVERIES,
             SALES_CUSTOMERS,
-            NIA_USE,
         }
     ),
     SLUG_BOOKS: frozenset(
-        {BOOKS_MUTATE, BOOKS_JOURNALS, SALES_CUSTOMERS, STOCK_COST_VIEW, SALES_REFUNDS, NIA_USE}
+        {BOOKS_MUTATE, BOOKS_JOURNALS, SALES_CUSTOMERS, STOCK_COST_VIEW, SALES_REFUNDS}
     ),
 }
 

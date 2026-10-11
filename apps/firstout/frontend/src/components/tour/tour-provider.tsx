@@ -32,11 +32,10 @@ const TourContext = createContext<TourContextValue | null>(null);
 
 type TourProviderProps = {
   userId: string;
-  nia: boolean;
   children: ReactNode;
 };
 
-export function TourProvider({ userId, nia, children }: TourProviderProps) {
+export function TourProvider({ userId, children }: TourProviderProps) {
   const router = useRouter();
   const navigate = useCallback(
     (route: string) => {
@@ -48,8 +47,8 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const steps = useMemo(
-    () => buildJoyrideSteps(stepsForUser({ nia }), navigate),
-    [navigate, nia],
+    () => buildJoyrideSteps(stepsForUser(), navigate),
+    [navigate],
   );
 
   const finish = useCallback(

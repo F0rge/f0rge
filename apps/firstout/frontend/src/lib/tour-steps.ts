@@ -1,7 +1,7 @@
 /**
  * Firstout app-tour steps. Single source of truth for the joyride.
  *
- * Anchors: `[data-tour]` on the shell header, home cockpit, and Nia button.
+ * Anchors: `[data-tour]` on the shell header and home cockpit.
  * Page steps spotlight `#main-content h1` after navigation.
  * Replay: header "App tour" button and Profile → Replay walkthrough.
  */
@@ -19,8 +19,6 @@ export type TourStepDefinition = {
   isFixed?: boolean;
   /** Open the side rail so section labels are visible. */
   expandNav?: boolean;
-  /** Omit unless the signed-in user has `nia.use`. */
-  requiresNia?: boolean;
 };
 
 export const TOUR_STEPS: TourStepDefinition[] = [
@@ -45,7 +43,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     expandNav: true,
     title: "Sections in the rail",
     content:
-      "Home is the stock cockpit. Catalogue holds SKUs, suppliers, price lists, proformas, and locations. Stock is stocktakes, adjustments, CSV import, and reorder. Warehouse runs purchase orders, transit, receive, transfers, and picks. Till sells on the floor. Sales covers quotes, orders, lookbooks, laybys, customers, returns, and deliveries. Books is the chart of accounts through VAT201. Admin is users, roles, audit, profile, and settings.",
+      "Home is the stock cockpit. Catalogue holds SKUs, suppliers, price lists, proformas, and locations. Stock is stocktakes, adjustments, CSV import, and reorder. Warehouse runs purchase orders, transit, receive, transfers, and picks. Till sells on the floor. Sales covers quotes, orders, laybys, customers, returns, and deliveries. Books is the chart of accounts through VAT201. Admin is users, roles, audit, profile, and settings.",
   },
   {
     id: "home-actions",
@@ -199,18 +197,6 @@ export const TOUR_STEPS: TourStepDefinition[] = [
       "A VAT201 period snapshots the draft return for a date range so someone can type it into eFiling. Locking the period can also lock the matching books period, which then blocks new journals and stock movements on those dates. Reopening the VAT period does not unlock the books. The app never calls SARS.",
   },
   {
-    id: "nia",
-    route: "/",
-    heading: "Home",
-    target: "[data-tour='header-nia']",
-    placement: "bottom",
-    isFixed: true,
-    requiresNia: true,
-    title: "Nia",
-    content:
-      "Nia is the in-app assistant. Open it from this button or with Ctrl or Cmd and a full stop. It can look up stock, overdue invoices, and charts. Charts and tables render on Canvas in the rail, not inside the chat panel. Any write asks you to approve before data changes. Nia cannot send email, take payment, or file VAT.",
-  },
-  {
     id: "settings",
     route: "/settings",
     heading: "Settings",
@@ -218,7 +204,7 @@ export const TOUR_STEPS: TourStepDefinition[] = [
     placement: "bottom",
     title: "Shop settings",
     content:
-      "Settings holds the legal name, VAT number, and logo printed on tax invoices, plus document prefixes, session length, the till discount cap, and the purchase-order approval threshold. Communications is the shop mailbox and WhatsApp. Nia’s monthly token cap is here too. Pick priority chooses which location a kit pick drains first.",
+      "Settings holds the legal name, VAT number, and logo printed on tax invoices, plus document prefixes, session length, the till discount cap, and the purchase-order approval threshold. Communications is the shop mailbox and WhatsApp. Pick priority chooses which location a kit pick drains first.",
   },
   {
     id: "replay",
@@ -231,6 +217,6 @@ export const TOUR_STEPS: TourStepDefinition[] = [
   },
 ];
 
-export function stepsForUser(options: { nia: boolean }): TourStepDefinition[] {
-  return TOUR_STEPS.filter((step) => !step.requiresNia || options.nia);
+export function stepsForUser(): TourStepDefinition[] {
+  return TOUR_STEPS;
 }

@@ -31,10 +31,8 @@ describe("nav path helpers", () => {
     expect(isWarehousePath("/purchase-orders")).toBe(true);
     expect(isWarehousePath("/purchase-orders/abc")).toBe(true);
     expect(isWarehousePath("/wms")).toBe(true);
-    expect(isSalesPath("/lookbooks")).toBe(true);
     expect(isSalesPath("/quotes")).toBe(true);
     expect(isSalesPath("/orders")).toBe(true);
-    expect(isSalesPath("/storefront-exceptions")).toBe(true);
     expect(isSalesPath("/laybys")).toBe(true);
     expect(isSalesPath("/deliveries")).toBe(true);
     expect(isSalesPath("/customers/abc")).toBe(true);
@@ -52,11 +50,7 @@ describe("nav path helpers", () => {
     expect(booksHrefs).not.toContain("/contacts");
   });
 
-  it("labels storefront exceptions in sales nav", () => {
-    expect(labelForNavPath("/storefront-exceptions")).toBe("Storefront exceptions");
-  });
-
-  it("labels nested paths for Nia cards", () => {
+  it("labels nested paths from the nav map", () => {
     expect(labelForNavPath("/catalogue")).toBe("Catalogue");
     expect(labelForNavPath("/catalogue/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")).toBe("Catalogue");
     expect(labelForNavPath("/invoices/abc")).toBe("Invoices");

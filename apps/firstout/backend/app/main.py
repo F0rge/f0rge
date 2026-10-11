@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import asyncio
-import logging
-from contextlib import asynccontextmanager, suppress
-from typing import AsyncIterator, Optional, cast
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, cast
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,8 +14,6 @@ from app.exceptions import (
     CommsSmtpFailedError,
     CommsSmtpUnconfiguredError,
     ForbiddenError,
-    NiaCapExceededError,
-    NiaLlmUnconfiguredError,
 )
 
 from app.config import settings
@@ -50,24 +46,15 @@ from app.routers import (
     payments,
     picks,
     price_lists,
-    product_groups,
     proformas,
     purchase_orders,
     reorder,
     repeating_invoices,
     returns,
     laybys,
-    lookbooks,
-    public_lookbooks,
     quotes,
     sales_orders,
-    nia,
-    nia_run,
-    nia_schedule,
-    nia_threads,
-    nia_usage as nia_usage_router,
     ops_commerce,
-    storefront_exceptions,
     storefront_orders,
     reports,
     roles,
@@ -89,25 +76,7 @@ from app.services.role_user_seed import RoleUserSeedService
 from app.services.roles import RoleSeedService
 from app.services.till_seed import TillSeedService
 from app.services.storefront_system_actor import StorefrontSystemActorService
-from app.services.nia_schedule import NiaScheduleService
 from app.services.users import BootstrapService
-
-logger = logging.getLogger(__name__)
-
-TICK_INTERVAL_SECONDS = 60
-
-
-async def _nia_schedule_loop(stop: asyncio.Event) -> None:
-    while not stop.is_set():
-        try:
-            async with async_session_maker() as session:
-                await NiaScheduleService(session).tick_due_tasks()
-        except Exception:
-            logger.exception("nia schedule tick failed")
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=TICK_INTERVAL_SECONDS)
-        except asyncio.TimeoutError:
-            continue
 
 
 @asynccontextmanager
@@ -127,18 +96,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await coa.ensure_bank_accounts()
         await TillSeedService(session).seed_if_empty()
         await PlaygroundSeedService(session).seed_if_enabled()
-    stop = asyncio.Event()
-    ticker: Optional[asyncio.Task] = None
-    if settings.nia_schedule_ticker:
-        ticker = asyncio.create_task(_nia_schedule_loop(stop))
-    try:
-        yield
-    finally:
-        stop.set()
-        if ticker is not None:
-            ticker.cancel()
-            with suppress(asyncio.CancelledError):
-                await ticker
+    yield
 
 
 app = FastAPI(
@@ -161,22 +119,6 @@ async def _forbidden_handler(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
-async def _nia_llm_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, NiaLlmUnconfiguredError)
-    return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={"detail": {"code": exc.detail}},
-    )
-
-
-async def _nia_cap_exceeded_handler(_: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, NiaCapExceededError)
-    return JSONResponse(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        content={"detail": {"code": exc.detail}},
-    )
-
-
 async def _comms_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, (CommsEncryptionUnconfiguredError, CommsSmtpUnconfiguredError))
     return JSONResponse(
@@ -194,14 +136,6 @@ async def _comms_smtp_failed_handler(_: Request, exc: Exception) -> JSONResponse
 
 
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
-app.add_exception_handler(
-    NiaLlmUnconfiguredError,
-    cast(ExceptionHandler, _nia_llm_unconfigured_handler),
-)
-app.add_exception_handler(
-    NiaCapExceededError,
-    cast(ExceptionHandler, _nia_cap_exceeded_handler),
-)
 app.add_exception_handler(
     CommsEncryptionUnconfiguredError,
     cast(ExceptionHandler, _comms_unconfigured_handler),
@@ -234,10 +168,8 @@ app.include_router(suppliers.suppliers_router)
 app.include_router(price_lists.price_lists_router)
 app.include_router(proformas.proformas_router)
 app.include_router(skus.skus_router)
-app.include_router(product_groups.router)
 app.include_router(ops_commerce.router)
 app.include_router(storefront_orders.router)
-app.include_router(storefront_exceptions.router)
 app.include_router(catalogue_imports.catalogue_imports_router)
 app.include_router(purchase_orders.purchase_orders_router)
 app.include_router(purchase_orders.receive_router)
@@ -251,8 +183,6 @@ app.include_router(returns.returns_router)
 app.include_router(deliveries.deliveries_router)
 app.include_router(laybys.laybys_router)
 app.include_router(quotes.quotes_router)
-app.include_router(lookbooks.lookbooks_router)
-app.include_router(public_lookbooks.public_lookbooks_router)
 app.include_router(sales_orders.sales_orders_router)
 app.include_router(customer_portal.portal_router)
 app.include_router(till.till_router)
@@ -279,8 +209,3 @@ app.include_router(settings_router.settings_router)
 app.include_router(comms.comms_router)
 app.include_router(whatsapp_webhook.whatsapp_webhook_router)
 app.include_router(cost_audit.cost_audit_router)
-app.include_router(nia.nia_router)
-app.include_router(nia_threads.nia_threads_router)
-app.include_router(nia_run.nia_run_router)
-app.include_router(nia_usage_router.nia_usage_router)
-app.include_router(nia_schedule.nia_schedule_router)

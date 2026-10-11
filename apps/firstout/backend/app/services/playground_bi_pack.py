@@ -621,7 +621,7 @@ class PlaygroundBiPack:
         today: datetime.date,
     ) -> None:
         # Books invoices do not move stock. Do not stamp sku_id — that would
-        # report SKU sales of units still on hand. AR mix is still useful for Nia.
+        # report SKU sales of units still on hand. AR mix is still useful for books reports.
         invoice_service = InvoiceService(self.db)
         payment_service = PaymentService(self.db)
         trade_names = [spec["name"] for spec in BI_CUSTOMERS if spec["customer_type"] == "trade"]
@@ -678,7 +678,7 @@ class PlaygroundBiPack:
                 )
             elif status == "partial":
                 # PaymentService requires the remaining balance in full.
-                # Stamp amount_paid so Nia still sees partial AR.
+                # Stamp amount_paid so aged receivables still show a partial balance.
                 await self._stamp_partial_balance(invoice.id)
         await self._backfill_partial_balances()
 

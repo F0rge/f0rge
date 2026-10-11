@@ -73,7 +73,6 @@ async def _import_uninvoiced_handoff(
     offer_resp = await owner_client.patch(
         f"/api/v1/skus/{line['source_sku_id']}",
         json={
-            "storefront_published": True,
             "made_to_order_capacity": 3,
             "made_to_order_lead_time_min_days": 28,
             "made_to_order_lead_time_max_days": 42,
@@ -162,7 +161,6 @@ async def _import_mixed_uninvoiced_handoff(
         f"/api/v1/skus/{mto_sku_id}",
         json={
             "retail_inc_vat": "1150.00",
-            "storefront_published": True,
             "made_to_order_capacity": 3,
             "made_to_order_lead_time_min_days": 28,
             "made_to_order_lead_time_max_days": 42,

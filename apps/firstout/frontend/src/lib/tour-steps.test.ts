@@ -28,9 +28,8 @@ describe("firstout tour steps", () => {
     }
   });
 
-  it("includes Nia only when the user can open it", () => {
-    expect(stepsForUser({ nia: false }).some((step) => step.id === "nia")).toBe(false);
-    expect(stepsForUser({ nia: true }).some((step) => step.id === "nia")).toBe(true);
-    expect(stepsForUser({ nia: false }).at(-1)?.id).toBe("replay");
+  it("ends on the replay control", () => {
+    expect(stepsForUser().some((step) => step.id === "nia")).toBe(false);
+    expect(stepsForUser().at(-1)?.id).toBe("replay");
   });
 });

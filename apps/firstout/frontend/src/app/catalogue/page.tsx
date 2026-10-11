@@ -20,13 +20,12 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { Barcode, DocumentExport, DocumentImport, Printer, Share } from "@carbon/icons-react";
+import { Barcode, DocumentExport, DocumentImport, Printer } from "@carbon/icons-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   canMutateCatalogue,
-  canMutateQuotes,
   canViewCostAudit,
   formatPriceAmount,
   getSkuLeadTimes,
@@ -38,7 +37,6 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { skuCartonCount } from "@/lib/carton-helpers";
-import { ShareLookbookModal } from "@/components/share-lookbook-modal";
 import { downloadCsv } from "@/lib/csv";
 import { formatObservedMedianLine, skuLeadTimeById } from "@/lib/lead-times";
 import { printSkuLabels } from "@/lib/sku-label-print";
@@ -101,7 +99,6 @@ function CataloguePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const canMutate = canMutateCatalogue(user);
-  const canShare = canMutateQuotes(user);
   const canViewCost = canViewCostAudit(user);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [skuLeadTimes, setSkuLeadTimes] = useState<SkuLeadTimeRow[]>([]);
@@ -111,7 +108,6 @@ function CataloguePageContent() {
   const [searchFilter, setSearchFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [shareOpen, setShareOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -258,10 +254,6 @@ function CataloguePageContent() {
     printSkuLabels(targetSkus);
   }
 
-  const shareSkuIds =
-    selectedIds.size > 0 ? filteredSkus.filter((sku) => selectedIds.has(sku.id)).map((sku) => sku.id) : filteredSkus.map((sku) => sku.id);
-  const shareName = `${categoryFilter?.trim() || (selectedIds.size > 0 ? "Selection" : "Catalogue")} — ${new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short" })} — walk-in`;
-
   return (
     <Stack gap={6}>
       <div className="firstout-page-header">
@@ -272,16 +264,6 @@ function CataloguePageContent() {
           </p>
         </div>
         <div className="firstout-catalogue-actions">
-          {canShare ? (
-            <Button
-              kind="secondary"
-              renderIcon={Share}
-              disabled={shareSkuIds.length === 0}
-              onClick={() => setShareOpen(true)}
-            >
-              Share lookbook
-            </Button>
-          ) : null}
           <Button
             kind="secondary"
             renderIcon={DocumentExport}
@@ -582,12 +564,6 @@ function CataloguePageContent() {
           />
         </div>
       )}
-      <ShareLookbookModal
-        open={shareOpen}
-        skuIds={shareSkuIds}
-        defaultName={shareName}
-        onClose={() => setShareOpen(false)}
-      />
     </Stack>
   );
 }
