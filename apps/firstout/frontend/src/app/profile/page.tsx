@@ -13,9 +13,11 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { ApiError, isActiveLocation, listLocations, updateProfile, type Location } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useTour } from "@/components/tour/tour-provider";
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
+  const { startTour } = useTour();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -156,6 +158,17 @@ export default function ProfilePage() {
           </Button>
         </Stack>
       </form>
+
+      <Stack gap={4}>
+        <h2 className="cds--type-productive-heading-03">App tour</h2>
+        <p className="cds--type-body-01">
+          Walk through catalogue, warehouse, till, sales, and books. Skip it at any step. The same
+          tour is on the question-mark button in the header.
+        </p>
+        <Button kind="tertiary" type="button" onClick={() => startTour()}>
+          Replay walkthrough
+        </Button>
+      </Stack>
     </Stack>
   );
 }

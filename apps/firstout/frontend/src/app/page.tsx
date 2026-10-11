@@ -163,14 +163,14 @@ export default function HomePage() {
 
   return (
     <Stack gap={6} className="firstout-home">
-      <div>
+      <div data-tour="home-intro">
         <h1 className="cds--type-productive-heading-04">Home</h1>
         <p className="cds--type-body-01">
           Stock cockpit — overview of operations, inventory, and laybys.
         </p>
       </div>
 
-      <div className="firstout-home-actions">
+      <div className="firstout-home-actions" data-tour="home-actions">
         <Button kind="primary" renderIcon={Add} onClick={() => router.push("/catalogue/new")}>
           New stock
         </Button>
@@ -195,6 +195,7 @@ export default function HomePage() {
         </Button>
       </div>
 
+      <div data-tour="home-kpis">
       {loading ? <Loading withOverlay={false} description="Loading summary…" /> : null}
       {error ? (
         <InlineNotification kind="error" title="Home summary" subtitle={error} hideCloseButton />
@@ -256,7 +257,14 @@ export default function HomePage() {
               <p className="cds--type-helper-text-01">Requires processing</p>
             </Tile>
           </div>
+        </>
+      ) : !loading && !error ? (
+        <p className="cds--type-helper-text-01">Stock figures appear when the home summary loads.</p>
+      ) : null}
+      </div>
 
+      <div data-tour="home-attention">
+      {summary ? (
           <div className="firstout-home-tables">
             <div>
               <h2 className="cds--type-productive-heading-03">Needs attention</h2>
@@ -327,8 +335,12 @@ export default function HomePage() {
               </TableContainer>
             </div>
           </div>
-        </>
-      ) : null}
+      ) : (
+        <p className="cds--type-helper-text-01">
+          Needs attention and recent movements load with the home summary.
+        </p>
+      )}
+      </div>
     </Stack>
   );
 }

@@ -88,6 +88,7 @@ import {
   NiaDockProvider,
   NiaHeaderAction,
 } from "@/components/nia/nia-dock";
+import { TourProvider, TourReplayButton } from "@/components/tour/tour-provider";
 import { canUseNia } from "@/lib/permissions";
 import {
   getNarrowViewportServerSnapshot,
@@ -294,6 +295,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
+    <TourProvider userId={user.id} nia={canUseNia(user)}>
     <NiaDockProvider enabled={canUseNia(user)}>
       <div
         className="firstout-shell"
@@ -322,7 +324,14 @@ export function AppShell({ children }: AppShellProps) {
             </HeaderName>
             <HeaderGlobalBar>
               <HeaderSearch />
-              {canUseNia(user) ? <NiaHeaderAction /> : null}
+              <span className="firstout-tour-anchor" data-tour="header-tour">
+                <TourReplayButton />
+              </span>
+              {canUseNia(user) ? (
+                <span className="firstout-tour-anchor" data-tour="header-nia">
+                  <NiaHeaderAction />
+                </span>
+              ) : null}
               <span className="firstout-header-user" title={user.email}>
                 {user.display_name || user.email}
               </span>
@@ -338,6 +347,7 @@ export function AppShell({ children }: AppShellProps) {
         <SideNav
           aria-label="Firstout sections"
           className="firstout-side-nav"
+          data-tour="side-nav"
           expanded={expanded}
           isRail={!narrow}
           isPersistent={!narrow}
@@ -378,5 +388,6 @@ export function AppShell({ children }: AppShellProps) {
       </Theme>
     </div>
     </NiaDockProvider>
+    </TourProvider>
   );
 }
