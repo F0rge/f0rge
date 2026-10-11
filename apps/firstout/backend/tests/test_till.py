@@ -112,6 +112,47 @@ async def test_till_cash_sale_decrements_bedfordview_stock(
     assert payload["lines"][0]["sku_id"] == sku_id
 
 
+async def test_till_cash_tender_below_total_is_refused(
+    async_client: AsyncClient,
+    owner_client: AsyncClient,
+) -> None:
+    data = await _receive_qty_at_location(
+        async_client,
+        owner_client,
+        qty=1,
+        location_name="Kramerville",
+        our_ref="TILL-SHORT-CASH",
+    )
+    sku_id = data["sku"]["id"]
+    await _set_retail_price(owner_client, sku_id, "1000.00")
+    bedford_id = await _transfer_to_bedfordview(async_client, owner_client, sku_id, 1)
+    assert await _inventory_on_hand(owner_client, sku_id, bedford_id) == 1
+
+    payments_before = await owner_client.get("/api/v1/payments")
+    assert payments_before.status_code == 200
+
+    till = await _create_till(async_client, owner_client)
+    sale = await till.post(
+        "/api/v1/till/sales",
+        json={
+            "location_id": bedford_id,
+            "lines": [{"sku_id": sku_id, "qty": 1}],
+            "tender": "cash",
+            "amount_tendered": "1.00",
+        },
+    )
+    assert sale.status_code == 400
+    assert "tender" in sale.json()["detail"].lower()
+
+    assert await _inventory_on_hand(owner_client, sku_id, bedford_id) == 1
+    payments_after = await owner_client.get("/api/v1/payments")
+    assert payments_after.status_code == 200
+    assert payments_after.json()["total"] == payments_before.json()["total"]
+    assert all(
+        Decimal(item["amount"]) != Decimal("1150.00") for item in payments_after.json()["items"]
+    )
+
+
 async def test_till_card_sale_records_tender(
     async_client: AsyncClient,
     owner_client: AsyncClient,

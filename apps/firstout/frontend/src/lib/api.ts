@@ -884,6 +884,7 @@ export type TillSalePayload = {
   location_id: string;
   lines: TillSaleLinePayload[];
   tender: TillTender;
+  amount_tendered?: string;
   customer_id?: string;
   pick_id?: string;
   credit_override?: boolean;
