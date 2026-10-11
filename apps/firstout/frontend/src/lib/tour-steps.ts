@@ -126,6 +126,7 @@ export const PAGE_TOURS: PageTour[] = [
     exact: true,
     steps: [
       step("stocktake-location", "Location", "Choose the location to count.", "#stocktake-location"),
+      step("stocktake-category", "Category", "Count one category, such as Sofas, or leave this as all.", "#stocktake-category"),
       step("stocktake-start", "Start", "Start the count. This location stays locked until you post.", "[data-tour='stocktake-start']"),
     ],
   },

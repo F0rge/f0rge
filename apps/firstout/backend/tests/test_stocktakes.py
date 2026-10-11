@@ -43,6 +43,7 @@ async def _create_sku_with_opening(
     suffix: str,
     location_id: str,
     qty: int = 5,
+    **overrides: object,
 ) -> dict:
     resp = await client.post(
         "/api/v1/skus",
@@ -51,6 +52,7 @@ async def _create_sku_with_opening(
             opening_location_id=location_id,
             opening_qty=qty,
             opening_unit_cost_zar="100.00",
+            **overrides,
         ),
     )
     assert resp.status_code == 201
@@ -217,3 +219,67 @@ async def test_cancel_unlocks_without_changing_qty(owner_client: AsyncClient) ->
 
     second = await owner_client.post("/api/v1/stocktakes", json={"location_id": location_id})
     assert second.status_code == 201
+
+
+async def test_category_stocktake_counts_and_posts_only_matching_skus(
+    owner_client: AsyncClient,
+) -> None:
+    location_id = await _kramerville_id(owner_client)
+    sofa = await _create_sku_with_opening(
+        owner_client, "SOFA", location_id, qty=4, category="Sofas"
+    )
+    dining = await _create_sku_with_opening(
+        owner_client, "DINE", location_id, qty=7, category="Dining"
+    )
+    uncategorised = await _create_sku_with_opening(owner_client, "NONE", location_id, qty=2)
+
+    missing = await owner_client.post(
+        "/api/v1/stocktakes",
+        json={"location_id": location_id, "category": "Chairs"},
+    )
+    assert missing.status_code == 409
+    assert missing.json()["detail"] == "No SKUs in that category"
+
+    started = await owner_client.post(
+        "/api/v1/stocktakes",
+        json={"location_id": location_id, "category": "sofas"},
+    )
+    assert started.status_code == 201
+    body = started.json()
+    assert body["category"] == "sofas"
+    assert body["status"] == "in_progress"
+    sku_ids = {line["sku_id"] for line in body["lines"]}
+    assert sofa["id"] in sku_ids
+    assert dining["id"] not in sku_ids
+    assert uncategorised["id"] not in sku_ids
+    assert all((line["category"] or "").strip().lower() == "sofas" for line in body["lines"])
+
+    locked = await owner_client.post(
+        "/api/v1/stocktakes",
+        json={"location_id": location_id, "category": "Dining"},
+    )
+    assert locked.status_code == 409
+    assert locked.json()["detail"] == "Location is locked for stocktake"
+
+    absent = await owner_client.post(
+        f"/api/v1/stocktakes/{body['id']}/lookup",
+        json={"barcode": dining["our_barcode"]},
+    )
+    assert absent.status_code == 404
+
+    line = _line_for_sku(body, sofa["id"])
+    patched = await owner_client.patch(
+        f"/api/v1/stocktakes/{body['id']}/lines/{line['id']}",
+        json={"counted_qty": 1},
+    )
+    assert patched.status_code == 200
+
+    completed = await owner_client.post(f"/api/v1/stocktakes/{body['id']}/complete")
+    assert completed.status_code == 200
+    assert completed.json()["category"] == "sofas"
+    completed_ids = {entry["sku_id"] for entry in completed.json()["lines"]}
+    assert sofa["id"] in completed_ids
+    assert dining["id"] not in completed_ids
+    assert await _location_on_hand(owner_client, sofa["id"], location_id) == 1
+    assert await _location_on_hand(owner_client, dining["id"], location_id) == 7
+    assert await _location_on_hand(owner_client, uncategorised["id"], location_id) == 2

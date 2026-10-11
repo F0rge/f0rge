@@ -183,11 +183,11 @@ Endpoints (all under `/api/v1`, cookie `firstout_session`):
 
 - **Stocktakes:** `GET/POST /stocktakes`, `GET /stocktakes/{id}`, `PATCH /stocktakes/{id}/lines/{line_id}` (`{counted_qty}` ≥ 0), `POST /stocktakes/{id}/lookup` (`{barcode}` exact `our_barcode`), `POST /stocktakes/{id}/complete`, `POST /stocktakes/{id}/cancel`. No pause endpoint.
 
-Start snapshots **every SKU** at that location (`expected_qty` = on-hand or 0). Status `in_progress`. 409 if that location already has an in-progress stocktake.
+Start snapshots SKUs at that location (`expected_qty` = on-hand or 0). Optional `category` is a case-insensitive exact match on `skus.category` and limits the sheet to that category (for example Sofas). Omit it, or send a blank, to count every SKU. A category with no SKUs returns 409 `"No SKUs in that category"` and does not lock the location. Status `in_progress`. 409 `"Location is locked for stocktake"` if that location already has an in-progress stocktake, including when the open count is only one category. The lock is still the whole location.
 
 **Location lock:** while `in_progress`, receive into the location, transfer from **or** to the location, and till sale at the location return 409 `"Location is locked for stocktake"`.
 
-Complete only from `in_progress`. Lines with `counted_qty` set apply `delta = counted - expected` via stock movements (audit source `stocktake`); **uncounted lines are skipped** (on-hand unchanged). Then `completed` and unlock. Cancel only from `in_progress` → `cancelled`, no stock writes. No GL.
+Complete only from `in_progress`. Lines with `counted_qty` set apply `delta = counted - expected` via stock movements (audit source `stocktake`); **uncounted lines are skipped** (on-hand unchanged). SKUs outside the category are not on the sheet, so their on-hand does not change. Then `completed` and unlock. Cancel only from `in_progress` → `cancelled`, no stock writes. No GL. The response includes `category` (`null` means all SKUs).
 
 | Action | Permission |
 |--------|------------|

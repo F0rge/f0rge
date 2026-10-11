@@ -25,6 +25,9 @@ describe("firstout page tours", () => {
       ".cds--modal.is-visible .cds--btn--primary",
     ]);
 
+    expect(pageTourForPath("/stocktakes")?.steps.map((step) => step.target)).toContain(
+      "#stocktake-category",
+    );
     expect(pageTourForPath("/catalogue")?.id).toBe("catalogue");
     expect(pageTourForPath("/catalogue/new")?.id).toBe("catalogue-new");
     expect(pageTourForPath("/customers/abc")).toBeNull();

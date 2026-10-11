@@ -1189,6 +1189,7 @@ export type StocktakeSummary = {
   location_id: string;
   location_name: string;
   status: StocktakeStatus;
+  category: string | null;
   started_at: string;
   completed_at: string | null;
 };
@@ -1207,10 +1208,18 @@ export function listStocktakes(): Promise<StocktakeSummary[]> {
   return apiFetch<StocktakeSummary[]>("/stocktakes");
 }
 
-export function startStocktake(payload: { location_id: string }): Promise<Stocktake> {
+export function startStocktake(payload: {
+  location_id: string;
+  category?: string;
+}): Promise<Stocktake> {
+  const category = payload.category?.trim();
+  const body: { location_id: string; category?: string } = { location_id: payload.location_id };
+  if (category) {
+    body.category = category;
+  }
   return apiFetch<Stocktake>("/stocktakes", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 }
 
