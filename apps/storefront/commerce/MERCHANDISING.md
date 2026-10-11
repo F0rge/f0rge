@@ -5,14 +5,24 @@ identity, ZAR retail price, and available stock. Medusa can also store a
 description, images, SEO, dimensions, materials, and care instructions when a
 merchant has them. Firstout's catalogue does not. The sync creates new products
 as drafts, then publishes every in-stock (or finite made-to-order) product into
-the **In stock** collection, handle `in-stock`. Each product is published on its
-own. A product the publication hook rejects for a missing tax-inclusive ZAR
-price stays a draft. The sync does not invent a price, and that rejection does
-not roll back the priced products in the same run. A product leaves that
-collection and returns to draft when it is no longer in the Ops feed or none of
-its variants has positive stock or a live made-to-order offer. Later sync runs update
-source-owned variant fields. A group has the stable handle
-`firstout-group-<group UUID>`.
+the **On Sale** collection, handle `on-sale`. An existing collection with handle
+`in-stock` is renamed in place to that title and handle. The shop's availability
+filter stays `in-stock`. Each product is published on its own. A product the
+publication hook rejects for a missing tax-inclusive ZAR price stays a draft.
+The sync does not invent a price, and that rejection does not roll back the
+priced products in the same run. A product leaves On Sale and returns to draft
+when it is no longer in the Ops feed or none of its variants has positive stock
+or a live made-to-order offer. Publish and withdraw set status and
+`collection_id` only, so gallery images and other product metadata stay.
+
+Sofas (`sofas`) and Dining Room (`dining-room`) are separate collections. Medusa
+keeps one `collection_id` per product, and that field is On Sale for every
+priced in-stock product. Room membership is `storefront_room_collections` on
+product metadata. The sync writes that key by copying the rest of the product
+metadata, and it does not clear the key when it publishes or withdraws. A
+product is a sofa or a dining-room piece from its title and SKUs, never both.
+Later sync runs update source-owned variant fields. A group has the stable
+handle `firstout-group-<group UUID>`.
 
 What the shop requires before a Firstout product is published:
 
