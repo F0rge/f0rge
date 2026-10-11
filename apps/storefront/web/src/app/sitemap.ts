@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { canonicalUrl, sitemapPaths, storefrontIndexable } from "@/lib/launch-indexing";
-import { listStoreProducts, productPath, publicCollections } from "@/lib/medusa";
+import { merchandisingCollections } from "@/lib/catalogue-collections";
+import { listStoreProducts, productPath } from "@/lib/medusa";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_BASE_URL;
@@ -10,7 +11,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const listed = await listStoreProducts();
     products = listed.map((product) => ({ path: productPath(product) }));
-    collections = publicCollections(listed).map((collection) => ({ handle: collection.handle }));
+    collections = merchandisingCollections(listed).map((collection) => ({ handle: collection.handle }));
   } catch {
     products = [];
     collections = [];
