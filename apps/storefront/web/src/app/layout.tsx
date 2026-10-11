@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { ClerkProvider } from "@clerk/nextjs";
 import { UiProvider } from "@f0rge/ui";
 import { StorefrontAnalyticsProvider } from "@/components/analytics/analytics-provider";
@@ -8,6 +9,12 @@ import { collectorSkinAttribute } from "@/lib/collector-skin";
 import { currentCustomerPolicies } from "@/lib/customer-policies";
 import { storefrontIndexable } from "@/lib/launch-indexing";
 import "./style.css";
+
+const instrumentSerif = localFont({
+  src: "../fonts/InstrumentSerif-Regular.ttf",
+  variable: "--vellano-serif",
+  display: "swap",
+});
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3004";
 const indexable = storefrontIndexable();
@@ -29,5 +36,5 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <main id="main-content">{children}</main>
     <SiteFooter />
   </StorefrontAnalyticsProvider></UiProvider>;
-  return <html lang="en-ZA" data-scroll-behavior="smooth" data-collector-skin={skin ?? undefined}><body>{clerkConfigured ? <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY} appearance={{ variables: { colorPrimary: "var(--primary)", fontFamily: "var(--sans)", borderRadius: "10px" } }}>{storefront}</ClerkProvider> : storefront}</body></html>;
+  return <html lang="en-ZA" className={instrumentSerif.variable} data-scroll-behavior="smooth" data-collector-skin={skin ?? undefined}><body>{clerkConfigured ? <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY} appearance={{ variables: { colorPrimary: "var(--primary)", fontFamily: "var(--sans)", borderRadius: "10px" } }}>{storefront}</ClerkProvider> : storefront}</body></html>;
 }

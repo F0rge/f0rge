@@ -314,13 +314,14 @@ export function AppShell({ children }: AppShellProps) {
             />
             <HeaderName
               href="/"
-              prefix="F0rge"
+              prefix=""
+              className="firstout-brand"
               onClick={(event) => {
                 event.preventDefault();
                 router.push("/");
               }}
             >
-              Firstout
+              <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
             </HeaderName>
             <HeaderGlobalBar>
               <HeaderSearch />
