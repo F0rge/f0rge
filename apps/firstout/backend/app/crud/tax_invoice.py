@@ -28,7 +28,7 @@ class TaxInvoiceCRUD(BaseCRUD):
             .where(TaxInvoice.id == invoice_id)
         )
         if for_update:
-            stmt = stmt.execution_options(populate_existing=True).with_for_update()
+            stmt = stmt.execution_options(populate_existing=True).with_for_update(of=TaxInvoice)
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_for_customer(self, customer_id: uuid.UUID) -> list[TaxInvoice]:
