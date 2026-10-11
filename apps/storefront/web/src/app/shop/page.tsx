@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@f0rge/ui";
-import { listStoreProducts, publicCollections, type MedusaVariant, type StoreProduct } from "@/lib/medusa";
+import { merchandisingCollections, productInCollection } from "@/lib/catalogue-collections";
+import { listStoreProducts, type MedusaVariant, type StoreProduct } from "@/lib/medusa";
 import { ProductCard } from "../product-card";
 import { SearchResultsTracker } from "@/components/analytics/search-results-tracker";
 
@@ -31,7 +32,7 @@ function filteredProducts(products: StoreProduct[], params: Search): StoreProduc
   const results = products.filter((product) => {
     return (!query || `${product.title} ${product.description || ""} ${product.material || ""} ${product.variants.map((variant) => `${variant.sku || ""} ${variant.material || ""}`).join(" ")}`.toLocaleLowerCase("en-ZA").includes(query))
       && (!params.category || product.categories?.some((category) => category.handle === params.category))
-      && (!params.collection || product.collection?.handle === params.collection)
+      && (!params.collection || productInCollection(product, params.collection))
       && qualifyingVariants(product, params).length > 0;
   });
   return results.sort((a, b) => {
@@ -50,7 +51,7 @@ export default async function ShopPage({ searchParams }: Props) {
   const params = Object.fromEntries(Object.entries(await searchParams).map(([key, value]) => [key, typeof value === "string" ? value : ""])) as Search;
   const products = await listStoreProducts();
   const categories = [...new Map(products.flatMap((product) => product.categories?.map((category) => [category.handle, category] as const) || [])).values()].sort((a, b) => a.name.localeCompare(b.name));
-  const collections = publicCollections(products).sort((a, b) => a.title.localeCompare(b.title));
+  const collections = merchandisingCollections(products).sort((a, b) => a.title.localeCompare(b.title));
   const results = filteredProducts(products, params);
   const categoryId = categories.find((category) => category.handle === params.category)?.id;
   const collectionId = collections.find((collection) => collection.handle === params.collection)?.id;

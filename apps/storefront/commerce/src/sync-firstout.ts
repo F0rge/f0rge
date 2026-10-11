@@ -5,10 +5,15 @@ import { recordOpsCheckoutHealth, refreshOpsCheckoutHealth } from "./storefront-
 import { CAPACITY_STATE_METADATA_KEY, mergeCapacityState, offerPresentation } from "./made-to-order-capacity";
 import {
   createCollectionsWorkflow, createInventoryLevelsWorkflow, createProductsWorkflow, createProductVariantsWorkflow,
-  deleteProductVariantsWorkflow, updateInventoryLevelsWorkflow, updateProductVariantsWorkflow,
+  deleteProductVariantsWorkflow, updateCollectionsWorkflow, updateInventoryLevelsWorkflow, updateProductVariantsWorkflow,
   updateProductsWorkflow,
 } from "@medusajs/medusa/core-flows";
 
+import {
+  CATALOGUE_COLLECTION_HANDLE, CATALOGUE_COLLECTION_TITLE, LEGACY_CATALOGUE_COLLECTION_HANDLE, ROOM_COLLECTIONS,
+  ROOM_COLLECTIONS_METADATA_KEY, collectionEnsurePlan, roomCollectionHandles, withRoomCollections,
+  type CollectionRecord,
+} from "./catalogue-collections";
 import { medusaPrice, parseOpsProducts, pendingCommitments, projectAvailableQuantity, shouldApplyRevision, type OpsProduct } from "./ops-contract";
 
 type CommerceVariant = {
@@ -22,8 +27,6 @@ type CommerceProduct = {
 type VariantInventory = { inventory_items?: { inventory_item_id: string }[] };
 type SourceGroup = { externalId: string; title: string; rows: OpsProduct[]; grouped: boolean };
 const SOURCE_PREFIX = "firstout-";
-export const CATALOGUE_COLLECTION_HANDLE = "in-stock";
-export const CATALOGUE_COLLECTION_TITLE = "In stock";
 
 function syncedCapacityMetadata(row: OpsProduct, metadata: Record<string, unknown> | null) {
   const state = mergeCapacityState(metadata, row.made_to_order_offer, row.revision);
@@ -196,18 +199,42 @@ export function missingTaxInclusiveZarPrice(error: unknown): boolean {
   return parts.join("\n").includes("tax-inclusive ZAR price is missing");
 }
 
-async function catalogueCollectionId(container: MedusaContainer): Promise<string> {
+async function listedCollections(container: MedusaContainer): Promise<CollectionRecord[]> {
   const query = container.resolve(ContainerRegistrationKeys.QUERY);
-  const { data } = await query.graph({ entity: "product_collection", fields: ["id", "handle"] });
-  const existing = (data as { id?: string; handle?: string }[]).find((item) => item.handle === CATALOGUE_COLLECTION_HANDLE)?.id;
-  if (existing) return existing;
+  const { data } = await query.graph({ entity: "product_collection", fields: ["id", "handle", "title"] });
+  return (data as { id?: string; handle?: string; title?: string }[]).flatMap((row) =>
+    row.id && row.handle && typeof row.title === "string" ? [{ id: row.id, handle: row.handle, title: row.title }] : [],
+  );
+}
+
+async function ensureCollection(
+  container: MedusaContainer, rows: CollectionRecord[], handle: string, title: string, legacyHandle?: string,
+): Promise<string> {
+  const plan = collectionEnsurePlan(rows, handle, title, legacyHandle);
+  if (plan.action === "keep") return plan.id;
+  if (plan.action === "retitle" || plan.action === "rename") {
+    await updateCollectionsWorkflow(container).run({
+      input: { selector: { id: plan.id }, update: plan.action === "rename" ? { title, handle } : { title } },
+    });
+    return plan.id;
+  }
   const { result } = await createCollectionsWorkflow(container).run({
-    input: { collections: [{ title: CATALOGUE_COLLECTION_TITLE, handle: CATALOGUE_COLLECTION_HANDLE }] },
+    input: { collections: [{ title, handle }] },
   });
   const created = (Array.isArray(result) ? result : []) as { id?: string }[];
   const id = created[0]?.id;
-  if (!id) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Medusa did not create the In stock collection");
+  if (!id) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, `Medusa did not create the ${title} collection`);
+  rows.push({ id, handle, title });
   return id;
+}
+
+async function ensureStorefrontCollections(container: MedusaContainer): Promise<string> {
+  const rows = await listedCollections(container);
+  const saleId = await ensureCollection(
+    container, rows, CATALOGUE_COLLECTION_HANDLE, CATALOGUE_COLLECTION_TITLE, LEGACY_CATALOGUE_COLLECTION_HANDLE,
+  );
+  for (const room of ROOM_COLLECTIONS) await ensureCollection(container, rows, room.handle, room.title);
+  return saleId;
 }
 
 async function setCatalogueMembership(
@@ -241,7 +268,7 @@ async function publishCatalogue(container: MedusaContainer, readyIds: Set<string
   });
   const products = (data as CatalogueProduct[]).filter((product) => product.external_id?.startsWith(SOURCE_PREFIX));
   const wanted = products.filter((product) => readyIds.has(product.external_id || ""));
-  const collectionId = wanted.length ? await catalogueCollectionId(container) : null;
+  const collectionId = await ensureStorefrontCollections(container);
   const publish = wanted
     .filter((product) => product.status !== ProductStatus.PUBLISHED || product.collection_id !== collectionId)
     .map((product) => product.id);
@@ -249,9 +276,25 @@ async function publishCatalogue(container: MedusaContainer, readyIds: Set<string
     .filter((product) => !readyIds.has(product.external_id || "") &&
       (product.status !== ProductStatus.DRAFT || !!product.collection_id))
     .map((product) => product.id);
-  if (publish.length && collectionId) await publishCatalogueProducts(container, publish, collectionId);
+  if (publish.length) await publishCatalogueProducts(container, publish, collectionId);
   if (withdraw.length) {
     await setCatalogueMembership(container, withdraw, { status: ProductStatus.DRAFT, collection_id: null });
+  }
+}
+
+type RoomTarget = { id: string; metadata: Record<string, unknown> | null };
+
+async function assignRoomCollections(
+  container: MedusaContainer, groups: SourceGroup[], products: Map<string, RoomTarget>,
+) {
+  for (const group of groups) {
+    const product = products.get(group.externalId);
+    if (!product) continue;
+    const metadata = withRoomCollections(product.metadata, roomCollectionHandles(group.title, group.rows.map((row) => row.sku)));
+    if (!metadata) continue;
+    await updateProductsWorkflow(container).run({
+      input: { selector: { id: [product.id] }, update: { metadata } },
+    });
   }
 }
 
@@ -319,10 +362,19 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
     product.variants = (product.variants || []).filter((variant) => !moved.includes(variant));
   }
 
+  const roomTargets = new Map<string, RoomTarget>();
+  for (const product of existing) {
+    if (product.external_id) roomTargets.set(product.external_id, { id: product.id, metadata: product.metadata });
+  }
+
   for (const group of groups) {
     const product = bySourceId.get(group.externalId);
     const options = productOptions(group);
     if (!product) {
+      const roomMetadata = {
+        ...(group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {}),
+        [ROOM_COLLECTIONS_METADATA_KEY]: roomCollectionHandles(group.title, group.rows.map((row) => row.sku)),
+      };
       const { result } = await createProductsWorkflow(container).run({ input: { products: [{
         title: group.title, handle: group.externalId, external_id: group.externalId,
         status: ProductStatus.DRAFT, shipping_profile_id: profiles[0].id,
@@ -332,8 +384,11 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
           options: variantOptions(row), prices: [{ amount: medusaPrice(row.price_minor_zar), currency_code: "zar" }],
           metadata: { source_sku_id: row.source_sku_id, source_revision: row.revision, source_observed_at: row.observed_at, source_available_quantity: row.available_quantity, source_projected_quantity: row.available_quantity, source_price_includes_tax: true, ...syncedCapacityMetadata(row, null) },
         })),
-        metadata: group.grouped ? { source_product_group_id: group.rows[0].product_group_id } : {},
+        metadata: roomMetadata,
       }] } });
+      const createdId = result[0]?.id;
+      if (!createdId) throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, `Medusa did not create product ${group.externalId}`);
+      roomTargets.set(group.externalId, { id: createdId, metadata: roomMetadata });
       const createdVariants = result[0]?.variants || [];
       for (const row of group.rows) {
         const variant = createdVariants.find((item) => item.sku === row.sku);
@@ -415,4 +470,5 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
   }
 
   await publishCatalogue(container, new Set(catalogueExternalIds(sourceProducts)));
+  await assignRoomCollections(container, groups, roomTargets);
 }
