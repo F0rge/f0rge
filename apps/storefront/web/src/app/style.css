@@ -50,7 +50,13 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .skip-link { position: absolute; left: 1rem; top: -5rem; z-index: 60; background: var(--background); padding: .8rem 1rem; }
 .skip-link:focus { top: .5rem; }
 .site-header { position: sticky; top: 0; z-index: 30; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: space-between; gap: 2rem; min-height: 64px; padding: .55rem clamp(1.25rem, 4.3vw, 5rem); border-bottom: 1px solid var(--line); background: rgb(255 255 255 / 92%); }
-.wordmark { font: 650 1.6rem/1.1 var(--sans); letter-spacing: -.055em; text-decoration: none; white-space: nowrap; }
+.wordmark { display: inline-flex; align-items: center; font-family: var(--vellano-serif), "Times New Roman", serif; font-size: 1.15rem; font-weight: 400; letter-spacing: .01em; line-height: 1; text-decoration: none; white-space: nowrap; color: inherit; }
+.wordmark img { display: block; height: 2.35rem; width: auto; }
+.wordmark span[aria-hidden="true"] { margin-left: -.28rem; }
+.hero-no-image .wordmark { font-size: 1.85rem; }
+.hero-no-image .wordmark img { height: 4.75rem; }
+.collection-image .wordmark { font-size: 1.45rem; }
+.collection-image .wordmark img { height: 3.75rem; }
 .site-header .desktop-navigation { display: flex; gap: clamp(1.25rem, 2.5vw, 2.5rem); }
 .site-header a:not(.wordmark), .header-auth { font: 13px var(--sans); text-decoration: none; }
 .site-header nav a { padding: .7rem 0; }
@@ -62,7 +68,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .site-header .mobile-menu-trigger { display: none; }
 .mobile-menu { padding: 2.5rem 1.75rem 1.75rem; gap: 1.25rem; border-radius: 24px; }
 .mobile-menu [data-slot="dialog-close"] { min-width: 44px; min-height: 44px; }
-.mobile-menu .wordmark { font: 650 1.75rem var(--sans); letter-spacing: -.055em; }
+.mobile-menu .wordmark { font-size: 1.35rem; }
+.mobile-menu .wordmark img { height: 2.6rem; }
 .mobile-menu nav { display: grid; margin-top: 1rem; }
 .mobile-menu nav a { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--line); font: 600 1.5rem var(--sans); letter-spacing: -.025em; text-decoration: none; }
 .mobile-menu nav a:hover { color: var(--primary); }
@@ -272,7 +279,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .error-state button { margin: 1rem 1rem 0 0; }
 .site-footer { background: #fff; color: var(--foreground); border-top: 1px solid var(--line); }
 .footer-main { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 3rem; max-width: 1500px; margin: auto; padding: 3.5rem clamp(1.25rem, 4.3vw, 5rem); }
-.footer-brand .wordmark { font-size: 2rem; }
+.footer-brand .wordmark { font-size: 1.45rem; }
+.footer-brand .wordmark img { height: 3rem; }
 .footer-brand p { margin: 1rem 0 0; color: var(--muted-foreground); font: 500 18px/1.45 var(--sans); letter-spacing: -.02em; }
 .site-footer nav { display: flex; align-items: flex-start; flex-direction: column; gap: .75rem; }
 .site-footer nav .eyebrow { color: var(--foreground); margin-bottom: .5rem; }
@@ -304,7 +312,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 }
 @media (max-width: 700px) {
   .site-header { min-height: 60px; gap: .75rem; padding-block: .5rem; }
-  .wordmark { font-size: 1.4rem; letter-spacing: -.055em; }
+  .wordmark { font-size: 1rem; }
+  .wordmark img { height: 2rem; }
   .header-actions { gap: .65rem; }
   .header-bag { gap: .45rem; }
   .home-hero { padding-top: 2.5rem; }

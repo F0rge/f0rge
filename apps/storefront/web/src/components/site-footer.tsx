@@ -1,9 +1,11 @@
 import Link from "next/link";
 
+import { Wordmark } from "./wordmark";
+
 export function SiteFooter() {
   return <footer className="site-footer">
     <div className="footer-main">
-      <div className="footer-brand"><Link href="/" className="wordmark" aria-label="Vellano home">Vellano</Link><p>Furniture for<br />everyday life.</p></div>
+      <div className="footer-brand"><Link href="/" className="wordmark" aria-label="Vellano home"><Wordmark /></Link><p>Furniture for<br />everyday life.</p></div>
       <nav aria-label="Explore Vellano"><p className="eyebrow">Explore</p><Link href="/shop">All furniture</Link><Link href="/collections">Collections</Link><Link href="/account">Your account</Link><Link href="/bag">Your bag</Link></nav>
       <nav aria-label="Support and policies"><p className="eyebrow">Here to help</p><Link href="/support">Support</Link><Link href="/policies/delivery">Delivery and collection</Link><Link href="/policies/returns">Returns and refunds</Link><Link href="/policies/privacy">Privacy</Link></nav>
     </div>
