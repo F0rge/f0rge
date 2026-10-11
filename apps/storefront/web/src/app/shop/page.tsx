@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Button } from "@f0rge/ui";
 import { listStoreProducts, publicCollections, type MedusaVariant, type StoreProduct } from "@/lib/medusa";
 import { ProductCard } from "../product-card";
 import { SearchResultsTracker } from "@/components/analytics/search-results-tracker";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Shop furniture", description: "Discover The Collector's considered furniture collection.", alternates: { canonical: "/shop" } };
+export const metadata: Metadata = { title: "Shop furniture", description: "Discover Vellano's considered furniture collection.", alternates: { canonical: "/shop" } };
 
 type Search = { q?: string; category?: string; collection?: string; availability?: string; min?: string; max?: string; sort?: string };
 type Props = { searchParams: Promise<Record<keyof Search, string | string[] | undefined>> };
@@ -54,19 +55,22 @@ export default async function ShopPage({ searchParams }: Props) {
   const categoryId = categories.find((category) => category.handle === params.category)?.id;
   const collectionId = collections.find((collection) => collection.handle === params.collection)?.id;
   const priceFilterActive = [params.min, params.max].some((value) => value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0);
+  const advancedFiltersActive = Boolean(params.category || params.collection || params.availability || params.min || params.max);
   const sortOrder = params.sort === "price-asc" ? "price_asc" : params.sort === "price-desc" ? "price_desc" : "default";
   return <div className="content shop-page">
-    <p className="eyebrow">The Collector / shop</p><h1>Explore the collection.</h1>
+    <p className="eyebrow">Vellano / shop</p><h1>The collection.</h1>
     <p className="intro">Thoughtfully chosen pieces for rooms made to be lived in.</p>
     <form action="/shop" method="get" className="catalogue-filters" role="search">
       <div className="search-field"><label htmlFor="catalogue-search">Search furniture</label><input id="catalogue-search" name="q" type="search" defaultValue={params.q || ""} placeholder="Search pieces or materials" /></div>
+      <div><label htmlFor="sort">Sort by</label><select id="sort" name="sort" defaultValue={params.sort || "title"}><option value="title">Name A–Z</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option></select></div>
+      <div className="filter-actions"><Button type="submit">Show pieces</Button><Link href="/shop">Clear filters</Link></div>
+      <details className="advanced-filters" open={advancedFiltersActive}><summary>Filters<span aria-hidden="true">+</span></summary><div className="advanced-filter-fields">
       {categories.length > 0 && <div><label htmlFor="category">Category</label><select id="category" name="category" defaultValue={params.category || ""}><option value="">All categories</option>{categories.map((category) => <option key={category.id} value={category.handle}>{category.name}</option>)}</select></div>}
       {collections.length > 0 && <div><label htmlFor="collection">Collection</label><select id="collection" name="collection" defaultValue={params.collection || ""}><option value="">All collections</option>{collections.map((collection) => <option key={collection.id} value={collection.handle}>{collection.title}</option>)}</select></div>}
       <div><label htmlFor="availability">Availability</label><select id="availability" name="availability" defaultValue={params.availability || ""}><option value="">All pieces</option><option value="in-stock">In stock</option></select></div>
       <div><label htmlFor="min-price">Minimum price (R)</label><input id="min-price" name="min" type="number" min="0" step="1" defaultValue={params.min || ""} /></div>
       <div><label htmlFor="max-price">Maximum price (R)</label><input id="max-price" name="max" type="number" min="0" step="1" defaultValue={params.max || ""} /></div>
-      <div><label htmlFor="sort">Sort by</label><select id="sort" name="sort" defaultValue={params.sort || "title"}><option value="title">Name A–Z</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option></select></div>
-      <div className="filter-actions"><button type="submit">Show pieces</button><Link href="/shop">Clear filters</Link></div>
+      </div></details>
     </form>
     <SearchResultsTracker queryPresent={Boolean(params.q?.trim())} categoryId={categoryId} collectionId={collectionId} availability={params.availability === "in-stock" ? "in_stock" : "all"} priceFilterActive={priceFilterActive} sortOrder={sortOrder} resultCount={results.length} />
     <div className="results-heading" role="status" aria-live="polite">{results.length} {results.length === 1 ? "piece" : "pieces"}</div>

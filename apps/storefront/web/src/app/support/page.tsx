@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function SupportPage() {
   return <article className="content policy-page">
-    <p className="eyebrow">The Collector</p>
+    <p className="eyebrow">Vellano</p>
     <h1>{page.title}</h1>
     {page.paragraphs.map((paragraph, index) => <p key={`support-${index}`}>{paragraph}</p>)}
   </article>;

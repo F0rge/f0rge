@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@f0rge/ui";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { MedusaVariant, StoreProduct } from "@/lib/medusa";
@@ -71,16 +72,16 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
     <div ref={attentionRef} className="product-attention-region" aria-hidden="true" />
     <div className="product-page">
     <div className="gallery">
-      <div className="product-image hero-study">{image ? <img src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} width={800} height={1000} fetchPriority="high" /> : <span aria-hidden="true">Object study</span>}</div>
+      <div className="product-image hero-study">{image ? <img key={image} className="gallery-image" src={image} alt={`${product.title}${variant?.title ? `, ${variant.title}` : ""}, view ${imagePosition} of ${gallery.length}`} width={800} height={1000} fetchPriority="high" /> : <span className="image-placeholder" aria-hidden="true">Vellano</span>}</div>
       <p className="sr-only" aria-live="polite">{imagePosition ? `Image ${imagePosition} of ${gallery.length} for ${product.title}` : `No image for ${product.title}`}</p>
-      {gallery.length > 1 && <div className="gallery-thumbnails" aria-label="Product images">{gallery.map((url, index) => <button key={url} type="button" className={url === image ? "active" : ""} onClick={() => {
+      {gallery.length > 1 && <div className="gallery-thumbnails" aria-label="Product images">{gallery.map((url, index) => <Button key={url} type="button" className={url === image ? "active" : ""} onClick={() => {
         setActiveImage(url);
         capture({ name: "storefront_product_media_selected", properties: { product_id: product.id, media_index: index } });
-      }} aria-label={`Show image ${index + 1} of ${gallery.length}`} aria-pressed={url === image}><img src={url} alt="" /></button>)}</div>}
+      }} aria-label={`Show image ${index + 1} of ${gallery.length}`} aria-pressed={url === image}><img src={url} alt="" /></Button>)}</div>}
     </div>
     <div className="product-copy">
       <Link href="/shop" className="back-link">← All pieces</Link>
-      <p className="eyebrow">The Collector / furniture</p>
+      <p className="eyebrow">Vellano / furniture</p>
       <h1>{product.title}</h1>
       {description && <p>{description}</p>}
       {options.length > 0 && <div className="variant-options">{options.map((option) => {
@@ -99,17 +100,17 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
           } });
         }}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>;
       })}</div>}
-      {!variant && <button type="button" className="reset-variant" onClick={() => { setChoices(Object.fromEntries((first?.options || []).map((option) => [option.option_id || option.option?.id, option.value]).filter((entry): entry is [string, string] => !!entry[0]))); setActiveImage(null); }}>Choose an available combination</button>}
+      {!variant && <Button type="button" className="reset-variant" onClick={() => { setChoices(Object.fromEntries((first?.options || []).map((option) => [option.option_id || option.option?.id, option.value]).filter((entry): entry is [string, string] => !!entry[0]))); setActiveImage(null); }}>Choose an available combination</Button>}
       <p className="price" aria-live="polite">{formatPrice(variant)} {variant?.calculated_price && <span>incl. VAT</span>}</p>
       <p className="sku-identity">{variant?.sku ? `SKU ${variant.sku}` : "Select an available combination"}</p>
       <p className="availability" role="status">{availability}</p>
-      {quantity < 1 && offerAvailable && promisedWindow && <p className="availability-promise">Estimated ready between {promisedWindow}. {offer!.remaining_capacity} made-to-order {offer!.remaining_capacity === 1 ? "place" : "places"} remain in this finite allowance.</p>}
+      {quantity < 1 && offerAvailable && promisedWindow && <p className="availability-promise">Estimated ready between {promisedWindow}. {offer!.remaining_capacity} made-to-order {offer!.remaining_capacity === 1 ? "place" : "places"} currently available.</p>}
       {(variant?.material || product.material || hasDimensions || care) && <dl className="product-details">
         {(variant?.material || product.material) && <><dt>Material</dt><dd>{variant?.material || product.material}</dd></>}
         {hasDimensions && <><dt>Dimensions (L × W × H)</dt><dd>{dimensions.join(" × ")} {product.metadata?.dimension_unit || ""}</dd></>}
         {care && <><dt>Care</dt><dd>{care}</dd></>}
       </dl>}
-      <button className="add-to-bag" type="button" disabled={!variant || !variant.calculated_price || (quantity < 1 && !offerAvailable) || adding} onClick={async () => {
+      <Button className="add-to-bag" type="button" disabled={!variant || !variant.calculated_price || (quantity < 1 && !offerAvailable) || adding} onClick={async () => {
         if (!variant) return;
         setAdding(true); setBagMessage(""); setBagFailed(false);
         try {
@@ -128,7 +129,8 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
           setBagMessage(error instanceof Error ? error.message : "Could not add this piece");
         }
         finally { setAdding(false); }
-      }}>{adding ? "Adding…" : "Add to bag"}</button>
+      }}>{adding ? "Adding…" : "Add to bag"}</Button>
+      <nav className="product-policy-links" aria-label="Purchase information"><Link href="/policies/delivery">Delivery & collection</Link><Link href="/policies/returns">Returns & refunds</Link></nav>
       {feedback && <p ref={feedbackRef} role={feedback.role} tabIndex={feedback.tabIndex} className="bag-feedback">{feedback.message}{!bagFailed && <> <Link href="/bag">View bag</Link></>}</p>}
     </div>
     </div>

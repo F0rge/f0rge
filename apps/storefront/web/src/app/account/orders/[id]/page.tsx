@@ -52,7 +52,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
   } catch { /* Keep account order errors private and generic. */ }
 
   if (!order) return <div className="content account-page account-order-detail">
-    <p className="eyebrow">The Collector / customer account</p>
+    <p className="eyebrow">Vellano / customer account</p>
     <h1>{signedIn ? "Order not found" : "Sign in to view this order"}</h1>
     <p className="account-error">{signedIn ? "This order is unavailable in your account." : "Order details are shown only to the signed-in customer."}</p>
     <Link href={signedIn ? "/account" : "/account/sign-in"} className="text-link">{signedIn ? "Back to your account ↗" : "Continue with email ↗"}</Link>
@@ -60,7 +60,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
 
   const currency = order.currency_code || "ZAR";
   return <div className="content account-page account-order-detail">
-    <p className="eyebrow">The Collector / customer account</p>
+    <p className="eyebrow">Vellano / customer account</p>
     <h1>Order {order.display_id ?? order.id}</h1>
     {order.fulfillment_status || order.fulfillment_type ? <section className="account-panel" aria-label="Fulfilment status">
       <h2>Fulfilment</h2>

@@ -28,10 +28,10 @@ export function HeaderAuth() {
     <>
       <Show when="signed-out">
         <SignInButton mode="redirect">
-          <button type="button" className="header-auth">Sign in</button>
+          <Button type="button" className="header-auth" variant="ghost">Sign in</Button>
         </SignInButton>
         <SignUpButton mode="redirect">
-          <button type="button" className="header-auth">Sign up</button>
+          <Button type="button" className="header-auth" variant="ghost">Sign up</Button>
         </SignUpButton>
       </Show>
       <Show when="signed-in">

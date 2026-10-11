@@ -315,7 +315,7 @@ export function InteractiveStudy() {
             >
               {staticMode ? "Motion off" : "Pause motion"}
             </button>
-            <a href="#collection">Skip study <span aria-hidden="true">↓</span></a>
+            <a href="#after-study">Skip study <span aria-hidden="true">↓</span></a>
           </div>
         </div>
 
