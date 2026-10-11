@@ -224,6 +224,7 @@ export default function BooksPeriodsPage() {
               onChange={(event) => setToDate(event.target.value)}
             />
             <Button
+              data-tour="books-period-create"
               kind="primary"
               disabled={saving || !canCreate}
               onClick={() => void handleCreate()}

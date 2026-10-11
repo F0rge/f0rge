@@ -128,6 +128,7 @@ export default function PaymentsPage() {
         />
       ) : null}
 
+      <div data-tour="payments-list">
       {loading ? (
         <p className="cds--type-body-01">Loading payments…</p>
       ) : total === 0 ? (
@@ -206,6 +207,7 @@ export default function PaymentsPage() {
         />
         </>
       )}
+      </div>
 
       <Modal
         open={historyPayment !== null}

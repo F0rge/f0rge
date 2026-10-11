@@ -76,7 +76,7 @@ function SettingsSaveButton({
     );
   }
   return (
-    <Button kind="primary" disabled={saving} onClick={onSave}>
+    <Button kind="primary" data-tour="settings-save" disabled={saving} onClick={onSave}>
       {saving ? "Saving…" : "Save settings"}
     </Button>
   );

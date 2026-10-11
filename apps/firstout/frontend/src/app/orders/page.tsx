@@ -294,7 +294,7 @@ export default function OrdersPage() {
       {error ? <InlineNotification kind="error" title={error} hideCloseButton /> : null}
       <h1>{canMutate ? "Sales orders" : canCollect ? "Storefront collection" : "Storefront refunds"}</h1>
       {canReadHandoffs ? (
-        <section aria-labelledby="storefront-handoffs-heading">
+        <section aria-labelledby="storefront-handoffs-heading" data-tour="storefront-handoffs">
           <Stack gap={3}>
             <h2 id="storefront-handoffs-heading">Storefront handoffs</h2>
             {handoffs.length === 0 ? <p>No Storefront handoffs recorded.</p> : null}

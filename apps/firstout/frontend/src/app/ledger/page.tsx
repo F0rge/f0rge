@@ -302,7 +302,7 @@ export default function ChartOfAccountsPage() {
             Double-entry ledger accounts with live ZAR balances.
           </p>
         </div>
-        {canMutate ? <Button onClick={() => setCreateOpen(true)}>Add account</Button> : null}
+        {canMutate ? <Button data-tour="ledger-new" onClick={() => setCreateOpen(true)}>Add account</Button> : null}
       </div>
 
       {error ? (

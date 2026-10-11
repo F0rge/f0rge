@@ -202,6 +202,7 @@ export default function StocktakesPage() {
                 ))}
               </Select>
               <Button
+                data-tour="stocktake-start"
                 disabled={submitting || !locationId}
                 onClick={() => void handleStart()}
               >

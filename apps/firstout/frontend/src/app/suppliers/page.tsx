@@ -139,7 +139,7 @@ export default function SuppliersPage() {
           <p className="cds--type-body-01">Furniture suppliers and their default currencies.</p>
         </div>
         {canMutate ? (
-          <Button onClick={() => setCreateOpen(true)}>Add supplier</Button>
+          <Button data-tour="supplier-new" onClick={() => setCreateOpen(true)}>Add supplier</Button>
         ) : null}
       </div>
 

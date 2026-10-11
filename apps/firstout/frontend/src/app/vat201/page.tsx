@@ -363,7 +363,7 @@ export default function Vat201Page() {
               value={toDate}
               onChange={(event) => setToDate(event.target.value)}
             />
-            <Button kind="primary" disabled={saving || !canCreate} onClick={() => void handleCreate()}>
+            <Button data-tour="vat-create" kind="primary" disabled={saving || !canCreate} onClick={() => void handleCreate()}>
               {saving ? "Creating…" : "Create period"}
             </Button>
           </Stack>

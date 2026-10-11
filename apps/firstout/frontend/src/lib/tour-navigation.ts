@@ -4,9 +4,9 @@ import { setSideNavExpanded } from "@/lib/side-nav-preference";
 import type { TourStepDefinition } from "@/lib/tour-steps";
 import { getNarrowViewportSnapshot } from "@/lib/viewport";
 
-export function routeMatches(pathname: string, route: string): boolean {
-  if (route === "/") {
-    return pathname === "/";
+export function routeMatches(pathname: string, route: string, exact = false): boolean {
+  if (exact || route === "/") {
+    return pathname === route;
   }
   return pathname === route || pathname.startsWith(`${route}/`);
 }
@@ -34,23 +34,29 @@ export function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<
   });
 }
 
-function pageHeading(): HTMLElement | null {
-  const heading = document.querySelector("#main-content h1");
-  return heading instanceof HTMLElement ? heading : null;
+function elementReady(match: HTMLElement): boolean {
+  const modal = match.closest(".cds--modal");
+  if (modal instanceof HTMLElement && !modal.classList.contains("is-visible")) {
+    return false;
+  }
+  if (match.closest("[hidden]")) {
+    return false;
+  }
+  return match.getClientRects().length > 0;
+}
+
+function findTarget(selector: string): HTMLElement | null {
+  for (const node of document.querySelectorAll(selector)) {
+    if (node instanceof HTMLElement && elementReady(node)) {
+      return node;
+    }
+  }
+  return null;
 }
 
 function resolveTarget(step: TourStepDefinition): HTMLElement {
-  if (step.heading) {
-    const heading = pageHeading();
-    if (heading && headingMatches(heading.textContent, step.heading)) {
-      return heading;
-    }
-  }
   if (step.target !== "body") {
-    const match = document.querySelector(step.target);
-    if (match instanceof HTMLElement) {
-      return match;
-    }
+    return findTarget(step.target) ?? document.body;
   }
   return document.body;
 }
@@ -65,19 +71,23 @@ export async function prepareTourStep(
     setSideNavExpanded(false);
   }
 
-  if (step.route && !routeMatches(window.location.pathname, step.route)) {
+  if (step.route && !routeMatches(window.location.pathname, step.route, Boolean(step.exact))) {
     navigate(step.route);
-  }
-
-  if (step.heading) {
     await waitUntil(
-      () => headingMatches(pageHeading()?.textContent, step.heading ?? ""),
+      () => routeMatches(window.location.pathname, step.route ?? "", Boolean(step.exact)),
       12000,
     );
   }
 
+  if (step.target !== "body" && step.open && !findTarget(step.target)) {
+    const opener = step.open ? findTarget(step.open) ?? document.querySelector(step.open) : null;
+    if (opener instanceof HTMLElement) {
+      opener.click();
+    }
+  }
+
   if (step.target !== "body") {
-    await waitUntil(() => document.querySelector(step.target) instanceof Element, 8000);
+    await waitUntil(() => findTarget(step.target) instanceof HTMLElement, 8000);
   }
 
   if (step.expandNav) {

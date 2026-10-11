@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  readTourCompletion,
-  tourStorageKey,
-  writeTourCompletion,
+  overviewStorageKey,
+  pageTourStorageKey,
+  readOverviewCompletion,
+  readPageTourCompletion,
+  writeOverviewCompletion,
+  writePageTourCompletion,
   type TourStore,
 } from "./tour-storage";
 
@@ -20,22 +23,29 @@ function memoryStore(): TourStore {
 }
 
 describe("tour completion storage", () => {
-  it("remembers skip and completion per user", () => {
+  it("remembers each page tour and the overview separately", () => {
     const store = memoryStore();
-    expect(readTourCompletion("owner-1", store)).toBeNull();
+    expect(readPageTourCompletion("owner-1", "laybys", store)).toBeNull();
+    expect(readOverviewCompletion("owner-1", store)).toBeNull();
 
-    writeTourCompletion("owner-1", "skipped", store);
-    expect(readTourCompletion("owner-1", store)).toBe("skipped");
-    expect(readTourCompletion("till-2", store)).toBeNull();
+    writePageTourCompletion("owner-1", "laybys", "skipped", store);
+    expect(readPageTourCompletion("owner-1", "laybys", store)).toBe("skipped");
+    expect(readPageTourCompletion("owner-1", "customers", store)).toBeNull();
+    expect(readPageTourCompletion("till-2", "laybys", store)).toBeNull();
+    expect(readOverviewCompletion("owner-1", store)).toBeNull();
 
-    writeTourCompletion("owner-1", "completed", store);
-    expect(readTourCompletion("owner-1", store)).toBe("completed");
-    expect(store.getItem(tourStorageKey("owner-1"))).toBe("completed");
+    writeOverviewCompletion("owner-1", "completed", store);
+    expect(readOverviewCompletion("owner-1", store)).toBe("completed");
+    expect(store.getItem(pageTourStorageKey("owner-1", "laybys"))).toBe("skipped");
+    expect(store.getItem(overviewStorageKey("owner-1"))).toBe("completed");
+    expect(pageTourStorageKey("owner-1", "laybys").startsWith("firstout-tour-v2:")).toBe(true);
   });
 
   it("ignores unknown stored values", () => {
     const store = memoryStore();
-    store.setItem(tourStorageKey("owner-1"), "later");
-    expect(readTourCompletion("owner-1", store)).toBeNull();
+    store.setItem(pageTourStorageKey("owner-1", "laybys"), "later");
+    store.setItem(overviewStorageKey("owner-1"), "later");
+    expect(readPageTourCompletion("owner-1", "laybys", store)).toBeNull();
+    expect(readOverviewCompletion("owner-1", store)).toBeNull();
   });
 });

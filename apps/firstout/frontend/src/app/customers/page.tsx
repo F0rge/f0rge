@@ -284,6 +284,7 @@ export default function CustomersPage() {
           </Button>
           {canMutate ? (
             <Button
+              data-tour="customer-new"
               onClick={() => {
                 setCreateForm(emptyCustomerForm);
                 setCreateOpen(true);

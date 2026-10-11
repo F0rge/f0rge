@@ -311,7 +311,7 @@ function CataloguePageContent() {
               >
                 Import
               </Button>
-              <Button onClick={() => router.push("/catalogue/new")}>New SKU</Button>
+              <Button data-tour="catalogue-new" onClick={() => router.push("/catalogue/new")}>New SKU</Button>
             </>
           ) : null}
         </div>

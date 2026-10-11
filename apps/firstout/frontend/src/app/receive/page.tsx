@@ -270,6 +270,7 @@ function ReceivePageContent() {
           />
           {canRecv ? (
             <Button
+              data-tour="receive-submit"
               disabled={submitting || !formValid}
               onClick={() => void handleReceive()}
             >

@@ -133,6 +133,7 @@ export default function AuditPage() {
         />
       ) : null}
 
+      <div data-tour="audit-events">
       {loading ? (
         <p className="cds--type-body-01">Loading audit events…</p>
       ) : total === 0 && !error ? (
@@ -195,6 +196,7 @@ export default function AuditPage() {
           />
         </>
       )}
+      </div>
     </Stack>
   );
 }
