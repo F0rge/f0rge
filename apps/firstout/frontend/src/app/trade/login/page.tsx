@@ -37,6 +37,7 @@ export default function TradeLoginPage() {
     <Theme theme="g10">
       <main style={{ maxWidth: "24rem", margin: "4rem auto", padding: "1rem" }}>
         <Stack gap={5}>
+          <img className="firstout-login-mark" src="/brand/logo-transparent.png" alt="Firstout" width={72} height={72} />
           <h1>Trade portal</h1>
           {error ? <InlineNotification kind="error" title={error} hideCloseButton /> : null}
           <form onSubmit={(event) => void onSubmit(event)}>

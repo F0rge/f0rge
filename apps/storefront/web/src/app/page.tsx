@@ -3,6 +3,7 @@ import { Button } from "@f0rge/ui";
 import { StorefrontMotion } from "@/components/storefront-motion";
 import { TrackedProductLink } from "@/components/analytics/tracked-product-link";
 import { listStoreProducts, lowestPricedVariant, priceLabel, productPath, publicCollections } from "@/lib/medusa";
+import { Wordmark } from "@/components/wordmark";
 import { ProductCard } from "./product-card";
 import { InteractiveStudy } from "./study/interactive-study";
 
@@ -26,7 +27,7 @@ export default async function HomePage() {
       {heroProduct && heroImage ? <TrackedProductLink href={productPath(heroProduct)} productId={heroProduct.id} className="hero-image-link">
         <div className="hero-product-visual"><img className="hero-photograph" src={heroImage} alt={heroProduct.title} width={1400} height={1200} fetchPriority="high" loading="eager" /></div>
         <div className="hero-product-caption"><div><p className="eyebrow">Featured piece</p><strong>{heroProduct.title}</strong><span>{new Set(heroPrices).size > 1 ? "From " : ""}{priceLabel(lowestPricedVariant(heroProduct.variants))}</span></div><span className="hero-product-arrow">Explore piece <span aria-hidden="true">›</span></span></div>
-      </TrackedProductLink> : <div className="hero-no-image"><span className="wordmark">Vellano</span><p>Your next piece starts here.</p><span className="eyebrow">Explore our furniture collection</span></div>}
+      </TrackedProductLink> : <div className="hero-no-image"><span className="wordmark"><Wordmark /></span><p>Your next piece starts here.</p><span className="eyebrow">Explore our furniture collection</span></div>}
     </section>
     <section data-reveal className="content featured-section" id={collections.length === 0 ? "collection" : undefined}>
       <div className="section-heading"><div><p className="eyebrow">Explore the lineup</p><h2>Find your next piece.</h2></div><Link href="/shop" className="text-link">Shop all furniture <span aria-hidden="true">↗</span></Link></div>
@@ -40,7 +41,7 @@ export default async function HomePage() {
           const cover = pieces.find((product) => product.thumbnail || product.images?.[0]?.url);
           const image = cover?.thumbnail || cover?.images?.[0]?.url;
           return <Link key={collection.id} href={`/shop?collection=${encodeURIComponent(collection.handle)}`} className="collection-card">
-            <div className="collection-image">{image ? <img src={image} alt="" width={800} height={600} loading="lazy" /> : <span className="wordmark">Vellano</span>}</div>
+            <div className="collection-image">{image ? <img src={image} alt="" width={800} height={600} loading="lazy" /> : <span className="wordmark"><Wordmark /></span>}</div>
             <div className="collection-card-copy"><div><h3>{collection.title}</h3><p>{pieces.length} {pieces.length === 1 ? "piece" : "pieces"} to explore</p></div><span aria-hidden="true">↗</span></div>
           </Link>;
         })}</div>
