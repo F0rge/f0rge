@@ -20,7 +20,7 @@ which includes the v12.0.1 merge fix and the subsequent incremental result merge
 hardening. Its GraphQL 14–17 peer range covers Medusa's GraphQL 16. Although the
 utils package itself declares Node >=16, its `@whatwg-node/promise-helpers@2.0.0`
 dependency requires Node >=22.15.0. Commerce's declared Node engine therefore
-moves from Node 20.19 / 22.12 to >=22.15.0. CI and storefront Docker images already
+moves from Node 20.19 / 22.12 to >=22.15.0. CI and Vellano Docker images already
 use Node 22; verification uses Node 22.22.0. Local commerce development must also
 use Node >=22.15.0. The [upstream changelog](https://github.com/ardatan/graphql-tools/blob/master/packages/utils/CHANGELOG.md)
 identifies changes to schemas without operation roots in v11 and variable-value

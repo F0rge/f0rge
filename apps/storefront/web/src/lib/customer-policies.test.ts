@@ -10,7 +10,7 @@ const reviewed = {
   collection_location: "Kramerville showroom, 12 Commerce Road, Johannesburg",
   collection_instructions: "Collect from the showroom desk on weekdays between 09:00 and 16:00.",
   gauteng_zones: [{ name: "Johannesburg", rate_zar_incl_vat: "950.00" }],
-  cancellation_returns_refund: "Standard made to order pieces keep the confirmed lead time on the order. Bespoke commissions are not offered on the storefront and use a separate agreement.",
+  cancellation_returns_refund: "Standard made to order pieces keep the confirmed lead time on the order. Bespoke commissions are not offered on Vellano and use a separate agreement.",
   privacy: "We use contact details to fulfil the order and to provide support. Optional analytics stay off until the visitor accepts them.",
   information_officer_name: "Naledi Dlamini",
   information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",

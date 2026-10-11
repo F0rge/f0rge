@@ -1,4 +1,4 @@
-# Storefront refunds
+# Vellano refunds
 
 Refunds start as an authorized Firstout staff request. Firstout reserves the
 remaining refundable amount and returns a durable command to Medusa. Before

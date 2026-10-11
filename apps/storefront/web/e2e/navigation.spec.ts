@@ -66,7 +66,7 @@ for (const width of [1440, 390]) {
     await expect(heading).toBeInViewport()
     await expect.poll(() => heading.evaluate((element) => {
       const header = document.querySelector('.site-header')
-      if (!header) throw new Error('Storefront header is missing')
+      if (!header) throw new Error('Vellano header is missing')
       return element.getBoundingClientRect().top >= header.getBoundingClientRect().bottom
     })).toBe(true)
     const header = page.locator('.site-header')

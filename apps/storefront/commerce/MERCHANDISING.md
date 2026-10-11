@@ -1,4 +1,4 @@
-# Firstout storefront publication
+# Firstout Vellano publication
 
 The private Ops snapshot owns product-group membership, option values, source SKU
 identity, ZAR retail price, and available stock. Medusa can also store a

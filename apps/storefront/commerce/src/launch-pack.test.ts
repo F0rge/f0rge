@@ -175,12 +175,12 @@ const reviewedPolicies = {
   collector_skin: "Oxblood / citron",
 };
 
-test("policy text must distinguish made to order from bespoke and name one Collector skin", () => {
+test("policy text must distinguish made to order from bespoke and name one Vellano skin", () => {
   expect(codes({ policies: {} })).toContain("policies_unreviewed");
   expect(assessLaunchPack({ policies: { ...reviewedPolicies, collector_skin: "development default" } }).findings).toContainEqual({
     section: "policies_and_skin",
     code: "policies_unreviewed",
-    detail: "The final Collector D font and palette is not selected.",
+    detail: "The final Vellano font and palette is not selected.",
   });
   const undifferentiated = reviewedPolicies.cancellation_returns_refund.replace("Bespoke commissions", "Custom work");
   expect(assessLaunchPack({ policies: { ...reviewedPolicies, cancellation_returns_refund: undifferentiated } }).findings).toContainEqual({

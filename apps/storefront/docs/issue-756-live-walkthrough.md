@@ -1,6 +1,6 @@
 # Issue #756 live walkthrough
 
-Verified against the production build on 2026-09-28 with Playwright Chromium 153.0.8010.12. The local storefront used a disposable read-only Medusa stub that returned a ZAR region and an empty product list; no commerce credentials or real customer data were used.
+Verified against the production build on 2026-09-28 with Playwright Chromium 153.0.8010.12. The local Vellano used a disposable read-only Medusa stub that returned a ZAR region and an empty product list; no commerce credentials or real customer data were used.
 
 The desktop run used a 1440 × 900 viewport. The Sola study remained below the fold until scroll, accepted Enter on the material control, and the page continued scrolling over the study. Pause switched to the static illustration. The mobile run used a 390 × 844 viewport, found no horizontal overflow, kept navigation visible, scrolled through the study, and reached `/shop` through its collection link. These are browser viewport checks, not tests on physical devices.
 
@@ -12,10 +12,10 @@ The Next route bundle report measured the homepage's first-load JavaScript at 46
 
 Validation:
 
-- `npx nx run storefront-web:typecheck` — passed.
-- `npx nx run storefront-web:lint` — passed with four existing `<img>` optimization warnings in bag, product-card and product-detail files.
-- `npx nx run storefront-web:build` — passed.
-- `npx nx run storefront-web:e2e-ci--e2e/study.spec.ts` — all 7 study checks passed against the live local production server.
-- `npx nx run storefront-web:e2e` — 10 passed and 14 commerce/data-dependent checks skipped with database, publishable-key and product-fixture environment variables unset.
+- `npx nx run vellano-web:typecheck` — passed.
+- `npx nx run vellano-web:lint` — passed with four existing `<img>` optimization warnings in bag, product-card and product-detail files.
+- `npx nx run vellano-web:build` — passed.
+- `npx nx run vellano-web:e2e-ci--e2e/study.spec.ts` — all 7 study checks passed against the live local production server.
+- `npx nx run vellano-web:e2e` — 10 passed and 14 commerce/data-dependent checks skipped with database, publishable-key and product-fixture environment variables unset.
 
-The atomized `storefront-web:e2e-ci` target requires Nx Cloud in this environment; the complete non-atomized Nx `e2e` target ran instead.
+The atomized `vellano-web:e2e-ci` target requires Nx Cloud in this environment; the complete non-atomized Nx `e2e` target ran instead.

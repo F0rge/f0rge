@@ -109,13 +109,13 @@ describe("Clerk and private-preview proxy composition", () => {
     process.env.STOREFRONT_PRIVATE_PREVIEW = "off";
     process.env.STOREFRONT_INDEXING_ENABLED = "true";
     process.env.RAILWAY_ENVIRONMENT_NAME = "production";
-    process.env.NEXT_PUBLIC_BASE_URL = "https://collector.example";
+    process.env.NEXT_PUBLIC_BASE_URL = "https://vellano.example";
     delete process.env.STOREFRONT_PREVIEW_USERNAME;
     delete process.env.STOREFRONT_PREVIEW_PASSWORD;
     const { proxy } = await import("./proxy");
-    const shop = await proxy(new NextRequest("https://collector.example/shop"), {} as never);
-    const account = await proxy(new NextRequest("https://collector.example/account"), {} as never);
-    const checkout = await proxy(new NextRequest("https://collector.example/checkout"), {} as never);
+    const shop = await proxy(new NextRequest("https://vellano.example/shop"), {} as never);
+    const account = await proxy(new NextRequest("https://vellano.example/account"), {} as never);
+    const checkout = await proxy(new NextRequest("https://vellano.example/checkout"), {} as never);
     expect(shop.headers.get("x-robots-tag")).toBeNull();
     expect(account.headers.get("x-robots-tag")).toContain("noindex");
     expect(checkout.headers.get("x-robots-tag")).toContain("noindex");

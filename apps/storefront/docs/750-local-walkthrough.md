@@ -20,10 +20,10 @@ Observed results:
 
 The first run caught an incorrect `addr_` validation assumption. Native Medusa
 customer addresses use `cuaddr_`; the account BFF now accepts that prefix.
-An audit of the Storefront source found no other uses of the incorrect prefix.
+An audit of the Vellano source found no other uses of the incorrect prefix.
 
 The new account fields and actions use the shared UI library. The shared
-provider and token aliases retain the existing Collector palette and fonts.
+provider and token aliases retain the existing Vellano palette and fonts.
 
 Still required before closing #750: a configured Clerk development tenant with
 passwords disabled, the documented JWT template, a real email-code sign-in,

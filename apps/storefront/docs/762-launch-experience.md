@@ -1,6 +1,6 @@
 # Launch experience preparation
 
-Issue #762 asks for a public-ready Collector experience: an approved catalogue load, reviewed policies, the selected D palette, accessibility and performance evidence, and correct indexing. This change adds that software. It does not supply the owner pack, and it does not turn public selling on.
+Issue #762 asks for a public-ready Vellano experience: an approved catalogue load, reviewed policies, the selected D palette, accessibility and performance evidence, and correct indexing. This change adds that software. It does not supply the owner pack, and it does not turn public selling on.
 
 `loadApprovedLaunchPack` in `apps/storefront/commerce/src/launch-load.ts` is the load. It publishes variants only when `assessLaunchPack` accepts the pack. An incomplete record is left unpublished, and `directPurchase` refuses it. A second load upserts by SKU under `launch:{group}:{sku}` and does not copy over paid order lines. A rejected file leaves the last accepted shelf as it was. `public_selling` is always false.
 
@@ -28,7 +28,7 @@ A ready file prints the published count and still sets `public_selling` to false
 
 Support, delivery and collection, returns and refunds, and privacy are linked from the footer and from the analytics panel (`/policies/privacy`) before a visitor can accept analytics. Until a reviewed document is supplied, each page says `Reviewed text for this page is not published.` and does not invent legal, delivery, or refund copy. Made-to-order versus bespoke appears only when that sentence is in the owner text.
 
-The storefront still uses the existing oxblood / citron tokens. `collectorSkinAttribute` applies that skin only when the pack names `Oxblood / citron`. The other nine named skins have no approved colour values here, so they are not applied and there is no theme switch. Retired placeholder lines ("taking shape", "a considered addition to your living space") are not rendered.
+Vellano still uses the existing oxblood / citron tokens. `collectorSkinAttribute` applies that skin only when the pack names `Oxblood / citron`. The other nine named skins have no approved colour values here, so they are not applied and there is no theme switch. Retired placeholder lines ("taking shape", "a considered addition to your living space") are not rendered.
 
 ## Indexing and a future hostname
 

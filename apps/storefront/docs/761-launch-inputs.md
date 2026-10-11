@@ -13,10 +13,10 @@ No owner pack was supplied on 2026-10-05. Assessing the absent pack returns
 | Business identity | `business_identity_unconfirmed` | Legal entity, trading name, contact address, VAT position, dedicated support mailbox, named daily reconciliation and support operator, escalation availability, and a recorded owner confirmation. The software name Firstout is not that identity. |
 | Catalogue | `catalogue_not_approved` | An owner-approved set of 30–80 sellable variants. Each needs a durable SKU, product group, option combination, VAT-inclusive ZAR price, dimensions, material, care, useful copy, at least three licensed photos of that finish, and an explicit wrong-finish review. |
 | Availability and fulfilment | `availability_unconfirmed` | Finite physical stock or a finite, unexpired made-to-order allowance with a confirmed lead-time range; Gauteng zones and VAT-inclusive rates; collection location and instructions; recorded approval of the single mixed-cart promise (slowest line, no split shipment). |
-| Policies and skin | `policies_unreviewed` | Reviewed delivery, cancellation/returns/refund, and privacy content; Information Officer and PAIA baseline; cancellation text that distinguishes standard made-to-order from bespoke goods; one final Collector D skin. |
+| Policies and skin | `policies_unreviewed` | Reviewed delivery, cancellation/returns/refund, and privacy content; Information Officer and PAIA baseline; cancellation text that distinguishes standard made-to-order from bespoke goods; one final Vellano skin. |
 | Provisioning | `provisioning_incomplete` | A checklist for Clerk, Peach, email, PostHog, Railway, and the temporary hostname. Each entry identifies whether access is authorized, whether test and live are separated, and what onboarding remains. No secret values and no customer export. |
 
-The ten Collector D skins remain alternatives. None is selected for launch:
+The ten Vellano skins remain alternatives. None is selected for launch:
 Oxblood / citron, Ultramarine / shell, Forest / bone, Terracotta / chalk,
 Ink / saffron, Aubergine / blush, Cobalt / ice, Moss / sand, Charcoal / copper,
 Petrol / stone.
@@ -32,7 +32,7 @@ API keys, tokens, or customer exports into the pack, this file, or the issue.
 | Peach | not recorded | not recorded | Owner must grant Hosted Checkout access. Test payments stay off any public host. |
 | Email | not recorded | not recorded | Owner must name the sender and support mailbox control, without recording credentials. |
 | PostHog | not recorded | not recorded | Owner must grant the EU project and keep local or test traffic out of production reports. |
-| Railway | not recorded | not recorded | Storefront hosting stays in its own project. Do not use the Marrow project. |
+| Railway | not recorded | not recorded | Vellano hosting stays in its own project. Do not use the Marrow project. |
 | Temporary hostname | not recorded | not recorded | Owner must authorize a temporary hostname. No permanent domain purchase is required. |
 
 ## Walkthrough

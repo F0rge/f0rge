@@ -41,7 +41,7 @@ const ABSENT_MISSING = [
   "Operator fulfilment, refund, return, and recovery were not recorded.",
   "Consented, rejected, and withdrawn analytics journeys were not recorded.",
   "Private capacity rehearsal was not recorded.",
-  "Measured monthly Storefront cost was not recorded.",
+  "Measured monthly Vellano cost was not recorded.",
   "Environment identity, backups, restore evidence, and alerts were not recorded.",
   "Owner authorization for public selling is absent.",
   "Owner authorization for a real-money rehearsal is absent.",
@@ -76,13 +76,13 @@ function cents(value: unknown): value is number {
 
 function costAssessment(value: unknown): { problems: string[]; cost: StorefrontCost | null } {
   if (value === undefined) {
-    return { problems: ["Measured monthly Storefront cost was not recorded."], cost: null };
+    return { problems: ["Measured monthly Vellano cost was not recorded."], cost: null };
   }
   const cost = record(value);
   const assumptions = cost && typeof cost.usage_assumptions === "string" ? cost.usage_assumptions.trim() : "";
   const lines = cost && Array.isArray(cost.lines) ? cost.lines : [];
   if (!cost || cost.measured !== true || assumptions.length < 40 || lines.length === 0) {
-    return { problems: ["Measured monthly Storefront cost was not recorded."], cost: null };
+    return { problems: ["Measured monthly Vellano cost was not recorded."], cost: null };
   }
   const totals = { storefront: 0, payment_fee: 0, carrier: 0, firstout_hosting: 0 };
   const seen = new Set<string>();
@@ -92,11 +92,11 @@ function costAssessment(value: unknown): { problems: string[]; cost: StorefrontC
     const category = line?.category;
     if (!line || !cents(line.usd_cents) || typeof category !== "string" ||
         (klass !== "storefront" && klass !== "payment_fee" && klass !== "carrier" && klass !== "firstout_hosting")) {
-      return { problems: ["A Storefront cost line is not a recorded non-negative USD cent amount."], cost: null };
+      return { problems: ["A Vellano cost line is not a recorded non-negative USD cent amount."], cost: null };
     }
     if (klass === "storefront") {
       if (!STOREFRONT_CATEGORIES.includes(category as typeof STOREFRONT_CATEGORIES[number]) || seen.has(category)) {
-        return { problems: ["Storefront cost categories must be compute, staging, media, backups, and SaaS, once each."], cost: null };
+        return { problems: ["Vellano cost categories must be compute, staging, media, backups, and SaaS, once each."], cost: null };
       }
       seen.add(category);
       totals.storefront += line.usd_cents;
@@ -105,11 +105,11 @@ function costAssessment(value: unknown): { problems: string[]; cost: StorefrontC
     }
   }
   if (STOREFRONT_CATEGORIES.some((category) => !seen.has(category))) {
-    return { problems: ["Measured monthly Storefront cost was not recorded."], cost: null };
+    return { problems: ["Measured monthly Vellano cost was not recorded."], cost: null };
   }
   const fits = totals.storefront <= BUDGET_USD_CENTS;
   return {
-    problems: fits ? [] : ["Measured monthly Storefront cost is above USD 50 and remains a no-go pending an owner decision."],
+    problems: fits ? [] : ["Measured monthly Vellano cost is above USD 50 and remains a no-go pending an owner decision."],
     cost: {
       storefront_usd_cents: totals.storefront,
       fits_budget: fits,
@@ -309,7 +309,7 @@ function environmentFindings(value: unknown): string[] {
     problems.push("Environment identity was not recorded.");
   }
   if (environment.private_access !== true || environment.indexing_enabled !== false || environment.public_selling_enabled !== false) {
-    problems.push("The recorded environment is not a private, non-indexable Storefront with public selling off.");
+    problems.push("The recorded environment is not a private, non-indexable Vellano shop with public selling off.");
   }
   const backup = typeof environment.backup_evidence_id === "string" && environment.backup_evidence_id.trim().length > 0;
   const restore = typeof environment.restore_evidence_id === "string" && environment.restore_evidence_id.trim().length > 0;

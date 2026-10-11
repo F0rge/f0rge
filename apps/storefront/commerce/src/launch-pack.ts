@@ -30,7 +30,7 @@ const ABSENT: LaunchPackFinding[] = [
   {
     section: "policies_and_skin",
     code: "policies_unreviewed",
-    detail: "Owner has not supplied reviewed delivery, cancellation, privacy, and PAIA content, or selected a final Collector D font and palette.",
+    detail: "Owner has not supplied reviewed delivery, cancellation, privacy, and PAIA content, or selected a final Vellano font and palette.",
   },
   {
     section: "provisioning",
@@ -288,7 +288,7 @@ function policyFindings(value: unknown): LaunchPackFinding[] {
     findings.push(policyFinding("Information Officer and PAIA baseline responsibilities are missing."));
   }
   if (typeof policies.collector_skin !== "string" || !COLLECTOR_SKINS.includes(policies.collector_skin as typeof COLLECTOR_SKINS[number])) {
-    findings.push(policyFinding("The final Collector D font and palette is not selected."));
+    findings.push(policyFinding("The final Vellano font and palette is not selected."));
   }
   return findings;
 }
