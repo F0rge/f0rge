@@ -20,7 +20,7 @@ day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added 
 | Supplements | `set_supplements(keys, date?, mode='replace')` | write | `replace` / `add` / `remove` the day's supplement keys |
 | Meals | `get_meal(photo_id)` | read | Ingredients, tags, photo metadata |
 | Meals | `log_meal(date, name, meal_time?, ingredients?, photo_base64?)` | write | No background vision; `ingredients` = decomposed, catalogue-named list; returns per-ingredient match status (see below) |
-| Meals | `edit_meal(photo_id, name?, meal_time?)` | write | Name/time only; ingredients via `set_ingredients` |
+| Meals | `edit_meal(photo_id, name?, meal_time?)` | write | Name/time only; a `meal_time` on another date moves the meal to that day (entry created if missing); ingredients via `set_ingredients` |
 | Meals | `search_ingredients(query, limit=10)` | read | Ranked lookup in the caller's active catalogue: canonical name, match type, score, flags |
 | Meals | `set_ingredients(photo_id, ingredients)` | write | Atomically replaces the ingredient list (all or nothing); returns per-ingredient match status |
 | Meals | `tag_meal(photo_id, handles)` | write | Tag accepted connections |

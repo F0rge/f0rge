@@ -6,6 +6,7 @@ import datetime
 from typing import Any, Optional
 
 from mcp.server.fastmcp import Context, FastMCP
+from app.cache.invalidation import invalidate_user_insights_cache
 from app.crud.meal_tags import MealTagCRUD
 from app.crud.meals import MealCRUD
 from app.crud.photo_analysis import PhotoAnalysisCRUD
@@ -56,7 +57,9 @@ _SET_INGREDIENTS_DESCRIPTION = (
     + INGREDIENT_TOOL_NOTE
 )
 _EDIT_MEAL_DESCRIPTION = (
-    "Update a meal's display name and/or meal time. Does not change ingredients: "
+    "Update a meal's display name and/or meal time. A meal_time on another calendar day "
+    "moves the meal to that day (the day is created if it has no check-in yet); the day "
+    "is the date part of meal_time as written. Does not change ingredients: "
     "use search_ingredients then set_ingredients for that (decomposed, catalogue-matched "
     "names; see marrow://reference/meal-logging-guide)."
 )
@@ -192,6 +195,9 @@ def register_meals_tools(server: FastMCP) -> None:
             result_ingredients = [
                 ingredient_payload(row, resolution) for row, resolution in zip(rows, resolutions)
             ]
+            # The API caches GET /entries/{date}; without this the app keeps serving
+            # the day without the new meal (and its diet flags) until the TTL expires.
+            await invalidate_user_insights_cache(current_user_id(), parsed)
 
         return {
             "photo_id": photo.id,
@@ -228,20 +234,33 @@ def register_meals_tools(server: FastMCP) -> None:
                 analysis = await PhotoAnalysisCRUD(db).get_for_photo(photo_id)
                 if analysis is not None and stripped:
                     analysis.dish_name = stripped
+            old_date = photo.entry.date
+            new_date = old_date
             if meal_time is not None:
                 try:
                     parsed_time = datetime.datetime.fromisoformat(meal_time)
                 except ValueError as exc:
                     raise ValidationError("meal_time must be ISO datetime") from exc
+                # The day is the calendar date the caller wrote, before UTC normalisation
+                # (log_meal files a meal under its `date` argument the same way).
+                new_date = parsed_time.date()
                 if parsed_time.tzinfo is not None:
                     offset = parsed_time.utcoffset()
                     parsed_time = (parsed_time - offset).replace(tzinfo=None)
                 photo.meal_time = parsed_time
                 if photo.meal is not None:
                     photo.meal.meal_time = parsed_time
+                if new_date != old_date:
+                    # Day membership is Photo.entry_id, not meal_time: re-home the
+                    # placement or the meal stays on the old day with a new time.
+                    photo.entry = await get_or_create_entry(db, new_date)
             await PhotoCRUD(db).commit_refresh(photo)
+            await invalidate_user_insights_cache(current_user_id(), old_date)
+            if new_date != old_date:
+                await invalidate_user_insights_cache(current_user_id(), new_date)
             return {
                 "photo_id": photo.id,
+                "date": str(new_date),
                 "name": photo.label,
                 "meal_time": photo.meal_time.isoformat() if photo.meal_time else None,
             }
@@ -272,6 +291,9 @@ def register_meals_tools(server: FastMCP) -> None:
             created = [
                 ingredient_payload(row, resolution) for row, resolution in zip(rows, resolutions)
             ]
+            photo = await PhotoCRUD(db).get_by_id_owned(photo_id)
+            if photo is not None:
+                await invalidate_user_insights_cache(current_user_id(), photo.entry.date)
             return {
                 "photo_id": photo_id,
                 **summary_fields(resolutions, dropped),
@@ -295,12 +317,14 @@ def register_meals_tools(server: FastMCP) -> None:
             photo = await PhotoCRUD(db).get_by_id_owned(photo_id)
             if photo is None:
                 raise NotFoundError("Photo not found")
+            entry_date = photo.entry.date
             for tag in await tag_service.crud.list_for_source_photo(photo_id):
                 if tag.status in ("pending_analysis", "pending_approval"):
                     await tag_service.cancel(tag.id)
             if handles:
                 await tag_service.add_tags_to_photo(photo_id, handles)
             tags = await _tags_for_photo(db, photo_id)
+            await invalidate_user_insights_cache(current_user_id(), entry_date)
             return {"photo_id": photo_id, "tags": tags}
 
     @server.tool()
