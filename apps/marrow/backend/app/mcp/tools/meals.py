@@ -4,6 +4,7 @@ import asyncio
 import base64
 import datetime
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from mcp.server.fastmcp import Context, FastMCP
 from app.cache.invalidation import invalidate_user_insights_cache
@@ -34,8 +35,9 @@ from app.services.photo_storage import resize_image, save_photo, thumb_filename
 from app.prompts.ingredient_rules import INGREDIENT_TOOL_NOTE
 from app.services.photos import entry_photo_upload_lock, next_photo_filename
 from app.crud.base import unit_of_work
+from app.config import settings
 from f0rge_core.exceptions import NotFoundError, ValidationError
-from f0rge_db.tenant import current_user_id
+from f0rge_db.tenant import apply_session_user_id, current_user_id
 
 
 async def _tags_for_photo(db, photo_id: int) -> list[dict[str, Any]]:
@@ -47,9 +49,90 @@ async def _tags_for_photo(db, photo_id: int) -> list[dict[str, Any]]:
     return items
 
 
+async def _move_tag_copies(
+    db,
+    source_photo_id: int,
+    tagger_id,
+    new_date: datetime.date,
+    meal_time: Optional[datetime.datetime],
+) -> list[tuple[Any, datetime.date]]:
+    """Follow a source meal that moved day: retarget its tags and delivered copies.
+
+    Same tenant-switch pattern as ``TagDeliveryService._deliver_tag``: tags are read and
+    updated as the tagger, each recipient's placement is moved under the recipient's own
+    RLS context (their entry for ``new_date`` is created if missing), then the session
+    returns to the tagger. Pending tags only get ``source_date``, so a later delivery
+    lands on the new day. Returns ``(recipient_id, old_date)`` per moved copy.
+    """
+    tags = await MealTagCRUD(db).list_for_source_photo(source_photo_id)
+    delivered: list[tuple[Any, int]] = []
+    for tag in tags:
+        tag.source_date = new_date
+        if tag.status == "delivered" and tag.delivered_photo_id is not None:
+            delivered.append((tag.tagged_user_id, tag.delivered_photo_id))
+    await db.flush()
+    moved: list[tuple[Any, datetime.date]] = []
+    try:
+        for recipient_id, copy_id in delivered:
+            await apply_session_user_id(db, recipient_id)
+            copy = await PhotoCRUD(db).get_by_id_owned(copy_id)
+            if copy is None or copy.source_photo_id != source_photo_id:
+                continue
+            old_date = copy.entry.date
+            if old_date != new_date:
+                copy.entry = await get_or_create_entry(db, new_date)
+            if meal_time is not None:
+                copy.meal_time = meal_time
+            await db.flush()
+            moved.append((recipient_id, old_date))
+    finally:
+        await apply_session_user_id(db, tagger_id)
+    return moved
+
+
+def _local_tz() -> ZoneInfo:
+    return ZoneInfo(settings.app_timezone)
+
+
+def _to_utc_naive(value: datetime.datetime) -> datetime.datetime:
+    """Store meal times like the app does: naive UTC.
+
+    A naive value is wall-clock time in ``settings.app_timezone`` (Europe/Luxembourg);
+    a value with an explicit offset is kept as that instant.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=_local_tz())
+    return value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+
+def _local_date(value: datetime.datetime) -> datetime.date:
+    """Calendar day of ``value`` in the app timezone (naive = already local)."""
+    if value.tzinfo is None:
+        return value.date()
+    return value.astimezone(_local_tz()).date()
+
+
+def _time_fields(stored_utc: Optional[datetime.datetime]) -> dict[str, Any]:
+    if stored_utc is None:
+        return {"meal_time": None, "meal_time_local": None}
+    aware = stored_utc.replace(tzinfo=datetime.timezone.utc)
+    return {
+        "meal_time": aware.isoformat(),
+        "meal_time_local": aware.astimezone(_local_tz()).isoformat(),
+    }
+
+
+_TIME_NOTE = (
+    "meal_time without an offset (HH:MM or a naive ISO datetime) is local time in "
+    "Europe/Luxembourg; an ISO datetime with an explicit offset is kept as that instant. "
+    "Stored in UTC; the response gives meal_time (UTC) and meal_time_local. "
+)
+
+
 _LOG_MEAL_DESCRIPTION = (
     "Log a meal on a day. Returns when the meal row exists (no background vision). "
     "`name` is the meal/product name and may carry brand, pack size and quantity. "
+    + _TIME_NOTE
     + INGREDIENT_TOOL_NOTE
 )
 _SET_INGREDIENTS_DESCRIPTION = (
@@ -57,9 +140,11 @@ _SET_INGREDIENTS_DESCRIPTION = (
     + INGREDIENT_TOOL_NOTE
 )
 _EDIT_MEAL_DESCRIPTION = (
-    "Update a meal's display name and/or meal time. A meal_time on another calendar day "
-    "moves the meal to that day (the day is created if it has no check-in yet); the day "
-    "is the date part of meal_time as written. Does not change ingredients: "
+    _TIME_NOTE
+    + "Update a meal's display name and/or meal time. A meal_time on another calendar day "
+    "moves the meal (and the copies delivered to people tagged on it) to that day, creating "
+    "the day if it has no check-in yet; the day is meal_time's local Europe/Luxembourg date. "
+    "Does not change ingredients: "
     "use search_ingredients then set_ingredients for that (decomposed, catalogue-matched "
     "names; see marrow://reference/meal-logging-guide)."
 )
@@ -129,9 +214,8 @@ def register_meals_tools(server: FastMCP) -> None:
         else:
             effective_time = datetime.datetime.utcnow()
 
-        if effective_time.tzinfo is not None:
-            offset = effective_time.utcoffset()
-            effective_time = (effective_time - offset).replace(tzinfo=None)
+        if meal_time:
+            effective_time = _to_utc_naive(effective_time)
 
         async with mcp_tools.scoped_main_session(user_id) as db:
             # Resolve (and validate) before any write so a bad request creates no meal.
@@ -204,7 +288,7 @@ def register_meals_tools(server: FastMCP) -> None:
             "meal_id": meal.id,
             "date": str(parsed),
             "name": name.strip(),
-            "meal_time": effective_time.isoformat(),
+            **_time_fields(effective_time),
             **summary_fields(resolutions, dropped),
             "ingredients": result_ingredients,
             "next_step": next_step(resolutions, tool="log_meal"),
@@ -241,12 +325,9 @@ def register_meals_tools(server: FastMCP) -> None:
                     parsed_time = datetime.datetime.fromisoformat(meal_time)
                 except ValueError as exc:
                     raise ValidationError("meal_time must be ISO datetime") from exc
-                # The day is the calendar date the caller wrote, before UTC normalisation
-                # (log_meal files a meal under its `date` argument the same way).
-                new_date = parsed_time.date()
-                if parsed_time.tzinfo is not None:
-                    offset = parsed_time.utcoffset()
-                    parsed_time = (parsed_time - offset).replace(tzinfo=None)
+                # Day = local calendar date of the given time (naive input is local).
+                new_date = _local_date(parsed_time)
+                parsed_time = _to_utc_naive(parsed_time)
                 photo.meal_time = parsed_time
                 if photo.meal is not None:
                     photo.meal.meal_time = parsed_time
@@ -254,15 +335,24 @@ def register_meals_tools(server: FastMCP) -> None:
                     # Day membership is Photo.entry_id, not meal_time: re-home the
                     # placement or the meal stays on the old day with a new time.
                     photo.entry = await get_or_create_entry(db, new_date)
+            moved_copies: list[tuple[Any, datetime.date]] = []
+            if new_date != old_date:
+                moved_copies = await _move_tag_copies(
+                    db, photo_id, current_user_id(), new_date, photo.meal_time
+                )
             await PhotoCRUD(db).commit_refresh(photo)
             await invalidate_user_insights_cache(current_user_id(), old_date)
             if new_date != old_date:
                 await invalidate_user_insights_cache(current_user_id(), new_date)
+            for recipient_id, recipient_old_date in moved_copies:
+                await invalidate_user_insights_cache(recipient_id, recipient_old_date)
+                await invalidate_user_insights_cache(recipient_id, new_date)
             return {
                 "photo_id": photo.id,
                 "date": str(new_date),
                 "name": photo.label,
-                "meal_time": photo.meal_time.isoformat() if photo.meal_time else None,
+                **_time_fields(photo.meal_time),
+                "moved_tag_copies": len(moved_copies),
             }
 
     @server.tool(description=_SET_INGREDIENTS_DESCRIPTION)
