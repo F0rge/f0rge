@@ -531,6 +531,7 @@ function DeliveriesPageContent() {
         </div>
         {canMutate ? (
           <Button
+            data-tour="delivery-new"
             onClick={() => {
               resetCreateForm();
               setCreateOpen(true);

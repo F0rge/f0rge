@@ -158,7 +158,7 @@ export async function writeStock(container: MedusaContainer, variantId: string, 
   // Ops availability (less unacknowledged paid commitments) already excludes
   // these sold units. Native reservations must remain for fulfillment, so add
   // them to stocked quantity and let Medusa subtract them exactly once. Active
-  // cart holds and reservations outside captured Storefront orders still reduce
+  // cart holds and reservations outside captured Vellano orders still reduce
   // sellable stock normally.
   const stockedQuantity = quantity + await paidOrderReservedQuantity(container, itemId, locationId);
   if (levels.length) {
@@ -335,7 +335,7 @@ async function syncFirstoutLocked(container: MedusaContainer): Promise<void> {
   const { data: locations } = await query.graph({ entity: "stock_location", fields: ["id"] });
   const { data: profiles } = await query.graph({ entity: "shipping_profile", fields: ["id"] });
   if (!channels[0] || !locations[0] || !profiles[0]) {
-    throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Run the Medusa Storefront bootstrap before syncing");
+    throw new MedusaError(MedusaError.Types.UNEXPECTED_STATE, "Run the Vellano bootstrap before syncing");
   }
 
   // A SKU may move from its legacy one-SKU product into a group. Release the

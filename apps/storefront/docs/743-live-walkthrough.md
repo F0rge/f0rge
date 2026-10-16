@@ -14,7 +14,7 @@ PostgreSQL on port 5434, Redis on port 6379. Firstout ran on 8003, Medusa on
    request displayed R12,000 and three available. No browser request went to
    Firstout.
 3. Unpublishing the test SKU and syncing returned HTTP 404 at its direct
-   Storefront route. A bad machine token returned 401 from Ops. Republishing
+   Vellano route. A bad machine token returned 401 from Ops. Republishing
    and syncing restored HTTP 200. The two-database contract test separately
    denied a first-instance credential and company ID on a second real
    PostgreSQL-backed Firstout instance.
@@ -26,6 +26,6 @@ PostgreSQL on port 5434, Redis on port 6379. Firstout ran on 8003, Medusa on
 ![Chromium product route showing the Arc sofa at R12,000 with three available](743-product-page.png)
 
 Repeat the live parity check with the environment variables in
-`apps/storefront/README.md` and `npx nx run storefront-commerce:integration`.
+`apps/storefront/README.md` and `npx nx run vellano-commerce:integration`.
 The browser test needs `STOREFRONT_TEST_SKU_ID`; it skips the published-product
 case when no seeded SKU is supplied.

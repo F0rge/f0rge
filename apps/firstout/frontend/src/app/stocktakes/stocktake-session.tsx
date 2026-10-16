@@ -184,7 +184,7 @@ export function StocktakeSession({
         <div>
           <h1 className="cds--type-productive-heading-04">{stocktake.location_name} stocktake</h1>
           <p className="cds--type-body-01">
-            Started {formatDateTime(stocktake.started_at)} • In progress
+            Started {formatDateTime(stocktake.started_at)} • {stocktake.category ?? "All categories"} • In progress
           </p>
         </div>
         {canMutate ? (

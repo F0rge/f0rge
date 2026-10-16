@@ -1,4 +1,4 @@
-# Config-as-code for the isolated Storefront private-preview web service.
+# Config-as-code for the Vellano web service.
 # Set Railway Root Directory to the repository root and use this file as the
 # service config path. Never attach this service to the Firstout or Marrow project.
 

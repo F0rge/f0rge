@@ -18,7 +18,7 @@ function unavailable(): NextResponse {
 
 function unauthorized(): NextResponse {
   const response = new NextResponse("Authentication required.", { status: 401 });
-  response.headers.set("WWW-Authenticate", 'Basic realm="Storefront private preview", charset="UTF-8"');
+  response.headers.set("WWW-Authenticate", 'Basic realm="Vellano", charset="UTF-8"');
   response.headers.set("Cache-Control", "no-store");
   return withRobotsHeader(response);
 }

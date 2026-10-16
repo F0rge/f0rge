@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.team_settings import (
     DEFAULT_HOME_CURRENCY,
-    DEFAULT_NIA_MONTHLY_TOKEN_CAP,
     DEFAULT_VAT_RATE,
     TeamSettings,
 )
@@ -36,7 +35,6 @@ class TeamSettingsCRUD(BaseCRUD):
             home_currency=DEFAULT_HOME_CURRENCY,
             always_prefer_warehouse=True,
             pick_priority=[],
-            nia_monthly_token_cap=DEFAULT_NIA_MONTHLY_TOKEN_CAP,
         )
         async with unit_of_work(self.db):
             await self.add_and_flush(settings)

@@ -20,7 +20,6 @@ export const TILL_NAV_ITEM = { href: "/till", label: "Till" } as const;
 
 export const CATALOGUE_NAV_ITEMS = [
   { href: "/catalogue", label: "Catalogue" },
-  { href: "/product-groups", label: "Storefront products" },
   { href: "/suppliers", label: "Suppliers" },
   { href: "/price-lists", label: "Price lists" },
   { href: "/proformas", label: "Proformas" },
@@ -46,16 +45,12 @@ export const WAREHOUSE_NAV_ITEMS = [
 
 export const SALES_NAV_ITEMS = [
   { href: "/quotes", label: "Quotes" },
-  { href: "/lookbooks", label: "Lookbooks" },
   { href: "/orders", label: "Orders" },
-  { href: "/storefront-exceptions", label: "Storefront exceptions" },
   { href: "/laybys", label: "Laybys" },
   { href: "/customers", label: "Customers" },
   { href: "/returns", label: "Returns" },
   { href: "/deliveries", label: "Deliveries" },
 ] as const;
-
-export const NIA_NAV_ITEMS = [{ href: "/canvas", label: "Canvas" }] as const;
 
 export const ADMIN_NAV_ITEMS = [
   { href: "/users", label: "Users", permission: "users.manage" as const },
@@ -115,9 +110,7 @@ export function isSalesPath(pathname: string): boolean {
     SALES_HREFS.has(pathname) ||
     pathname.startsWith("/customers/") ||
     pathname.startsWith("/quotes/") ||
-    pathname.startsWith("/lookbooks/") ||
-    pathname.startsWith("/orders/") ||
-    pathname.startsWith("/storefront-exceptions")
+    pathname.startsWith("/orders/")
   );
 }
 
@@ -134,12 +127,11 @@ const ALL_NAV_PATH_LABELS: ReadonlyMap<string, string> = new Map(
     ...WAREHOUSE_NAV_ITEMS,
     ...SALES_NAV_ITEMS,
     ...BOOKS_NAV_ITEMS,
-    ...NIA_NAV_ITEMS,
     ...ADMIN_NAV_ITEMS,
   ].map((item) => [item.href, item.label]),
 );
 
-/** Human label for Nia navigation cards — maps `/invoices` → "Invoices", not raw path. */
+/** Human label for a nav href — maps `/invoices` → "Invoices", not the raw path. */
 export function labelForNavPath(path: string): string {
   const exact = ALL_NAV_PATH_LABELS.get(path);
   if (exact) {

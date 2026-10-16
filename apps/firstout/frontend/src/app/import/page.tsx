@@ -207,7 +207,7 @@ export default function ImportPage() {
       ) : null}
 
       <Grid condensed fullWidth>
-        <Column lg={8} md={4} sm={4}>
+        <Column lg={8} md={4} sm={4} data-tour="import-inventory">
           <UploadZone
             title="1. Inventory List CSV"
             description="Create or update products. Required."
@@ -279,7 +279,7 @@ export default function ImportPage() {
               >
                 {busy ? "Working…" : "Re-preview"}
               </Button>
-              <Button kind="primary" disabled={!canStart} onClick={() => void handleCommit()}>
+              <Button data-tour="import-start" kind="primary" disabled={!canStart} onClick={() => void handleCommit()}>
                 {busy ? "Working…" : "Start Import"}
               </Button>
             </Stack>

@@ -9,7 +9,6 @@ import {
   type PickPreview,
   type UpdatePickPayload,
 } from "./picks";
-import { consumeNiaSse, type NiaSseHandlers } from "./nia-sse";
 
 export type PresetRole = "owner" | "buyer" | "warehouse" | "till" | "books";
 /** Role slug — five presets plus custom slugs from GET /roles. */
@@ -130,12 +129,6 @@ export async function parseErrorMessage(response: Response): Promise<string> {
     }
     if (body.detail && typeof body.detail === "object" && "code" in body.detail) {
       const code = body.detail.code;
-      if (code === "nia_llm_unconfigured") {
-        return "Nia is not configured";
-      }
-      if (code === "nia_cap_exceeded") {
-        return "Monthly Nia allowance used";
-      }
       if (code === "comms_encryption_unconfigured") {
         return "Communications encryption is not configured";
       }
@@ -259,14 +252,11 @@ export {
   canMutateDeliveries,
   canMutateLaybys,
   canMutateOrders,
-  canViewStorefrontExceptions,
   canMutatePicks,
   canMutateQuotes,
   canMutateReturns,
   canMutateSettings,
   canSendComms,
-  canAdminNia,
-  canUseNia,
   canRaisePo,
   canReceive,
   canReceiveTransfer,
@@ -582,13 +572,11 @@ export type Sku = {
   retail_inc_vat: string | null;
   carton_count: number;
   is_kit: boolean;
-  storefront_published?: boolean;
   created_at: string;
   updated_at: string;
 };
 
 export type UpdateSkuPricePayload = {
-  storefront_published?: boolean;
   our_ref?: string;
   our_barcode?: string;
   name?: string;
@@ -718,61 +706,6 @@ export function deleteSku(id: string): Promise<void> {
 
 export function skuPhotoUrl(id: string): string {
   return `/api/v1/skus/${id}/photo`;
-}
-
-export type ProductGroupVariant = {
-  source_sku_id: string;
-  sku: string;
-  name: string;
-  options: Record<string, string>;
-};
-
-export type ProductGroup = {
-  id: string;
-  title: string;
-  options: Record<string, string[]>;
-  storefront_published: boolean;
-  variants: ProductGroupVariant[];
-  created_at: string;
-  updated_at: string;
-};
-
-export type ProductGroupVariantWrite = Pick<ProductGroupVariant, "source_sku_id" | "options">;
-
-export function listProductGroups(): Promise<ProductGroup[]> {
-  return apiFetch<ProductGroup[]>("/product-groups");
-}
-
-export function createProductGroup(payload: {
-  title: string;
-  options: Record<string, string[]>;
-  variants: ProductGroupVariantWrite[];
-}): Promise<ProductGroup> {
-  return apiFetch<ProductGroup>("/product-groups", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateProductGroup(id: string, payload: {
-  title?: string;
-  options?: Record<string, string[]>;
-  storefront_published?: boolean;
-}): Promise<ProductGroup> {
-  return apiFetch<ProductGroup>(`/product-groups/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function replaceProductGroupVariants(
-  id: string,
-  variants: ProductGroupVariantWrite[],
-): Promise<ProductGroup> {
-  return apiFetch<ProductGroup>(`/product-groups/${id}/variants`, {
-    method: "PUT",
-    body: JSON.stringify({ variants }),
-  });
 }
 
 export type SkuBomLine = {
@@ -1256,6 +1189,7 @@ export type StocktakeSummary = {
   location_id: string;
   location_name: string;
   status: StocktakeStatus;
+  category: string | null;
   started_at: string;
   completed_at: string | null;
 };
@@ -1274,10 +1208,18 @@ export function listStocktakes(): Promise<StocktakeSummary[]> {
   return apiFetch<StocktakeSummary[]>("/stocktakes");
 }
 
-export function startStocktake(payload: { location_id: string }): Promise<Stocktake> {
+export function startStocktake(payload: {
+  location_id: string;
+  category?: string;
+}): Promise<Stocktake> {
+  const category = payload.category?.trim();
+  const body: { location_id: string; category?: string } = { location_id: payload.location_id };
+  if (category) {
+    body.category = category;
+  }
   return apiFetch<Stocktake>("/stocktakes", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 }
 
@@ -2848,7 +2790,6 @@ export type AppSettings = {
   warning: string | null;
   always_prefer_warehouse: boolean;
   pick_priority: string[];
-  nia_monthly_token_cap: number;
   legal_name: string;
   trading_name: string | null;
   address: string;
@@ -2865,23 +2806,6 @@ export type AppSettings = {
   default_receive_location_id: string | null;
   default_till_location_id: string | null;
   document_sequences: DocumentSequence[];
-};
-
-export type NiaUsageMe = {
-  used: number;
-  cap: number;
-  remaining: number;
-  period_start: string;
-};
-
-export type NiaUsageUser = {
-  user_id: string;
-  email: string;
-  display_name: string | null;
-  used: number;
-  cap: number;
-  override: number | null;
-  remaining: number;
 };
 
 export type UnitCostAuditEntry = {
@@ -3009,7 +2933,6 @@ export function updateSettings(payload: {
   home_currency?: string;
   always_prefer_warehouse?: boolean;
   pick_priority?: string[];
-  nia_monthly_token_cap?: number;
   legal_name?: string;
   trading_name?: string | null;
   address?: string;
@@ -3093,7 +3016,7 @@ export function reopenBooksPeriod(id: string, reason: string): Promise<BooksPeri
   });
 }
 
-export type AuditSource = "books" | "nia" | "cost";
+export type AuditSource = "books" | "cost";
 
 export type AuditEvent = {
   at: string;
@@ -3111,299 +3034,6 @@ export function listAuditEvents(params?: {
   search.set("limit", String(params?.limit ?? 50));
   search.set("offset", String(params?.offset ?? 0));
   return apiFetch<Page<AuditEvent>>(`/audit/events?${search.toString()}`);
-}
-
-export function getNiaUsageMe(): Promise<NiaUsageMe> {
-  return apiFetch<NiaUsageMe>("/nia/usage/me");
-}
-
-export function listNiaUsage(): Promise<NiaUsageUser[]> {
-  return apiFetch<NiaUsageUser[]>("/nia/usage");
-}
-
-export function patchNiaUsageCap(
-  userId: string,
-  cap: number | null,
-): Promise<NiaUsageUser> {
-  return apiFetch<NiaUsageUser>(`/nia/usage/${userId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ nia_monthly_token_cap: cap }),
-  });
-}
-
-export type NiaScheduleCadence =
-  | "weekdays_08"
-  | "daily_08"
-  | "weekly_mon_08"
-  | "hourly"
-  | "custom";
-
-export type NiaScheduledTask = {
-  id: string;
-  name: string;
-  prompt: string;
-  timezone: string;
-  cadence: NiaScheduleCadence | string;
-  cron: string | null;
-  enabled: boolean;
-  notify_only_if_changed: boolean;
-  last_run_at: string | null;
-  last_status: "ok" | "skipped" | "error" | "needs_ok" | string | null;
-  last_error: string | null;
-  next_run_at: string | null;
-  last_thread_id: string | null;
-  created_at: string;
-};
-
-export type NiaScheduledTaskWrite = {
-  name: string;
-  prompt: string;
-  timezone?: string;
-  cadence: NiaScheduleCadence;
-  cron?: string;
-  enabled?: boolean;
-  notify_only_if_changed?: boolean;
-};
-
-export function listNiaSchedule(): Promise<NiaScheduledTask[]> {
-  return apiFetch<NiaScheduledTask[]>("/nia/schedule");
-}
-
-export function createNiaSchedule(payload: NiaScheduledTaskWrite): Promise<NiaScheduledTask> {
-  return apiFetch<NiaScheduledTask>("/nia/schedule", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateNiaSchedule(
-  id: string,
-  payload: Partial<NiaScheduledTaskWrite>,
-): Promise<NiaScheduledTask> {
-  return apiFetch<NiaScheduledTask>(`/nia/schedule/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function deleteNiaSchedule(id: string): Promise<void> {
-  return apiFetch<void>(`/nia/schedule/${id}`, { method: "DELETE" });
-}
-
-export function runNiaScheduleNow(id: string): Promise<NiaScheduledTask> {
-  return apiFetch<NiaScheduledTask>(`/nia/schedule/${id}/run`, { method: "POST" });
-}
-
-export type NiaMessage = {
-  id: string;
-  role: "user" | "assistant" | string;
-  content: string;
-  structured_payload: NiaStructuredPayload | null;
-  created_at: string;
-};
-
-export type NiaThreadSummary = {
-  id: string;
-  title: string;
-  created_at: string;
-  updated_at: string;
-  archived_at: string | null;
-};
-
-export type NiaThread = NiaThreadSummary & {
-  messages: NiaMessage[];
-};
-
-export type NiaNeedsOkPayload = {
-  kind: "needs_ok";
-  title: string;
-  body: string;
-  tool_call_id: string;
-  tool_name?: string;
-  actions?: string[];
-  action_id?: string;
-  args?: Record<string, unknown>;
-};
-
-export type NiaFieldType = "text" | "number" | "date" | "boolean" | "select" | "json";
-
-export type NiaFieldOption = {
-  id: string;
-  text: string;
-};
-
-export type NiaFieldSpec = {
-  id: string;
-  label: string;
-  type: NiaFieldType | string;
-  required: boolean;
-  value?: string;
-  error?: string;
-  options?: NiaFieldOption[];
-};
-
-export type NiaNeedsFieldsPayload = {
-  kind: "needs_fields";
-  action_id: string;
-  title: string;
-  body?: string;
-  fields: NiaFieldSpec[];
-  values?: Record<string, unknown>;
-  source?: string;
-};
-
-export type NiaYourCallPayload = {
-  kind: "your_call";
-  title?: string;
-  body?: string;
-  options?: string[];
-  tool_call_id?: string;
-};
-
-export type NiaOpenedPagePayload = {
-  kind: "opened_page";
-  path: string;
-};
-
-export type {
-  CanvasBarLineComponent,
-  CanvasComponent,
-  CanvasMetricComponent,
-  CanvasSpec,
-  CanvasTableComponent,
-} from "./nia-canvas-types";
-export {
-  isCanvasClearedPayload,
-  isCanvasSpecPayload,
-  isEmptyCanvasSpec,
-  parseCanvasSpec,
-} from "./nia-canvas-types";
-export type { CanvasClearedPayload } from "./nia-canvas-types";
-
-export type NiaCanvasSpecPayload = import("./nia-canvas-types").CanvasSpec;
-export type NiaCanvasClearedPayload = import("./nia-canvas-types").CanvasClearedPayload;
-
-export type NiaCitation = {
-  label: string;
-  href?: string;
-};
-
-export type NiaOverdueInvoicesPayload = {
-  kind: "overdue_invoices";
-  invoices: {
-    id: string;
-    invoice_number: string;
-    remaining_zar: string;
-  }[];
-  citations?: NiaCitation[];
-};
-
-export type NiaTransferDraftPayload = {
-  kind: "transfer_draft";
-  transfer_id: string;
-  transfer_number: string;
-  status: TransferStatus;
-  undoable: boolean;
-  citations?: NiaCitation[];
-};
-
-export type NiaStructuredPayload =
-  | NiaNeedsOkPayload
-  | NiaNeedsFieldsPayload
-  | NiaYourCallPayload
-  | NiaOpenedPagePayload
-  | NiaCanvasSpecPayload
-  | NiaCanvasClearedPayload
-  | NiaOverdueInvoicesPayload
-  | NiaTransferDraftPayload
-  | { kind: string; [key: string]: unknown };
-
-export type NiaResumeDecision = "accept" | "decline" | "cancel" | "submit_fields";
-
-export function listNiaThreads(): Promise<NiaThreadSummary[]> {
-  return apiFetch<NiaThreadSummary[]>("/nia/threads");
-}
-
-export function createNiaThread(title?: string): Promise<NiaThread> {
-  const body = title?.trim() ? { title: title.trim() } : {};
-  return apiFetch<NiaThread>("/nia/threads", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
-
-export function getNiaThread(id: string): Promise<NiaThread> {
-  return apiFetch<NiaThread>(`/nia/threads/${id}`);
-}
-
-export function archiveNiaThread(id: string): Promise<NiaThreadSummary> {
-  return apiFetch<NiaThreadSummary>(`/nia/threads/${id}/archive`, { method: "POST" });
-}
-
-export function patchNiaThread(id: string, title: string): Promise<NiaThreadSummary> {
-  const trimmed = title.trim();
-  if (!trimmed) {
-    return Promise.reject(new ApiError(422, "Title cannot be empty"));
-  }
-  return apiFetch<NiaThreadSummary>(`/nia/threads/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ title: trimmed }),
-  });
-}
-
-/** Feature-detect: returns null when usage endpoint is unavailable (404). */
-export async function getNiaUsageMeOptional(): Promise<NiaUsageMe | null> {
-  const response = await fetch("/api/v1/nia/usage/me", { credentials: "include" });
-  if (response.status === 404) {
-    return null;
-  }
-  if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
-  }
-  return response.json() as Promise<NiaUsageMe>;
-}
-
-export async function runNiaThread(
-  threadId: string,
-  message: string,
-  pagePath: string,
-  handlers?: ((delta: string) => void) | NiaSseHandlers,
-): Promise<void> {
-  const response = await fetch(`/api/v1/nia/threads/${threadId}/run`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, page: { path: pagePath } }),
-  });
-  await consumeNiaSse(response, handlers);
-}
-
-export async function resumeNiaThread(
-  threadId: string,
-  decision: NiaResumeDecision,
-  toolCallId?: string,
-  handlers?: ((delta: string) => void) | NiaSseHandlers,
-  fields?: Record<string, unknown>,
-): Promise<void> {
-  const body: {
-    decision: NiaResumeDecision;
-    tool_call_id?: string;
-    fields?: Record<string, unknown>;
-  } = { decision };
-  if (toolCallId) {
-    body.tool_call_id = toolCallId;
-  }
-  if (fields) {
-    body.fields = fields;
-  }
-  const response = await fetch(`/api/v1/nia/threads/${threadId}/resume`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  await consumeNiaSse(response, handlers);
 }
 
 export function listCostAudit(
@@ -3764,166 +3394,6 @@ export async function downloadQuotePdf(id: string, quoteNumber: string): Promise
   await downloadApiFile(`/api/v1/quotes/${id}/pdf`, `${quoteNumber}.pdf`);
 }
 
-export type LookbookPriceMode = "retail" | "price_list" | "hidden";
-
-export type LookbookItemStaff = {
-  id: string;
-  sku_id: string;
-  position: number;
-  name: string;
-  our_ref: string;
-  unit_inc_vat: string | null;
-};
-
-export type LookbookListItem = {
-  id: string;
-  name: string;
-  customer_id: string | null;
-  customer_name: string | null;
-  price_mode: LookbookPriceMode;
-  sku_count: number;
-  token: string;
-  expires_at: string;
-  revoked_at: string | null;
-  created_at: string;
-};
-
-export type Lookbook = LookbookListItem & {
-  price_list_id: string | null;
-  items: LookbookItemStaff[];
-};
-
-export type CreateLookbookPayload = {
-  name: string;
-  customer_id?: string;
-  price_mode: LookbookPriceMode;
-  price_list_id?: string;
-  sku_ids: string[];
-  expires_in_days?: number;
-};
-
-export type PublicLookbookItem = {
-  id: string;
-  sku_id: string;
-  position: number;
-  name: string;
-  our_ref: string;
-  unit_inc_vat: string | null;
-  photo_path: string | null;
-};
-
-export type PublicLookbook = {
-  company_name: string;
-  name: string;
-  price_mode: LookbookPriceMode;
-  expires_at: string;
-  items: PublicLookbookItem[];
-};
-
-export function listLookbooks(params?: ListParams): Promise<Page<LookbookListItem>> {
-  return apiFetch<Page<LookbookListItem>>(`/lookbooks?${buildListQuery(params)}`);
-}
-
-export function getLookbook(id: string): Promise<Lookbook> {
-  return apiFetch<Lookbook>(`/lookbooks/${id}`);
-}
-
-export function createLookbook(payload: CreateLookbookPayload): Promise<Lookbook> {
-  return apiFetch<Lookbook>("/lookbooks", { method: "POST", body: JSON.stringify(payload) });
-}
-
-export function revokeLookbook(id: string): Promise<Lookbook> {
-  return apiFetch<Lookbook>(`/lookbooks/${id}/revoke`, { method: "POST" });
-}
-
-export function lookbookPublicUrl(token: string): string {
-  if (typeof window === "undefined") {
-    return `/c/${token}`;
-  }
-  return `${window.location.origin}/c/${token}`;
-}
-
-export type LookbookActivitySku = {
-  sku_id: string;
-  name: string;
-  our_ref: string;
-  dwell_ms: number;
-  opens: number;
-  hearts: number;
-};
-
-export type LookbookQuoteLink = {
-  id: string;
-  quote_number: string;
-};
-
-export type LookbookActivity = {
-  opens: number;
-  hearts: number;
-  submits: number;
-  skus: LookbookActivitySku[];
-  quotes: LookbookQuoteLink[];
-};
-
-export type PublicLookbookEvent = {
-  event_type: "open" | "sku_visible" | "sku_open" | "heart" | "unheart" | "submit";
-  sku_id?: string;
-  duration_ms?: number;
-};
-
-export function getLookbookActivity(id: string): Promise<LookbookActivity> {
-  return apiFetch<LookbookActivity>(`/lookbooks/${id}/activity`);
-}
-
-export function getPublicLookbook(token: string): Promise<PublicLookbook> {
-  return apiFetch<PublicLookbook>(`/public/lookbooks/${token}`);
-}
-
-export function postPublicLookbookEvents(
-  token: string,
-  visitorId: string,
-  events: PublicLookbookEvent[],
-  keepalive = false,
-): Promise<void> {
-  return apiFetch<void>(`/public/lookbooks/${token}/events`, {
-    method: "POST",
-    body: JSON.stringify({ visitor_id: visitorId, events }),
-    keepalive,
-  });
-}
-
-export function requestPublicLookbookQuote(
-  token: string,
-  payload: { name: string; contact: string; sku_ids: string[] },
-): Promise<void> {
-  return apiFetch<void>(`/public/lookbooks/${token}/request`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function beaconPublicLookbookEvents(
-  token: string,
-  visitorId: string,
-  events: PublicLookbookEvent[],
-): boolean {
-  if (events.length === 0) {
-    return true;
-  }
-  const body = JSON.stringify({ visitor_id: visitorId, events });
-  const blob = new Blob([body], { type: "application/json" });
-  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-    return navigator.sendBeacon(`/api/v1/public/lookbooks/${token}/events`, blob);
-  }
-  void fetch(`/api/v1/public/lookbooks/${token}/events`, {
-    method: "POST",
-    body,
-    headers: { "Content-Type": "application/json" },
-    keepalive: true,
-  });
-  return true;
-}
-
 export function listSalesOrders(params?: ListParams): Promise<Page<SalesOrderListItem>> {
   return apiFetch<Page<SalesOrderListItem>>(`/orders?${buildListQuery(params)}`);
 }
@@ -4073,89 +3543,6 @@ export function requestStorefrontRefund(
   return apiFetch<StorefrontRefund>(`/storefront/orders/${handoffId}/refunds`, {
     method: "POST",
     body: JSON.stringify(payload),
-  });
-}
-
-export type StorefrontExceptionKind =
-  | "aged_hold"
-  | "stale_sync"
-  | "missing_operational_paid_order"
-  | "unknown_payment"
-  | "refund_mismatch"
-  | "fulfilment_drift"
-  | "capacity_conflict";
-
-export type StorefrontExceptionAudit = {
-  id: string;
-  actor_user_id: string;
-  reason: string;
-  outcome: string;
-  detail: string | null;
-  created_at: string;
-};
-
-export type StorefrontException = {
-  id: string;
-  kind: StorefrontExceptionKind;
-  status: "open" | "aged" | "terminal" | "resolved";
-  age_seconds: number;
-  correlation_id: string;
-  explanation: string;
-  safe_action: string;
-  last_error: string | null;
-  financial: boolean;
-  amount_minor: number | null;
-  payment_reference: string | null;
-  provider_verified: boolean;
-  blocks_checkout: boolean;
-  can_repair: boolean;
-  repair_pending: boolean;
-  detected_at: string;
-  resolved_at: string | null;
-  repair_count: number;
-  audits: StorefrontExceptionAudit[];
-};
-
-export type StorefrontExceptionList = {
-  items: StorefrontException[];
-  checkout_allowed: boolean;
-  paid_recovery_retained: true;
-};
-
-export type StorefrontExceptionAlert = {
-  id: string;
-  kind: StorefrontExceptionKind;
-  queue_class: "aged" | "terminal" | "retrying";
-  context: Record<string, unknown>;
-  created_at: string;
-};
-
-export function listStorefrontExceptions(): Promise<StorefrontExceptionList> {
-  return apiFetch<StorefrontExceptionList>("/storefront/exceptions");
-}
-
-export function getStorefrontException(id: string): Promise<StorefrontException> {
-  return apiFetch<StorefrontException>(`/storefront/exceptions/${id}`);
-}
-
-export function seedStorefrontExceptions(): Promise<StorefrontExceptionList> {
-  return apiFetch<StorefrontExceptionList>("/storefront/exceptions/seed", { method: "POST" });
-}
-
-export function repairStorefrontException(
-  id: string,
-  payload: { reason: string; idempotency_key: string },
-): Promise<StorefrontException> {
-  return apiFetch<StorefrontException>(`/storefront/exceptions/${id}/repair`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function deliverStorefrontExceptionAlert(exceptionId?: string): Promise<StorefrontExceptionAlert> {
-  return apiFetch<StorefrontExceptionAlert>("/storefront/exceptions/alerts/test", {
-    method: "POST",
-    body: JSON.stringify(exceptionId ? { exception_id: exceptionId } : {}),
   });
 }
 

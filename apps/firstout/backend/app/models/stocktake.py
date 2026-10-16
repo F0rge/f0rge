@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    String,
     UniqueConstraint,
     text,
 )
@@ -49,6 +50,7 @@ class Stocktake(UUIDPkMixin, TimestampMixin, Base):
     )
     started_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     completed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),

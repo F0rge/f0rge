@@ -1,4 +1,4 @@
-# Storefront foundation
+# Vellano foundation
 
 Separate applications for Medusa commerce (`commerce`) and the Next.js public site (`web`).
 Firstout is the operational system; its versioned Ops Commerce API is the only source adapter.
@@ -30,7 +30,7 @@ Set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and
 same Clerk secret key in commerce, plus `STOREFRONT_CLERK_ISSUER` to the exact
 issuer shown by Clerk and `STOREFRONT_CLERK_AUDIENCE=storefront`. Commerce can
 use `CLERK_JWT_KEY` instead of the secret key for networkless signature
-verification. Keep all private keys server-side. The storefront exchanges its
+verification. Keep all private keys server-side. Vellano exchanges its
 server-verified Clerk session for a short-lived Medusa token and never sends
 that token to the browser. Saved addresses use Medusa's authenticated `/me`
 routes; cart ownership is tied to the Medusa customer ID and is not detached on
@@ -44,7 +44,7 @@ Medusa environment; secrets must stay server-side. The source starts unpublished
 staff opt in a priced SKU by setting `storefront_published` on the staff API.
 
 Run Medusa migrations and the first-time bootstrap script before the source sync.
-The private Storefront supports guest checkout for collection and configured
+Vellano supports guest checkout for collection and configured
 Gauteng delivery. It applies the configured South African VAT rate to
 VAT-inclusive ZAR prices and calculates delivery from server-owned zone/rate
 configuration. No launch delivery rates are checked in. The included payment
@@ -74,14 +74,14 @@ npm run dev
 ```
 
 The bootstrap creates a publishable key; copy it from Medusa Admin into the
-Storefront web environment. Start `npm run dev` in `apps/storefront/web` and
+Vellano web environment. Start `npm run dev` in `apps/storefront/web` and
 visit `http://localhost:3004`. The sync job repeats every minute while Medusa
 runs. It serializes runs with the Redis-backed Medusa lock and applies only
 newer source revisions. Keep the machine token only in server environments.
 
 To verify the live boundary, set `STOREFRONT_TEST_SKU_ID` to a published SKU UUID,
-then run `npx nx run storefront-commerce:integration` and
-`npx nx run storefront-web:e2e`. The integration target checks the real Ops
+then run `npx nx run vellano-commerce:integration` and
+`npx nx run vellano-web:e2e`. The integration target checks the real Ops
 and Medusa APIs, including price/stock parity, field allowlisting, and denial
 of a bad service token. The browser target checks navigation and direct 404s.
 The Firstout database-backed isolation test is in
@@ -132,10 +132,10 @@ success, recovery, delivery, and database assertions.
 For the bag browser test, set `STOREFRONT_TEST_BAG_MULTI_SKU_ID` to a published
 SKU with at least two units and `STOREFRONT_TEST_LAST_UNIT_SKU_ID` to one with
 exactly one free unit. Set `STOREFRONT_TEST_MEDUSA_PUBLISHABLE_KEY` to the local
-public key to test direct cart denial. Run `npx nx run storefront-web:e2e`
+public key to test direct cart denial. Run `npx nx run vellano-web:e2e`
 against the disposable live stack. See `docs/746-live-walkthrough.md`.
 
-The Vellano storefront uses published Medusa Store API products. Home and
+Vellano uses published Medusa Store API products. Home and
 collections lead to `/shop`, where search, category, collection, availability,
 price and sort state live in the URL. Product pages show the selected variant's
 price, stock or order lead time, gallery, dimensions, material and care. Medusa
@@ -152,12 +152,12 @@ For discovery browser coverage, publish two representative SKUs, a draft SKU,
 and a two-variant group in a disposable local environment. Set
 `STOREFRONT_TEST_SKU_ID`, `STOREFRONT_TEST_OTHER_SKU_ID`,
 `STOREFRONT_TEST_DRAFT_SKU_ID`, and `STOREFRONT_TEST_GROUP_HANDLE`, then run
-`npx nx run storefront-web:e2e`. The tests skip fixture-dependent cases when
+`npx nx run vellano-web:e2e`. The tests skip fixture-dependent cases when
 their corresponding IDs are absent.
 
 ## Vellano UI foundation
 
-The public storefront customizes the repository's `@f0rge/ui` components, built
+Vellano customizes the repository's `@f0rge/ui` components, built
 with [shadcn/ui](https://ui.shadcn.com/) and [Base UI](https://base-ui.com/).
 Both are free under the MIT license ([shadcn/ui license](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md),
 [Base UI license](https://github.com/mui/base-ui/blob/master/LICENSE)); the mobile
@@ -191,7 +191,7 @@ not connect these configs to the Firstout or Marrow Railway projects.
 
 ## Optional analytics
 
-Optional storefront analytics stays off until a visitor accepts it. The browser
+Optional Vellano analytics stays off until a visitor accepts it. The browser
 adapter sends typed browsing and commerce events to PostHog Cloud EU. Purchases
 and refunds are emitted by the server confirmation path, once per opaque order
 or refund id. Session replay is consent-gated, sampled at 10% of eligible

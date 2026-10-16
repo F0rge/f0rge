@@ -193,7 +193,7 @@ export default function ReorderPage() {
           </p>
         </div>
         {canRaise ? (
-          <Button disabled={createDisabled} onClick={() => void handleCreateDraftPo()}>
+          <Button data-tour="reorder-create" disabled={createDisabled} onClick={() => void handleCreateDraftPo()}>
             {creating ? "Creating…" : "Create draft PO"}
           </Button>
         ) : null}

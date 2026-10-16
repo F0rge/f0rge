@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
@@ -10,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.sku import Sku
 from app.models.team import Team
 from tests.test_sales_orders import _open_held_order
 
@@ -31,10 +33,10 @@ async def test_held_stock_is_counted_once_in_versioned_ops_snapshot(
         async_client, owner_client, "OPS-HOLD-746", qty=2, hold_qty=1, deposit=None
     )
     sku_id = order["_sku_id"]
-    published = await owner_client.patch(
-        f"/api/v1/skus/{sku_id}", json={"storefront_published": True}
-    )
-    assert published.status_code == 200, published.text
+    sku = await async_db.get(Sku, UUID(sku_id))
+    assert sku is not None
+    sku.storefront_published = True
+    await async_db.flush()
 
     held = await owner_client.get("/api/v1/ops-commerce/v1/products", headers=headers)
     assert held.status_code == 200, held.text

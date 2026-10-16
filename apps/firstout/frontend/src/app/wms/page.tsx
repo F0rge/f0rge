@@ -672,6 +672,7 @@ function CountTab({
           Start a stocktake at your standing location (switch at top), then scan each SKU to count.
         </p>
         <Button
+          data-tour="wms-stocktake"
           size="lg"
           disabled={starting || !floorLocationId}
           onClick={() => void handleStart()}

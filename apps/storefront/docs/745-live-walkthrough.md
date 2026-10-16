@@ -1,7 +1,7 @@
 # Issue #745 live walkthrough
 
 This walkthrough was performed against disposable local Firstout, Medusa and
-Storefront instances, with separate PostgreSQL databases and Redis. The published
+Vellano instances, with separate PostgreSQL databases and Redis. The published
 catalogue contained an Arc sofa, an Alba chair and a two-finish Arc group. A
 separate wall sconce remained in draft. The catalogue data and locally generated
 test images are not launch assets.
@@ -26,7 +26,7 @@ test images are not launch assets.
 
 ## Verification
 
-`storefront-web` Playwright catalogue and discovery specs ran against the live
+`vellano-web` Playwright catalogue and discovery specs ran against the live
 local stack with all four fixture IDs set. Automated accessibility-related
 assertions cover browser roles, keyboard focus, live status text and the gallery
 button's pressed state. They do not explicitly assert image `alt` attributes:

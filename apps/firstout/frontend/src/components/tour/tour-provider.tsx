@@ -1,8 +1,8 @@
 "use client";
 
 import { HeaderGlobalAction } from "@carbon/react";
-import { Help } from "@carbon/icons-react";
-import { useRouter } from "next/navigation";
+import { Compass, Help } from "@carbon/icons-react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -13,41 +13,37 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
-import { EVENTS, STATUS, useJoyride, type EventData } from "react-joyride";
+import { ACTIONS, EVENTS, STATUS, useJoyride, type EventData } from "react-joyride";
 
 import { TourTooltip } from "@/components/tour/tour-tooltip";
+import { buildJoyrideSteps } from "@/lib/tour-navigation";
+import { OVERVIEW_STEPS, pageTourForPath } from "@/lib/tour-steps";
 import {
-  getSideNavExpandedSnapshot,
-  setSideNavExpanded,
-} from "@/lib/side-nav-preference";
-import {
-  buildJoyrideSteps,
-  cancelTourNavigation,
-  releaseTourBlockers,
-} from "@/lib/tour-navigation";
-import { stepsForUser } from "@/lib/tour-steps";
-import {
-  readTourCompletion,
-  writeTourCompletion,
+  readPageTourCompletion,
+  writeOverviewCompletion,
+  writePageTourCompletion,
   type TourCompletion,
 } from "@/lib/tour-storage";
 
+type TourMode = "page" | "overview";
+
 type TourContextValue = {
-  startTour: () => void;
-  isRunning: boolean;
+  startPageTour: () => void;
+  startOverviewTour: () => void;
+  pageTourAvailable: boolean;
+  running: TourMode | null;
 };
 
 const TourContext = createContext<TourContextValue | null>(null);
 
 type TourProviderProps = {
   userId: string;
-  nia: boolean;
   children: ReactNode;
 };
 
-export function TourProvider({ userId, nia, children }: TourProviderProps) {
+export function TourProvider({ userId, children }: TourProviderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const navigate = useCallback(
     (route: string) => {
       router.push(route);
@@ -55,44 +51,63 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
     [router],
   );
 
+  const pageTour = pageTourForPath(pathname);
+  const [mode, setMode] = useState<TourMode>("page");
   const [run, setRun] = useState(false);
-  const steps = useMemo(
-    () => buildJoyrideSteps(stepsForUser({ nia }), navigate),
-    [navigate, nia],
-  );
-  const navBeforeTour = useRef<boolean | null>(null);
-  const hasStarted = useRef(false);
-  const ended = useRef(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const holdAutoRef = useRef(false);
+  const suppressAutoUntilRef = useRef(0);
 
-  const endTour = useCallback(
+  const definitions = useMemo(
+    () => (mode === "overview" ? OVERVIEW_STEPS : (pageTour?.steps ?? [])),
+    [mode, pageTour],
+  );
+  const steps = useMemo(
+    () => buildJoyrideSteps(definitions, navigate),
+    [definitions, navigate],
+  );
+
+  const finish = useCallback(
     (completion: TourCompletion) => {
-      if (ended.current) {
-        return;
-      }
-      ended.current = true;
-      cancelTourNavigation();
-      writeTourCompletion(userId, completion);
-      if (navBeforeTour.current !== null) {
-        setSideNavExpanded(navBeforeTour.current);
-        navBeforeTour.current = null;
+      if (mode === "overview") {
+        writeOverviewCompletion(userId, completion);
+        suppressAutoUntilRef.current = Date.now() + 2000;
+      } else if (pageTour) {
+        writePageTourCompletion(userId, pageTour.id, completion);
       }
       setRun(false);
+      setStepIndex(0);
     },
-    [userId],
+    [mode, pageTour, userId],
   );
 
   const onEvent = useCallback(
     (data: EventData) => {
-      const { type, status } = data;
+      const { type, action, index, status } = data;
+
+      if (type === EVENTS.STEP_AFTER && status === STATUS.RUNNING) {
+        if (action === ACTIONS.NEXT) {
+          setStepIndex(index + 1);
+        } else if (action === ACTIONS.PREV) {
+          setStepIndex(Math.max(0, index - 1));
+        }
+      }
+
+      if (type === EVENTS.TARGET_NOT_FOUND) {
+        setStepIndex((current) => (current + 1 >= steps.length ? current : current + 1));
+      }
+
       if (type === EVENTS.TOUR_END || status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-        endTour(status === STATUS.SKIPPED ? "skipped" : "completed");
+        const skipped = status === STATUS.SKIPPED || action === ACTIONS.SKIP;
+        finish(skipped ? "skipped" : "completed");
       }
     },
-    [endTour],
+    [finish, steps.length],
   );
 
   const { Tour, controls } = useJoyride({
     run,
+    stepIndex,
     steps,
     continuous: true,
     scrollToFirstStep: true,
@@ -111,40 +126,45 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
       skipBeacon: true,
       showProgress: false,
       overlayClickAction: false,
-      // Joyride only handles Escape while the tooltip is open. The listener
-      // below skips during the wait, when the mask is up and the tooltip is not.
       dismissKeyAction: false,
       blockTargetInteraction: true,
       spotlightPadding: 8,
       spotlightRadius: 0,
-      // before() already waited. A missing node should skip quickly, not pin the mask.
-      targetWaitTimeout: 400,
-      beforeTimeout: 8000,
+      targetWaitTimeout: 8000,
+      beforeTimeout: 20000,
       zIndex: 12000,
       primaryColor: "#0f62fe",
       backgroundColor: "#ffffff",
       textColor: "#161616",
       overlayColor: "rgba(22, 22, 22, 0.6)",
       arrowColor: "#ffffff",
-      width: 416,
+      width: 360,
     },
   });
 
-  const dismiss = useCallback(() => {
-    endTour("skipped");
-    controls.skip();
-  }, [controls, endTour]);
-
-  const startTour = useCallback(() => {
-    ended.current = false;
-    navBeforeTour.current = getSideNavExpandedSnapshot();
-    hasStarted.current = true;
+  const begin = useCallback((next: TourMode) => {
+    holdAutoRef.current = true;
+    setMode(next);
+    setStepIndex(0);
     setRun(false);
     window.setTimeout(() => {
-      controls.reset(false);
       setRun(true);
+      window.setTimeout(() => {
+        holdAutoRef.current = false;
+      }, 0);
     }, 0);
-  }, [controls]);
+  }, []);
+
+  const startPageTour = useCallback(() => {
+    if (!pageTour) {
+      return;
+    }
+    begin("page");
+  }, [begin, pageTour]);
+
+  const startOverviewTour = useCallback(() => {
+    begin("overview");
+  }, [begin]);
 
   useEffect(() => {
     if (!run) {
@@ -155,68 +175,47 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
         return;
       }
       event.preventDefault();
-      event.stopPropagation();
-      dismiss();
+      controls.skip();
     };
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [dismiss, run]);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [controls, run]);
 
   useEffect(() => {
-    if (run) {
-      hasStarted.current = true;
-      if (navBeforeTour.current === null) {
-        navBeforeTour.current = getSideNavExpandedSnapshot();
-      }
+    if (holdAutoRef.current || run) {
       return;
     }
-    if (!hasStarted.current) {
+    if (Date.now() < suppressAutoUntilRef.current) {
       return;
     }
-    releaseTourBlockers();
-  }, [run]);
-
-  useEffect(() => {
-    if (readTourCompletion(userId)) {
+    if (!pageTour) {
+      return;
+    }
+    if (readPageTourCompletion(userId, pageTour.id)) {
       return;
     }
     const timer = window.setTimeout(() => {
-      ended.current = false;
-      hasStarted.current = true;
-      navBeforeTour.current = getSideNavExpandedSnapshot();
+      setMode("page");
+      setStepIndex(0);
       setRun(true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [userId]);
+  }, [pageTour, pathname, run, userId]);
 
   const value = useMemo(
     () => ({
-      startTour,
-      isRunning: run,
+      startPageTour,
+      startOverviewTour,
+      pageTourAvailable: pageTour !== null,
+      running: run ? mode : null,
     }),
-    [run, startTour],
+    [mode, pageTour, run, startOverviewTour, startPageTour],
   );
-
-  const dismissButton =
-    run && typeof document !== "undefined"
-      ? createPortal(
-          <button
-            type="button"
-            className="firstout-tour-dismiss"
-            autoFocus
-            onClick={() => dismiss()}
-          >
-            Skip tour
-          </button>,
-          document.body,
-        )
-      : null;
 
   return (
     <TourContext.Provider value={value}>
       {children}
       {Tour}
-      {dismissButton}
     </TourContext.Provider>
   );
 }
@@ -229,15 +228,31 @@ export function useTour(): TourContextValue {
   return context;
 }
 
-export function TourReplayButton() {
-  const { isRunning, startTour } = useTour();
+export function PageTourButton() {
+  const { running, startPageTour, pageTourAvailable } = useTour();
+  if (!pageTourAvailable) {
+    return null;
+  }
   return (
     <HeaderGlobalAction
-      aria-label={isRunning ? "Restart app tour" : "App tour"}
+      aria-label={running === "page" ? "Restart page tour" : "Page tour"}
       tooltipAlignment="end"
-      onClick={() => startTour()}
+      onClick={() => startPageTour()}
     >
       <Help size={20} />
+    </HeaderGlobalAction>
+  );
+}
+
+export function OverviewTourButton() {
+  const { running, startOverviewTour } = useTour();
+  return (
+    <HeaderGlobalAction
+      aria-label={running === "overview" ? "Restart overview tour" : "Overview tour"}
+      tooltipAlignment="end"
+      onClick={() => startOverviewTour()}
+    >
+      <Compass size={20} />
     </HeaderGlobalAction>
   );
 }

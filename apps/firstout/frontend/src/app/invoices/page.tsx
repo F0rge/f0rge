@@ -266,6 +266,7 @@ function InvoicesPageContent() {
         </div>
         {canMutate ? (
           <Button
+            data-tour="invoice-new"
             onClick={() => {
               resetCreateForm();
               setCreateOpen(true);

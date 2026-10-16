@@ -4,9 +4,9 @@ import { setSideNavExpanded } from "@/lib/side-nav-preference";
 import type { TourStepDefinition } from "@/lib/tour-steps";
 import { getNarrowViewportSnapshot } from "@/lib/viewport";
 
-export function routeMatches(pathname: string, route: string): boolean {
-  if (route === "/") {
-    return pathname === "/";
+export function routeMatches(pathname: string, route: string, exact = false): boolean {
+  if (exact || route === "/") {
+    return pathname === route;
   }
   return pathname === route || pathname.startsWith(`${route}/`);
 }
@@ -16,40 +16,10 @@ export function headingMatches(text: string | null | undefined, expected: string
   return normalized.includes(expected.trim().toLowerCase());
 }
 
-/** Bumped when the tour is dismissed so an in-flight step cannot navigate afterwards. */
-let navigationEpoch = 0;
-
-export function cancelTourNavigation(): void {
-  navigationEpoch += 1;
-}
-
-/** Drop a Joyride mask that survived the tour closing, and release its focus. */
-export function releaseTourBlockers(): void {
-  if (typeof document === "undefined") {
-    return;
-  }
-  const portal = document.getElementById("react-joyride-portal");
-  portal?.querySelectorAll(".react-joyride__overlay, .react-joyride__floater").forEach((node) => {
-    node.remove();
-  });
-  const active = document.activeElement;
-  if (active instanceof HTMLElement && portal?.contains(active)) {
-    active.blur();
-  }
-}
-
-export function waitUntil(
-  predicate: () => boolean,
-  timeoutMs: number,
-  isCancelled?: () => boolean,
-): Promise<boolean> {
+export function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     const started = Date.now();
     const check = () => {
-      if (isCancelled?.()) {
-        resolve(false);
-        return;
-      }
       if (predicate()) {
         resolve(true);
         return;
@@ -58,110 +28,73 @@ export function waitUntil(
         resolve(false);
         return;
       }
-      globalThis.setTimeout(check, 50);
+      window.setTimeout(check, 50);
     };
     check();
   });
 }
 
-function asHtmlElement(value: Element | null): HTMLElement | null {
-  if (!value) {
-    return null;
+function elementReady(match: HTMLElement): boolean {
+  const modal = match.closest(".cds--modal");
+  if (modal instanceof HTMLElement && !modal.classList.contains("is-visible")) {
+    return false;
   }
-  if (typeof HTMLElement !== "undefined" && value instanceof HTMLElement) {
-    return value;
+  if (match.closest("[hidden]")) {
+    return false;
   }
-  if (value.nodeType === 1) {
-    return value as HTMLElement;
+  return match.getClientRects().length > 0;
+}
+
+function findTarget(selector: string): HTMLElement | null {
+  for (const node of document.querySelectorAll(selector)) {
+    if (node instanceof HTMLElement && elementReady(node)) {
+      return node;
+    }
   }
   return null;
 }
 
-/**
- * Spotlight only an element that is actually on screen.
- * A missing heading or selector returns null so Joyride skips the step
- * instead of spotlighting `document.body` and blocking the whole page.
- */
-export function resolveTourTarget(
-  step: TourStepDefinition,
-  query: (selector: string) => Element | null,
-): HTMLElement | null {
-  if (step.target === "body") {
-    return asHtmlElement(query("body"));
+function resolveTarget(step: TourStepDefinition): HTMLElement {
+  if (step.target !== "body") {
+    return findTarget(step.target) ?? document.body;
   }
-
-  const heading = asHtmlElement(query("#main-content h1"));
-  const headingOk = !step.heading || headingMatches(heading?.textContent, step.heading);
-  if (step.heading && headingOk && heading && (step.target === "#main-content h1" || step.target === "body")) {
-    return heading;
-  }
-  if (step.heading && !headingOk && step.target === "#main-content h1") {
-    return null;
-  }
-
-  if (!headingOk) {
-    return null;
-  }
-
-  return asHtmlElement(query(step.target));
+  return document.body;
 }
-
-const HEADING_WAIT_MS = 4000;
-const TARGET_WAIT_MS = 2000;
-const NAV_WAIT_MS = 1500;
 
 export async function prepareTourStep(
   step: TourStepDefinition,
   navigate: (route: string) => void,
 ): Promise<void> {
-  const epoch = navigationEpoch;
-  const stale = () => epoch !== navigationEpoch;
-
-  if (stale()) {
-    return;
-  }
-
   if (step.expandNav) {
     setSideNavExpanded(true);
   } else if (getNarrowViewportSnapshot()) {
     setSideNavExpanded(false);
   }
 
-  if (stale()) {
-    return;
-  }
-
-  if (step.route && !routeMatches(window.location.pathname, step.route)) {
+  if (step.route && !routeMatches(window.location.pathname, step.route, Boolean(step.exact))) {
     navigate(step.route);
+    await waitUntil(
+      () => routeMatches(window.location.pathname, step.route ?? "", Boolean(step.exact)),
+      12000,
+    );
   }
 
-  if (step.heading) {
-    const headingReady = await waitUntil(
-      () => headingMatches(document.querySelector("#main-content h1")?.textContent, step.heading ?? ""),
-      HEADING_WAIT_MS,
-      stale,
-    );
-    if (!headingReady || stale()) {
-      return;
+  if (step.target !== "body" && step.open && !findTarget(step.target)) {
+    const opener = step.open ? findTarget(step.open) ?? document.querySelector(step.open) : null;
+    if (opener instanceof HTMLElement) {
+      opener.click();
     }
   }
 
   if (step.target !== "body") {
-    const targetReady = await waitUntil(
-      () => document.querySelector(step.target) instanceof Element,
-      TARGET_WAIT_MS,
-      stale,
-    );
-    if (!targetReady || stale()) {
-      return;
-    }
+    await waitUntil(() => findTarget(step.target) instanceof HTMLElement, 8000);
   }
 
   if (step.expandNav) {
     await waitUntil(() => {
       const nav = document.querySelector(".firstout-side-nav");
-      return nav instanceof Element && nav.classList.contains("cds--side-nav--expanded");
-    }, NAV_WAIT_MS, stale);
+      return nav instanceof HTMLElement && nav.classList.contains("cds--side-nav--expanded");
+    }, 2000);
   }
 }
 
@@ -175,7 +108,7 @@ export function buildJoyrideSteps(
     content: step.content,
     placement: step.placement ?? "bottom",
     isFixed: step.isFixed ?? false,
-    target: step.target === "body" ? "body" : () => resolveTourTarget(step, (selector) => document.querySelector(selector)),
+    target: step.target === "body" ? "body" : () => resolveTarget(step),
     before: async () => {
       await prepareTourStep(step, navigate);
     },

@@ -230,6 +230,7 @@ export default function BillsPage() {
         </div>
         {canMutate ? (
           <Button
+            data-tour="bill-new"
             onClick={() => {
               resetCreateForm();
               setCreateOpen(true);

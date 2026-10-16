@@ -4,7 +4,7 @@ The handoff keeps a paid Medusa order in a durable order-metadata outbox until F
 
 ## Local walkthrough
 
-Use only disposable local PostgreSQL/Redis services, a test Firstout company, and the local Storefront test-payment provider. Set the Medusa `FIRSTOUT_OPS_*` values and Firstout `OPS_COMMERCE_*` values through the local process environment. Do not put credentials in this document or use Peach/Clerk production credentials for the walkthrough.
+Use only disposable local PostgreSQL/Redis services, a test Firstout company, and the local Vellano test-payment provider. Set the Medusa `FIRSTOUT_OPS_*` values and Firstout `OPS_COMMERCE_*` values through the local process environment. Do not put credentials in this document or use Peach/Clerk production credentials for the walkthrough.
 
 1. Apply the Firstout migrations through `056_storefront_order_handoffs`, start both services, and sync a published Firstout SKU into Medusa.
 2. Stop the Firstout API while leaving Medusa, PostgreSQL and Redis running. Complete a guest collection checkout with the local test provider and replay its captured callback. Confirm the browser receives captured status and the Medusa order has durable handoff state. A corrected serializer can rebuild a failed, payload-less snapshot from the retained paid-order facts before retrying.

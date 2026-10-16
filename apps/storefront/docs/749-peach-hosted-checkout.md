@@ -1,6 +1,6 @@
 # Peach Hosted Checkout V2 sandbox
 
-The Storefront registers `pp_peach_sandbox` only when every Peach setting is
+Vellano registers `pp_peach_sandbox` only when every Peach setting is
 present and `PEACH_ENVIRONMENT=sandbox`. Live Peach endpoints and credentials
 are deliberately unsupported. The local test provider remains an independent,
 local-only option.
@@ -8,7 +8,7 @@ local-only option.
 Set the `PEACH_*` variables from the Peach sandbox account in the commerce
 environment, enable HMAC signing for the Checkout webhook, and set
 `PEACH_WEBHOOK_URL` to the exact configured HTTPS callback URL ending in
-`/hooks/peach`. `STOREFRONT_PUBLIC_URL` must be the public HTTPS Storefront
+`/hooks/peach`. `STOREFRONT_PUBLIC_URL` must be the public HTTPS Vellano
 origin. Do not put provider credentials in web/client variables. The callback
 must reach this one commerce route through an approved narrow ingress; this
 change does not modify Railway or make the commerce service public.

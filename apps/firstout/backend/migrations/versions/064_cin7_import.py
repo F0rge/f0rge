@@ -1,7 +1,7 @@
 """Cin7 import: archive documents, reference tables, wider natural keys.
 
-Revision ID: 062_cin7_import
-Revises: 061_live_commerce_exceptions
+Revision ID: 064_cin7_import
+Revises: 063_stocktake_category
 
 Applied here because the importer writes these columns and tables.
 
@@ -26,8 +26,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "062_cin7_import"
-down_revision: Union[str, Sequence[str], None] = "061_live_commerce_exceptions"
+revision: str = "064_cin7_import"
+down_revision: Union[str, Sequence[str], None] = "063_stocktake_category"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

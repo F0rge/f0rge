@@ -110,6 +110,7 @@ export default function TransitPage() {
         />
       ) : null}
 
+      <div data-tour="transit-list">
       {loading ? (
         <p className="cds--type-body-01">Loading transit…</p>
       ) : orders.length === 0 ? (
@@ -161,6 +162,7 @@ export default function TransitPage() {
           )}
         </DataTable>
       )}
+      </div>
 
       <div>
         <h2 className="cds--type-productive-heading-03">On-order inventory</h2>

@@ -246,7 +246,7 @@ export default function PriceListsPage() {
           </p>
         </div>
         {canMutate ? (
-          <Button onClick={() => setCreateOpen(true)}>New price list</Button>
+          <Button data-tour="price-list-new" onClick={() => setCreateOpen(true)}>New price list</Button>
         ) : null}
       </div>
 

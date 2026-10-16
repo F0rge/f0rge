@@ -66,7 +66,7 @@ test("absent evidence is a no-go and leaves public selling off", () => {
       "Operator fulfilment, refund, return, and recovery were not recorded.",
       "Consented, rejected, and withdrawn analytics journeys were not recorded.",
       "Private capacity rehearsal was not recorded.",
-      "Measured monthly Storefront cost was not recorded.",
+      "Measured monthly Vellano cost was not recorded.",
       "Environment identity, backups, restore evidence, and alerts were not recorded.",
       "Owner authorization for public selling is absent.",
       "Owner authorization for a real-money rehearsal is absent.",
@@ -88,7 +88,7 @@ test("hosted guest and Clerk purchases that cover stocked, lead-time, delivery, 
     "Operator fulfilment, refund, return, and recovery were not recorded.",
     "Consented, rejected, and withdrawn analytics journeys were not recorded.",
     "Private capacity rehearsal was not recorded.",
-    "Measured monthly Storefront cost was not recorded.",
+    "Measured monthly Vellano cost was not recorded.",
     "Environment identity, backups, restore evidence, and alerts were not recorded.",
     "Owner authorization for public selling is absent.",
     "Owner authorization for a real-money rehearsal is absent.",
@@ -151,7 +151,7 @@ test("a refund that restocks, or a duplicate callback with two orders, keeps rec
   );
 });
 
-test("measured Storefront spend of 42.00 dollars fits the 50 dollar envelope and leaves fees outside it", () => {
+test("measured Vellano spend of 42.00 dollars fits the 50 dollar envelope and leaves fees outside it", () => {
   const result = assessFirstSaleReadiness({
     cost: {
       measured: true,
@@ -178,7 +178,7 @@ test("measured Storefront spend of 42.00 dollars fits the 50 dollar envelope and
   });
 });
 
-test("Storefront spend of 52.00 dollars stays a no-go pending an owner decision", () => {
+test("Vellano spend of 52.00 dollars stays a no-go pending an owner decision", () => {
   const result = assessFirstSaleReadiness({
     cost: {
       measured: true,
@@ -194,7 +194,7 @@ test("Storefront spend of 52.00 dollars stays a no-go pending an owner decision"
   });
   expect(result.decision).toBe("no_go");
   expect(result.cost).toMatchObject({ storefront_usd_cents: 5200, fits_budget: false, pending_owner_decision: true });
-  expect(result.missing).toContain("Measured monthly Storefront cost is above USD 50 and remains a no-go pending an owner decision.");
+  expect(result.missing).toContain("Measured monthly Vellano cost is above USD 50 and remains a no-go pending an owner decision.");
 });
 
 test("a private hosted capacity rehearsal at the proposed profile closes only that gate", () => {
@@ -271,7 +271,7 @@ const MARROW_RAILWAY_PROJECT_ID = "a633a271-5bb0-461e-8eb5-1acb9e126a59";
 function readyEnvironment() {
   return {
     railway_project_id: "11111111-1111-4111-8111-111111111111",
-    railway_project_name: "F0rge Storefront Preview",
+    railway_project_name: "Vellano",
     private_access: true,
     indexing_enabled: false,
     public_selling_enabled: false,
@@ -293,7 +293,7 @@ test("provider evidence without recorded allowed origins stays open", () => {
   expect(result.missing.some((line) => line.startsWith("Provider credentials"))).toBe(true);
 });
 
-test("a private Storefront environment, recorded callbacks, and a named operator close those gates", () => {
+test("a private Vellano environment, recorded callbacks, and a named operator close those gates", () => {
   const result = assessFirstSaleReadiness({
     environment: readyEnvironment(),
     operator: { name: "Naledi Dlamini" },

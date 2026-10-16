@@ -20,7 +20,7 @@ function normalizedPath(req: MedusaRequest): string | null {
 }
 
 function denied(res: MedusaResponse, status = 403): void {
-  res.status(status).json({ message: "Storefront access is restricted" });
+  res.status(status).json({ message: "Vellano access is restricted" });
 }
 
 async function checkCartOwner(req: MedusaRequest, res: MedusaResponse, next: MedusaNextFunction, path: string): Promise<void> {

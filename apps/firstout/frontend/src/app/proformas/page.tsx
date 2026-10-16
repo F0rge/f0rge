@@ -173,7 +173,7 @@ export default function ProformasPage() {
           <p className="cds--type-body-01">Proforma invoices filed against suppliers.</p>
         </div>
         {canMutate ? (
-          <Button onClick={openCreate}>File proforma invoice</Button>
+          <Button data-tour="proforma-new" onClick={openCreate}>File proforma invoice</Button>
         ) : null}
       </div>
 

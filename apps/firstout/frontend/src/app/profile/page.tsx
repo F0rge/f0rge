@@ -17,7 +17,7 @@ import { useTour } from "@/components/tour/tour-provider";
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
-  const { startTour } = useTour();
+  const { startPageTour, startOverviewTour } = useTour();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -153,21 +153,25 @@ export default function ProfilePage() {
               />
             ))}
           </Select>
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting} data-tour="profile-save">
             {submitting ? "Saving…" : "Save changes"}
           </Button>
         </Stack>
       </form>
 
-      <Stack gap={4}>
-        <h2 className="cds--type-productive-heading-03">App tour</h2>
+      <Stack gap={4} data-tour="profile-tours">
+        <h2 className="cds--type-productive-heading-03">Tours</h2>
         <p className="cds--type-body-01">
-          Walk through catalogue, warehouse, till, sales, and books. Skip it at any step. The same
-          tour is on the question-mark button in the header.
+          The question mark restarts the tour for this page. Overview walks the whole shop.
         </p>
-        <Button kind="tertiary" type="button" onClick={() => startTour()}>
-          Replay walkthrough
-        </Button>
+        <div className="firstout-catalogue-actions">
+          <Button kind="tertiary" type="button" onClick={() => startPageTour()}>
+            Page tour
+          </Button>
+          <Button kind="tertiary" type="button" data-tour="profile-overview-tour" onClick={() => startOverviewTour()}>
+            Overview tour
+          </Button>
+        </div>
       </Stack>
     </Stack>
   );
