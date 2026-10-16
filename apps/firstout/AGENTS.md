@@ -62,7 +62,7 @@ On startup, if the `users` table is empty the API seeds one team (`Firstout`) an
 - `SEED_OWNER_EMAIL` (default `owner@example.com`)
 - `SEED_OWNER_PASSWORD` (default `change-me-owner`)
 
-It then creates these role users if the email is missing (idempotent; owner is never replaced):
+`SEED_BOOT_FIXTURES` (default **false**) creates these role users if the email is missing, plus the disabled storefront system user and the Walk-in customer. Leave it false on the live service so a wipe stays empty. Owner bootstrap above does not use this flag. When the flag is true, the role users are idempotent and the owner is never replaced:
 
 | Email | Role | Password env | Default |
 |-------|------|--------------|---------|
@@ -115,7 +115,7 @@ suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land →
 
 **Backdate limits:** till/PO/transfer services stamp "now"; the pack then writes `tax_invoices.issue_date`, `payments.paid_on`, PO lead timestamps, transfer timestamps, and dead-stock `location_stock.updated_at`. Journals and stock-movement audit rows stay at seed-run time. Books `InvoiceCreate` does not move stock — BI books invoices are AR-only (no `sku_id`) so sales-by-SKU does not claim units still on hand. SKU sales signal comes from till + completed laybys.
 
-**Railway develop:** on service `firstout-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do **not** enable on production. After it runs, log in as `owner@example.com` / `change-me-owner` (or the role users above) and walk stock → proforma → PO → receive → transfer → till → books.
+**Railway develop:** on service `firstout-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do **not** enable on production. After it runs, log in as `owner@example.com` / `change-me-owner`. Role logins exist only when `SEED_BOOT_FIXTURES=true`. Walk stock → proforma → PO → receive → transfer → till → books.
 
 Local: `SEED_PLAYGROUND=true` in `apps/firstout/backend/.env`, then restart uvicorn.
 
@@ -637,7 +637,7 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 - **Config files:** `apps/firstout/{backend,frontend}/railway.toml` — no Root Directory; Config File path points here.
 - **`watchPatterns`:** `apps/firstout/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `firstout-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
 - **Manifest:** `.github/deploy/manifest.yml` — `branches: [develop]` only. No `health_url.main`, no production.
-- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Every startup also seeds missing role users `till@` / `books@` / `warehouse@` / `buyer@example.com` (`SEED_*_PASSWORD`, defaults `change-me-<role>`). Cookie `firstout_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). `SEED_BOOT_FIXTURES` defaults false; set true only to also seed `till@` / `books@` / `warehouse@` / `buyer@example.com`, the storefront system user, and the Walk-in customer. Leave it false on the live API. Cookie `firstout_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
 - **Comms encryption:** `SETTINGS_ENCRYPTION_KEY` (Fernet) on `firstout-api` develop — required to save SMTP/WhatsApp secrets. Same value locally in `.env`.
 - **WhatsApp click-to-chat:** `POST .../send {channel:whatsapp}` with Cloud API off writes outbox `whatsapp_click` / `opened` and returns a `https://wa.me/{e164}?text=...` URL. Click-to-chat cannot attach a PDF.
 - **WhatsApp Cloud API:** paste phone-number id + access token in Settings → Communications (`whatsapp_mode=cloud` when both present). Token and app secret are Fernet-encrypted; GET never returns them. Keep the existing WhatsApp Business app on the number — paste-token coexistence, no Embedded Signup. Unofficial WhatsApp libraries are banned.
