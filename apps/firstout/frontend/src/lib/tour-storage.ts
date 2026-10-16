@@ -8,49 +8,75 @@ export type TourStore = {
   setItem(key: string, value: string): void;
 };
 
-function browserStore(): TourStore | null {
+function browserStores(): TourStore[] {
   if (typeof window === "undefined") {
-    return null;
+    return [];
+  }
+  const stores: TourStore[] = [];
+  try {
+    if (window.localStorage) {
+      stores.push(window.localStorage);
+    }
+  } catch {
+    // localStorage disabled.
   }
   try {
-    return window.localStorage;
+    if (window.sessionStorage) {
+      stores.push(window.sessionStorage);
+    }
   } catch {
-    return null;
+    // sessionStorage disabled.
   }
+  return stores;
+}
+
+function storesFor(store: TourStore | TourStore[] | null | undefined): TourStore[] {
+  if (store === undefined) {
+    return browserStores();
+  }
+  if (Array.isArray(store)) {
+    return store;
+  }
+  return store ? [store] : [];
 }
 
 export function tourStorageKey(userId: string): string {
   return `${TOUR_STORAGE_PREFIX}${userId}`;
 }
 
-export function readTourCompletion(userId: string, store?: TourStore | null): TourCompletion | null {
-  const resolved = store === undefined ? browserStore() : store;
-  if (!resolved || !userId) {
+export function readTourCompletion(
+  userId: string,
+  store?: TourStore | TourStore[] | null,
+): TourCompletion | null {
+  if (!userId) {
     return null;
   }
-  try {
-    const value = resolved.getItem(tourStorageKey(userId));
-    if (value === "completed" || value === "skipped") {
-      return value;
+  for (const resolved of storesFor(store)) {
+    try {
+      const value = resolved.getItem(tourStorageKey(userId));
+      if (value === "completed" || value === "skipped") {
+        return value;
+      }
+    } catch {
+      // Try the next store. A quota or privacy error must not reopen the tour.
     }
-    return null;
-  } catch {
-    return null;
   }
+  return null;
 }
 
 export function writeTourCompletion(
   userId: string,
   completion: TourCompletion,
-  store?: TourStore | null,
+  store?: TourStore | TourStore[] | null,
 ): void {
-  const resolved = store === undefined ? browserStore() : store;
-  if (!resolved || !userId) {
+  if (!userId) {
     return;
   }
-  try {
-    resolved.setItem(tourStorageKey(userId), completion);
-  } catch {
-    // Private mode and quota errors should still let the tour close.
+  for (const resolved of storesFor(store)) {
+    try {
+      resolved.setItem(tourStorageKey(userId), completion);
+    } catch {
+      // Private mode and quota errors should still let the tour close.
+    }
   }
 }

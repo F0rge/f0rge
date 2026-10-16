@@ -1935,3 +1935,24 @@ body {
 .firstout-tour-tooltip__ghost:hover {
   background: #e8e8e8;
 }
+
+/* Above the Joyride mask (z-index 12000), including while a step is still waiting. */
+.firstout-tour-dismiss {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 13000;
+  min-height: 2rem;
+  padding: 0 1rem;
+  border: 0;
+  background: #ffffff;
+  color: #0f62fe;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.firstout-tour-dismiss:hover {
+  background: #e8e8e8;
+}

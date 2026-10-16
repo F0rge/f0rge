@@ -26,8 +26,8 @@ export type TourStepDefinition = {
 export const TOUR_STEPS: TourStepDefinition[] = [
   {
     id: "welcome",
-    route: "/",
-    heading: "Home",
+    // No route: the first card stays on the page the user already opened
+    // (often an empty catalogue) so Skip does not navigate them away.
     target: "body",
     placement: "center",
     isFixed: true,

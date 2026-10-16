@@ -15,12 +15,7 @@ export function TourTooltip({
 }: TooltipRenderProps) {
   return (
     <div className="firstout-tour-tooltip" {...tooltipProps}>
-      <button
-        type="button"
-        className="firstout-tour-tooltip__close"
-        aria-label="Skip tour"
-        onClick={closeProps.onClick}
-      >
+      <button type="button" className="firstout-tour-tooltip__close" {...closeProps}>
         <span aria-hidden="true">×</span>
       </button>
       {step.title ? <h2 id="firstout-tour-title">{step.title}</h2> : null}
@@ -34,16 +29,16 @@ export function TourTooltip({
         <button
           type="button"
           className="firstout-tour-tooltip__ghost firstout-tour-tooltip__skip"
-          onClick={skipProps.onClick}
+          {...skipProps}
         >
           Skip tour
         </button>
         {index > 0 ? (
-          <button type="button" className="firstout-tour-tooltip__ghost" onClick={backProps.onClick}>
+          <button type="button" className="firstout-tour-tooltip__ghost" {...backProps}>
             Back
           </button>
         ) : null}
-        <button type="button" className="firstout-tour-tooltip__primary" onClick={primaryProps.onClick}>
+        <button type="button" className="firstout-tour-tooltip__primary" {...primaryProps}>
           {isLastStep ? "Done" : "Next"}
         </button>
       </div>

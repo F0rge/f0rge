@@ -38,4 +38,23 @@ describe("tour completion storage", () => {
     store.setItem(tourStorageKey("owner-1"), "later");
     expect(readTourCompletion("owner-1", store)).toBeNull();
   });
+
+  it("falls back to the next store when the first has no completion", () => {
+    const local = memoryStore();
+    const session = memoryStore();
+    local.setItem(tourStorageKey("owner-1"), "later");
+    writeTourCompletion("owner-1", "skipped", [local, session]);
+    expect(local.getItem(tourStorageKey("owner-1"))).toBe("skipped");
+    expect(session.getItem(tourStorageKey("owner-1"))).toBe("skipped");
+
+    const blocked: TourStore = {
+      getItem() {
+        return null;
+      },
+      setItem() {
+        throw new Error("quota");
+      },
+    };
+    expect(readTourCompletion("owner-1", [blocked, session])).toBe("skipped");
+  });
 });
