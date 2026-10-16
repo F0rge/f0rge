@@ -9,13 +9,23 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { ACTIONS, EVENTS, STATUS, useJoyride, type EventData } from "react-joyride";
+import { createPortal } from "react-dom";
+import { EVENTS, STATUS, useJoyride, type EventData } from "react-joyride";
 
 import { TourTooltip } from "@/components/tour/tour-tooltip";
-import { buildJoyrideSteps } from "@/lib/tour-navigation";
+import {
+  getSideNavExpandedSnapshot,
+  setSideNavExpanded,
+} from "@/lib/side-nav-preference";
+import {
+  buildJoyrideSteps,
+  cancelTourNavigation,
+  releaseTourBlockers,
+} from "@/lib/tour-navigation";
 import { stepsForUser } from "@/lib/tour-steps";
 import {
   readTourCompletion,
@@ -46,48 +56,43 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
   );
 
   const [run, setRun] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0);
   const steps = useMemo(
     () => buildJoyrideSteps(stepsForUser({ nia }), navigate),
     [navigate, nia],
   );
+  const navBeforeTour = useRef<boolean | null>(null);
+  const hasStarted = useRef(false);
+  const ended = useRef(false);
 
-  const finish = useCallback(
+  const endTour = useCallback(
     (completion: TourCompletion) => {
+      if (ended.current) {
+        return;
+      }
+      ended.current = true;
+      cancelTourNavigation();
       writeTourCompletion(userId, completion);
+      if (navBeforeTour.current !== null) {
+        setSideNavExpanded(navBeforeTour.current);
+        navBeforeTour.current = null;
+      }
       setRun(false);
-      setStepIndex(0);
     },
     [userId],
   );
 
   const onEvent = useCallback(
     (data: EventData) => {
-      const { type, action, index, status } = data;
-
-      if (type === EVENTS.STEP_AFTER && status === STATUS.RUNNING) {
-        if (action === ACTIONS.NEXT) {
-          setStepIndex(index + 1);
-        } else if (action === ACTIONS.PREV) {
-          setStepIndex(Math.max(0, index - 1));
-        }
-      }
-
-      if (type === EVENTS.TARGET_NOT_FOUND) {
-        setStepIndex((current) => (current + 1 >= steps.length ? current : current + 1));
-      }
-
+      const { type, status } = data;
       if (type === EVENTS.TOUR_END || status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-        const skipped = status === STATUS.SKIPPED || action === ACTIONS.SKIP;
-        finish(skipped ? "skipped" : "completed");
+        endTour(status === STATUS.SKIPPED ? "skipped" : "completed");
       }
     },
-    [finish, steps.length],
+    [endTour],
   );
 
   const { Tour, controls } = useJoyride({
     run,
-    stepIndex,
     steps,
     continuous: true,
     scrollToFirstStep: true,
@@ -106,12 +111,15 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
       skipBeacon: true,
       showProgress: false,
       overlayClickAction: false,
+      // Joyride only handles Escape while the tooltip is open. The listener
+      // below skips during the wait, when the mask is up and the tooltip is not.
       dismissKeyAction: false,
       blockTargetInteraction: true,
       spotlightPadding: 8,
       spotlightRadius: 0,
-      targetWaitTimeout: 8000,
-      beforeTimeout: 20000,
+      // before() already waited. A missing node should skip quickly, not pin the mask.
+      targetWaitTimeout: 400,
+      beforeTimeout: 8000,
       zIndex: 12000,
       primaryColor: "#0f62fe",
       backgroundColor: "#ffffff",
@@ -122,13 +130,21 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
     },
   });
 
+  const dismiss = useCallback(() => {
+    endTour("skipped");
+    controls.skip();
+  }, [controls, endTour]);
+
   const startTour = useCallback(() => {
-    setStepIndex(0);
+    ended.current = false;
+    navBeforeTour.current = getSideNavExpandedSnapshot();
+    hasStarted.current = true;
     setRun(false);
     window.setTimeout(() => {
+      controls.reset(false);
       setRun(true);
     }, 0);
-  }, []);
+  }, [controls]);
 
   useEffect(() => {
     if (!run) {
@@ -139,18 +155,35 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
         return;
       }
       event.preventDefault();
-      controls.skip();
+      event.stopPropagation();
+      dismiss();
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [controls, run]);
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [dismiss, run]);
+
+  useEffect(() => {
+    if (run) {
+      hasStarted.current = true;
+      if (navBeforeTour.current === null) {
+        navBeforeTour.current = getSideNavExpandedSnapshot();
+      }
+      return;
+    }
+    if (!hasStarted.current) {
+      return;
+    }
+    releaseTourBlockers();
+  }, [run]);
 
   useEffect(() => {
     if (readTourCompletion(userId)) {
       return;
     }
     const timer = window.setTimeout(() => {
-      setStepIndex(0);
+      ended.current = false;
+      hasStarted.current = true;
+      navBeforeTour.current = getSideNavExpandedSnapshot();
       setRun(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -164,10 +197,26 @@ export function TourProvider({ userId, nia, children }: TourProviderProps) {
     [run, startTour],
   );
 
+  const dismissButton =
+    run && typeof document !== "undefined"
+      ? createPortal(
+          <button
+            type="button"
+            className="firstout-tour-dismiss"
+            autoFocus
+            onClick={() => dismiss()}
+          >
+            Skip tour
+          </button>,
+          document.body,
+        )
+      : null;
+
   return (
     <TourContext.Provider value={value}>
       {children}
       {Tour}
+      {dismissButton}
     </TourContext.Provider>
   );
 }
