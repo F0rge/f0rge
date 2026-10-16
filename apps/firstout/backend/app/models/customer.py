@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -47,3 +47,5 @@ class Customer(UUIDPkMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
+
+    __table_args__ = (Index("ix_customers_name_lower", text("lower(name)"), unique=True),)

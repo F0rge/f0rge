@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,7 +16,10 @@ from f0rge_db.mixins import TimestampMixin, UUIDPkMixin
 class Bill(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "bills"
 
-    bill_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    bill_number: Mapped[str] = mapped_column(String(128), nullable=False)
+    is_archive: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     supplier_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("suppliers.id", ondelete="RESTRICT"),

@@ -60,6 +60,7 @@ def invoice_overdue_predicate(as_of: datetime.date):
     balance = TaxInvoice.total_inc_vat - TaxInvoice.amount_paid
     legacy_cutoff = as_of - datetime.timedelta(days=DEFAULT_TERMS_DAYS)
     return and_(
+        TaxInvoice.is_archive.is_(False),
         balance > 0,
         or_(
             and_(TaxInvoice.due_date.is_not(None), TaxInvoice.due_date < as_of),
