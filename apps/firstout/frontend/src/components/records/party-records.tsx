@@ -15,6 +15,7 @@ import {
 import { useEffect, useState } from "react";
 
 import {
+  ApiError,
   listPartyAddresses,
   listPartyContacts,
   type PartyAddress,
@@ -33,6 +34,7 @@ export function PartyRecords({ kind, id }: { kind: PartyKind; id: string }) {
   const [addresses, setAddresses] = useState<PartyAddress[]>([]);
   const [contacts, setContacts] = useState<PartyContact[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,14 +46,24 @@ export function PartyRecords({ kind, id }: { kind: PartyKind; id: string }) {
         }
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load addresses and contacts.");
+        if (cancelled) {
+          return;
         }
+        // An API without these routes (older deploy) hides the section instead of erroring.
+        if (err instanceof ApiError && err.status === 404) {
+          setUnavailable(true);
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Failed to load addresses and contacts.");
       });
     return () => {
       cancelled = true;
     };
   }, [kind, id]);
+
+  if (unavailable) {
+    return null;
+  }
 
   return (
     <Stack gap={5}>

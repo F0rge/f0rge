@@ -113,6 +113,7 @@ export function SalesHistoryTable({ customerId }: { customerId?: string }) {
       columns={SALES_COLUMNS}
       load={load}
       rowId={(row, index) => `${row.document_id}-${index}`}
+      hideWhenMissing={Boolean(customerId)}
       searchPlaceholder="Search document, product, customer, or SKU"
     />
   );

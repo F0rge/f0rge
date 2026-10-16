@@ -15,7 +15,7 @@ import {
 } from "@carbon/react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
-import { PAGE_SIZES, type ListParams, type Page } from "@/lib/api";
+import { ApiError, PAGE_SIZES, type ListParams, type Page } from "@/lib/api";
 
 export type RecordsColumn<T> = {
   key: string;
@@ -31,6 +31,8 @@ type Props<T> = {
   rowId: (row: T, index: number) => string;
   searchPlaceholder?: string;
   emptyText?: string;
+  /** Render nothing when the API has no such route (404), e.g. an older API deploy. */
+  hideWhenMissing?: boolean;
 };
 
 /** Server-paged read-only Carbon table with a search box. */
@@ -42,6 +44,7 @@ export function RecordsTable<T>({
   rowId,
   searchPlaceholder = "Search",
   emptyText = "Nothing to show.",
+  hideWhenMissing = false,
 }: Props<T>) {
   const [rows, setRows] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -51,6 +54,7 @@ export function RecordsTable<T>({
   const [debounced, setDebounced] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -72,15 +76,23 @@ export function RecordsTable<T>({
       setRows(data.items);
       setTotal(data.total);
     } catch (err) {
+      if (hideWhenMissing && err instanceof ApiError && err.status === 404) {
+        setUnavailable(true);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to load.");
     } finally {
       setLoading(false);
     }
-  }, [load, page, pageSize, debounced]);
+  }, [load, page, pageSize, debounced, hideWhenMissing]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  if (unavailable) {
+    return null;
+  }
 
   return (
     <Stack gap={4}>
