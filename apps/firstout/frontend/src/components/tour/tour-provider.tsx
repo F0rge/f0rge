@@ -94,7 +94,12 @@ export function TourProvider({ userId, children }: TourProviderProps) {
       }
 
       if (type === EVENTS.TARGET_NOT_FOUND) {
-        setStepIndex((current) => (current + 1 >= steps.length ? current : current + 1));
+        // A missing spotlight on the last step used to leave the mask up with no way out (#842).
+        if (index + 1 >= steps.length) {
+          finish("skipped");
+          return;
+        }
+        setStepIndex(index + 1);
       }
 
       if (type === EVENTS.TOUR_END || status === STATUS.FINISHED || status === STATUS.SKIPPED) {

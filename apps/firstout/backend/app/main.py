@@ -20,6 +20,7 @@ from app.config import settings
 from app.database import async_session_maker
 from app.middleware.auth import AuthContextMiddleware
 from app.routers import (
+    records,
     accounts,
     adjustments,
     audit,
@@ -209,3 +210,4 @@ app.include_router(settings_router.settings_router)
 app.include_router(comms.comms_router)
 app.include_router(whatsapp_webhook.whatsapp_webhook_router)
 app.include_router(cost_audit.cost_audit_router)
+app.include_router(records.records_router)

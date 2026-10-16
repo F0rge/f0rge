@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,9 @@ class TaxInvoice(UUIDPkMixin, TimestampMixin, Base):
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     total_inc_vat: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_paid: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    is_archive: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     customer: Mapped["Customer"] = relationship()
     lines: Mapped[list["InvoiceLine"]] = relationship(

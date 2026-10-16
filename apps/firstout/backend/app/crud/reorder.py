@@ -46,6 +46,7 @@ class ReorderCRUD(BaseCRUD):
             )
             .join(PurchaseOrder, PurchaseOrder.id == PoLine.po_id)
             .where(PurchaseOrder.status == PurchaseOrderStatus.OPEN)
+            .where(PurchaseOrder.is_archive.is_(False))
             .group_by(PoLine.sku_id)
             .subquery()
         )

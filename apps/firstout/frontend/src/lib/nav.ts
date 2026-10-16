@@ -32,6 +32,7 @@ export const STOCK_NAV_ITEMS = [
   { href: "/adjustments", label: "Adjustments" },
   { href: "/import", label: "Import" },
   { href: "/reorder", label: "Reorder" },
+  { href: "/stock-by-bin", label: "Stock by bin" },
 ] as const;
 
 export const WAREHOUSE_NAV_ITEMS = [
@@ -50,6 +51,7 @@ export const SALES_NAV_ITEMS = [
   { href: "/customers", label: "Customers" },
   { href: "/returns", label: "Returns" },
   { href: "/deliveries", label: "Deliveries" },
+  { href: "/history", label: "History" },
 ] as const;
 
 export const ADMIN_NAV_ITEMS = [

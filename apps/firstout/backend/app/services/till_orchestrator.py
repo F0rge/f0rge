@@ -25,6 +25,7 @@ from app.models.payment import Payment, PaymentDirection
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
 from app.schemas.invoice import InvoiceLineResponse
 from app.schemas.till import TillSaleCreate, TillSaleLocationStock, TillSaleResponse
+from app.services.sku_bom import whole_component_qty
 from app.services.books_events import BooksEventService
 from app.services.category_posting import CategoryPostingService
 from app.services.customer_credit import CustomerCreditService
@@ -364,7 +365,7 @@ class TillOrchestrator:
     ) -> tuple[Decimal, Optional[Pick]]:
         showroom_ok = True
         for bom in bom_lines:
-            need = bom.qty * line_qty
+            need = whole_component_qty(bom.qty, line_qty)
             loc_stock = await self.location_stock_crud.get_by_sku_and_location(
                 bom.component_sku_id,
                 location_id,
@@ -379,7 +380,7 @@ class TillOrchestrator:
         if showroom_ok:
             line_cogs = Decimal(0)
             for bom in bom_lines:
-                need = bom.qty * line_qty
+                need = whole_component_qty(bom.qty, line_qty)
                 component = await self.sku_crud.get_by_id(bom.component_sku_id)
                 if component is None:
                     raise NotFoundError("SKU not found")
