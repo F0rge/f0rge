@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -38,7 +38,7 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "caio", version = "0.9.25", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "caio", version = "0.9.25", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/67/e2/d7cb819de8df6b5c1968a2756c3cb4122d4fa2b8fc768b53b7c9e5edb646/aiofile-3.9.0.tar.gz", hash = "sha256:e5ad718bb148b265b6df1b3752c4d1d83024b93da9bd599df74b9d9ffcf7919b", size = 17943, upload-time = "2024-10-08T10:39:35.846Z" }
 wheels = [
@@ -56,7 +56,7 @@ resolution-markers = [
     "(python_full_version >= '3.11' and python_full_version < '3.13' and sys_platform != 'emscripten') or (python_full_version == '3.11.*' and sys_platform == 'emscripten')",
 ]
 dependencies = [
-    { name = "caio", version = "0.12.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "caio", version = "0.12.2", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/14/31/edb06aabd8f8f0b56d659f30800795f40b93cba96be946ce179f6931e3a5/aiofile-3.12.3.tar.gz", hash = "sha256:caa6aa746b5e47e2165f7abd741b6415e49cf4d44fddc0f61844612cc3924d41", size = 21600, upload-time = "2026-08-04T22:59:27.171Z" }
 wheels = [
@@ -874,6 +874,15 @@ wheels = [
 ]
 
 [[package]]
+name = "et-xmlfile"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/38/af70d7ab1ae9d4da450eeec1fa3918940a5fafb9055e934af8d6eb0c2313/et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54", size = 17234, upload-time = "2024-10-25T17:25:40.039Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa", size = 18059, upload-time = "2024-10-25T17:25:39.051Z" },
+]
+
+[[package]]
 name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1227,6 +1236,71 @@ client = [
 ]
 
 [[package]]
+name = "firstout-backend"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "bcrypt" },
+    { name = "cryptography" },
+    { name = "email-validator" },
+    { name = "f0rge-core" },
+    { name = "f0rge-db" },
+    { name = "f0rge-storage" },
+    { name = "fastapi", extra = ["standard"] },
+    { name = "greenlet" },
+    { name = "httpx" },
+    { name = "openpyxl" },
+    { name = "pydantic-ai", extra = ["ag-ui", "openrouter"] },
+    { name = "pydantic-ai-harness", extra = ["codemode"] },
+    { name = "pydantic-settings" },
+    { name = "pyjwt" },
+    { name = "reportlab" },
+    { name = "sqlalchemy" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "f0rge-testing" },
+    { name = "httpx" },
+    { name = "pypdf" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.13" },
+    { name = "asyncpg", specifier = ">=0.29" },
+    { name = "bcrypt", specifier = ">=4.0" },
+    { name = "cryptography", specifier = ">=43.0" },
+    { name = "email-validator", specifier = ">=2.0" },
+    { name = "f0rge-core", editable = "../../../libs/backend/core" },
+    { name = "f0rge-db", editable = "../../../libs/backend/db" },
+    { name = "f0rge-storage", editable = "../../../libs/backend/storage" },
+    { name = "fastapi", extras = ["standard"] },
+    { name = "greenlet", specifier = ">=3.3.2" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "openpyxl", specifier = ">=3.1" },
+    { name = "pydantic-ai", extras = ["openrouter", "ag-ui"] },
+    { name = "pydantic-ai-harness", extras = ["codemode"], specifier = ">=0.28.1" },
+    { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "pyjwt", specifier = ">=2.8" },
+    { name = "reportlab", specifier = ">=5.0.1" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "f0rge-testing", editable = "../../../libs/backend/testing" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pypdf", specifier = ">=6.16.2" },
+    { name = "pytest", specifier = ">=9.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+]
+
+[[package]]
 name = "genai-prices"
 version = "0.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1412,8 +1486,8 @@ name = "httpcore2"
 version = "2.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11", marker = "python_full_version != '3.12.*' or sys_platform != 'emscripten'" },
-    { name = "truststore", marker = "python_full_version != '3.12.*' or sys_platform != 'emscripten'" },
+    { name = "h11" },
+    { name = "truststore" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/be/ad/f4f0e57345f1870f3e8cb624e058d7eca6e5a27d33bcc3311d9b618734cd/httpcore2-2.12.0.tar.gz", hash = "sha256:9293522bba0aa7c4c8e9e3f040c16575bd8868e155a77fa30c7a9085a5eae648", size = 67548, upload-time = "2026-08-18T13:22:08.211Z" }
 wheels = [
@@ -1525,7 +1599,7 @@ name = "importlib-metadata"
 version = "9.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp", marker = "(python_full_version < '3.13' and sys_platform != 'emscripten') or (python_full_version < '3.12' and sys_platform == 'emscripten')" },
+    { name = "zipp" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/6f/7e/1e7e8dc30634b93ebb3d58a3dea569ad146e656218d3960ab04f62047b29/importlib_metadata-9.0.1.tar.gz", hash = "sha256:ab830580bc0ef3db61ce8fae716389e5462b67e033018bab6d8f80ef17172f99", size = 59124, upload-time = "2026-08-28T15:30:34.646Z" }
 wheels = [
@@ -2131,6 +2205,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ad/ba/6d46da4232f80cb5842280e024242e6fed163418ab81bebc1c83f693bb0b/openai-3.7.0.tar.gz", hash = "sha256:e836eb7effee89df802cd0c7d1bad8de8c993976cf238c44d5b5b844f5aefd38", size = 1455615, upload-time = "2026-09-02T01:30:54.555Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d3/9d/77e0f43f04ae51a3d21bb08bd372a752856b86ee22648b1458c93a623927/openai-3.7.0-py3-none-any.whl", hash = "sha256:008fa33e0a01dc71039c27355ef8f476eed690e8e48bec18183878dcd32fb841", size = 1699594, upload-time = "2026-09-02T01:30:52.445Z" },
+]
+
+[[package]]
+name = "openpyxl"
+version = "3.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "et-xmlfile" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/f9/88d94a75de065ea32619465d2f77b29a0469500e99012523b91cc4141cd1/openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050", size = 186464, upload-time = "2024-06-28T14:03:44.161Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2", size = 250910, upload-time = "2024-06-28T14:03:41.161Z" },
 ]
 
 [[package]]
@@ -3859,8 +3945,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography", marker = "python_full_version != '3.12.*' or sys_platform != 'emscripten'" },
-    { name = "jeepney", marker = "python_full_version != '3.12.*' or sys_platform != 'emscripten'" },
+    { name = "cryptography" },
+    { name = "jeepney" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
@@ -4254,69 +4340,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/37/945b4ca0ac27e3dc4952642d4c900edd030b3da6c9634875af6e13ae80e5/uvloop-0.22.1-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b91328c72635f6f9e0282e4a57da7470c7350ab1c9f48546c0f2866205349d21", size = 4467065, upload-time = "2025-10-16T22:16:58.206Z" },
     { url = "https://files.pythonhosted.org/packages/97/cc/48d232f33d60e2e2e0b42f4e73455b146b76ebe216487e862700457fbf3c/uvloop-0.22.1-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:daf620c2995d193449393d6c62131b3fbd40a63bf7b307a1527856ace637fe88", size = 4328384, upload-time = "2025-10-16T22:16:59.36Z" },
     { url = "https://files.pythonhosted.org/packages/e4/16/c1fd27e9549f3c4baf1dc9c20c456cd2f822dbf8de9f463824b0c0357e06/uvloop-0.22.1-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:6cde23eeda1a25c75b2e07d39970f3374105d5eafbaab2a4482be82f272d5a5e", size = 4296730, upload-time = "2025-10-16T22:17:00.744Z" },
-]
-
-[[package]]
-name = "firstout-backend"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "alembic" },
-    { name = "asyncpg" },
-    { name = "bcrypt" },
-    { name = "cryptography" },
-    { name = "email-validator" },
-    { name = "f0rge-core" },
-    { name = "f0rge-db" },
-    { name = "f0rge-storage" },
-    { name = "fastapi", extra = ["standard"] },
-    { name = "greenlet" },
-    { name = "httpx" },
-    { name = "pydantic-ai", extra = ["ag-ui", "openrouter"] },
-    { name = "pydantic-ai-harness", extra = ["codemode"] },
-    { name = "pydantic-settings" },
-    { name = "pyjwt" },
-    { name = "reportlab" },
-    { name = "sqlalchemy" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "f0rge-testing" },
-    { name = "httpx" },
-    { name = "pypdf" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", specifier = ">=1.13" },
-    { name = "asyncpg", specifier = ">=0.29" },
-    { name = "bcrypt", specifier = ">=4.0" },
-    { name = "cryptography", specifier = ">=43.0" },
-    { name = "email-validator", specifier = ">=2.0" },
-    { name = "f0rge-core", editable = "../../../libs/backend/core" },
-    { name = "f0rge-db", editable = "../../../libs/backend/db" },
-    { name = "f0rge-storage", editable = "../../../libs/backend/storage" },
-    { name = "fastapi", extras = ["standard"] },
-    { name = "greenlet", specifier = ">=3.3.2" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pydantic-ai", extras = ["openrouter", "ag-ui"] },
-    { name = "pydantic-ai-harness", extras = ["codemode"], specifier = ">=0.28.1" },
-    { name = "pydantic-settings", specifier = ">=2.0" },
-    { name = "pyjwt", specifier = ">=2.8" },
-    { name = "reportlab", specifier = ">=5.0.1" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "f0rge-testing", editable = "../../../libs/backend/testing" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pypdf", specifier = ">=6.16.2" },
-    { name = "pytest", specifier = ">=9.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23" },
 ]
 
 [[package]]

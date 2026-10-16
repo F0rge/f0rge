@@ -328,6 +328,7 @@ async def build_dining_vs_sofas_canvas_spec(db: AsyncSession) -> dict[str, Any]:
         .join(TaxInvoice, InvoiceLine.invoice_id == TaxInvoice.id)
         .outerjoin(Sku, InvoiceLine.sku_id == Sku.id)
         .where(
+            TaxInvoice.is_archive.is_(False),
             TaxInvoice.issue_date >= month_start,
             TaxInvoice.issue_date <= month_end,
         )

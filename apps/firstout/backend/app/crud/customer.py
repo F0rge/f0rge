@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.customer import Customer
@@ -53,13 +53,15 @@ class CustomerCRUD(BaseCRUD):
             return {}
 
         balance = TaxInvoice.total_inc_vat - TaxInvoice.amount_paid
+        live = TaxInvoice.is_archive.is_(False)
+        open_balance = and_(balance > 0, live)
         overdue_clause = invoice_overdue_predicate(as_of)
         stmt = (
             select(
                 TaxInvoice.customer_id,
-                func.count().filter(balance > 0).label("open_count"),
+                func.count().filter(open_balance).label("open_count"),
                 func.coalesce(
-                    func.sum(case((balance > 0, balance), else_=Decimal("0"))),
+                    func.sum(case((open_balance, balance), else_=Decimal("0"))),
                     Decimal("0"),
                 ).label("open_zar"),
                 func.count().filter(overdue_clause).label("overdue_count"),

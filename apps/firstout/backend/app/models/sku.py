@@ -31,7 +31,7 @@ class Sku(UUIDPkMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     design: Mapped[str] = mapped_column(String(255), nullable=False)
     fabric: Mapped[str] = mapped_column(String(255), nullable=False)
-    supplier_ref: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    supplier_ref: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     preferred_supplier_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("suppliers.id", ondelete="SET NULL"),

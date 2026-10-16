@@ -17,6 +17,7 @@ from sqlalchemy import (
     Numeric,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -80,6 +81,9 @@ class SalesOrder(UUIDPkMixin, TimestampMixin, Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     fulfillment_promise: Mapped[Optional[dict]] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"), nullable=True
+    )
+    is_archive: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
     created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
