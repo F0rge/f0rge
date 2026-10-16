@@ -36,6 +36,7 @@ from app.models.pick import Pick, PickAllocation, PickLine, PickSourceType, Pick
 from app.models.price_list import PriceList, PriceListItem
 from app.models.product_group import ProductGroup, ProductGroupVariant
 from app.models.payment import Payment, PaymentDirection
+from app.models.payment_term import PaymentTerm
 from app.models.proforma import Proforma
 from app.models.quote import Quote, QuoteLine, QuoteStatus
 from app.models.sales_order import (
@@ -54,6 +55,7 @@ from app.models.purchase_order import (
 from app.models.repeating_invoice import RepeatingInvoice, RepeatingInvoiceLine
 from app.models.sku import Sku
 from app.models.sku_bom_line import SkuBomLine
+from app.models.sku_supplier_price import SkuSupplierPrice
 from app.models.stock_adjustment import (
     StockAdjustment,
     StockAdjustmentLine,
@@ -70,10 +72,18 @@ from app.models.stock_return import (
 from app.models.stocktake import Stocktake, StocktakeLine, StocktakeStatus
 from app.models.supplier import Supplier
 from app.models.tax_invoice import InvoiceLine, TaxInvoice
+from app.models.tax_rule import TaxRule
 from app.models.team_settings import TeamSettings
 from app.models.transfer import Transfer, TransferLine, TransferStatus
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
 from app.models.team import Team
+from app.models.archive_credit_note import ArchiveCreditNote, ArchiveCreditNoteLine
+from app.models.cin7_party import (
+    CustomerAddress,
+    CustomerContact,
+    SupplierAddress,
+    SupplierContact,
+)
 from app.models.role import Role, RolePermission
 from app.models.user import User, UserRole
 from app.models.vat201_period import (
@@ -133,6 +143,13 @@ __all__ = [
     "OpsCommerceOrder",
     "Payment",
     "PaymentDirection",
+    "PaymentTerm",
+    "ArchiveCreditNote",
+    "ArchiveCreditNoteLine",
+    "CustomerAddress",
+    "CustomerContact",
+    "SupplierAddress",
+    "SupplierContact",
     "Pick",
     "PickAllocation",
     "PickLine",
@@ -159,6 +176,7 @@ __all__ = [
     "RolePermission",
     "Sku",
     "SkuBomLine",
+    "SkuSupplierPrice",
     "SkuStock",
     "StockAdjustment",
     "StockAdjustmentLine",
@@ -174,6 +192,7 @@ __all__ = [
     "StocktakeStatus",
     "Supplier",
     "TaxInvoice",
+    "TaxRule",
     "TaxTreatment",
     "TeamSettings",
     "Transfer",

@@ -19,6 +19,7 @@ dependencies = [
     "f0rge-db",
     "f0rge-storage",
     "reportlab>=5.0.1",
+    "openpyxl>=3.1",
 ]
 
 [dependency-groups]

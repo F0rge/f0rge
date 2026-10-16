@@ -605,6 +605,19 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 | List imports, reports, VAT201 draft | any authenticated |
 | Upload CSV, match lines | `books.mutate` |
 
+## Cin7 Core import and records
+
+`uv run --project apps/firstout/backend python -m app.commands.import_cin7 --export-dir <dir> [--commit]` loads a Cin7 Core full export. Dry-run is the default. It upserts on natural keys (SKU, customer/supplier name, document number), so a second run of the same export changes nothing. A non-local `DATABASE_URL` needs `FIRSTOUT_CIN7_IMPORT_TARGET=firstout` (Firstout is main-only). Never commit the export: it holds customer PII. Tests use fake fixtures.
+
+- Workbook names may use spaces or underscores (`Sale Documents_ALLTIME.xlsx`). Only the `All` sheet is read.
+- Customers and suppliers that appear only on documents are created as stubs before contacts, SKUs, and documents.
+- Every address and contact row goes to `customer_addresses`, `customer_contacts`, `supplier_addresses`, and `supplier_contacts`, keyed by a content hash (`natural_key`). The default contact and billing address are also copied onto the customer row.
+- `sku_bom_lines.qty` is `Numeric(14,4)`, so fractional components are allowed. Pick and till call `whole_component_qty`. If a kit needs fractional component units, they return a 400 instead of rounding.
+- Cin7 `CR-*` documents go to `archive_credit_notes` and `archive_credit_note_lines`. They are never `credit_notes`: no invoice link, no journal, no stock, no VAT201.
+- Archive bills keep `currency` and `amount_foreign`. If there is no ZAR rate, `fx_rate_known=false` and the ZAR fields are 0 placeholders. APIs return ZAR as null.
+
+Read APIs (any authenticated user; cost fields are null without `stock.cost.view`): `GET /customers/{id}/addresses|contacts`, `GET /suppliers/{id}/addresses|contacts`, `GET /supplier-prices`, `GET /history/sales` (archive invoices and archive credit notes), `GET /history/purchases` (archive bills), and `GET /stock/by-bin`. UI: `/history` (Sales nav), `/stock-by-bin` (Stock nav), `/suppliers/[id]`, plus addresses, contacts, and sales history on `/customers/[id]`. Migration: `065_cin7_followup`.
+
 ## Railway
 
 **Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Production has no Firstout services; the Marrow project has no Firstout config.

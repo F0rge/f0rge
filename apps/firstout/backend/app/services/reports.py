@@ -119,6 +119,7 @@ class ReportsService:
         result = await self.db.execute(
             select(TaxInvoice, Customer.name)
             .join(Customer, TaxInvoice.customer_id == Customer.id)
+            .where(TaxInvoice.is_archive.is_(False))
             .where(TaxInvoice.total_inc_vat > TaxInvoice.amount_paid)
             .order_by(TaxInvoice.issue_date)
         )
@@ -160,6 +161,7 @@ class ReportsService:
         result = await self.db.execute(
             select(Bill, Supplier.name)
             .join(Supplier, Bill.supplier_id == Supplier.id)
+            .where(Bill.is_archive.is_(False))
             .where(Bill.amount_zar > Bill.amount_paid_zar)
             .order_by(Bill.issue_date)
         )
@@ -297,6 +299,7 @@ class ReportsService:
         invoice_result = await self.db.execute(
             select(func.coalesce(func.sum(TaxInvoice.subtotal_ex_vat), 0), func.count()).where(
                 and_(
+                    TaxInvoice.is_archive.is_(False),
                     TaxInvoice.issue_date >= period_from,
                     TaxInvoice.issue_date <= period_to,
                 )
@@ -317,6 +320,7 @@ class ReportsService:
         output_tax_result = await self.db.execute(
             select(func.coalesce(func.sum(TaxInvoice.vat_amount), 0)).where(
                 and_(
+                    TaxInvoice.is_archive.is_(False),
                     TaxInvoice.issue_date >= period_from,
                     TaxInvoice.issue_date <= period_to,
                 )
@@ -614,6 +618,7 @@ class ReportsService:
                 func.coalesce(func.sum(TaxInvoice.amount_paid), 0),
             ).where(
                 and_(
+                    TaxInvoice.is_archive.is_(False),
                     TaxInvoice.issue_date >= from_date,
                     TaxInvoice.issue_date <= to_date,
                 )
