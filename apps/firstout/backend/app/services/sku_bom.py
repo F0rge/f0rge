@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
+from typing import Union
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +13,21 @@ from app.models.sku_bom_line import SkuBomLine
 from app.schemas.sku_bom import SkuBomLineResponse, SkuBomReplace
 from f0rge_core.exceptions import ConflictError, NotFoundError, ValidationError
 from f0rge_db.crud import unit_of_work
+
+
+def whole_component_qty(bom_qty: Union[Decimal, int], kit_qty: int) -> int:
+    """Component units for ``kit_qty`` kits. Stock is counted in whole units.
+
+    Cin7 assemblies can carry fractional components (for example 0.5 m of fabric).
+    They are stored as-is, but picking or selling such a kit from stock would need
+    fractional on-hand, so it is refused instead of silently rounded.
+    """
+    need = Decimal(bom_qty) * kit_qty
+    if need != need.to_integral_value():
+        raise ValidationError(
+            "Kit has a fractional component quantity and cannot be picked or sold from stock"
+        )
+    return int(need)
 
 
 class SkuBomService:
@@ -31,7 +48,7 @@ class SkuBomService:
     ) -> list[SkuBomLineResponse]:
         await self._get_sku_or_404(parent_sku_id)
         seen: set[uuid.UUID] = set()
-        prepared: list[tuple[uuid.UUID, int]] = []
+        prepared: list[tuple[uuid.UUID, Decimal]] = []
         for line in data.lines:
             if line.component_sku_id == parent_sku_id:
                 raise ValidationError("BOM cannot include the parent SKU as a component")

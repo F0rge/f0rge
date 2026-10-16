@@ -77,6 +77,13 @@ from app.models.team_settings import TeamSettings
 from app.models.transfer import Transfer, TransferLine, TransferStatus
 from app.models.unit_cost_audit import UnitCostAudit, UnitCostAuditSource
 from app.models.team import Team
+from app.models.archive_credit_note import ArchiveCreditNote, ArchiveCreditNoteLine
+from app.models.cin7_party import (
+    CustomerAddress,
+    CustomerContact,
+    SupplierAddress,
+    SupplierContact,
+)
 from app.models.role import Role, RolePermission
 from app.models.user import User, UserRole
 from app.models.vat201_period import (
@@ -137,6 +144,12 @@ __all__ = [
     "Payment",
     "PaymentDirection",
     "PaymentTerm",
+    "ArchiveCreditNote",
+    "ArchiveCreditNoteLine",
+    "CustomerAddress",
+    "CustomerContact",
+    "SupplierAddress",
+    "SupplierContact",
     "Pick",
     "PickAllocation",
     "PickLine",

@@ -11,7 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.account import Account, AccountType, default_tax_treatment
+from app.models.archive_credit_note import ArchiveCreditNote, ArchiveCreditNoteLine
 from app.models.bill import Bill, BillLine
+from app.models.cin7_party import (
+    CustomerAddress,
+    CustomerContact,
+    SupplierAddress,
+    SupplierContact,
+)
 from app.models.customer import Customer
 from app.models.inventory import LocationStock
 from app.models.journal import JournalEntry
@@ -42,6 +49,11 @@ from app.services.cin7_import.parse import (
     read_xlsx_all,
     reorder_min,
 )
+from app.services.cin7_import.children import (
+    address_payload,
+    contact_payload,
+    upsert_children,
+)
 from app.services.cin7_import.report import EntityResult, ImportReport
 
 ASSUMPTIONS = [
@@ -52,8 +64,8 @@ ASSUMPTIONS = [
     "The lowest product code keeps a shared Cin7 barcode.",
     "Sales orders, tax invoices, purchase orders, and bills are archive rows. "
     "The import does not write journals or move stock for them.",
-    "Bills in a currency other than ZAR keep the foreign amount with fx_to_zar 0 and amount_zar 0. "
-    "The export has no exchange rate.",
+    "Bills in a currency other than ZAR keep the currency and foreign amount, with "
+    "fx_rate_known false. The export has no exchange rate, so the ZAR value is unknown.",
     "On-hand quantities come from StockOnHand only. A received purchase order does not increase stock.",
     "Archive invoices are left out of VAT, aged receivables, and overdue balances. "
     "Sales-by-SKU and SKU criticality still include them when the date range covers the invoice.",
@@ -202,6 +214,8 @@ class Cin7Loader:
         self.locations: dict[str, Location] = {}
         self.supplier_currency: dict[str, str] = {}
         self.payment_days: dict[str, int] = {}
+        self._credit_rows: list[dict[str, str]] = []
+        self._workbooks: dict[Path, tuple[list[dict[str, str]], int]] = {}
 
     def _result(self, name: str) -> EntityResult:
         return self.report.entity(name)
@@ -213,9 +227,10 @@ class Cin7Loader:
         await self._load_accounts()
         await self._load_suppliers()
         await self._load_customers()
+        await self._ensure_document_parties()
         await self._load_customer_contacts()
         await self._load_customer_addresses()
-        self._skip_supplier_children()
+        await self._load_supplier_children()
         await self._load_locations()
         await self._load_skus()
         await self._load_price_lists()
@@ -226,6 +241,7 @@ class Cin7Loader:
         await self._load_stock()
         await self._load_sales_orders()
         await self._load_invoices()
+        await self._load_archive_credit_notes()
         await self._link_orders_to_invoices()
         await self._load_purchase_orders()
         await self._load_bills()
@@ -535,8 +551,34 @@ class Cin7Loader:
         self._result("customer").note("stub customer created from a document name")
         return found
 
+    def _workbook(self, path: Path) -> tuple[list[dict[str, str]], int]:
+        if path not in self._workbooks:
+            self._workbooks[path] = read_xlsx_all(path)
+        return self._workbooks[path]
+
+    async def _ensure_document_parties(self) -> None:
+        """Create customer/supplier stubs named only on documents before anything links to them.
+
+        Contacts, SKU LastSuppliedBy, and documents then resolve on the first run, so a
+        second run of the same export changes nothing.
+        """
+        for prefix, column, ensure in (
+            ("Sale_Order_Details", "Customer", self._ensure_customer),
+            ("Sale_Documents", "Customer", self._ensure_customer),
+            ("Purchase_Order_Details", "Supplier", self._ensure_supplier),
+            ("Purchase_Invoice_Details", "Supplier", self._ensure_supplier),
+        ):
+            path = find_file(self.export_dir, prefix, ".xlsx")
+            if path is None:
+                continue
+            records, _filled = self._workbook(path)
+            for name in sorted({row.get(column, "").strip() for row in records} - {""}):
+                await ensure(name)
+
     async def _load_customer_contacts(self) -> None:
-        result = self._result("customer_contact")
+        # customer_primary_contact: the default contact's phone/email on the customer row.
+        # customer_contact: every contact row in customer_contacts.
+        result = self._result("customer_primary_contact")
         path = find_file(self.export_dir, "CustomerContacts", ".csv")
         if path is None:
             result.skip("CustomerContacts file not found")
@@ -568,15 +610,22 @@ class Cin7Loader:
                 result.updated += 1
             else:
                 result.unchanged += 1
-            extra = len(group) - 1
-            if extra:
-                result.skip(
-                    "customer stores one phone and email; extra contacts were not stored", extra
-                )
         await self.session.flush()
+        await upsert_children(
+            self.session,
+            model=CustomerContact,
+            owner_field="customer_id",
+            owners=self.customers,
+            owner_key=_key,
+            rows=rows,
+            owner_column="Customer",
+            build=lambda row: contact_payload(row, with_marketing=True),
+            result=self._result("customer_contact"),
+        )
 
     async def _load_customer_addresses(self) -> None:
-        result = self._result("customer_address")
+        # customer_billing_address: the chosen address text on customers.billing_address.
+        result = self._result("customer_billing_address")
         path = find_file(self.export_dir, "CustomerAddresses", ".csv")
         if path is None:
             result.skip("CustomerAddresses file not found")
@@ -601,33 +650,41 @@ class Cin7Loader:
                 result.updated += 1
             else:
                 result.unchanged += 1
-            extra = len(group) - 1
-            if extra:
-                result.skip(
-                    "customer stores one billing address; extra addresses were not stored",
-                    extra,
-                )
         await self.session.flush()
+        await upsert_children(
+            self.session,
+            model=CustomerAddress,
+            owner_field="customer_id",
+            owners=self.customers,
+            owner_key=_key,
+            rows=rows,
+            owner_column="Name",
+            build=address_payload,
+            result=self._result("customer_address"),
+        )
 
-    def _skip_supplier_children(self) -> None:
-        contacts = find_file(self.export_dir, "SupplierContacts", ".csv")
-        addresses = find_file(self.export_dir, "SupplierAddresses", ".csv")
-        if contacts is not None:
-            rows, _shifted = read_csv_records(contacts)
-            self._result("supplier_contact").skip(
-                "supplier stores name and currency only; contacts were not stored",
-                len(rows),
+    async def _load_supplier_children(self) -> None:
+        for prefix, entity, model, build in (
+            ("SupplierContacts", "supplier_contact", SupplierContact, None),
+            ("SupplierAddresses", "supplier_address", SupplierAddress, address_payload),
+        ):
+            path = find_file(self.export_dir, prefix, ".csv")
+            if path is None:
+                self._result(entity).skip(f"{prefix} file not found")
+                continue
+            rows, _shifted = read_csv_records(path)
+            column = "Supplier" if model is SupplierContact else "Name"
+            await upsert_children(
+                self.session,
+                model=model,
+                owner_field="supplier_id",
+                owners=self.suppliers,
+                owner_key=_key,
+                rows=rows,
+                owner_column=column,
+                build=build or (lambda row: contact_payload(row, with_marketing=False)),
+                result=self._result(entity),
             )
-        else:
-            self._result("supplier_contact").skip("SupplierContacts file not found")
-        if addresses is not None:
-            rows, _shifted = read_csv_records(addresses)
-            self._result("supplier_address").skip(
-                "supplier stores name and currency only; addresses were not stored",
-                len(rows),
-            )
-        else:
-            self._result("supplier_address").skip("SupplierAddresses file not found")
 
     async def _load_locations(self) -> None:
         result = self._result("location")
@@ -969,9 +1026,9 @@ class Cin7Loader:
             if parent.id == component.id:
                 result.skip("BOM line names the parent as its own component")
                 continue
-            qty, reason = integral_qty(row.get("Quantity"))
-            if qty is None:
-                result.skip(f"BOM {reason}")
+            qty = money(row.get("Quantity"), "0.0001")
+            if qty is None or qty <= 0:
+                result.skip("BOM quantity is blank or not positive")
                 continue
             key = (parent.id, component.id)
             current = existing.get(key)
@@ -982,7 +1039,7 @@ class Cin7Loader:
                 self.session.add(current)
                 existing[key] = current
                 result.created += 1
-            elif current.qty == qty:
+            elif _dec_eq(Decimal(current.qty), qty):
                 result.unchanged += 1
             else:
                 current.qty = qty
@@ -1078,7 +1135,7 @@ class Cin7Loader:
             orders.skip("Sale_Order_Details file not found")
             lines.skip("Sale_Order_Details file not found")
             return
-        records, filled = read_xlsx_all(path)
+        records, filled = self._workbook(path)
         self.report.filled_down["Sale_Order_Details"] = filled
         existing = {
             row.so_number: row
@@ -1173,28 +1230,22 @@ class Cin7Loader:
     async def _load_invoices(self) -> None:
         invoices = self._result("tax_invoice")
         lines = self._result("invoice_line")
-        credits = self._result("credit_note")
+        credits = self._result("archive_credit_note")
         path = find_file(self.export_dir, "Sale_Documents", ".xlsx")
         if path is None:
             invoices.skip("Sale_Documents file not found")
             lines.skip("Sale_Documents file not found")
             credits.skip("Sale_Documents file not found")
             return
-        records, filled = read_xlsx_all(path)
+        records, filled = self._workbook(path)
         self.report.filled_down["Sale_Documents"] = filled
-        credit_docs: set[str] = set()
         invoice_rows: list[dict[str, str]] = []
         for row in records:
             number = row.get("Document #", "").strip()
             if number.upper().startswith("CR"):
-                credit_docs.add(number)
+                self._credit_rows.append(row)
                 continue
             invoice_rows.append(row)
-        if credit_docs:
-            credits.skip(
-                "credit note has no single linked tax invoice and must not post a reversal",
-                len(credit_docs),
-            )
         existing = {
             row.invoice_number: row
             for row in (
@@ -1257,6 +1308,99 @@ class Cin7Loader:
                 invoices.updated += 1
         await self.session.flush()
 
+    async def _load_archive_credit_notes(self) -> None:
+        """Store Cin7 ``CR-*`` documents as archive credit notes. No journal, no stock."""
+        notes = self._result("archive_credit_note")
+        lines = self._result("archive_credit_note_line")
+        if not self._credit_rows:
+            return
+        existing = {
+            row.document_number: row
+            for row in (
+                await self.session.scalars(
+                    select(ArchiveCreditNote).options(selectinload(ArchiveCreditNote.lines))
+                )
+            ).all()
+        }
+        for number, group in _group(self._credit_rows, "Document #"):
+            if len(number) > 64:
+                notes.skip("credit note number is longer than 64 characters")
+                lines.skip("credit note was skipped", len(group))
+                continue
+            issue = parse_date(group[0].get("Date"))
+            if issue is None:
+                notes.skip("credit note has no date")
+                lines.skip("credit note was skipped", len(group))
+                continue
+            customer = await self._ensure_customer(group[0].get("Customer", ""))
+            built = _credit_lines(group, self.skus, lines)
+            if not built:
+                notes.skip("credit note has no lines")
+                continue
+            subtotal = sum((line["ex_vat"] for line in built), ZERO)
+            vat = sum((line["vat_amount"] for line in built), ZERO)
+            total = sum((line["inc_vat"] for line in built), ZERO)
+            signature = [tuple(str(line[k]) for k in sorted(line)) for line in built]
+            customer_id = customer.id if customer else None
+            current = existing.get(number)
+            if current is not None:
+                current_sig = [
+                    tuple(
+                        str(v)
+                        for _k, v in sorted(
+                            {
+                                "description": line.description,
+                                "ex_vat": line.ex_vat,
+                                "inc_vat": line.inc_vat,
+                                "qty": line.qty,
+                                "sku_code": line.sku_code,
+                                "sku_id": line.sku_id,
+                                "vat_amount": line.vat_amount,
+                            }.items()
+                        )
+                    )
+                    for line in current.lines
+                ]
+                if (
+                    current.customer_id == customer_id
+                    and current.issue_date == issue
+                    and current_sig == signature
+                ):
+                    notes.unchanged += 1
+                    lines.unchanged += len(built)
+                    continue
+                current.customer_id = customer_id
+                current.issue_date = issue
+                current.subtotal_ex_vat = subtotal
+                current.vat_amount = vat
+                current.total_inc_vat = total
+                await self.session.execute(
+                    delete(ArchiveCreditNoteLine).where(
+                        ArchiveCreditNoteLine.credit_note_id == current.id
+                    )
+                )
+                notes.updated += 1
+            else:
+                current = ArchiveCreditNote(
+                    document_number=number,
+                    customer_id=customer_id,
+                    issue_date=issue,
+                    subtotal_ex_vat=subtotal,
+                    vat_amount=vat,
+                    total_inc_vat=total,
+                    source="cin7",
+                )
+                self.session.add(current)
+                await self.session.flush()
+                existing[number] = current
+                notes.created += 1
+            for index, line in enumerate(built):
+                self.session.add(
+                    ArchiveCreditNoteLine(credit_note_id=current.id, sort_order=index, **line)
+                )
+                lines.created += 1
+        await self.session.flush()
+
     async def _replace_invoice_lines(
         self, invoice: TaxInvoice, built: list[dict[str, object]]
     ) -> None:
@@ -1282,7 +1426,7 @@ class Cin7Loader:
         orders = self._result("sales_order")
         if path is None:
             return
-        records, filled = read_xlsx_all(path)
+        records, filled = self._workbook(path)
         self.report.filled_down["Sales_by_Product"] = filled
         links: dict[str, set[str]] = {}
         for row in records:
@@ -1326,7 +1470,7 @@ class Cin7Loader:
             orders.skip("Purchase_Order_Details file not found")
             lines.skip("Purchase_Order_Details file not found")
             return
-        records, filled = read_xlsx_all(path)
+        records, filled = self._workbook(path)
         self.report.filled_down["Purchase_Order_Details"] = filled
         existing = {
             row.po_number: row
@@ -1415,7 +1559,7 @@ class Cin7Loader:
             bills.skip("Purchase_Invoice_Details file not found")
             lines.skip("Purchase_Invoice_Details file not found")
             return
-        records, filled = read_xlsx_all(path)
+        records, filled = self._workbook(path)
         self.report.filled_down["Purchase_Invoice_Details"] = filled
         existing = {
             row.bill_number: row
@@ -1449,7 +1593,10 @@ class Cin7Loader:
             else:
                 fx = FX_ZERO
                 amount_zar = ZERO
-                bills.note("non-ZAR bill stored with fx_to_zar 0")
+                bills.note(
+                    "non-ZAR bill: currency and foreign amount kept, ZAR unknown (fx_rate_known false)"
+                )
+            fx_known = currency == "ZAR"
             current = existing.get(number)
             signature = [(line["description"], line["qty"], str(line["amount"])) for line in built]
             if current is None:
@@ -1464,13 +1611,14 @@ class Cin7Loader:
                     amount_zar=amount_zar,
                     amount_paid_zar=ZERO,
                     is_archive=True,
+                    fx_rate_known=fx_known,
                 )
                 self.session.add(current)
                 await self.session.flush()
                 existing[number] = current
                 bills.created += 1
                 await self._replace_bill_lines(current, built)
-            elif _bill_same(
+            elif current.fx_rate_known == fx_known and _bill_same(
                 current, supplier.id, issue, currency, fx, foreign, amount_zar, signature
             ):
                 bills.unchanged += 1
@@ -1483,6 +1631,7 @@ class Cin7Loader:
                 current.fx_to_zar = fx
                 current.amount_foreign = foreign
                 current.amount_zar = amount_zar
+                current.fx_rate_known = fx_known
                 current.amount_paid_zar = ZERO
                 current.is_archive = True
                 await self._replace_bill_lines(current, built)
@@ -1657,6 +1806,40 @@ def _invoice_lines(
                 "qty": qty,
                 "description": description,
                 "unit_ex_vat": unit,
+                "ex_vat": ex_vat,
+                "vat_amount": vat_amount,
+                "inc_vat": inc_vat,
+            }
+        )
+    return built
+
+
+def _credit_lines(
+    group: list[dict[str, str]],
+    skus: dict[str, Sku],
+    result: EntityResult,
+) -> list[dict[str, object]]:
+    """Credit lines keep Cin7's sign (negative) and fractional quantities as exported."""
+    built: list[dict[str, object]] = []
+    for row in group:
+        qty = money(row.get("Quantity"), "0.0001")
+        if qty is None or qty == 0:
+            result.skip("credit note line has no quantity")
+            continue
+        code = clip(row.get("SKU"), 128)
+        sku = skus.get(code) if code else None
+        ex_vat = money(row.get("Amount")) or ZERO
+        vat_amount = money(row.get("Tax")) or ZERO
+        inc_vat = money(row.get("Total"))
+        if inc_vat is None:
+            inc_vat = (ex_vat + vat_amount).quantize(Decimal("0.01"))
+        built.append(
+            {
+                "sku_id": sku.id if sku else None,
+                "sku_code": code,
+                "description": clip(row.get("Product"), 4000)
+                or (sku.name if sku else "Cin7 credit"),
+                "qty": qty,
                 "ex_vat": ex_vat,
                 "vat_amount": vat_amount,
                 "inc_vat": inc_vat,

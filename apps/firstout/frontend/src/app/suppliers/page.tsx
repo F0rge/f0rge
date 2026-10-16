@@ -16,6 +16,7 @@ import {
   TableRow,
   TextInput,
 } from "@carbon/react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -199,7 +200,13 @@ export default function SuppliersPage() {
                       tableRows.map((row) => (
                         <TableRow {...getRowProps({ row })} key={row.id}>
                           {row.cells.map((cell) => (
-                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                            <TableCell key={cell.id}>
+                              {cell.info.header === "name" ? (
+                                <Link href={`/suppliers/${row.id}`}>{cell.value}</Link>
+                              ) : (
+                                cell.value
+                              )}
+                            </TableCell>
                           ))}
                         </TableRow>
                       ))

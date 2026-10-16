@@ -84,7 +84,11 @@ def find_file(directory: Path, prefix: str, suffix: str) -> Optional[Path]:
     matches = sorted(
         path
         for path in directory.iterdir()
-        if path.is_file() and path.name.startswith(prefix) and path.name.lower().endswith(suffix)
+        if path.is_file()
+        # Cin7 names report workbooks with spaces ("Sale Documents_ALLTIME.xlsx");
+        # treat a space and an underscore as the same character.
+        and path.name.replace(" ", "_").startswith(prefix.replace(" ", "_"))
+        and path.name.lower().endswith(suffix)
     )
     if not matches:
         return None

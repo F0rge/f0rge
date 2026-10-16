@@ -16,6 +16,7 @@ from app.crud.purchase_order import LocationStockCRUD
 from app.crud.sales_order import SalesOrderCRUD
 from app.crud.sku import SkuCRUD
 from app.crud.sku_bom_line import SkuBomLineCRUD
+from app.services.sku_bom import whole_component_qty
 from app.crud.tax_invoice import TaxInvoiceCRUD
 from app.crud.team_settings import TeamSettingsCRUD
 from app.crud.transfer import TransferCRUD
@@ -521,9 +522,9 @@ class PickService:
         needs_map: dict[uuid.UUID, int] = {}
         for parent_id, qty in kit_qty_by_sku.items():
             for bom in bom_by_parent[parent_id]:
-                needs_map[bom.component_sku_id] = (
-                    needs_map.get(bom.component_sku_id, 0) + bom.qty * qty
-                )
+                needs_map[bom.component_sku_id] = needs_map.get(
+                    bom.component_sku_id, 0
+                ) + whole_component_qty(bom.qty, qty)
         return (
             kit_sku_id,
             kit_qty,
@@ -542,7 +543,11 @@ class PickService:
         if not bom:
             raise ValidationError("SKU is not a kit")
         needs = [
-            ComponentNeed(sku_id=line.component_sku_id, qty_needed=line.qty * qty) for line in bom
+            ComponentNeed(
+                sku_id=line.component_sku_id,
+                qty_needed=whole_component_qty(line.qty, qty),
+            )
+            for line in bom
         ]
         return sku, qty, needs
 

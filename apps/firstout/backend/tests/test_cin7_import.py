@@ -7,9 +7,13 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from app.commands.import_cin7 import assert_safe_database_url
+from app.models.archive_credit_note import ArchiveCreditNote
 from app.models.bill import Bill
+from app.models.cin7_party import SupplierContact
+from app.models.credit_note import CreditNote
 from app.models.inventory import LocationStock
 from app.models.journal import JournalEntry
 from app.models.purchase_order import PurchaseOrder
@@ -277,7 +281,7 @@ def _fixture_dir(root: Path) -> Path:
         ],
     )
     _write_xlsx(
-        root / "Sale_Documents_fixture.xlsx",
+        root / "Sale Documents_fixture.xlsx",
         ["Document #", "Customer", "Date", "SKU", "Product", "Quantity", "Amount", "Tax", "Total"],
         [
             ["INV-9001", "Fixture Buyer", "2024-01-03", "CHAIR-1", "Chair", 1, 100, 15, 115],
@@ -463,8 +467,7 @@ async def test_cin7_import_is_idempotent_and_does_not_post(async_db, tmp_path: P
     assert stock.on_hand == 2
 
     bom = (await async_db.execute(select(SkuBomLine))).scalars().all()
-    assert len(bom) == 1
-    assert bom[0].qty == 2
+    assert sorted(line.qty for line in bom) == [Decimal("0.5"), Decimal("2")]
 
     invoice = (
         await async_db.execute(select(TaxInvoice).where(TaxInvoice.invoice_number == "INV-9001"))
@@ -475,6 +478,15 @@ async def test_cin7_import_is_idempotent_and_does_not_post(async_db, tmp_path: P
         select(func.count()).select_from(TaxInvoice).where(TaxInvoice.invoice_number == "CR-9001")
     )
     assert credit == 0
+    archive_credit = (
+        await async_db.execute(
+            select(ArchiveCreditNote)
+            .where(ArchiveCreditNote.document_number == "CR-9001")
+            .options(selectinload(ArchiveCreditNote.lines))
+        )
+    ).scalar_one()
+    assert archive_credit.lines
+    assert await async_db.scalar(select(func.count()).select_from(CreditNote)) == 0
 
     purchase = (
         await async_db.execute(select(PurchaseOrder).where(PurchaseOrder.po_number == "PO-9001"))
@@ -489,20 +501,25 @@ async def test_cin7_import_is_idempotent_and_does_not_post(async_db, tmp_path: P
     assert bill.fx_to_zar == Decimal("0")
     assert bill.amount_zar == Decimal("0")
     assert bill.amount_foreign == Decimal("350.00")
+    assert bill.fx_rate_known is False
 
     journals_after = await async_db.scalar(select(func.count()).select_from(JournalEntry))
     assert journals_after == journals_before
 
     assert first.entity("sku").created == 3
-    assert first.entity("sku_bom_line").skipped == 1
+    assert first.entity("sku_bom_line").created == 2
     assert (
         first.entity("po_line").reasons["purchase order factory unit amount must be greater than 0"]
         == 1
     )
     assert first.entity("customer").reasons["stub customer created from a document name"] == 1
     assert first.entity("supplier").reasons["stub supplier created from a document name"] == 1
-    assert first.entity("credit_note").skipped == 1
-    assert first.entity("supplier_contact").skipped == 1
+    assert first.entity("archive_credit_note").created == 1
+    assert first.entity("supplier_contact").created == 1
+    assert first.entity("supplier_address").created == 1
+    assert first.entity("customer_contact").created >= 1
+    assert first.entity("customer_address").created >= 1
+    assert await async_db.scalar(select(func.count()).select_from(SupplierContact)) == 1
     assert first.customer_rows_realigned == 1
     assert first.filled_down["Sale_Order_Details"] == 2
 
@@ -514,6 +531,12 @@ async def test_cin7_import_is_idempotent_and_does_not_post(async_db, tmp_path: P
     assert second.entity("bill").created == 0
     assert second.entity("customer").created == 0
     assert second.entity("supplier").created == 0
+    changed = {
+        name: (result.created, result.updated)
+        for name, result in second.entities.items()
+        if result.created or result.updated
+    }
+    assert changed == {}
     sku_count = await async_db.scalar(
         select(func.count()).select_from(Sku).where(Sku.our_ref == "CHAIR-1")
     )

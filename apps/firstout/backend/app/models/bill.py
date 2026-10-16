@@ -32,6 +32,12 @@ class Bill(UUIDPkMixin, TimestampMixin, Base):
     fx_to_zar: Mapped[Decimal] = mapped_column(Numeric(14, 6), nullable=False)
     amount_foreign: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    # False when the bill is in a foreign currency and no ZAR rate is known (Cin7 history).
+    # Then ``fx_to_zar`` and ``amount_zar`` are 0 placeholders; ``currency`` and
+    # ``amount_foreign`` hold the original amount. APIs return ZAR as null.
+    fx_rate_known: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
     amount_paid_zar: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     pdf_storage_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
 

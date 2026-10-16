@@ -66,6 +66,16 @@ function componentLabel(skus: Sku[], id: string): string {
   return sku ? `${sku.our_ref} — ${sku.name}` : id;
 }
 
+/** Positive, at most 4 decimal places (fractional Cin7 components such as 0.5 m fabric). */
+export function isValidBomQty(value: number | ""): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    Math.abs(value * 10000 - Math.round(value * 10000)) < 1e-6
+  );
+}
+
 export function SkuBomEditor({
   sku,
   skus,
@@ -125,10 +135,10 @@ export function SkuBomEditor({
     () => skus.filter((entry) => entry.id !== sku?.id && !usedIds.has(entry.id)),
     [skus, sku?.id, usedIds],
   );
-  const qtyValid = typeof qty === "number" && Number.isInteger(qty) && qty >= 1;
+  const qtyValid = isValidBomQty(qty);
   const linesValid = lines.every(
     (line) =>
-      line.component_sku_id !== sku?.id && Number.isInteger(line.qty) && line.qty >= 1,
+      line.component_sku_id !== sku?.id && isValidBomQty(line.qty),
   );
 
   function addLine() {
@@ -195,12 +205,12 @@ export function SkuBomEditor({
           <NumberInput
             id="kit-bom-qty"
             label="Qty"
-            min={1}
-            step={1}
+            min={0.0001}
+            step={0.5}
             allowEmpty
             value={qty}
             invalid={qty !== "" && !qtyValid}
-            invalidText="Qty must be 1 or more"
+            invalidText="Qty must be more than 0, up to 4 decimal places"
             onChange={(_event, { value }) => {
               setQty(value === "" ? "" : Number(value));
             }}
