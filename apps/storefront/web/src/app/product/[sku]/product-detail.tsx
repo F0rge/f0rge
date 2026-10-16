@@ -7,11 +7,12 @@ import type { MedusaVariant, StoreProduct } from "@/lib/medusa";
 import { useProductAttention } from "@/components/analytics/use-product-attention";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
+import { formatCustomerPrice } from "@/lib/order-money";
 import { customerFacingCopy, purchaseFeedback } from "@/lib/purchase-feedback";
 
 function formatPrice(variant?: MedusaVariant): string {
   const amount = variant?.calculated_price?.calculated_amount;
-  return amount == null ? "Price unavailable" : new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(amount);
+  return amount == null ? "Price unavailable" : formatCustomerPrice(amount, variant?.calculated_price?.currency_code);
 }
 
 function selectedImages(product: StoreProduct, variant?: MedusaVariant): string[] {
@@ -130,7 +131,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
         }
         finally { setAdding(false); }
       }}>{adding ? "Adding…" : "Add to bag"}</Button>
-      <nav className="product-policy-links" aria-label="Purchase information"><Link href="/policies/delivery">Delivery & collection</Link><Link href="/policies/returns">Returns & refunds</Link></nav>
+      <nav className="product-policy-links" aria-label="Purchase information"><Link href="/policies/delivery">Delivery</Link><Link href="/policies/returns">Returns</Link><Link href="/policies/refunds">Refunds</Link></nav>
       {feedback && <p ref={feedbackRef} role={feedback.role} tabIndex={feedback.tabIndex} className="bag-feedback">{feedback.message}{!bagFailed && <> <Link href="/bag">View bag</Link></>}</p>}
     </div>
     </div>

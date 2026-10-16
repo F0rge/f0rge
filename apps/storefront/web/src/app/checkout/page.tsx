@@ -7,6 +7,7 @@ import { Checkbox, Select } from "@f0rge/ui/forms";
 import { useRouter } from "next/navigation";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
+import { formatCustomerPrice } from "@/lib/order-money";
 import { purchaseFeedback } from "@/lib/purchase-feedback";
 import type { Bag } from "@/lib/bag-server";
 
@@ -16,7 +17,7 @@ type PreparedCheckout = {
   provider_id?: string; redirect_url?: string | null;
 };
 type SavedAddress = { id: string; first_name?: string; last_name?: string; address_1?: string; address_2?: string; city?: string; province?: string; postal_code?: string; phone?: string };
-const money = (value: number, currency = "ZAR") => new Intl.NumberFormat("en-ZA", { style: "currency", currency }).format(value);
+const money = (value: number, currency?: string) => formatCustomerPrice(value, currency);
 const promiseDates = (from: string, by: string) => {
   const format = (value: string) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
   return from === by ? format(from) : `${format(from)} – ${format(by)}`;
@@ -165,7 +166,7 @@ export default function CheckoutPage() {
         {feedback && <p ref={errorRef} id="checkout-error" role={feedback.role} tabIndex={feedback.tabIndex} className="bag-error">{feedback.message}</p>}
         {checkout ? <div className="checkout-payment" data-testid={checkout.provider_id === "pp_peach_sandbox" ? "peach-payment-panel" : "test-payment-panel"}>
           <p className="eyebrow">{checkout.provider_id === "pp_peach_sandbox" ? "Secure hosted payment" : "Test payment only"}</p>
-          <h2>{money(total, checkout.currency_code.toUpperCase())}</h2>
+          <h2>{money(total, checkout.currency_code)}</h2>
           <p>{checkout.provider_id === "pp_peach_sandbox"
             ? "Continue to Peach Payments to complete your secure payment. Return here to check your order status."
             : "No real payment is taken. Choose an outcome to exercise the local simulator."} You can return to your private order status page to check for updates.</p>
@@ -224,13 +225,13 @@ export default function CheckoutPage() {
       </section>
       <aside className="checkout-summary">
         <p className="eyebrow">Order summary</p>
-        {bag?.items.map((item) => <div className="checkout-summary-line" key={item.id}><span>{item.title} × {item.quantity}{item.fulfillment_promise?.kind === "made_to_order" && <small>Made to order · {promiseDates(item.fulfillment_promise.estimated_from, item.fulfillment_promise.estimated_by)}</small>}</span><strong>{money(item.total)}</strong></div>)}
+        {bag?.items.map((item) => <div className="checkout-summary-line" key={item.id}><span>{item.title} × {item.quantity}{item.fulfillment_promise?.kind === "made_to_order" && <small>Made to order · {promiseDates(item.fulfillment_promise.estimated_from, item.fulfillment_promise.estimated_by)}</small>}</span><strong>{money(item.total, bag.currency_code)}</strong></div>)}
         {bag?.hold?.fulfillment_promise && <div className="checkout-fulfillment-promise" role="status" data-testid="checkout-fulfillment-promise">
           <strong>One fulfillment promise for your full order</strong>
           <p>{bag.hold.fulfillment_promise.kind === "mixed" ? "All pieces will be fulfilled together when the made-to-order pieces are ready." : bag.hold.fulfillment_promise.kind === "made_to_order" ? "This order is made to order." : "All pieces are in stock."}</p>
           <p>Estimated ready {promiseDates(bag.hold.fulfillment_promise.estimated_from, bag.hold.fulfillment_promise.estimated_by)}.</p>
         </div>}
-        <dl><dt>Bag total incl. VAT</dt><dd>{money(bag?.total || 0)}</dd><dt>Final total incl. VAT</dt><dd data-testid="checkout-total">{money(total)}</dd></dl>
+        <dl><dt>Bag total incl. VAT</dt><dd>{money(bag?.total || 0, bag?.currency_code)}</dd><dt>Final total incl. VAT</dt><dd data-testid="checkout-total">{money(total, checkout?.currency_code ?? bag?.currency_code)}</dd></dl>
         <p>Prices, availability and delivery are confirmed before payment. You can review any changes before continuing.</p>
         <p>Availability is reserved until {bag?.hold?.expires_at ? new Date(bag.hold.expires_at).toLocaleTimeString("en-ZA") : "your hold expires"}.</p>
       </aside>

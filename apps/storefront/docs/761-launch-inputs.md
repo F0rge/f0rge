@@ -10,10 +10,10 @@ No owner pack was supplied on 2026-10-05. Assessing the absent pack returns
 
 | Section | Code | What is still missing |
 | --- | --- | --- |
-| Business identity | `business_identity_unconfirmed` | Legal entity, trading name, contact address, VAT position, dedicated support mailbox, named daily reconciliation and support operator, escalation availability, and a recorded owner confirmation. The software name Firstout is not that identity. |
+| Business identity | `business_identity_unconfirmed` | Legal entity, trading name, contact address, phone, company registration number, VAT position, dedicated support mailbox, named daily reconciliation and support operator, escalation availability, and a recorded owner confirmation. The software name Firstout is not that identity. |
 | Catalogue | `catalogue_not_approved` | An owner-approved set of 30–80 sellable variants. Each needs a durable SKU, product group, option combination, VAT-inclusive ZAR price, dimensions, material, care, useful copy, at least three licensed photos of that finish, and an explicit wrong-finish review. |
 | Availability and fulfilment | `availability_unconfirmed` | Finite physical stock or a finite, unexpired made-to-order allowance with a confirmed lead-time range; Gauteng zones and VAT-inclusive rates; collection location and instructions; recorded approval of the single mixed-cart promise (slowest line, no split shipment). |
-| Policies and skin | `policies_unreviewed` | Reviewed delivery, cancellation/returns/refund, and privacy content; Information Officer and PAIA baseline; cancellation text that distinguishes standard made-to-order from bespoke goods; one final Vellano skin. |
+| Policies and skin | `policies_unreviewed` | Reviewed delivery, terms, separate refund and return policies, and privacy content (information collected, operators, retention); Information Officer and PAIA baseline; refund and return text that distinguishes standard made-to-order from bespoke goods; one final Vellano skin. |
 | Provisioning | `provisioning_incomplete` | A checklist for Clerk, Peach, email, PostHog, Railway, and the temporary hostname. Each entry identifies whether access is authorized, whether test and live are separated, and what onboarding remains. No secret values and no customer export. |
 
 The ten Vellano skins remain alternatives. None is selected for launch:

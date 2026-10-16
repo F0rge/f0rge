@@ -7,6 +7,7 @@ import { useStorefrontAnalytics } from "@/components/analytics/analytics-provide
 import { ANALYTICS_CUSTOMER_TYPE_HEADER } from "@/lib/analytics/attribution";
 import { confirmedPaymentStep } from "@/lib/analytics/commerce-events";
 import { fulfillmentStatusLabel } from "@/lib/order-fulfillment";
+import { formatCustomerPrice } from "@/lib/order-money";
 
 type Confirmation = {
   status: "captured" | "pending" | "processing" | "declined" | "cancelled" | "paid_exception" | "unknown";
@@ -43,7 +44,7 @@ type Confirmation = {
     address: { first_name: string; last_name: string; address_1: string; address_2?: string; city: string; province: string; postal_code: string } | null;
   };
 };
-const money = (value: number, currency = "ZAR") => new Intl.NumberFormat("en-ZA", { style: "currency", currency }).format(value);
+const money = (value: number, currency?: string) => formatCustomerPrice(value, currency);
 const refundLabels: Record<string, string> = {
   pending: "Refund is processing",
   succeeded: "Refund sent",
@@ -136,10 +137,10 @@ export default function OrderConfirmationPage() {
               ? `Ready ${item.fulfillment_promise.estimated_by}`
               : `Ready ${item.fulfillment_promise.estimated_from} – ${item.fulfillment_promise.estimated_by}`}
           </small>}</span>
-          <strong>{money(item.total, result.order!.currency_code.toUpperCase())}</strong>
+          <strong>{money(item.total, result.order!.currency_code)}</strong>
         </div>)}
-        {result.order.shipping.map((method, index) => <div className="checkout-summary-line" key={method.name + "-" + index}><span>{method.name}</span><strong>{money(method.total, result.order!.currency_code.toUpperCase())}</strong></div>)}
-        <dl><dt>Subtotal</dt><dd>{money(result.order.subtotal, result.order.currency_code.toUpperCase())}</dd><dt>VAT included</dt><dd>{money(result.order.tax_total, result.order.currency_code.toUpperCase())}</dd><dt>Total paid</dt><dd>{money(result.order.total, result.order.currency_code.toUpperCase())}</dd></dl>
+        {result.order.shipping.map((method, index) => <div className="checkout-summary-line" key={method.name + "-" + index}><span>{method.name}</span><strong>{money(method.total, result.order!.currency_code)}</strong></div>)}
+        <dl><dt>Subtotal</dt><dd>{money(result.order.subtotal, result.order.currency_code)}</dd><dt>VAT included</dt><dd>{money(result.order.tax_total, result.order.currency_code)}</dd><dt>Total paid</dt><dd>{money(result.order.total, result.order.currency_code)}</dd></dl>
         {result.order.refund_status?.items.length ? <section aria-live="polite">
           <h2>Refund status</h2>
           {result.order.refund_status.items.map((refund, index) => <p key={`${refund.status}-${refund.amount_minor}-${index}`} role="status">

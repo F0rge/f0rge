@@ -40,12 +40,21 @@ export type CustomerPolicies = {
   trading_name: string;
   contact_address: string;
   support_mailbox: string;
+  phone: string;
+  company_registration_number: string;
+  vat_registered: boolean;
+  vat_number: string;
   delivery: string;
   collection_location: string;
   collection_instructions: string;
   gauteng_zones: { name: string; rate_zar_incl_vat: string }[];
-  cancellation_returns_refund: string;
+  terms: string;
+  refund_policy: string;
+  return_policy: string;
   privacy: string;
+  data_collected: string;
+  processors: string;
+  retention: string;
   information_officer_name: string;
   information_officer_responsibilities: string;
   paia_baseline: string;
@@ -184,6 +193,10 @@ export function publishedCustomerPolicies(pack: unknown, now: Date = new Date())
     trading_name: String(business.trading_name),
     contact_address: String(business.contact_address),
     support_mailbox: String(business.support_mailbox),
+    phone: String(business.phone),
+    company_registration_number: String(business.company_registration_number),
+    vat_registered: business.vat_registered === true,
+    vat_number: typeof business.vat_number === "string" ? business.vat_number : "",
     delivery: String(policies.delivery),
     collection_location: String(collection.location),
     collection_instructions: String(collection.instructions),
@@ -192,8 +205,13 @@ export function publishedCustomerPolicies(pack: unknown, now: Date = new Date())
       if (!item) return [];
       return [{ name: String(item.name), rate_zar_incl_vat: String(item.rate_zar_incl_vat) }];
     }),
-    cancellation_returns_refund: String(policies.cancellation_returns_refund),
+    terms: String(policies.terms),
+    refund_policy: String(policies.refund_policy),
+    return_policy: String(policies.return_policy),
     privacy: String(policies.privacy),
+    data_collected: String(policies.data_collected),
+    processors: String(policies.processors),
+    retention: String(policies.retention),
     information_officer_name: String(policies.information_officer_name),
     information_officer_responsibilities: String(policies.information_officer_responsibilities),
     paia_baseline: String(policies.paia_baseline),

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { PolicyArticle } from "@/components/policy-article";
 import { currentCustomerPolicies, policyPage, type PolicySection } from "@/lib/customer-policies";
 import { storefrontIndexable } from "@/lib/launch-indexing";
 
-const SECTIONS = new Set<PolicySection>(["delivery", "returns", "privacy"]);
+const SECTIONS = new Set<PolicySection>(["delivery", "returns", "refunds", "terms", "privacy"]);
 
 type PolicyPageProps = { params: Promise<{ section: string }> };
 
@@ -27,9 +28,5 @@ export default async function PolicySectionPage({ params }: PolicyPageProps) {
   const section = sectionOf((await params).section);
   if (!section) notFound();
   const page = policyPage(currentCustomerPolicies(), section);
-  return <article className="content policy-page">
-    <p className="eyebrow">Vellano</p>
-    <h1>{page.title}</h1>
-    {page.paragraphs.map((paragraph, index) => <p key={`${section}-${index}`}>{paragraph}</p>)}
-  </article>;
+  return <PolicyArticle page={page} section={section} />;
 }

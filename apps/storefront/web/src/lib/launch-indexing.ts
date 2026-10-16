@@ -21,11 +21,21 @@ function isPrivatePath(path: string): boolean {
   return PRIVATE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
+export const PUBLIC_INFO_PATHS = [
+  "/support",
+  "/contact",
+  "/policies/delivery",
+  "/policies/returns",
+  "/policies/refunds",
+  "/policies/terms",
+  "/policies/privacy",
+] as const;
+
 export function catalogueIndexable(pathname: string, env: IndexingEnv = process.env): boolean {
   if (!storefrontIndexable(env)) return false;
   const path = pathOnly(pathname);
   if (isPrivatePath(path)) return false;
-  return path === "/" || path === "/shop" || path === "/collections" || path === "/support" ||
+  return path === "/" || path === "/shop" || path === "/collections" || path === "/support" || path === "/contact" ||
     path.startsWith("/product/") || path.startsWith("/policies/");
 }
 
@@ -39,15 +49,7 @@ export function sitemapPaths(input: {
   collections: { handle: string }[];
 }): string[] {
   if (!input.indexable) return [];
-  const paths = [
-    "/",
-    "/shop",
-    "/collections",
-    "/support",
-    "/policies/delivery",
-    "/policies/returns",
-    "/policies/privacy",
-  ];
+  const paths = ["/", "/shop", "/collections", ...PUBLIC_INFO_PATHS];
   input.collections.forEach((collection) => {
     paths.push(`/shop?collection=${encodeURIComponent(collection.handle)}`);
   });
