@@ -6,13 +6,153 @@ Parses VisionResult + prompt constants; optionally parses the DAG if airflow is 
 from __future__ import annotations
 
 import ast
+import email.message
+import importlib.machinery
 import importlib.util
+import io
+import logging
+import sys
+import types
+import urllib.error
 from pathlib import Path
 
 import pytest
 
 DAG_PATH = Path(__file__).resolve().parents[2] / "dags" / "classify_meal.py"
 SCHEMA_PATH = DAG_PATH.with_name("_vision_schema.py")
+
+
+def _ensure_module(name: str) -> types.ModuleType:
+    existing = sys.modules.get(name)
+    if existing is not None and getattr(existing, "__spec__", None) is not None:
+        return existing
+    module = existing if existing is not None else types.ModuleType(name)
+    module.__path__ = []  # type: ignore[attr-defined]
+    module.__package__ = name
+    # find_spec() raises if a sys.modules entry has __spec__ is None.
+    module.__spec__ = importlib.machinery.ModuleSpec(name, loader=None, is_package=True)
+    sys.modules[name] = module
+    return module
+
+
+def _install_airflow_stubs() -> type[Exception]:
+    """Enough of Airflow for classify_meal to import without the runtime."""
+    airflow = _ensure_module("airflow")
+    exceptions = _ensure_module("airflow.exceptions")
+
+    class AirflowSkipException(Exception):
+        pass
+
+    exceptions.AirflowSkipException = AirflowSkipException  # type: ignore[attr-defined]
+    airflow.exceptions = exceptions  # type: ignore[attr-defined]
+
+    sdk = _ensure_module("airflow.sdk")
+
+    def dag(**_kwargs):
+        def deco(fn):
+            return fn
+
+        return deco
+
+    class _Arrow:
+        def __rshift__(self, other):
+            return other
+
+        def __rrshift__(self, other):
+            return self
+
+    def task(fn):
+        def _call(*_args, **_kwargs):
+            return _Arrow()
+
+        return _call
+
+    sdk.dag = dag  # type: ignore[attr-defined]
+    sdk.task = task  # type: ignore[attr-defined]
+
+    for name in (
+        "airflow.providers",
+        "airflow.providers.common",
+        "airflow.providers.common.ai",
+        "airflow.providers.common.ai.operators",
+    ):
+        _ensure_module(name)
+    operators = _ensure_module("airflow.providers.common.ai.operators.llm_file_analysis")
+
+    class LLMFileAnalysisOperator:
+        def __init__(self, **kwargs):
+            self.output = object()
+            self.task_id = kwargs.get("task_id")
+
+        def __rshift__(self, other):
+            return other
+
+        def __rrshift__(self, other):
+            return self
+
+    operators.LLMFileAnalysisOperator = LLMFileAnalysisOperator  # type: ignore[attr-defined]
+    return AirflowSkipException
+
+
+def _load_classify_meal():
+    if importlib.util.find_spec("airflow") is None:
+        _install_airflow_stubs()
+    dag_dir = str(DAG_PATH.parent)
+    if dag_dir not in sys.path:
+        sys.path.insert(0, dag_dir)
+    spec = importlib.util.spec_from_file_location("classify_meal_under_test", DAG_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _http_error(code: int) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError(
+        "http://marrow.test/meal-analysis",
+        code,
+        "error",
+        email.message.Message(),
+        io.BytesIO(b'{"detail":"superseded"}'),
+    )
+
+
+@pytest.mark.parametrize("status_code", [410, 404])
+def test_classify_callback_superseded_status_skips(monkeypatch, caplog, status_code: int):
+    """complete/fail 410 (and legacy 404) skip the task instead of failing the DAG."""
+    module = _load_classify_meal()
+    monkeypatch.setenv("MARROW_DEV_API_BASE_URL", "http://marrow.test")
+    monkeypatch.setenv("MARROW_DEV_AIRFLOW_SERVICE_TOKEN", "token")
+
+    def _raise(*_args, **_kwargs):
+        raise _http_error(status_code)
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", _raise)
+    from airflow.exceptions import AirflowSkipException
+
+    path = "/api/v1/internal/airflow/meal-analysis/7/complete"
+    with caplog.at_level(logging.INFO, logger="_superseded"):
+        with pytest.raises(AirflowSkipException, match="superseded"):
+            module._marrow_request("POST", path, body={"user_id": "abc"})
+    assert f"returned {status_code}" in caplog.text
+    assert "skipping superseded meal analysis" in caplog.text
+
+
+def test_classify_callback_other_http_errors_still_fail(monkeypatch):
+    module = _load_classify_meal()
+    monkeypatch.setenv("MARROW_DEV_API_BASE_URL", "http://marrow.test")
+    monkeypatch.setenv("MARROW_DEV_AIRFLOW_SERVICE_TOKEN", "token")
+
+    def _raise(*_args, **_kwargs):
+        raise _http_error(500)
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", _raise)
+    with pytest.raises(RuntimeError, match="-> 500"):
+        module._marrow_request(
+            "POST",
+            "/api/v1/internal/airflow/meal-analysis/7/fail",
+            body={"error_message": "boom"},
+        )
 
 
 def test_classify_meal_dag_file_parses():

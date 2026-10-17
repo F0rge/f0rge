@@ -8,6 +8,7 @@ from f0rge_core.exceptions import (
     ConflictError,
     DomainError,
     ExternalServiceError,
+    GoneError,
     NotFoundError,
     UnauthorizedError,
     ValidationError,
@@ -16,6 +17,7 @@ from f0rge_core.handlers import register_exception_handlers
 
 CASES = [
     (NotFoundError, 404),
+    (GoneError, 410),
     (ValidationError, 400),
     (ConflictError, 409),
     (UnauthorizedError, 401),
