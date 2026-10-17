@@ -14,6 +14,8 @@ import os
 import argparse
 
 BASE = os.path.dirname(os.path.abspath(__file__))
+import fees  # noqa: E402
+import market  # noqa: E402
 import storage  # noqa: E402
 
 DB = storage.DB
@@ -220,28 +222,6 @@ def fetch_detail(c, i, slug):
     return rec
 
 
-STOPB = set(
-    "road gravel bike bicycle disc disk di2 etap axs ultegra dura ace dura-ace 105 grx sram shimano campagnolo rival force red apex tiagra sora claris super record chorus centaur ekar potenza edition team limited the and with carbon alu aluminium aluminum frameset complete new mechanical hydraulic hrd ltd 1x 2x 11 12 speed 12s 11s rim custom size cm".split()
-)
-STOPW = set(
-    "complete wheels wheel wheelset wheelsets laufradsatz laufräder laufrad set pair paire de roues ruote coppia par ruedas disc disk disco brake brakes rim rims carbon carbone carbono alloy aluminium aluminum alu tubeless tubular clincher tle tl cl centerlock center centre lock 6-bolt 6 bolt 700c 700 28 29 27.5 650b 26 zoll inch mm thru axle ta qr shimano sram hg xdr xd 11s 12s 11 12 speed road gravel mtb new with and for the front rear tyres tires tyre tire freehub hub hubs body only".split()
-)
-WBR = {"1430": "disc", "1431": "rim"}
-WMAT = {"1433": "carbon", "1432": "aluminium", "1434": "steel"}
-WSYS = {"1435": "tubeless", "1436": "tubular", "1437": "clincher"}
-
-
-def model_key(kind, name, brand):
-    b = brand.lower()
-    n = " " + name.lower() + " "
-    for w in b.split():
-        n = re.sub(r"(?<![a-z0-9])" + re.escape(w) + r"(?![a-z0-9])", " ", n)
-    n = re.sub(r"\b(19|20)\d\d\b", " ", n)
-    n = re.sub(r"(\d+)\s*mm\b", r"\1", n)
-    toks = [w for w in re.findall(r"[a-z0-9.+-]+", n) if w not in (STOPW if kind == "wheels" else STOPB) and w.strip(".-+")]
-    return " ".join(toks[: 3 if kind == "wheels" else 2])
-
-
 def build(c, kind, today):
     cmap = dict(c.execute("select cid,country from country_map").fetchall())
     rows = [
@@ -256,28 +236,13 @@ def build(c, kind, today):
         hist[r[0]].append((r[1], r[2]))
     L = []
     for r in rows:
-        sp = json.loads(r["spec"] or "{}")
-        s = sp.get("spec") or {}
-        if kind == "wheels" and s.get("wheel-type") not in ("1372", None):
-            continue
-        r["mk"] = model_key(kind, r["name"], r["brand"])
-        r["bk"] = r["brand"].lower()
-        r["brake"] = WBR.get(s.get("complete-wheels-brakes-type"), "") if kind == "wheels" else ""
-        r["mat"] = WMAT.get(s.get("rim-material"), "") if kind == "wheels" else ""
-        r["wsys"] = WSYS.get(s.get("wheel-system"), "") if kind == "wheels" else ""
-        r["cat"] = sp.get("cat") or ""
-        r["comp"] = sp.get("comp") or ""
-        L.append(r)
-    act = [r for r in L if not r["gone_at"]]
-    G = collections.defaultdict(list)
-    for r in act:
-        if r["mk"]:
-            G[(r["bk"], r["mk"], r["brake"], r["mat"])].append(r)
+        if market.annotate(r, kind):
+            L.append(r)
+    comp_map = market.comparable_listings(L, kind)
     now = time.time()
     D = []
     for r in L:
-        g = G.get((r["bk"], r["mk"], r["brake"], r["mat"]), [])
-        comps = [x for x in g if x["id"] != r["id"] and (kind == "wheels" or r["year"] is None or x["year"] is None or abs(x["year"] - r["year"]) <= 1)]
+        comps = comp_map[r["id"]]
         ref = st.median(x["price"] for x in comps) if len(comps) >= 3 else None
         disp = None
         if len(comps) >= 4:
@@ -469,12 +434,12 @@ def write_split(kind, meta, items, models):
         return [x.get(k) if x.get(k) not in ("", []) else None for k in COLS]
 
     o = OUT[kind]
-    dflt = (0.025, 0, 125, 75 + 50, 0.0695) if kind == "bikes" else (0.06, 1, 25, 30, 0)
 
     def pf(x):
-        if x["r"] is None:
+        est = fees.estimate_net_margin(kind, x["p"], x["r"])
+        if est is None:
             return -1e9
-        return x["r"] * 0.95 * (1 - dflt[4]) - (x["p"] * (1 + dflt[0]) + dflt[1] + dflt[2] + dflt[3])
+        return est["net_margin_eur"]
 
     hard = {"too-good-to-be-true", "implausibly low price", "zero-review seller"}
     top = sorted([x for x in items if not x["g"] and not (hard & set(x["rk"]))], key=lambda x: -pf(x))[:300]
@@ -485,11 +450,8 @@ def write_split(kind, meta, items, models):
 
 
 def alerts(kind, D, today, had_prior):
-    # default cost model mirrors the UI defaults
-    if kind == "bikes":
-        bp, bpf, ship_in, ship_out, sell, pack, buf, minp = 0.025, 0, 125, 0, 0.0695, 0, 75, 300
-    else:
-        bp, bpf, ship_in, ship_out, sell, pack, buf, minp = 0.06, 1, 25, 0, 0, 10, 20, 100
+    # Thresholds stay here; the cost model is fees.estimate_net_margin (dashboard defaults).
+    minp = 300 if kind == "bikes" else 100
     out = []
     for x in D:
         if x["g"] or x["r"] is None or x["nc"] < 5:
@@ -498,10 +460,9 @@ def alerts(kind, D, today, had_prior):
         dropped = len(x["h"]) > 1 and x["h"][-1][0] == today and x["h"][-1][1] < x["h"][-2][1]
         if not (is_new or dropped):
             continue
-        sale = x["r"] * 0.95
-        cost = x["p"] * (1 + bp) + bpf + ship_in + pack + buf
-        profit = sale * (1 - sell) - ship_out - cost
-        roi = profit / cost * 100
+        est = fees.estimate_net_margin(kind, x["p"], x["r"])
+        profit = est["net_margin_eur"]
+        roi = est["roi_pct"]
         hard = {"too-good-to-be-true", "implausibly low price", "zero-review seller"} & set(x["rk"])
         if profit >= minp and roi >= 15 and not hard:
             out.append(

@@ -3,6 +3,9 @@ import sys
 import os
 import re
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tracker"))
+import fees  # noqa: E402
+
 T = open(sys.argv[1] if len(sys.argv) > 1 else "index.tpl.html").read()
 OCT = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor", "octicons.json")))
 svg = lambda n: f'<svg class="octicon" viewBox="0 0 16 16" width=16 height=16 aria-hidden=true fill=currentColor>{OCT[n]}</svg>'
@@ -59,7 +62,7 @@ K = {
     "bikes": dict(
         title="Buycycle road & gravel bikes — resale deal finder",
         refx=", model year ±1",
-        defaults=dict(bp=2.5, bpf=0, pay=0, shipin=125, pack=0, repair=50, buffer=75, haircut=5, sellfee=6.95, shipout=0, relist=0),
+        defaults=fees.ASSUMPTIONS["bikes"],
         fee='Defaults from buycycle\'s fee page (<a href="https://buycycle.com/en-de/page/fees" target=_blank>buycycle.com/en-de/page/fees</a>, checked 17 Oct 2026, EU): buyer protection 2.5% of price for bikes; shipping €99–149 for bikes (default €125 midpoint-ish; local pickup is free); seller protection fee 6.95% of sale price for bikes; listing free; boost optional and dynamic; buycycle packaging is free for bike sellers (<a href="https://buycycle.zendesk.com/hc/en-us/articles/20389854670225-seller-fees" target=_blank>seller-fee help article</a>); no extra payment fee except FX when not paying in EUR; buyer pays the outbound shipping on resale, so outbound defaults to €0. €75 cancellation fee applies to whoever cancels.',
         extra="",
         ejs=[],
@@ -67,7 +70,7 @@ K = {
     "wheels": dict(
         title="Buycycle wheelsets — resale deal finder",
         refx=", brake type and rim material, tyre system where ≥3",
-        defaults=dict(bp=6, bpf=1, pay=0, shipin=25, pack=10, repair=0, buffer=20, haircut=5, sellfee=0, shipout=0, relist=0),
+        defaults=fees.ASSUMPTIONS["wheels"],
         fee='Defaults from buycycle\'s fee page (<a href="https://buycycle.com/en-de/page/fees" target=_blank>buycycle.com/en-de/page/fees</a>, checked 17 Oct 2026, EU): buyer protection for parts 6% + €1; selling parts is free (0% seller fee); parts shipping "varies by size & location" (default €25 is an assumption — check the checkout total); packaging for parts is not supplied, default €10; no payment fee except FX.',
         extra='<label>Brake<select id=fk><option value="">All</option></select></label><label>Rim<select id=fm><option value="">All</option></select></label><label>Tyre system<select id=fw><option value="">All</option></select></label>',
         ejs=[dict(id="fk", k="k", label="Brake"), dict(id="fm", k="mt", label="Rim"), dict(id="fw", k="w", label="Tyre system")],

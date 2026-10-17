@@ -1,7 +1,10 @@
+import json
 import os
 import sqlite3
 import subprocess
 import sys
+
+import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.dirname(HERE)
@@ -38,6 +41,41 @@ def test_migration_copies_all_rows(tmp_path):
     assert r2.returncode != 0
 
 
+def test_fee_config_matches_dashboard_formula():
+    import fees
+
+    bikes = fees.estimate_net_margin("bikes", 1000, 2400)
+    sale = 2400 * (1 - 5 / 100)
+    cost = 1000 * (1 + 2.5 / 100) + 0 + 125 + 0 + 50 + 75
+    net = sale * (1 - 6.95 / 100) - cost
+    assert bikes["margin_label"] == "estimate"
+    assert bikes["net_margin_eur"] == pytest.approx(net)
+    assert bikes["roi_pct"] == pytest.approx(net / cost * 100)
+    assert fees.estimate_net_margin("bikes", 1000, None) is None
+    wheels = fees.estimate_net_margin("wheels", 100, 200)
+    wheel_cost = 100 * (1 + 6 / 100) + 1 + 25 + 10 + 20
+    assert wheels["net_margin_eur"] == pytest.approx(200 * 0.95 - wheel_cost)
+
+
+def test_reference_cohort_matches_dashboard_rules():
+    import market
+
+    rows = []
+    for listing_id, year, price, gone in (
+        ("1", 2020, 1000, None),
+        ("2", 2020, 1200, None),
+        ("3", 2021, 1400, None),
+        ("4", 2020, 1600, "2026-10-01"),
+        ("5", 2010, 500, None),
+    ):
+        row = {"id": listing_id, "name": "Canyon Endurace CF", "brand": "Canyon", "year": year, "price": price, "gone_at": gone, "spec": "{}"}
+        assert market.annotate(row, "bikes")
+        rows.append(row)
+    comps = market.comparable_listings(rows, "bikes")
+    assert sorted(item["id"] for item in comps["1"]) == ["2", "3"]
+    assert comps["5"] == []
+
+
 def test_render_is_responsive_and_has_no_toggle(tmp_path):
     r = subprocess.run(
         [sys.executable, os.path.join(APP, "dashboard", "render.py"), os.path.join(APP, "dashboard", "index.tpl.html"), str(tmp_path)],
@@ -50,6 +88,12 @@ def test_render_is_responsive_and_has_no_toggle(tmp_path):
         assert "__" + "KIND__" not in html and "__OCT_" not in html
         assert "data-viewbtn" not in html and "toggle mobile/desktop" not in html
         assert "<style" not in html
+    import fees
+
+    bikes_html = (tmp_path / "index-bikes.html").read_text()
+    wheels_html = (tmp_path / "index-wheels.html").read_text()
+    assert json.dumps(fees.ASSUMPTIONS["bikes"]) in bikes_html
+    assert json.dumps(fees.ASSUMPTIONS["wheels"]) in wheels_html
 
 
 def test_no_feed_key_in_source():

@@ -109,6 +109,7 @@ function writeHash(){const h=new URLSearchParams();F.forEach(f=>{const v=FV[f[0]
  if(TAB=='insights'&&$('msel').value)h.set('m',$('msel').value);history.replaceState(null,'','#'+h)}
 // ---------- data ----------
 function unpack(d){return d.rows.map(r=>{const x={};d.cols.forEach((c,j)=>{if(r[j]!=null)x[c]=r[j]});x.u=PFX+x.u;x.rk=x.rk||[];x._s=(x.n+' '+x.b+' '+(x.cp||'')+' '+(x.ct||'')+' '+(x.m||'')).toLowerCase();calc(x);return x})}
+// Same formula as tracker/fees.py estimate_net_margin. Numbers come from DEF (that module).
 function calc(x){x.pf=x.roi=null;if(x.r==null)return;const sale=x.r*(1-C.haircut/100),cost=x.p*(1+C.bp/100)+C.bpf+x.p*C.pay/100+C.shipin+C.pack+C.repair+C.buffer;
  x.pf=sale*(1-C.sellfee/100)-C.shipout-C.relist-cost;x.roi=x.pf/cost*100}
 const getModels=()=>MODELS?Promise.resolve(MODELS):fetch('models.json').then(r=>r.json()).then(m=>MODELS=m);
