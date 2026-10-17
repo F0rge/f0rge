@@ -34,7 +34,9 @@ _FODMAP_COLUMNS_NO_LACTOSE = (
 
 
 class PhotoScores(BaseModel):
-    histamine_load: int  # sum of histamine_score across confirmed ingredients
+    # Dose sum of every confirmed histamine_score, including scores below
+    # HISTAMINE_FLAG_THRESHOLD. The check-in pill counts sources instead.
+    histamine_load: int
     fodmap_count: int  # count of ingredients with any subcategory == "high"
     gluten_count: int  # count of ingredients with contains_gluten = true
     dairy_count: int  # count of ingredients with contains_dairy = true
