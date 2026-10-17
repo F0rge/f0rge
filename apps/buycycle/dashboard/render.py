@@ -42,6 +42,7 @@ T = T.replace(
     ),
 )
 OUTP = sys.argv[2] if len(sys.argv) > 2 else "."
+os.makedirs(OUTP, exist_ok=True)
 SRC = """<h2>What resale specialists track, and where it shows up here</h2>
 <ul class=src>
 <li><b>Net profit and ROI after <i>all</i> costs</b> — resellers rank by money left after fees, shipping, packaging, repairs and returns, and ROI = net profit ÷ total cost (<a href="https://scanflip.ai/blog/return-on-investment-metrics/" target=_blank>Scanflip: ROI metrics resellers use</a>; <a href="https://getpricebird.com/guides/reseller-profit-margin-calculator/" target=_blank>Pricebird: profit-margin calculator guide</a>). <i>Shown as:</i> € profit and ROI columns (default sort), editable Cost assumptions tab, Profit-vs-ROI scatter.</li>

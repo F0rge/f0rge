@@ -19,11 +19,11 @@ Pi: aarch64, Coolify v4.0.0-beta.473 (Scheduled Tasks available). Internal only.
 | Health check | Dockerfile HEALTHCHECK (curls 8095/8096 inside the container) |
 
 Then:
-- Put the app UUID into `.github/deploy/manifest.yml` (`components.buycycle.coolify.app_uuid`, currently a TODO placeholder). That's a small PR.
+- App UUID `xi0qwpbyl2d8gf8u3xl13jkv` is set in `.github/deploy/manifest.yml`.
 - Copy the app's manual GitHub webhook secret into the GitHub Actions secret `COOLIFY_WEBHOOK_BUYCYCLE`. Until that's set, the deploy job skips cleanly.
 
 ## 2. Scheduled task (Coolify → app → Scheduled Tasks)
-- Name `buycycle-tracker`, command `/app/run-tracker.sh`, frequency `15 6 * * *`. Check that the Coolify server timezone is Europe/Luxembourg; otherwise use the UTC equivalent.
+- Name `buycycle-tracker`, command `/app/run-tracker.sh`, frequency **`15 4,5 * * *`** (Coolify cron runs in UTC). That's 04:15 and 05:15 UTC; the script carries on only when the Europe/Luxembourg hour is 06 and exits 0 otherwise, so there's exactly one run at 06:15 local time all year (CEST → 04:15 UTC, CET → 05:15 UTC). For a manual run at any hour use `BUYCYCLE_FORCE=1 /app/run-tracker.sh`; any arguments, e.g. `--no-scrape --no-fetch`, also bypass the guard.
 - The scrape timing and limits are unchanged from the old `buycycle-tracker.timer`.
 
 ## 3. Cutover (do it outside 06:00–08:00 so you don't collide with a scrape)
