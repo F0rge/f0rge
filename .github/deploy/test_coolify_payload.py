@@ -8,6 +8,7 @@ from `.github/deploy` (that directory is not importable as `.github`).
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -181,6 +182,60 @@ class QueuedResponseTests(unittest.TestCase):
             [{"application_uuid": "someone-else", "status": "success", "message": "Deployment queued."}]
         )
         self.assertFalse(payload.response_queues_app(body, self.UUID))
+
+    def test_sibling_invalid_signature_does_not_fail(self) -> None:
+        # Body from the buycycle deploy: this app queued, dk apps rejected the HMAC.
+        body = json.dumps(
+            [
+                {
+                    "application": "buycycle",
+                    "status": "success",
+                    "message": "Deployment queued.",
+                    "application_uuid": self.UUID,
+                    "application_name": "buycycle",
+                    "deployment_uuid": "dep",
+                },
+                {"application": "daskasas-frontend", "status": "failed", "message": "Invalid signature."},
+                {"application": "daskasas-backend", "status": "failed", "message": "Invalid signature."},
+            ]
+        )
+        self.assertTrue(payload.response_queues_app(body, self.UUID))
+
+    def test_this_app_invalid_signature_is_not_queued(self) -> None:
+        backend = "pskswsc8c0044ggo40go4og0"
+        body = json.dumps(
+            [
+                {
+                    "application": "daskasas-backend",
+                    "status": "failed",
+                    "message": "Invalid signature.",
+                    "application_uuid": backend,
+                },
+                {
+                    "application": "buycycle",
+                    "status": "success",
+                    "message": "Deployment queued.",
+                    "application_uuid": self.UUID,
+                },
+            ]
+        )
+        self.assertFalse(payload.response_queues_app(body, backend))
+        self.assertTrue(payload.response_queues_app(body, self.UUID))
+
+
+class ManifestSecretTests(unittest.TestCase):
+    def test_each_coolify_app_has_its_own_secret(self) -> None:
+        text = Path(__file__).with_name("manifest.yml").read_text()
+        envs = re.findall(r"webhook_secret_env:\s*(\S+)", text)
+        self.assertEqual(
+            envs,
+            [
+                "COOLIFY_WEBHOOK_DASKASAS_BACKEND",
+                "COOLIFY_WEBHOOK_DASKASAS_FRONTEND",
+                "COOLIFY_WEBHOOK_BUYCYCLE",
+            ],
+        )
+        self.assertEqual(len(envs), len(set(envs)))
 
 
 if __name__ == "__main__":

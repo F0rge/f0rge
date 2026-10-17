@@ -40,8 +40,10 @@ cd apps/dk/tag-printer/frontend && npm run dev -- --port 3002
 ## CI deploy
 
 Manifest entry in `.github/deploy/manifest.yml`. On `main` push after CI green,
-`deploy-reusable.yml` fires Coolify manual webhooks (secrets
-`COOLIFY_WEBHOOK_DK_*`). `watch_paths` prevent marrow-only merges from
+`deploy-reusable.yml` fires Coolify manual webhooks. Each app is signed with
+its own secret: `COOLIFY_WEBHOOK_DASKASAS_BACKEND` and
+`COOLIFY_WEBHOOK_DASKASAS_FRONTEND`. Each value must match that Coolify app's
+manual GitHub webhook secret. `watch_paths` prevent marrow-only merges from
 rebuilding dk containers.
 
 Memory: `~/.cursor/agent-memory/devops/project_dk_tag_printer_deploy.md`
