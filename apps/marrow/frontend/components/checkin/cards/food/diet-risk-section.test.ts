@@ -29,11 +29,11 @@ const catalog: DietTagCatalogItem[] = [
   { id: 4, key: 'high-histamine', label: 'High-histamine', archived: false, sort_order: 4 },
 ]
 
-function renderSection() {
+function renderSection(signal: PhotoSignal = october17) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  const entry = { photo_signal: october17 } as Entry
+  const entry = { photo_signal: signal } as Entry
   const photos = [{ id: 785 }, { id: 786 }] as Entry['photos']
   return renderToStaticMarkup(
     createElement(
@@ -60,11 +60,23 @@ describe('DietRiskSection pills', () => {
     expect(html).toContain('High-FODMAP: spaghetti')
     expect(html).toContain('High-histamine: bacon, parmesan')
     expect(html).toContain('2 photos')
-    expect(html).toContain('4 ingredients')
-    expect(html).not.toContain('6 ingredients')
+    expect(html).toContain('4 flagged ingredients')
+    expect(html).not.toContain('4 ingredients')
     expect(html).toContain('title="2 ingredients: bacon, parmesan"')
     expect(html).not.toContain('Σ histamine_score')
     expect(html).not.toContain('title="8 ingredients')
     expect(html).not.toContain('>8<')
+  })
+
+  it('uses the singular flagged-ingredient label when one name is listed', () => {
+    const html = renderSection({
+      flags: ['gluten'],
+      scores: { histamine_load: 0, fodmap_count: 0, gluten_count: 1, dairy_count: 0 },
+      sources: { gluten: ['spaghetti'] },
+    })
+
+    expect(html).toContain('2 photos')
+    expect(html).toContain('1 flagged ingredient')
+    expect(html).not.toContain('1 flagged ingredients')
   })
 })
