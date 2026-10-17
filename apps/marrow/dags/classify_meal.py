@@ -26,6 +26,7 @@ from _bundle_env import (
     marrow_service_token,
     photos_conn_id,
 )
+from _superseded import raise_if_superseded
 from _vision_schema import VisionResult
 
 logger = logging.getLogger(__name__)
@@ -139,6 +140,7 @@ def _marrow_request(
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:500]
+        raise_if_superseded(exc.code, path, detail)
         raise RuntimeError(f"Marrow {method} {path} -> {exc.code}: {detail}") from exc
 
 
@@ -163,7 +165,11 @@ def _mark_failed(context: dict[str, Any]) -> None:
                 "user_id": (job or {}).get("user_id"),
             },
         )
-    except Exception:
+    except Exception as exc:
+        from airflow.exceptions import AirflowSkipException
+
+        if isinstance(exc, AirflowSkipException):
+            return
         logger.exception("on_failure: failed to notify Marrow")
 
 
