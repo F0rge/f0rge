@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, UniqueConstraint
+from decimal import Decimal
+
+from sqlalchemy import CheckConstraint, ForeignKey, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,7 +26,7 @@ class SkuBomLine(UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("skus.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    qty: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
 
     __table_args__ = (
         UniqueConstraint(
@@ -32,7 +34,7 @@ class SkuBomLine(UUIDPkMixin, TimestampMixin, Base):
             "component_sku_id",
             name="uq_sku_bom_lines_parent_component",
         ),
-        CheckConstraint("qty >= 1", name="ck_sku_bom_lines_qty"),
+        CheckConstraint("qty > 0", name="ck_sku_bom_lines_qty"),
         CheckConstraint(
             "parent_sku_id <> component_sku_id",
             name="ck_sku_bom_lines_no_self_parent",

@@ -3931,3 +3931,140 @@ export function createReorderDraftPo(skuIds: string[]): Promise<CreateReorderDra
     body: JSON.stringify({ sku_ids: skuIds }),
   });
 }
+
+// --- Imported records (Cin7): party detail, supplier prices, history, stock by bin ---
+
+export type PartyAddress = {
+  id: string;
+  address_type: string | null;
+  is_default: boolean;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  state: string | null;
+  postcode: string | null;
+  country: string | null;
+};
+
+export type PartyContact = {
+  id: string;
+  name: string | null;
+  job_title: string | null;
+  phone: string | null;
+  mobile: string | null;
+  fax: string | null;
+  email: string | null;
+  website: string | null;
+  comment: string | null;
+  is_default: boolean;
+  include_in_emails: boolean;
+};
+
+export type PartyKind = "customers" | "suppliers";
+
+export function listPartyAddresses(kind: PartyKind, id: string): Promise<PartyAddress[]> {
+  return apiFetch<PartyAddress[]>(`/${kind}/${id}/addresses`);
+}
+
+export function listPartyContacts(kind: PartyKind, id: string): Promise<PartyContact[]> {
+  return apiFetch<PartyContact[]>(`/${kind}/${id}/contacts`);
+}
+
+export type SupplierPriceRow = {
+  id: string;
+  supplier_id: string;
+  supplier_name: string;
+  sku_id: string;
+  our_ref: string;
+  sku_name: string;
+  supplier_sku: string | null;
+  currency: string;
+  latest_price: string | null;
+  fixed_price: string | null;
+};
+
+export type SalesHistoryRow = {
+  kind: "invoice" | "credit_note";
+  document_id: string;
+  document_number: string;
+  issue_date: string;
+  customer_id: string | null;
+  customer_name: string | null;
+  sku_id: string | null;
+  our_ref: string | null;
+  description: string;
+  qty: string;
+  ex_vat: string;
+  vat_amount: string;
+  inc_vat: string;
+};
+
+export type PurchaseHistoryRow = {
+  bill_id: string;
+  bill_number: string;
+  issue_date: string;
+  supplier_id: string;
+  supplier_name: string;
+  description: string;
+  qty: number;
+  currency: string;
+  unit_amount: string | null;
+  amount_foreign: string | null;
+  fx_rate_known: boolean;
+  bill_amount_zar: string | null;
+};
+
+export type StockByBinRow = {
+  location_id: string;
+  location_name: string;
+  bin_id: string;
+  bin_code: string;
+  sku_id: string;
+  our_ref: string;
+  sku_name: string;
+  on_hand: number;
+};
+
+type RecordFilters = Record<string, string | undefined>;
+
+function recordsQuery(params?: ListParams, filters?: RecordFilters): string {
+  const search = new URLSearchParams(buildListQuery(params));
+  for (const [key, value] of Object.entries(filters ?? {})) {
+    if (value) {
+      search.set(key, value);
+    }
+  }
+  return search.toString();
+}
+
+export function listSupplierPrices(
+  params?: ListParams,
+  filters?: { supplier_id?: string; sku_id?: string },
+): Promise<Page<SupplierPriceRow>> {
+  return apiFetch<Page<SupplierPriceRow>>(`/supplier-prices?${recordsQuery(params, filters)}`);
+}
+
+export function listSalesHistory(
+  params?: ListParams,
+  filters?: { customer_id?: string; sku_id?: string; from?: string; to?: string },
+): Promise<Page<SalesHistoryRow>> {
+  return apiFetch<Page<SalesHistoryRow>>(`/history/sales?${recordsQuery(params, filters)}`);
+}
+
+export function listPurchaseHistory(
+  params?: ListParams,
+  filters?: { supplier_id?: string; from?: string; to?: string },
+): Promise<Page<PurchaseHistoryRow>> {
+  return apiFetch<Page<PurchaseHistoryRow>>(`/history/purchases?${recordsQuery(params, filters)}`);
+}
+
+export function listStockByBin(
+  params?: ListParams,
+  filters?: { location_id?: string },
+): Promise<Page<StockByBinRow>> {
+  return apiFetch<Page<StockByBinRow>>(`/stock/by-bin?${recordsQuery(params, filters)}`);
+}
+
+export function getSupplier(id: string): Promise<Supplier | undefined> {
+  return listSuppliers().then((rows) => rows.find((row) => row.id === id));
+}

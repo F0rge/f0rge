@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { CustomerCrmBadges } from "@/components/customer-crm-badges";
+import { SalesHistoryTable } from "@/components/records/history-tables";
+import { PartyRecords } from "@/components/records/party-records";
 import {
   CustomerFormFields,
   customerWritePayload,
@@ -266,6 +268,8 @@ export default function CustomerDetailPage() {
               </Stack>
             </Tile>
           ) : null}
+          <PartyRecords kind="customers" id={customer.id} />
+          <SalesHistoryTable customerId={customer.id} />
         </>
       ) : (
         <InlineNotification

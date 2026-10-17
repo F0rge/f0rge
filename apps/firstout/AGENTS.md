@@ -62,7 +62,7 @@ On startup, if the `users` table is empty the API seeds one team (`Firstout`) an
 - `SEED_OWNER_EMAIL` (default `owner@example.com`)
 - `SEED_OWNER_PASSWORD` (default `change-me-owner`)
 
-It then creates these role users if the email is missing (idempotent; owner is never replaced):
+`SEED_BOOT_FIXTURES` (default **false**) creates these role users if the email is missing, plus the disabled storefront system user and the Walk-in customer. Leave it false on the live service so a wipe stays empty. Owner bootstrap above does not use this flag. When the flag is true, the role users are idempotent and the owner is never replaced:
 
 | Email | Role | Password env | Default |
 |-------|------|--------------|---------|
@@ -115,7 +115,7 @@ suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land →
 
 **Backdate limits:** till/PO/transfer services stamp "now"; the pack then writes `tax_invoices.issue_date`, `payments.paid_on`, PO lead timestamps, transfer timestamps, and dead-stock `location_stock.updated_at`. Journals and stock-movement audit rows stay at seed-run time. Books `InvoiceCreate` does not move stock — BI books invoices are AR-only (no `sku_id`) so sales-by-SKU does not claim units still on hand. SKU sales signal comes from till + completed laybys.
 
-**Railway (live env, tracks `main`):** on service `firstout-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do **not** enable on production. After it runs, log in as `owner@example.com` / `change-me-owner` (or the role users above) and walk stock → proforma → PO → receive → transfer → till → books.
+**Railway (live env, tracks `main`):** on service `firstout-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do **not** enable on production. After it runs, log in as `owner@example.com` / `change-me-owner`. Role logins exist only when `SEED_BOOT_FIXTURES=true`. Walk stock → proforma → PO → receive → transfer → till → books.
 
 Local: `SEED_PLAYGROUND=true` in `apps/firstout/backend/.env`, then restart uvicorn.
 
@@ -605,6 +605,19 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 | List imports, reports, VAT201 draft | any authenticated |
 | Upload CSV, match lines | `books.mutate` |
 
+## Cin7 Core import and records
+
+`uv run --project apps/firstout/backend python -m app.commands.import_cin7 --export-dir <dir> [--commit]` loads a Cin7 Core full export. Dry-run is the default. It upserts on natural keys (SKU, customer/supplier name, document number), so a second run of the same export changes nothing. A non-local `DATABASE_URL` needs `FIRSTOUT_CIN7_IMPORT_TARGET=firstout` (Firstout is main-only). Never commit the export: it holds customer PII. Tests use fake fixtures.
+
+- Workbook names may use spaces or underscores (`Sale Documents_ALLTIME.xlsx`). Only the `All` sheet is read.
+- Customers and suppliers that appear only on documents are created as stubs before contacts, SKUs, and documents.
+- Every address and contact row goes to `customer_addresses`, `customer_contacts`, `supplier_addresses`, and `supplier_contacts`, keyed by a content hash (`natural_key`). The default contact and billing address are also copied onto the customer row.
+- `sku_bom_lines.qty` is `Numeric(14,4)`, so fractional components are allowed. Pick and till call `whole_component_qty`. If a kit needs fractional component units, they return a 400 instead of rounding.
+- Cin7 `CR-*` documents go to `archive_credit_notes` and `archive_credit_note_lines`. They are never `credit_notes`: no invoice link, no journal, no stock, no VAT201.
+- Archive bills keep `currency` and `amount_foreign`. If there is no ZAR rate, `fx_rate_known=false` and the ZAR fields are 0 placeholders. APIs return ZAR as null.
+
+Read APIs (any authenticated user; cost fields are null without `stock.cost.view`): `GET /customers/{id}/addresses|contacts`, `GET /suppliers/{id}/addresses|contacts`, `GET /supplier-prices`, `GET /history/sales` (archive invoices and archive credit notes), `GET /history/purchases` (archive bills), and `GET /stock/by-bin`. UI: `/history` (Sales nav), `/stock-by-bin` (Stock nav), `/suppliers/[id]`, plus addresses, contacts, and sales history on `/customers/[id]`. Migration: `065_cin7_followup`.
+
 ## Railway
 
 > **Main only.** Firstout has no develop branch workflow and no separate develop environment. The single Railway environment below is *named* `develop` for historical reasons, but its services track git `main` and it is the live environment. Merging to `main` deploys it. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
@@ -626,7 +639,7 @@ Matching a bank line to a payment sets `payments.is_reconciled = true`. Journal 
 - **Config files:** `apps/firstout/{backend,frontend}/railway.toml` — no Root Directory; Config File path points here.
 - **`watchPatterns`:** `apps/firstout/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `firstout-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
 - **Manifest:** `.github/deploy/manifest.yml` — `branches: [main]`. Smoke targets `health_url.main` (the live hosts). There is no separate production environment.
-- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). Every startup also seeds missing role users `till@` / `books@` / `warehouse@` / `buyer@example.com` (`SEED_*_PASSWORD`, defaults `change-me-<role>`). Cookie `firstout_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+- **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). `SEED_BOOT_FIXTURES` defaults false; set true only to also seed `till@` / `books@` / `warehouse@` / `buyer@example.com`, the storefront system user, and the Walk-in customer. Leave it false on the live API. Cookie `firstout_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
 - **Comms encryption:** `SETTINGS_ENCRYPTION_KEY` (Fernet) on `firstout-api` — required to save SMTP/WhatsApp secrets. Same value locally in `.env`.
 - **WhatsApp click-to-chat:** `POST .../send {channel:whatsapp}` with Cloud API off writes outbox `whatsapp_click` / `opened` and returns a `https://wa.me/{e164}?text=...` URL. Click-to-chat cannot attach a PDF.
 - **WhatsApp Cloud API:** paste phone-number id + access token in Settings → Communications (`whatsapp_mode=cloud` when both present). Token and app secret are Fernet-encrypted; GET never returns them. Keep the existing WhatsApp Business app on the number — paste-token coexistence, no Embedded Signup. Unofficial WhatsApp libraries are banned.
