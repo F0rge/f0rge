@@ -83,11 +83,11 @@ let C=Object.assign({},DEF,ld('costs',{})),WL=ld('watch',{}),LOG=ld('log',[]),IT
 const HARD=['too-good-to-be-true','implausibly low price','zero-review seller'],CONF={none:0,low:1,medium:2,high:3},COND={'1':'fair','2':'good','3':'very good','4':'like new'};
 const TABS=[['deals','Deals','list-unordered'],['insights','Insights','graph'],['watch','Watchlist','star'],['alerts','Alerts','bell']],SECT={deals:['deals'],insights:['charts','models'],watch:['watch'],alerts:['alerts'],costs:['costs'],method:['method']};
 // single sort state (column key + direction); desktop = DataTable header buttons, mobile = one select
-const SORTS=[['pf','€ profit'],['roi','ROI %'],['d','% under ref.'],['flex','Flexibility'],['dl','Days listed'],['p','Price'],['pdp','Price drop %']],ASC_DEFAULT=['dl','p'];
+const SORTS=[['pf','€ profit'],['roi','ROI %'],['d','% under ref.'],['av','Avg ask'],['nc','Comps'],['flex','Flexibility'],['dl','Days listed'],['p','Price'],['pdp','Price drop %']],ASC_DEFAULT=['dl','p','av'];
 // ---------- filters: grouped, rendered into desktop sidebar and mobile dialog ----------
 const FG=[['Find',[['q','Search','text','model, brand, groupset…'],['brand','Brand','select'],['size','Size','text','e.g. 56, M'],...EXTRA.map(e=>[e.id,e.label,'select'])]],
- ['Price & return',[['pmin','Min price €','number'],['pmax','Max price €','number'],['minp','Min profit €','number'],['minr','Min ROI %','number']]],
- ['Trust & risk',[['conf','Comparables confidence','seg',[['','Any'],['low','Low+'],['medium','Med+'],['high','High']]],['risk','Risk flags','seg',[['','Hide hard'],['all','All'],['none','None']]],
+ ['Price & return',[['pmin','Min price €','number'],['pmax','Max price €','number'],['avmin','Min avg ask €','number'],['avmax','Max avg ask €','number'],['minp','Min profit €','number'],['minr','Min ROI %','number']]],
+ ['Trust & risk',[['conf','Comparables confidence','seg',[['','Any'],['low','Low+'],['medium','Med+'],['high','High']]],['minc','Min comps','number'],['risk','Risk flags','seg',[['','Hide hard'],['all','All'],['none','None']]],
   ['flex','Seller flexibility','select',[['','Any'],['pr','buycycle "price reduced"'],['drop','Dropped (history or vs original)'],['any','Either signal'],['hi','Flex score ≥3']]]]],
  ['Location & age',[['country','Country','select'],['kmax','Max km from Luxembourg','number'],['dmax','Max days listed','number']]]];
 const F=FG.flatMap(g=>g[1]);const FV={};F.forEach(f=>FV[f[0]]='');
@@ -115,29 +115,30 @@ const getModels=()=>MODELS?Promise.resolve(MODELS):fetch('models.json').then(r=>
 const getDet=()=>DET?Promise.resolve(DET):fetch('details.json').then(r=>r.json()).then(m=>DET=m);
 function flexOk(x,f){const dr=(x.pd||0)>0||(x.pdp||0)>0;return !f||(f=='pr'&&x.pr)||(f=='drop'&&dr)||(f=='any'&&(x.pr||dr))||(f=='hi'&&(x.flex||0)>=3)}
 function filt(){const g=k=>FV[k],num=k=>g(k)===''?null:+g(k),q=g('q').toLowerCase().split(/\s+/).filter(Boolean),cf=CONF[g('conf')]||0;
- const f={pmin:num('pmin'),pmax:num('pmax'),minp:num('minp'),minr:num('minr'),dmax:num('dmax'),kmax:num('kmax')};
+ const f={pmin:num('pmin'),pmax:num('pmax'),minp:num('minp'),minr:num('minr'),dmax:num('dmax'),kmax:num('kmax'),avmin:num('avmin'),avmax:num('avmax'),minc:num('minc')};
  view=ITEMS.filter(x=>!x.g&&(!g('brand')||x.b==g('brand'))&&(!g('country')||x.co==g('country'))&&(!g('size')||String(x.s||'').toLowerCase().includes(g('size').toLowerCase()))
-  &&(f.pmin==null||x.p>=f.pmin)&&(f.pmax==null||x.p<=f.pmax)&&(f.minp==null||(x.pf??-1e9)>=f.minp)&&(f.minr==null||(x.roi??-1e9)>=f.minr)&&(f.dmax==null||x.dl<=f.dmax)
+  &&(f.pmin==null||x.p>=f.pmin)&&(f.pmax==null||x.p<=f.pmax)&&(f.avmin==null||(x.av!=null&&x.av>=f.avmin))&&(f.avmax==null||(x.av!=null&&x.av<=f.avmax))&&(f.minc==null||(x.nc||0)>=f.minc)&&(f.minp==null||(x.pf??-1e9)>=f.minp)&&(f.minr==null||(x.roi??-1e9)>=f.minr)&&(f.dmax==null||x.dl<=f.dmax)
   &&(f.kmax==null||(x.km!=null&&x.km<=f.kmax))&&(!cf||CONF[x.cf||'none']>=cf)&&(g('risk')!=''||!x.rk.some(r=>HARD.includes(r)))&&(g('risk')!='none'||!x.rk.length)
   &&flexOk(x,g('flex'))&&EXTRA.every(e=>!g(e.id)||x[e.k]==g(e.id))&&(!q.length||q.every(w=>x._s.includes(w))));
  const key=SORT,asc=ASC;
- view.sort((a,b)=>{let A=a[key],B=b[key];if(A==null&&B==null)return 0;if(A==null)return 1;if(B==null)return -1;if(typeof A=='string')return asc?A.localeCompare(B):B.localeCompare(A);return asc?A-B:B-A});
+ view.sort((a,b)=>{let A=a[key],B=b[key];if(key=='nc'&&!A)A=null;if(key=='nc'&&!B)B=null;if(A==null&&B==null)return 0;if(A==null)return 1;if(B==null)return -1;if(typeof A=='string')return asc?A.localeCompare(B):B.localeCompare(A);return asc?A-B:B-A});
  sel=-1;syncInputs();writeHash();renderList();renderKpis();$('fshow').textContent=view.length.toLocaleString();if(TAB=='insights')renderCharts()}
 // ---------- rendering (Primer: Label, Counter, Progress, Button, DataTable, Box rows) ----------
 const strong=x=>x.pf>=250&&x.roi>=15&&x.d!=null&&x.d>=20&&CONF[x.cf||'none']>=2&&!x.rk.some(r=>HARD.includes(r));
 const lab=(t,c)=>`<span class="Label Label--${c||'secondary'} mr-1 mb-1">${esc(t)}</span>`;
 const sgn=v=>v>0?'color-fg-success':'color-fg-danger';
 const rkHtml=x=>x.rk.map(r=>lab(r,HARD.includes(r)?'danger':'attention')).join('');
-const cfHtml=x=>`<span class="Counter mr-1" title="comparable listings">${x.nc||0}</span>${lab(x.cf||'no comps',{high:'success',medium:'accent',low:'severe',none:'secondary'}[x.cf||'none'])}`;
+const cfHtml=x=>`<span class="Counter mr-1" title="comparable listings">${x.nc||'–'}</span>${lab(x.cf||'no comps',{high:'success',medium:'accent',low:'severe',none:'secondary'}[x.cf||'none'])}`;
 const bar=x=>x.d==null?'':`<span class="Progress Progress--small mt-1" aria-hidden=true><span class="Progress-item color-bg-success-emphasis" style="width:${Math.min(100,Math.max(0,x.d*1.6))}%"></span></span>`;
 const star=x=>`<button type=button class="Button Button--invisible Button--iconOnly Button--small" data-w="${x.i}" aria-label="${WL[x.i]?'Unwatch':'Watch'} ${esc(x.n)}" aria-pressed="${!!WL[x.i]}">${oc(WL[x.i]?'star-fill':'star',WL[x.i]?'color-fg-attention':'')}</button>`;
 const compsBtn=x=>x.d!=null&&x.d>20?`<details data-c="${x.i}" class=mt-1><summary class="f6 Link--muted">comparables</summary><div class="f6" data-cl></div></details>`:'';
 const meta=x=>`${esc(x.b)} · ${esc(x.s||'?')} · ${x.y||''} · ${COND[x.c]||''}${x.cp?' · '+esc(x.cp):''}${x.k?' · '+x.k+' · '+(x.mt||'')+' · '+(x.w||''):''}`;
-const COLS=[['n','Listing','minmax(200px,2.4fr)'],['p','Price','minmax(80px,.7fr)',1],['r','Reference','minmax(120px,1fr)',1],['d','Under ref.','minmax(110px,1fr)',1],['pf','€ profit','minmax(80px,.7fr)',1],['roi','ROI','minmax(56px,.5fr)',1],
- ['dl','Days','minmax(52px,.5fr)',1],['flex','Flex','minmax(48px,.4fr)',1],['str','Model STR / DTS','minmax(90px,.7fr)',1],['co','Location','minmax(80px,.7fr)'],['rk','Risk','minmax(110px,1fr)'],['_','Watch','48px']];
+const COLS=[['n','Listing','minmax(168px,2.4fr)'],['p','Price','minmax(80px,.7fr)',1],['r','Reference','minmax(112px,1fr)',1],['av','Avg ask','minmax(68px,.6fr)',1],['nc','Comps','minmax(60px,.45fr)',1],['d','Under ref.','minmax(100px,.9fr)',1],['pf','€ profit','minmax(80px,.7fr)',1],['roi','ROI','minmax(56px,.5fr)',1],
+ ['dl','Days','minmax(52px,.5fr)',1],['flex','Flex','minmax(48px,.4fr)',1],['str','Model STR / DTS','minmax(90px,.7fr)',1],['co','Location','minmax(72px,.6fr)'],['rk','Risk','minmax(100px,.9fr)'],['_','Watch','48px']];
 const TD=(a,h)=>`<td class=prc-DataTable-TableCell-Fk4ve${a?' data-cell-align=end':''}><div class=width-full>${h}</div></td>`;
 function row(x,j,cols){const c={n:`${strong(x)?lab('Strong deal','success'):''}<a class="Link--primary text-semibold" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><div class="f6 color-fg-muted">${meta(x)}</div>`,
  p:`${eur(x.p)}${x.pdp>0?`<div class="f6 color-fg-muted">was ${eur(x.op)} (−${x.pdp}%)</div>`:''}${x.pr?'<div>'+lab('reduced','accent')+'</div>':''}`,r:`${eur(x.r)}<div class=mt-1>${cfHtml(x)}</div>${compsBtn(x)}`,
+ av:eur(x.av),nc:x.nc?String(x.nc):'–',
  d:x.d==null?'–':`<span class=text-semibold>${x.d}%</span><div class="f6 color-fg-muted">${eur(x.r-x.p)} under</div>${bar(x)}`,pf:`<span class="text-semibold ${sgn(x.pf)}">${eur(x.pf)}</span>`,roi:`<span class="${sgn(x.roi)}">${x.roi!=null?Math.round(x.roi)+'%':'–'}</span>`,
  dl:`${Math.round(x.dl)}${x.ld?'':'*'}${x.pd?`<div class=mt-1><span class=Counter>${x.pd}</span> <span class="f6 color-fg-muted">drops</span></div>`:''}`,flex:`<span class=text-semibold>${x.flex||0}</span>`,
  str:`${x.str!=null?x.str+'%':'–'} / ${x.mdts!=null?x.mdts+' d':'–'}`,co:`${esc(x.co||'?')}${x.km!=null?`<div class="f6 color-fg-muted">~${x.km} km</div>`:''}`,
@@ -148,6 +149,7 @@ function card(x){return `<li class="Box-row px-3 py-2"><div class="d-flex flex-i
 <div class="f6 color-fg-muted">${esc(x.b)} · ${esc(x.s||'?')} · ${x.y||''} · ${COND[x.c]||''} · ${esc(x.co||'?')}${x.km!=null?' ~'+x.km+' km':''}</div></div>${star(x)}</div>
 <div class="d-flex flex-items-baseline flex-wrap mt-1"><span class="f3 text-semibold mr-2">${eur(x.p)}</span>${x.pdp>0?`<span class="f6 color-fg-muted mr-2"><s>${eur(x.op)}</s> −${x.pdp}%</span>`:''}${x.pr?lab('price reduced','accent'):''}</div>
 <div class="f5 mt-1">${stat(eur(x.pf),'profit',sgn(x.pf))}${stat(x.roi!=null?Math.round(x.roi)+'%':'–','ROI',sgn(x.roi))}${stat(x.d!=null?x.d+'%':'–',`under ref. ${eur(x.r)}${x.r!=null?' ('+eur(x.r-x.p)+')':''}`)}</div>${bar(x)}
+<div class="f6 mt-1">${stat(eur(x.av),'avg ask')}${stat(x.nc?x.nc:'–','comps')}</div>
 <div class="f6 color-fg-muted mt-1">${Math.round(x.dl)}${x.ld?'':'*'} days listed · flex ${x.flex||0}${x.pd?' · '+x.pd+' drop(s)':''}</div>
 <div class=mt-2>${cfHtml(x)}${rkHtml(x)}</div>${compsBtn(x)}</li>`}
 function renderList(){const hasStr=ITEMS.some(x=>x.str||x.mdts),cols=COLS.filter(c=>c[0]!='str'||hasStr);$('dt').style.setProperty('--grid-template-columns',cols.map(c=>c[2]).join(' '));
@@ -162,7 +164,7 @@ function renderKpis(){const pos=view.filter(x=>x.pf>0),med=a=>{a=a.filter(v=>v!=
 document.addEventListener('click',e=>{const w=e.target.closest('[data-w]');if(w){tw(w.dataset.w);return}const k=e.target.closest('th [data-k]');if(k){const c=k.dataset.k;if(SORT==c)ASC=!ASC;else{SORT=c;ASC=ASC_DEFAULT.includes(c)}filt();return}
  const s=e.target.closest('[data-seg]');if(s){setF(s.dataset.seg,s.dataset.v);syncInputs();return}
  const tr=e.target.closest('tr[data-j]');if(tr&&!e.target.closest('a,button,summary')){sel=+tr.dataset.j;markSel()}});
-document.addEventListener('toggle',e=>{const d=e.target;if(d.dataset&&d.dataset.c&&d.open){getDet().then(D=>{const c=(D[d.dataset.c]||[])[0]||[];d.querySelector('[data-cl]').innerHTML=c.map(c=>`<div><a href="${PFX+esc(c[0].replace(PFX,''))}" target=_blank rel=noopener>${eur(c[1])}</a></div>`).join('')||'none'})}},true);
+document.addEventListener('toggle',e=>{const d=e.target;if(d.dataset&&d.dataset.c&&d.open){getDet().then(D=>{const x=ITEMS.find(y=>y.i==d.dataset.c)||{},list=(D[d.dataset.c]||[])[0]||[];d.querySelector('[data-cl]').innerHTML=`<div class="mb-1">Avg ask ${eur(x.av)} · ${x.nc?x.nc:'–'} listed</div>`+(list.map(c=>`<div><a href="${PFX+esc(c[0].replace(PFX,''))}" target=_blank rel=noopener>${eur(c[1])}</a></div>`).join('')||'none')})}},true);
 $('more').onclick=()=>{shown+=200;renderList()};
 function tw(i){if(WL[i])delete WL[i];else{const x=ITEMS.find(y=>y.i==i);WL[i]={n:x.n,u:x.u,p:x.p,t:new Date().toISOString().slice(0,10)}}sv('watch',WL);
  const x=ITEMS.find(y=>y.i==i);document.querySelectorAll(`[data-w="${i}"]`).forEach(b=>{if(b.classList.contains('Button--iconOnly'))b.outerHTML=star(x||{i,n:''})});renderKpis();if(TAB=='watch')renderWatch()}
@@ -187,7 +189,7 @@ function renderModel(){if(!window.Chart)return setTimeout(renderModel,100);theme
  mk('c7',{type:'line',data:{datasets:[{label:'median ask',data:m.t.map(t=>({x:t[0],y:t[1]})),borderColor:cv('--fgColor-accent'),tension:.2},{label:'active listings',data:m.t.map(t=>({x:t[0],y:t[2]})),borderColor:cv('--fgColor-muted'),yAxisID:'y2',borderDash:[4,4]},
   {type:'scatter',label:'likely sold (last ask)',data:m.sold.map(s=>({x:s[0],y:s[1]})),backgroundColor:cv('--fgColor-success')}]},options:{parsing:false,scales:{x:{type:'category',labels:[...new Set([...m.t.map(t=>t[0]),...m.sold.map(s=>s[0])])].sort()},y:{title:{display:true,text:'€'}},y2:{position:'right',grid:{display:false}}}}});
  $('mnote').textContent=`${m.a} active · ${m.g30} likely sold in 30 d · sell-through ${m.str??'–'}% · median days to sell ${m.dts??'–'}. History starts ${m.t[0]?.[0]||'–'}.`;
- const L=ITEMS.filter(x=>x.b+' '+x.m==k).sort((a,b)=>a.p-b.p);$('mtb').innerHTML=L.map(x=>`<div class="Box-row d-flex flex-justify-between flex-wrap"><a class="mr-2" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><span class="f6 color-fg-muted">${eur(x.p)} · ${Math.round(x.dl)} d · ${x.pd||0} drops · ${x.g?'likely sold '+x.g:'active'}</span></div>`).join('');writeHash()})}
+ const L=ITEMS.filter(x=>x.b+' '+x.m==k).sort((a,b)=>a.p-b.p);$('mtb').innerHTML=L.map(x=>`<div class="Box-row d-flex flex-justify-between flex-wrap"><a class="mr-2" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><span class="f6 color-fg-muted">${eur(x.p)} · avg ${eur(x.av)} · ${x.nc?x.nc:'–'} comps · ${Math.round(x.dl)} d · ${x.pd||0} drops · ${x.g?'likely sold '+x.g:'active'}</span></div>`).join('');writeHash()})}
 $('msel').onchange=renderModel;
 // ---------- watchlist / log ----------
 function renderWatch(){const by=Object.fromEntries(ITEMS.map(x=>[x.i,x]));$('wl').innerHTML=Object.entries(WL).map(([i,w])=>{const x=by[i];return `<div class="Box-row d-flex flex-items-center flex-wrap"><a class="flex-1 mr-2" href="${esc(w.u)}" target=_blank rel=noopener>${esc(w.n)}</a><span class="f6 color-fg-muted mr-2">added ${w.t} at ${eur(w.p)} · now ${x?eur(x.p):'–'} · profit ${x?eur(x.pf):'–'} · ${!x?'gone (>30 d)':x.g?'likely sold '+x.g:'active'}</span>${btn('Remove','Button--secondary Button--small',`data-w="${i}"`)}</div>`}).join('')||`<div class="Box-row f6 color-fg-muted">Use ${oc('star')} on a deal to watch it.</div>`;

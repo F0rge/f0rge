@@ -279,6 +279,8 @@ def build(c, kind, today):
         g = G.get((r["bk"], r["mk"], r["brake"], r["mat"]), [])
         comps = [x for x in g if x["id"] != r["id"] and (kind == "wheels" or r["year"] is None or x["year"] is None or abs(x["year"] - r["year"]) <= 1)]
         ref = st.median(x["price"] for x in comps) if len(comps) >= 3 else None
+        # mean ask of the same live comps (any count). None when there are none, so the column is a dash.
+        av = round(st.fmean(x["price"] for x in comps), 2) if comps else None
         disp = None
         if len(comps) >= 4:
             q = st.quantiles([x["price"] for x in comps], n=4)
@@ -323,6 +325,7 @@ def build(c, kind, today):
                 "u": "https://buycycle.com/en-lu/product/" + r["slug"],
                 "r": ref,
                 "nc": len(comps),
+                "av": av,
                 "cf": conf,
                 "sp": disp,
                 "d": disc,
@@ -423,6 +426,7 @@ COLS = [
     "u",
     "r",
     "nc",
+    "av",
     "cf",
     "sp",
     "d",
