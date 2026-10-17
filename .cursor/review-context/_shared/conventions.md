@@ -43,7 +43,7 @@ Common patterns that warrant an audit:
 
 Automated checks (lint, pytest, build, typecheck) are NOT a complete gate. The PR is not done until:
 
-- A human has driven the new feature in a live dev server (`uvicorn` + `npm run dev` locally OR `app-dev.marrow-health.com`).
+- A human has driven the new feature in a live dev server (`uvicorn` + `npm run dev` locally OR the live app after merge).
 - The golden path works end-to-end through the UI.
 - At least one error path was driven and the UI failed gracefully.
 - Backend logs were tailed during the test for hidden 500s.
@@ -75,10 +75,10 @@ Canonical playbooks: `.cursor/review-context/`.
 
 ## Branch & PR conventions
 
-- `develop` is the default integration branch.
-- PRs land on `develop`, run `.github/workflows/ci.yml`, then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by the same `.github/workflows/ci.yml` (prod-shaped frontend build on `main`).
-- Feature branches: `feat/<descriptive-name>`, `fix/<descriptive-name>`, `chore/<descriptive-name>`.
+- Trunk-based: `main` is the only long-lived and only deployed branch. There is no `develop` branch or develop environment. Block any PR targeting `develop`.
+- Short-lived branches off `main`: `feat/…`, `fix/…`, `chore/…`, `docs/…`, `refactor/…`, `test/…`, `hotfix/…`.
+- PRs into `main` only, `.github/workflows/ci.yml` green, squash merge. Merging deploys.
+- Hotfixes are ordinary PRs into `main`.
 - Direct push to `main` is only acceptable for single-file edits on personal config.
 
 ## Git workflow boundaries
@@ -86,7 +86,7 @@ Canonical playbooks: `.cursor/review-context/`.
 Block on any PR or workflow step that:
 - Uses `--no-verify` (skips hooks).
 - Uses `--no-gpg-sign` (bypasses signing).
-- Force-pushes to `main` or `develop`.
+- Force-pushes to `main`.
 - Deletes branches without explicit user approval.
 - Modifies `.git/config` or `gh auth` state.
 
@@ -96,7 +96,7 @@ After this PR merges, the working tree must be clean:
 - Worktrees: spawned worktrees must be unlocked, removed, pruned. `git worktree list` shows only `main` (or other intentional trees).
 - Branches: `git cleanup` alias removes branches whose remote tracking branch is gone (`: gone]` markers).
 - `git status` is clean.
-- Session ends on the default branch (`develop`), fast-forwarded to origin.
+- Session ends on the default branch (`main`), fast-forwarded to origin.
 
 See global `~/.cursor/rules/leo-system-wide.mdc` § "Post-Merge Hygiene".
 

@@ -13,7 +13,7 @@ Personal daily symptom check-in app for Leo's health research vault.
 
 ## Environments
 
-Marrow runs on Railway project **zoological-fulfillment** (`a633a271-…`). **Production** deploys from git branch `main` only. The `develop` git branch remains the integration branch for CI and local work; it does not trigger Marrow deploy or Actions smoke. dk tag-printer stays on Coolify/Pi.
+Marrow runs on Railway project **zoological-fulfillment** (`a633a271-…`). **Production** deploys from git branch `main` only. There is no develop environment and no `develop` branch workflow (see [Git flow](#git-flow-trunk-based-main-only)). dk tag-printer stays on Coolify/Pi.
 
 ### Production (`main`)
 
@@ -45,13 +45,24 @@ Infra: [`apps/dk/tag-printer/AGENTS.md`](apps/dk/tag-printer/AGENTS.md) (nested 
 
 ## apps/firstout
 
-Furniture retailer back office. Nested [`apps/firstout/AGENTS.md`](apps/firstout/AGENTS.md). **Own Railway project** — do **not** add Firstout services, Postgres, or buckets to Marrow `zoological-fulfillment` or the Marrow develop environment. Develop hosts: https://firstout.co.za and https://api.firstout.co.za (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
+Furniture retailer back office. Nested [`apps/firstout/AGENTS.md`](apps/firstout/AGENTS.md). **Own Railway project** — do **not** add Firstout services, Postgres, or buckets to Marrow `zoological-fulfillment` or the Marrow project. Live hosts (tracking `main`): https://firstout.co.za and https://api.firstout.co.za (`/docs` for Swagger). Local ports `:8003` / `:3003` / Postgres `:5433`. UI is IBM Carbon, not `@f0rge/ui`.
 
-## Branch workflow
+## Git flow (trunk-based, main only)
 
-- `develop` is the integration branch; PRs land there, run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build), then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by the same `.github/workflows/ci.yml` (same checks + prod-shaped frontend build).
-- After CI green on push, the manifest-driven deploy workflow smokes marrow on Railway and deploys dk tag printer to Coolify (main only).
+There is **no `develop` branch workflow and no develop environment**. `main` is the only long-lived branch and the only deployed branch. Merging to `main` is deploying.
+
+- **Trunk-based development.** Everyone integrates into `main` continuously.
+- **Short-lived feature branches off `main`.** Name them `<type>/<short-kebab-description>`, where type is `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, or `hotfix` (for example `feat/peach-policy-pages`, `fix/tour-last-step`). Agent-created branches may keep their tool prefix (`cursor/…`). Branch from up-to-date `origin/main`; keep a branch to a few days and one concern.
+- **PRs into `main` only.** Never open a PR against `develop` or any other branch. CI (`ci`, plus `playwright smoke` when required) must be green before merge.
+- **Squash merge** with a clean conventional-commit title (`feat(scope): …`). Delete the branch after merge.
+- **`main` is the only deployed branch.** Railway services (Marrow, Firstout, Vellano) track `main`; Coolify deploys dk from `main`. A merge to `main` ships to the live environment.
+- **No long-lived branches.** No `develop`, `staging`, `release/*`, or per-environment branches. Rebase or merge `origin/main` into your branch to stay current; never merge another feature branch into yours.
+- **Hotfixes are just PRs into `main`** (`hotfix/<desc>` or `fix/<desc>`), same CI and squash merge.
+- Never force-push `main`. Force-pushing your own feature branch is fine when needed.
+- Hostnames or Railway environments still *named* `develop`, `app-dev`, or `api-dev` are names only, or are retired. They do not imply a develop branch, and nothing deploys from one.
+
+- PRs into `main` run `.github/workflows/ci.yml` (ruff + pytest + frontend lint/typecheck/build + prod-shaped frontend build) and `e2e-smoke.yml`.
+- After CI is green on push to `main`, the manifest-driven deploy workflow smokes Marrow and Firstout on Railway and deploys dk tag printer to Coolify.
 
 ## Running locally
 
@@ -132,7 +143,7 @@ Agent-ready GitHub issue authoring (scope split, decision surfacing, parent/sub-
 
 ## Shipping features
 
-End-to-end workflow (prompt or GitHub issue → develop → dev smoke → main PR): `.cursor/skills/ship-feature/SKILL.md`.
+End-to-end workflow (prompt or GitHub issue → feature branch → PR into `main` → CI green → squash merge, which deploys): `.cursor/skills/ship-feature/SKILL.md`.
 
 ## PR review context
 

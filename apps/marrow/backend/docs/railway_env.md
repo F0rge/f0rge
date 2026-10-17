@@ -1,6 +1,6 @@
 # Railway environment variables (marrow)
 
-Marrow deploys to **production** from git branch `main` only (`.github/deploy/manifest.yml` + Railway autodeploy). GitHub Actions smoke uses the production URLs below. The `develop` git branch is still used for CI integration; it does not deploy Marrow.
+Marrow deploys to **production** from git branch `main` only (`.github/deploy/manifest.yml` + Railway autodeploy). GitHub Actions smoke uses the production URLs below. There is no develop environment and no `develop` branch workflow; PRs go into `main` and merging deploys.
 
 Shared monorepo services. Do **not** set Root Directory. Point each service's
 Config File at the matching `railway*.toml`.

@@ -103,7 +103,7 @@ Nia (the in-app assistant), Canvas (`/canvas`), lookbooks, and storefront-except
 
 Staff storefront-product admin (`/product-groups`, publication toggles on SKU update) is also removed. Medusa owns public merchandising. Keep the ops-commerce feed: `GET /api/v1/ops-commerce/v1/products` still returns names, tax-inclusive prices, and stock for published SKUs. `skus.storefront_published` and `product_groups` stay in the database because that feed filters and groups on them. `GET /api/v1/ops-commerce/v1/checkout-safety` stays and, once authorized, returns `checkout_allowed: true`. A missing or failing checkout-safety response pauses shop checkout.
 
-### Playground seed (develop / local demos)
+### Playground seed (live demo env / local demos)
 
 Env-gated, default **off**. When `SEED_PLAYGROUND=true`, startup creates a coherent demo path if it is not already present (markers: supplier `Playground Imports` / SKU `PG-TABLE`, then demo pack `PG-SOFA`, then sofa catalogue `VEL-SOFA-LONDON`, then BI pack `VEL-BI-V1`):
 
@@ -115,7 +115,7 @@ suppliers + SKUs (ZAR, VAT 15%) → proforma PDF → PO → transit → land →
 
 **Backdate limits:** till/PO/transfer services stamp "now"; the pack then writes `tax_invoices.issue_date`, `payments.paid_on`, PO lead timestamps, transfer timestamps, and dead-stock `location_stock.updated_at`. Journals and stock-movement audit rows stay at seed-run time. Books `InvoiceCreate` does not move stock — BI books invoices are AR-only (no `sku_id`) so sales-by-SKU does not claim units still on hand. SKU sales signal comes from till + completed laybys.
 
-**Railway develop:** on service `firstout-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do **not** enable on production. After it runs, log in as `owner@example.com` / `change-me-owner`. Role logins exist only when `SEED_BOOT_FIXTURES=true`. Walk stock → proforma → PO → receive → transfer → till → books.
+**Railway (live env, tracks `main`):** on service `firstout-api`, set `SEED_PLAYGROUND=true` and redeploy (or restart). Safe to leave on — second boot is a no-op. Do **not** enable on production. After it runs, log in as `owner@example.com` / `change-me-owner`. Role logins exist only when `SEED_BOOT_FIXTURES=true`. Walk stock → proforma → PO → receive → transfer → till → books.
 
 Local: `SEED_PLAYGROUND=true` in `apps/firstout/backend/.env`, then restart uvicorn.
 
@@ -620,31 +620,33 @@ Read APIs (any authenticated user; cost fields are null without `stock.cost.view
 
 ## Railway
 
-**Own Railway project** — not Marrow `zoological-fulfillment`, not the Marrow develop environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Production has no Firstout services; the Marrow project has no Firstout config.
+> **Main only.** Firstout has no develop branch workflow and no separate develop environment. The single Railway environment below is *named* `develop` for historical reasons, but its services track git `main` and it is the live environment. Merging to `main` deploys it. Branch rules: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
+
+**Own Railway project** — not Marrow `zoological-fulfillment`, not any Marrow environment, not Marrow Postgres/Redis/photos. Do not add `firstout-*` services to the Marrow project. Production has no Firstout services; the Marrow project has no Firstout config.
 
 | Resource | ID / URL |
 |----------|----------|
 | Project `Firstout` | `c76d8df1-d839-454c-a94a-79b930deaf38` |
-| Environment `develop` | `7a8ce6f1-c514-4e5d-9c50-4b7918865321` |
+| Environment `develop` (name only; the live env, tracks `main`) | `7a8ce6f1-c514-4e5d-9c50-4b7918865321` |
 | Service `firstout-api` | `77a83033-b75e-4da1-88d0-b6db39bcedaf` |
 | Service `firstout-frontend` | `10838be1-7a37-4dfc-810a-8805d040d5d7` |
 | Postgres (own, not Marrow pgvector) | `a1a6695d-b8fb-4c79-92a6-664b48bc07e4` |
-| Bucket `firstout-dev` (Tigris, develop only) | `49435225-4849-4132-bb87-66a23c67cdf1` |
+| Bucket `firstout-dev` (Tigris, the live env) | `49435225-4849-4132-bb87-66a23c67cdf1` |
 | API | https://api.firstout.co.za (`/api/v1/health`, Swagger `/docs`) |
 | Frontend | https://firstout.co.za |
 
 - **Replicas:** 1 each (hobby tier, `sfo` region).
 - **Config files:** `apps/firstout/{backend,frontend}/railway.toml` — no Root Directory; Config File path points here.
 - **`watchPatterns`:** `apps/firstout/**` + `libs/backend/{core,db,storage}/**` (repo `railway.toml` and live `firstout-api`). Dockerfile `COPY`s `libs/backend/storage` for `f0rge_storage`.
-- **Manifest:** `.github/deploy/manifest.yml` — `branches: [develop]` only. No `health_url.main`, no production.
+- **Manifest:** `.github/deploy/manifest.yml` — `branches: [main]`. Smoke targets `health_url.main` (the live hosts). There is no separate production environment.
 - **Auth bootstrap:** on first deploy with empty `users`, seeds owner from `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (defaults `owner@example.com` / `change-me-owner`). `SEED_BOOT_FIXTURES` defaults false; set true only to also seed `till@` / `books@` / `warehouse@` / `buyer@example.com`, the storefront system user, and the Walk-in customer. Leave it false on the live API. Cookie `firstout_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
-- **Comms encryption:** `SETTINGS_ENCRYPTION_KEY` (Fernet) on `firstout-api` develop — required to save SMTP/WhatsApp secrets. Same value locally in `.env`.
+- **Comms encryption:** `SETTINGS_ENCRYPTION_KEY` (Fernet) on `firstout-api` — required to save SMTP/WhatsApp secrets. Same value locally in `.env`.
 - **WhatsApp click-to-chat:** `POST .../send {channel:whatsapp}` with Cloud API off writes outbox `whatsapp_click` / `opened` and returns a `https://wa.me/{e164}?text=...` URL. Click-to-chat cannot attach a PDF.
 - **WhatsApp Cloud API:** paste phone-number id + access token in Settings → Communications (`whatsapp_mode=cloud` when both present). Token and app secret are Fernet-encrypted; GET never returns them. Keep the existing WhatsApp Business app on the number — paste-token coexistence, no Embedded Signup. Unofficial WhatsApp libraries are banned.
 - **WhatsApp webhook:** public `GET/POST https://api.firstout.co.za/api/v1/webhooks/whatsapp` (no cookie). Meta verify token is env `WA_VERIFY_TOKEN`, not the access token. Local challenge: `curl -G 'http://localhost:8003/api/v1/webhooks/whatsapp' --data-urlencode 'hub.mode=subscribe' --data-urlencode "hub.verify_token=$WA_VERIFY_TOKEN" --data-urlencode 'hub.challenge=ok'`. HMAC `X-Hub-Signature-256` is required when an app secret is saved. Delivery statuses update `comms_messages`; inbound chat is not stored as a conversation.
 - **WhatsApp Cloud send:** when `whatsapp_mode=cloud`, `POST .../send {channel:whatsapp}` sends a pre-approved utility template then uploads the PDF (`type=document`). Template body parameters are (1) document number (2) amount inc VAT — laybys use remaining balance as the amount. First contact must use the template named in Settings (`wa_invoice_template_name`, default language `en`). 24h window / template failures return 409 with Meta's message and outbox `failed`. If Cloud is off, the same button stays click-to-chat. Graph timeout 20s; never log the Bearer token.
-- **Playground dataset:** set `SEED_PLAYGROUND=true` on `firstout-api` and redeploy to fill catalogue / PO / till / books for demos. Default off. See [Playground seed](#playground-seed-develop--local-demos).
-- **Object storage:** dedicated Railway Tigris bucket `firstout-dev` in this project only — never Marrow `photos` / `photos-dev`, never Marrow project buckets. On `firstout-api` develop: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{firstout-dev.*}}`; `AWS_ENDPOINT_URL_S3=https://fly.storage.tigris.dev`; `AWS_REGION=auto`. Keep `COOKIE_SECURE`, `JWT_SECRET`, `DATABASE_URL`. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Production is not wired.
+- **Playground dataset:** set `SEED_PLAYGROUND=true` on `firstout-api` and redeploy to fill catalogue / PO / till / books for demos. Default off. See [Playground seed](#playground-seed-live-demo-env--local-demos).
+- **Object storage:** dedicated Railway Tigris bucket `firstout-dev` in this project only — never Marrow `photos` / `photos-dev`, never Marrow project buckets. On `firstout-api`: `BUCKET_NAME` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` reference `${{firstout-dev.*}}`; `AWS_ENDPOINT_URL_S3=https://fly.storage.tigris.dev`; `AWS_REGION=auto`. Keep `COOKIE_SECURE`, `JWT_SECRET`, `DATABASE_URL`. When those AWS vars are unset (local), uploads use `STORAGE_DIR`. Production is not wired.
 
 ## V2 shell (issue #530)
 

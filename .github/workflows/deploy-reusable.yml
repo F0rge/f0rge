@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: develop or main
+        description: main (only deployed branch)
         required: true
         type: string
       sha:
@@ -117,7 +117,7 @@ jobs:
           WEBHOOK_SECRET_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DK_FRONTEND }}
           SECRET_ENV: ${{ matrix.component.webhook_secret_env }}
           SHA: ${{ inputs.sha }}
-          BRANCH: ${{ inputs.environment == 'main' && 'main' || 'develop' }}
+          BRANCH: main
           APP_NAME: ${{ matrix.component.name }}
           APP_UUID: ${{ matrix.component.app_uuid }}
         run: |

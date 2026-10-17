@@ -6,8 +6,8 @@ affected`, and delegates to Railway smoke or Coolify executors.
 
 Marrow ships via **Railway GitHub autodeploy**; Actions only plans + smokes.
 dk tag-printer remains on Coolify (Pi). Firstout is a **separate Railway
-project** (not Marrow `zoological-fulfillment` / not Marrow develop),
-**develop only**. Hosts: `firstout.co.za` /
+project** (not Marrow `zoological-fulfillment`),
+**`main` only**. Hosts: `firstout.co.za` /
 `api.firstout.co.za` (Swagger at `/docs`).
 
 ## Add app #3
@@ -21,8 +21,8 @@ project** (not Marrow `zoological-fulfillment` / not Marrow develop),
 4. For **Coolify (Pi)**: set `target: coolify`, `coolify.app_uuid`, and
    `webhook_secret_env` (name of a GitHub Actions secret holding the app's
    `manual_webhook_secret_github` value).
-5. Set `branches` — e.g. `[main]` for prod-only Pi apps, `[develop, main]` for
-   marrow.
+5. Set `branches` — e.g. `[main]`. `main` is the only deployed branch;
+   there is no develop environment.
 6. Add repo secrets if new Coolify webhooks are needed:
    - `COOLIFY_BASE_URL` (e.g. `https://coolify.taxpilot.lu`)
    - `COOLIFY_WEBHOOK_<APP>_*` per component

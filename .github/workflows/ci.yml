@@ -1,16 +1,16 @@
 name: CI
 
-# PR + push + workflow_dispatch on develop/main: parallel backend/frontend via
+# PR + push + workflow_dispatch on main (the only branch; no develop): parallel backend/frontend via
 # `nx affected` (no detect job) → `ci` gate. Deploy is a separate workflow
 # (deploy.yml) after this succeeds on push.
 # The aggregate gate job MUST stay named `ci` — branch rulesets require that context.
-# Tests (pytest / frontend unit / e2e-smoke) run on main only; develop skips them.
+# Tests (pytest / frontend unit / e2e-smoke) run for main.
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [main]
   push:
-    branches: [develop, main]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -87,8 +87,7 @@ jobs:
           python3 -m pip install --user pip-audit
           python3 -m pip_audit -r /tmp/marrow-req.txt
 
-      # Pytest is expensive (testcontainers). Run it on main/prod only;
-      # develop keeps lint + format-check so PRs stay cheap.
+      # Pytest is expensive (testcontainers). Runs for main.
       # workflow_dispatch uses run-many (full matrix).
       - name: nx affected (backend)
         env:
@@ -145,7 +144,7 @@ jobs:
       - name: Nx project registration guard
         run: bash .github/scripts/check-nx-projects.sh
 
-      # main only: prod-shaped build (was the sole difference between ci-main and ci-develop).
+      # main only: prod-shaped build.
       - name: Prod-shaped build env
         if: env.TARGET_BRANCH == 'main'
         run: |
@@ -174,7 +173,7 @@ jobs:
             echo "marrow-frontend not affected — skip backend sync for codegen"
           fi
 
-      # Unit tests only on main/prod; develop keeps lint/typecheck/build + codegen:check.
+      # Unit tests run for main alongside lint/typecheck/build + codegen:check.
       - name: nx affected (frontend)
         env:
           TARGET_BRANCH: ${{ env.TARGET_BRANCH }}

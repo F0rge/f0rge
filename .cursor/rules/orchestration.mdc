@@ -58,4 +58,4 @@ Template: `.cursor/skills/ship-feature/references/sub-agent-brief-template.md`
 
 ## End-to-end shipping
 
-For idea or GitHub issue implementation through develop → dev smoke → main PR, use the **`ship-feature`** skill (`.cursor/skills/ship-feature/SKILL.md`).
+For idea or GitHub issue implementation through a short-lived branch → PR into `main` → CI green → squash merge (deploys), use the **`ship-feature`** skill (`.cursor/skills/ship-feature/SKILL.md`).

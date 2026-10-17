@@ -54,3 +54,7 @@ Memory: `~/.cursor/agent-memory/devops/project_dk_tag_printer_deploy.md`
 - Frontend Dockerfile must `COPY libs/ui` (same pattern as marrow) — build context is repo root
 - Do **not** use `@f0rge/ui/api` — keep axios + `getApiBase()` for this stateless app
 - Full import/token contract: `.cursor/rules/ui-kit.mdc`
+
+## Branches
+
+Main only: there is no `develop` branch workflow and no develop environment. Branch off `main`, open PRs into `main`, squash merge; merging deploys. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).

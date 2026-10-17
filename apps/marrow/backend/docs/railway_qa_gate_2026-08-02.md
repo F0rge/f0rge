@@ -1,5 +1,7 @@
 # Railway cutover QA Gate — 2026-08-02
 
+> **Historical.** The develop environment, `develop` branch workflow, and `api-dev` / `app-dev` hosts referenced below are retired. Marrow deploys from `main` only.
+
 ## Verdict
 
 **PASS** — custom domains on Railway (prod + develop).

@@ -13,7 +13,7 @@ Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
 | App | Target | Branches | Manifest component |
 |-----|--------|----------|-------------------|
 | marrow | Railway project `zoological-fulfillment` (autodeploy + Actions smoke) | `main` only | `marrow-backend`, `marrow-frontend` |
-| firstout | **Own** Railway project `Firstout` (`c76d8df1-…`). Hosts `firstout-dev` / `firstout-dev-api` on `leo-figueiredo.com` | `develop` only | `firstout-backend`, `firstout-frontend` |
+| firstout | **Own** Railway project `Firstout` (`c76d8df1-…`). Hosts `firstout.co.za` / `api.firstout.co.za` | `main` only | `firstout-backend`, `firstout-frontend` |
 | dk tag printer | Pi Coolify | `main` only | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
 
 Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) reads [`.github/deploy/manifest.yml`](../.github/deploy/manifest.yml) + Nx affected. Marrow smoke: [`railway-smoke-reusable.yml`](../.github/workflows/railway-smoke-reusable.yml). Coolify: webhook POST from deploy job (secrets `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DK_*`).
@@ -28,13 +28,12 @@ Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/dep
 |---|---|---|---|---|
 | Production | `main` | https://marrow-health.com | https://api.marrow-health.com | https://mcp.marrow-health.com |
 
-Marrow CI still integrates on the `develop` git branch; Railway deploy and Actions smoke for Marrow run on `main` only. Firstout continues to deploy from `develop`.
+**There is no develop environment and no `develop` branch workflow.** Every app deploys from `main` only; Railway services track `main`. Merging to `main` is deploying. Git flow: root [`AGENTS.md`](../../AGENTS.md#git-flow-trunk-based-main-only).
 
 Railway `*.up.railway.app` hostnames also work for interim smoke.
 
-- `develop` is the integration branch; PRs land there, run `.github/workflows/ci.yml`, then merge.
-- Promotion to prod is a PR `develop` → `main`, gated by the same CI.
-- After CI green on push to `develop`/`main`, [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) calls [`deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) (manifest + Nx affected → Railway smoke or Coolify). Marrow smoke/deploy targets production (`main`) only; pushes to `develop` still deploy Firstout when affected.
+- Short-lived feature branches off `main` (`feat/…`, `fix/…`, `chore/…`, `docs/…`, `hotfix/…`); PRs into `main` only; CI green; squash merge. No long-lived branches. Hotfixes are ordinary PRs into `main`.
+- After CI green on push to `main`, [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) calls [`deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) (manifest + Nx affected → Railway smoke or Coolify). Marrow and Firstout smoke target the live `main` deployments.
 
 ## Railway services
 
@@ -93,7 +92,7 @@ For every new `app/config.py` setting:
 
 - [ ] In `apps/marrow/backend/.env.example`
 - [ ] README/deploy doc updated if required
-- [ ] Set on Railway service variables (production + develop)
+- [ ] Set on Railway service variables (production)
 - [ ] Degrades gracefully when missing (no 500 storm)
 - [ ] Startup warning when feature enabled but credentials missing
 

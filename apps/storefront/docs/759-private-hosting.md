@@ -1,5 +1,7 @@
 # Vellano private Railway preview
 
+> **Main only.** There is no `develop` branch workflow. The Railway environment named `develop` below is a name only; its services track `main`. Use `--base=origin/main` for affected checks.
+
 Issue #759 asks for a private hosted Vellano with isolated Medusa data
 services, a real Firstout SKU round-trip, health checks, a rollback path, and a
 monthly total below USD 50.
@@ -172,7 +174,7 @@ provisioning, run the affected checks and verify both Dockerfiles build from
 the repository root:
 
 ~~~bash
-npx nx affected -t=lint,typecheck,build --base=origin/develop --head=HEAD
+npx nx affected -t=lint,typecheck,build --base=origin/main --head=HEAD
 docker build -f apps/storefront/commerce/Dockerfile .
 docker build -f apps/storefront/web/Dockerfile .
 ~~~

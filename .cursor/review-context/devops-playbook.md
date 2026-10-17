@@ -31,11 +31,10 @@ Review checklist for infrastructure diffs. Load this when reviewing a PR that to
 
 - **Custom domain without cert plan.** New `marrow-health.com` hostnames need `fly certs add` + Cloudflare DNS-only (grey cloud) + ACME CNAME until issued.
 
-## Fly deploy conventions
+## Fly deploy conventions (historical; Marrow now deploys on Railway from `main` only, no develop env)
 
 | Env | Branch | Apps | Workflow |
 |---|---|---|---|
-| Dev | `develop` | `marrow-dev`, `marrow-mcp-dev`, `marrow-ui-dev` | `ci.yml` (deploy job) |
 | Prod | `main` | `marrow`, `marrow-mcp`, `marrow-ui` | `ci.yml` (deploy job) |
 
 Deploy order: API (alembic via `release_command`) → MCP (serial); frontend parallel. Jobs: `plan`, `deploy api`, `deploy mcp`, `deploy frontend`, `smoke`. `workflow_dispatch` supports `component=all|api|mcp|frontend`.
@@ -50,7 +49,9 @@ Full reference: [README.md](../../README.md#cicd), `.cursor/rules/infra.mdc`.
 - [ ] `fly secrets set` on `marrow-dev` / `marrow` documented if required
 - [ ] Degrades gracefully when missing
 
-## Smoke URLs (dev)
+## Smoke URLs
 
-- https://api-dev.marrow-health.com/api/v1/health
-- https://app-dev.marrow-health.com/
+There is no dev environment (`api-dev` / `app-dev` are retired). Smoke production after merge to `main`:
+
+- https://api.marrow-health.com/api/v1/health
+- https://marrow-health.com/
