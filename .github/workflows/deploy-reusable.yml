@@ -29,6 +29,8 @@ on:
         required: false
       COOLIFY_WEBHOOK_DK_FRONTEND:
         required: false
+      COOLIFY_WEBHOOK_BUYCYCLE:
+        required: false
       SMOKE_EMAIL:
         required: false
       SMOKE_PASSWORD:
@@ -115,6 +117,7 @@ jobs:
           COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
           WEBHOOK_SECRET_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DK_BACKEND }}
           WEBHOOK_SECRET_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DK_FRONTEND }}
+          WEBHOOK_SECRET_BUYCYCLE: ${{ secrets.COOLIFY_WEBHOOK_BUYCYCLE }}
           SECRET_ENV: ${{ matrix.component.webhook_secret_env }}
           SHA: ${{ inputs.sha }}
           BRANCH: main
@@ -126,6 +129,7 @@ jobs:
           case "$SECRET_ENV" in
             COOLIFY_WEBHOOK_DK_BACKEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_BACKEND" ;;
             COOLIFY_WEBHOOK_DK_FRONTEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_FRONTEND" ;;
+            COOLIFY_WEBHOOK_BUYCYCLE) WEBHOOK_SECRET="$WEBHOOK_SECRET_BUYCYCLE" ;;
             *) echo "Unknown webhook secret env: $SECRET_ENV"; exit 1 ;;
           esac
           # Secrets missing → Coolify path not configured; skip rather than fail the release.
@@ -134,6 +138,12 @@ jobs:
             echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Placeholder UUID → app not created in Coolify yet; skip.
+          case "$APP_UUID" in TODO*)
+            echo "::notice::Skipping Coolify deploy for $APP_NAME — app_uuid is still a placeholder in manifest.yml"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0 ;;
+          esac
           # `commits` is required: Coolify reads commits.*.added before checking the
           # signature, and foreaches the result — omitting the key 500s the endpoint.
           PAYLOAD=$(jq -nc \
@@ -181,7 +191,9 @@ jobs:
           echo "Triggered Coolify deploy for $APP_NAME"
 
       - name: Smoke health
-        if: steps.coolify.outputs.skipped != 'true'
+        # Internal-only targets (e.g. buycycle on the Pi) have no health_url: runners can't reach them,
+        # so the queued-deploy assertion above is the check.
+        if: steps.coolify.outputs.skipped != 'true' && matrix.component.health_url != ''
         env:
           HEALTH_URL: ${{ matrix.component.health_url }}
         run: |
