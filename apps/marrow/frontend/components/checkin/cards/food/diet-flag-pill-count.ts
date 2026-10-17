@@ -8,6 +8,11 @@ export function dietFlagPillCount(flag: string, signal: PhotoSignal): number {
   return signal.sources[flag]?.length ?? 0
 }
 
+// Header noun. Zero and every count other than 1 use the plural.
+export function dietFlagIngredientLabel(count: number): string {
+  return `${count} ${count === 1 ? 'flagged ingredient' : 'flagged ingredients'}`
+}
+
 // Header count. One ingredient listed under two flags counts once.
 export function dietFlagIngredientCount(signal: PhotoSignal): number {
   const names = new Set<string>()

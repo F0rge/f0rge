@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { dietFlagIngredientCount, dietFlagPillCount } from './diet-flag-pill-count'
+import {
+  dietFlagIngredientCount,
+  dietFlagIngredientLabel,
+  dietFlagPillCount,
+} from './diet-flag-pill-count'
 import type { PhotoSignal } from '@/lib/api/types'
 
 // 2026-10-17 check-in: coffee with oat milk + H3 carbonara.
@@ -64,5 +68,17 @@ describe('dietFlagIngredientCount', () => {
 
   it('is zero when nothing is listed', () => {
     expect(dietFlagIngredientCount({ ...october17, sources: {} })).toBe(0)
+  })
+})
+
+describe('dietFlagIngredientLabel', () => {
+  it('uses the singular only when one ingredient is flagged', () => {
+    expect(dietFlagIngredientLabel(1)).toBe('1 flagged ingredient')
+  })
+
+  it('uses the plural for every other count', () => {
+    expect(dietFlagIngredientLabel(0)).toBe('0 flagged ingredients')
+    expect(dietFlagIngredientLabel(3)).toBe('3 flagged ingredients')
+    expect(dietFlagIngredientLabel(4)).toBe('4 flagged ingredients')
   })
 })
