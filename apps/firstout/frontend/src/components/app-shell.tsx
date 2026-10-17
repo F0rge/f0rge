@@ -299,7 +299,11 @@ export function AppShell({ children }: AppShellProps) {
                 router.push("/");
               }}
             >
-              <img src="/brand/mark-on-dark.png" alt="Firstout" width={32} height={32} />
+              <img src="/brand/mark-on-dark.png" alt="" width={32} height={32} />
+              <span className="firstout-org">
+                <span className="firstout-org-name">Primavera</span>
+                <span className="firstout-org-by">powered by FirstOut</span>
+              </span>
             </HeaderName>
             <HeaderGlobalBar>
               <HeaderSearch />

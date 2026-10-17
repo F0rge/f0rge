@@ -162,7 +162,7 @@ export default function ProfilePage() {
       <Stack gap={4} data-tour="profile-tours">
         <h2 className="cds--type-productive-heading-03">Tours</h2>
         <p className="cds--type-body-01">
-          The question mark restarts the tour for this page. Overview walks the whole shop.
+          The question mark opens the tour for this page. Overview walks the whole shop.
         </p>
         <div className="firstout-catalogue-actions">
           <Button kind="tertiary" type="button" onClick={() => startPageTour()}>
