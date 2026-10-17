@@ -5,15 +5,7 @@ import { Camera } from 'lucide-react'
 import { apiGet, ApiError } from '@f0rge/ui/api'
 import type { Entry, PhotoSignal, DietTagCatalogItem, PhotoAnalysis } from '@/lib/api/types'
 
-function getFlagScore(flag: string, signal: PhotoSignal): number {
-  switch (flag) {
-    case 'high-histamine': return signal.scores.histamine_load
-    case 'high-fodmap': return signal.scores.fodmap_count
-    case 'gluten': return signal.scores.gluten_count
-    case 'dairy': return signal.scores.dairy_count
-    default: return 0
-  }
-}
+import { dietFlagIngredientCount, dietFlagPillCount } from './diet-flag-pill-count'
 
 function buildSourceLine(signal: PhotoSignal, catalog: DietTagCatalogItem[]): string {
   return signal.flags
@@ -58,7 +50,7 @@ interface PhotoDerivedRowProps {
 
 function PhotoDerivedRow({ signal, photoCount, catalog }: PhotoDerivedRowProps) {
   const sourceLine = buildSourceLine(signal, catalog)
-  const ingredientCount = Object.values(signal.sources).reduce((sum, arr) => sum + arr.length, 0)
+  const ingredientCount = dietFlagIngredientCount(signal)
 
   return (
     <div className="space-y-2">
@@ -76,12 +68,10 @@ function PhotoDerivedRow({ signal, photoCount, catalog }: PhotoDerivedRowProps) 
           <div className="flex flex-wrap gap-2">
             {signal.flags.map((flag) => {
               const catalogItem = catalog.find((o) => o.key === flag)
-              const score = getFlagScore(flag, signal)
+              const score = dietFlagPillCount(flag, signal)
               const sources = signal.sources[flag] ?? []
               const flagLabel = catalogItem?.label ?? flag
-              const scoreDescription = flag === 'high-histamine'
-                ? `Σ histamine_score = ${score}`
-                : `${score} ingredient${score !== 1 ? 's' : ''}`
+              const scoreDescription = `${score} ingredient${score === 1 ? '' : 's'}`
               return (
                 <LockedChip
                   key={flag}
