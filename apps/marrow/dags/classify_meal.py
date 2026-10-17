@@ -209,13 +209,16 @@ def marrow_classify_meal() -> None:
         prompt=USER_PROMPT,
         system_prompt="{{ ti.xcom_pull(task_ids='resolve_job')['system_prompt'] }}",
         llm_conn_id=LLM_CONN_ID,
+        model_id="openai:google/gemini-3.1-flash-lite",
         file_path="{{ ti.xcom_pull(task_ids='resolve_job')['file_path'] }}",
         file_conn_id=FILE_CONN_ID,
         multi_modal=True,
         output_type=VisionResult,
         serialize_output=True,
         require_approval=False,
-        agent_params={"retries": 3},
+        # OpenRouter reserves the model max (65536) when max_tokens is omitted
+        # and returns 402 if the key cannot cover that budget.
+        agent_params={"retries": 3, "model_settings": {"max_tokens": 8192}},
         retries=2,
         retry_delay=timedelta(seconds=45),
         max_file_size_bytes=8 * 1024 * 1024,
