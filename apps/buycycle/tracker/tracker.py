@@ -242,6 +242,71 @@ def model_key(kind, name, brand):
     return " ".join(toks[: 3 if kind == "wheels" else 2])
 
 
+def _days_listed(row, now):
+    start = row["activated_at"] or dt.datetime.fromisoformat(row["first_seen"]).timestamp()
+    end = dt.datetime.fromisoformat(row["gone_at"]).timestamp() if row["gone_at"] else now
+    return (end - start) / 86400
+
+
+def _same_comp(kind, a, b):
+    """Same live-comp match as the average: not itself; bikes also keep model year ±1."""
+    if a["id"] == b["id"]:
+        return False
+    if kind != "wheels" and a["year"] is not None and b["year"] is not None and abs(a["year"] - b["year"]) > 1:
+        return False
+    return True
+
+
+def _zscore(price, comps):
+    """(price - mean) / population stdev of the other live comps. None under 2 comps or when stdev is 0."""
+    prices = [x["price"] for x in comps]
+    if len(prices) < 2:
+        return None
+    sd = st.pstdev(prices)
+    if not sd:
+        return None
+    return round((price - st.fmean(prices)) / sd, 2)
+
+
+def _cut_speed(row, history, days):
+    """€/day from the original ask, or the first snapshot. 0 if it did not fall. None with no history."""
+    if not history:
+        return None
+    start = row["original_price"] or history[0][1]
+    delta = start - row["price"]
+    if delta <= 0:
+        return 0
+    if days <= 0:
+        return None
+    return round(delta / days, 2)
+
+
+def _sell_through(cohort, cut30):
+    """Share of comps first seen on or before cut30 that left the feed within 30 days. None if fewer than 5."""
+    mature = [x for x in cohort if x["first_seen"] and x["first_seen"] <= cut30]
+    if len(mature) < 5:
+        return None, None
+    fast = 0
+    for x in mature:
+        if not x["gone_at"]:
+            continue
+        span = (dt.date.fromisoformat(x["gone_at"][:10]) - dt.date.fromisoformat(x["first_seen"][:10])).days
+        if 0 <= span <= 30:
+            fast += 1
+    return round(fast / len(mature) * 100, 1), len(mature)
+
+
+def _versus_typical(days, cohort, now):
+    """days listed / median days-to-disappear of comps that have left the feed. None if fewer than 5."""
+    gone = [x for x in cohort if x["gone_at"] and x["first_seen"]]
+    if len(gone) < 5:
+        return None
+    med = st.median(_days_listed(x, now) for x in gone)
+    if med <= 0:
+        return None
+    return round(days / med, 2)
+
+
 def build(c, kind, today):
     cmap = dict(c.execute("select cid,country from country_map").fetchall())
     rows = [
@@ -270,10 +335,15 @@ def build(c, kind, today):
         L.append(r)
     act = [r for r in L if not r["gone_at"]]
     G = collections.defaultdict(list)
+    allg = collections.defaultdict(list)
+    for r in L:
+        if r["mk"]:
+            allg[(r["bk"], r["mk"], r["brake"], r["mat"])].append(r)
     for r in act:
         if r["mk"]:
             G[(r["bk"], r["mk"], r["brake"], r["mat"])].append(r)
     now = time.time()
+    cut30 = (dt.date.fromisoformat(today) - dt.timedelta(days=30)).isoformat()
     D = []
     for r in L:
         g = G.get((r["bk"], r["mk"], r["brake"], r["mat"]), [])
@@ -281,6 +351,9 @@ def build(c, kind, today):
         ref = st.median(x["price"] for x in comps) if len(comps) >= 3 else None
         # mean ask of the same live comps (any count). None when there are none, so the column is a dash.
         av = round(st.fmean(x["price"] for x in comps), 2) if comps else None
+        z = _zscore(r["price"], comps)
+        cohort = [x for x in allg.get((r["bk"], r["mk"], r["brake"], r["mat"]), []) if _same_comp(kind, r, x)]
+        sold, sold_n = _sell_through(cohort, cut30)
         disp = None
         if len(comps) >= 4:
             q = st.quantiles([x["price"] for x in comps], n=4)
@@ -290,8 +363,9 @@ def build(c, kind, today):
         h = hist.get(r["id"], [])
         drops = sum(1 for a, b in zip(h, h[1:]) if b[1] < a[1])
         orig = r["original_price"] or r["price"]
-        start = r["activated_at"] or (dt.datetime.fromisoformat(r["first_seen"]).timestamp())
-        end = dt.datetime.fromisoformat(r["gone_at"]).timestamp() if r["gone_at"] else now
+        dl = round(_days_listed(r, now), 1)
+        cs = _cut_speed(r, h, dl)
+        vs = _versus_typical(dl, cohort, now)
         country = r["dcountry"] or cmap.get(r["country_id"]) or ""
         risk = []
         if disc is not None and disc >= 55:
@@ -326,18 +400,19 @@ def build(c, kind, today):
                 "r": ref,
                 "nc": len(comps),
                 "av": av,
+                "z": z,
+                "cs": cs,
+                "st": sold,
+                "sn": sold_n,
+                "vs": vs,
                 "cf": conf,
                 "sp": disp,
                 "d": disc,
-                "dl": round((end - start) / 86400, 1),
+                "dl": dl,
                 "ld": 1 if r["activated_at"] else 0,
                 "fs": r["first_seen"],
                 "g": r["gone_at"],
                 "pr": r["pr"] or 0,
-                "flex": (2 if r["pr"] else 0)
-                + min(drops, 3)
-                + (1 if (r["activated_at"] and (now - r["activated_at"]) / 86400 > 90) else 0)
-                + (1 if orig > r["price"] else 0),
                 "pd": drops + (1 if orig > r["price"] and drops == 0 else 0),
                 "pdp": round((orig - r["price"]) / orig * 100, 1) if orig else 0,
                 "h": h[-30:] if len(h) > 1 else [],
@@ -427,6 +502,11 @@ COLS = [
     "r",
     "nc",
     "av",
+    "z",
+    "cs",
+    "st",
+    "sn",
+    "vs",
     "cf",
     "sp",
     "d",
@@ -437,7 +517,6 @@ COLS = [
     "pd",
     "pdp",
     "pr",
-    "flex",
     "co",
     "km",
     "sr",

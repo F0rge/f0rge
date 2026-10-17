@@ -20,7 +20,7 @@
 <main>
 <section id=t-deals>
  <div class=d-md-flex>
-  <aside class="d-none d-md-block col-md-4 col-lg-3 border-right p-3" aria-label=Filters>
+  <aside class="d-none d-md-block col-md-4 col-lg-2 border-right p-3" aria-label=Filters>
    <div class="d-flex flex-items-center flex-justify-between mb-2"><h2 class="f5 text-semibold">Filters</h2><button type=button class="Button Button--invisible Button--small" data-reset><span class=Button-content><span class=Button-label>Reset</span></span></button></div>
    <div id=fd></div><p class="f6 color-fg-muted mt-3">Filters and sort are kept in the URL; bookmark it to keep a view.</p>
   </aside>
@@ -83,12 +83,18 @@ let C=Object.assign({},DEF,ld('costs',{})),WL=ld('watch',{}),LOG=ld('log',[]),IT
 const HARD=['too-good-to-be-true','implausibly low price','zero-review seller'],CONF={none:0,low:1,medium:2,high:3},COND={'1':'fair','2':'good','3':'very good','4':'like new'};
 const TABS=[['deals','Deals','list-unordered'],['insights','Insights','graph'],['watch','Watchlist','star'],['alerts','Alerts','bell']],SECT={deals:['deals'],insights:['charts','models'],watch:['watch'],alerts:['alerts'],costs:['costs'],method:['method']};
 // single sort state (column key + direction); desktop = DataTable header buttons, mobile = one select
-const SORTS=[['pf','€ profit'],['roi','ROI %'],['d','% under ref.'],['av','Avg ask'],['nc','Comps'],['flex','Flexibility'],['dl','Days listed'],['p','Price'],['pdp','Price drop %']],ASC_DEFAULT=['dl','p','av'];
+const SORTS=[['pf','€ profit'],['roi','ROI %'],['d','% under ref.'],['av','Avg ask'],['nc','Comps'],['z','Z-score'],['cs','€/day cut'],['st','Sold within 30d'],['vs','Days vs typical'],['dl','Days listed'],['p','Price'],['pdp','Price drop %']],ASC_DEFAULT=['dl','p','av','z','vs'];
+const TIP={
+z:'How far the ask sits from the live comps: (price - their mean) / their standard deviation, this listing left out. Marked low under 5 comps. Blank under 2 comps or when every comp ask is the same.',
+cs:'Euros cut per day listed. Start is buycycle original price, or the first daily snapshot when there is no original, minus the current price, divided by days listed. 0 when the ask did not fall. Blank when this tracker has no price history.',
+st:'Share of the same comps first seen at least 30 days ago that disappeared within 30 days. Disappeared means a complete daily pass no longer listed them (sold or withdrawn; buycycle publishes no sold status). The number after the percent is how many comps were old enough. Blank under 5. History only goes back to when this tracker started, so this is often blank.',
+vs:'Days listed divided by the median days-to-disappear of the same comps that have disappeared. Blank when fewer than 5 comparables have disappeared.',
+str:'Model sell-through over the last 30 days, and the median days those listings took to disappear.'};
 // ---------- filters: grouped, rendered into desktop sidebar and mobile dialog ----------
 const FG=[['Find',[['q','Search','text','model, brand, groupset…'],['brand','Brand','select'],['size','Size','text','e.g. 56, M'],...EXTRA.map(e=>[e.id,e.label,'select'])]],
- ['Price & return',[['pmin','Min price €','number'],['pmax','Max price €','number'],['avmin','Min avg ask €','number'],['avmax','Max avg ask €','number'],['minp','Min profit €','number'],['minr','Min ROI %','number']]],
+ ['Price & return',[['pmin','Min price €','number'],['pmax','Max price €','number'],['avmin','Min avg ask €','number'],['avmax','Max avg ask €','number'],['zmin','Min z-score','number'],['zmax','Max z-score','number'],['csmin','Min €/day cut','number'],['stmin','Min sold %','number'],['vsmax','Max days vs typical','number'],['minp','Min profit €','number'],['minr','Min ROI %','number']]],
  ['Trust & risk',[['conf','Comparables confidence','seg',[['','Any'],['low','Low+'],['medium','Med+'],['high','High']]],['minc','Min comps','number'],['risk','Risk flags','seg',[['','Hide hard'],['all','All'],['none','None']]],
-  ['flex','Seller flexibility','select',[['','Any'],['pr','buycycle "price reduced"'],['drop','Dropped (history or vs original)'],['any','Either signal'],['hi','Flex score ≥3']]]]],
+  ['flex','Seller flexibility','select',[['','Any'],['pr','buycycle "price reduced"'],['drop','Dropped (history or vs original)'],['any','Either signal']]]]],
  ['Location & age',[['country','Country','select'],['kmax','Max km from Luxembourg','number'],['dmax','Max days listed','number']]]];
 const F=FG.flatMap(g=>g[1]);const FV={};F.forEach(f=>FV[f[0]]='');
 function fHtml(p){return FG.map(([g,fs],gi)=>`<div role=group aria-labelledby=${p}g${gi} class="${gi?'border-top pt-3 mt-3':''}"><h3 class="f6 text-semibold color-fg-muted mb-2" id=${p}g${gi}>${g}</h3>${fs.filter(f=>!(p=='m'&&f[0]=='q')).map(f=>{const id=p+f[0];
@@ -109,15 +115,21 @@ function writeHash(){const h=new URLSearchParams();F.forEach(f=>{const v=FV[f[0]
  if(TAB=='insights'&&$('msel').value)h.set('m',$('msel').value);history.replaceState(null,'','#'+h)}
 // ---------- data ----------
 function unpack(d){return d.rows.map(r=>{const x={};d.cols.forEach((c,j)=>{if(r[j]!=null)x[c]=r[j]});x.u=PFX+x.u;x.rk=x.rk||[];x._s=(x.n+' '+x.b+' '+(x.cp||'')+' '+(x.ct||'')+' '+(x.m||'')).toLowerCase();calc(x);return x})}
+// data.json from before the av column still has nc and p. Mean of p over the same live comps (brand, model, brake, rim; bikes also year ±1).
+function compKey(x){return (x.b||'').toLowerCase()+'\0'+x.m+'\0'+(x.k||'')+'\0'+(x.mt||'')}
+function liveGroups(items){const G=new Map();for(const x of items){if(x.g||!x.m)continue;const key=compKey(x);(G.get(key)||G.set(key,[]).get(key)).push(x)}return G}
+function liveComps(G,x){return x.m?(G.get(compKey(x))||[]).filter(y=>y.i!=x.i&&(KIND=='wheels'||x.y==null||y.y==null||Math.abs(+y.y-+x.y)<=1)):[]}
+function fillAvg(items){if(!items.some(x=>x.nc&&x.av==null))return;const G=liveGroups(items);for(const x of items){if(x.av!=null||!x.m)continue;const prices=liveComps(G,x).map(y=>y.p).filter(p=>typeof p=='number');if(prices.length)x.av=Math.round(prices.reduce((a,b)=>a+b,0)/prices.length*100)/100}}
+function fillZ(items){if(!items.some(x=>(x.nc||0)>=2&&x.z==null))return;const G=liveGroups(items);for(const x of items){if(x.z!=null||!x.m)continue;const p=liveComps(G,x).map(y=>y.p).filter(v=>typeof v=='number');if(p.length<2)continue;const m=p.reduce((a,b)=>a+b,0)/p.length,sd=Math.sqrt(p.reduce((a,b)=>a+(b-m)*(b-m),0)/p.length);if(sd)x.z=Math.round((x.p-m)/sd*100)/100}}
 function calc(x){x.pf=x.roi=null;if(x.r==null)return;const sale=x.r*(1-C.haircut/100),cost=x.p*(1+C.bp/100)+C.bpf+x.p*C.pay/100+C.shipin+C.pack+C.repair+C.buffer;
  x.pf=sale*(1-C.sellfee/100)-C.shipout-C.relist-cost;x.roi=x.pf/cost*100}
 const getModels=()=>MODELS?Promise.resolve(MODELS):fetch('models.json').then(r=>r.json()).then(m=>MODELS=m);
 const getDet=()=>DET?Promise.resolve(DET):fetch('details.json').then(r=>r.json()).then(m=>DET=m);
-function flexOk(x,f){const dr=(x.pd||0)>0||(x.pdp||0)>0;return !f||(f=='pr'&&x.pr)||(f=='drop'&&dr)||(f=='any'&&(x.pr||dr))||(f=='hi'&&(x.flex||0)>=3)}
+function flexOk(x,f){const dr=(x.pd||0)>0||(x.pdp||0)>0;return !f||(f=='pr'&&x.pr)||(f=='drop'&&dr)||(f=='any'&&(x.pr||dr))}
 function filt(){const g=k=>FV[k],num=k=>g(k)===''?null:+g(k),q=g('q').toLowerCase().split(/\s+/).filter(Boolean),cf=CONF[g('conf')]||0;
- const f={pmin:num('pmin'),pmax:num('pmax'),minp:num('minp'),minr:num('minr'),dmax:num('dmax'),kmax:num('kmax'),avmin:num('avmin'),avmax:num('avmax'),minc:num('minc')};
+ const f={pmin:num('pmin'),pmax:num('pmax'),minp:num('minp'),minr:num('minr'),dmax:num('dmax'),kmax:num('kmax'),avmin:num('avmin'),avmax:num('avmax'),minc:num('minc'),zmin:num('zmin'),zmax:num('zmax'),csmin:num('csmin'),stmin:num('stmin'),vsmax:num('vsmax')};
  view=ITEMS.filter(x=>!x.g&&(!g('brand')||x.b==g('brand'))&&(!g('country')||x.co==g('country'))&&(!g('size')||String(x.s||'').toLowerCase().includes(g('size').toLowerCase()))
-  &&(f.pmin==null||x.p>=f.pmin)&&(f.pmax==null||x.p<=f.pmax)&&(f.avmin==null||(x.av!=null&&x.av>=f.avmin))&&(f.avmax==null||(x.av!=null&&x.av<=f.avmax))&&(f.minc==null||(x.nc||0)>=f.minc)&&(f.minp==null||(x.pf??-1e9)>=f.minp)&&(f.minr==null||(x.roi??-1e9)>=f.minr)&&(f.dmax==null||x.dl<=f.dmax)
+  &&(f.pmin==null||x.p>=f.pmin)&&(f.pmax==null||x.p<=f.pmax)&&(f.avmin==null||(x.av!=null&&x.av>=f.avmin))&&(f.avmax==null||(x.av!=null&&x.av<=f.avmax))&&(f.zmin==null||(x.z!=null&&x.z>=f.zmin))&&(f.zmax==null||(x.z!=null&&x.z<=f.zmax))&&(f.csmin==null||(x.cs!=null&&x.cs>=f.csmin))&&(f.stmin==null||(x.st!=null&&x.st>=f.stmin))&&(f.vsmax==null||(x.vs!=null&&x.vs<=f.vsmax))&&(f.minc==null||(x.nc||0)>=f.minc)&&(f.minp==null||(x.pf??-1e9)>=f.minp)&&(f.minr==null||(x.roi??-1e9)>=f.minr)&&(f.dmax==null||x.dl<=f.dmax)
   &&(f.kmax==null||(x.km!=null&&x.km<=f.kmax))&&(!cf||CONF[x.cf||'none']>=cf)&&(g('risk')!=''||!x.rk.some(r=>HARD.includes(r)))&&(g('risk')!='none'||!x.rk.length)
   &&flexOk(x,g('flex'))&&EXTRA.every(e=>!g(e.id)||x[e.k]==g(e.id))&&(!q.length||q.every(w=>x._s.includes(w))));
  const key=SORT,asc=ASC;
@@ -133,28 +145,34 @@ const bar=x=>x.d==null?'':`<span class="Progress Progress--small mt-1" aria-hidd
 const star=x=>`<button type=button class="Button Button--invisible Button--iconOnly Button--small" data-w="${x.i}" aria-label="${WL[x.i]?'Unwatch':'Watch'} ${esc(x.n)}" aria-pressed="${!!WL[x.i]}">${oc(WL[x.i]?'star-fill':'star',WL[x.i]?'color-fg-attention':'')}</button>`;
 const compsBtn=x=>x.d!=null&&x.d>20?`<details data-c="${x.i}" class=mt-1><summary class="f6 Link--muted">comparables</summary><div class="f6" data-cl></div></details>`:'';
 const meta=x=>`${esc(x.b)} · ${esc(x.s||'?')} · ${x.y||''} · ${COND[x.c]||''}${x.cp?' · '+esc(x.cp):''}${x.k?' · '+x.k+' · '+(x.mt||'')+' · '+(x.w||''):''}`;
-const COLS=[['n','Listing','minmax(168px,2.4fr)'],['p','Price','minmax(80px,.7fr)',1],['r','Reference','minmax(112px,1fr)',1],['av','Avg ask','minmax(68px,.6fr)',1],['nc','Comps','minmax(60px,.45fr)',1],['d','Under ref.','minmax(100px,.9fr)',1],['pf','€ profit','minmax(80px,.7fr)',1],['roi','ROI','minmax(56px,.5fr)',1],
- ['dl','Days','minmax(52px,.5fr)',1],['flex','Flex','minmax(48px,.4fr)',1],['str','Model STR / DTS','minmax(90px,.7fr)',1],['co','Location','minmax(72px,.6fr)'],['rk','Risk','minmax(100px,.9fr)'],['_','Watch','48px']];
-const TD=(a,h)=>`<td class=prc-DataTable-TableCell-Fk4ve${a?' data-cell-align=end':''}><div class=width-full>${h}</div></td>`;
+const COLS=[['n','Listing','minmax(120px,1.6fr)'],['p','Price','minmax(64px,.5fr)',1],['r','Reference','minmax(80px,.65fr)',1],['av','Avg ask','minmax(64px,.5fr)',1],['nc','Comps','minmax(58px,.45fr)',1],['z','Z','minmax(76px,.6fr)',1],['cs','€/day','minmax(56px,.45fr)',1],['st','Sold %','minmax(72px,.55fr)',1],['vs','vs sell','minmax(60px,.45fr)',1],['d','Under','minmax(76px,.55fr)',1],['pf','Profit','minmax(80px,.6fr)',1],['roi','ROI','minmax(48px,.4fr)',1],
+ ['dl','Days','minmax(44px,.35fr)',1],['str','STR','minmax(52px,.4fr)',1],['co','Loc','minmax(64px,.45fr)'],['rk','Risk','minmax(64px,.5fr)'],['_','Watch','52px']];
+const TD=(a,h)=>`<td class="prc-DataTable-TableCell-Fk4ve min-width-0"${a?' data-cell-align=end':''}><div class="width-full min-width-0">${h}</div></td>`;
 function row(x,j,cols){const c={n:`${strong(x)?lab('Strong deal','success'):''}<a class="Link--primary text-semibold" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><div class="f6 color-fg-muted">${meta(x)}</div>`,
  p:`${eur(x.p)}${x.pdp>0?`<div class="f6 color-fg-muted">was ${eur(x.op)} (−${x.pdp}%)</div>`:''}${x.pr?'<div>'+lab('reduced','accent')+'</div>':''}`,r:`${eur(x.r)}<div class=mt-1>${cfHtml(x)}</div>${compsBtn(x)}`,
  av:eur(x.av),nc:x.nc?String(x.nc):'–',
+ z:zCell(x),cs:csCell(x),st:stCell(x),vs:vsCell(x),
  d:x.d==null?'–':`<span class=text-semibold>${x.d}%</span><div class="f6 color-fg-muted">${eur(x.r-x.p)} under</div>${bar(x)}`,pf:`<span class="text-semibold ${sgn(x.pf)}">${eur(x.pf)}</span>`,roi:`<span class="${sgn(x.roi)}">${x.roi!=null?Math.round(x.roi)+'%':'–'}</span>`,
- dl:`${Math.round(x.dl)}${x.ld?'':'*'}${x.pd?`<div class=mt-1><span class=Counter>${x.pd}</span> <span class="f6 color-fg-muted">drops</span></div>`:''}`,flex:`<span class=text-semibold>${x.flex||0}</span>`,
+ dl:`${Math.round(x.dl)}${x.ld?'':'*'}${x.pd?`<div class=mt-1><span class=Counter>${x.pd}</span> <span class="f6 color-fg-muted">drops</span></div>`:''}`,
  str:`${x.str!=null?x.str+'%':'–'} / ${x.mdts!=null?x.mdts+' d':'–'}`,co:`${esc(x.co||'?')}${x.km!=null?`<div class="f6 color-fg-muted">~${x.km} km</div>`:''}`,
  rk:`${rkHtml(x)}${x.sr!=null?`<div class="f6 color-fg-muted">${x.sr} reviews${x.msn?' · since '+esc(x.msn):''}</div>`:''}`,_:star(x)};
  return `<tr class=prc-DataTable-TableRow-Icc7F data-j=${j}>${cols.map(k=>TD(k[3],c[k[0]])).join('')}</tr>`}
 const stat=(v,l,cls)=>`<span class="mr-3 mb-1 d-inline-block"><span class="text-semibold ${cls||''}">${v}</span> <span class="color-fg-muted">${l}</span></span>`;
+const zCell=x=>x.z==null?'–':`<span title="${esc(TIP.z)}" class="${x.z<0?'color-fg-success':x.z>0?'color-fg-danger':''}">${x.z>0?'+':''}${x.z} <span class="f6 color-fg-muted">· ${x.nc||0}</span></span>${(x.nc||0)<5?` ${lab('low','attention')}`:''}`;
+const csCell=x=>x.cs==null?'–':`<span title="${esc(TIP.cs)}">${x.cs}</span>`;
+const stCell=x=>x.st==null?'–':`<span title="${esc(TIP.st)}">${x.st}% <span class="f6 color-fg-muted">· ${x.sn}</span></span>`;
+const vsCell=x=>x.vs==null?'–':`<span title="${esc(TIP.vs)}">${x.vs}×</span>`;
 function card(x){return `<li class="Box-row px-3 py-2"><div class="d-flex flex-items-start"><div class="flex-1 min-width-0">${strong(x)?lab('Strong deal','success'):''}<a class="Link--primary text-semibold f5 wb-break-word" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a>
 <div class="f6 color-fg-muted">${esc(x.b)} · ${esc(x.s||'?')} · ${x.y||''} · ${COND[x.c]||''} · ${esc(x.co||'?')}${x.km!=null?' ~'+x.km+' km':''}</div></div>${star(x)}</div>
 <div class="d-flex flex-items-baseline flex-wrap mt-1"><span class="f3 text-semibold mr-2">${eur(x.p)}</span>${x.pdp>0?`<span class="f6 color-fg-muted mr-2"><s>${eur(x.op)}</s> −${x.pdp}%</span>`:''}${x.pr?lab('price reduced','accent'):''}</div>
 <div class="f5 mt-1">${stat(eur(x.pf),'profit',sgn(x.pf))}${stat(x.roi!=null?Math.round(x.roi)+'%':'–','ROI',sgn(x.roi))}${stat(x.d!=null?x.d+'%':'–',`under ref. ${eur(x.r)}${x.r!=null?' ('+eur(x.r-x.p)+')':''}`)}</div>${bar(x)}
 <div class="f6 mt-1">${stat(eur(x.av),'avg ask')}${stat(x.nc?x.nc:'–','comps')}</div>
-<div class="f6 color-fg-muted mt-1">${Math.round(x.dl)}${x.ld?'':'*'} days listed · flex ${x.flex||0}${x.pd?' · '+x.pd+' drop(s)':''}</div>
+<div class="f6 mt-1">${stat(zCell(x),'z-score')}${stat(csCell(x),'€/day')}${stat(stCell(x),'sold %')}${stat(vsCell(x),'vs typical')}</div>
+<div class="f6 color-fg-muted mt-1">${Math.round(x.dl)}${x.ld?'':'*'} days listed${x.pd?' · '+x.pd+' drop(s)':''}</div>
 <div class=mt-2>${cfHtml(x)}${rkHtml(x)}</div>${compsBtn(x)}</li>`}
 function renderList(){const hasStr=ITEMS.some(x=>x.str||x.mdts),cols=COLS.filter(c=>c[0]!='str'||hasStr);$('dt').style.setProperty('--grid-template-columns',cols.map(c=>c[2]).join(' '));
- $('th').innerHTML=cols.map(c=>{const on=SORT==c[0];return `<th class=prc-DataTable-TableHeader-eyTab scope=col${c[3]?' data-cell-align=end':''} aria-sort="${on?(ASC?'ascending':'descending'):'none'}">${['_','co','rk','n'].includes(c[0])?c[1]:
-  `<button type=button class="Button Button--invisible Button--small" data-k="${c[0]}" aria-label="Sort by ${c[1]}"><span class=Button-content><span class=Button-label>${c[1]}</span>${on?`<span class="Button-visual Button-trailingVisual">${oc(ASC?'sort-asc':'sort-desc')}</span>`:''}</span></button>`}</th>`}).join('');
+ $('th').innerHTML=cols.map(c=>{const on=SORT==c[0],tip=TIP[c[0]]?` title="${esc(TIP[c[0]])}"`:'';return `<th class="prc-DataTable-TableHeader-eyTab min-width-0" scope=col${c[3]?' data-cell-align=end':''}${tip} aria-sort="${on?(ASC?'ascending':'descending'):'none'}">${['_','co','rk','n'].includes(c[0])?c[1]:
+  `<button type=button class="Button Button--invisible Button--small" data-k="${c[0]}"${tip} aria-label="Sort by ${c[1]}"><span class=Button-content><span class=Button-label>${c[1]}</span>${on?`<span class="Button-visual Button-trailingVisual">${oc(ASC?'sort-asc':'sort-desc')}</span>`:''}</span></button>`}</th>`}).join('');
  $('tb').innerHTML=view.slice(0,shown).map((x,j)=>row(x,j,cols)).join('');$('cnt').textContent=`${view.length.toLocaleString()} listings match · showing ${Math.min(shown,view.length)}${FULL?'':' · loading full data…'} · * = days since first seen`;$('more').hidden=view.length<=shown;
  $('cards').innerHTML=view.slice(0,mshown).map(card).join('')||'<li class="Box-row color-fg-muted">No listings match these filters.</li>';$('sentinel').textContent=view.length>mshown?'Loading more…':`${view.length.toLocaleString()} listings${FULL?'':' (top picks — loading all…)'}`}
 new IntersectionObserver(e=>{if(e[0].isIntersecting&&view.length>mshown){mshown+=30;$('cards').insertAdjacentHTML('beforeend',view.slice(mshown-30,mshown).map(card).join(''));$('sentinel').textContent=view.length>mshown?'Loading more…':`${view.length.toLocaleString()} listings`}},{rootMargin:'600px'}).observe($('sentinel'));
@@ -164,7 +182,7 @@ function renderKpis(){const pos=view.filter(x=>x.pf>0),med=a=>{a=a.filter(v=>v!=
 document.addEventListener('click',e=>{const w=e.target.closest('[data-w]');if(w){tw(w.dataset.w);return}const k=e.target.closest('th [data-k]');if(k){const c=k.dataset.k;if(SORT==c)ASC=!ASC;else{SORT=c;ASC=ASC_DEFAULT.includes(c)}filt();return}
  const s=e.target.closest('[data-seg]');if(s){setF(s.dataset.seg,s.dataset.v);syncInputs();return}
  const tr=e.target.closest('tr[data-j]');if(tr&&!e.target.closest('a,button,summary')){sel=+tr.dataset.j;markSel()}});
-document.addEventListener('toggle',e=>{const d=e.target;if(d.dataset&&d.dataset.c&&d.open){getDet().then(D=>{const x=ITEMS.find(y=>y.i==d.dataset.c)||{},list=(D[d.dataset.c]||[])[0]||[];d.querySelector('[data-cl]').innerHTML=`<div class="mb-1">Avg ask ${eur(x.av)} · ${x.nc?x.nc:'–'} listed</div>`+(list.map(c=>`<div><a href="${PFX+esc(c[0].replace(PFX,''))}" target=_blank rel=noopener>${eur(c[1])}</a></div>`).join('')||'none')})}},true);
+document.addEventListener('toggle',e=>{const d=e.target;if(d.dataset&&d.dataset.c&&d.open){getDet().then(D=>{const x=ITEMS.find(y=>y.i==d.dataset.c)||{},list=(D[d.dataset.c]||[])[0]||[];d.querySelector('[data-cl]').innerHTML=`<div class="mb-1">Avg ask ${eur(x.av)} · ${x.nc?x.nc:'–'} listed</div><div class="mb-1 f6 color-fg-muted">z ${zCell(x)} · ${csCell(x)} €/day · sold ${stCell(x)} · vs typical ${vsCell(x)}</div>`+(list.map(c=>`<div><a href="${PFX+esc(c[0].replace(PFX,''))}" target=_blank rel=noopener>${eur(c[1])}</a></div>`).join('')||'none')})}},true);
 $('more').onclick=()=>{shown+=200;renderList()};
 function tw(i){if(WL[i])delete WL[i];else{const x=ITEMS.find(y=>y.i==i);WL[i]={n:x.n,u:x.u,p:x.p,t:new Date().toISOString().slice(0,10)}}sv('watch',WL);
  const x=ITEMS.find(y=>y.i==i);document.querySelectorAll(`[data-w="${i}"]`).forEach(b=>{if(b.classList.contains('Button--iconOnly'))b.outerHTML=star(x||{i,n:''})});renderKpis();if(TAB=='watch')renderWatch()}
@@ -189,7 +207,7 @@ function renderModel(){if(!window.Chart)return setTimeout(renderModel,100);theme
  mk('c7',{type:'line',data:{datasets:[{label:'median ask',data:m.t.map(t=>({x:t[0],y:t[1]})),borderColor:cv('--fgColor-accent'),tension:.2},{label:'active listings',data:m.t.map(t=>({x:t[0],y:t[2]})),borderColor:cv('--fgColor-muted'),yAxisID:'y2',borderDash:[4,4]},
   {type:'scatter',label:'likely sold (last ask)',data:m.sold.map(s=>({x:s[0],y:s[1]})),backgroundColor:cv('--fgColor-success')}]},options:{parsing:false,scales:{x:{type:'category',labels:[...new Set([...m.t.map(t=>t[0]),...m.sold.map(s=>s[0])])].sort()},y:{title:{display:true,text:'€'}},y2:{position:'right',grid:{display:false}}}}});
  $('mnote').textContent=`${m.a} active · ${m.g30} likely sold in 30 d · sell-through ${m.str??'–'}% · median days to sell ${m.dts??'–'}. History starts ${m.t[0]?.[0]||'–'}.`;
- const L=ITEMS.filter(x=>x.b+' '+x.m==k).sort((a,b)=>a.p-b.p);$('mtb').innerHTML=L.map(x=>`<div class="Box-row d-flex flex-justify-between flex-wrap"><a class="mr-2" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><span class="f6 color-fg-muted">${eur(x.p)} · avg ${eur(x.av)} · ${x.nc?x.nc:'–'} comps · ${Math.round(x.dl)} d · ${x.pd||0} drops · ${x.g?'likely sold '+x.g:'active'}</span></div>`).join('');writeHash()})}
+ const L=ITEMS.filter(x=>x.b+' '+x.m==k).sort((a,b)=>a.p-b.p);$('mtb').innerHTML=L.map(x=>`<div class="Box-row d-flex flex-justify-between flex-wrap"><a class="mr-2" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><span class="f6 color-fg-muted">${eur(x.p)} · avg ${eur(x.av)} · ${x.nc?x.nc:'–'} comps · z ${zCell(x)} · ${csCell(x)} €/day · sold ${stCell(x)} · vs typical ${vsCell(x)} · ${Math.round(x.dl)} d · ${x.pd||0} drops · ${x.g?'likely sold '+x.g:'active'}</span></div>`).join('');writeHash()})}
 $('msel').onchange=renderModel;
 // ---------- watchlist / log ----------
 function renderWatch(){const by=Object.fromEntries(ITEMS.map(x=>[x.i,x]));$('wl').innerHTML=Object.entries(WL).map(([i,w])=>{const x=by[i];return `<div class="Box-row d-flex flex-items-center flex-wrap"><a class="flex-1 mr-2" href="${esc(w.u)}" target=_blank rel=noopener>${esc(w.n)}</a><span class="f6 color-fg-muted mr-2">added ${w.t} at ${eur(w.p)} · now ${x?eur(x.p):'–'} · profit ${x?eur(x.pf):'–'} · ${!x?'gone (>30 d)':x.g?'likely sold '+x.g:'active'}</span>${btn('Remove','Button--secondary Button--small',`data-w="${i}"`)}</div>`}).join('')||`<div class="Box-row f6 color-fg-muted">Use ${oc('star')} on a deal to watch it.</div>`;
@@ -234,5 +252,5 @@ function setMeta(m){const lr=m.runs[m.runs.length-1]||{};$('meta').innerHTML=`<s
 function options(){const opt=(k,id)=>{const m={};ITEMS.forEach(x=>{if(x[k])m[x[k]]=(m[x[k]]||0)+1});const v=Object.keys(m).sort(k=='b'?undefined:(a,b)=>m[b]-m[a]);
  ['d','m'].forEach(p=>{const s=$(p+id);if(!s)return;s.length=1;s.insertAdjacentHTML('beforeend',v.map(o=>`<option>${esc(o)}</option>`).join(''))})};opt('b','brand');opt('co','country');EXTRA.forEach(e=>opt(e.k,e.id));syncInputs()}
 fetch('top.json').then(r=>r.json()).then(d=>{if(FULL)return;META=d.meta;setMeta(d.meta);ITEMS=unpack(d);options();filt();tab(TAB)}).catch(()=>{});
-fetch('data.json').then(r=>r.json()).then(d=>{FULL=true;META=d.meta;setMeta(d.meta);ITEMS=unpack(d);options();filt();if(TAB!='deals')tab(TAB)});
+fetch('data.json').then(r=>r.json()).then(d=>{FULL=true;META=d.meta;setMeta(d.meta);ITEMS=unpack(d);fillAvg(ITEMS);fillZ(ITEMS);options();filt();if(TAB!='deals')tab(TAB)});
 </script></body></html>

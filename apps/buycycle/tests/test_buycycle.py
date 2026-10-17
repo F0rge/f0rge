@@ -175,8 +175,14 @@ def test_dashboard_columns_sort_zero_comps_last(tmp_path):
         assert "['av','Avg ask'" in html and "['nc','Comps'" in html
         assert "Min avg ask" in html and "Max avg ask" in html and "Min comps" in html
         assert "avg ask" in html and "comps" in html
+        assert "['z','Z-score'" in html and "['cs','€/day cut'" in html and "['st','Sold within 30d'" in html and "['vs','Days vs typical'" in html
+        assert "Min z-score" in html and "Min €/day cut" in html and "Min sold %" in html and "Max days vs typical" in html
+        assert "standard deviation" in html and "no price history" in html and "fewer than 5" in html
+        assert "z-score" in html and "€/day" in html and "sold %" in html and "vs typical" in html
+        assert "Flex score" not in html and "['flex','Flex'" not in html and "days listed · flex" not in html
+        assert "price reduced" in html and "Dropped (history or vs original)" in html
         calc = html.split("function calc(x)", 1)[1].split("function", 1)[0]
-        assert "if(x.r==null)return" in calc and "x.av" not in calc
+        assert "if(x.r==null)return" in calc and "x.av" not in calc and "x.z" not in calc and "x.cs" not in calc
         m = re.search(r"view\.sort\(\(a,b\)=>\{.*?\}\);", html)
         assert m and "key=='nc'&&!A" in m.group(0)
     script = r"""
@@ -199,6 +205,210 @@ if (avNames.slice(3).sort().join() !== 'none,zero') throw new Error('av tail ' +
 """ % (m.group(0), m.group(0), m.group(0))
     out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
+
+
+def _prod_listing(c, **k):
+    """One row in the shape the Pi stores: listing.price is the integer ask; every other money/spec field may be NULL."""
+    c.execute(
+        "insert into listing(id,kind,slug,name,brand,year,size,cond,msrp,price,original_price,activated_at,updated_at,country_id,seller_id,favs,offers,high_demand,n_media,desc_len,spec,first_seen,last_seen,gone_at,last_fetch,fetch_price,pr)"
+        " values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            k["id"],
+            k["kind"],
+            k["id"],
+            k["name"],
+            k["brand"],
+            k.get("year"),
+            None,
+            None,
+            None,
+            k["price"],
+            k.get("original"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            k.get("spec"),
+            k.get("first_seen", "2026-10-01"),
+            "2026-10-17",
+            k.get("gone_at"),
+            None,
+            None,
+            None,
+        ),
+    )
+
+
+def _comp_js():
+    lines = open(os.path.join(APP, "dashboard", "index.tpl.html")).read().splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("function compKey"))
+    end = next(i for i, line in enumerate(lines) if line.startswith("function calc"))
+    return "\n".join(lines[start:end])
+
+
+def _unpack(doc):
+    items = []
+    for row in doc["rows"]:
+        x = {c: v for c, v in zip(doc["cols"], row) if v is not None}
+        items.append(x)
+    return items
+
+
+def _strip_av(doc):
+    """The file currently on the Pi: comp count and asking price, no av column."""
+    i = doc["cols"].index("av")
+    doc["cols"].pop(i)
+    for row in doc["rows"]:
+        row.pop(i)
+    return doc
+
+
+def test_average_from_prod_listing_price_when_json_has_no_av_column(tmp_path, monkeypatch):
+    import storage
+    import tracker
+
+    monkeypatch.setitem(tracker.OUT, "wheels", str(tmp_path / "wheels"))
+    monkeypatch.setitem(tracker.OUT, "bikes", str(tmp_path / "bikes"))
+    c = storage.connect(str(tmp_path / "fixture.turso.db"))
+    disc = json.dumps({"spec": {"wheel-type": "1372", "complete-wheels-brakes-type": "1430", "rim-material": "1433"}})
+    rim = json.dumps({"spec": {"wheel-type": "1372", "complete-wheels-brakes-type": "1431", "rim-material": "1433"}})
+    for row in (
+        dict(id="w1", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=1000, spec=disc),
+        dict(id="w2", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=2000, spec=disc),
+        dict(id="w3", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=3000, spec=disc),
+        dict(id="w4", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=9000, spec=disc),
+        dict(id="wgone", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=50, spec=disc, gone_at="2026-10-10"),
+        dict(id="wrim", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=80, spec=rim),
+    ):
+        _prod_listing(c, **row)
+    for row in (
+        dict(id="t24", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2024, price=2000),
+        dict(id="t23", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2023, price=1000),
+        dict(id="t25", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2025, price=9000),
+        dict(id="tgone", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2024, price=40, gone_at="2026-10-10"),
+    ):
+        _prod_listing(c, **row)
+    # A different number in history must not become the average. The ask is listing.price.
+    c.execute("insert into price_history values(?,?,?)", ("w1", "2026-09-01", 1))
+    c.commit()
+    stored = c.execute("select price, typeof(price), original_price, year from listing where id='w1'").fetchone()
+    assert stored[0] == 1000 and stored[1] == "integer" and stored[2] is None and stored[3] is None
+
+    wheels = {x["i"]: x for x in tracker.build(c, "wheels", "2026-10-17")}
+    bikes = {x["i"]: x for x in tracker.build(c, "bikes", "2026-10-17")}
+    assert wheels["w1"]["nc"] == 3
+    assert wheels["w1"]["av"] == round(statistics.fmean([2000, 3000, 9000]), 2)
+    assert wheels["w1"]["p"] == 1000
+    assert "flex" not in wheels["w1"]
+    assert bikes["t24"]["av"] == round(statistics.fmean([1000, 9000]), 2)
+    assert bikes["t24"]["nc"] == 2
+
+    def recover(kind, doc_path):
+        doc = _strip_av(json.loads(doc_path.read_text()))
+        assert "av" not in doc["cols"] and "p" in doc["cols"] and "nc" in doc["cols"]
+        script = "const KIND=%s;\n%s\nconst items=%s;\nfillAvg(items);\nconsole.log(JSON.stringify(items.map(x=>({i:x.i,av:x.av??null,nc:x.nc}))));" % (
+            json.dumps(kind),
+            _comp_js(),
+            json.dumps(_unpack(doc)),
+        )
+        out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        return {x["i"]: x for x in json.loads(out.stdout)}
+
+    got = recover("wheels", tmp_path / "wheels" / "data.json")
+    assert got["w1"]["nc"] == 3 and got["w1"]["av"] == wheels["w1"]["av"]
+    assert got["wgone"]["av"] == wheels["wgone"]["av"]
+    assert got["wrim"]["av"] is None and got["wrim"]["nc"] == 0
+    gotb = recover("bikes", tmp_path / "bikes" / "data.json")
+    assert gotb["t24"]["av"] == bikes["t24"]["av"] and gotb["t24"]["nc"] == 2
+    assert gotb["t23"]["nc"] == 1 and gotb["t23"]["av"] == 2000
+
+
+def test_market_metrics_on_prod_shaped_rows(tmp_path, monkeypatch):
+    import storage
+    import tracker
+
+    monkeypatch.setitem(tracker.OUT, "wheels", str(tmp_path / "wheels"))
+    monkeypatch.setitem(tracker.OUT, "bikes", str(tmp_path / "bikes"))
+    c = storage.connect(str(tmp_path / "fixture.turso.db"))
+    disc = json.dumps({"spec": {"wheel-type": "1372", "complete-wheels-brakes-type": "1430", "rim-material": "1433"}})
+    rim = json.dumps({"spec": {"wheel-type": "1372", "complete-wheels-brakes-type": "1431", "rim-material": "1433"}})
+    today = "2026-10-17"
+    for i, price in enumerate((1000, 2000, 3000, 4000, 5000, 6000), start=1):
+        _prod_listing(c, id=f"a{i}", kind="wheels", name="DT Swiss ARC 1100", brand="DT Swiss", price=price, spec=disc)
+    for i in range(3):
+        _prod_listing(c, id=f"flat{i}", kind="wheels", name="Enve SES", brand="Enve", price=800, spec=disc)
+    _prod_listing(c, id="pair1", kind="wheels", name="Roval Alpinist", brand="Roval", price=1400, spec=disc)
+    _prod_listing(c, id="pair2", kind="wheels", name="Roval Alpinist", brand="Roval", price=1800, spec=disc)
+    for i, price in enumerate((1100, 1600, 2100)):
+        _prod_listing(c, id=f"low{i}", kind="wheels", name="Scope R4", brand="Scope", price=price, spec=disc)
+    _prod_listing(c, id="nohist", kind="wheels", name="Zipp 404", brand="Zipp", price=900, spec=disc, original=5000)
+    _prod_listing(c, id="nodrop", kind="wheels", name="Zipp 303", brand="Zipp", price=700, spec=disc)
+    # Mature comps for sell-through and time-to-disappear. A recent listing and a different brake stay out.
+    _prod_listing(c, id="m0", kind="wheels", name="Mavic Cosmic", brand="Mavic", price=2000, spec=disc, first_seen="2026-08-01")
+    for i in range(1, 4):
+        _prod_listing(c, id=f"m{i}", kind="wheels", name="Mavic Cosmic", brand="Mavic", price=1500, spec=disc, first_seen="2026-08-01", gone_at="2026-08-20")
+    for i in (4, 5):
+        _prod_listing(c, id=f"m{i}", kind="wheels", name="Mavic Cosmic", brand="Mavic", price=2200, spec=disc, first_seen="2026-08-01")
+    for i, gone in ((6, "2026-09-20"), (7, "2026-09-20")):
+        _prod_listing(c, id=f"m{i}", kind="wheels", name="Mavic Cosmic", brand="Mavic", price=1800, spec=disc, first_seen="2026-08-01", gone_at=gone)
+    _prod_listing(c, id="mnew", kind="wheels", name="Mavic Cosmic", brand="Mavic", price=50, spec=disc, first_seen="2026-10-01")
+    _prod_listing(c, id="mrim", kind="wheels", name="Mavic Cosmic", brand="Mavic", price=10, spec=rim, first_seen="2026-08-01", gone_at="2026-08-05")
+    for i in range(4):
+        _prod_listing(c, id=f"thin{i}", kind="wheels", name="Lightweight Meilenstein", brand="Lightweight", price=3000, spec=disc, first_seen="2026-08-01")
+    _prod_listing(c, id="t24", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2024, price=2000)
+    _prod_listing(c, id="t23", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2023, price=1000)
+    _prod_listing(c, id="t25", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2025, price=9000)
+    _prod_listing(c, id="t22", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2022, price=100)
+    c.executemany(
+        "insert into price_history values(?,?,?)",
+        [("a1", "2026-08-01", 3000), ("nodrop", "2026-10-01", 700), ("a1", "2026-10-17", 1000)],
+    )
+    c.commit()
+    wheels = {x["i"]: x for x in tracker.build(c, "wheels", today)}
+    bikes = {x["i"]: x for x in tracker.build(c, "bikes", today)}
+
+    prices = [2000, 3000, 4000, 5000, 6000]
+    assert wheels["a1"]["nc"] == 5
+    assert wheels["a1"]["z"] == round((1000 - statistics.fmean(prices)) / statistics.pstdev(prices), 2)
+    assert wheels["a1"]["av"] == round(statistics.fmean(prices), 2)
+    assert wheels["flat0"]["nc"] == 2 and wheels["flat0"]["z"] is None
+    assert wheels["pair1"]["nc"] == 1 and wheels["pair1"]["z"] is None
+    assert wheels["low0"]["nc"] == 2 and wheels["low0"]["z"] is not None
+    assert wheels["a1"]["cs"] == round(2000 / wheels["a1"]["dl"], 2)
+    assert wheels["nodrop"]["cs"] == 0
+    assert wheels["nohist"]["cs"] is None and wheels["nohist"]["op"] == 5000
+    assert wheels["m0"]["st"] == 42.9 and wheels["m0"]["sn"] == 7
+    assert wheels["mrim"]["st"] is None and wheels["mnew"]["i"]
+    gone_days = [19, 19, 19, 50, 50]
+    assert wheels["m0"]["vs"] == round(wheels["m0"]["dl"] / statistics.median(gone_days), 2)
+    assert wheels["thin0"]["st"] is None and wheels["thin0"]["vs"] is None
+    assert bikes["t24"]["nc"] == 2
+    assert bikes["t24"]["z"] == round((2000 - statistics.fmean([1000, 9000])) / statistics.pstdev([1000, 9000]), 2)
+    assert bikes["t22"]["nc"] == 1 and bikes["t22"]["z"] is None
+    alerts = open(os.path.join(APP, "tracker", "tracker.py")).read().split("def alerts(", 1)[1].split("\ndef ", 1)[0]
+    assert 'x["z"]' not in alerts and 'x["cs"]' not in alerts and 'x["st"]' not in alerts and 'x["r"]' in alerts
+
+    doc = _strip_av(json.loads((tmp_path / "wheels" / "data.json").read_text()))
+    zi = doc["cols"].index("z")
+    doc["cols"].pop(zi)
+    for row in doc["rows"]:
+        row.pop(zi)
+    script = "const KIND=%s;\n%s\nconst items=%s;\nfillZ(items);\nconsole.log(JSON.stringify(items.map(x=>({i:x.i,z:x.z??null}))));" % (
+        json.dumps("wheels"),
+        _comp_js(),
+        json.dumps(_unpack(doc)),
+    )
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    got = {x["i"]: x["z"] for x in json.loads(out.stdout)}
+    assert got["a1"] == wheels["a1"]["z"]
+    assert got["flat0"] is None and got["pair1"] is None
 
 
 def test_no_feed_key_in_source():
