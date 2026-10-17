@@ -30,7 +30,7 @@ KEYS = [
     ("Enter / o", "Open listing"),
     ("w", "Watch / unwatch row"),
     ("c", "Show comparables"),
-    ("1–7", "Switch tab"),
+    ("1–4", "Switch tab"),
     ("?", "This help"),
     ("Esc", "Close"),
 ]
