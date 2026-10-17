@@ -32,8 +32,8 @@ project** (not Marrow `zoological-fulfillment`),
 | Secret | Used by |
 |--------|---------|
 | `COOLIFY_BASE_URL` | Coolify webhook POST base |
-| `COOLIFY_WEBHOOK_DK_BACKEND` | dk-tag-printer-backend |
-| `COOLIFY_WEBHOOK_DK_FRONTEND` | dk-tag-printer-frontend |
+| `COOLIFY_WEBHOOK_DASKASAS_BACKEND` | dk-tag-printer-backend (Coolify app daskasas-backend) |
+| `COOLIFY_WEBHOOK_DASKASAS_FRONTEND` | dk-tag-printer-frontend (Coolify app daskasas-frontend) |
 | `COOLIFY_WEBHOOK_BUYCYCLE` | buycycle (Pi, internal only; skips while unset) |
 | `SMOKE_EMAIL` / `SMOKE_PASSWORD` | Optional Railway auth smoke |
 
@@ -55,8 +55,11 @@ secrets after the 48h Fly rollback window).
 The manual webhook body is one commit (`id`, `added`, `modified`, `removed`)
 from `git diff --name-status` between the deployed SHA and the Coolify base
 (`NX_PARENT` when `NX_BASE == NX_HEAD`, otherwise `NX_BASE`). Coolify matches
-those paths to each app's watch paths. Sibling apps on the same repo and branch
-answer `Invalid signature` because the endpoint checks each app's own secret.
+those paths to each app's watch paths. Each component is signed with its own
+secret (`webhook_secret_env`). That value must equal the app's manual GitHub
+webhook secret in Coolify. Sibling apps on the same repo and branch answer
+`Invalid signature` because the endpoint checks each app's own secret; the job
+only requires this app's entry to say `Deployment queued.`
 
 Disable Coolify GitHub App auto-deploy on dk apps once Actions webhooks are
 verified — deploy is CI-gated via `deploy-reusable.yml` on `main` push.

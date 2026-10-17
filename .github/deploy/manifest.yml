@@ -33,7 +33,7 @@ components:
     branches: [main]
     coolify:
       app_uuid: pskswsc8c0044ggo40go4og0
-      webhook_secret_env: COOLIFY_WEBHOOK_DK_BACKEND
+      webhook_secret_env: COOLIFY_WEBHOOK_DASKASAS_BACKEND
     health_url: https://tags-api.leo-figueiredo.com/health
 
   dk-tag-printer-frontend:
@@ -42,7 +42,7 @@ components:
     branches: [main]
     coolify:
       app_uuid: f080ossg88ows8k8csw40c4s
-      webhook_secret_env: COOLIFY_WEBHOOK_DK_FRONTEND
+      webhook_secret_env: COOLIFY_WEBHOOK_DASKASAS_FRONTEND
     health_url: https://tags.leo-figueiredo.com/
 
   # Buycycle dashboards: Coolify on the Pi, internal only (host ports 8095/8096, no domain).

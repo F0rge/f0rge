@@ -146,9 +146,9 @@ def response_queues_app(body: str, app_uuid: str) -> bool:
 
     The manual push handler reports a queued deploy as ``status: success``
     and ``message: Deployment queued.`` (v4.0.0-beta.473). ``status: queued``
-    is accepted too. Watch-path ignores stay ``status: failed`` and must not
-    pass. Sibling apps that reject the HMAC are a different object and are
-    ignored here.
+    on this same app counts too. Watch-path ignores and an ``Invalid
+    signature`` on this app stay failures. Sibling apps are separate objects
+    (often with no uuid) and their ``Invalid signature`` entries are ignored.
     """
     try:
         data = json.loads(body)

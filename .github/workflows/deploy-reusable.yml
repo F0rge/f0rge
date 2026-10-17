@@ -25,9 +25,9 @@ on:
     secrets:
       COOLIFY_BASE_URL:
         required: false
-      COOLIFY_WEBHOOK_DK_BACKEND:
+      COOLIFY_WEBHOOK_DASKASAS_BACKEND:
         required: false
-      COOLIFY_WEBHOOK_DK_FRONTEND:
+      COOLIFY_WEBHOOK_DASKASAS_FRONTEND:
         required: false
       COOLIFY_WEBHOOK_BUYCYCLE:
         required: false
@@ -128,8 +128,8 @@ jobs:
         id: coolify
         env:
           COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
-          WEBHOOK_SECRET_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DK_BACKEND }}
-          WEBHOOK_SECRET_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DK_FRONTEND }}
+          WEBHOOK_SECRET_DASKASAS_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_BACKEND }}
+          WEBHOOK_SECRET_DASKASAS_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_FRONTEND }}
           WEBHOOK_SECRET_BUYCYCLE: ${{ secrets.COOLIFY_WEBHOOK_BUYCYCLE }}
           SECRET_ENV: ${{ matrix.component.webhook_secret_env }}
           SHA: ${{ inputs.sha }}
@@ -141,8 +141,8 @@ jobs:
           set -euo pipefail
           echo "skipped=false" >> "$GITHUB_OUTPUT"
           case "$SECRET_ENV" in
-            COOLIFY_WEBHOOK_DK_BACKEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_BACKEND" ;;
-            COOLIFY_WEBHOOK_DK_FRONTEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_FRONTEND" ;;
+            COOLIFY_WEBHOOK_DASKASAS_BACKEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_DASKASAS_BACKEND" ;;
+            COOLIFY_WEBHOOK_DASKASAS_FRONTEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_DASKASAS_FRONTEND" ;;
             COOLIFY_WEBHOOK_BUYCYCLE) WEBHOOK_SECRET="$WEBHOOK_SECRET_BUYCYCLE" ;;
             *) echo "Unknown webhook secret env: $SECRET_ENV"; exit 1 ;;
           esac
@@ -167,9 +167,10 @@ jobs:
             exit 1
           fi
           PAYLOAD=$(python3 .github/deploy/coolify_payload.py --sha "$SHA" --base "$DIFF_BASE" --branch "$BRANCH")
-          # Sibling apps on this repo+branch (daskasas when this job signs with
-          # another app's secret) answer "Invalid signature." Each app checks
-          # its own secret; the payload repo and branch already match them.
+          # Each matrix row signs with that component's secret only. Coolify still
+          # checks every app on this repo+branch, so siblings answer
+          # "Invalid signature." That does not fail the job; only this app's
+          # entry must say "Deployment queued."
           SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')
           RESPONSE=$(curl -sS --fail-with-body -w '\nHTTP %{http_code}' \
             -X POST "${COOLIFY_BASE_URL%/}/webhooks/source/github/events/manual" \
