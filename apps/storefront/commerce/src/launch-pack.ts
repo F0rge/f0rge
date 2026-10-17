@@ -15,7 +15,7 @@ const ABSENT: LaunchPackFinding[] = [
   {
     section: "business_identity",
     code: "business_identity_unconfirmed",
-    detail: "Owner has not confirmed the legal entity, trading name, contact address, VAT position, support mailbox, daily operator, or escalation availability.",
+    detail: "Owner has not confirmed the legal entity, trading name, contact address, phone, company registration number, VAT position, support mailbox, daily operator, or escalation availability.",
   },
   {
     section: "catalogue",
@@ -30,7 +30,7 @@ const ABSENT: LaunchPackFinding[] = [
   {
     section: "policies_and_skin",
     code: "policies_unreviewed",
-    detail: "Owner has not supplied reviewed delivery, cancellation, privacy, and PAIA content, or selected a final Vellano font and palette.",
+    detail: "Owner has not supplied reviewed delivery, terms, refund, return, privacy, and PAIA content, or selected a final Vellano font and palette.",
   },
   {
     section: "provisioning",
@@ -64,6 +64,16 @@ function isFirstoutName(value: unknown): boolean {
   return typeof value === "string" && value.trim().toLowerCase() === "firstout";
 }
 
+function phoneNumber(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= 15;
+}
+
+function registrationNumber(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length >= 6 && value.trim().length <= 40 && /\d/.test(value);
+}
+
 function businessConfirmed(value: unknown): boolean {
   const business = record(value);
   if (!business) return false;
@@ -71,6 +81,7 @@ function businessConfirmed(value: unknown): boolean {
   const vatKnown = business.vat_registered === false ||
     (business.vat_registered === true && typeof business.vat_number === "string" && /^\d{10}$/.test(business.vat_number));
   return text(business.legal_name, 3) && text(business.trading_name, 2) && text(business.contact_address, 12) &&
+    phoneNumber(business.phone) && registrationNumber(business.company_registration_number) &&
     vatKnown && dedicatedMailbox(business.support_mailbox) && text(business.daily_operator_name, 3) &&
     text(business.escalation_availability, 12) && text(business.confirmed_by, 3) &&
     typeof business.confirmed_on === "string" && /^\d{4}-\d{2}-\d{2}$/.test(business.confirmed_on);
@@ -216,6 +227,10 @@ function mentions(value: unknown, phrase: string): boolean {
   return typeof value === "string" && value.toLowerCase().replace(/-/g, " ").includes(phrase);
 }
 
+function distinguishesGoods(value: unknown): boolean {
+  return mentions(value, "made to order") && mentions(value, "bespoke");
+}
+
 const PROVISIONING_CHANNELS = ["clerk", "peach", "email", "posthog", "railway", "temporary_hostname"];
 const SECRET_KEY = /password|secret|token|api[_-]?key|private[_-]?key|credential|authorization/i;
 const SECRET_VALUE = /sk_(?:live|test)_|pk_(?:live|test)_|-----BEGIN |whsec_|Bearer /;
@@ -276,14 +291,20 @@ function policyFindings(value: unknown): LaunchPackFinding[] {
   if (!policies) return [ABSENT[3]];
   const findings: LaunchPackFinding[] = [];
   if (!text(policies.reviewed_by, 3) || typeof policies.reviewed_on !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(policies.reviewed_on)) {
-    findings.push(policyFinding("Delivery, returns, and privacy content has no recorded owner review."));
+    findings.push(policyFinding("Delivery, terms, returns, refunds, and privacy content has no recorded owner review."));
   }
   if (!text(policies.delivery, 80)) findings.push(policyFinding("Reviewed delivery content is missing."));
-  if (!text(policies.cancellation_returns_refund, 80) || !mentions(policies.cancellation_returns_refund, "made to order") ||
-      !mentions(policies.cancellation_returns_refund, "bespoke")) {
-    findings.push(policyFinding("Cancellation terms do not distinguish standard made to order from bespoke goods."));
+  if (!text(policies.terms, 80)) findings.push(policyFinding("Reviewed terms and conditions are missing."));
+  if (!text(policies.refund_policy, 80) || !distinguishesGoods(policies.refund_policy)) {
+    findings.push(policyFinding("Refund terms do not distinguish standard made to order from bespoke goods."));
+  }
+  if (!text(policies.return_policy, 80) || !distinguishesGoods(policies.return_policy)) {
+    findings.push(policyFinding("Return terms do not distinguish standard made to order from bespoke goods."));
   }
   if (!text(policies.privacy, 80)) findings.push(policyFinding("Reviewed privacy content is missing."));
+  if (!text(policies.data_collected, 40)) findings.push(policyFinding("A description of the personal information collected is missing."));
+  if (!text(policies.processors, 40)) findings.push(policyFinding("The list of operators and processors is missing."));
+  if (!text(policies.retention, 40)) findings.push(policyFinding("Retention of personal information is missing."));
   if (!text(policies.information_officer_name, 3) || !text(policies.information_officer_responsibilities, 40) || !text(policies.paia_baseline, 40)) {
     findings.push(policyFinding("Information Officer and PAIA baseline responsibilities are missing."));
   }

@@ -38,7 +38,7 @@ export function SiteHeader({ clerkConfigured }: { clerkConfigured: boolean }) {
           <nav aria-label="Mobile navigation">
             {links.map((link) => <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)} aria-current={pathname === link.href ? "page" : undefined}>{link.label}<span aria-hidden="true">↗</span></Link>)}
             <Link href="/account" onClick={() => setMenuOpen(false)}>Account<span aria-hidden="true">↗</span></Link>
-            <Link href="/support" onClick={() => setMenuOpen(false)}>Support<span aria-hidden="true">↗</span></Link>
+            <Link href="/contact" onClick={() => setMenuOpen(false)}>Contact<span aria-hidden="true">↗</span></Link>
           </nav>
           {clerkConfigured && <div className="mobile-menu-auth"><HeaderAuth /></div>}
           <p className="menu-note">Furniture. For everyday life.</p>

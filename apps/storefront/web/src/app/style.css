@@ -272,13 +272,21 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 
 .policy-page { max-width: 52rem; }
 .policy-page h1 { font-size: clamp(2.6rem, 5vw, 4.4rem); }
+.policy-page h2 { font-size: 1.45rem; line-height: 1.3; margin: 2.25rem 0 0; }
 .policy-page p:not(.eyebrow) { color: var(--muted-foreground); line-height: 1.9; margin-block: 1.5rem; }
+.policy-page p.policy-draft-notice { color: var(--foreground); border: 1px solid var(--line); padding: 1rem 1.1rem; }
+.policy-placeholder { background: #fff4d6; color: var(--foreground); padding: 0 .15rem; }
+.policy-related { display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; margin-top: 2rem; }
+.policy-related a { display: inline-flex; align-items: center; min-height: 44px; color: var(--foreground); font-size: 13px; }
 .error-state { min-height: 55vh; }
 .error-state h1 { max-width: 14ch; }
 .error-state > p:not(.eyebrow) { color: var(--muted-foreground); }
 .error-state button { margin: 1rem 1rem 0 0; }
 .site-footer { background: #fff; color: var(--foreground); border-top: 1px solid var(--line); }
-.footer-main { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 3rem; max-width: 1500px; margin: auto; padding: 3.5rem clamp(1.25rem, 4.3vw, 5rem); }
+.footer-main { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.2fr; gap: 3rem; max-width: 1500px; margin: auto; padding: 3.5rem clamp(1.25rem, 4.3vw, 5rem); }
+.footer-contact { font-style: normal; display: flex; flex-direction: column; gap: .75rem; }
+.footer-contact .eyebrow { color: var(--foreground); margin-bottom: .5rem; }
+.footer-contact p { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.55; }
 .footer-brand .wordmark { font-size: 1.45rem; }
 .footer-brand .wordmark img { height: 3rem; }
 .footer-brand p { margin: 1rem 0 0; color: var(--muted-foreground); font: 500 18px/1.45 var(--sans); letter-spacing: -.02em; }

@@ -4,6 +4,8 @@ const confirmedBusiness = {
   legal_name: "Northwind Furnishings (Pty) Ltd",
   trading_name: "Northwind",
   contact_address: "12 Commerce Road, Kramerville, Johannesburg, 2090",
+  phone: "011 555 0100",
+  company_registration_number: "2020/123456/07",
   vat_registered: true,
   vat_number: "4123456789",
   support_mailbox: "support@northwind.co.za",
@@ -46,6 +48,13 @@ test("the software name Firstout is not a confirmed retail identity", () => {
 
 test("a support mailbox on a reserved domain is not a dedicated mailbox", () => {
   expect(codes({ business: { ...confirmedBusiness, support_mailbox: "support@shop.example" } })).toContain(
+    "business_identity_unconfirmed",
+  );
+});
+
+test("a phone number and company registration number are part of the confirmed identity", () => {
+  expect(codes({ business: { ...confirmedBusiness, phone: "123" } })).toContain("business_identity_unconfirmed");
+  expect(codes({ business: { ...confirmedBusiness, company_registration_number: "none" } })).toContain(
     "business_identity_unconfirmed",
   );
 });
@@ -163,12 +172,19 @@ test("made-to-order allowances must be finite and unexpired, and the mixed-cart 
   });
 });
 
+const goodsLine = "Standard made to order pieces keep the confirmed lead time on the order and, once delivered, follow the same unused-return rules as stocked pieces. Bespoke commissions are not offered on the storefront, use a separate agreement, and are not refunded for a change of mind.";
+
 const reviewedPolicies = {
   reviewed_by: "Naledi Dlamini",
   reviewed_on: "2026-10-05",
   delivery: "Delivery is available in the approved Gauteng zones at the stated VAT-inclusive rate. Collection from the showroom is the alternative.",
-  cancellation_returns_refund: "Standard made to order pieces keep the confirmed lead time on the order. Bespoke commissions are not offered on the storefront and use a separate agreement.",
+  terms: "Customer prices are in South African Rand and include VAT. Delivery, returns, and refunds are the reviewed pages in this pack.",
+  refund_policy: goodsLine,
+  return_policy: goodsLine,
   privacy: "We use contact details to fulfil the order and to provide support. Optional analytics stay off until the visitor accepts them.",
+  data_collected: "We collect the name, email, phone, delivery address, and order details needed to fulfil a purchase.",
+  processors: "Clerk handles sign-in, PostHog handles optional analytics, Peach handles card payments, SendGrid sends email, and Railway hosts the store.",
+  retention: "Order records are kept for as long as tax law and open disputes require, and analytics stay off until accepted.",
   information_officer_name: "Naledi Dlamini",
   information_officer_responsibilities: "Receives privacy questions and PAIA requests sent to the support mailbox.",
   paia_baseline: "The information officer publishes the PAIA manual and acknowledges requests received at the support mailbox.",
@@ -182,11 +198,17 @@ test("policy text must distinguish made to order from bespoke and name one Vella
     code: "policies_unreviewed",
     detail: "The final Vellano font and palette is not selected.",
   });
-  const undifferentiated = reviewedPolicies.cancellation_returns_refund.replace("Bespoke commissions", "Custom work");
-  expect(assessLaunchPack({ policies: { ...reviewedPolicies, cancellation_returns_refund: undifferentiated } }).findings).toContainEqual({
+  const undifferentiated = reviewedPolicies.return_policy.replace("Bespoke commissions", "Custom work");
+  expect(assessLaunchPack({ policies: { ...reviewedPolicies, return_policy: undifferentiated } }).findings).toContainEqual({
     section: "policies_and_skin",
     code: "policies_unreviewed",
-    detail: "Cancellation terms do not distinguish standard made to order from bespoke goods.",
+    detail: "Return terms do not distinguish standard made to order from bespoke goods.",
+  });
+  const undifferentiatedRefund = reviewedPolicies.refund_policy.replace("Bespoke commissions", "Custom work");
+  expect(assessLaunchPack({ policies: { ...reviewedPolicies, refund_policy: undifferentiatedRefund } }).findings).toContainEqual({
+    section: "policies_and_skin",
+    code: "policies_unreviewed",
+    detail: "Refund terms do not distinguish standard made to order from bespoke goods.",
   });
 });
 

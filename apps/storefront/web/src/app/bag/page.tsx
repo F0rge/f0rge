@@ -6,10 +6,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStorefrontAnalytics } from "@/components/analytics/analytics-provider";
 import { zarMinorUnits } from "@/lib/analytics/money";
+import { formatCustomerPrice } from "@/lib/order-money";
 import { purchaseFeedback } from "@/lib/purchase-feedback";
 import type { Bag } from "@/lib/bag-server";
 
-const money = (value: number) => new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(value);
+const money = (value: number, currency?: string) => formatCustomerPrice(value, currency);
 const promiseDates = (from: string, by: string) => {
   const format = (value: string) => new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
   return from === by ? format(from) : `${format(from)} – ${format(by)}`;
@@ -77,7 +78,7 @@ export default function BagPage() {
     {bag && bag.items.length > 0 && <div className="bag-layout">
       <div className="bag-lines">{bag.items.map((item) => <div className="bag-line" key={item.id}>
         <div className="bag-line-image">{item.thumbnail && <img src={item.thumbnail} alt="" />}</div>
-        <div><h2>{item.title}</h2><p>{money(item.unit_price)} each</p>
+        <div><h2>{item.title}</h2><p>{money(item.unit_price, bag.currency_code)} each</p>
           {item.fulfillment_promise?.kind === "made_to_order" && <p className="line-fulfillment-promise" data-testid="line-fulfillment-promise">Made to order · estimated ready {promiseDates(item.fulfillment_promise.estimated_from, item.fulfillment_promise.estimated_by)}</p>}
           {item.fulfillment_promise?.kind === "stocked" && <p className="line-fulfillment-promise">In stock and reserved</p>}
           <label htmlFor={`quantity-${item.id}`}>Quantity for {item.title}</label>
@@ -90,9 +91,9 @@ export default function BagPage() {
             if (valueMinor !== null) capture({ name: "storefront_cart_item_removed", properties: { variant_id: item.variant_id, quantity: item.quantity, value_minor: valueMinor, ...(bag.id ? { cart_id: bag.id } : {}) } });
             void update("DELETE", `/api/bag?item_id=${encodeURIComponent(item.id)}`);
           }}>Remove</Button>
-        </div><strong>{money(item.total)}</strong>
+        </div><strong>{money(item.total, bag.currency_code)}</strong>
       </div>)}</div>
-      <aside className="bag-summary"><p className="eyebrow">Order summary</p><dl><dt>Subtotal</dt><dd>{money(bag.subtotal)}</dd><dt>Total incl. VAT</dt><dd data-testid="bag-total">{money(bag.total)}</dd></dl>
+      <aside className="bag-summary"><p className="eyebrow">Order summary</p><dl><dt>Subtotal</dt><dd>{money(bag.subtotal, bag.currency_code)}</dd><dt>Total incl. VAT</dt><dd data-testid="bag-total">{money(bag.total, bag.currency_code)}</dd></dl>
         {bag.hold?.status === "review" && <div className="bag-review" role="status"><h2>Review changes</h2><p>Price or availability changed. Review your bag before continuing.</p>{bag.hold.changes?.map((change) => <p key={change}>{change}</p>)}</div>}
         {bag.hold?.fulfillment_promise && <div className="bag-fulfillment-promise" role="status" data-testid="fulfillment-promise-summary">
           <h2>One fulfillment promise for the whole order</h2>

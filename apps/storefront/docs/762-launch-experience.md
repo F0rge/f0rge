@@ -26,7 +26,7 @@ A ready file prints the published count and still sets `public_selling` to false
 
 ## Customer pages
 
-Support, delivery and collection, returns and refunds, and privacy are linked from the footer and from the analytics panel (`/policies/privacy`) before a visitor can accept analytics. Until a reviewed document is supplied, each page says `Reviewed text for this page is not published.` and does not invent legal, delivery, or refund copy. Made-to-order versus bespoke appears only when that sentence is in the owner text.
+Privacy, terms, refunds, returns, delivery, and contact are linked from the footer. The analytics panel still links to `/policies/privacy` before a visitor can accept analytics. Until a reviewed launch pack is supplied, company identity, phone, email, physical address, delivery zones and rates, and the Information Officer stay as `[PLACEHOLDER: …]` lines. Return, refund, and the returns section of the terms use adapted store rules and are not left blank. A reviewed pack replaces that draft.
 
 Vellano still uses the existing oxblood / citron tokens. `collectorSkinAttribute` applies that skin only when the pack names `Oxblood / citron`. The other nine named skins have no approved colour values here, so they are not applied and there is no theme switch. Retired placeholder lines ("taking shape", "a considered addition to your living space") are not rendered.
 

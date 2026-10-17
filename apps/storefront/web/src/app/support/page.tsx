@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PolicyArticle } from "@/components/policy-article";
 import { currentCustomerPolicies, policyPage } from "@/lib/customer-policies";
 import { storefrontIndexable } from "@/lib/launch-indexing";
 
@@ -12,9 +13,5 @@ export const metadata: Metadata = {
 };
 
 export default function SupportPage() {
-  return <article className="content policy-page">
-    <p className="eyebrow">Vellano</p>
-    <h1>{page.title}</h1>
-    {page.paragraphs.map((paragraph, index) => <p key={`support-${index}`}>{paragraph}</p>)}
-  </article>;
+  return <PolicyArticle page={page} section="support" />;
 }

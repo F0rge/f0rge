@@ -1,5 +1,6 @@
 import "server-only";
 import { roomCollectionHandles } from "./catalogue-collections";
+import { formatCustomerPrice } from "./order-money";
 
 type MedusaRegion = { id: string; currency_code: string };
 export type MedusaImage = { id: string; url: string };
@@ -168,5 +169,5 @@ export function lowestPricedVariant(variants: MedusaVariant[]): MedusaVariant | 
 export function priceLabel(variant?: MedusaVariant): string {
   const amount = variant?.calculated_price?.calculated_amount;
   if (amount == null) return "Price unavailable";
-  return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(amount);
+  return formatCustomerPrice(amount, variant?.calculated_price?.currency_code);
 }

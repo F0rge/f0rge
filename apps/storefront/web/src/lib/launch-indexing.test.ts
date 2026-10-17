@@ -22,6 +22,10 @@ describe("storefront indexing", () => {
     expect(catalogueIndexable("/product/chair", production)).toBe(true);
     expect(catalogueIndexable("/collections", production)).toBe(true);
     expect(catalogueIndexable("/policies/privacy", production)).toBe(true);
+    expect(catalogueIndexable("/policies/terms", production)).toBe(true);
+    expect(catalogueIndexable("/policies/refunds", production)).toBe(true);
+    expect(catalogueIndexable("/policies/returns", production)).toBe(true);
+    expect(catalogueIndexable("/contact", production)).toBe(true);
     expect(catalogueIndexable("/account", production)).toBe(false);
     expect(catalogueIndexable("/account/orders/1", production)).toBe(false);
     expect(catalogueIndexable("/checkout", production)).toBe(false);
@@ -44,6 +48,11 @@ describe("storefront indexing", () => {
     expect(paths).toContain("/product/chair");
     expect(paths).toContain("/shop?collection=seating");
     expect(paths).toContain("/policies/privacy");
+    expect(paths).toContain("/policies/terms");
+    expect(paths).toContain("/policies/refunds");
+    expect(paths).toContain("/policies/returns");
+    expect(paths).toContain("/policies/delivery");
+    expect(paths).toContain("/contact");
     expect(paths.some((path) => path.startsWith("/account") || path.startsWith("/checkout") || path.startsWith("/order"))).toBe(false);
   });
 
