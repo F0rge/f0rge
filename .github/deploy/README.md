@@ -5,7 +5,7 @@ Single source of truth for **which Nx projects deploy where**. The orchestrator
 affected`, and delegates to Railway smoke or Coolify executors.
 
 Marrow ships via **Railway GitHub autodeploy**; Actions only plans + smokes.
-dk tag-printer remains on Coolify (Pi). Firstout is a **separate Railway
+dk tag-printer and buycycle run on Coolify (Pi). Firstout is a **separate Railway
 project** (not Marrow `zoological-fulfillment`),
 **`main` only**. Hosts: `firstout.co.za` /
 `api.firstout.co.za` (Swagger at `/docs`).
@@ -34,6 +34,7 @@ project** (not Marrow `zoological-fulfillment`),
 | `COOLIFY_BASE_URL` | Coolify webhook POST base |
 | `COOLIFY_WEBHOOK_DK_BACKEND` | dk-tag-printer-backend |
 | `COOLIFY_WEBHOOK_DK_FRONTEND` | dk-tag-printer-frontend |
+| `COOLIFY_WEBHOOK_BUYCYCLE` | buycycle (Pi, internal only; skips while unset) |
 | `SMOKE_EMAIL` / `SMOKE_PASSWORD` | Optional Railway auth smoke |
 
 `FLY_API_TOKEN` is unused after the Railway cutover (safe to delete from GitHub
@@ -53,6 +54,11 @@ secrets after the 48h Fly rollback window).
 
 Disable Coolify GitHub App auto-deploy on dk apps once Actions webhooks are
 verified — deploy is CI-gated via `deploy-reusable.yml` on `main` push.
+
+Internal-only Coolify components (e.g. `buycycle`, `host: pi`) omit `health_url`:
+runners can't reach the Pi, so the job relies on Coolify's `queued` response and
+skips the health smoke. A `TODO…` placeholder `app_uuid` also skips. Buycycle
+cutover: [apps/buycycle/deploy/PI_CUTOVER.md](../../apps/buycycle/deploy/PI_CUTOVER.md).
 
 Coolify steps **skip (success)** when webhook secrets are missing or Coolify
 returns `Deployments disabled` for the app — so a parked Pi app does not fail

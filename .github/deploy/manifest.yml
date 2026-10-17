@@ -2,7 +2,7 @@ version: 1
 
 # Maps Nx projects to deploy targets. The orchestrator (deploy-reusable.yml)
 # filters by branch/environment and nx affected before calling executors.
-# Marrow: Railway GitHub autodeploy + Actions smoke only. dk: Coolify on main.
+# Marrow: Railway GitHub autodeploy + Actions smoke only. dk + buycycle: Coolify (Pi) on main.
 
 components:
   marrow-backend:
@@ -44,6 +44,17 @@ components:
       app_uuid: f080ossg88ows8k8csw40c4s
       webhook_secret_env: COOLIFY_WEBHOOK_DK_FRONTEND
     health_url: https://tags.leo-figueiredo.com/
+
+  # Buycycle dashboards: Coolify on the Pi, internal only (host ports 8095/8096, no domain).
+  # No health_url: GitHub runners cannot reach the Pi, so the deploy trusts Coolify's "queued" response.
+  buycycle:
+    nx: buycycle
+    target: coolify
+    host: pi
+    branches: [main]
+    coolify:
+      app_uuid: TODO-set-after-creating-coolify-app  # TODO(ops): replace with the Coolify app UUID (apps/buycycle/deploy/PI_CUTOVER.md)
+      webhook_secret_env: COOLIFY_WEBHOOK_BUYCYCLE
 
   # Firstout: own Railway project (not zoological-fulfillment).
   # main only (Railway env is named develop but tracks main). Public hosts are firstout.co.za and api.firstout.co.za.

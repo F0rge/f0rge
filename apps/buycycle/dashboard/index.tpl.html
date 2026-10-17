@@ -1,0 +1,233 @@
+<!doctype html><html lang=en data-color-mode=auto data-light-theme=light data-dark-theme=dark><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name=color-scheme content="light dark">
+<title>__TITLE__</title>
+<link rel=stylesheet href="vendor/primer.css"><link rel=stylesheet href="vendor/primer_view_components.css"><link rel=stylesheet href="vendor/primer-react-datatable.css">
+</head><body class="color-bg-default color-fg-default">
+<a class="show-on-focus px-3 py-2 color-bg-default" href="#t-deals">Skip to deals</a>
+<header class="color-bg-subtle border-bottom px-3 px-md-4 py-2 d-flex flex-items-center">
+ <div class="flex-1 min-width-0"><h1 class="f4 text-semibold"><span class="d-none d-md-inline">__TITLE__</span><span class="d-md-none">__SHORT__</span></h1><div class="f6 color-fg-muted" id=meta>Loading…</div></div>
+ <button type=button class="Button Button--invisible Button--small d-none d-md-inline-flex" id=kopen><span class=Button-content><span class=Button-label>Shortcuts <kbd>?</kbd></span></span></button>
+</header>
+<nav class="UnderlineNav px-2 px-md-4 overflow-x-auto" aria-label=Sections><ul class="UnderlineNav-body list-style-none" role=list id=tabs></ul></nav>
+<div class="d-md-none position-sticky top-0 z-1 color-bg-default border-bottom px-3 py-2 d-flex flex-items-center" id=mbar>
+ <span class="FormControl-input-wrap FormControl-input-wrap--leadingVisual flex-1 mr-2"><span class=FormControl-input-leadingVisualWrap>__OCT_search__</span><input class="FormControl-input FormControl-medium" type=search id=mq placeholder="Search model, brand…" aria-label=Search></span>
+ <span class="FormControl-select-wrap mr-2"><select class="FormControl-select FormControl-medium" id=msort aria-label="Sort by"></select></span>
+ <button type=button class="Button Button--secondary Button--medium" id=fopen aria-label="Filters"><span class=Button-content><span class=Button-visual>__OCT_filter__</span><span class=Button-label><span class=Counter id=fcount>0</span></span></span></button>
+</div>
+<main>
+<section id=t-deals>
+ <div class=d-md-flex>
+  <aside class="d-none d-md-block col-md-4 col-lg-3 border-right p-3" aria-label=Filters>
+   <div class="d-flex flex-items-center flex-justify-between mb-2"><h2 class="f5 text-semibold">Filters</h2><button type=button class="Button Button--invisible Button--small" data-reset><span class=Button-content><span class=Button-label>Reset</span></span></button></div>
+   <div id=fd></div><p class="f6 color-fg-muted mt-3">Filters and sort are kept in the URL; bookmark it to keep a view.</p>
+  </aside>
+  <div class="flex-1 min-width-0 p-3">
+   <div class="d-flex flex-wrap gutter-condensed" id=kpis></div>
+   <div class="d-none d-md-block mt-2">
+    <div class="prc-DataTable-TableOverflowWrapper-bSqT- overflow-x-auto"><table class=prc-DataTable-Table-7ux1n data-cell-padding=condensed id=dt aria-describedby=dtcap><thead class=prc-DataTable-TableHead-4FaBf><tr class=prc-DataTable-TableRow-Icc7F id=th></tr></thead><tbody class=prc-DataTable-TableBody-QKQy2 id=tb></tbody></table></div>
+    <p class="f6 color-fg-muted mt-2" id=dtcap>Strong deal = profit ≥ €250, ROI ≥ 15%, ≥20% under the reference price, medium-or-better comparables and no hard risk flag.</p>
+    <div class="d-flex flex-items-center flex-justify-between mt-2"><span class="f6 color-fg-muted" id=cnt></span><button type=button class="Button Button--secondary Button--small" id=more><span class=Button-content><span class=Button-label>Show 200 more</span></span></button></div>
+   </div>
+   <div class="d-md-none mt-2"><ul class="Box list-style-none" id=cards aria-label=Deals></ul><div id=sentinel class="f6 color-fg-muted text-center p-3"></div></div>
+  </div>
+ </div>
+</section>
+<section id=t-charts class=p-3 hidden><div class="d-flex flex-wrap gutter">
+ <div class="col-12 col-lg-6 mb-3"><div class="Box"><div class=Box-header><h3 class=Box-title>Profit vs ROI</h3></div><div class="Box-body"><div class=position-relative style="height:280px"><canvas id=c1></canvas></div><p class="f6 color-fg-muted mt-2">Top-right is best. Colour = comps confidence.</p></div></div></div>
+ <div class="col-12 col-lg-6 mb-3"><div class="Box"><div class=Box-header><h3 class=Box-title>Discount vs days on market</h3></div><div class="Box-body"><div class=position-relative style="height:280px"><canvas id=c2></canvas></div><p class="f6 color-fg-muted mt-2">Old listings with big discounts often hide a problem.</p></div></div></div>
+ <div class="col-12 col-lg-6 mb-3"><div class="Box"><div class=Box-header><h3 class=Box-title>Fastest-selling models (median days to sell, 30 d)</h3></div><div class="Box-body"><div class=position-relative style="height:280px"><canvas id=c3></canvas></div><p class="f6 color-fg-muted mt-2" id=c3n>Fills in as daily history accumulates (vanished listing = likely sold).</p></div></div></div>
+ <div class="col-12 col-lg-6 mb-3"><div class="Box"><div class=Box-header><h3 class=Box-title>Highest sell-through models (30 d)</h3></div><div class="Box-body"><div class=position-relative style="height:280px"><canvas id=c4></canvas></div><p class="f6 color-fg-muted mt-2">Gone in 30 d ÷ (gone + active). 50%+ strong, &lt;20% slow.</p></div></div></div>
+ <div class="col-12 col-lg-6 mb-3"><div class="Box"><div class=Box-header><h3 class=Box-title>Days listed (filtered)</h3></div><div class="Box-body"><div class=position-relative style="height:280px"><canvas id=c5></canvas></div></div></div></div>
+ <div class="col-12 col-lg-6 mb-3"><div class="Box"><div class=Box-header><h3 class=Box-title>Risk flags (profitable, filtered)</h3></div><div class="Box-body"><div class=position-relative style="height:280px"><canvas id=c6></canvas></div></div></div></div>
+</div></section>
+<section id=t-models class=p-3 hidden><div class="Box mb-3"><div class=Box-body><div class="FormControl FormControl--fullWidth"><label class=FormControl-label for=msel>Model</label><input class="FormControl-input FormControl-medium" id=msel list=mlist placeholder="Type a model"></div><datalist id=mlist></datalist>
+ <div class="position-relative mt-3" style="height:340px"><canvas id=c7></canvas></div><p class="f6 color-fg-muted mt-2" id=mnote></p></div></div>
+ <div class=Box><div class="Box-header"><h3 class=Box-title>Listings of this model</h3></div><div id=mtb></div></div></section>
+<section id=t-watch class=p-3 hidden><div class="Box mb-3"><div class=Box-header><h3 class=Box-title>Watchlist</h3></div><div id=wl></div></div>
+ <div class=Box><div class=Box-header><h3 class=Box-title>Bought / sold log</h3></div><div class="Box-body"><div class="d-flex flex-wrap gutter-condensed">
+ __LOGFORM__
+ <div class="col-12 col-md-4 mb-2 d-flex flex-items-end"><button type=button class="Button Button--primary Button--medium" id=ladd><span class=Button-content><span class=Button-label>Add / update</span></span></button></div></div></div><div id=ltb></div>
+ <div class="Box-footer f6 color-fg-muted d-flex flex-wrap flex-items-center"><span id=lsum class=mr-2></span><span class=mr-2>Stored in this browser only.</span>
+ <button type=button class="Button Button--secondary Button--small mr-2" id=exp><span class=Button-content><span class=Button-visual>__OCT_download__</span><span class=Button-label>Export JSON</span></span></button>
+ <label class="Button Button--secondary Button--small"><span class=Button-content><span class=Button-visual>__OCT_upload__</span><span class=Button-label>Import</span></span><input type=file id=imp accept=.json hidden></label></div></div></section>
+<section id=t-alerts class=p-3 hidden><div class=Box><div class=Box-header><h3 class=Box-title>Today's new strong deals</h3><p class="f6 color-fg-muted mt-1">Machine-readable: <a href="alerts.json">alerts.json</a> (plus dated alerts-YYYY-MM-DD.json). <span id=acrit></span></p></div><div id=atb></div></div></section>
+<section id=t-costs class=p-3 hidden><div class=Box><div class=Box-header><h3 class=Box-title>Cost assumptions (saved in this browser)</h3></div><div class=Box-body>
+ <div class="d-flex flex-wrap gutter-condensed" id=costf></div>
+ <p class="f6 color-fg-muted mt-3">You buy on buycycle and resell on buycycle at the comparables median minus the haircut.<br>Total cost = price × (1 + buyer protection %) + fixed € + payment/FX % × price + inbound shipping + packaging + repair + buffer.<br>Net sale = expected sale × (1 − seller fee %) − outbound shipping − boost/relist. Profit = net sale − total cost; ROI = profit ÷ total cost.<br>__FEENOTE__</p>
+ <button type=button class="Button Button--secondary Button--medium mt-2" id=creset><span class=Button-content><span class=Button-label>Restore defaults</span></span></button></div></div></section>
+<section id=t-method class=p-3 hidden><div class="Box p-3 markdown-body">__METHOD__</div></section>
+</main>
+<dialog class="Overlay Overlay--size-medium-portrait Overlay--motion-scaleFade Overlay--placement-bottom-whenNarrow" id=fdlg aria-labelledby=fdlgt>
+ <div class="Overlay-header Overlay-header--divided"><div class=Overlay-headerContentWrap><div class=Overlay-titleWrap><h2 class=Overlay-title id=fdlgt>Filters</h2></div>
+ <div class=Overlay-actionWrap><button type=button class="close-button Overlay-closeButton" data-close aria-label=Close>__OCT_x__</button></div></div></div>
+ <div class=Overlay-body id=fm></div>
+ <div class="Overlay-footer Overlay-footer--divided Overlay-footer--alignEnd"><button type=button class="Button Button--secondary Button--medium" data-reset><span class=Button-content><span class=Button-label>Reset</span></span></button>
+ <button type=button class="Button Button--primary Button--medium" data-close><span class=Button-content><span class=Button-label>Show <span id=fshow></span> results</span></span></button></div>
+</dialog>
+<dialog class="Overlay Overlay--size-small Overlay--height-auto Overlay--motion-scaleFade" id=kdlg aria-labelledby=kdlgt>
+ <div class=Overlay-header><div class=Overlay-headerContentWrap><div class=Overlay-titleWrap><h2 class=Overlay-title id=kdlgt>Keyboard shortcuts</h2></div><div class=Overlay-actionWrap><button type=button class="close-button Overlay-closeButton" data-close aria-label=Close>__OCT_x__</button></div></div></div>
+ <div class="Overlay-body Overlay-body--paddingCondensed"><ul class=ActionListWrap role=list>__KEYS__</ul></div>
+</dialog>
+<script src="vendor/chart.umd.min.js" defer></script>
+<script>
+const KIND='__KIND__',DEF=__DEFAULTS__,EXTRA=__EXTRA_JS__,PFX='https://buycycle.com/en-lu/product/',OCT=__OCTICONS__;
+const $=id=>document.getElementById(id),H=document.documentElement,NARROW=()=>matchMedia('(max-width: 767px)').matches;
+const oc=(n,c)=>`<svg class="octicon ${c||''}" viewBox="0 0 16 16" width=16 height=16 aria-hidden=true fill=currentColor>${OCT[n]}</svg>`;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const eur=v=>v==null?'–':'€'+Math.round(v).toLocaleString('en');
+const btn=(label,cls,attrs,icon)=>`<button type=button class="Button ${cls||'Button--secondary Button--small'}" ${attrs||''}><span class=Button-content>${icon?`<span class=Button-visual>${oc(icon)}</span>`:''}<span class=Button-label>${label}</span></span></button>`;
+const LS=k=>KIND+':'+k,ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(LS(k)))??d}catch(e){return d}},sv=(k,v)=>localStorage.setItem(LS(k),JSON.stringify(v));
+let C=Object.assign({},DEF,ld('costs',{})),WL=ld('watch',{}),LOG=ld('log',[]),ITEMS=[],MODELS=null,DET=null,META=null,FULL=false,view=[],shown=200,mshown=30,sel=-1,charts={},SORT='pf',ASC=false,TAB='deals';
+const HARD=['too-good-to-be-true','implausibly low price','zero-review seller'],CONF={none:0,low:1,medium:2,high:3},COND={'1':'fair','2':'good','3':'very good','4':'like new'};
+const TABS=[['deals','Deals','list-unordered'],['charts','Charts','graph'],['models','Trends','pulse'],['watch','Watchlist','star'],['alerts','Alerts','bell'],['costs','Costs','gear'],['method','Method','info']];
+// single sort state (column key + direction); desktop = DataTable header buttons, mobile = one select
+const SORTS=[['pf','€ profit'],['roi','ROI %'],['d','% under ref.'],['flex','Flexibility'],['dl','Days listed'],['p','Price'],['pdp','Price drop %']],ASC_DEFAULT=['dl','p'];
+// ---------- filters: grouped, rendered into desktop sidebar and mobile dialog ----------
+const FG=[['Find',[['q','Search','text','model, brand, groupset…'],['brand','Brand','select'],['size','Size','text','e.g. 56, M'],...EXTRA.map(e=>[e.id,e.label,'select'])]],
+ ['Price & return',[['pmin','Min price €','number'],['pmax','Max price €','number'],['minp','Min profit €','number'],['minr','Min ROI %','number']]],
+ ['Trust & risk',[['conf','Comparables confidence','seg',[['','Any'],['low','Low+'],['medium','Med+'],['high','High']]],['risk','Risk flags','seg',[['','Hide hard'],['all','All'],['none','None']]],
+  ['flex','Seller flexibility','select',[['','Any'],['pr','buycycle "price reduced"'],['drop','Dropped (history or vs original)'],['any','Either signal'],['hi','Flex score ≥3']]]]],
+ ['Location & age',[['country','Country','select'],['kmax','Max km from Luxembourg','number'],['dmax','Max days listed','number']]]];
+const F=FG.flatMap(g=>g[1]);const FV={};F.forEach(f=>FV[f[0]]='');
+function fHtml(p){return FG.map(([g,fs],gi)=>`<div role=group aria-labelledby=${p}g${gi} class="${gi?'border-top pt-3 mt-3':''}"><h3 class="f6 text-semibold color-fg-muted mb-2" id=${p}g${gi}>${g}</h3>${fs.filter(f=>!(p=='m'&&f[0]=='q')).map(f=>{const id=p+f[0];
+ if(f[2]=='seg')return `<div class="FormControl FormControl--fullWidth mb-2"><span class=FormControl-label id=${id}l>${f[1]}</span><ul class="SegmentedControl SegmentedControl--small SegmentedControl--fullWidth" role=list aria-labelledby=${id}l>${f[3].map(o=>`<li class=SegmentedControl-item role=listitem data-seg=${f[0]} data-v="${o[0]}"><button type=button class="Button Button--invisible Button--small" aria-current=false><span class=Button-content><span class=Button-label>${esc(o[1])}</span></span></button></li>`).join('')}</ul></div>`;
+ if(f[2]=='select')return `<div class="FormControl FormControl--fullWidth mb-2"><label class=FormControl-label for=${id}>${f[1]}</label><span class=FormControl-select-wrap><select class="FormControl-select FormControl-medium" id=${id} data-f=${f[0]}>${(f[3]||[['','All']]).map(o=>`<option value="${o[0]}">${esc(o[1])}</option>`).join('')}</select></span></div>`;
+ return `<div class="FormControl FormControl--fullWidth mb-2"><label class=FormControl-label for=${id}>${f[1]}</label><input class="FormControl-input FormControl-medium" id=${id} data-f=${f[0]} type=${f[2]=='number'?'number':'search'} ${f[2]=='number'?'inputmode=decimal':''} placeholder="${f[3]||''}"></div>`}).join('')}</div>`).join('')}
+$('fd').innerHTML=fHtml('d');$('fm').innerHTML=fHtml('m');$('msort').innerHTML=SORTS.map(s=>`<option value=${s[0]}>${s[1]}</option>`).join('');
+function syncInputs(){document.querySelectorAll('[data-f]').forEach(i=>{if(document.activeElement!==i)i.value=FV[i.dataset.f]});if(document.activeElement!==$('mq'))$('mq').value=FV.q;
+ document.querySelectorAll('[data-seg]').forEach(li=>{const on=FV[li.dataset.seg]==li.dataset.v;li.classList.toggle('SegmentedControl-item--selected',on);li.firstChild.setAttribute('aria-current',on)});
+ $('msort').value=SORTS.some(s=>s[0]==SORT)?SORT:'pf';$('fcount').textContent=F.filter(f=>f[0]!='q'&&FV[f[0]]).length}
+let tmr;function setF(k,v){FV[k]=v;shown=200;mshown=30;clearTimeout(tmr);tmr=setTimeout(filt,150)}
+document.addEventListener('input',e=>{const k=e.target.dataset.f;if(k)setF(k,e.target.value)});
+$('mq').oninput=e=>setF('q',e.target.value);$('msort').onchange=e=>{SORT=e.target.value;ASC=ASC_DEFAULT.includes(SORT);filt()};
+document.querySelectorAll('[data-reset]').forEach(b=>b.onclick=()=>{F.forEach(f=>FV[f[0]]='');SORT='pf';ASC=false;syncInputs();filt()});
+// ---------- URL state ----------
+function readHash(){const h=new URLSearchParams(location.hash.slice(1));F.forEach(f=>{if(h.has(f[0]))FV[f[0]]=h.get(f[0])});SORT=h.get('o')||'pf';ASC=h.get('a')=='1';TAB=h.get('tab')||'deals';return h}
+function writeHash(){const h=new URLSearchParams();F.forEach(f=>{const v=FV[f[0]];if(v)h.set(f[0],v)});if(SORT!='pf')h.set('o',SORT);if(ASC)h.set('a','1');if(TAB!='deals')h.set('tab',TAB);
+ if(TAB=='models'&&$('msel').value)h.set('m',$('msel').value);history.replaceState(null,'','#'+h)}
+// ---------- data ----------
+function unpack(d){return d.rows.map(r=>{const x={};d.cols.forEach((c,j)=>{if(r[j]!=null)x[c]=r[j]});x.u=PFX+x.u;x.rk=x.rk||[];x._s=(x.n+' '+x.b+' '+(x.cp||'')+' '+(x.ct||'')+' '+(x.m||'')).toLowerCase();calc(x);return x})}
+function calc(x){x.pf=x.roi=null;if(x.r==null)return;const sale=x.r*(1-C.haircut/100),cost=x.p*(1+C.bp/100)+C.bpf+x.p*C.pay/100+C.shipin+C.pack+C.repair+C.buffer;
+ x.pf=sale*(1-C.sellfee/100)-C.shipout-C.relist-cost;x.roi=x.pf/cost*100}
+const getModels=()=>MODELS?Promise.resolve(MODELS):fetch('models.json').then(r=>r.json()).then(m=>MODELS=m);
+const getDet=()=>DET?Promise.resolve(DET):fetch('details.json').then(r=>r.json()).then(m=>DET=m);
+function flexOk(x,f){const dr=(x.pd||0)>0||(x.pdp||0)>0;return !f||(f=='pr'&&x.pr)||(f=='drop'&&dr)||(f=='any'&&(x.pr||dr))||(f=='hi'&&(x.flex||0)>=3)}
+function filt(){const g=k=>FV[k],num=k=>g(k)===''?null:+g(k),q=g('q').toLowerCase().split(/\s+/).filter(Boolean),cf=CONF[g('conf')]||0;
+ const f={pmin:num('pmin'),pmax:num('pmax'),minp:num('minp'),minr:num('minr'),dmax:num('dmax'),kmax:num('kmax')};
+ view=ITEMS.filter(x=>!x.g&&(!g('brand')||x.b==g('brand'))&&(!g('country')||x.co==g('country'))&&(!g('size')||String(x.s||'').toLowerCase().includes(g('size').toLowerCase()))
+  &&(f.pmin==null||x.p>=f.pmin)&&(f.pmax==null||x.p<=f.pmax)&&(f.minp==null||(x.pf??-1e9)>=f.minp)&&(f.minr==null||(x.roi??-1e9)>=f.minr)&&(f.dmax==null||x.dl<=f.dmax)
+  &&(f.kmax==null||(x.km!=null&&x.km<=f.kmax))&&(!cf||CONF[x.cf||'none']>=cf)&&(g('risk')!=''||!x.rk.some(r=>HARD.includes(r)))&&(g('risk')!='none'||!x.rk.length)
+  &&flexOk(x,g('flex'))&&EXTRA.every(e=>!g(e.id)||x[e.k]==g(e.id))&&(!q.length||q.every(w=>x._s.includes(w))));
+ const key=SORT,asc=ASC;
+ view.sort((a,b)=>{let A=a[key],B=b[key];if(A==null&&B==null)return 0;if(A==null)return 1;if(B==null)return -1;if(typeof A=='string')return asc?A.localeCompare(B):B.localeCompare(A);return asc?A-B:B-A});
+ sel=-1;syncInputs();writeHash();renderList();renderKpis();$('fshow').textContent=view.length.toLocaleString();if(TAB=='charts')renderCharts()}
+// ---------- rendering (Primer: Label, Counter, Progress, Button, DataTable, Box rows) ----------
+const strong=x=>x.pf>=250&&x.roi>=15&&x.d!=null&&x.d>=20&&CONF[x.cf||'none']>=2&&!x.rk.some(r=>HARD.includes(r));
+const lab=(t,c)=>`<span class="Label Label--${c||'secondary'} mr-1 mb-1">${esc(t)}</span>`;
+const sgn=v=>v>0?'color-fg-success':'color-fg-danger';
+const rkHtml=x=>x.rk.map(r=>lab(r,HARD.includes(r)?'danger':'attention')).join('');
+const cfHtml=x=>`<span class="Counter mr-1" title="comparable listings">${x.nc||0}</span>${lab(x.cf||'no comps',{high:'success',medium:'accent',low:'severe',none:'secondary'}[x.cf||'none'])}`;
+const bar=x=>x.d==null?'':`<span class="Progress Progress--small mt-1" aria-hidden=true><span class="Progress-item color-bg-success-emphasis" style="width:${Math.min(100,Math.max(0,x.d*1.6))}%"></span></span>`;
+const star=x=>`<button type=button class="Button Button--invisible Button--iconOnly Button--small" data-w="${x.i}" aria-label="${WL[x.i]?'Unwatch':'Watch'} ${esc(x.n)}" aria-pressed="${!!WL[x.i]}">${oc(WL[x.i]?'star-fill':'star',WL[x.i]?'color-fg-attention':'')}</button>`;
+const compsBtn=x=>x.d!=null&&x.d>20?`<details data-c="${x.i}" class=mt-1><summary class="f6 Link--muted">comparables</summary><div class="f6" data-cl></div></details>`:'';
+const meta=x=>`${esc(x.b)} · ${esc(x.s||'?')} · ${x.y||''} · ${COND[x.c]||''}${x.cp?' · '+esc(x.cp):''}${x.k?' · '+x.k+' · '+(x.mt||'')+' · '+(x.w||''):''}`;
+const COLS=[['n','Listing','minmax(200px,2.4fr)'],['p','Price','minmax(84px,.8fr)',1],['r','Reference','minmax(120px,1fr)',1],['d','Under ref.','minmax(110px,1fr)',1],['pf','€ profit','minmax(80px,.7fr)',1],['roi','ROI','minmax(56px,.5fr)',1],
+ ['dl','Days listed','minmax(72px,.6fr)',1],['flex','Flex','minmax(104px,.8fr)'],['str','Model STR / DTS','minmax(90px,.7fr)',1],['co','Location','minmax(90px,.8fr)'],['rk','Risk','minmax(110px,1fr)'],['_','Watch','48px']];
+const TD=(a,h)=>`<td class=prc-DataTable-TableCell-Fk4ve${a?' data-cell-align=end':''}><div class=width-full>${h}</div></td>`;
+function row(x,j,cols){const c={n:`${strong(x)?lab('Strong deal','success'):''}<a class="Link--primary text-semibold" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><div class="f6 color-fg-muted">${meta(x)}</div>`,
+ p:`${eur(x.p)}${x.pdp>0?`<div class="f6 color-fg-muted">was ${eur(x.op)} (−${x.pdp}%)</div>`:''}`,r:`${eur(x.r)}<div class=mt-1>${cfHtml(x)}</div>${compsBtn(x)}`,
+ d:x.d==null?'–':`<span class=text-semibold>${x.d}%</span><div class="f6 color-fg-muted">${eur(x.r-x.p)} under</div>${bar(x)}`,pf:`<span class="text-semibold ${sgn(x.pf)}">${eur(x.pf)}</span>`,roi:`<span class="${sgn(x.roi)}">${x.roi!=null?Math.round(x.roi)+'%':'–'}</span>`,
+ dl:`${Math.round(x.dl)}${x.ld?'':'*'}${x.pd?`<div class=mt-1><span class=Counter>${x.pd}</span> <span class="f6 color-fg-muted">drops</span></div>`:''}`,flex:`<span class=text-semibold>${x.flex||0}</span>${x.pr?'<div>'+lab('price reduced','accent')+'</div>':''}`,
+ str:`${x.str!=null?x.str+'%':'–'} / ${x.mdts!=null?x.mdts+' d':'–'}`,co:`${esc(x.co||'?')}${x.km!=null?`<div class="f6 color-fg-muted">~${x.km} km</div>`:''}`,
+ rk:`${rkHtml(x)}${x.sr!=null?`<div class="f6 color-fg-muted">${x.sr} reviews${x.msn?' · since '+esc(x.msn):''}</div>`:''}`,_:star(x)};
+ return `<tr class=prc-DataTable-TableRow-Icc7F data-j=${j}>${cols.map(k=>TD(k[3],c[k[0]])).join('')}</tr>`}
+const stat=(v,l,cls)=>`<span class="mr-3 mb-1 d-inline-block"><span class="text-semibold ${cls||''}">${v}</span> <span class="color-fg-muted">${l}</span></span>`;
+function card(x){return `<li class=Box-row><div class="d-flex flex-items-start"><div class="flex-1 min-width-0">${strong(x)?lab('Strong deal','success'):''}<a class="Link--primary text-semibold f4 wb-break-word" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a>
+<div class="f6 color-fg-muted">${esc(x.b)} · ${esc(x.s||'?')} · ${x.y||''} · ${COND[x.c]||''} · ${esc(x.co||'?')}${x.km!=null?' ~'+x.km+' km':''}</div></div>${star(x)}</div>
+<div class="d-flex flex-items-baseline flex-wrap mt-2"><span class="f2 text-semibold mr-2">${eur(x.p)}</span>${x.pdp>0?`<span class="f6 color-fg-muted mr-2"><s>${eur(x.op)}</s> −${x.pdp}%</span>`:''}${x.pr?lab('price reduced','accent'):''}</div>
+<div class="f5 mt-1">${stat(eur(x.pf),'profit',sgn(x.pf))}${stat(x.roi!=null?Math.round(x.roi)+'%':'–','ROI',sgn(x.roi))}${stat(x.d!=null?x.d+'%':'–',`under ref. ${eur(x.r)}${x.r!=null?' ('+eur(x.r-x.p)+')':''}`)}</div>${bar(x)}
+<div class="f6 color-fg-muted mt-1">${Math.round(x.dl)}${x.ld?'':'*'} days listed · flex ${x.flex||0}${x.pd?' · '+x.pd+' drop(s)':''}</div>
+<div class=mt-2>${cfHtml(x)}${rkHtml(x)}</div>${compsBtn(x)}</li>`}
+function renderList(){const hasStr=ITEMS.some(x=>x.str||x.mdts),cols=COLS.filter(c=>c[0]!='str'||hasStr);$('dt').style.setProperty('--grid-template-columns',cols.map(c=>c[2]).join(' '));
+ $('th').innerHTML=cols.map(c=>{const on=SORT==c[0];return `<th class=prc-DataTable-TableHeader-eyTab scope=col${c[3]?' data-cell-align=end':''} aria-sort="${on?(ASC?'ascending':'descending'):'none'}">${['_','co','rk','n'].includes(c[0])?c[1]:
+  `<button type=button class="Button Button--invisible Button--small" data-k="${c[0]}" aria-label="Sort by ${c[1]}"><span class=Button-content><span class=Button-label>${c[1]}</span>${on?`<span class="Button-visual Button-trailingVisual">${oc(ASC?'sort-asc':'sort-desc')}</span>`:''}</span></button>`}</th>`}).join('');
+ $('tb').innerHTML=view.slice(0,shown).map((x,j)=>row(x,j,cols)).join('');$('cnt').textContent=`${view.length.toLocaleString()} listings match · showing ${Math.min(shown,view.length)}${FULL?'':' · loading full data…'} · * = days since first seen`;$('more').hidden=view.length<=shown;
+ $('cards').innerHTML=view.slice(0,mshown).map(card).join('')||'<li class="Box-row color-fg-muted">No listings match these filters.</li>';$('sentinel').textContent=view.length>mshown?'Loading more…':`${view.length.toLocaleString()} listings${FULL?'':' (top picks — loading all…)'}`}
+new IntersectionObserver(e=>{if(e[0].isIntersecting&&view.length>mshown){mshown+=30;$('cards').insertAdjacentHTML('beforeend',view.slice(mshown-30,mshown).map(card).join(''));$('sentinel').textContent=view.length>mshown?'Loading more…':`${view.length.toLocaleString()} listings`}},{rootMargin:'600px'}).observe($('sentinel'));
+function renderKpis(){const pos=view.filter(x=>x.pf>0),med=a=>{a=a.filter(v=>v!=null).sort((x,y)=>x-y);return a.length?a[a.length>>1]:null};
+ const k=[['Matching',view.length.toLocaleString()],['Profit > 0',pos.length.toLocaleString()],['Strong deals',view.filter(strong).length.toLocaleString()],['Best € profit',eur(Math.max(0,...view.map(x=>x.pf??0)))],['Median ROI (profit>0)',pos.length?Math.round(med(pos.map(x=>x.roi)))+'%':'–'],['Median days listed',Math.round(med(view.map(x=>x.dl))??0)]];
+ $('kpis').innerHTML=k.map(a=>`<div class="col-4 col-lg-2 mb-2"><div class="Box px-2 px-md-3 py-2 height-full"><div class="f3 text-semibold">${a[1]}</div><div class="f6 color-fg-muted">${a[0]}</div></div></div>`).join('')}
+document.addEventListener('click',e=>{const w=e.target.closest('[data-w]');if(w){tw(w.dataset.w);return}const k=e.target.closest('th [data-k]');if(k){const c=k.dataset.k;if(SORT==c)ASC=!ASC;else{SORT=c;ASC=ASC_DEFAULT.includes(c)}filt();return}
+ const s=e.target.closest('[data-seg]');if(s){setF(s.dataset.seg,s.dataset.v);syncInputs();return}
+ const tr=e.target.closest('tr[data-j]');if(tr&&!e.target.closest('a,button,summary')){sel=+tr.dataset.j;markSel()}});
+document.addEventListener('toggle',e=>{const d=e.target;if(d.dataset&&d.dataset.c&&d.open){getDet().then(D=>{const c=(D[d.dataset.c]||[])[0]||[];d.querySelector('[data-cl]').innerHTML=c.map(c=>`<div><a href="${PFX+esc(c[0].replace(PFX,''))}" target=_blank rel=noopener>${eur(c[1])}</a></div>`).join('')||'none'})}},true);
+$('more').onclick=()=>{shown+=200;renderList()};
+function tw(i){if(WL[i])delete WL[i];else{const x=ITEMS.find(y=>y.i==i);WL[i]={n:x.n,u:x.u,p:x.p,t:new Date().toISOString().slice(0,10)}}sv('watch',WL);
+ const x=ITEMS.find(y=>y.i==i);document.querySelectorAll(`[data-w="${i}"]`).forEach(b=>{if(b.classList.contains('Button--iconOnly'))b.outerHTML=star(x||{i,n:''})});renderKpis();if(TAB=='watch')renderWatch()}
+// ---------- charts (theme-aware, lazy) ----------
+function cv(n){return getComputedStyle(H).getPropertyValue(n).trim()}
+function mk(id,cfg){charts[id]?.destroy();charts[id]=new Chart($(id),cfg)}
+function theme(){if(!window.Chart)return;Chart.defaults.maintainAspectRatio=false;Chart.defaults.color=cv('--fgColor-muted');Chart.defaults.borderColor=cv('--borderColor-muted');Chart.defaults.font.family=cv('--fontStack-system')}
+function renderCharts(){if(!window.Chart)return setTimeout(renderCharts,100);theme();getModels().then(M=>{const mob=NARROW(),v=view.filter(x=>x.pf!=null).slice(0,mob?600:1500);
+ const col={high:cv('--fgColor-success'),medium:cv('--fgColor-accent'),low:cv('--fgColor-attention')};const lim=mob?8:15;
+ mk('c1',{type:'scatter',data:{datasets:['high','medium','low'].map(c=>({label:c,backgroundColor:col[c],pointRadius:mob?2:3,data:v.filter(x=>x.cf==c).map(x=>({x:x.roi,y:x.pf,n:x.n}))}))},options:{plugins:{tooltip:{callbacks:{label:c=>`${c.raw.n}: ${eur(c.raw.y)} · ${Math.round(c.raw.x)}%`}}},scales:{x:{title:{display:true,text:'ROI %'},min:-50},y:{title:{display:true,text:'€ profit'}}}}});
+ mk('c2',{type:'scatter',data:{datasets:[{backgroundColor:cv('--fgColor-danger'),pointRadius:mob?1.5:2.5,data:view.filter(x=>x.d!=null).slice(0,mob?1000:3000).map(x=>({x:x.dl,y:x.d,n:x.n}))}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw.n}: ${c.raw.y}% · ${Math.round(c.raw.x)} d`}}},scales:{x:{title:{display:true,text:'Days listed'}},y:{title:{display:true,text:'% below comps'},min:-100,max:80}}}});
+ const ms=Object.entries(M),fast=ms.filter(m=>m[1].dts!=null&&m[1].g30>=2).sort((a,b)=>a[1].dts-b[1].dts).slice(0,lim);$('c3n').hidden=!!fast.length;
+ const hb=(id,e,colr,x)=>mk(id,{type:'bar',data:{labels:e.map(m=>m[0]),datasets:[{data:e.map(m=>m[1]),backgroundColor:colr}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:x||{}}}});
+ hb('c3',fast.map(m=>[m[0],m[1].dts]),cv('--fgColor-accent'),{title:{display:true,text:'median days'}});
+ hb('c4',ms.filter(m=>m[1].a+m[1].g30>=5&&m[1].str!=null).sort((a,b)=>b[1].str-a[1].str).slice(0,lim).map(m=>[m[0],m[1].str]),cv('--fgColor-success'),{max:100});
+ const ed=[0,7,14,30,60,90,180,365,1e9],lb=['<7','7–14','14–30','30–60','60–90','90–180','180–365','365+'],bn=lb.map(()=>0);view.forEach(x=>{for(let i=0;i<8;i++)if(x.dl<ed[i+1]){bn[i]++;break}});
+ mk('c5',{type:'bar',data:{labels:lb,datasets:[{data:bn,backgroundColor:cv('--fgColor-done')||cv('--fgColor-accent')}]},options:{plugins:{legend:{display:false}}}});
+ const rc={};view.filter(x=>x.pf>0).forEach(x=>(x.rk.length?x.rk:['none']).forEach(r=>rc[r]=(rc[r]||0)+1));const re=Object.entries(rc).sort((a,b)=>b[1]-a[1]);
+ mk('c6',{type:'bar',data:{labels:re.map(r=>r[0]),datasets:[{data:re.map(r=>r[1]),backgroundColor:re.map(r=>HARD.includes(r[0])?cv('--fgColor-danger'):cv('--fgColor-attention'))}]},options:{indexAxis:'y',plugins:{legend:{display:false}}}})})}
+function renderModel(){if(!window.Chart)return setTimeout(renderModel,100);theme();getModels().then(M=>{$('mlist').innerHTML||($('mlist').innerHTML=Object.keys(M).sort().map(m=>`<option value="${esc(m)}">`).join(''));
+ if(!$('msel').value){const t=Object.entries(M).sort((a,b)=>b[1].a-a[1].a)[0];if(t)$('msel').value=t[0]}const k=$('msel').value,m=M[k];if(!m){$('mnote').textContent='Pick a model with at least 3 listings.';return}
+ mk('c7',{type:'line',data:{datasets:[{label:'median ask',data:m.t.map(t=>({x:t[0],y:t[1]})),borderColor:cv('--fgColor-accent'),tension:.2},{label:'active listings',data:m.t.map(t=>({x:t[0],y:t[2]})),borderColor:cv('--fgColor-muted'),yAxisID:'y2',borderDash:[4,4]},
+  {type:'scatter',label:'likely sold (last ask)',data:m.sold.map(s=>({x:s[0],y:s[1]})),backgroundColor:cv('--fgColor-success')}]},options:{parsing:false,scales:{x:{type:'category',labels:[...new Set([...m.t.map(t=>t[0]),...m.sold.map(s=>s[0])])].sort()},y:{title:{display:true,text:'€'}},y2:{position:'right',grid:{display:false}}}}});
+ $('mnote').textContent=`${m.a} active · ${m.g30} likely sold in 30 d · sell-through ${m.str??'–'}% · median days to sell ${m.dts??'–'}. History starts ${m.t[0]?.[0]||'–'}.`;
+ const L=ITEMS.filter(x=>x.b+' '+x.m==k).sort((a,b)=>a.p-b.p);$('mtb').innerHTML=L.map(x=>`<div class="Box-row d-flex flex-justify-between flex-wrap"><a class="mr-2" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><span class="f6 color-fg-muted">${eur(x.p)} · ${Math.round(x.dl)} d · ${x.pd||0} drops · ${x.g?'likely sold '+x.g:'active'}</span></div>`).join('');writeHash()})}
+$('msel').onchange=renderModel;
+// ---------- watchlist / log ----------
+function renderWatch(){const by=Object.fromEntries(ITEMS.map(x=>[x.i,x]));$('wl').innerHTML=Object.entries(WL).map(([i,w])=>{const x=by[i];return `<div class="Box-row d-flex flex-items-center flex-wrap"><a class="flex-1 mr-2" href="${esc(w.u)}" target=_blank rel=noopener>${esc(w.n)}</a><span class="f6 color-fg-muted mr-2">added ${w.t} at ${eur(w.p)} · now ${x?eur(x.p):'–'} · profit ${x?eur(x.pf):'–'} · ${!x?'gone (>30 d)':x.g?'likely sold '+x.g:'active'}</span>${btn('Remove','Button--secondary Button--small',`data-w="${i}"`)}</div>`}).join('')||`<div class="Box-row f6 color-fg-muted">Use ${oc('star')} on a deal to watch it.</div>`;
+ let tp=0,tc=0;$('ltb').innerHTML=LOG.map((l,j)=>{const pf=l.sell?l.sell-l.buy:null;if(pf!=null){tp+=pf;tc+=l.buy}const days=l.bd&&l.sd?Math.round((new Date(l.sd)-new Date(l.bd))/864e5)+' d held':'';
+  return `<div class="Box-row d-flex flex-items-center flex-wrap"><span class="flex-1 mr-2">${l.url?`<a href="${esc(l.url)}" target=_blank rel=noopener>${esc(l.name)}</a>`:esc(l.name)}</span><span class="f6 mr-2">bought ${eur(l.buy)} ${l.bd||''} · ${l.sell?'sold '+eur(l.sell)+' '+(l.sd||''):'unsold'} · <b class="${sgn(pf)}">${pf!=null?eur(pf)+' ('+Math.round(pf/l.buy*100)+'%)':''}</b> ${days}</span>${btn('Edit','Button--secondary Button--small mr-1',`onclick="ed(${j})"`,'pencil')}${btn('Delete','Button--danger Button--small',`onclick="dl(${j})"`,'trash')}</div>`}).join('');
+ $('lsum').textContent=LOG.length?`Realised ${eur(tp)} on ${eur(tc)} (${tc?Math.round(tp/tc*100):0}% ROI) · ${LOG.filter(l=>!l.sell).length} unsold`:'No entries yet'}
+let editing=-1;function ed(j){const l=LOG[j];editing=j;['name','url','buy','bd','sell','sd'].forEach(k=>$('l'+k).value=l[k]||'')}
+function dl(j){if(confirm('Delete this log entry?')){LOG.splice(j,1);sv('log',LOG);renderWatch()}}
+$('ladd').onclick=()=>{const l={name:$('lname').value,url:$('lurl').value,buy:+$('lbuy').value||0,bd:$('lbd').value,sell:+$('lsell').value||0,sd:$('lsd').value};if(!l.name)return;if(editing>=0)LOG[editing]=l;else LOG.push(l);editing=-1;sv('log',LOG);['name','url','buy','bd','sell','sd'].forEach(k=>$('l'+k).value='');renderWatch()};
+$('exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({watch:WL,log:LOG,costs:C},null,1)]));a.download=KIND+'-watch-log.json';a.click()};
+$('imp').onchange=e=>{e.target.files[0].text().then(t=>{const j=JSON.parse(t);WL=j.watch||WL;LOG=j.log||LOG;sv('watch',WL);sv('log',LOG);renderWatch()})};
+// ---------- costs ----------
+const CL={bp:'Buyer protection %',bpf:'Buyer protection fixed €',pay:'Payment / FX fee %',shipin:'Inbound shipping € (to you)',pack:'Packaging €',repair:'Repair / servicing €',buffer:'Risk buffer €',haircut:'Negotiation haircut % (resale vs comps)',sellfee:'Seller fee % when you relist',shipout:'Outbound shipping you pay €',relist:'Boost / relist cost €'};
+function renderCosts(){$('costf').innerHTML=Object.keys(CL).map(k=>`<div class="col-12 col-md-6 col-lg-4 mb-2"><div class="FormControl FormControl--fullWidth"><label class=FormControl-label for=c_${k}>${CL[k]}</label><input class="FormControl-input FormControl-medium" type=number step=any inputmode=decimal id=c_${k} data-c=${k} value="${C[k]}"></div></div>`).join('');
+ document.querySelectorAll('[data-c]').forEach(i=>i.oninput=()=>{C[i.dataset.c]=+i.value||0;sv('costs',C);ITEMS.forEach(calc);filt()})}
+$('creset').onclick=()=>{C=Object.assign({},DEF);localStorage.removeItem(LS('costs'));renderCosts();ITEMS.forEach(calc);filt()};
+// ---------- alerts ----------
+function renderAlerts(){fetch('alerts.json').then(r=>r.json()).then(a=>{$('acrit').textContent=a.criteria+' · generated '+a.generated;
+ $('atb').innerHTML=a.deals.map(d=>`<div class="Box-row"><div class="d-flex flex-justify-between flex-wrap"><a class="text-semibold mr-2" href="${esc(d.url)}" target=_blank rel=noopener>${esc(d.name)}</a><span><b class=color-fg-success>${eur(d.est_profit_eur)}</b> · ${d.roi_pct}% ROI</span></div>
+ <div class="f6 color-fg-muted">${eur(d.price_eur)} vs ref ${eur(d.reference_eur)} · ${d.comps} comps (${d.confidence}) · ${esc(d.country)} · ${esc(d.why)}</div><div>${d.risk_flags.map(r=>lab(r,'attention')).join('')}</div></div>`).join('')||'<div class="Box-row f6 color-fg-muted">No new strong deals today.</div>'}).catch(()=>$('atb').innerHTML='<div class=Box-row>alerts.json not found yet</div>')}
+// ---------- tabs, dialogs, keyboard (layout is CSS-only: Primer d-md-* responsive utilities) ----------
+$('tabs').innerHTML=TABS.map((t,i)=>`<li class=d-inline-flex><a href="#tab=${t[0]}" class=UnderlineNav-item data-t=${t[0]} title="${t[1]} (${i+1})">${oc(t[2],'UnderlineNav-octicon')}<span>${t[1]}</span></a></li>`).join('');
+function tab(t){TAB=t;document.querySelectorAll('[data-t]').forEach(b=>{b.dataset.t==t?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current')});
+ document.querySelectorAll('main>section').forEach(s=>s.hidden=s.id!='t-'+t);$('mbar').hidden=t!='deals';
+ if(t=='charts')renderCharts();if(t=='models')renderModel();if(t=='alerts')renderAlerts();if(t=='watch')renderWatch();writeHash();scrollTo(0,0)}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-t]');if(b){e.preventDefault();tab(b.dataset.t)}const c=e.target.closest('[data-close]');if(c)c.closest('dialog').close();
+ if(e.target.tagName=='DIALOG')e.target.close()});
+matchMedia('(max-width: 767px)').addEventListener('change',()=>{if(TAB=='charts')renderCharts()});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(TAB=='charts')renderCharts();if(TAB=='models')renderModel()});
+$('fopen').onclick=()=>$('fdlg').showModal();$('kopen').onclick=()=>$('kdlg').showModal();
+function markSel(){document.querySelectorAll('#tb tr').forEach(r=>r.querySelectorAll('td').forEach(td=>td.classList.toggle('color-bg-accent',+r.dataset.j==sel)));const r=document.querySelector(`#tb tr[data-j="${sel}"] td`);r&&r.scrollIntoView({block:'nearest'})}
+document.addEventListener('keydown',e=>{if(e.key=='Escape'){document.activeElement.blur();return}
+ if(e.target.matches('input,select,textarea')||e.metaKey||e.ctrlKey||e.altKey||document.querySelector('dialog[open]'))return;const x=view[sel];
+ if(e.key=='/'){e.preventDefault();(NARROW()?$('mq'):$('dq')).focus()}else if(e.key=='?')$('kdlg').showModal();
+ else if(/^[1-7]$/.test(e.key))tab(TABS[+e.key-1][0]);
+ else if(TAB=='deals'&&!NARROW()){if(e.key=='j'||e.key=='ArrowDown'){e.preventDefault();sel=Math.min(sel+1,Math.min(shown,view.length)-1);markSel()}
+  else if(e.key=='k'||e.key=='ArrowUp'){e.preventDefault();sel=Math.max(sel-1,0);markSel()}else if((e.key=='Enter'||e.key=='o')&&x)open(x.u,'_blank','noopener');
+  else if(e.key=='w'&&x)tw(x.i);else if(e.key=='c'&&x){const d=document.querySelector(`#tb tr[data-j="${sel}"] details`);if(d)d.open=!d.open}}});
+// ---------- boot: small top.json first, then full data in background ----------
+const h0=readHash();if(h0.get('m'))$('msel').value=h0.get('m');renderCosts();syncInputs();renderList();
+function setMeta(m){const lr=m.runs[m.runs.length-1]||{};$('meta').innerHTML=`<span class="d-none d-md-inline">${m.active.toLocaleString()} active · ${m.gone.toLocaleString()} likely sold · updated ${esc(m.generated.replace('T',' '))} · last scrape ${esc(lr.day||'–')} ${lr.complete?'complete':'INCOMPLETE'} (${lr.new||0} new, ${lr.gone||0} gone) · ${m.runs.length} snapshot(s) · <a href="alerts.json">alerts.json</a></span><span class=d-md-none>${m.active.toLocaleString()} active · updated ${esc(m.generated.slice(5,16).replace('T',' '))}</span>`}
+function options(){const opt=(k,id)=>{const m={};ITEMS.forEach(x=>{if(x[k])m[x[k]]=(m[x[k]]||0)+1});const v=Object.keys(m).sort(k=='b'?undefined:(a,b)=>m[b]-m[a]);
+ ['d','m'].forEach(p=>{const s=$(p+id);if(!s)return;s.length=1;s.insertAdjacentHTML('beforeend',v.map(o=>`<option>${esc(o)}</option>`).join(''))})};opt('b','brand');opt('co','country');EXTRA.forEach(e=>opt(e.k,e.id));syncInputs()}
+fetch('top.json').then(r=>r.json()).then(d=>{if(FULL)return;META=d.meta;setMeta(d.meta);ITEMS=unpack(d);options();filt();tab(TAB)}).catch(()=>{});
+fetch('data.json').then(r=>r.json()).then(d=>{FULL=true;META=d.meta;setMeta(d.meta);ITEMS=unpack(d);options();filt();if(TAB!='deals')tab(TAB)});
+</script></body></html>

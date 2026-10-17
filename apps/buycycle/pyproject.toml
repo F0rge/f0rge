@@ -1,0 +1,22 @@
+[project]
+name = "buycycle"
+version = "1.0.0"
+description = "Buycycle resale deal finder: gentle daily tracker (embedded Turso) + static Primer dashboards, served from the Pi"
+requires-python = ">=3.10"
+dependencies = ["pyturso==0.8.3"]
+
+[dependency-groups]
+dev = ["pytest>=9.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tracker", "dashboard"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 160
+
+[tool.ruff.lint]
+select = ["E", "F"]
+# tracker/render are compact one-liner scripts ported as-is from the Pi
+ignore = ["E501", "E701", "E702", "E731", "E741"]

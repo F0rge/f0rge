@@ -108,7 +108,8 @@ def main() -> None:
                         "name": _name,
                         "app_uuid": spec["coolify"]["app_uuid"],
                         "webhook_secret_env": spec["coolify"]["webhook_secret_env"],
-                        "health_url": spec["health_url"],
+                        "health_url": spec.get("health_url") or "",
+                        "host": spec.get("host", ""),
                     }
                 )
 
