@@ -7,3 +7,12 @@ import type { PhotoSignal } from '@/lib/api/types'
 export function dietFlagPillCount(flag: string, signal: PhotoSignal): number {
   return signal.sources[flag]?.length ?? 0
 }
+
+// Header count. One ingredient listed under two flags counts once.
+export function dietFlagIngredientCount(signal: PhotoSignal): number {
+  const names = new Set<string>()
+  for (const list of Object.values(signal.sources)) {
+    for (const name of list) names.add(name)
+  }
+  return names.size
+}

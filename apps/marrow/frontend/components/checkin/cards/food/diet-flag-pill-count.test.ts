@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { dietFlagPillCount } from './diet-flag-pill-count'
+import { dietFlagIngredientCount, dietFlagPillCount } from './diet-flag-pill-count'
 import type { PhotoSignal } from '@/lib/api/types'
 
 // 2026-10-17 check-in: coffee with oat milk + H3 carbonara.
@@ -52,5 +52,17 @@ describe('dietFlagPillCount', () => {
 
   it('is zero when a flag has no listed ingredients', () => {
     expect(dietFlagPillCount('high-histamine', { ...october17, sources: {} })).toBe(0)
+  })
+})
+
+describe('dietFlagIngredientCount', () => {
+  it('counts each listed name once across flags', () => {
+    // Per-flag lengths are 1 + 2 + 1 + 2 = 6. Distinct names are 4.
+    expect(dietFlagIngredientCount(october17)).toBe(4)
+    expect(dietFlagIngredientCount(october17)).not.toBe(6)
+  })
+
+  it('is zero when nothing is listed', () => {
+    expect(dietFlagIngredientCount({ ...october17, sources: {} })).toBe(0)
   })
 })

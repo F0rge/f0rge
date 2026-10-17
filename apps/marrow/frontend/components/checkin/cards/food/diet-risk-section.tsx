@@ -5,7 +5,7 @@ import { Camera } from 'lucide-react'
 import { apiGet, ApiError } from '@f0rge/ui/api'
 import type { Entry, PhotoSignal, DietTagCatalogItem, PhotoAnalysis } from '@/lib/api/types'
 
-import { dietFlagPillCount } from './diet-flag-pill-count'
+import { dietFlagIngredientCount, dietFlagPillCount } from './diet-flag-pill-count'
 
 function buildSourceLine(signal: PhotoSignal, catalog: DietTagCatalogItem[]): string {
   return signal.flags
@@ -50,7 +50,7 @@ interface PhotoDerivedRowProps {
 
 function PhotoDerivedRow({ signal, photoCount, catalog }: PhotoDerivedRowProps) {
   const sourceLine = buildSourceLine(signal, catalog)
-  const ingredientCount = Object.values(signal.sources).reduce((sum, arr) => sum + arr.length, 0)
+  const ingredientCount = dietFlagIngredientCount(signal)
 
   return (
     <div className="space-y-2">
