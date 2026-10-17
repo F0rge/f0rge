@@ -7,7 +7,7 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: develop or main
+        description: main (only deployed branch)
         required: true
         type: string
       smoke_api:

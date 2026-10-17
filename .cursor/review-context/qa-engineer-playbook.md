@@ -52,14 +52,14 @@ The bot can't run local servers or drive Playwright. Instead, when the review co
 
 **Always include (every PR):**
 - [ ] Spin up local dev (`cd apps/marrow/backend && uv run uvicorn app.main:app --port 8000 --reload` + `cd apps/marrow/frontend && npm run dev`); poll `/api/v1/health` to ready.
-- [ ] Drive every NEW user-facing path on the branch — every route, every form, every workflow that wasn't there on `develop`. Identify them from the diff.
+- [ ] Drive every NEW user-facing path on the branch — every route, every form, every workflow that wasn't there on `main`. Identify them from the diff.
 - [ ] After running, tail backend container logs for the test window — a 500 hidden behind a frontend toast is the most common slipped bug (see `MEMORY.md` → "Tail backend logs FIRST when UI reports an error").
 - [ ] Confirm `git status` is clean and any temp servers/worktrees are torn down (per global post-merge hygiene rule).
 
 **Add when diff includes:**
-- Migration files → after Fly deploy on develop, verify `alembic_version` via API health + exercise changed paths on `app-dev.marrow-health.com`.
-- Any `Mapped[datetime]` schema change → verify against Postgres dev (`app-dev.marrow-health.com`), not local SQLite.
-- MCP / embedding / OpenRouter changes → run dev-env gate against `api-dev.marrow-health.com` / `app-dev.marrow-health.com`.
+- Migration files → verify against a local Postgres testcontainer before merge; after merge to `main` (which deploys), check `alembic_version` via API health.
+- Any `Mapped[datetime]` schema change → verify against local Postgres (testcontainer), not SQLite.
+- MCP / embedding / OpenRouter changes → gate locally; there is no dev environment (`api-dev` / `app-dev` are retired).
 - dnd-kit changes → use real `page.mouse` not synthetic events; mobile path requires real-device verify (CDP `Input.dispatchTouchEvent` does NOT activate dnd-kit `TouchSensor`). See `qa-engineer/issue_78_findings.md`.
 - New `Dialog` / overlay / fixed-position UI → `elementsFromPoint(cx, cy)` z-index audit. The capsule lives at z:40, Dialog at z:50, bottom nav at z:50. Pattern in `qa-engineer/issue_pr100_findings.md`.
 - New env var → confirm Fly secrets on `marrow-dev` and `marrow` API apps.
@@ -94,7 +94,7 @@ Per `project_datetime_tz_convention.md`:
 - **Pydantic v2 immutable-field guard tests** — to test a service guard for a field that `XxxUpdate` excludes, subclass with the field as an explicit constructor arg. `object.__setattr__` and `__pydantic_fields_set__` hacks do not work with v2's storage. See `fastapi-backend/immutable_field_guard_test_pattern.md`.
 - **AI seam contracts** — OpenRouter `openai/text-embedding-3-small` with `dimensions=1024` returns 1024-float vectors. Response has extra `provider` + `id` top-level keys vs OpenAI. Access via `response["data"][i]["embedding"]`. Default LLM in `docs/architecture/ai_seams.md` is `google/gemini-3-flash-preview`. See `project_byok_pgvector_gate.md` follow-up 3.
 - **BYOK + pgvector ordering** — every code path that calls `Base.metadata.create_all` (production startup, every test fixture, every migration smoke harness) must execute `CREATE EXTENSION IF NOT EXISTS vector` first. The migration itself does this, but `create_all` bypasses migrations. `main.py` aliases the settings router (`from app.routers import settings as settings_router`) because the module name collides with `app.config.settings`. See `project_byok_pgvector.md`.
-- **MCP `read_sql` points at prod, NOT dev** — for dev-DB queries during QA, use `curl` against `https://api-dev.marrow-health.com/api/v1/...` with a logged-in cookie. See `qa-engineer/issue_79_findings.md`.
+- **MCP `read_sql` points at prod, NOT dev** — there is no dev DB; use a local Postgres for QA queries. See `qa-engineer/issue_79_findings.md`.
 - **Trackers dual-write path** — seeded trackers (`Alcohol units`, `Caffeine servings`, `Sick`, `Hot shower`) must keep both `entries.<col>` and `tracker_log` in sync. Path A: entry autosave → `sync_seed_tracker_log_from_entry` after `db.refresh`. Path B: `PUT tracker_values/{id}` → `_mirror_value_to_entry` (silently skips if no entry exists; Path A will catch up on entry creation). New seeded trackers must be added to `_SEED_NAME_TO_ENTRY_COL`. Zero-suppression: skip None/0 for counters, None/False for binaries. See `fastapi-backend/trackers_dual_write_pattern.md`.
 
 ---

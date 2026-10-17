@@ -12,3 +12,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Storybook:** `npx nx run f0rge-ui:storybook` — catalogue for shared primitives
 - **Never** copy shadcn into `components/ui/` — add primitives in `libs/ui` instead
 - Domain widgets (Bristol grid, meal chips, symptom picker) stay in this app
+
+## Branches
+
+Main only: there is no `develop` branch workflow and no develop environment. Branch off `main`, open PRs into `main`, squash merge; merging deploys. See root [`AGENTS.md`](../../../AGENTS.md#git-flow-trunk-based-main-only).

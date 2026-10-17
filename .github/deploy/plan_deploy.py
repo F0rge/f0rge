@@ -90,7 +90,7 @@ def main() -> None:
                             f"skip railway smoke for {spec['nx']}: "
                             f"empty health_url.{environment} "
                             "(Firstout is its own Railway project; "
-                            "do not smoke Marrow develop)"
+                            "do not smoke Marrow)"
                         )
                 elif role == "frontend":
                     if is_marrow or url:
@@ -100,7 +100,7 @@ def main() -> None:
                             f"skip railway smoke for {spec['nx']}: "
                             f"empty health_url.{environment} "
                             "(Firstout is its own Railway project; "
-                            "do not smoke Marrow develop)"
+                            "do not smoke Marrow)"
                         )
             elif spec["target"] == "coolify":
                 coolify.append(

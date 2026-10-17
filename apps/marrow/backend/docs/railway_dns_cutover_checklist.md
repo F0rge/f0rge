@@ -1,5 +1,7 @@
 # Cloudflare DNS cutover — marrow-health.com → Railway
 
+> **Historical.** The develop environment, `develop` branch workflow, and `api-dev` / `app-dev` hosts referenced below are retired. Marrow deploys from `main` only.
+
 Cloudflare API token in admin-ref is **invalid** (verify failed). Apply these in CF UI.
 Set records to **DNS only (grey cloud)** until Railway cert shows ACTIVE, then proxy if desired.
 

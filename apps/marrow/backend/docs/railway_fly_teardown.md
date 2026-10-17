@@ -1,5 +1,7 @@
 # Fly teardown (post Railway cutover)
 
+> **Historical.** The develop environment, `develop` branch workflow, and `api-dev` / `app-dev` hosts referenced below are retired. Marrow deploys from `main` only.
+
 Do **not** run destroy steps until **48h after custom-domain DNS is green** on Railway.
 
 ## Already done at cutover

@@ -1,5 +1,7 @@
 # Airflow — Agent Instructions
 
+> **Pending migration.** The repo has no `develop` branch workflow (main only, see root `AGENTS.md`). The `airflow`, `marrow_dev`, and `dk` bundles below still set `tracking_ref: develop` in `docker-compose.yml`; repoint them to `main` (or retire `marrow_dev`) in a separate change to the live Airflow config.
+
 Shared **Airflow 3** control plane for f0rge apps. Deployed on **rpi** via standalone Docker Compose (not Coolify, not Railway).
 
 CeleryExecutor + Redis. DAGs come from GitHub via **GitDagBundle** (not host bind mounts). Apps trigger DAGs over the Airflow REST API.

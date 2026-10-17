@@ -1,6 +1,6 @@
 name: Deploy
 
-# Runs after CI succeeds on push/dispatch to develop or main.
+# Runs after CI succeeds on push/dispatch to main (the only deployed branch).
 # Manual redeploy via workflow_dispatch (does not re-run lint/test — use CI for that).
 
 on:
@@ -12,7 +12,7 @@ on:
       environment:
         description: Target environment
         type: choice
-        options: [develop, main]
+        options: [main]
         default: main
       component:
         description: Component to deploy
@@ -37,7 +37,7 @@ jobs:
       (
         github.event.workflow_run.conclusion == 'success' &&
         contains(fromJSON('["push","workflow_dispatch"]'), github.event.workflow_run.event) &&
-        contains(fromJSON('["develop","main"]'), github.event.workflow_run.head_branch)
+        contains(fromJSON('["main"]'), github.event.workflow_run.head_branch)
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5

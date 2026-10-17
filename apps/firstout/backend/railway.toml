@@ -1,5 +1,5 @@
 # Config-as-code for firstout-api in the *Firstout* Railway project
-# (not Marrow zoological-fulfillment / not Marrow develop).
+# (not Marrow zoological-fulfillment). Tracks git `main` only.
 # Point that service's Config File path here. Do NOT set Root Directory.
 # CoS provisions the Firstout project + services separately; this file is repo config only.
 

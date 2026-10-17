@@ -4,7 +4,7 @@ Native SwiftUI app (bundle id `com.f0rge.marrow`). Two internal testers: Leo and
 Beatriz. No public App Store listing, no CI lane — releases are manual.
 
 - Xcode project: `Marrow.xcodeproj`, scheme `Marrow`.
-- Build config: Debug → Dev API (`api-dev.marrow-health.com`), Release → Prod API
+- Build config: Debug → Dev API (`api-dev.marrow-health.com`, retired; there is no dev environment, so point Debug at a local or production API), Release → Prod API
   (`api.marrow-health.com`). See `Config/{Shared,Dev,Prod}.xcconfig`.
 - Version and Team ID are set in `Config/Shared.xcconfig` (see below).
 
