@@ -29,7 +29,7 @@ Marrow runs on Railway project **zoological-fulfillment** (`a633a271-…`). **Pr
 Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `railway.mcp.toml`, `apps/marrow/frontend/railway.toml`. Railway autodeploys production; GitHub Actions smoke runs on `main` only. See [README.md](README.md#cicd), [`.cursor/rules/infra.mdc`](.cursor/rules/infra.mdc), [`apps/marrow/backend/docs/railway_env.md`](apps/marrow/backend/docs/railway_env.md).
 ## apps/buycycle
 
-Internal buycycle deal-finder dashboards on the Pi (Coolify, ports 8095/8096, no domain). See [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md). Public repo: never commit its DBs, data or feed key.
+Internal buycycle deal-finder dashboards on the Pi (Coolify, ports 8095/8096, no domain) plus a read-only MCP server on Tailscale port 8097. See [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md). Public repo: never commit its DBs, data or feed key.
 
 ## apps/dk (tag printer)
 

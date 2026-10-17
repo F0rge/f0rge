@@ -53,3 +53,7 @@ curl -sI http://100.103.61.77:8095/ | head -1; curl -sI http://100.103.61.77:809
 sudo systemctl enable --now bikes-dashboard.service wheels-dashboard.service buycycle-tracker.timer
 ```
 The legacy `/home/leo/buycycle-tracker/buycycle.db` is never modified by the new app, so the old stack carries on from where it stopped. Days scraped after cutover exist only in the volume's `buycycle.turso.db`.
+
+## MCP server
+
+Separate Coolify app. Dockerfile `apps/buycycle/mcp/Dockerfile`, build context `/`. Publish **only** on the tailnet: `100.103.61.77:8097:8097`. No domain and no Cloudflare tunnel. Mount `buycycle-data` at `/data` **read-only** (the file is `/data/buycycle.turso.db`). Set `BUYCYCLE_MCP_TOKEN`. Manifest component `buycycle-mcp` uses placeholder `app_uuid` `TODO-buycycle-mcp` and secret `COOLIFY_WEBHOOK_BUYCYCLE_MCP` until the app exists; deploys are CI-only and skip while the uuid starts with `TODO`. Details: [../mcp/README.md](../mcp/README.md).

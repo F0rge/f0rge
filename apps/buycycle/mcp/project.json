@@ -1,0 +1,22 @@
+{
+  "name": "buycycle-mcp",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/buycycle/mcp",
+  "implicitDependencies": ["buycycle"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {"cwd": "apps/buycycle/mcp", "command": "uvx ruff@0.16.1 check ."}
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {"cwd": "apps/buycycle/mcp", "command": "uvx ruff@0.16.1 format --check ."}
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {"cwd": "apps/buycycle/mcp", "command": "uv run pytest -ra"}
+    }
+  },
+  "tags": ["platform:py", "scope:buycycle", "deploy-target:coolify"]
+}

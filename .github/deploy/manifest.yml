@@ -56,6 +56,19 @@ components:
       app_uuid: xi0qwpbyl2d8gf8u3xl13jkv
       webhook_secret_env: COOLIFY_WEBHOOK_BUYCYCLE
 
+  # Buycycle MCP: Coolify on the Pi, Tailscale only. Container port 8097, published on
+  # 100.103.61.77:8097. No public hostname, no Cloudflare tunnel, no health_url.
+  # Placeholder app_uuid skips the webhook until the Coolify app exists. Deploys are CI-only.
+  buycycle-mcp:
+    nx: buycycle-mcp
+    target: coolify
+    host: pi
+    branches: [main]
+    port: 8097
+    coolify:
+      app_uuid: TODO-buycycle-mcp
+      webhook_secret_env: COOLIFY_WEBHOOK_BUYCYCLE_MCP
+
   # Firstout: own Railway project (not zoological-fulfillment).
   # main only (Railway env is named develop but tracks main). Public hosts are firstout.co.za and api.firstout.co.za.
   firstout-backend:

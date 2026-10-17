@@ -35,6 +35,7 @@ project** (not Marrow `zoological-fulfillment`),
 | `COOLIFY_WEBHOOK_DK_BACKEND` | dk-tag-printer-backend |
 | `COOLIFY_WEBHOOK_DK_FRONTEND` | dk-tag-printer-frontend |
 | `COOLIFY_WEBHOOK_BUYCYCLE` | buycycle (Pi, internal only; skips while unset) |
+| `COOLIFY_WEBHOOK_BUYCYCLE_MCP` | buycycle MCP (Pi, Tailscale port 8097; skips while unset or while `app_uuid` is `TODO…`) |
 | `SMOKE_EMAIL` / `SMOKE_PASSWORD` | Optional Railway auth smoke |
 
 `FLY_API_TOKEN` is unused after the Railway cutover (safe to delete from GitHub
@@ -55,7 +56,7 @@ secrets after the 48h Fly rollback window).
 Disable Coolify GitHub App auto-deploy on dk apps once Actions webhooks are
 verified — deploy is CI-gated via `deploy-reusable.yml` on `main` push.
 
-Internal-only Coolify components (e.g. `buycycle`, `host: pi`) omit `health_url`:
+Internal-only Coolify components (e.g. `buycycle` and `buycycle-mcp`, `host: pi`) omit `health_url`:
 runners can't reach the Pi, so the job relies on Coolify's `queued` response and
 skips the health smoke. A `TODO…` placeholder `app_uuid` also skips. Buycycle
 cutover: [apps/buycycle/deploy/PI_CUTOVER.md](../../apps/buycycle/deploy/PI_CUTOVER.md).
