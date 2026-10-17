@@ -65,3 +65,11 @@ returns `Deployments disabled` for the app — so a parked Pi app does not fail
 the marrow Railway smoke.
 
 See also [manifest.yml](manifest.yml) and [plan_deploy.py](plan_deploy.py).
+
+## Known: Deploy runs from the default branch's workflow file
+`deploy.yml` is triggered by `workflow_run`, which always uses the workflow file
+(and the local `./.github/workflows/deploy-reusable.yml` it calls) from the
+repository **default branch**. Until the default branch is switched from
+`develop` to `main` (Settings → General → Default branch), changes to these two
+files on `main` do not take effect for automatic deploys. The checked-out code,
+manifest and `plan_deploy.py` do come from the deployed `main` SHA.
