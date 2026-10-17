@@ -50,6 +50,7 @@ jobs:
       deploy_mcp: ${{ steps.plan.outputs.deploy_mcp }}
       deploy_frontend: ${{ steps.plan.outputs.deploy_frontend }}
       coolify_matrix: ${{ steps.plan.outputs.coolify_matrix }}
+      coolify_diff_base: ${{ steps.plan.outputs.coolify_diff_base }}
       api_health_url: ${{ steps.plan.outputs.api_health_url }}
       frontend_health_url: ${{ steps.plan.outputs.frontend_health_url }}
       mcp_health_url: ${{ steps.plan.outputs.mcp_health_url }}
@@ -116,6 +117,13 @@ jobs:
       group: coolify-${{ matrix.component.app_uuid }}
       cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v4
+        with:
+          # Parent fallback needs the deployed commit's parent (depth >= 2).
+          # Full history so an older nx-set-shas base is present too.
+          fetch-depth: 0
+          ref: ${{ inputs.sha }}
+
       - name: Trigger Coolify deploy webhook
         id: coolify
         env:
@@ -125,6 +133,7 @@ jobs:
           WEBHOOK_SECRET_BUYCYCLE: ${{ secrets.COOLIFY_WEBHOOK_BUYCYCLE }}
           SECRET_ENV: ${{ matrix.component.webhook_secret_env }}
           SHA: ${{ inputs.sha }}
+          DIFF_BASE: ${{ needs.plan.outputs.coolify_diff_base }}
           BRANCH: main
           APP_NAME: ${{ matrix.component.name }}
           APP_UUID: ${{ matrix.component.app_uuid }}
@@ -151,10 +160,16 @@ jobs:
           esac
           # `commits` is required: Coolify reads commits.*.added before checking the
           # signature, and foreaches the result — omitting the key 500s the endpoint.
-          PAYLOAD=$(jq -nc \
-            --arg ref "refs/heads/${BRANCH}" \
-            --arg sha "$SHA" \
-            '{ref: $ref, after: $sha, commits: [], repository: {full_name: "F0rge/f0rge", name: "f0rge"}}')
+          # One entry covers the same base..sha range plan_deploy used, so watch
+          # paths see the real changed files instead of [].
+          if [ -z "${DIFF_BASE:-}" ]; then
+            echo "::error::Coolify diff base is empty; plan_deploy did not emit coolify_diff_base"
+            exit 1
+          fi
+          PAYLOAD=$(python3 .github/deploy/coolify_payload.py --sha "$SHA" --base "$DIFF_BASE" --branch "$BRANCH")
+          # Sibling apps on this repo+branch (daskasas when this job signs with
+          # another app's secret) answer "Invalid signature." Each app checks
+          # its own secret; the payload repo and branch already match them.
           SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')
           RESPONSE=$(curl -sS --fail-with-body -w '\nHTTP %{http_code}' \
             -X POST "${COOLIFY_BASE_URL%/}/webhooks/source/github/events/manual" \
@@ -183,13 +198,9 @@ jobs:
 
           # Coolify answers 200 even when it queues nothing (per-app failures land in the
           # body), so a 2xx is not proof of a deploy — assert this app was actually queued.
-          if ! echo "$BODY" | jq -e --arg uuid "$APP_UUID" '
-            [.. | objects
-              | select((.uuid? // .id? // .application_id? // .application_uuid? // "") == $uuid)
-              | .status?
-            ] | any(. == "queued")
-          ' >/dev/null 2>&1 \
-            && ! echo "$BODY" | jq -e '.status == "queued"' >/dev/null 2>&1; then
+          # A queued manual push is status "success" + "Deployment queued." (beta.473);
+          # status "queued" counts too. Watch-path ignores stay a hard failure.
+          if ! printf '%s' "$BODY" | python3 .github/deploy/coolify_payload.py --require-queued --app-uuid "$APP_UUID"; then
             echo "::error::Coolify accepted the webhook but queued no deploy for $APP_NAME ($APP_UUID)"
             exit 1
           fi

@@ -16,6 +16,8 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pyyaml", "-q"])
     import yaml
 
+from coolify_payload import coolify_diff_base
+
 
 def _nx_affected(base: str, head: str) -> set[str]:
     out = subprocess.check_output(
@@ -31,6 +33,7 @@ def main() -> None:
     manifest_path = Path(__file__).with_name("manifest.yml")
     manifest = yaml.safe_load(manifest_path.read_text())
 
+    diff_base = ""
     if component_mode != "auto":
         # Manual dispatch: marrow-only component override (respect manifest branches).
         marrow_backend = manifest["components"]["marrow-backend"]
@@ -61,10 +64,13 @@ def main() -> None:
         # Coolify components need a real diff even when NX_BASE == NX_HEAD (CI already
         # succeeded on this SHA, so nx-set-shas returns it as its own base). Fall back to
         # the pushed commit's parent; Railway selection above is unchanged.
+        # The webhook file list uses this same SHA (coolify_diff_base).
+        parent = os.environ.get("NX_PARENT") or ""
+        diff_base = coolify_diff_base(nx_base, nx_head, parent)
         coolify_affected = affected
-        if nx_base == nx_head and os.environ.get("NX_PARENT"):
-            coolify_affected = _nx_affected(os.environ["NX_PARENT"], nx_head)
-            print(f"coolify affected vs parent {os.environ['NX_PARENT'][:12]}: {sorted(coolify_affected)}")
+        if diff_base != nx_base:
+            coolify_affected = _nx_affected(diff_base, nx_head)
+            print(f"coolify affected vs parent {diff_base[:12]}: {sorted(coolify_affected)}")
         deploy_api = deploy_mcp = deploy_frontend = False
         coolify = []
         for _name, spec in manifest["components"].items():
@@ -119,6 +125,7 @@ def main() -> None:
         "deploy_mcp": str(deploy_mcp).lower(),
         "deploy_frontend": str(deploy_frontend).lower(),
         "coolify_matrix": json.dumps(coolify),
+        "coolify_diff_base": diff_base,
         "api_health_url": health.get("api", ""),
         "frontend_health_url": health.get("frontend", ""),
         "mcp_health_url": health.get("mcp", ""),

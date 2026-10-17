@@ -52,6 +52,12 @@ secrets after the 48h Fly rollback window).
 | Frontend build-time env | `NEXT_PUBLIC_API_URL=https://tags-api.leo-figueiredo.com` |
 | Backend runtime env | `CORS_ORIGINS=https://tags.leo-figueiredo.com` |
 
+The manual webhook body is one commit (`id`, `added`, `modified`, `removed`)
+from `git diff --name-status` between the deployed SHA and the Coolify base
+(`NX_PARENT` when `NX_BASE == NX_HEAD`, otherwise `NX_BASE`). Coolify matches
+those paths to each app's watch paths. Sibling apps on the same repo and branch
+answer `Invalid signature` because the endpoint checks each app's own secret.
+
 Disable Coolify GitHub App auto-deploy on dk apps once Actions webhooks are
 verified — deploy is CI-gated via `deploy-reusable.yml` on `main` push.
 
