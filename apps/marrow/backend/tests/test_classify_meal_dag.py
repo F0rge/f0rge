@@ -45,6 +45,7 @@ def test_vision_result_in_dag_accepts_fixture():
     assert "photos_conn_id" in source
     assert "Never emit null/None in ingredient lists" in source
     assert "agent_params" in source
+    assert '"max_tokens": 8192' in source
 
 
 def test_dag_vision_result_drops_null_ingredients():
