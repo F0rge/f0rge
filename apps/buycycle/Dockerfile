@@ -11,7 +11,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY apps/buycycle/tracker ./tracker
 COPY apps/buycycle/dashboard ./dashboard
 COPY apps/buycycle/entrypoint.sh apps/buycycle/run-tracker.sh ./
-RUN /app/.venv/bin/python dashboard/render.py dashboard/index.tpl.html /app/site && chmod +x entrypoint.sh run-tracker.sh \
+RUN mkdir -p /app/site && /app/.venv/bin/python dashboard/render.py dashboard/index.tpl.html /app/site && chmod +x entrypoint.sh run-tracker.sh \
  && useradd -u 1000 -m leo && mkdir -p /data && chown -R 1000:1000 /data
 USER 1000:1000
 VOLUME ["/data"]
