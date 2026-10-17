@@ -46,4 +46,4 @@ patch_app "f080ossg88ows8k8csw40c4s" \
 echo "Done. Verify Coolify env vars:"
 echo "  backend CORS_ORIGINS=https://tags.leo-figueiredo.com"
 echo "  frontend NEXT_PUBLIC_API_URL=https://tags-api.leo-figueiredo.com (build-time)"
-echo "Set GitHub secrets COOLIFY_BASE_URL, COOLIFY_WEBHOOK_DK_BACKEND, COOLIFY_WEBHOOK_DK_FRONTEND"
+echo "Set GitHub secrets COOLIFY_BASE_URL, COOLIFY_WEBHOOK_DASKASAS_BACKEND, COOLIFY_WEBHOOK_DASKASAS_FRONTEND"
