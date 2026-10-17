@@ -53,7 +53,7 @@ components:
     host: pi
     branches: [main]
     coolify:
-      app_uuid: TODO-set-after-creating-coolify-app  # TODO(ops): replace with the Coolify app UUID (apps/buycycle/deploy/PI_CUTOVER.md)
+      app_uuid: xi0qwpbyl2d8gf8u3xl13jkv
       webhook_secret_env: COOLIFY_WEBHOOK_BUYCYCLE
 
   # Firstout: own Railway project (not zoological-fulfillment).

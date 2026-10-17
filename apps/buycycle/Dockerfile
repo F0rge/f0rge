@@ -1,6 +1,7 @@
 # Buycycle dashboards + tracker for the Pi (Coolify, Dockerfile build, base directory "/").
 # Static servers on 8095 (bikes) and 8096 (wheels). Data lives on the /data volume, never in the image.
 FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /bin/uv
 ENV TZ=Europe/Luxembourg PYTHONUNBUFFERED=1 UV_PROJECT_ENVIRONMENT=/app/.venv \
     BUYCYCLE_DB=/data/buycycle.turso.db BUYCYCLE_OUT_BIKES=/data/bikes BUYCYCLE_OUT_WHEELS=/data/wheels
