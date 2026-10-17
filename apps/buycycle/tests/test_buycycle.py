@@ -175,6 +175,8 @@ def test_dashboard_columns_sort_zero_comps_last(tmp_path):
         assert "['av','Avg ask'" in html and "['nc','Comps'" in html
         assert "Min avg ask" in html and "Max avg ask" in html and "Min comps" in html
         assert "avg ask" in html and "comps" in html
+        assert "Flex score" not in html and "['flex','Flex'" not in html and "days listed · flex" not in html
+        assert "price reduced" in html and "Dropped (history or vs original)" in html
         calc = html.split("function calc(x)", 1)[1].split("function", 1)[0]
         assert "if(x.r==null)return" in calc and "x.av" not in calc
         m = re.search(r"view\.sort\(\(a,b\)=>\{.*?\}\);", html)
@@ -199,6 +201,124 @@ if (avNames.slice(3).sort().join() !== 'none,zero') throw new Error('av tail ' +
 """ % (m.group(0), m.group(0), m.group(0))
     out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
+
+
+def _prod_listing(c, **k):
+    """One row in the shape the Pi stores: listing.price is the integer ask; every other money/spec field may be NULL."""
+    c.execute(
+        "insert into listing(id,kind,slug,name,brand,year,size,cond,msrp,price,original_price,activated_at,updated_at,country_id,seller_id,favs,offers,high_demand,n_media,desc_len,spec,first_seen,last_seen,gone_at,last_fetch,fetch_price,pr)"
+        " values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            k["id"],
+            k["kind"],
+            k["id"],
+            k["name"],
+            k["brand"],
+            k.get("year"),
+            None,
+            None,
+            None,
+            k["price"],
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            k.get("spec"),
+            "2026-10-01",
+            "2026-10-17",
+            k.get("gone_at"),
+            None,
+            None,
+            None,
+        ),
+    )
+
+
+def _unpack(doc):
+    items = []
+    for row in doc["rows"]:
+        x = {c: v for c, v in zip(doc["cols"], row) if v is not None}
+        items.append(x)
+    return items
+
+
+def _strip_av(doc):
+    """The file currently on the Pi: comp count and asking price, no av column."""
+    i = doc["cols"].index("av")
+    doc["cols"].pop(i)
+    for row in doc["rows"]:
+        row.pop(i)
+    return doc
+
+
+def test_average_from_prod_listing_price_when_json_has_no_av_column(tmp_path, monkeypatch):
+    import storage
+    import tracker
+
+    monkeypatch.setitem(tracker.OUT, "wheels", str(tmp_path / "wheels"))
+    monkeypatch.setitem(tracker.OUT, "bikes", str(tmp_path / "bikes"))
+    c = storage.connect(str(tmp_path / "fixture.turso.db"))
+    disc = json.dumps({"spec": {"wheel-type": "1372", "complete-wheels-brakes-type": "1430", "rim-material": "1433"}})
+    rim = json.dumps({"spec": {"wheel-type": "1372", "complete-wheels-brakes-type": "1431", "rim-material": "1433"}})
+    for row in (
+        dict(id="w1", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=1000, spec=disc),
+        dict(id="w2", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=2000, spec=disc),
+        dict(id="w3", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=3000, spec=disc),
+        dict(id="w4", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=9000, spec=disc),
+        dict(id="wgone", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=50, spec=disc, gone_at="2026-10-10"),
+        dict(id="wrim", kind="wheels", name="DT Swiss ERC 1400", brand="DT Swiss", price=80, spec=rim),
+    ):
+        _prod_listing(c, **row)
+    for row in (
+        dict(id="t24", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2024, price=2000),
+        dict(id="t23", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2023, price=1000),
+        dict(id="t25", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2025, price=9000),
+        dict(id="tgone", kind="bikes", name="Specialized Tarmac SL7", brand="Specialized", year=2024, price=40, gone_at="2026-10-10"),
+    ):
+        _prod_listing(c, **row)
+    # A different number in history must not become the average. The ask is listing.price.
+    c.execute("insert into price_history values(?,?,?)", ("w1", "2026-09-01", 1))
+    c.commit()
+    stored = c.execute("select price, typeof(price), original_price, year from listing where id='w1'").fetchone()
+    assert stored[0] == 1000 and stored[1] == "integer" and stored[2] is None and stored[3] is None
+
+    wheels = {x["i"]: x for x in tracker.build(c, "wheels", "2026-10-17")}
+    bikes = {x["i"]: x for x in tracker.build(c, "bikes", "2026-10-17")}
+    assert wheels["w1"]["nc"] == 3
+    assert wheels["w1"]["av"] == round(statistics.fmean([2000, 3000, 9000]), 2)
+    assert wheels["w1"]["p"] == 1000
+    assert "flex" not in wheels["w1"]
+    assert bikes["t24"]["av"] == round(statistics.fmean([1000, 9000]), 2)
+    assert bikes["t24"]["nc"] == 2
+
+    fn = re.search(r"function fillAvg\(items\)\{.*\}", open(os.path.join(APP, "dashboard", "index.tpl.html")).read())
+    assert fn
+
+    def recover(kind, doc_path):
+        doc = _strip_av(json.loads(doc_path.read_text()))
+        assert "av" not in doc["cols"] and "p" in doc["cols"] and "nc" in doc["cols"]
+        script = "const KIND=%s;\n%s\nconst items=%s;\nfillAvg(items);\nconsole.log(JSON.stringify(items.map(x=>({i:x.i,av:x.av??null,nc:x.nc}))));" % (
+            json.dumps(kind),
+            fn.group(0),
+            json.dumps(_unpack(doc)),
+        )
+        out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        return {x["i"]: x for x in json.loads(out.stdout)}
+
+    got = recover("wheels", tmp_path / "wheels" / "data.json")
+    assert got["w1"]["nc"] == 3 and got["w1"]["av"] == wheels["w1"]["av"]
+    assert got["wgone"]["av"] == wheels["wgone"]["av"]
+    assert got["wrim"]["av"] is None and got["wrim"]["nc"] == 0
+    gotb = recover("bikes", tmp_path / "bikes" / "data.json")
+    assert gotb["t24"]["av"] == bikes["t24"]["av"] and gotb["t24"]["nc"] == 2
+    assert gotb["t23"]["nc"] == 1 and gotb["t23"]["av"] == 2000
 
 
 def test_no_feed_key_in_source():

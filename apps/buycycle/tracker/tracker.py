@@ -334,10 +334,6 @@ def build(c, kind, today):
                 "fs": r["first_seen"],
                 "g": r["gone_at"],
                 "pr": r["pr"] or 0,
-                "flex": (2 if r["pr"] else 0)
-                + min(drops, 3)
-                + (1 if (r["activated_at"] and (now - r["activated_at"]) / 86400 > 90) else 0)
-                + (1 if orig > r["price"] else 0),
                 "pd": drops + (1 if orig > r["price"] and drops == 0 else 0),
                 "pdp": round((orig - r["price"]) / orig * 100, 1) if orig else 0,
                 "h": h[-30:] if len(h) > 1 else [],
@@ -437,7 +433,6 @@ COLS = [
     "pd",
     "pdp",
     "pr",
-    "flex",
     "co",
     "km",
     "sr",
