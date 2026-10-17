@@ -17,6 +17,14 @@ except ImportError:
     import yaml
 
 
+def _nx_affected(base: str, head: str) -> set[str]:
+    out = subprocess.check_output(
+        ["npx", "nx", "show", "projects", "--affected", f"--base={base}", f"--head={head}", "--json"],
+        text=True,
+    )
+    return set(json.loads(out))
+
+
 def main() -> None:
     environment = os.environ["ENVIRONMENT"]
     component_mode = os.environ.get("COMPONENT", "auto")
@@ -49,29 +57,20 @@ def main() -> None:
                 and spec["nx"].startswith("marrow-")
             }
         else:
-            affected = set(
-                json.loads(
-                    subprocess.check_output(
-                        [
-                            "npx",
-                            "nx",
-                            "show",
-                            "projects",
-                            "--affected",
-                            f"--base={nx_base}",
-                            f"--head={nx_head}",
-                            "--json",
-                        ],
-                        text=True,
-                    )
-                )
-            )
+            affected = _nx_affected(nx_base, nx_head)
+        # Coolify components need a real diff even when NX_BASE == NX_HEAD (CI already
+        # succeeded on this SHA, so nx-set-shas returns it as its own base). Fall back to
+        # the pushed commit's parent; Railway selection above is unchanged.
+        coolify_affected = affected
+        if nx_base == nx_head and os.environ.get("NX_PARENT"):
+            coolify_affected = _nx_affected(os.environ["NX_PARENT"], nx_head)
+            print(f"coolify affected vs parent {os.environ['NX_PARENT'][:12]}: {sorted(coolify_affected)}")
         deploy_api = deploy_mcp = deploy_frontend = False
         coolify = []
         for _name, spec in manifest["components"].items():
             if environment not in spec.get("branches", []):
                 continue
-            if spec["nx"] not in affected:
+            if spec["nx"] not in (coolify_affected if spec["target"] == "coolify" else affected):
                 continue
             if spec["target"] in {"fly", "railway"}:
                 # fly kept for legacy manifests; railway is the live target.

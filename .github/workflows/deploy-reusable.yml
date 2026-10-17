@@ -68,6 +68,10 @@ jobs:
           # Last successful CI run defines the nx-affected base (Deploy follows CI).
           workflow-id: ci.yml
 
+      - name: Parent of the deployed commit (Coolify affected fallback when NX_BASE == NX_HEAD)
+        if: inputs.component == 'auto'
+        run: echo "NX_PARENT=$(git rev-parse --verify -q '${{ inputs.sha }}^' || true)" >> "$GITHUB_ENV"
+
       - name: Resolve deploy plan from manifest
         id: plan
         env:
@@ -75,6 +79,7 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           NX_BASE: ${{ env.NX_BASE }}
           NX_HEAD: ${{ env.NX_HEAD }}
+          NX_PARENT: ${{ env.NX_PARENT }}
         run: python3 .github/deploy/plan_deploy.py
 
   smoke-railway:
