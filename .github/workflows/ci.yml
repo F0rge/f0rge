@@ -47,6 +47,11 @@ jobs:
       - name: Assert no root uv.lock
         run: bash .github/scripts/assert-no-root-uv-lock.sh
 
+      - name: Coolify payload builder
+        # discover can't import `.github/` (the dot). Run the module from its dir.
+        working-directory: .github/deploy
+        run: python3 -m unittest test_coolify_payload.py
+
       - name: Nx project registration guard
         run: bash .github/scripts/check-nx-projects.sh
 
