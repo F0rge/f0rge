@@ -209,6 +209,7 @@ def marrow_classify_meal() -> None:
         prompt=USER_PROMPT,
         system_prompt="{{ ti.xcom_pull(task_ids='resolve_job')['system_prompt'] }}",
         llm_conn_id=LLM_CONN_ID,
+        model_id="openai:google/gemini-3.1-flash-lite",
         file_path="{{ ti.xcom_pull(task_ids='resolve_job')['file_path'] }}",
         file_conn_id=FILE_CONN_ID,
         multi_modal=True,
