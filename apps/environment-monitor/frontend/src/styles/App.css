@@ -1,0 +1,196 @@
+/* Layout only. Color, type, and controls come from Primer
+   (data-color-mode=auto follows prefers-color-scheme). */
+
+body {
+  font-family: var(--fontStack-system, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  background: var(--bgColor-default);
+  color: var(--fgColor-default);
+}
+
+.app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hero-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hero-temp-wrap {
+  display: flex;
+  align-items: flex-start;
+  line-height: 0.9;
+}
+
+.hero-temp {
+  font-size: clamp(3.25rem, 16vw, 4.75rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--fgColor-default);
+  align-self: baseline;
+}
+
+.hero-unit {
+  margin-top: 0.35em;
+  margin-left: 4px;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--fgColor-muted);
+}
+
+/* Unsmoothed digits sit on the big numeral's baseline. */
+.live-indicator {
+  align-self: baseline;
+  position: relative;
+  top: -0.2em;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: var(--borderRadius-small, 4px);
+  background: var(--bgColor-neutral-muted);
+  color: var(--fgColor-default);
+  font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.7rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.hero-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.hero-metric-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: var(--fgColor-default);
+}
+
+.chart-canvas {
+  height: 240px;
+  position: relative;
+}
+
+.chart-loading,
+.chart-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.metrics-value {
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+/* SegmentedControl is inline-flex and will not wrap. On a 390px screen the
+   seven ranges need to wrap onto a second line. */
+@media (max-width: 767.98px) {
+  .timeframes.SegmentedControl {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .timeframes .SegmentedControl-item {
+    flex: 1 1 auto;
+  }
+}
+
+/* Desktop: reading on the left, chart fills the rest of the viewport.
+   The chart canvas must be allowed to shrink — Chart.js writes a px height
+   onto it, and an indefinite row would lock the page to that height. */
+@media (min-width: 1012px) {
+  .app {
+    height: 100dvh;
+    min-height: 780px;
+  }
+
+  .app-main {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.45fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-items: stretch;
+    padding: 24px 32px 20px;
+    column-gap: 16px;
+    row-gap: 16px;
+  }
+
+  .hero {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero-body {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .hero-reading {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 28px;
+  }
+
+  .hero-temp {
+    font-size: clamp(4.25rem, 5.5vw, 6rem);
+  }
+
+  .chart {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chart-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chart-canvas {
+    flex: 1;
+    height: auto;
+    min-height: 220px;
+    overflow: hidden;
+  }
+
+  .footer {
+    grid-column: 1 / -1;
+  }
+}

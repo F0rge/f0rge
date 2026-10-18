@@ -18,6 +18,17 @@ from typing import Any
 REPO_FULL_NAME = "F0rge/f0rge"
 REPO_NAME = "f0rge"
 
+# Globs configured on each Coolify app. The payload lists every path from
+# git diff; Coolify deploys only when a path matches that app's watch paths.
+# Keys are manifest component names.
+COOLIFY_WATCH_PATHS: dict[str, tuple[str, ...]] = {
+    "dk-tag-printer-backend": ("apps/dk/tag-printer/backend/**",),
+    "dk-tag-printer-frontend": ("apps/dk/tag-printer/frontend/**",),
+    "buycycle": ("apps/buycycle/**",),
+    "environment-monitor-backend": ("apps/environment-monitor/backend/**",),
+    "environment-monitor-frontend": ("apps/environment-monitor/frontend/**",),
+}
+
 
 def coolify_diff_base(nx_base: str, nx_head: str, nx_parent: str) -> str:
     """SHA ``plan_deploy`` diffs Coolify projects against.

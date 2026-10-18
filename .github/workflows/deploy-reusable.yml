@@ -31,6 +31,10 @@ on:
         required: false
       COOLIFY_WEBHOOK_BUYCYCLE:
         required: false
+      COOLIFY_WEBHOOK_ENVMON_BACKEND:
+        required: false
+      COOLIFY_WEBHOOK_ENVMON_FRONTEND:
+        required: false
       SMOKE_EMAIL:
         required: false
       SMOKE_PASSWORD:
@@ -131,6 +135,8 @@ jobs:
           WEBHOOK_SECRET_DASKASAS_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_BACKEND }}
           WEBHOOK_SECRET_DASKASAS_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_DASKASAS_FRONTEND }}
           WEBHOOK_SECRET_BUYCYCLE: ${{ secrets.COOLIFY_WEBHOOK_BUYCYCLE }}
+          WEBHOOK_SECRET_ENVMON_BACKEND: ${{ secrets.COOLIFY_WEBHOOK_ENVMON_BACKEND }}
+          WEBHOOK_SECRET_ENVMON_FRONTEND: ${{ secrets.COOLIFY_WEBHOOK_ENVMON_FRONTEND }}
           SECRET_ENV: ${{ matrix.component.webhook_secret_env }}
           SHA: ${{ inputs.sha }}
           DIFF_BASE: ${{ needs.plan.outputs.coolify_diff_base }}
@@ -144,6 +150,8 @@ jobs:
             COOLIFY_WEBHOOK_DASKASAS_BACKEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_DASKASAS_BACKEND" ;;
             COOLIFY_WEBHOOK_DASKASAS_FRONTEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_DASKASAS_FRONTEND" ;;
             COOLIFY_WEBHOOK_BUYCYCLE) WEBHOOK_SECRET="$WEBHOOK_SECRET_BUYCYCLE" ;;
+            COOLIFY_WEBHOOK_ENVMON_BACKEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_ENVMON_BACKEND" ;;
+            COOLIFY_WEBHOOK_ENVMON_FRONTEND) WEBHOOK_SECRET="$WEBHOOK_SECRET_ENVMON_FRONTEND" ;;
             *) echo "Unknown webhook secret env: $SECRET_ENV"; exit 1 ;;
           esac
           # Secrets missing → Coolify path not configured; skip rather than fail the release.

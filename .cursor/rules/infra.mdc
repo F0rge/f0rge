@@ -16,8 +16,9 @@ Delegate deploy/infra work to the `devops` sub-agent in `~/.cursor/agents/`.
 | firstout | **Own** Railway project `Firstout` (`c76d8df1-…`). Hosts `firstout.co.za` / `api.firstout.co.za` | `main` only | `firstout-backend`, `firstout-frontend` |
 | dk tag printer | Pi Coolify | `main` only | `dk-tag-printer-backend`, `dk-tag-printer-frontend` |
 | buycycle | Pi Coolify, internal only (host ports 8095/8096, no domain); tracker = Coolify scheduled task; Turso DB on `/data` volume | `main` only | `buycycle` |
+| environment-monitor | Pi Coolify, internal only (backend 5001, frontend 5000). SQLite `/app/data/readings.db` on volume `environment-monitor_sensor_data` | `main` only | `environment-monitor-backend`, `environment-monitor-frontend` |
 
-Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) reads [`.github/deploy/manifest.yml`](../.github/deploy/manifest.yml) + Nx affected. Marrow smoke: [`railway-smoke-reusable.yml`](../.github/workflows/railway-smoke-reusable.yml). Coolify: webhook POST from deploy job (secrets `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DASKASAS_BACKEND`, `COOLIFY_WEBHOOK_DASKASAS_FRONTEND`, `COOLIFY_WEBHOOK_BUYCYCLE`). Each secret is that app's Coolify manual GitHub webhook secret.
+Orchestrator: [`.github/workflows/deploy-reusable.yml`](../.github/workflows/deploy-reusable.yml) reads [`.github/deploy/manifest.yml`](../.github/deploy/manifest.yml) + Nx affected. Marrow smoke: [`railway-smoke-reusable.yml`](../.github/workflows/railway-smoke-reusable.yml). Coolify: webhook POST from deploy job (secrets `COOLIFY_BASE_URL`, `COOLIFY_WEBHOOK_DASKASAS_BACKEND`, `COOLIFY_WEBHOOK_DASKASAS_FRONTEND`, `COOLIFY_WEBHOOK_BUYCYCLE`, `COOLIFY_WEBHOOK_ENVMON_BACKEND`, `COOLIFY_WEBHOOK_ENVMON_FRONTEND`). Each secret is that app's Coolify manual GitHub webhook secret.
 
 # Marrow Infrastructure (Railway)
 

@@ -233,9 +233,31 @@ class ManifestSecretTests(unittest.TestCase):
                 "COOLIFY_WEBHOOK_DASKASAS_BACKEND",
                 "COOLIFY_WEBHOOK_DASKASAS_FRONTEND",
                 "COOLIFY_WEBHOOK_BUYCYCLE",
+                "COOLIFY_WEBHOOK_ENVMON_BACKEND",
+                "COOLIFY_WEBHOOK_ENVMON_FRONTEND",
             ],
         )
         self.assertEqual(len(envs), len(set(envs)))
+
+    def test_watch_paths_cover_coolify_app_dirs(self) -> None:
+        text = Path(__file__).with_name("manifest.yml").read_text()
+        # Component body is the following 4-space-indented lines (next key is at 2 spaces).
+        coolify_names = []
+        for match in re.finditer(r"^  ([a-z0-9-]+):\n((?:    .*\n)*)", text, re.MULTILINE):
+            name, body = match.group(1), match.group(2)
+            if "target: coolify" in body:
+                coolify_names.append(name)
+        self.assertEqual(sorted(coolify_names), sorted(payload.COOLIFY_WATCH_PATHS))
+        covered = {
+            "environment-monitor-backend": "apps/environment-monitor/backend/app.py",
+            "environment-monitor-frontend": "apps/environment-monitor/frontend/Dockerfile",
+        }
+        for app, path in covered.items():
+            globs = payload.COOLIFY_WATCH_PATHS[app]
+            self.assertTrue(
+                any(path.startswith(glob.removesuffix("/**") + "/") or path == glob.removesuffix("/**") for glob in globs),
+                f"{path} not covered by {globs}",
+            )
 
 
 if __name__ == "__main__":
