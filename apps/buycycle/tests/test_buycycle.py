@@ -678,6 +678,30 @@ if (matchNote({}) !== 'any year') throw new Error('blank bike');
     assert out.returncode == 0, out.stderr
 
 
+def test_insight_charts_use_one_scale(tmp_path):
+    """Width must not change which rows or model stats the Insights charts plot."""
+    r = subprocess.run(
+        [sys.executable, os.path.join(APP, "dashboard", "render.py"), os.path.join(APP, "dashboard", "index.tpl.html"), str(tmp_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    html = (tmp_path / "index-wheels.html").read_text()
+    assert "mob?600" not in html and "mob?1000" not in html and "mob?8" not in html
+    assert "max:100" not in html and "m.t.length>=5" in html and "chartGen" in html
+    assert "if(TAB=='insights')renderCharts()" in html
+    note = next(line for line in html.splitlines() if line.startswith("function niceMax"))
+    script = (
+        note
+        + """
+const cases=[[[4],5],[[0.4,1.2,3.9],5],[[100],100],[[0],1],[[6,2],10],[[50],50],[[],1]];
+for (const [v,want] of cases) if (niceMax(v)!==want) throw new Error(JSON.stringify(v)+' -> '+niceMax(v)+' != '+want);
+"""
+    )
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+
+
 def test_no_feed_key_in_source():
     import re
 
