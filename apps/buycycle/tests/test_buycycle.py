@@ -183,11 +183,12 @@ def test_dashboard_columns_sort_zero_comps_last(tmp_path):
         assert "z-score" in html and "€/day" in html and "sold %" in html and "vs typical" in html
         assert "Flex score" not in html and "['flex','Flex'" not in html and "days listed · flex" not in html
         assert "price reduced" in html and "Dropped (history or vs original)" in html
-        assert "['nxd','Next cheaper'" in html and "['nxd','Next'" in html and "Min next-cheaper days" in html
-        assert html.index("['nc','Comps'") < html.index("['nxd','Next'") < html.index("['z','Z'")
+        assert "['nxd','Next up'" in html and "Min next-up days" in html
+        assert html.index("['nc','Comps'") < html.index("['nxd','Next up'") < html.index("['z','Z'")
         cols = html.split("const COLS=", 1)[1].split("];", 1)[0]
         assert cols.index("['nc'") < cols.index("['nxd'") < cols.index("['z'")
-        assert "next cheaper" in html and "strictly below" in html and html.count("fillNext(ITEMS") == 1
+        assert "next up" in html and "strictly above" in html and "priciest" in html
+        assert "next cheaper" not in html and "cheapest" not in html and html.count("fillNext(ITEMS") == 1
         assert "x.nxd!=null&&x.nxd>=" in html
         calc = html.split("function calc(x)", 1)[1].split("function", 1)[0]
         assert "if(x.r==null)return" in calc and "x.av" not in calc and "x.z" not in calc and "x.cs" not in calc and "x.nx" not in calc
@@ -497,32 +498,62 @@ def _nx_cell_js():
     return next(line for line in lines if line.startswith("function nxCell"))
 
 
-def test_next_cheaper_from_published_rows(tmp_path):
-    """Closest strictly cheaper live comp, from price and first_seen already in the published file."""
+def test_next_up_from_published_rows(tmp_path):
+    """Closest strictly pricier live comp. Lightweight at €1,500 is the cheapest of 10 comps, so next up is €1,700."""
     today = "2026-10-17"
     wheels = [
-        dict(i="hi", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=2400, fs="2026-10-01", u="https://buycycle.com/en-lu/product/hi"),
-        dict(i="close", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=1450, fs="2026-09-24", u="https://buycycle.com/en-lu/product/close"),
-        dict(i="tie", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=1450, fs="2026-10-01", u="https://buycycle.com/en-lu/product/tie"),
-        dict(i="low", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=900, fs="2026-08-01", u="https://buycycle.com/en-lu/product/low"),
-        dict(i="gone", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=2390, fs="2026-08-01", g="2026-10-10", u="https://buycycle.com/en-lu/product/gone"),
-        dict(i="rim", b="DT Swiss", m="ARC", k="rim", mt="carbon", p=2390, fs="2026-08-01", u="https://buycycle.com/en-lu/product/rim"),
+        dict(
+            i="lw",
+            n="Lightweight Meilenstein Evo Disc Tubeless",
+            b="Lightweight",
+            m="Meilenstein",
+            k="disc",
+            mt="carbon",
+            p=1500,
+            fs="2026-10-10",
+            u="https://buycycle.com/en-lu/product/lw",
+        ),
+        dict(i="up", b="Lightweight", m="Meilenstein", k="disc", mt="carbon", p=1700, fs="2026-10-01", u="https://buycycle.com/en-lu/product/up"),
+        dict(
+            i="gone",
+            b="Lightweight",
+            m="Meilenstein",
+            k="disc",
+            mt="carbon",
+            p=1600,
+            fs="2026-08-01",
+            g="2026-10-10",
+            u="https://buycycle.com/en-lu/product/gone",
+        ),
+        dict(i="rim", b="Lightweight", m="Meilenstein", k="rim", mt="carbon", p=1600, fs="2026-08-01", u="https://buycycle.com/en-lu/product/rim"),
         dict(i="eq", b="Scope", m="R4", k="disc", mt="carbon", p=800, fs="2026-10-01", u="https://buycycle.com/en-lu/product/eq"),
         dict(i="eq2", b="Scope", m="R4", k="disc", mt="carbon", p=800, fs="2026-09-01", u="https://buycycle.com/en-lu/product/eq2"),
         dict(i="higher", b="Scope", m="R4", k="disc", mt="carbon", p=1200, fs="2026-10-01", u="https://buycycle.com/en-lu/product/higher"),
         dict(i="solo", b="Hunt", m="Limitless", k="disc", mt="carbon", p=1500, fs="2026-10-01", u="https://buycycle.com/en-lu/product/solo"),
-        dict(i="floor", b="Enve", m="SES", k="disc", mt="carbon", p=2000, fs="2026-10-05", u="https://buycycle.com/en-lu/product/floor"),
-        dict(i="floorc", b="Enve", m="SES", k="disc", mt="carbon", p=1800, fs="2026-08-01", u="https://buycycle.com/en-lu/product/floorc"),
-        dict(i="nodays", b="Zipp", m="404", k="disc", mt="carbon", p=2200, fs="2026-10-02", u="https://buycycle.com/en-lu/product/nodays"),
-        dict(i="nodaysc", b="Zipp", m="404", k="disc", mt="carbon", p=2100, u="https://buycycle.com/en-lu/product/nodaysc"),
-        dict(i="zero", b="Roval", m="Alpinist", k="disc", mt="carbon", p=1600, fs="2026-10-17", u="https://buycycle.com/en-lu/product/zero"),
-        dict(i="zeroc", b="Roval", m="Alpinist", k="disc", mt="carbon", p=1500, fs="2026-10-17", u="https://buycycle.com/en-lu/product/zeroc"),
+        dict(i="tie", b="Enve", m="SES", k="disc", mt="carbon", p=1000, fs="2026-10-10", u="https://buycycle.com/en-lu/product/tie"),
+        dict(i="tiea", b="Enve", m="SES", k="disc", mt="carbon", p=1500, fs="2026-09-24", u="https://buycycle.com/en-lu/product/tiea"),
+        dict(i="tieb", b="Enve", m="SES", k="disc", mt="carbon", p=1500, fs="2026-10-01", u="https://buycycle.com/en-lu/product/tieb"),
+        dict(i="floor", b="Roval", m="Alpinist", k="disc", mt="carbon", p=1000, fs="2026-10-05", u="https://buycycle.com/en-lu/product/floor"),
+        dict(i="floorc", b="Roval", m="Alpinist", k="disc", mt="carbon", p=1200, fs="2026-08-01", u="https://buycycle.com/en-lu/product/floorc"),
     ]
+    for i, price in enumerate((1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400), start=1):
+        wheels.append(
+            dict(
+                i=f"h{i}",
+                b="Lightweight",
+                m="Meilenstein",
+                k="disc",
+                mt="carbon",
+                p=price,
+                fs="2026-08-01" if price == 3400 else "2026-10-05",
+                u=f"https://buycycle.com/en-lu/product/h{i}",
+            )
+        )
     bikes = [
-        dict(i="t24", b="Specialized", m="Tarmac", y=2024, p=3000, fs="2026-10-10", u="https://buycycle.com/en-lu/product/t24"),
+        dict(i="t24", b="Specialized", m="Tarmac", y=2024, p=2000, fs="2026-10-10", u="https://buycycle.com/en-lu/product/t24"),
         dict(i="t23", b="Specialized", m="Tarmac", y=2023, p=2500, fs="2026-10-01", u="https://buycycle.com/en-lu/product/t23"),
-        dict(i="t25", b="Specialized", m="Tarmac", y=2025, p=2200, fs="2026-09-20", u="https://buycycle.com/en-lu/product/t25"),
-        dict(i="t22", b="Specialized", m="Tarmac", y=2022, p=2900, fs="2026-08-01", u="https://buycycle.com/en-lu/product/t22"),
+        dict(i="t25", b="Specialized", m="Tarmac", y=2025, p=4000, fs="2026-09-20", u="https://buycycle.com/en-lu/product/t25"),
+        dict(i="t22", b="Specialized", m="Tarmac", y=2022, p=2100, fs="2026-08-01", u="https://buycycle.com/en-lu/product/t22"),
         dict(i="e1", b="Canyon", m="Aeroad", y=2020, p=1000, fs="2026-10-01", u="https://buycycle.com/en-lu/product/e1"),
         dict(i="e2", b="Canyon", m="Aeroad", y=2020, p=1000, fs="2026-09-01", u="https://buycycle.com/en-lu/product/e2"),
     ]
@@ -541,37 +572,50 @@ def test_next_cheaper_from_published_rows(tmp_path):
         assert out.returncode == 0, out.stderr
         return {x["i"]: x for x in json.loads(out.stdout)}
 
+    others = [x for x in wheels if x["m"] == "Meilenstein" and x["i"] != "lw" and not x.get("g") and x.get("k") == "disc"]
+    assert len(others) == 10 and min(x["p"] for x in others) == 1700
     got = run("wheels", wheels)
-    assert got["hi"]["nxp"] == 1450 and got["hi"]["nxu"].endswith("/close")
-    assert got["hi"]["nxd"] == 23 and got["hi"]["nxn"] == 1 and got["hi"]["nxf"] is False
-    assert got["eq"]["nxk"] == "cheapest" and got["eq"]["nxp"] is None and got["eq"]["nxd"] is None
+    assert got["lw"]["nxp"] == 1700 and got["lw"]["nxu"].endswith("/up")
+    assert got["lw"]["nxd"] == 16 and got["lw"]["nxn"] == 0 and got["lw"]["nxf"] is False
+    assert got["h9"]["nxk"] == "priciest" and got["h9"]["nxp"] is None
+    assert got["eq"]["nxp"] == 1200 and got["eq"]["nxk"] is None
     assert got["solo"]["nxk"] is None and got["solo"]["nxp"] is None and got["solo"]["nxd"] is None
-    assert got["floor"]["nxp"] == 1800 and got["floor"]["nxd"] == 77 and got["floor"]["nxf"] is True and got["floor"]["nxn"] == 0
+    assert got["tie"]["nxp"] == 1500 and got["tie"]["nxu"].endswith("/tiea") and got["tie"]["nxd"] == 23 and got["tie"]["nxn"] == 1
+    assert got["floor"]["nxp"] == 1200 and got["floor"]["nxd"] == 77 and got["floor"]["nxf"] is True and got["floor"]["nxn"] == 0
     assert got["rim"]["nxk"] is None and got["rim"]["nxp"] is None
-    assert got["nodays"]["nxp"] == 2100 and got["nodays"]["nxd"] is None
-    assert got["zero"]["nxd"] == 0 and got["zero"]["nxp"] == 1500
     gotb = run("bikes", bikes)
     assert gotb["t24"]["nxp"] == 2500 and gotb["t24"]["nxu"].endswith("/t23") and gotb["t24"]["nxd"] == 16
-    assert gotb["e1"]["nxk"] == "cheapest"
+    assert gotb["e1"]["nxk"] == "priciest"
 
     cell = "const esc=s=>String(s??'');const eur=v=>v==null?'–':'€'+Math.round(v).toLocaleString('en');const TIP={nxd:'tip'};\n%s\n" % _nx_cell_js()
     show = cell + "const rows=%s;\nconsole.log(rows.map(nxCell).join('\\n'));" % json.dumps(
         [
-            dict(nxp=1450, nxu="https://buycycle.com/en-lu/product/close", nxd=23, nxn=1, nxf=False),
-            dict(nxp=1800, nxu="https://buycycle.com/en-lu/product/floorc", nxd=77, nxn=0, nxf=True),
-            dict(nxk="cheapest"),
+            dict(p=1500, nxp=1700, nxu="https://buycycle.com/en-lu/product/up", nxd=16, nxn=0, nxf=False),
+            dict(p=1000, nxp=1200, nxu="https://buycycle.com/en-lu/product/floorc", nxd=77, nxn=0, nxf=True),
+            dict(p=1000, nxp=1500, nxu="https://buycycle.com/en-lu/product/tiea", nxd=23, nxn=1, nxf=False),
+            dict(nxk="priciest"),
             {},
-            dict(nxp=2100, nxu="https://buycycle.com/en-lu/product/nodaysc", nxd=None, nxn=0, nxf=False),
+            dict(p=1500, nxp=1700, nxu="https://buycycle.com/en-lu/product/up", nxd=None, nxn=0, nxf=False),
         ]
     )
     shown = subprocess.run(["node", "-e", show], capture_output=True, text=True)
     assert shown.returncode == 0, shown.stderr
     lines = shown.stdout.splitlines()
-    assert lines[0] == '<a class=Link--primary title="tip" href="https://buycycle.com/en-lu/product/close" target=_blank rel=noopener>↓ €1,450 · 23d (+1)</a>'
-    assert lines[1] == '<a class=Link--primary title="tip" href="https://buycycle.com/en-lu/product/floorc" target=_blank rel=noopener>↓ €1,800 · ≥77d</a>'
-    assert lines[2] == '<span title="tip">cheapest</span>'
-    assert lines[3] == "–"
-    assert "€2,100" in lines[4] and "d" not in lines[4].split("€", 1)[1]
+    assert (
+        lines[0]
+        == '<a class=Link--primary title="tip" href="https://buycycle.com/en-lu/product/up" target=_blank rel=noopener>↑ €1,700 (+€200 / +13%) · 16d</a>'
+    )
+    assert (
+        lines[1]
+        == '<a class=Link--primary title="tip" href="https://buycycle.com/en-lu/product/floorc" target=_blank rel=noopener>↑ €1,200 (+€200 / +20%) · ≥77d</a>'
+    )
+    assert (
+        lines[2]
+        == '<a class=Link--primary title="tip" href="https://buycycle.com/en-lu/product/tiea" target=_blank rel=noopener>↑ €1,500 (+€500 / +50%) · 23d (+1)</a>'
+    )
+    assert lines[3] == '<span title="tip">priciest</span>'
+    assert lines[4] == "–"
+    assert "€1,700" in lines[5] and "·" not in lines[5]
 
     r = subprocess.run(
         [sys.executable, os.path.join(APP, "dashboard", "render.py"), os.path.join(APP, "dashboard", "index.tpl.html"), str(tmp_path)],
