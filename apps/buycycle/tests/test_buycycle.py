@@ -692,7 +692,10 @@ def test_insight_charts_use_one_scale(tmp_path):
     assert "if(TAB=='insights')renderCharts()" in html
     assert "const ins=chartInputs(view,M)" in html
     assert "Chart.defaults.animation=false" in html and "animation:false" in html and "max:niceMax(rois)" in html
-    assert "minmax(96px,1.1fr)" in html and 'style="display:block"' in html
+    assert 'style="display:block"' in html
+    comp = html.split("function compTable", 1)[1].split("function toggleComps", 1)[0]
+    assert "'112px'" in comp and "'108px'" in comp and "'180px'" in comp and "'72px'" in comp and "'104px'" in comp and "'84px'" in comp
+    assert "1.6fr" not in comp and "minmax" not in comp and "Truncate-text" in comp and 'title="${esc(note)}"' in comp
     body = html.split("function chartInputs", 1)[1].split("let chartGen", 1)[0]
     assert "NARROW" not in body and "matchMedia" not in body
     filt = html.split("function filt()", 1)[1].split("const strong=", 1)[0]
