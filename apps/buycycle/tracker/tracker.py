@@ -269,10 +269,12 @@ def _zscore(price, comps):
 
 
 def _cut_speed(row, history, days):
-    """€/day from the original ask, or the first snapshot. 0 if it did not fall. None with no history."""
+    """€/day from the higher of buycycle's original price and the highest snapshot. 0 if it did not fall. None with no history."""
     if not history:
         return None
-    start = row["original_price"] or history[0][1]
+    start = max(price for _, price in history)
+    if row["original_price"]:
+        start = max(start, row["original_price"])
     delta = start - row["price"]
     if delta <= 0:
         return 0
@@ -413,6 +415,7 @@ def build(c, kind, today):
                 "fs": r["first_seen"],
                 "g": r["gone_at"],
                 "pr": r["pr"] or 0,
+                "hs": len(h),
                 "pd": drops + (1 if orig > r["price"] and drops == 0 else 0),
                 "pdp": round((orig - r["price"]) / orig * 100, 1) if orig else 0,
                 "h": h[-30:] if len(h) > 1 else [],
@@ -514,6 +517,7 @@ COLS = [
     "ld",
     "fs",
     "g",
+    "hs",
     "pd",
     "pdp",
     "pr",

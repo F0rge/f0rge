@@ -177,12 +177,20 @@ def test_dashboard_columns_sort_zero_comps_last(tmp_path):
         assert "avg ask" in html and "comps" in html
         assert "['z','Z-score'" in html and "['cs','€/day cut'" in html and "['st','Sold within 30d'" in html and "['vs','Days vs typical'" in html
         assert "Min z-score" in html and "Min €/day cut" in html and "Min sold %" in html and "Max days vs typical" in html
-        assert "standard deviation" in html and "no price history" in html and "fewer than 5" in html
+        assert "standard deviation" in html and "fewer than 5" in html
+        assert "no price history" in html and "highest daily snapshot" in html
+        assert "of history" in html and "active · ${m.runs.length} snapshot(s) · updated" in html
         assert "z-score" in html and "€/day" in html and "sold %" in html and "vs typical" in html
         assert "Flex score" not in html and "['flex','Flex'" not in html and "days listed · flex" not in html
         assert "price reduced" in html and "Dropped (history or vs original)" in html
+        assert "['nxd','Next cheaper'" in html and "['nxd','Next'" in html and "Min next-cheaper days" in html
+        assert html.index("['nc','Comps'") < html.index("['nxd','Next'") < html.index("['z','Z'")
+        cols = html.split("const COLS=", 1)[1].split("];", 1)[0]
+        assert cols.index("['nc'") < cols.index("['nxd'") < cols.index("['z'")
+        assert "next cheaper" in html and "strictly below" in html and html.count("fillNext(ITEMS") == 1
+        assert "x.nxd!=null&&x.nxd>=" in html
         calc = html.split("function calc(x)", 1)[1].split("function", 1)[0]
-        assert "if(x.r==null)return" in calc and "x.av" not in calc and "x.z" not in calc and "x.cs" not in calc
+        assert "if(x.r==null)return" in calc and "x.av" not in calc and "x.z" not in calc and "x.cs" not in calc and "x.nx" not in calc
         m = re.search(r"view\.sort\(\(a,b\)=>\{.*?\}\);", html)
         assert m and "key=='nc'&&!A" in m.group(0)
     script = r"""
@@ -409,6 +417,185 @@ def test_market_metrics_on_prod_shaped_rows(tmp_path, monkeypatch):
     got = {x["i"]: x["z"] for x in json.loads(out.stdout)}
     assert got["a1"] == wheels["a1"]["z"]
     assert got["flat0"] is None and got["pair1"] is None
+
+
+def test_cut_speed_counts_a_snapshot_drop_the_original_price_hides(tmp_path, monkeypatch):
+    """Syncros Capital SL: ask €2,200, original €2,200, one snapshot drop, 205 days listed. The old start price ignored that drop and showed 0."""
+    import storage
+    import tracker
+
+    now = 1_800_000_000
+    monkeypatch.setattr(tracker.time, "time", lambda: now)
+    monkeypatch.setitem(tracker.OUT, "wheels", str(tmp_path / "wheels"))
+    monkeypatch.setitem(tracker.OUT, "bikes", str(tmp_path / "bikes"))
+    c = storage.connect(str(tmp_path / "cut.turso.db"))
+    disc = json.dumps({"spec": {"wheel-type": "1372", "complete-wheels-brakes-type": "1430", "rim-material": "1433"}})
+    today = "2026-10-17"
+    _prod_listing(
+        c,
+        id="syncros",
+        kind="wheels",
+        name="Syncros Capital SL 40 mm",
+        brand="Syncros",
+        price=2200,
+        original=2200,
+        spec=disc,
+        first_seen="2026-03-26",
+    )
+    _prod_listing(
+        c,
+        id="mid",
+        kind="wheels",
+        name="Zipp 353 NSW",
+        brand="Zipp",
+        price=2200,
+        original=2200,
+        spec=disc,
+        first_seen="2026-08-01",
+    )
+    _prod_listing(
+        c,
+        id="bsync",
+        kind="bikes",
+        name="Canyon Aeroad CF",
+        brand="Canyon",
+        year=2024,
+        price=1500,
+        original=1500,
+        first_seen="2026-08-01",
+    )
+    c.execute("update listing set pr=1, activated_at=? where id='syncros'", (now - 205 * 86400,))
+    c.executemany(
+        "insert into price_history values(?,?,?)",
+        [
+            ("syncros", "2026-03-26", 2800),
+            ("syncros", "2026-10-17", 2200),
+            ("mid", "2026-08-01", 2200),
+            ("mid", "2026-09-01", 2600),
+            ("mid", "2026-10-17", 2200),
+            ("bsync", "2026-08-01", 2000),
+            ("bsync", "2026-10-17", 1500),
+        ],
+    )
+    c.commit()
+    wheels = {x["i"]: x for x in tracker.build(c, "wheels", today)}
+    bikes = {x["i"]: x for x in tracker.build(c, "bikes", today)}
+    sync = wheels["syncros"]
+    assert sync["p"] == 2200 and sync["op"] == 2200 and sync["pr"] == 1
+    assert sync["pd"] == 1 and sync["dl"] == 205 and sync["hs"] == 2
+    assert sync["cs"] == round(600 / 205, 2)
+    mid = wheels["mid"]
+    assert mid["pd"] == 1 and mid["hs"] == 3 and mid["cs"] == round(400 / mid["dl"], 2) and mid["cs"] > 0
+    bike = bikes["bsync"]
+    assert bike["hs"] == 2 and bike["cs"] == round(500 / bike["dl"], 2) and bike["cs"] > 0
+    doc = json.loads((tmp_path / "wheels" / "data.json").read_text())
+    assert doc["cols"].index("hs") == doc["cols"].index("g") + 1
+
+
+def _nx_cell_js():
+    lines = open(os.path.join(APP, "dashboard", "index.tpl.html")).read().splitlines()
+    return next(line for line in lines if line.startswith("function nxCell"))
+
+
+def test_next_cheaper_from_published_rows(tmp_path):
+    """Closest strictly cheaper live comp, from price and first_seen already in the published file."""
+    today = "2026-10-17"
+    wheels = [
+        dict(i="hi", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=2400, fs="2026-10-01", u="https://buycycle.com/en-lu/product/hi"),
+        dict(i="close", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=1450, fs="2026-09-24", u="https://buycycle.com/en-lu/product/close"),
+        dict(i="tie", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=1450, fs="2026-10-01", u="https://buycycle.com/en-lu/product/tie"),
+        dict(i="low", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=900, fs="2026-08-01", u="https://buycycle.com/en-lu/product/low"),
+        dict(i="gone", b="DT Swiss", m="ARC", k="disc", mt="carbon", p=2390, fs="2026-08-01", g="2026-10-10", u="https://buycycle.com/en-lu/product/gone"),
+        dict(i="rim", b="DT Swiss", m="ARC", k="rim", mt="carbon", p=2390, fs="2026-08-01", u="https://buycycle.com/en-lu/product/rim"),
+        dict(i="eq", b="Scope", m="R4", k="disc", mt="carbon", p=800, fs="2026-10-01", u="https://buycycle.com/en-lu/product/eq"),
+        dict(i="eq2", b="Scope", m="R4", k="disc", mt="carbon", p=800, fs="2026-09-01", u="https://buycycle.com/en-lu/product/eq2"),
+        dict(i="higher", b="Scope", m="R4", k="disc", mt="carbon", p=1200, fs="2026-10-01", u="https://buycycle.com/en-lu/product/higher"),
+        dict(i="solo", b="Hunt", m="Limitless", k="disc", mt="carbon", p=1500, fs="2026-10-01", u="https://buycycle.com/en-lu/product/solo"),
+        dict(i="floor", b="Enve", m="SES", k="disc", mt="carbon", p=2000, fs="2026-10-05", u="https://buycycle.com/en-lu/product/floor"),
+        dict(i="floorc", b="Enve", m="SES", k="disc", mt="carbon", p=1800, fs="2026-08-01", u="https://buycycle.com/en-lu/product/floorc"),
+        dict(i="nodays", b="Zipp", m="404", k="disc", mt="carbon", p=2200, fs="2026-10-02", u="https://buycycle.com/en-lu/product/nodays"),
+        dict(i="nodaysc", b="Zipp", m="404", k="disc", mt="carbon", p=2100, u="https://buycycle.com/en-lu/product/nodaysc"),
+        dict(i="zero", b="Roval", m="Alpinist", k="disc", mt="carbon", p=1600, fs="2026-10-17", u="https://buycycle.com/en-lu/product/zero"),
+        dict(i="zeroc", b="Roval", m="Alpinist", k="disc", mt="carbon", p=1500, fs="2026-10-17", u="https://buycycle.com/en-lu/product/zeroc"),
+    ]
+    bikes = [
+        dict(i="t24", b="Specialized", m="Tarmac", y=2024, p=3000, fs="2026-10-10", u="https://buycycle.com/en-lu/product/t24"),
+        dict(i="t23", b="Specialized", m="Tarmac", y=2023, p=2500, fs="2026-10-01", u="https://buycycle.com/en-lu/product/t23"),
+        dict(i="t25", b="Specialized", m="Tarmac", y=2025, p=2200, fs="2026-09-20", u="https://buycycle.com/en-lu/product/t25"),
+        dict(i="t22", b="Specialized", m="Tarmac", y=2022, p=2900, fs="2026-08-01", u="https://buycycle.com/en-lu/product/t22"),
+        dict(i="e1", b="Canyon", m="Aeroad", y=2020, p=1000, fs="2026-10-01", u="https://buycycle.com/en-lu/product/e1"),
+        dict(i="e2", b="Canyon", m="Aeroad", y=2020, p=1000, fs="2026-09-01", u="https://buycycle.com/en-lu/product/e2"),
+    ]
+
+    def run(kind, items):
+        script = (
+            "const KIND=%s;\n%s\nconst items=%s;\nfillNext(items,%s);\nconsole.log(JSON.stringify(items.map(x=>({i:x.i,nxp:x.nxp,nxu:x.nxu,nxd:x.nxd,nxn:x.nxn,nxf:x.nxf,nxk:x.nxk}))));"
+            % (
+                json.dumps(kind),
+                _comp_js(),
+                json.dumps(items),
+                json.dumps(today),
+            )
+        )
+        out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        return {x["i"]: x for x in json.loads(out.stdout)}
+
+    got = run("wheels", wheels)
+    assert got["hi"]["nxp"] == 1450 and got["hi"]["nxu"].endswith("/close")
+    assert got["hi"]["nxd"] == 23 and got["hi"]["nxn"] == 1 and got["hi"]["nxf"] is False
+    assert got["eq"]["nxk"] == "cheapest" and got["eq"]["nxp"] is None and got["eq"]["nxd"] is None
+    assert got["solo"]["nxk"] is None and got["solo"]["nxp"] is None and got["solo"]["nxd"] is None
+    assert got["floor"]["nxp"] == 1800 and got["floor"]["nxd"] == 77 and got["floor"]["nxf"] is True and got["floor"]["nxn"] == 0
+    assert got["rim"]["nxk"] is None and got["rim"]["nxp"] is None
+    assert got["nodays"]["nxp"] == 2100 and got["nodays"]["nxd"] is None
+    assert got["zero"]["nxd"] == 0 and got["zero"]["nxp"] == 1500
+    gotb = run("bikes", bikes)
+    assert gotb["t24"]["nxp"] == 2500 and gotb["t24"]["nxu"].endswith("/t23") and gotb["t24"]["nxd"] == 16
+    assert gotb["e1"]["nxk"] == "cheapest"
+
+    cell = "const esc=s=>String(s??'');const eur=v=>v==null?'–':'€'+Math.round(v).toLocaleString('en');const TIP={nxd:'tip'};\n%s\n" % _nx_cell_js()
+    show = cell + "const rows=%s;\nconsole.log(rows.map(nxCell).join('\\n'));" % json.dumps(
+        [
+            dict(nxp=1450, nxu="https://buycycle.com/en-lu/product/close", nxd=23, nxn=1, nxf=False),
+            dict(nxp=1800, nxu="https://buycycle.com/en-lu/product/floorc", nxd=77, nxn=0, nxf=True),
+            dict(nxk="cheapest"),
+            {},
+            dict(nxp=2100, nxu="https://buycycle.com/en-lu/product/nodaysc", nxd=None, nxn=0, nxf=False),
+        ]
+    )
+    shown = subprocess.run(["node", "-e", show], capture_output=True, text=True)
+    assert shown.returncode == 0, shown.stderr
+    lines = shown.stdout.splitlines()
+    assert lines[0] == '<a class=Link--primary title="tip" href="https://buycycle.com/en-lu/product/close" target=_blank rel=noopener>↓ €1,450 · 23d (+1)</a>'
+    assert lines[1] == '<a class=Link--primary title="tip" href="https://buycycle.com/en-lu/product/floorc" target=_blank rel=noopener>↓ €1,800 · ≥77d</a>'
+    assert lines[2] == '<span title="tip">cheapest</span>'
+    assert lines[3] == "–"
+    assert "€2,100" in lines[4] and "d" not in lines[4].split("€", 1)[1]
+
+    r = subprocess.run(
+        [sys.executable, os.path.join(APP, "dashboard", "render.py"), os.path.join(APP, "dashboard", "index.tpl.html"), str(tmp_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    html = (tmp_path / "index-wheels.html").read_text()
+    m = re.search(r"view\.sort\(\(a,b\)=>\{.*?\}\);", html)
+    assert m
+    sort = """
+const rows=[{nxd:null,name:'dash'},{nxd:0,name:'zero'},{nxd:23,name:'mid'},{nxd:null,name:'cheap'},{nxd:5,name:'five'}];
+let key='nxd', asc=true, view=rows.slice();
+%s
+if (view.map(r=>r.name).join() !== 'zero,five,mid,dash,cheap') throw new Error('asc '+view.map(r=>r.name));
+view=rows.slice(); asc=false;
+%s
+if (view.map(r=>r.name).slice(0,3).join() !== 'mid,five,zero') throw new Error('desc '+view.map(r=>r.name));
+if (view.map(r=>r.name).slice(3).sort().join() !== 'cheap,dash') throw new Error('desc tail '+view.map(r=>r.name));
+""" % (m.group(0), m.group(0))
+    out = subprocess.run(["node", "-e", sort], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    alerts = open(os.path.join(APP, "tracker", "tracker.py")).read().split("def alerts(", 1)[1].split("\ndef ", 1)[0]
+    assert "nxp" not in alerts and "nxd" not in alerts
 
 
 def test_no_feed_key_in_source():
