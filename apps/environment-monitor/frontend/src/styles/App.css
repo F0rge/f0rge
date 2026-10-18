@@ -108,6 +108,80 @@ body {
   line-height: 1.1;
 }
 
+/* Range bar under Min/Max. Track, comfort band, and fills use Primer
+   tokens so light and dark stay in sync with the rest of the page. */
+.range-bar {
+  position: relative;
+  margin-top: 6px;
+  padding-bottom: 16px;
+}
+
+.range-bar--comfort {
+  padding-bottom: 0;
+}
+
+.range-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--bgColor-neutral-muted);
+  box-shadow: inset 0 0 0 1px var(--borderColor-muted);
+  overflow: hidden;
+}
+
+.range-bar--comfort .range-track {
+  height: 8px;
+}
+
+.range-band,
+.range-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.range-band {
+  background: color-mix(in srgb, var(--bgColor-success-emphasis) 32%, transparent);
+}
+
+/* The min–max segment sits in the middle of the track so the comfort
+   shade stays visible above and below it. */
+.range-bar:not(.range-bar--comfort) .range-fill {
+  top: 4px;
+  bottom: auto;
+  height: 6px;
+  border-radius: 999px;
+}
+
+.range-fill--success { background: var(--bgColor-success-emphasis); }
+.range-fill--accent { background: var(--bgColor-accent-emphasis); }
+.range-fill--attention { background: var(--bgColor-attention-emphasis); }
+.range-fill--danger { background: var(--bgColor-danger-emphasis); }
+
+.range-mark {
+  position: absolute;
+  top: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--fgColor-default);
+  box-shadow: 0 0 0 2px var(--bgColor-default);
+  pointer-events: none;
+}
+
+.range-edge {
+  position: absolute;
+  top: 16px;
+  transform: translateX(-50%);
+  font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--fgColor-muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* SegmentedControl is inline-flex and will not wrap. On a 390px screen the
    seven ranges need to wrap onto a second line. */
 @media (max-width: 767.98px) {
