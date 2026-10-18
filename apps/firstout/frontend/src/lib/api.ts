@@ -116,6 +116,58 @@ function buildListQuery(params?: ListParams): string {
   return search.toString();
 }
 
+const TIMEOUT_STATUSES = new Set([408, 499, 504]);
+
+export function callName(method: string, path: string): string {
+  const route = (path.split("?")[0] || path).replace(/^\/api\/v1/, "") || path;
+  return `${method.toUpperCase()} ${route}`;
+}
+
+export function isTimeoutStatus(status: number): boolean {
+  return TIMEOUT_STATUSES.has(status);
+}
+
+export function isTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const name = "name" in error ? String(error.name) : "";
+  const message = "message" in error ? String(error.message) : "";
+  return name === "AbortError" || name === "TimeoutError" || /timed?\s*out/i.test(message);
+}
+
+export function formatTransportError(call: string, error: unknown): string {
+  if (isTimeoutError(error)) {
+    return `${call} timed out`;
+  }
+  return `${call} failed`;
+}
+
+export function formatHttpError(
+  call: string,
+  status: number,
+  statusText: string,
+  detail: string,
+): string {
+  if (
+    isTimeoutStatus(status) ||
+    /timed?\s*out/i.test(detail) ||
+    /timed?\s*out/i.test(statusText)
+  ) {
+    return `${call} timed out`;
+  }
+  const trimmed = detail.trim();
+  const generic =
+    !trimmed ||
+    trimmed === "Request failed" ||
+    trimmed === statusText ||
+    trimmed.toLowerCase() === "internal server error";
+  if (generic) {
+    return status ? `${call} failed (${status})` : `${call} failed`;
+  }
+  return trimmed;
+}
+
 export async function parseErrorMessage(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as {
@@ -153,16 +205,25 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  const call = callName(options.method ?? "GET", path);
 
-  const response = await fetch(`/api/v1${path}`, {
-    ...options,
-    credentials: "include",
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1${path}`, {
+      ...options,
+      credentials: "include",
+      headers,
+    });
+  } catch (error) {
+    throw new ApiError(0, formatTransportError(call, error));
+  }
 
   if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
+    const detail = await parseErrorMessage(response);
+    throw new ApiError(
+      response.status,
+      formatHttpError(call, response.status, response.statusText, detail),
+    );
   }
 
   if (response.status === 204) {
@@ -397,15 +458,24 @@ export function updateLocationBin(
 }
 
 async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
+  const call = callName("POST", path);
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1${path}`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+  } catch (error) {
+    throw new ApiError(0, formatTransportError(call, error));
+  }
 
   if (!response.ok) {
-    const message = await parseErrorMessage(response);
-    throw new ApiError(response.status, message);
+    const detail = await parseErrorMessage(response);
+    throw new ApiError(
+      response.status,
+      formatHttpError(call, response.status, response.statusText, detail),
+    );
   }
 
   if (response.status === 204) {
@@ -650,14 +720,50 @@ export type CreateSkuPayload = {
   carton_count?: number;
 };
 
-export function listSkus(options?: { category?: string }): Promise<Sku[]> {
+export type SkuListParams = {
+  limit?: number;
+  offset?: number;
+  q?: string;
+  category?: string;
+};
+
+export type SkuListPage = Page<Sku> & { categories: string[] };
+
+export type SkuUnitCost = {
+  sku_id: string;
+  unit_cost_zar: string | null;
+};
+
+function skuListQuery(options?: SkuListParams): string {
   const params = new URLSearchParams();
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.offset) {
+    params.set("offset", String(options.offset));
+  }
+  const q = options?.q?.trim();
+  if (q) {
+    params.set("q", q);
+  }
   const category = options?.category?.trim();
   if (category) {
     params.set("category", category);
   }
   const qs = params.toString();
-  return apiFetch<Sku[]>(`/skus${qs ? `?${qs}` : ""}`);
+  return qs ? `?${qs}` : "";
+}
+
+export function listSkus(options?: { category?: string; q?: string }): Promise<Sku[]> {
+  return apiFetch<Sku[]>(`/skus${skuListQuery(options)}`);
+}
+
+export function listSkusPage(options: SkuListParams & { limit: number }): Promise<SkuListPage> {
+  return apiFetch<SkuListPage>(`/skus${skuListQuery(options)}`);
+}
+
+export function listSkuUnitCosts(options?: SkuListParams): Promise<Page<SkuUnitCost>> {
+  return apiFetch<Page<SkuUnitCost>>(`/skus/unit-costs${skuListQuery(options)}`);
 }
 
 export function getSku(id: string): Promise<Sku> {

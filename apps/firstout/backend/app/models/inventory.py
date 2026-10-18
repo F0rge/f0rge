@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import ForeignKey, Integer, Numeric, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Integer, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +47,7 @@ class LocationStock(UUIDPkMixin, TimestampMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("sku_id", "location_id", name="uq_location_stock_sku_location"),
+        Index("ix_location_stock_sku_id", "sku_id"),
     )
 
 

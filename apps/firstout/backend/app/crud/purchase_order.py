@@ -6,7 +6,7 @@ from typing import Optional
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.models.inventory import LocationStock, SkuStock
 from app.models.purchase_order import PoLine, PurchaseOrder, PurchaseOrderStatus
@@ -155,9 +155,12 @@ class SkuStockCRUD(BaseCRUD):
 
     async def list_with_movement(self) -> list[SkuStock]:
         result = await self.db.execute(
-            select(SkuStock).options(selectinload(SkuStock.sku)).where(SkuStock.on_order > 0)
+            select(SkuStock)
+            .options(joinedload(SkuStock.sku))
+            .where(SkuStock.on_order > 0)
+            .execution_options(populate_existing=True)
         )
-        return list(result.scalars().all())
+        return list(result.unique().scalars().all())
 
 
 class LocationStockCRUD(BaseCRUD):
@@ -198,12 +201,33 @@ class LocationStockCRUD(BaseCRUD):
         result = await self.db.execute(
             select(LocationStock)
             .options(
-                selectinload(LocationStock.sku),
-                selectinload(LocationStock.location),
+                joinedload(LocationStock.sku),
+                joinedload(LocationStock.location),
             )
             .where(LocationStock.on_hand > 0)
+            .execution_options(populate_existing=True)
         )
-        return list(result.scalars().all())
+        return list(result.unique().scalars().all())
+
+    async def on_hand_cost_pairs(
+        self, sku_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[tuple[int, Optional[Decimal]]]]:
+        if not sku_ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                LocationStock.sku_id,
+                LocationStock.on_hand,
+                LocationStock.unit_cost_zar,
+            ).where(
+                LocationStock.sku_id.in_(sku_ids),
+                LocationStock.on_hand > 0,
+            )
+        )
+        grouped: dict[uuid.UUID, list[tuple[int, Optional[Decimal]]]] = {}
+        for sku_id, on_hand, unit_cost in result.all():
+            grouped.setdefault(sku_id, []).append((int(on_hand), unit_cost))
+        return grouped
 
     async def list_for_sku_ids(self, sku_ids: list[uuid.UUID]) -> list[LocationStock]:
         if not sku_ids:
