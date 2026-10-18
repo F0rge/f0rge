@@ -53,6 +53,10 @@ def test_render_is_responsive_and_has_no_toggle(tmp_path):
         assert "__" + "KIND__" not in html and "__OCT_" not in html
         assert "data-viewbtn" not in html and "toggle mobile/desktop" not in html
         assert "<style" not in html
+        # Desktop table scrolls at its column floors; risk badges wrap in the cell. Cards stay as they were.
+        assert "minmax(160px,.45fr)" in html and "dt.style.minWidth" in html
+        assert '<div class="d-flex flex-wrap">${rkHtml(x)}</div>' in html
+        assert "function card(x)" in html and "wb-break-word" in html.split("function card(x)", 1)[0].split("function row", 1)[1]
 
 
 def _insert(c, **k):
@@ -188,7 +192,7 @@ def test_dashboard_columns_sort_zero_comps_last(tmp_path):
         cols = html.split("const COLS=", 1)[1].split("];", 1)[0]
         assert cols.index("['nc'") < cols.index("['nxd'") < cols.index("['z'")
         assert "next up" in html and "strictly above" in html and "priciest" in html
-        assert "next cheaper" not in html and "cheapest" not in html and html.count("fillNext(ITEMS") == 1
+        assert "next cheaper" not in html and "nxk=='cheapest'" not in html and html.count("fillNext(ITEMS") == 1
         assert "x.nxd!=null&&x.nxd>=" in html
         calc = html.split("function calc(x)", 1)[1].split("function", 1)[0]
         assert "if(x.r==null)return" in calc and "x.av" not in calc and "x.z" not in calc and "x.cs" not in calc and "x.nx" not in calc
@@ -640,6 +644,38 @@ if (view.map(r=>r.name).slice(3).sort().join() !== 'cheap,dash') throw new Error
     assert out.returncode == 0, out.stderr
     alerts = open(os.path.join(APP, "tracker", "tracker.py")).read().split("def alerts(", 1)[1].split("\ndef ", 1)[0]
     assert "nxp" not in alerts and "nxd" not in alerts
+
+
+def test_insights_charts_and_model_table(tmp_path):
+    """Scatter dots open the listing, model bars open that model's table, and comps stay split by brake/rim or year."""
+    r = subprocess.run(
+        [sys.executable, os.path.join(APP, "dashboard", "render.py"), os.path.join(APP, "dashboard", "index.tpl.html"), str(tmp_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    for kind, rule in (("wheels", "brake and rim"), ("bikes", "year within")):
+        html = (tmp_path / f"index-{kind}.html").read_text()
+        assert "function openPoint" in html and "function openBar" in html and "function tipAsk" in html
+        assert "cheapest first — compare prices" in html and rule in html
+        assert "Click a dot to open the listing" in html and "Click a bar to compare" in html
+        assert "ITEMS.filter(x=>!x.g&&x.b+' '+x.m==k)" in html
+        assert "· avg " not in html
+    note = next(line for line in open(os.path.join(APP, "dashboard", "index.tpl.html")) if line.startswith("function matchNote"))
+    script = (
+        """
+let KIND='wheels';
+%s
+if (matchNote({k:'disc',mt:'carbon'}) !== 'disc · carbon') throw new Error('disc');
+if (matchNote({}) !== 'any brake · any rim') throw new Error('blank wheel');
+KIND='bikes';
+if (matchNote({y:2024}) !== '2024') throw new Error('year');
+if (matchNote({}) !== 'any year') throw new Error('blank bike');
+"""
+        % note
+    )
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
 
 
 def test_no_feed_key_in_source():
