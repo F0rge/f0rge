@@ -149,16 +149,16 @@ const star=x=>`<button type=button class="Button Button--invisible Button--iconO
 const compsBtn=x=>x.d!=null&&x.d>20?`<details data-c="${x.i}" class=mt-1><summary class="f6 Link--muted">comparables</summary><div class="f6" data-cl></div></details>`:'';
 const meta=x=>`${esc(x.b)} · ${esc(x.s||'?')} · ${x.y||''} · ${COND[x.c]||''}${x.cp?' · '+esc(x.cp):''}${x.k?' · '+x.k+' · '+(x.mt||'')+' · '+(x.w||''):''}`;
 const COLS=[['n','Listing','minmax(100px,1.3fr)'],['p','Price','minmax(64px,.5fr)',1],['r','Reference','minmax(80px,.65fr)',1],['av','Avg ask','minmax(64px,.5fr)',1],['nc','Comps','minmax(58px,.45fr)',1],['nxd','Next up','minmax(168px,1.2fr)',1],['z','Z','minmax(52px,.4fr)',1],['cs','€/day','minmax(56px,.45fr)',1],['st','Sold %','minmax(56px,.45fr)',1],['vs','vs sell','minmax(52px,.4fr)',1],['d','Under','minmax(52px,.4fr)',1],['pf','Profit','minmax(60px,.5fr)',1],['roi','ROI','minmax(48px,.4fr)',1],
- ['dl','Days','minmax(44px,.35fr)',1],['str','STR','minmax(52px,.4fr)',1],['co','Loc','minmax(52px,.4fr)'],['rk','Risk','minmax(48px,.4fr)'],['_','Watch','52px']];
+ ['dl','Days','minmax(44px,.35fr)',1],['str','STR','minmax(52px,.4fr)',1],['co','Loc','minmax(52px,.4fr)'],['rk','Risk','minmax(160px,.45fr)'],['_','Watch','52px']];
 const TD=(a,h)=>`<td class="prc-DataTable-TableCell-Fk4ve min-width-0"${a?' data-cell-align=end':''}><div class="width-full min-width-0">${h}</div></td>`;
-function row(x,j,cols){const c={n:`${strong(x)?lab('Strong deal','success'):''}<a class="Link--primary text-semibold" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><div class="f6 color-fg-muted">${meta(x)}</div>`,
+function row(x,j,cols){const c={n:`${strong(x)?lab('Strong deal','success'):''}<a class="Link--primary text-semibold wb-break-word" href="${esc(x.u)}" target=_blank rel=noopener>${esc(x.n)}</a><div class="f6 color-fg-muted wb-break-word">${meta(x)}</div>`,
  p:`${eur(x.p)}${x.pdp>0?`<div class="f6 color-fg-muted">was ${eur(x.op)} (−${x.pdp}%)</div>`:''}${x.pr?'<div>'+lab('reduced','accent')+'</div>':''}`,r:`${eur(x.r)}<div class=mt-1>${cfHtml(x)}</div>${compsBtn(x)}`,
  av:eur(x.av),nc:x.nc?String(x.nc):'–',nxd:nxCell(x),
  z:zCell(x),cs:csCell(x),st:stCell(x),vs:vsCell(x),
  d:x.d==null?'–':`<span class=text-semibold>${x.d}%</span><div class="f6 color-fg-muted">${eur(x.r-x.p)} under</div>${bar(x)}`,pf:`<span class="text-semibold ${sgn(x.pf)}">${eur(x.pf)}</span>`,roi:`<span class="${sgn(x.roi)}">${x.roi!=null?Math.round(x.roi)+'%':'–'}</span>`,
  dl:`${Math.round(x.dl)}${x.ld?'':'*'}${x.pd?`<div class=mt-1><span class=Counter>${x.pd}</span> <span class="f6 color-fg-muted">drops</span></div>`:''}`,
  str:`${x.str!=null?x.str+'%':'–'} / ${x.mdts!=null?x.mdts+' d':'–'}`,co:`${esc(x.co||'?')}${x.km!=null?`<div class="f6 color-fg-muted">~${x.km} km</div>`:''}`,
- rk:`${rkHtml(x)}${x.sr!=null?`<div class="f6 color-fg-muted">${x.sr} reviews${x.msn?' · since '+esc(x.msn):''}</div>`:''}`,_:star(x)};
+ rk:`<div class="d-flex flex-wrap">${rkHtml(x)}</div>${x.sr!=null?`<div class="f6 color-fg-muted wb-break-word">${x.sr} reviews${x.msn?' · since '+esc(x.msn):''}</div>`:''}`,_:star(x)};
  return `<tr class=prc-DataTable-TableRow-Icc7F data-j=${j}>${cols.map(k=>TD(k[3],c[k[0]])).join('')}</tr>`}
 const stat=(v,l,cls)=>`<span class="mr-3 mb-1 d-inline-block"><span class="text-semibold ${cls||''}">${v}</span> <span class="color-fg-muted">${l}</span></span>`;
 const zCell=x=>x.z==null?'–':`<span title="${esc(TIP.z)}" class="${x.z<0?'color-fg-success':x.z>0?'color-fg-danger':''}">${x.z>0?'+':''}${x.z} <span class="f6 color-fg-muted">· ${x.nc||0}</span></span>${(x.nc||0)<5?` ${lab('low','attention')}`:''}`;
@@ -174,7 +174,7 @@ function card(x){return `<li class="Box-row px-3 py-2"><div class="d-flex flex-i
 <div class="f6 mt-1">${stat(zCell(x),'z-score')}${stat(csCell(x),'€/day')}${stat(stCell(x),'sold %')}${stat(vsCell(x),'vs typical')}</div>
 <div class="f6 color-fg-muted mt-1">${Math.round(x.dl)}${x.ld?'':'*'} days listed${x.pd?' · '+x.pd+' drop(s)':''}</div>
 <div class=mt-2>${cfHtml(x)}${rkHtml(x)}</div>${compsBtn(x)}</li>`}
-function renderList(){const hasStr=ITEMS.some(x=>x.str||x.mdts),cols=COLS.filter(c=>c[0]!='str'||hasStr);$('dt').style.setProperty('--grid-template-columns',cols.map(c=>c[2]).join(' '));
+function renderList(){const hasStr=ITEMS.some(x=>x.str||x.mdts),cols=COLS.filter(c=>c[0]!='str'||hasStr),dt=$('dt');dt.style.setProperty('--grid-template-columns',cols.map(c=>c[2]).join(' '));dt.style.minWidth=cols.reduce((n,c)=>n+(+((c[2].match(/(\d+)px/)||[])[1]||0)),0)+'px';
  $('th').innerHTML=cols.map(c=>{const on=SORT==c[0],tip=TIP[c[0]]?` title="${esc(TIP[c[0]])}"`:'';return `<th class="prc-DataTable-TableHeader-eyTab min-width-0" scope=col${c[3]?' data-cell-align=end':''}${tip} aria-sort="${on?(ASC?'ascending':'descending'):'none'}">${['_','co','rk','n'].includes(c[0])?c[1]:
   `<button type=button class="Button Button--invisible Button--small" data-k="${c[0]}"${tip} aria-label="Sort by ${c[1]}"><span class=Button-content><span class=Button-label>${c[1]}</span>${on?`<span class="Button-visual Button-trailingVisual">${oc(ASC?'sort-asc':'sort-desc')}</span>`:''}</span></button>`}</th>`}).join('');
  $('tb').innerHTML=view.slice(0,shown).map((x,j)=>row(x,j,cols)).join('');$('cnt').textContent=`${view.length.toLocaleString()} listings match · showing ${Math.min(shown,view.length)}${FULL?'':' · loading full data…'} · * = days since first seen`;$('more').hidden=view.length<=shown;

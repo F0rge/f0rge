@@ -53,6 +53,10 @@ def test_render_is_responsive_and_has_no_toggle(tmp_path):
         assert "__" + "KIND__" not in html and "__OCT_" not in html
         assert "data-viewbtn" not in html and "toggle mobile/desktop" not in html
         assert "<style" not in html
+        # Desktop table scrolls at its column floors; risk badges wrap in the cell. Cards stay as they were.
+        assert "minmax(160px,.45fr)" in html and "dt.style.minWidth" in html
+        assert '<div class="d-flex flex-wrap">${rkHtml(x)}</div>' in html
+        assert "function card(x)" in html and "wb-break-word" in html.split("function card(x)", 1)[0].split("function row", 1)[1]
 
 
 def _insert(c, **k):
