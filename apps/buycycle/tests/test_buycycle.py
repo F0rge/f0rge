@@ -679,7 +679,7 @@ if (matchNote({}) !== 'any year') throw new Error('blank bike');
 
 
 def test_insight_charts_use_one_scale(tmp_path):
-    """Width must not change which rows or model stats the Insights charts plot."""
+    """Chart series come from one filtered set, and the value axis ends one step above the peak."""
     r = subprocess.run(
         [sys.executable, os.path.join(APP, "dashboard", "render.py"), os.path.join(APP, "dashboard", "index.tpl.html"), str(tmp_path)],
         capture_output=True,
@@ -688,18 +688,113 @@ def test_insight_charts_use_one_scale(tmp_path):
     assert r.returncode == 0, r.stderr
     html = (tmp_path / "index-wheels.html").read_text()
     assert "mob?600" not in html and "mob?1000" not in html and "mob?8" not in html
-    assert "max:100" not in html and "m.t.length>=5" in html and "chartGen" in html
+    assert "max:100" not in html and "beginAtZero" not in html and "m.t.length>=5" in html and "chartGen" in html
     assert "if(TAB=='insights')renderCharts()" in html
-    note = next(line for line in html.splitlines() if line.startswith("function niceMax"))
+    assert "const ins=chartInputs(view,M)" in html
+    body = html.split("function chartInputs", 1)[1].split("let chartGen", 1)[0]
+    assert "NARROW" not in body and "matchMedia" not in body
+    filt = html.split("function filt()", 1)[1].split("const strong=", 1)[0]
+    assert "NARROW" not in filt and "matchMedia" not in filt
+    lines = [
+        line
+        for line in html.splitlines()
+        if line.startswith("function niceStep")
+        or line.startswith("function niceMax")
+        or line.startswith("function axisTo")
+        or line.startswith("function chartInputs")
+        or line.startswith(" const fast")
+        or line.startswith(" const sold")
+        or line.startswith(" const ed=")
+        or line.startswith(" const rc=")
+        or line.startswith(" const roi=")
+        or line.startswith(" return {profit:")
+    ]
     script = (
-        note
+        "\n".join(lines)
         + """
-const cases=[[[4],5],[[0.4,1.2,3.9],5],[[100],100],[[0],1],[[6,2],10],[[50],50],[[],1]];
+const cases=[[[4],5],[[0.4,1.2,3.9],4],[[100],110],[[0],1],[[6,2],7],[[6.2],7],[[50],55],[[48],50],[[140],160],[[1200],1400],[[5700],6000],[[],1]];
 for (const [v,want] of cases) if (niceMax(v)!==want) throw new Error(JSON.stringify(v)+' -> '+niceMax(v)+' != '+want);
+const rows=[
+ {b:'Fulcrum',m:'Racing 4',p:800,pf:10,roi:5,cf:'high',d:20,dl:40,rk:[],n:'a',u:'/a'},
+ {b:'Fulcrum',m:'Racing 4',p:700,pf:-5,roi:-2,cf:'low',d:10,dl:3,rk:['thin description'],n:'b',u:'/b'},
+ {b:'Zipp',m:'303',p:900,pf:1,roi:1,cf:'medium',d:null,dl:200,rk:[],n:'c',u:'/c'},
+ {b:'Other',m:'Hidden',p:100,pf:1,roi:1,cf:'high',d:5,dl:40,rk:[],n:'d',u:'/d'}
+];
+const models={
+ 'Fulcrum Racing 4':{dts:13,g30:3,a:10,str:6.2},
+ 'Zipp 303':{dts:95,g30:2,a:4,str:4},
+ 'Slow One':{dts:140,g30:2,a:4,str:48},
+ 'Not In View':{dts:1,g30:9,a:9,str:99}
+};
+const wide=chartInputs(rows, models);
+const narrow=chartInputs(rows.slice(), models);
+if (JSON.stringify(wide)!==JSON.stringify(narrow)) throw new Error('width copies diverged');
+if (wide.fast.map(m=>m[0]+':'+m[1]).join()!=='Fulcrum Racing 4:13,Zipp 303:95') throw new Error('fast '+JSON.stringify(wide.fast));
+if (wide.sell.map(m=>m.join(':')).join()!=='Fulcrum Racing 4:6.2,Zipp 303:4') throw new Error('sell '+JSON.stringify(wide.sell));
+if (wide.sell.some(m=>m[0]==='Not In View'||m[0]==='Slow One')) throw new Error('unfiltered model');
+if (JSON.stringify(wide.days)!==JSON.stringify([1,0,0,2,0,0,1,0])) throw new Error('days '+wide.days);
+if (axisTo(wide.sell.map(m=>m[1])).max!==7) throw new Error('sell axis '+JSON.stringify(axisTo(wide.sell.map(m=>m[1]))));
+if (axisTo([6.2,4,1]).max!==7) throw new Error('tight sell');
+if (wide.discount.length!==3||wide.profit[0].length!==2) throw new Error('scatter '+wide.discount.length+' '+wide.profit[0].length);
 """
     )
     out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
+
+
+def test_desktop_comparables_are_a_full_width_row(tmp_path):
+    """The desktop comparables control adds a spanning row, not a stack inside the Reference cell."""
+    r = subprocess.run(
+        [sys.executable, os.path.join(APP, "dashboard", "render.py"), os.path.join(APP, "dashboard", "index.tpl.html"), str(tmp_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    html = (tmp_path / "index-bikes.html").read_text()
+    assert "compsOpen(x)" in html and "data-cx=" in html and "TableGroupHeaderCell" in html
+    assert "function card" in html and "compsBtn(x)" in html
+    table = html.split("function compTable", 1)[1].split("function toggleComps", 1)[0]
+    assert "This listing" in table and "Condition" in table and "Days listed" in table and "Location" in table
+    assert "Avg ask" not in table and "zCell" not in table and "next up" not in table
+    row = html.split("function row", 1)[1].split("const stat=", 1)[0]
+    assert "compsOpen(x)" in row and "compsBtn(x)" not in row and "<details" not in row
+    card = html.split("function card", 1)[1].split("function renderList", 1)[0]
+    assert "compsBtn(x)" in card
+    lines = []
+    keep = False
+    want = ("function compKey", "function liveGroups", "function liveComps", "function matchNote", "function compList")
+    for line in html.splitlines():
+        if line.startswith(want):
+            keep = True
+        elif line.startswith("function "):
+            keep = False
+        if keep:
+            lines.append(line)
+    script = (
+        "let KIND='wheels';\n"
+        + "\n".join(lines)
+        + """
+const items=[
+ {i:'self',b:'Fulcrum',m:'Racing 4',k:'disc',mt:'carbon',y:2020,p:800,c:'3',dl:40,co:'DE',u:'/self',g:null},
+ {i:'low',b:'Fulcrum',m:'Racing 4',k:'disc',mt:'carbon',y:2024,p:500,c:'4',dl:12,co:'FR',u:'/low',g:null},
+ {i:'high',b:'Fulcrum',m:'Racing 4',k:'disc',mt:'carbon',y:2019,p:1100,c:'2',dl:90,co:'LU',u:'/high',g:null},
+ {i:'other',b:'Fulcrum',m:'Racing 4',k:'rim',mt:'carbon',y:2020,p:100,c:'3',dl:1,co:'BE',u:'/other',g:null},
+ {i:'gone',b:'Fulcrum',m:'Racing 4',k:'disc',mt:'carbon',y:2020,p:50,c:'3',dl:1,co:'DE',u:'/gone',g:'2026-10-01'}
+];
+const got=compList(items, items[0]).map(x=>x.i+':'+x.p+':'+matchNote(x));
+if (got.join()!=='low:500:disc · carbon,self:800:disc · carbon,high:1100:disc · carbon') throw new Error(got.join());
+KIND='bikes';
+const bikes=[
+ {i:'b',b:'Canyon',m:'Ultimate',y:2024,p:2000,u:'/b',g:null},
+ {i:'a',b:'Canyon',m:'Ultimate',y:2023,p:1500,u:'/a',g:null},
+ {i:'far',b:'Canyon',m:'Ultimate',y:2018,p:900,u:'/far',g:null}
+];
+const bg=compList(bikes, bikes[0]).map(x=>x.i);
+if (bg.join()!=='a,b') throw new Error(bg.join());
+"""
+    )
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr + script[:400]
 
 
 def test_no_feed_key_in_source():
