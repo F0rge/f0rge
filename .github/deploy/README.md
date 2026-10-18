@@ -5,7 +5,7 @@ Single source of truth for **which Nx projects deploy where**. The orchestrator
 affected`, and delegates to Railway smoke or Coolify executors.
 
 Marrow ships via **Railway GitHub autodeploy**; Actions only plans + smokes.
-dk tag-printer and buycycle run on Coolify (Pi). Firstout is a **separate Railway
+dk tag-printer, buycycle, and environment-monitor run on Coolify (Pi). Firstout is a **separate Railway
 project** (not Marrow `zoological-fulfillment`),
 **`main` only**. Hosts: `firstout.co.za` /
 `api.firstout.co.za` (Swagger at `/docs`).
@@ -35,6 +35,8 @@ project** (not Marrow `zoological-fulfillment`),
 | `COOLIFY_WEBHOOK_DASKASAS_BACKEND` | dk-tag-printer-backend (Coolify app daskasas-backend) |
 | `COOLIFY_WEBHOOK_DASKASAS_FRONTEND` | dk-tag-printer-frontend (Coolify app daskasas-frontend) |
 | `COOLIFY_WEBHOOK_BUYCYCLE` | buycycle (Pi, internal only; skips while unset) |
+| `COOLIFY_WEBHOOK_ENVMON_BACKEND` | environment-monitor-backend (Pi; skips while unset) |
+| `COOLIFY_WEBHOOK_ENVMON_FRONTEND` | environment-monitor-frontend (Pi; skips while unset) |
 | `SMOKE_EMAIL` / `SMOKE_PASSWORD` | Optional Railway auth smoke |
 
 `FLY_API_TOKEN` is unused after the Railway cutover (safe to delete from GitHub
@@ -42,15 +44,15 @@ secrets after the 48h Fly rollback window).
 
 ## Coolify monorepo settings (per app)
 
-| Field | dk tag printer |
-|-------|----------------|
-| Repo | `F0rge/f0rge` |
-| Branch | `main` |
-| Base directory | `/` |
-| Dockerfile | `apps/dk/tag-printer/backend/Dockerfile` or `.../frontend/Dockerfile` |
-| Watch paths | `apps/dk/tag-printer/backend/**` or `.../frontend/**` |
-| Frontend build-time env | `NEXT_PUBLIC_API_URL=https://tags-api.leo-figueiredo.com` |
-| Backend runtime env | `CORS_ORIGINS=https://tags.leo-figueiredo.com` |
+| Field | dk tag printer | environment-monitor |
+|-------|----------------|---------------------|
+| Repo | `F0rge/f0rge` | `F0rge/f0rge` |
+| Branch | `main` | `main` |
+| Base directory | `/` | `apps/environment-monitor/backend` or `.../frontend` |
+| Dockerfile | `apps/dk/tag-printer/backend/Dockerfile` or `.../frontend/Dockerfile` | `Dockerfile` (relative to that base) |
+| Watch paths | `apps/dk/tag-printer/backend/**` or `.../frontend/**` | `apps/environment-monitor/backend/**` or `.../frontend/**` |
+| Frontend build-time env | `NEXT_PUBLIC_API_URL=https://tags-api.leo-figueiredo.com` | keep existing `BACKEND_URL` |
+| Backend runtime env | `CORS_ORIGINS=https://tags.leo-figueiredo.com` | keep existing `PYTHONUNBUFFERED` (both apps) |
 
 The manual webhook body is one commit (`id`, `added`, `modified`, `removed`)
 from `git diff --name-status` between the deployed SHA and the Coolify base
@@ -64,7 +66,7 @@ only requires this app's entry to say `Deployment queued.`
 Disable Coolify GitHub App auto-deploy on dk apps once Actions webhooks are
 verified — deploy is CI-gated via `deploy-reusable.yml` on `main` push.
 
-Internal-only Coolify components (e.g. `buycycle`, `host: pi`) omit `health_url`:
+Internal-only Coolify components (e.g. `buycycle`, `environment-monitor-*`, `host: pi`) omit `health_url`:
 runners can't reach the Pi, so the job relies on Coolify's `queued` response and
 skips the health smoke. A `TODO…` placeholder `app_uuid` also skips. Buycycle
 cutover: [apps/buycycle/deploy/PI_CUTOVER.md](../../apps/buycycle/deploy/PI_CUTOVER.md).

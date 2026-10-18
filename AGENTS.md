@@ -31,6 +31,10 @@ Deploy configs: `apps/marrow/backend/railway.toml`, `railway.worker.toml`, `rail
 
 Internal buycycle deal-finder dashboards on the Pi (Coolify, ports 8095/8096, no domain). See [apps/buycycle/AGENTS.md](apps/buycycle/AGENTS.md). Public repo: never commit its DBs, data or feed key.
 
+## apps/environment-monitor
+
+Room sensor dashboard on the Pi (Coolify). Backend port 5001, frontend port 5000. SQLite stays `/app/data/readings.db` on volume `environment-monitor_sensor_data`. See [apps/environment-monitor/AGENTS.md](apps/environment-monitor/AGENTS.md). Public repo: never commit the sensor DB, CSV exports, or `.env`.
+
 ## apps/dk (tag printer)
 
 DasKasas price tag tool — stateless FastAPI + Next.js, **no auth, no DB**.

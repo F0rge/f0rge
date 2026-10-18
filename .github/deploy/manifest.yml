@@ -56,6 +56,26 @@ components:
       app_uuid: xi0qwpbyl2d8gf8u3xl13jkv
       webhook_secret_env: COOLIFY_WEBHOOK_BUYCYCLE
 
+  # Environment monitor: Coolify on the Pi. No health_url (runners cannot reach the Pi).
+  # Storage stays the existing volume environment-monitor_sensor_data at /app/data.
+  environment-monitor-backend:
+    nx: environment-monitor-backend
+    target: coolify
+    host: pi
+    branches: [main]
+    coolify:
+      app_uuid: x408g80c0cggs4okgok4cc0o
+      webhook_secret_env: COOLIFY_WEBHOOK_ENVMON_BACKEND
+
+  environment-monitor-frontend:
+    nx: environment-monitor-frontend
+    target: coolify
+    host: pi
+    branches: [main]
+    coolify:
+      app_uuid: zk8s00gk0g88cc08gkswkc44
+      webhook_secret_env: COOLIFY_WEBHOOK_ENVMON_FRONTEND
+
   # Firstout: own Railway project (not zoological-fulfillment).
   # main only (Railway env is named develop but tracks main). Public hosts are firstout.co.za and api.firstout.co.za.
   firstout-backend:
