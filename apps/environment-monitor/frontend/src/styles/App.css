@@ -141,7 +141,19 @@ body {
 }
 
 .range-band {
-  background: color-mix(in srgb, var(--bgColor-success-emphasis) 32%, transparent);
+  /* Opaque mix so the wash stays visible on the translucent track.
+     Dark mode's muted green is much weaker, so the emphasis share goes up. */
+  background: color-mix(in srgb, var(--bgColor-success-emphasis) 34%, var(--bgColor-muted));
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-color-mode="auto"] .range-band {
+    background: color-mix(in srgb, var(--bgColor-success-emphasis) 72%, var(--bgColor-default));
+  }
+}
+
+[data-color-mode="dark"] .range-band {
+  background: color-mix(in srgb, var(--bgColor-success-emphasis) 72%, var(--bgColor-default));
 }
 
 /* The min–max segment sits in the middle of the track so the comfort
@@ -154,7 +166,6 @@ body {
 }
 
 .range-fill--success { background: var(--bgColor-success-emphasis); }
-.range-fill--accent { background: var(--bgColor-accent-emphasis); }
 .range-fill--attention { background: var(--bgColor-attention-emphasis); }
 .range-fill--danger { background: var(--bgColor-danger-emphasis); }
 

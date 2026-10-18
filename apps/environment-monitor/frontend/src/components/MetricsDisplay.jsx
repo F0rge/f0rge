@@ -8,8 +8,8 @@ import {
 import {
   FAR_BEYOND_HUMIDITY_PCT,
   FAR_BEYOND_TEMP_C,
-  HUMIDITY_TRACK,
-  TEMP_TRACK,
+  HUMIDITY_SCALE_PAD,
+  TEMP_SCALE_PAD,
   layoutMetricBar,
 } from '../range-bar';
 
@@ -19,10 +19,10 @@ function edgeLabel(value, unit) {
 }
 
 function RangeBar({
-  min, max, average, comfortMin, comfortMax, far, track, unit, inBandTone,
+  min, max, average, comfortMin, comfortMax, far, pad, unit,
 }) {
   const layout = layoutMetricBar({
-    min, max, average, comfortMin, comfortMax, far, track, inBandTone,
+    min, max, average, comfortMin, comfortMax, far, pad,
   });
   const unitText = unit === '°C' ? '°C' : '%';
   const title = `${min.toFixed(1)}–${max.toFixed(1)}${unitText}, average ${average.toFixed(1)}${unitText}. Comfort ${comfortMin}–${comfortMax}${unitText}. Amber within ${far}${unitText} of the band, red beyond.`;
@@ -95,9 +95,8 @@ function MetricsDisplay({ metrics }) {
           comfortMin={COMFORT_TEMP_MIN}
           comfortMax={COMFORT_TEMP_MAX}
           far={FAR_BEYOND_TEMP_C}
-          track={TEMP_TRACK}
+          pad={TEMP_SCALE_PAD}
           unit="°C"
-          inBandTone="success"
         />
         <div className="f6 color-fg-muted text-mono mt-1">σ ±{metrics.temperature_std_dev.toFixed(2)}° · {trendLabel(metrics.temperature_trend)}</div>
       </div>
@@ -115,9 +114,8 @@ function MetricsDisplay({ metrics }) {
           comfortMin={COMFORT_HUMIDITY_MIN}
           comfortMax={COMFORT_HUMIDITY_MAX}
           far={FAR_BEYOND_HUMIDITY_PCT}
-          track={HUMIDITY_TRACK}
+          pad={HUMIDITY_SCALE_PAD}
           unit="%"
-          inBandTone="accent"
         />
         <div className="f6 color-fg-muted text-mono mt-1">σ ±{metrics.humidity_std_dev.toFixed(2)}% · {trendLabel(metrics.humidity_trend)}</div>
       </div>
