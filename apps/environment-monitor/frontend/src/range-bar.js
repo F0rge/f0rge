@@ -1,22 +1,23 @@
 // Geometry for the metric range bars. Comfort edges come from comfort.js
 // (the same 20–24°C and 40–60% the Comfort % uses). "Far" is a fixed step
-// past those edges: 3°C or 10 percentage points.
+// past those edges: 3°C or 10 percentage points. In-band is one colour for
+// both metrics; amber and red are only the parts outside the band.
 
 export const FAR_BEYOND_TEMP_C = 3;
 export const FAR_BEYOND_HUMIDITY_PCT = 10;
 
-// Fixed tracks, wide enough that the comfort band and the amber margin on
-// either side both sit on the bar. The domain grows only when this period's
-// readings fall outside.
-export const TEMP_TRACK = { min: 15, max: 35 };
-export const HUMIDITY_TRACK = { min: 20, max: 80 };
+// Room on either side of the comfort band and this period's min/max.
+// A fixed 15–35°C track turned a 2° spread into a sliver.
+export const TEMP_SCALE_PAD = 1;
+export const HUMIDITY_SCALE_PAD = 3;
 
+const IN_BAND_TONE = 'success';
 const MIN_PIECE_PCT = 0.8;
 
-export function domainFor(track, dataMin, dataMax) {
-  const min = Math.min(track.min, dataMin);
-  const max = Math.max(track.max, dataMax);
-  if (!(max > min)) return { min: track.min, max: track.max };
+export function domainFor(comfortMin, comfortMax, dataMin, dataMax, pad) {
+  const min = Math.min(comfortMin, dataMin) - pad;
+  const max = Math.max(comfortMax, dataMax) + pad;
+  if (!(max > min)) return { min: comfortMin - pad, max: comfortMax + pad };
   return { min, max };
 }
 
@@ -27,14 +28,14 @@ export function percentAlong(value, domain) {
   return Math.min(100, Math.max(0, pct));
 }
 
-// Amber within `far` of the band, red beyond that, `inBandTone` inside.
-export function toneAt(value, comfortMin, comfortMax, far, inBandTone) {
+// Amber within `far` of the band, red beyond that, success inside.
+export function toneAt(value, comfortMin, comfortMax, far) {
   if (value < comfortMin - far || value > comfortMax + far) return 'danger';
   if (value < comfortMin || value > comfortMax) return 'attention';
-  return inBandTone;
+  return IN_BAND_TONE;
 }
 
-export function spanPieces(min, max, comfortMin, comfortMax, far, inBandTone) {
+export function spanPieces(min, max, comfortMin, comfortMax, far) {
   const lo = Math.min(min, max);
   const hi = Math.max(min, max);
   const cuts = [comfortMin - far, comfortMin, comfortMax, comfortMax + far]
@@ -49,27 +50,33 @@ export function spanPieces(min, max, comfortMin, comfortMax, far, inBandTone) {
     pieces.push({
       from,
       to,
-      tone: toneAt((from + to) / 2, comfortMin, comfortMax, far, inBandTone),
+      tone: toneAt((from + to) / 2, comfortMin, comfortMax, far),
     });
   }
   if (pieces.length === 0) {
     pieces.push({
       from: lo,
       to: hi,
-      tone: toneAt(lo, comfortMin, comfortMax, far, inBandTone),
+      tone: toneAt(lo, comfortMin, comfortMax, far),
     });
   }
   return pieces;
 }
 
 export function layoutMetricBar({
-  min, max, average, comfortMin, comfortMax, far, track, inBandTone,
+  min, max, average, comfortMin, comfortMax, far, pad,
 }) {
   const lo = Math.min(min, max);
   const hi = Math.max(min, max);
-  const domain = domainFor(track, Math.min(lo, average), Math.max(hi, average));
+  const domain = domainFor(
+    comfortMin,
+    comfortMax,
+    Math.min(lo, average),
+    Math.max(hi, average),
+    pad,
+  );
   const toPct = (value) => percentAlong(value, domain);
-  const pieces = spanPieces(lo, hi, comfortMin, comfortMax, far, inBandTone).map((piece) => ({
+  const pieces = spanPieces(lo, hi, comfortMin, comfortMax, far).map((piece) => ({
     left: toPct(piece.from),
     width: Math.max(0, toPct(piece.to) - toPct(piece.from)),
     tone: piece.tone,
