@@ -5,7 +5,7 @@ from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from app.models.location_bin import BinStock, LocationBin
 from f0rge_db.crud import BaseCRUD
@@ -126,7 +126,8 @@ class BinStockCRUD(BaseCRUD):
             return []
         result = await self.db.execute(
             select(BinStock)
-            .options(selectinload(BinStock.bin))
+            .options(joinedload(BinStock.bin))
             .where(BinStock.sku_id.in_(sku_ids), BinStock.on_hand > 0)
+            .execution_options(populate_existing=True)
         )
-        return list(result.scalars().all())
+        return list(result.unique().scalars().all())

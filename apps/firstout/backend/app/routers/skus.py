@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import Optional, Union
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import Response
 
 from app.dependencies.auth import (
@@ -12,7 +12,7 @@ from app.dependencies.auth import (
     get_sku_service,
     require_catalogue_mutate,
 )
-from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
+from app.schemas.sku import SkuCreate, SkuListPage, SkuResponse, SkuUnitCostPage, SkuUpdate
 from app.schemas.sku_bom import SkuBomLineResponse, SkuBomReplace
 from app.services.sku_bom import SkuBomService
 from app.services.skus import SkuService
@@ -20,13 +20,30 @@ from app.services.skus import SkuService
 skus_router = APIRouter(prefix="/api/v1/skus", tags=["skus"])
 
 
-@skus_router.get("", response_model=list[SkuResponse])
+@skus_router.get("", response_model=Union[list[SkuResponse], SkuListPage])
 async def list_skus(
     category: Optional[str] = None,
+    limit: Optional[int] = Query(default=None, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    q: Optional[str] = None,
     user_id: uuid.UUID = Depends(get_current_user_id),
     service: SkuService = Depends(get_sku_service),
 ):
-    return await service.list(category, user_id)
+    return await service.list(category, user_id, limit=limit, offset=offset, q=q)
+
+
+@skus_router.get("/unit-costs", response_model=SkuUnitCostPage)
+async def list_sku_unit_costs(
+    category: Optional[str] = None,
+    limit: Optional[int] = Query(default=None, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    q: Optional[str] = None,
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    service: SkuService = Depends(get_sku_service),
+):
+    return await service.list_unit_costs(
+        user_id, category=category, q=q, limit=limit, offset=offset
+    )
 
 
 @skus_router.post("", response_model=SkuResponse, status_code=status.HTTP_201_CREATED)

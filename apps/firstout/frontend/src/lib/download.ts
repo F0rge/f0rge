@@ -19,13 +19,20 @@ export async function downloadApiFile(
   fallbackFilename: string,
   mode: "save" | "open" = "save",
 ): Promise<void> {
-  const { ApiError, parseErrorMessage } = await import("./api");
+  const { ApiError, callName, formatHttpError, parseErrorMessage } = await import("./api");
   const response = await fetch(path, { credentials: "include" });
+  const call = callName("GET", path);
   if (!response.ok) {
-    throw new ApiError(response.status, await parseErrorMessage(response));
+    throw new ApiError(
+      response.status,
+      formatHttpError(call, response.status, response.statusText, await parseErrorMessage(response)),
+    );
   }
   if (isErrorDocument(response.headers.get("Content-Type"))) {
-    throw new ApiError(response.status, await parseErrorMessage(response));
+    throw new ApiError(
+      response.status,
+      formatHttpError(call, response.status, response.statusText, await parseErrorMessage(response)),
+    );
   }
 
   const filename = filenameFromDisposition(

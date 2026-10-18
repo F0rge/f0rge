@@ -98,3 +98,19 @@ class SkuResponse(BaseModel):
     updated_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SkuUnitCostItem(BaseModel):
+    sku_id: uuid.UUID
+    unit_cost_zar: Optional[Decimal] = None
+
+
+class SkuUnitCostPage(BaseModel):
+    items: list[SkuUnitCostItem]
+    total: int = Field(ge=0)
+
+
+class SkuListPage(BaseModel):
+    items: list[SkuResponse]
+    total: int = Field(ge=0)
+    categories: list[str]

@@ -20,6 +20,7 @@ from app.exceptions import (
 from app.config import settings
 from app.database import async_session_maker
 from app.middleware.auth import AuthContextMiddleware
+from app.middleware.slow_request import SlowRequestMiddleware
 from app.routers import (
     records,
     accounts,
@@ -170,6 +171,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(AuthContextMiddleware)
+app.add_middleware(SlowRequestMiddleware)
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router)

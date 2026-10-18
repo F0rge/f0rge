@@ -4,7 +4,7 @@ import asyncio
 import datetime
 import uuid
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import UploadFile
 from fastapi.responses import RedirectResponse, Response
@@ -20,7 +20,15 @@ from app.models.sku import Sku
 from app.models.unit_cost_audit import UnitCostAuditSource
 from app.permissions import STOCK_COST_VIEW
 from app.services.permissions import PermissionService
-from app.schemas.sku import SkuCreate, SkuResponse, SkuUpdate
+from app.schemas.sku import (
+    SkuCreate,
+    SkuListPage,
+    SkuResponse,
+    SkuUnitCostItem,
+    SkuUnitCostPage,
+    SkuUpdate,
+)
+from app.services.inventory import InventoryService
 from app.services.stock_movements import StockMovementService
 from app.services.vat import inc_to_ex, inc_vat_or_none, validate_non_negative_price
 from app.services.object_storage import (
@@ -34,6 +42,13 @@ from f0rge_db.crud import unit_of_work
 from f0rge_storage.images import resize_image
 
 
+def _blank_to_none(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
 class SkuService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -45,10 +60,49 @@ class SkuService:
         self.stock_movements = StockMovementService(db)
 
     async def list(
-        self, category: Optional[str] = None, user_id: Optional[uuid.UUID] = None
-    ) -> list[SkuResponse]:
-        skus = await self.crud.list_all(category=category)
-        return await self._to_responses(skus, user_id)
+        self,
+        category: Optional[str] = None,
+        user_id: Optional[uuid.UUID] = None,
+        *,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        q: Optional[str] = None,
+    ) -> Union[list[SkuResponse], SkuListPage]:
+        category = _blank_to_none(category)
+        q = _blank_to_none(q)
+        if limit is None:
+            skus = await self.crud.list_all(category=category, q=q)
+            return await self._to_responses(skus, user_id)
+        skus, total = await self.crud.list_filtered(
+            category=category, q=q, limit=limit, offset=offset
+        )
+        return SkuListPage(
+            items=await self._to_responses(skus, user_id),
+            total=total,
+            categories=await self.crud.list_categories(),
+        )
+
+    async def list_unit_costs(
+        self,
+        user_id: Optional[uuid.UUID] = None,
+        *,
+        category: Optional[str] = None,
+        q: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> SkuUnitCostPage:
+        category = _blank_to_none(category)
+        q = _blank_to_none(q)
+        skus, total = await self.crud.list_filtered(
+            category=category, q=q, limit=limit, offset=offset
+        )
+        costs = await InventoryService(self.db).unit_costs_by_sku_id(
+            [sku.id for sku in skus], user_id
+        )
+        return SkuUnitCostPage(
+            items=[SkuUnitCostItem(sku_id=sku.id, unit_cost_zar=costs.get(sku.id)) for sku in skus],
+            total=total,
+        )
 
     async def get(self, sku_id: uuid.UUID, user_id: Optional[uuid.UUID] = None) -> SkuResponse:
         sku = await self.crud.get_by_id(sku_id)

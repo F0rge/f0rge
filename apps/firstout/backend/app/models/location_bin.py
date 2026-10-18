@@ -97,6 +97,7 @@ class BinStock(UUIDPkMixin, TimestampMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("sku_id", "bin_id", name="uq_bin_stock_sku_bin"),
+        Index("ix_bin_stock_sku_id", "sku_id"),
         CheckConstraint("on_hand >= 0", name="ck_bin_stock_on_hand"),
     )
 
