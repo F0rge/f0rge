@@ -691,6 +691,8 @@ def test_insight_charts_use_one_scale(tmp_path):
     assert "max:100" not in html and "beginAtZero" not in html and "m.t.length>=5" in html and "chartGen" in html
     assert "if(TAB=='insights')renderCharts()" in html
     assert "const ins=chartInputs(view,M)" in html
+    assert "Chart.defaults.animation=false" in html and "animation:false" in html and "max:niceMax(rois)" in html
+    assert "minmax(96px,1.1fr)" in html and 'style="display:block"' in html
     body = html.split("function chartInputs", 1)[1].split("let chartGen", 1)[0]
     assert "NARROW" not in body and "matchMedia" not in body
     filt = html.split("function filt()", 1)[1].split("const strong=", 1)[0]
