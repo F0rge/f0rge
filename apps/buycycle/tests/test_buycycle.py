@@ -177,7 +177,9 @@ def test_dashboard_columns_sort_zero_comps_last(tmp_path):
         assert "avg ask" in html and "comps" in html
         assert "['z','Z-score'" in html and "['cs','€/day cut'" in html and "['st','Sold within 30d'" in html and "['vs','Days vs typical'" in html
         assert "Min z-score" in html and "Min €/day cut" in html and "Min sold %" in html and "Max days vs typical" in html
-        assert "standard deviation" in html and "no price history" in html and "fewer than 5" in html
+        assert "standard deviation" in html and "fewer than 5" in html
+        assert "no price history" in html and "highest daily snapshot" in html
+        assert "of history" in html and "active · ${m.runs.length} snapshot(s) · updated" in html
         assert "z-score" in html and "€/day" in html and "sold %" in html and "vs typical" in html
         assert "Flex score" not in html and "['flex','Flex'" not in html and "days listed · flex" not in html
         assert "price reduced" in html and "Dropped (history or vs original)" in html
@@ -415,6 +417,79 @@ def test_market_metrics_on_prod_shaped_rows(tmp_path, monkeypatch):
     got = {x["i"]: x["z"] for x in json.loads(out.stdout)}
     assert got["a1"] == wheels["a1"]["z"]
     assert got["flat0"] is None and got["pair1"] is None
+
+
+def test_cut_speed_counts_a_snapshot_drop_the_original_price_hides(tmp_path, monkeypatch):
+    """Syncros Capital SL: ask €2,200, original €2,200, one snapshot drop, 205 days listed. The old start price ignored that drop and showed 0."""
+    import storage
+    import tracker
+
+    now = 1_800_000_000
+    monkeypatch.setattr(tracker.time, "time", lambda: now)
+    monkeypatch.setitem(tracker.OUT, "wheels", str(tmp_path / "wheels"))
+    monkeypatch.setitem(tracker.OUT, "bikes", str(tmp_path / "bikes"))
+    c = storage.connect(str(tmp_path / "cut.turso.db"))
+    disc = json.dumps({"spec": {"wheel-type": "1372", "complete-wheels-brakes-type": "1430", "rim-material": "1433"}})
+    today = "2026-10-17"
+    _prod_listing(
+        c,
+        id="syncros",
+        kind="wheels",
+        name="Syncros Capital SL 40 mm",
+        brand="Syncros",
+        price=2200,
+        original=2200,
+        spec=disc,
+        first_seen="2026-03-26",
+    )
+    _prod_listing(
+        c,
+        id="mid",
+        kind="wheels",
+        name="Zipp 353 NSW",
+        brand="Zipp",
+        price=2200,
+        original=2200,
+        spec=disc,
+        first_seen="2026-08-01",
+    )
+    _prod_listing(
+        c,
+        id="bsync",
+        kind="bikes",
+        name="Canyon Aeroad CF",
+        brand="Canyon",
+        year=2024,
+        price=1500,
+        original=1500,
+        first_seen="2026-08-01",
+    )
+    c.execute("update listing set pr=1, activated_at=? where id='syncros'", (now - 205 * 86400,))
+    c.executemany(
+        "insert into price_history values(?,?,?)",
+        [
+            ("syncros", "2026-03-26", 2800),
+            ("syncros", "2026-10-17", 2200),
+            ("mid", "2026-08-01", 2200),
+            ("mid", "2026-09-01", 2600),
+            ("mid", "2026-10-17", 2200),
+            ("bsync", "2026-08-01", 2000),
+            ("bsync", "2026-10-17", 1500),
+        ],
+    )
+    c.commit()
+    wheels = {x["i"]: x for x in tracker.build(c, "wheels", today)}
+    bikes = {x["i"]: x for x in tracker.build(c, "bikes", today)}
+    sync = wheels["syncros"]
+    assert sync["p"] == 2200 and sync["op"] == 2200 and sync["pr"] == 1
+    assert sync["pd"] == 1 and sync["dl"] == 205 and sync["hs"] == 2
+    assert sync["cs"] == round(600 / 205, 2)
+    mid = wheels["mid"]
+    assert mid["pd"] == 1 and mid["hs"] == 3 and mid["cs"] == round(400 / mid["dl"], 2) and mid["cs"] > 0
+    bike = bikes["bsync"]
+    assert bike["hs"] == 2 and bike["cs"] == round(500 / bike["dl"], 2) and bike["cs"] > 0
+    doc = json.loads((tmp_path / "wheels" / "data.json").read_text())
+    assert doc["cols"].index("hs") == doc["cols"].index("g") + 1
 
 
 def _nx_cell_js():
