@@ -8,7 +8,7 @@ tool and no schema-dump resources. The registered surface is pinned by
 `tests/test_mcp_surface.py::test_registered_tool_names`; update that test, this file, and the
 day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added or removed.
 
-## Tools (22)
+## Tools (23)
 
 | Area | Tool | Kind | Notes |
 | --- | --- | --- | --- |
@@ -18,8 +18,9 @@ day-map resource (`app/mcp/resources/day_map.py`) together when a tool is added 
 | Days | `log_flare(date, key, severity, time?)` | write | Timed symptom event (+ `symptoms_json`) |
 | Supplements | `list_supplements(include_archived=False)` | read | Per-user supplement catalog (keys for `set_supplements`) |
 | Supplements | `set_supplements(keys, date?, mode='replace')` | write | `replace` / `add` / `remove` the day's supplement keys |
-| Meals | `get_meal(photo_id)` | read | Ingredients, tags, photo metadata |
-| Meals | `log_meal(date, name, meal_time?, ingredients?, photo_base64?)` | write | No background vision; `ingredients` = decomposed, catalogue-named list; returns per-ingredient match status (see below) |
+| Meals | `get_meal(photo_id)` | read | Ingredients, tags, photo metadata. `photo_sha256` is set when `original_filename` starts with `sha256:`; `photo_created_at` is the placement timestamp |
+| Meals | `log_meal(date, name, meal_time?, ingredients?, photo_base64?, source_photo_id?, allow_duplicate=false)` | write | No background vision; `ingredients` = decomposed, catalogue-named list; returns per-ingredient match status (see below). `photo_base64` and `source_photo_id` are mutually exclusive. Same-day repeat of the same image returns the existing meal with `deduplicated: true` unless `allow_duplicate` |
+| Meals | `attach_meal_photo(photo_id, photo_base64?, source_photo_id?, replace=false)` | write | Attach or replace the image on an existing meal. Exactly one of `photo_base64` or `source_photo_id`. Returns `photo_id`, `meal_id`, `has_photo`, `photo_sha256`, `replaced` |
 | Meals | `edit_meal(photo_id, name?, meal_time?)` | write | Name/time only; ingredients via `set_ingredients` |
 | Meals | `search_ingredients(query, limit=10)` | read | Ranked lookup in the caller's active catalogue: canonical name, match type, score, flags |
 | Meals | `set_ingredients(photo_id, ingredients)` | write | Atomically replaces the ingredient list (all or nothing); returns per-ingredient match status |
@@ -85,6 +86,17 @@ Clients should:
    ingredients, from the pack's ingredient list or photo.
 3. Call `search_ingredients` per ingredient and use the catalogue's exact `canonical_name`.
 4. Not invent ingredients; say which were inferred.
+
+## Meal photos
+
+`log_meal` accepts `photo_base64` (JPEG/PNG/WebP/HEIC; the server converts to JPEG at most 2048px, max 25 MB) or `source_photo_id` to copy another meal's image into a new meal (ingredients come from the call). A same-day retry of the same bytes returns the existing meal (`deduplicated: true`, same `photo_id`) unless `allow_duplicate` is true. `attach_meal_photo` sets the image on a meal that was logged without one, or replaces it when `replace` is true. The hash of the supplied bytes is `sha256:<hex>` on `original_filename` and in `photo_sha256`. Files are copied, never shared.
+
+Agent recipe:
+
+1. Image = the path in the chat message, else the newest jpg/png/webp/heic in `/home/box/agent-data/agents/<self-id>/attachments/` modified in the last 15 min.
+2. `base64 -w0 "$IMG" > /workspace/tmp/meal-<sha>.b64` (no resizing).
+3. `log_meal(..., photo_base64="$file:/workspace/tmp/meal-<sha>.b64")`; if `has_photo` is false, call `attach_meal_photo(photo_id, photo_base64="$file:...")`; delete the `.b64`.
+4. Reuse: `log_meal(..., source_photo_id=790)` or `attach_meal_photo(742, source_photo_id=790)`.
 
 Catalogue rows are per user and copied from the reference user at signup
 (`copy_user_catalog_from_reference`); gap-fill rows added later reach existing users through an
