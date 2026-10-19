@@ -9,7 +9,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -19,7 +18,6 @@ import { TourTooltip } from "@/components/tour/tour-tooltip";
 import { buildJoyrideSteps } from "@/lib/tour-navigation";
 import { OVERVIEW_STEPS, pageTourForPath } from "@/lib/tour-steps";
 import {
-  readPageTourCompletion,
   writeOverviewCompletion,
   writePageTourCompletion,
   type TourCompletion,
@@ -55,8 +53,6 @@ export function TourProvider({ userId, children }: TourProviderProps) {
   const [mode, setMode] = useState<TourMode>("page");
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
-  const holdAutoRef = useRef(false);
-  const suppressAutoUntilRef = useRef(0);
 
   const definitions = useMemo(
     () => (mode === "overview" ? OVERVIEW_STEPS : (pageTour?.steps ?? [])),
@@ -71,7 +67,6 @@ export function TourProvider({ userId, children }: TourProviderProps) {
     (completion: TourCompletion) => {
       if (mode === "overview") {
         writeOverviewCompletion(userId, completion);
-        suppressAutoUntilRef.current = Date.now() + 2000;
       } else if (pageTour) {
         writePageTourCompletion(userId, pageTour.id, completion);
       }
@@ -148,15 +143,11 @@ export function TourProvider({ userId, children }: TourProviderProps) {
   });
 
   const begin = useCallback((next: TourMode) => {
-    holdAutoRef.current = true;
     setMode(next);
     setStepIndex(0);
     setRun(false);
     window.setTimeout(() => {
       setRun(true);
-      window.setTimeout(() => {
-        holdAutoRef.current = false;
-      }, 0);
     }, 0);
   }, []);
 
@@ -185,27 +176,6 @@ export function TourProvider({ userId, children }: TourProviderProps) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [controls, run]);
-
-  useEffect(() => {
-    if (holdAutoRef.current || run) {
-      return;
-    }
-    if (Date.now() < suppressAutoUntilRef.current) {
-      return;
-    }
-    if (!pageTour) {
-      return;
-    }
-    if (readPageTourCompletion(userId, pageTour.id)) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      setMode("page");
-      setStepIndex(0);
-      setRun(true);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [pageTour, pathname, run, userId]);
 
   const value = useMemo(
     () => ({

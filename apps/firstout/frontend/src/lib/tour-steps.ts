@@ -1,6 +1,6 @@
 /**
  * Page tours teach the task on the current screen.
- * The overview is the long walk across the shop and is started on purpose.
+ * Nothing starts on its own. The question mark opens this page, and Overview walks the shop.
  * Steps spotlight the control you use. They do not retarget the page heading.
  */
 
