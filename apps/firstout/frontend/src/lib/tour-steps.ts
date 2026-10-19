@@ -1,6 +1,6 @@
 /**
  * Page tours teach the task on the current screen.
- * The overview is the long walk across the shop and is started on purpose.
+ * They start only when someone clicks the question mark in the header.
  * Steps spotlight the control you use. They do not retarget the page heading.
  */
 
@@ -424,7 +424,13 @@ export const PAGE_TOURS: PageTour[] = [
     steps: [
       step("profile-name", "Your name", "This name shows in the header.", "#profile-display-name"),
       step("profile-save", "Save", "Save profile changes.", "[data-tour='profile-save']"),
-      step("profile-tours", "Tours", "Replay this page, or start the full shop overview.", "[data-tour='profile-tours']"),
+      step(
+        "profile-replay",
+        "This page again",
+        "The question mark in the header restarts this page's tour.",
+        "[data-tour='header-page-tour']",
+        { isFixed: true },
+      ),
     ],
   },
   {
@@ -436,52 +442,6 @@ export const PAGE_TOURS: PageTour[] = [
       step("settings-save", "Save", "Save settings.", "[data-tour='settings-save']", { placement: "top" }),
     ],
   },
-];
-
-export const OVERVIEW_STEPS: TourStepDefinition[] = [
-  step("overview-home", "Home", "Start stock, a count, an adjustment, import, a layby, or a return.", "[data-tour='home-actions']", { route: "/", exact: true }),
-  step("overview-nav", "Sections", "Catalogue, stock, warehouse, till, sales, and books are in this rail.", ".firstout-side-nav", {
-    route: "/",
-    exact: true,
-    placement: "right",
-    isFixed: true,
-    expandNav: true,
-  }),
-  step("overview-search", "Search", "Search SKUs, purchase orders, and invoices.", "[data-tour='header-search']", {
-    route: "/",
-    exact: true,
-    isFixed: true,
-  }),
-  step("overview-catalogue", "Catalogue", "Create a SKU.", "[data-tour='catalogue-new']", { route: "/catalogue", exact: true }),
-  step("overview-sku", "SKU", "Name it, set the category and retail price, then save.", "#new-sku-name", { route: "/catalogue/new", exact: true }),
-  step("overview-count-location", "Stocktake", "Choose the location you are counting.", "#stocktake-location", { route: "/stocktakes", exact: true }),
-  step("overview-count-start", "Start the count", "Start the count. That location stays locked until you post.", "[data-tour='stocktake-start']", { route: "/stocktakes", exact: true }),
-  step("overview-po", "Purchase order", "Raise a purchase order.", "[data-tour='po-new']", { route: "/purchase-orders", exact: true }),
-  step("overview-supplier", "Supplier", "Choose the supplier.", "#po-supplier", { route: "/purchase-orders", exact: true, ...modal("[data-tour='po-new']") }),
-  step("overview-till", "Till", "Scan our barcode to sell.", "#till-scan", { route: "/till", exact: true }),
-  step("overview-layby", "Layby", "Start a layby.", "[data-tour='layby-new']", { route: "/laybys", exact: true }),
-  step("overview-layby-customer", "Layby customer", "Choose the customer who is reserving the item.", "#layby-customer", {
-    route: "/laybys",
-    exact: true,
-    ...modal("[data-tour='layby-new']"),
-  }),
-  step("overview-layby-save", "Confirm layby", "Confirm the layby and print the receipt.", MODAL_SAVE, {
-    route: "/laybys",
-    exact: true,
-    ...modal("[data-tour='layby-new']", "top"),
-  }),
-  step("overview-customer", "Customer", "Add a customer.", "[data-tour='customer-new']", { route: "/customers", exact: true }),
-  step("overview-customer-name", "Customer name", "Enter the name, then save.", "#create-customer-name", {
-    route: "/customers",
-    exact: true,
-    ...modal("[data-tour='customer-new']"),
-  }),
-  step("overview-invoice", "Invoice", "Create a tax invoice.", "[data-tour='invoice-new']", { route: "/invoices", exact: true }),
-  step("overview-settings", "Settings", "The legal name prints on tax invoices.", "#legal-name", { route: "/settings", exact: true }),
-  step("overview-replay", "Overview again", "This restarts the full shop tour. The question mark is only this page.", "[data-tour='header-overview-tour']", {
-    placement: "bottom",
-    isFixed: true,
-  }),
 ];
 
 export function pageTourForPath(pathname: string): PageTour | null {

@@ -1,4 +1,4 @@
-/** Per-user tour completion in this browser. v2 so the page/overview split shows once. */
+/** Per-user page-tour completion in this browser. Tours never start from this record. */
 export const TOUR_STORAGE_PREFIX = "firstout-tour-v2:";
 
 export type TourCompletion = "completed" | "skipped";
@@ -21,10 +21,6 @@ function browserStore(): TourStore | null {
 
 export function pageTourStorageKey(userId: string, tourId: string): string {
   return `${TOUR_STORAGE_PREFIX}page:${userId}:${tourId}`;
-}
-
-export function overviewStorageKey(userId: string): string {
-  return `${TOUR_STORAGE_PREFIX}overview:${userId}`;
 }
 
 function readCompletion(key: string, store?: TourStore | null): TourCompletion | null {
@@ -76,22 +72,4 @@ export function writePageTourCompletion(
     return;
   }
   writeCompletion(pageTourStorageKey(userId, tourId), completion, store);
-}
-
-export function readOverviewCompletion(userId: string, store?: TourStore | null): TourCompletion | null {
-  if (!userId) {
-    return null;
-  }
-  return readCompletion(overviewStorageKey(userId), store);
-}
-
-export function writeOverviewCompletion(
-  userId: string,
-  completion: TourCompletion,
-  store?: TourStore | null,
-): void {
-  if (!userId) {
-    return;
-  }
-  writeCompletion(overviewStorageKey(userId), completion, store);
 }
