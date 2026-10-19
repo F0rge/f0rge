@@ -43,6 +43,7 @@ def test_registered_tool_names() -> None:
     t_mod.register_tools(server)
     names = {t.name for t in server._tool_manager.list_tools()}
     assert names == {
+        "attach_meal_photo",
         "delete_meal",
         "edit_meal",
         "get_day",
