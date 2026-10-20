@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.models.account import Account, AccountType, TaxTreatment
-from app.models.bank_import import BankImport, BankImportLine
+from app.models.bank_import import BankImport, BankImportLine, BankImportLineAllocation
 from app.models.books_period import BooksPeriod, BooksPeriodStatus
 from app.models.bank_rule import BankRule
 from app.models.bill import Bill, BillLine
@@ -115,6 +115,7 @@ __all__ = [
     "AccountType",
     "BankImport",
     "BankImportLine",
+    "BankImportLineAllocation",
     "BankRule",
     "BooksPeriod",
     "BooksPeriodStatus",
