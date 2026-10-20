@@ -173,7 +173,12 @@ export default function ProformasPage() {
           <p className="cds--type-body-01">Proforma invoices filed against suppliers.</p>
         </div>
         {canMutate ? (
-          <Button onClick={openCreate}>File proforma invoice</Button>
+          <div style={{ display: "flex", gap: "0.75rem" }}>
+            <Button kind="secondary" href="/proformas/read">
+              Read a proforma
+            </Button>
+            <Button onClick={openCreate}>File proforma invoice</Button>
+          </div>
         ) : null}
       </div>
 

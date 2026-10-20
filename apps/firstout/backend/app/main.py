@@ -15,6 +15,7 @@ from app.exceptions import (
     CommsEncryptionUnconfiguredError,
     CommsSmtpFailedError,
     CommsSmtpUnconfiguredError,
+    DocumentLlmUnconfiguredError,
     ForbiddenError,
     NiaCapExceededError,
     NiaLlmUnconfiguredError,
@@ -41,6 +42,7 @@ from app.routers import (
     credit_notes,
     customers,
     deliveries,
+    document_intake,
     health,
     home,
     invoices,
@@ -193,7 +195,19 @@ async def _comms_smtp_failed_handler(_: Request, exc: Exception) -> JSONResponse
     )
 
 
+async def _document_llm_unconfigured_handler(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, DocumentLlmUnconfiguredError)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": {"code": exc.detail}},
+    )
+
+
 app.add_exception_handler(ForbiddenError, cast(ExceptionHandler, _forbidden_handler))
+app.add_exception_handler(
+    DocumentLlmUnconfiguredError,
+    cast(ExceptionHandler, _document_llm_unconfigured_handler),
+)
 app.add_exception_handler(
     NiaLlmUnconfiguredError,
     cast(ExceptionHandler, _nia_llm_unconfigured_handler),
@@ -233,6 +247,7 @@ app.include_router(locations.locations_router)
 app.include_router(suppliers.suppliers_router)
 app.include_router(price_lists.price_lists_router)
 app.include_router(proformas.proformas_router)
+app.include_router(document_intake.document_intake_router)
 app.include_router(skus.skus_router)
 app.include_router(product_groups.router)
 app.include_router(ops_commerce.router)

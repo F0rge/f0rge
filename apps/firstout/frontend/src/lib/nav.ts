@@ -101,7 +101,7 @@ export function isCatalogueMenuPath(pathname: string): boolean {
   if (CATALOGUE_HREFS.has(pathname)) {
     return true;
   }
-  return pathname.startsWith("/catalogue/");
+  return pathname.startsWith("/catalogue/") || pathname.startsWith("/proformas/");
 }
 
 export function isWarehousePath(pathname: string): boolean {
@@ -173,6 +173,9 @@ export function isNavLinkActive(pathname: string, href: string): boolean {
     return true;
   }
   if (href === "/purchase-orders" && pathname.startsWith("/purchase-orders/")) {
+    return true;
+  }
+  if (href === "/proformas" && pathname.startsWith("/proformas/")) {
     return true;
   }
   if (href === "/catalogue" && pathname.startsWith("/catalogue/")) {

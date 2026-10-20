@@ -7,6 +7,13 @@ class ForbiddenError(DomainError):
     """Caller lacks a required permission. Mapped to HTTP 403."""
 
 
+class DocumentLlmUnconfiguredError(DomainError):
+    """OpenRouter key missing for supplier-document reading. HTTP 503."""
+
+    def __init__(self) -> None:
+        super().__init__("document_llm_unconfigured")
+
+
 class NiaLlmUnconfiguredError(DomainError):
     """OpenRouter key missing. Mapped to HTTP 503 with code nia_llm_unconfigured."""
 
