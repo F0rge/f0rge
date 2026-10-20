@@ -1,7 +1,10 @@
 """Supplier VAT/address already landed. Invoice match columns.
 
-Revision ID: 064_supplier_invoice_match
-Revises: 063_supplier_document_intake
+Revision ID: 066_supplier_invoice_match
+Revises: 065_supplier_document_intake
+
+Ordering: revises 065_supplier_document_intake, which itself revises 062.
+It does not follow 063_customer_search or 064_warehouse_sales_quotes.
 
 Links a posted supplier bill to the purchase order it was checked against,
 stops the same supplier invoice number being filed twice, and stores the
@@ -16,8 +19,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "064_supplier_invoice_match"
-down_revision: Union[str, Sequence[str], None] = "063_supplier_document_intake"
+revision: str = "066_supplier_invoice_match"
+down_revision: Union[str, Sequence[str], None] = "065_supplier_document_intake"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
