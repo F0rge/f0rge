@@ -190,18 +190,16 @@ class DocumentIntakeService:
         kept = [line for line in data.lines if not line.skip]
         if not kept:
             raise ValidationError("Keep at least one line on the purchase order.")
-        sku_ids = [line.sku_id for line in kept]
-        if any(sku_id is None for sku_id in sku_ids):
-            raise ValidationError(
-                "Every kept line needs a SKU. Create one, link one, or skip the line."
-            )
+        sku_ids = [line.sku_id for line in kept if line.sku_id is not None]
         if len(set(sku_ids)) != len(sku_ids):
             raise ValidationError("Two lines point at the same SKU. Combine them or skip one.")
         for line in kept:
-            assert line.sku_id is not None
+            if line.sku_id is None:
+                continue
             sku = await self.sku_crud.get_by_id(line.sku_id)
             if sku is None:
                 raise NotFoundError("SKU not found")
+        unmatched = any(line.sku_id is None for line in kept)
 
         supplier_id = await self._resolve_supplier(data)
         if await self._proforma_exists(supplier_id, data.document_number):
@@ -237,14 +235,18 @@ class DocumentIntakeService:
             PurchaseOrderCreate(
                 supplier_id=supplier_id,
                 proforma_id=proforma_id,
+                supplier_ref=data.document_number.strip(),
+                notes=data.payment_terms,
+                submit_for_approval=data.submit_for_approval or unmatched,
                 lines=[
                     PoLineCreate(
-                        sku_id=line.sku_id,  # type: ignore[arg-type]
+                        sku_id=line.sku_id,
+                        supplier_code=line.supplier_code,
+                        description=line.description,
                         qty=line.qty,
                         factory_unit_amount=line.unit_price,
                     )
                     for line in kept
-                    if line.sku_id is not None
                 ],
             ),
             user_id,
@@ -342,17 +344,16 @@ class DocumentIntakeService:
             raise NotFoundError("Purchase order not found")
         kept_lines = []
         for line in kept:
-            if line.sku_id is None:
-                continue
-            await self._upsert_supplier_price(
-                sku_id=line.sku_id,
-                supplier_id=supplier_id,
-                supplier_sku=line.supplier_code,
-                latest_price=line.unit_price,
-            )
+            if line.sku_id is not None:
+                await self._upsert_supplier_price(
+                    sku_id=line.sku_id,
+                    supplier_id=supplier_id,
+                    supplier_sku=line.supplier_code,
+                    latest_price=line.unit_price,
+                )
             kept_lines.append(
                 {
-                    "sku_id": str(line.sku_id),
+                    "sku_id": None if line.sku_id is None else str(line.sku_id),
                     "supplier_code": line.supplier_code,
                     "description": line.description,
                     "qty": line.qty,
