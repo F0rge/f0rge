@@ -158,6 +158,7 @@ class ProformaConfirmIn(BaseModel):
     total: Optional[Decimal] = None
     charges: list[ChargeIn] = Field(default_factory=list)
     lines: list[ConfirmLineIn] = Field(min_length=1)
+    submit_for_approval: bool = False
 
 
 class ProformaConfirmResponse(BaseModel):

@@ -400,6 +400,13 @@ async def require_catalogue_mutate(
     return await _require_keys(user_id, db, (CATALOGUE_MUTATE,))
 
 
+async def require_po_line_edit(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> uuid.UUID:
+    return await _require_keys(user_id, db, (CATALOGUE_MUTATE, USERS_MANAGE))
+
+
 async def require_returns_mutate(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),

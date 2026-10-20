@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Checkbox,
   ComboBox,
   FileUploaderDropContainer,
   FileUploaderItem,
@@ -109,6 +110,7 @@ export default function ReadProformaPage() {
   const [skuLine, setSkuLine] = useState<number | null>(null);
   const [skuDraft, setSkuDraft] = useState<SkuDraft>(emptySku);
   const [skuSaving, setSkuSaving] = useState(false);
+  const [submitForApproval, setSubmitForApproval] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -314,6 +316,7 @@ export default function ReadProformaPage() {
           sku_id: line.skip ? null : line.sku_id || null,
           skip: line.skip,
         })),
+        submit_for_approval: submitForApproval,
       });
       router.push(`/purchase-orders/${result.purchase_order.id}`);
     } catch (err) {
@@ -328,7 +331,6 @@ export default function ReadProformaPage() {
     documentNumber.trim() &&
     documentDate &&
     (createNewSupplier ? supplierName.trim() : supplierId) &&
-    !keptWithoutSku &&
     lines.some((line) => !line.skip);
 
   if (!canMutate) {
@@ -349,7 +351,7 @@ export default function ReadProformaPage() {
         <div>
           <h1 className="cds--type-productive-heading-04">Read a proforma</h1>
           <p className="cds--type-body-01">
-            Nothing is saved until you confirm. The purchase order is then open, the same as one typed in by hand.
+            Nothing is saved until you confirm. Lines without a SKU stay on the order, and that order waits for approval until someone fills them in. A complete order is open unless you submit it for approval.
           </p>
         </div>
       </div>
@@ -610,12 +612,19 @@ export default function ReadProformaPage() {
             <p className="cds--type-body-01">
               Document total {review.total ?? "not read"}. Lines, VAT and charges come to {review.computed_total}.
             </p>
+            <Checkbox
+              id="proforma-submit-for-approval"
+              labelText="Submit for approval"
+              helperText="The order waits for approval even when every line already has a SKU."
+              checked={submitForApproval}
+              onChange={(_, { checked }) => setSubmitForApproval(checked)}
+            />
             <Button disabled={!canConfirm || saving} onClick={() => void confirm()}>
               {saving ? "Saving…" : "Confirm and create purchase order"}
             </Button>
             {keptWithoutSku ? (
               <p className="cds--type-helper-text-01">
-                Each kept line needs a SKU. Create one, link one, or skip the line.
+                Lines without a SKU stay on the order. It will wait for approval so those SKUs can be filled in.
               </p>
             ) : null}
           </Stack>

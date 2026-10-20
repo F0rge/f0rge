@@ -109,6 +109,7 @@ export type ListParams = {
   status?: string;
   invoice_id?: string;
   bill_id?: string;
+  needs_skus?: boolean;
 };
 
 function buildListQuery(params?: ListParams): string {
@@ -128,6 +129,9 @@ function buildListQuery(params?: ListParams): string {
   }
   if (params?.bill_id) {
     search.set("bill_id", params.bill_id);
+  }
+  if (params?.needs_skus) {
+    search.set("needs_skus", "true");
   }
   return search.toString();
 }
@@ -690,6 +694,7 @@ export type ProformaConfirmPayload = {
   total?: string | null;
   charges: { description: string; amount: string }[];
   lines: ProformaConfirmLine[];
+  submit_for_approval?: boolean;
 };
 
 export type ProformaConfirmResult = {
@@ -1123,11 +1128,15 @@ export type PurchaseOrderStatus =
 
 export type PoLine = {
   id: string;
-  sku_id: string;
-  our_ref: string;
-  our_barcode: string;
+  sku_id: string | null;
+  our_ref: string | null;
+  our_barcode: string | null;
   name: string;
-  fabric: string;
+  fabric: string | null;
+  supplier_code: string | null;
+  description: string | null;
+  notes: string | null;
+  needs_sku: boolean;
   qty: number;
   factory_unit_amount: string;
   unit_cost_zar: string | null;
@@ -1147,8 +1156,11 @@ export type PurchaseOrderListItem = {
   supplier_id: string;
   supplier_name: string;
   proforma_id: string | null;
+  supplier_ref: string | null;
+  notes: string | null;
   fx_to_zar: string | null;
   line_count: number;
+  needs_sku_count: number;
   received_location_id: string | null;
   ordered_at: string | null;
   on_water_at: string | null;
@@ -1164,7 +1176,10 @@ export type PurchaseOrder = PurchaseOrderListItem & {
 };
 
 export type CreatePoLinePayload = {
-  sku_id: string;
+  sku_id?: string | null;
+  supplier_code?: string | null;
+  description?: string | null;
+  notes?: string | null;
   qty: number;
   factory_unit_amount: string;
 };
@@ -1172,7 +1187,35 @@ export type CreatePoLinePayload = {
 export type CreatePurchaseOrderPayload = {
   supplier_id: string;
   proforma_id?: string;
+  supplier_ref?: string | null;
+  notes?: string | null;
+  submit_for_approval?: boolean;
   lines: CreatePoLinePayload[];
+};
+
+export type PurchaseOrderLineWrite = {
+  id?: string;
+  sku_id?: string | null;
+  supplier_code?: string | null;
+  description?: string | null;
+  notes?: string | null;
+  qty: number;
+  factory_unit_amount: string;
+};
+
+export type PurchaseOrderLinesUpdate = {
+  supplier_ref?: string | null;
+  notes?: string | null;
+  lines: PurchaseOrderLineWrite[];
+};
+
+export type PoLineSkuCreate = {
+  our_ref: string;
+  our_barcode: string;
+  name: string;
+  design: string;
+  fabric: string;
+  category?: string | null;
 };
 
 export type InventorySku = {
@@ -1251,6 +1294,27 @@ export function listPurchaseOrders(params?: ListParams): Promise<Page<PurchaseOr
 
 export function createPurchaseOrder(payload: CreatePurchaseOrderPayload): Promise<PurchaseOrder> {
   return apiFetch<PurchaseOrder>("/purchase-orders", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updatePurchaseOrderLines(
+  id: string,
+  payload: PurchaseOrderLinesUpdate,
+): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createPurchaseOrderLineSku(
+  poId: string,
+  lineId: string,
+  payload: PoLineSkuCreate,
+): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>(`/purchase-orders/${poId}/lines/${lineId}/sku`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
